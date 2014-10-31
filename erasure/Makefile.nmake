@@ -1,0 +1,78 @@
+########################################################################
+#  Copyright(c) 2011-2014 Intel Corporation All rights reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
+#    * Redistributions of source code must retain the above copyright
+#      notice, this list of conditions and the following disclaimer.
+#    * Redistributions in binary form must reproduce the above copyright
+#      notice, this list of conditions and the following disclaimer in
+#      the documentation and/or other materials provided with the
+#      distribution.
+#    * Neither the name of Intel Corporation nor the names of its
+#      contributors may be used to endorse or promote products derived
+#      from this software without specific prior written permission.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+#  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+#  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+########################################################################
+
+objs = src\ec-base.obj src\ec-highlevel-func.obj src\ec-multisrcary.obj src\gf-2vect-dot-prod-avx.obj src\gf-2vect-dot-prod-avx2.obj src\gf-2vect-dot-prod-sse.obj src\gf-3vect-dot-prod-avx.obj src\gf-3vect-dot-prod-avx2.obj src\gf-3vect-dot-prod-sse.obj src\gf-4vect-dot-prod-avx.obj src\gf-4vect-dot-prod-avx2.obj src\gf-4vect-dot-prod-sse.obj src\gf-5vect-dot-prod-avx.obj src\gf-5vect-dot-prod-avx2.obj src\gf-5vect-dot-prod-sse.obj src\gf-6vect-dot-prod-avx.obj src\gf-6vect-dot-prod-avx2.obj src\gf-6vect-dot-prod-sse.obj src\gf-vect-dot-prod-avx.obj src\gf-vect-dot-prod-avx2.obj src\gf-vect-dot-prod-sse.obj src\gf-vect-mul-avx.obj src\gf-vect-mul-sse.obj
+
+libpath  = c:\openssl\lib     #set to ossl path for tests
+lisrcc   = c:\openssl\include
+zlibpath   = c:\zlib\lib
+zlisrcc   = c:\zlib\include
+INCLUDES = -Isrc -Iinclude -I$(lisrcc) -I$(zlisrcc)
+CFLAGS   = -O2 -D ZLIB-WINAPI -D NDEBUG /nologo -D-USE-MATH-DEFINES -Qstd=c99 $(INCLUDES) $(D)
+AFLAGS   = -f win64 $(INCLUDES) $(D)
+CC       = icl
+AS       = yasm
+
+lib: src isa-l.lib
+
+src: ; -mkdir $@
+
+isa-l.lib: $(objs)
+	lib -out:$@ $?
+
+{erasure-code}.c.obj:
+	$(CC) $(CFLAGS) /c -Fo$@ $?
+{erasure-code}.asm.obj:
+	$(AS) $(AFLAGS) -o $@ $?
+
+
+
+.obj.exe:
+	link /out:$@ /nologo /libpath:$(libpath) /libpath:$(zlibpath) isa-l.lib $?
+
+# Unit tests
+tests = erasure-code-base-test.exe erasure-code-sse-test.exe erasure-code-test.exe gf-2vect-dot-prod-sse-test.exe gf-3vect-dot-prod-sse-test.exe gf-4vect-dot-prod-sse-test.exe gf-5vect-dot-prod-sse-test.exe gf-6vect-dot-prod-sse-test.exe gf-inverse-test.exe gf-vect-dot-prod-avx-test.exe gf-vect-dot-prod-base-test.exe gf-vect-dot-prod-sse-test.exe gf-vect-dot-prod-test.exe gf-vect-mul-avx-test.exe gf-vect-mul-base-test.exe gf-vect-mul-sse-test.exe gf-vect-mul-test.exe
+
+tests: lib $(tests)
+$(tests): $(@B).obj
+
+# Performance tests
+perfs = erasure-code-base-perf.exe erasure-code-perf.exe erasure-code-sse-perf.exe gf-2vect-dot-prod-sse-perf.exe gf-3vect-dot-prod-sse-perf.exe gf-4vect-dot-prod-sse-perf.exe gf-5vect-dot-prod-sse-perf.exe gf-6vect-dot-prod-sse-perf.exe gf-vect-dot-prod-1tbl.exe gf-vect-dot-prod-avx-perf.exe gf-vect-dot-prod-perf.exe gf-vect-dot-prod-sse-perf.exe gf-vect-mul-avx-perf.exe gf-vect-mul-perf.exe gf-vect-mul-sse-perf.exe
+
+perfs: lib $(perfs)
+$(perfs): $(@B).obj
+
+clean:
+	-if exist *.obj del *.obj
+	-if exist src\*.obj del src\*.obj
+	-if exist *.exe del *.exe
+	-if exist isa-l.lib del isa-l.lib
+
+zlib.lib:
+libeay32.lib:

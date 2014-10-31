@@ -1,0 +1,10 @@
+{
+  "source": "src",
+  "destination": "build",
+  "plugins": {
+    "metalsmith-drafts": true,
+    "metalsmith-markdown": true,
+    "metalsmith-permalinks": "posts/:title",
+    "metalsmith-templates": "handlebars"
+  }
+}
