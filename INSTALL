@@ -1,0 +1,9 @@
+To install signify-portable:
+
+make
+make install
+
+This will install the signify binary in /usr/bin and the manpage to
+/usr/man/man1. The makefile understands DESTDIR for those using 
+a staging directory for packaging.
+

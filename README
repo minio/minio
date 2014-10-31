@@ -1,0 +1,21 @@
+This is a self-contained port of OpenBSD's signify to Linux and other
+Unixes.
+
+Like on OpenBSD, this version of signify uses the Ed25519 primitive for
+signing/verification, ChaCha for random number generation, and a
+bcrypt-based KDF to protect secret keys.
+
+Signatures and keys are 100% compatible with OpenBSD.
+
+passphrase-20140902.diff adds the ability to add, change, or remove
+secret key passphrases. This function is not currently available on
+OpenBSD but in no way undermines compatibility of keys and signatures.
+
+HOWTO and the manpage contain sample usage.
+
+mancha <mancha1 AT zoho DOT com>
+
+Based on http://sourceforge.net/projects/slackdepot/files/signify/,
+this fork builds libsignify additionally to be used with external tools
+
+Harshavardhana <harsha AT harshavardhana DOT net>

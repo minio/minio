@@ -1,0 +1,164 @@
+.\" $OpenBSD: src/usr.bin/signify/signify.1,v 1.26 2014/03/16 22:49:56 tedu Exp $
+.\"
+.\"Copyright (c) 2013 Marc Espie <espie@openbsd.org>
+.\"Copyright (c) 2013 Ted Unangst <tedu@openbsd.org>
+.\"
+.\"Permission to use, copy, modify, and distribute this software for any
+.\"purpose with or without fee is hereby granted, provided that the above
+.\"copyright notice and this permission notice appear in all copies.
+.\"
+.\"THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\"WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\"MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\"ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\"WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\"ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\"OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.Dd $Mdocdate: May 8 2014 $
+.Dt SIGNIFY 1
+.Os
+.Sh NAME
+.Nm signify
+.Nd cryptographically sign and verify files
+.Sh SYNOPSIS
+.Nm signify
+.Fl C
+.Op Fl q
+.Fl p Ar pubkey
+.Fl x Ar sigfile
+.Op Ar
+.Nm signify
+.Fl G
+.Op Fl n
+.Op Fl c Ar comment
+.Fl p Ar pubkey
+.Fl s Ar seckey
+.Nm signify
+.Fl I
+.Op Fl p Ar pubkey
+.Op Fl s Ar seckey
+.Op Fl x Ar sigfile
+.Nm signify
+.Fl S
+.Op Fl e
+.Op Fl x Ar sigfile
+.Fl s Ar seckey
+.Fl m Ar message
+.Nm signify
+.Fl V
+.Op Fl eq
+.Op Fl x Ar sigfile
+.Fl p Ar pubkey
+.Fl m Ar message
+.Sh DESCRIPTION
+The
+.Nm
+utility creates and verifies cryptographic signatures.
+A signature verifies the integrity of a
+.Ar message .
+The mode of operation is selected with the following options:
+.Bl -tag -width Dsssigfile
+.It Fl C
+Verify a signed checksum list, and then verify the checksum for
+each file.
+If no files are specified, all of them are checked.
+.Ar sigfile
+should be the signed output of
+.Xr sha256 1 .
+.It Fl G
+Generate a new key pair.
+.It Fl I
+Inspect the specified keys or signature and print their fingerprint.
+.It Fl S
+Sign the specified message file and create a signature.
+.It Fl V
+Verify the message and signature match.
+.El
+.Pp
+The other options are as follows:
+.Bl -tag -width Dsssignature
+.It Fl c Ar comment
+Specify the comment to be added during key generation.
+.It Fl e
+When signing, embed the message after the signature.
+When verifying, extract the message from the signature.
+(This requires that the signature was created using
+.Fl e
+and creates a new message file as output.)
+.It Fl m Ar message
+When signing, the file containing the message to sign.
+When verifying, the file containing the message to verify.
+When verifying with
+.Fl e ,
+the file to create.
+.It Fl n
+Do not ask for a passphrase during key generation.
+Otherwise,
+.Nm
+will prompt the user for a passphrase to protect the secret key.
+.It Fl p Ar pubkey
+Public key produced by
+.Fl G ,
+and used by
+.Fl V
+to check a signature.
+.It Fl q
+Quiet mode.
+Suppress informational output.
+.It Fl s Ar seckey
+Secret (private) key produced by
+.Fl G ,
+and used by
+.Fl S
+to sign a message.
+.It Fl x Ar sigfile
+The signature file to create or verify.
+The default is
+.Ar message Ns .sig .
+.El
+.Pp
+The key and signature files created by
+.Nm
+have the same format.
+The first line of the file is a free form text comment that may be edited,
+so long as it does not exceed a single line.
+.\" Signature comments will be generated based on the name of the secret
+.\" key used for signing.
+.\" This comment can then be used as a hint for the name of the public key
+.\" when verifying.
+The second line of the file is the actual key or signature base64 encoded.
+.Sh EXIT STATUS
+.Ex -std signify
+It may fail because of one of the following reasons:
+.Pp
+.Bl -bullet -compact
+.It
+Some necessary files do not exist.
+.It
+Entered passphrase is incorrect.
+.It
+The message file was corrupted and its signature does not match.
+.It
+The message file is too large.
+.El
+.Sh EXAMPLES
+Create a new key pair:
+.Dl $ signify -G -p newkey.pub -s newkey.sec
+.Pp
+Sign a file, specifying a signature name:
+.Dl $ signify -S -s key.sec -m message.txt -x msg.sig
+.Pp
+Verify a signature, using the default signature name:
+.Dl $ signify -V -p key.pub -m generalsorders.txt
+.Pp
+Verify a SHA256 digest list (created with sha256sum --tag)
+.Dl $ signify -C -p key.pub -x SHA256SUMS.sig
+.Ed
+.Sh SEE ALSO
+.Xr sha256sum 1
+.Sh HISTORY
+The
+.Nm
+command first appeared in
+.Ox 5.5 .
+This is a portable version for use on Linux and other unixes.

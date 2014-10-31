@@ -1,0 +1,44 @@
+mini-HOWTO
+
+1. Create a keypair
+
+   $ signify -G -p key.pub -s key.sec -c "my first key"
+
+2. Create a stand-alone (or "detached") signature
+
+   $ signify -S -s key.sec -m file.txt
+
+3. Create a combined signature (message embedded after sig)
+
+   $ signify -S -e -s key.sec -m file.txt
+
+4. Verify a signature
+
+   $ signify -V -p key.pub -m file.txt
+
+5. Verify a signed sha256 digest list*
+
+   $ sha256sum --tag linux-signify.tar.bz2 > SHA256SUMS
+   $ signify -S -e -s key.sec -m SHA256SUMS
+   $ signify -C -p key.pub -x SHA256SUMS.sig
+
+   * signify expects a BSD-style digest list which can be created on
+     Linux using the "--tag" flag of sha256sum(1) (from coreutils)
+
+6. Inspect a key and print its 64-bit base64-encoded fingerprint
+
+   $ signify -I -p key.pub
+   $ signify -I -s key.sec
+
+7. Add or change a passphrase on a secret key (requires passphrase patch)
+
+   $ signify -P -s key.sec
+
+8. Remove a passphrase on a secret key (requires passphrase patch)
+
+   $ signify -P -n -s key.sec
+
+For more information, refer to the manpage.
+
+--mancha 20140902
+

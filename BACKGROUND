@@ -1,0 +1,81 @@
+signify - sign and verify
+
+One of the things OpenBSD has never done is sign releases, for whatever
+reasons. But 2014 is a new year, time to make a change. The first thing
+you need to start signing OS releases (besides the release itself) is a
+signing tool. Other projects use a variety of tools for this, but
+unfortunately none of them were invented here. signify is a small tool I
+wrote to fill that gap. Here's a few notes about it, working from the
+top down.
+
+There are only two useful portmanteaus to be made from the words sign
+and verify. Verisign charges a lot of money, so we went with the free
+option.
+
+The UI/UX is pretty spartan. It does lots of error checking, but makes
+no effort at error recovery. Early versions of signify refused to
+overwrite existing files, based on the theory that we're going to stick
+this in a careful workflow and not make mistakes; i.e., overwriting a
+signature file by signing the same file twice indicates the workflow has
+failed. This was later changed, based on feedback from the poor souls
+who had to use the thing.
+
+The signify file format is also really simple. At its core, it consists
+of a two byte algorithm identifier ("Ed") and the signature or key data,
+plus a bit more data in secret keys to support encrypting them. The core
+data is base64 encoded (so you don't poke your eye out) and appended
+after a one line comment. The comment is ignored and just there so you
+can tell the files apart if you accidentally rename them.
+
+Initially, I resisted adding identifiers to the keys. One way signature
+schemes break is user error, as in the evil people trick the user into
+believing their evil key is legit. By omitting identifying information,
+you can't be tricked into believing a key is OpenBSD official just
+because it says "OpenBSD official". Does this matter? Probably not, but
+since signify itself would never use such identifiers for verification,
+there wasn't any reason to add them. Soon after we started using signify
+however, we had too many keys running around and so a compromise was
+reached: keys have 64-bit random fingerprints to enable differentiation
+between the data being compromised and the wrong key being used. (I
+think we would have been ok without the identifiers eventually; it was
+only that first week with people experimenting and also the version
+changing from 5.4 to 5.5 when we were drowning in keys. Once more of the
+process was worked out, things settled down and key mismatches went
+away.)
+
+Moving on to the fun crypto bits, we wanted a tool that would fit on
+installation media, which meant minimizing code size and external
+dependencies.
+
+  -rw-r--r-- 1 anonftp wheel 1474560 Jul 30 12:27 floppy54.fs
+  -rw-r--r-- 1 anonftp wheel 2728452 Jul 22 18:40 gnupg-2.0.19p3.tgz
+
+The one and only supported algorithm is Ed25519. It has a lot of very
+nice properties, though I really like the deterministic signatures.
+Anything that makes it harder to screw up is great. The implementation,
+currently built by reaching over into the ssh directory, is small and
+independent with a simple interface that's hard to screw up.
+
+Ed25519 keys are really small. This makes them easy to work with. Public
+keys, in particular, are only 32 bytes. With some additional data
+signify adds and base64 encoded, the relevant figure is still 56 bytes,
+small enough to fit on a tshirt or even the back of your hand.
+
+I did run into one downside in the Ed25519 implementation interface. It
+signs messages by creating a complete copy of the message. Verification
+creates another complete copy of the message. The rationale for this
+decision is pretty obvious: You sign a message and get back a
+(theoretically opaque) string which you transmit; then the receiver
+verifies it to get back the original message. You can't accidentally use
+a message that fails verification because they are transmitted as part
+of the same bundle. Unfortunately, this design works better for small
+network packets than large files. We would prefer to keep the signatures
+detached from the message (this means it's now our responsibility to not
+accidentally use an unverified message.) signify deals with this
+internally by creating lots of copies. In the future we may open up the
+implementation for surgery, but that voids the manufacturer's warranty,
+so for now we're using the code exactly as it is with the workarounds in
+our code.
+
+  --Ted Unangst
+    (excerpted from http://www.tedunangst.com/flak/post/signify)

@@ -1,0 +1,133 @@
+From 038961e57c645f7bc90496a23fb20894a21b6ced Mon Sep 17 00:00:00 2001
+From: mancha <mancha1 AT zoho DOT com>
+Date: Tue, 2 Sep 2014
+Subject: Allow adding, changing, and removing passphrases
+
+ signify.1 |    6 +++++
+ signify.c |   60 ++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 64 insertions(+), 2 deletions(-)
+
+--- a/signify.c
++++ b/signify.c
+@@ -84,6 +84,7 @@
+ 	    "\t%1$s -C [-q] -p pubkey -x sigfile [file ...]\n"
+ 	    "\t%1$s -G [-n] [-c comment] -p pubkey -s seckey\n"
+ 	    "\t%1$s -I [-p pubkey] [-s seckey] [-x sigfile]\n"
++	    "\t%1$s -P [-n] -s seckey\n"
+ 	    "\t%1$s -S [-e] [-x sigfile] -s seckey -m message\n"
+ #endif
+ 	    "\t%1$s -V [-eq] [-x sigfile] -p pubkey -m message\n",
+@@ -671,6 +672,50 @@
+ }
+ #endif
+ 
++static void
++passphrase(const char *seckeyfile, int nrounds)
++{
++	uint8_t digest[SHA512_DIGEST_LENGTH];
++	struct enckey enckey;
++	uint8_t xorkey[sizeof(enckey.seckey)];
++	char comment[COMMENTMAXLEN];
++	int i, rounds;
++	SHA2_CTX ctx;
++
++	readb64file(seckeyfile, &enckey, sizeof(enckey), comment);
++
++	if (memcmp(enckey.kdfalg, KDFALG, 2) != 0)
++		errx(1, "unsupported KDF");
++	rounds = ntohl(enckey.kdfrounds);
++	if (rounds != 0)
++		printf("Current passphrase\n");
++	kdf(enckey.salt, sizeof(enckey.salt), rounds, 1, 0,
++	    xorkey, sizeof(xorkey));
++	for (i = 0; i < sizeof(enckey.seckey); i++)
++		enckey.seckey[i] ^= xorkey[i];
++	explicit_bzero(xorkey, sizeof(xorkey));
++	SHA512Init(&ctx);
++	SHA512Update(&ctx, enckey.seckey, sizeof(enckey.seckey));
++	SHA512Final(digest, &ctx);
++	if (memcmp(enckey.checksum, digest, sizeof(enckey.checksum)) != 0)
++		errx(1, "incorrect passphrase");
++	explicit_bzero(digest, sizeof(digest));
++
++	if (nrounds != 0) {
++		arc4random_buf(enckey.salt, sizeof(enckey.salt));	
++		printf("New passphrase\n");
++	}
++	enckey.kdfrounds = htonl(nrounds);
++	kdf(enckey.salt, sizeof(enckey.salt), nrounds, 1, 1,
++	    xorkey, sizeof(xorkey));
++	for (i = 0; i < sizeof(enckey.seckey); i++)
++		enckey.seckey[i] ^= xorkey[i];
++	explicit_bzero(xorkey, sizeof(xorkey));
++	writeb64file(seckeyfile, comment, &enckey,
++	    sizeof(enckey), NULL, 0, 0, 0600);
++	explicit_bzero(&enckey, sizeof(enckey));
++}
++
+ int
+ main(int argc, char **argv)
+ {
+@@ -687,13 +732,14 @@
+ 		GENERATE,
+ 		INSPECT,
+ 		SIGN,
+-		VERIFY
++		VERIFY,
++		PASSPHRASE	
+ 	} verb = NONE;
+ 
+ 
+ 	rounds = 42;
+ 
+-	while ((ch = getopt(argc, argv, "CGISVc:em:np:qs:x:")) != -1) {
++	while ((ch = getopt(argc, argv, "CGIPSVc:em:np:qs:x:")) != -1) {
+ 		switch (ch) {
+ #ifndef VERIFYONLY
+ 		case 'C':
+@@ -711,6 +757,11 @@
+ 				usage(NULL);
+ 			verb = INSPECT;
+ 			break;
++		case 'P':
++			if (verb)
++				usage(NULL);
++			verb = PASSPHRASE;
++			break;
+ 		case 'S':
+ 			if (verb)
+ 				usage(NULL);
+@@ -791,6 +842,11 @@
+ 			usage("must specify message and seckey");
+ 		sign(seckeyfile, msgfile, sigfile, embedded);
+ 		break;
++	case PASSPHRASE:
++		if (!seckeyfile)
++			usage("must specify seckey");
++		passphrase(seckeyfile, rounds);
++		break;
+ #endif
+ 	case VERIFY:
+ 		if (!msgfile)
+--- a/signify.1
++++ b/signify.1
+@@ -39,6 +39,10 @@
+ .Op Fl s Ar seckey
+ .Op Fl x Ar sigfile
+ .Nm signify
++.Fl P 
++.Op Fl n
++.Fl s Ar seckey
++.Nm signify
+ .Fl S
+ .Op Fl e
+ .Op Fl x Ar sigfile
+@@ -69,6 +73,8 @@
+ Generate a new key pair.
+ .It Fl I
+ Inspect the specified keys or signature and print their fingerprint.
++.It Fl P
++Add, change, or remove secret key passphrases.
+ .It Fl S
+ Sign the specified message file and create a signature.
+ .It Fl V
