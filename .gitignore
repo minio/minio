@@ -1,2 +1,4 @@
 .gvm_local
-minios
+/tmp/
+/bin/
+**/*.swp
