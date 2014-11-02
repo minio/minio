@@ -14,9 +14,7 @@ stage_build:
 
 
 build: stage_build
-	go install github.com/minios/minios/minios
-	go install github.com/minios/minios/miniosd
-	cp tmp/gopath/bin/* bin/
+	go install github.com/minios/minios/minio
 
 clean:
 	rm -rf tmp bin
