@@ -2,12 +2,40 @@ package main
 
 import (
 	"github.com/codegangsta/cli"
+	"github.com/gorilla/mux"
 	"github.com/minios/minios"
+	"log"
+	"net/http"
 	"os"
 )
 
 func main() {
-	cli.NewApp().Run(os.Args)
-	server := minio.Server{}
-	server.Start()
+	app := cli.NewApp()
+	router := mux.NewRouter()
+	runServer := false
+	app.Commands = []cli.Command{
+		{
+			Name:  "storage",
+			Usage: "Start a storage node",
+			Action: func(c *cli.Context) {
+				minio.RegisterStorageHandlers(router)
+				runServer = true
+			},
+		},
+		{
+			Name:  "gateway",
+			Usage: "Start a gateway node",
+			Action: func(c *cli.Context) {
+				minio.RegisterGatewayHandlers(router)
+				runServer = true
+			},
+		},
+	}
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal("App failed to load", err)
+	}
+	if runServer {
+		log.Fatal(http.ListenAndServe(":8080", router))
+	}
 }
