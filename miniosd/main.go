@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"github.com/minios/minios"
+)
 
 func main() {
-	fmt.Println("hello")
+	server := minios.Server{}
+	server.Start()
 }
