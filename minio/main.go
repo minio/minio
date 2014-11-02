@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	server := minios.Server{}
+	server := minio.Server{}
 	server.Start()
 }
