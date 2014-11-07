@@ -8,34 +8,39 @@ import (
 	"net/http"
 )
 
+// Stores system configuration, populated from CLI or test runner
+type GatewayConfig struct {
+	StorageDriver StorageDriver
+}
+
+// Message for requesting a bucket
 type BucketRequest struct {
 	name     string
 	context  Context
 	callback chan Bucket
 }
 
+// Context interface for security and session information
 type Context interface{}
 
-type BucketService interface {
-	Serve(chan BucketRequest) Bucket
-}
-
+// Bucket definition
 type Bucket interface {
 	GetName(Context) string
 	Get(Context, string) ([]byte, error)
 	Put(Context, string, []byte) error
 }
 
-type fakeContext struct{}
+// Storage driver function, should read from a channel and respond through callback channels
+type StorageDriver func(bucket string, input chan ObjectRequest)
 
-func GatewayHandler(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "Gateway")
-}
+// TODO remove when building real context
+type fakeContext struct{}
 
 type GatewayGetHandler struct {
 	requestBucketChan chan BucketRequest
 }
 
+// GET requests server
 func (handler GatewayGetHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucketName := vars["bucket"]
@@ -51,6 +56,8 @@ func (handler GatewayGetHandler) ServeHTTP(w http.ResponseWriter, req *http.Requ
 	object, err := bucket.Get(context, string(path))
 	if err != nil {
 		http.Error(w, err.Error(), 404)
+	} else if object == nil {
+		http.Error(w, errors.New("Object not found").Error(), 404)
 	} else {
 		fmt.Fprintf(w, string(object))
 	}
@@ -76,21 +83,21 @@ func (handler GatewayPutHandler) ServeHTTP(w http.ResponseWriter, req *http.Requ
 	bucket.Put(context, path, object)
 }
 
-func RegisterGatewayHandlers(router *mux.Router) {
+func RegisterGatewayHandlers(router *mux.Router, config GatewayConfig) {
 	requestBucketChan := make(chan BucketRequest)
-	go SynchronizedBucketService(requestBucketChan)
+	go SynchronizedBucketService(requestBucketChan, config)
 	getHandler := GatewayGetHandler{requestBucketChan: requestBucketChan}
 	putHandler := GatewayPutHandler{requestBucketChan: requestBucketChan}
 	router.Handle("/{bucket}/{path:.*}", getHandler).Methods("GET")
 	router.Handle("/{bucket}/{path:.*}", putHandler).Methods("PUT")
 }
 
-func SynchronizedBucketService(input chan BucketRequest) {
+func SynchronizedBucketService(input chan BucketRequest, config GatewayConfig) {
 	buckets := make(map[string]*SynchronizedBucket)
 	for request := range input {
 		if buckets[request.name] == nil {
 			bucketChannel := make(chan ObjectRequest)
-			go inMemoryBucketServer(bucketChannel)
+			go config.StorageDriver(request.name, bucketChannel)
 			buckets[request.name] = &SynchronizedBucket{
 				name:    request.name,
 				channel: bucketChannel,
@@ -159,13 +166,16 @@ func (bucket *SynchronizedBucket) closeChannel() {
 	close(bucket.channel)
 }
 
-func inMemoryBucketServer(input chan ObjectRequest) {
+func InMemoryStorageDriver(bucket string, input chan ObjectRequest) {
 	objects := make(map[string][]byte)
 	for request := range input {
+		fmt.Println("objects:", objects)
 		switch request.requestType {
 		case "GET":
+			fmt.Println("GET: " + request.path)
 			request.callback <- objects[request.path]
 		case "PUT":
+			fmt.Println("PUT: " + request.path)
 			objects[request.path] = request.object
 			request.callback <- nil
 		default:
