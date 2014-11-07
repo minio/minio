@@ -3,7 +3,8 @@
 all: test install
 
 test:
-	godep go test -race github.com/minios/minios
+	mkdir -p cover
+	godep go test -race -coverprofile=cover/cover.out github.com/minios/minios
 	godep go test -race github.com/minios/minios/minio
 
 install:
@@ -17,3 +18,9 @@ restore:
 
 env:
 	godep go env
+
+run: all
+	minio gateway
+
+cover: test
+	go tool cover -html=cover/cover.out

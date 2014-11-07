@@ -26,7 +26,7 @@ func main() {
 			Name:  "gateway",
 			Usage: "Start a gateway node",
 			Action: func(c *cli.Context) {
-				minio.RegisterGatewayHandlers(router)
+				minio.RegisterGatewayHandlers(router, minio.GatewayConfig{StorageDriver: minio.InMemoryStorageDriver})
 				runServer = true
 			},
 		},
