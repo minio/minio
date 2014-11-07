@@ -28,8 +28,8 @@ func (s *MySuite) TestPrintsGateway(c *C) {
 		log.Fatal(err)
 	}
 	bodyString := string(body)
-	if bodyString != "Gateway" {
-		log.Fatal("Expected 'Gateway', Received '" + bodyString + "'")
+	if bodyString == "" {
+		log.Fatal("Expected '', Received '" + bodyString + "'")
 	}
 }
 

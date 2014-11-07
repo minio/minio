@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -25,21 +26,63 @@ type Bucket interface {
 	Put(Context, string, []byte) error
 }
 
+type fakeContext struct{}
+
 func GatewayHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "Gateway")
 }
 
-func GatewayGetObjectHandler(w http.ResponseWriter, req *http.Request) {
+type GatewayGetHandler struct {
+	requestBucketChan chan BucketRequest
+}
+
+func (handler GatewayGetHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
-	fmt.Fprintf(w, "bucket: "+bucket)
-	fmt.Fprintf(w, "\r")
-	fmt.Fprintf(w, "object: "+object)
+	bucketName := vars["bucket"]
+	path := vars["path"]
+	context := fakeContext{}
+	callback := make(chan Bucket)
+	handler.requestBucketChan <- BucketRequest{
+		name:     bucketName,
+		context:  context,
+		callback: callback,
+	}
+	bucket := <-callback
+	object, err := bucket.Get(context, string(path))
+	if err != nil {
+		http.Error(w, err.Error(), 404)
+	} else {
+		fmt.Fprintf(w, string(object))
+	}
+}
+
+type GatewayPutHandler struct {
+	requestBucketChan chan BucketRequest
+}
+
+func (handler GatewayPutHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucketName := vars["bucket"]
+	path := vars["path"]
+	object, _ := ioutil.ReadAll(req.Body)
+	context := fakeContext{}
+	callback := make(chan Bucket)
+	handler.requestBucketChan <- BucketRequest{
+		name:     bucketName,
+		context:  context,
+		callback: callback,
+	}
+	bucket := <-callback
+	bucket.Put(context, path, object)
 }
 
 func RegisterGatewayHandlers(router *mux.Router) {
-	router.HandleFunc("/{bucket}/{object:.*}", GatewayGetObjectHandler).Methods("GET")
+	requestBucketChan := make(chan BucketRequest)
+	go SynchronizedBucketService(requestBucketChan)
+	getHandler := GatewayGetHandler{requestBucketChan: requestBucketChan}
+	putHandler := GatewayPutHandler{requestBucketChan: requestBucketChan}
+	router.Handle("/{bucket}/{path:.*}", getHandler).Methods("GET")
+	router.Handle("/{bucket}/{path:.*}", putHandler).Methods("PUT")
 }
 
 func SynchronizedBucketService(input chan BucketRequest) {
@@ -119,7 +162,6 @@ func (bucket *SynchronizedBucket) closeChannel() {
 func inMemoryBucketServer(input chan ObjectRequest) {
 	objects := make(map[string][]byte)
 	for request := range input {
-		fmt.Println(objects)
 		switch request.requestType {
 		case "GET":
 			request.callback <- objects[request.path]
