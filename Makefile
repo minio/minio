@@ -3,11 +3,11 @@
 all: test install
 
 test:
-	godep go test github.com/minios/minios
-	godep go test github.com/minios/minios/minio
+	godep go test -race github.com/minios/minios
+	godep go test -race github.com/minios/minios/minio
 
 install:
-	godep go install github.com/minios/minios/minio
+	godep go install -race github.com/minios/minios/minio
 
 save:
 	godep save ./...
