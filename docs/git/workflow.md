@@ -31,7 +31,7 @@ Assuming no conflict, push to your personal fork.
 
 ```sh
 git push myrepo new_feature_branch:new_feature_branch
-# Visit https://github.com/minios/minios and create a new pull request
+# Visit https://github.com/minio-io/minio and create a new pull request
 from your branch.
 ```
 

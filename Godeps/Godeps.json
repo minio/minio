@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/minios/minios",
+	"ImportPath": "github.com/minio-io/minio",
 	"GoVersion": "go1.3.3",
 	"Packages": [
 		"./..."
