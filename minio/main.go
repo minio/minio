@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/codegangsta/cli"
 	"github.com/gorilla/mux"
-	"github.com/minios/minios"
+	"github.com/minio-io/minio"
 	"log"
 	"net/http"
 	"os"
