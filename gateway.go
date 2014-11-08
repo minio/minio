@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/tchap/go-patricia/patricia"
 	"io/ioutil"
 	"net/http"
 )
@@ -134,11 +135,15 @@ func (bucket SynchronizedBucket) Get(context Context, path string) ([]byte, erro
 		path:        path,
 		callback:    callback,
 	}
-	switch response := <-callback; response.(type) {
-	case []byte:
-		return response.([]byte), nil
+	response := <-callback
+
+	switch response.(type) {
 	case error:
 		return nil, response.(error)
+	case nil:
+		return nil, errors.New("Object not found")
+	case interface{}:
+		return response.([]byte), nil
 	default:
 		return nil, errors.New("Unexpected error, service failed")
 	}
@@ -167,16 +172,17 @@ func (bucket *SynchronizedBucket) closeChannel() {
 }
 
 func InMemoryStorageDriver(bucket string, input chan ObjectRequest) {
-	objects := make(map[string][]byte)
+	objects := patricia.NewTrie()
 	for request := range input {
+		prefix := patricia.Prefix(request.path)
 		fmt.Println("objects:", objects)
 		switch request.requestType {
 		case "GET":
 			fmt.Println("GET: " + request.path)
-			request.callback <- objects[request.path]
+			request.callback <- objects.Get(prefix)
 		case "PUT":
 			fmt.Println("PUT: " + request.path)
-			objects[request.path] = request.object
+			objects.Insert(prefix, request.object)
 			request.callback <- nil
 		default:
 			request.callback <- errors.New("Unexpected message")
