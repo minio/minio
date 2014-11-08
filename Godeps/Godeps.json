@@ -19,6 +19,11 @@
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
+			"ImportPath": "github.com/tchap/go-patricia/patricia",
+			"Comment": "v1.0.1",
+			"Rev": "f64d0a63cd3363481c898faa9339de04d12213f9"
+		},
+		{
 			"ImportPath": "gopkg.in/check.v1",
 			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
 		}

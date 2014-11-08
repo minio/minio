@@ -117,7 +117,8 @@ func (s *MySuite) TestInMemoryBucketOperations(c *C) {
 	// get missing value
 	nilResult, err := bucket.Get(context, "foo")
 	c.Assert(nilResult, IsNil)
-	c.Assert(err, IsNil)
+	c.Assert(err, Not(IsNil))
+	c.Assert(err.Error(), Equals, "Object not found")
 
 	// add new value
 	err = bucket.Put(context, "foo", []byte("bar"))
