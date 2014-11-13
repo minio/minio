@@ -57,15 +57,18 @@ func (s *MySuite) TestPrintsGateway(c *C) {
 type TestContext struct{}
 
 func (s *MySuite) TestBucketCreation(c *C) {
-	requestBucketChan := make(chan BucketRequest)
-	defer close(requestBucketChan)
-	go SynchronizedBucketService(requestBucketChan, GatewayConfig{StorageDriver: InMemoryStorageDriver})
+	config := GatewayConfig{
+		StorageDriver:     InMemoryStorageDriver,
+		requestBucketChan: make(chan BucketRequest),
+	}
+	defer close(config.requestBucketChan)
+	go SynchronizedBucketService(config)
 	context := TestContext{}
 
 	// get new bucket A
 	var bucketA1 Bucket
 	callback := make(chan Bucket)
-	requestBucketChan <- BucketRequest{
+	config.requestBucketChan <- BucketRequest{
 		name:     "bucketA",
 		context:  context,
 		callback: callback,
@@ -76,7 +79,7 @@ func (s *MySuite) TestBucketCreation(c *C) {
 	// get bucket A again
 	var bucketA2 Bucket
 	callback = make(chan Bucket)
-	requestBucketChan <- BucketRequest{
+	config.requestBucketChan <- BucketRequest{
 		name:     "bucketA",
 		context:  context,
 		callback: callback,
@@ -88,7 +91,7 @@ func (s *MySuite) TestBucketCreation(c *C) {
 	// get new bucket B
 	var bucketB Bucket
 	callback = make(chan Bucket)
-	requestBucketChan <- BucketRequest{
+	config.requestBucketChan <- BucketRequest{
 		name:     "bucketB",
 		context:  context,
 		callback: callback,
@@ -99,14 +102,17 @@ func (s *MySuite) TestBucketCreation(c *C) {
 
 func (s *MySuite) TestInMemoryBucketOperations(c *C) {
 	// Test in memory bucket operations
-	requestBucketChan := make(chan BucketRequest)
-	defer close(requestBucketChan)
-	go SynchronizedBucketService(requestBucketChan, GatewayConfig{StorageDriver: InMemoryStorageDriver})
+	config := GatewayConfig{
+		StorageDriver:     InMemoryStorageDriver,
+		requestBucketChan: make(chan BucketRequest),
+	}
+	defer close(config.requestBucketChan)
+	go SynchronizedBucketService(config)
 	context := TestContext{}
 
 	// get bucket
 	callback := make(chan Bucket)
-	requestBucketChan <- BucketRequest{
+	config.requestBucketChan <- BucketRequest{
 		name:     "bucket",
 		context:  context,
 		callback: callback,
