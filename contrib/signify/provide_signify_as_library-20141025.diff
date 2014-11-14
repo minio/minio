@@ -1,48 +1,92 @@
-diff -pruN signify-portable-20140902/Makefile signify-portable-20140902-h/Makefile
---- signify-portable-20140902/Makefile	2014-09-02 00:26:00.000000000 -0700
-+++ signify-portable-20140902-h/Makefile	2014-10-25 03:02:49.628893485 -0700
-@@ -8,6 +8,8 @@ mandir=${prefix}/man
- DESTDIR=
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..e7707be
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,4 @@
++*.o
++signify
++*.a
++*.so*
+\ No newline at end of file
+diff --git a/Makefile b/Makefile
+index c332dd4..6780617 100644
+--- a/Makefile
++++ b/Makefile
+@@ -9,31 +9,37 @@ DESTDIR=
  
  CC=gcc
-+AR=ar
-+LIB=static
+ AR=ar
+-LIB=static
  INSTALL=/usr/bin/install -c
  
- CFLAGS=-O2 -D_FORTIFY_SOURCE=2 -ftrapv -fPIE -fstack-protector-all \
-@@ -15,23 +17,28 @@ CFLAGS=-O2 -D_FORTIFY_SOURCE=2 -ftrapv -
+-CFLAGS=-O2 -D_FORTIFY_SOURCE=2 -ftrapv -fPIE -fstack-protector-all \
++CFLAGS=-O2 -D_FORTIFY_SOURCE=2 -fPIC -ftrapv -fPIE -fstack-protector-all \
+ 	-Wno-attributes -Wno-unused-result -Ibsd-compat -I.
  
  TARGET = signify
  
-+TARGET_LIB = libsignify_$(LIB).a
-+
- SIGNIFY_OBJS = signify.o fe25519.o sc25519.o smult_curve25519_ref.o \
+-TARGET_LIB = libsignify_$(LIB).a
++SIGNIFY_STATIC_LIB = libsignify_static.a
++SIGNIFY_SHARED_LIB = libsignify_shared.so
+ 
+-SIGNIFY_OBJS = signify.o fe25519.o sc25519.o smult_curve25519_ref.o \
++SIGNIFY_OBJS = fe25519.o sc25519.o smult_curve25519_ref.o \
  	mod_ed25519.o mod_ge25519.o crypto_api.o base64.o bcrypt_pbkdf.o \
  	explicit_bzero.o arc4random.o timingsafe_bcmp.o sha2.o blowfish.o \
  	readpassphrase.o strlcpy.o helpers.o ohash.o
  
--all:	$(TARGET)
-+all:	$(TARGET) $(TARGET_LIB)
+ all:	$(TARGET) $(TARGET_LIB)
  
- $(TARGET): $(SIGNIFY_OBJS)
- 	$(CC) $(CFLAGS) -o $(TARGET) $(SIGNIFY_OBJS)
+-$(TARGET): $(SIGNIFY_OBJS)
+-	$(CC) $(CFLAGS) -o $(TARGET) $(SIGNIFY_OBJS)
++%.o: %.c
++	$(CC) $(CFLAGS) -c $<
  
--clean:	
--	rm -f *.o signify
-+$(TARGET_LIB): $(SIGNIFY_OBJS)
-+	$(AR) crs $(TARGET_LIB) $(SIGNIFY_OBJS)
+-$(TARGET_LIB): $(SIGNIFY_OBJS)
+-	$(AR) crs $(TARGET_LIB) $(SIGNIFY_OBJS)
++$(SIGNIFY_STATIC_LIB): $(SIGNIFY_OBJS)
++	$(AR) crs $@ $(SIGNIFY_OBJS)
 +
-+clean:
-+	@rm -f *.o signify $(TARGET_LIB)
++$(SIGNIFY_SHARED_LIB): $(SIGNIFY_STATIC_LIB)
++	$(CC) -shared -o $@ $(SIGNIFY_STATIC_LIB)
++
++$(TARGET): $(SIGNIFY_STATIC_LIB) $(SIGNIFY_STATIC_LIB)
++	$(CC) $(CFLAGS) -o $(TARGET) signify.c $(SIGNIFY_STATIC_LIB)
+ 
+ clean:
+-	@rm -f *.o signify $(TARGET_LIB)
++	rm -f *.o *.so *.a signify
  
  install:
--	$(INSTALL) -D -m 0755 signify $(DESTDIR)/$(bindir)/signify
--	$(INSTALL) -D -m 644 signify.1 $(DESTDIR)/$(mandir)/man1/signify.1
-+	$(INSTALL) -c -D -m 0755 signify $(DESTDIR)/$(bindir)/signify
-+	$(INSTALL) -c -D -m 644 signify.1 $(DESTDIR)/$(mandir)/man1/signify.1
+ 	$(INSTALL) -c -D -m 0755 signify $(DESTDIR)/$(bindir)/signify
+diff --git a/README b/README
+index b999d28..b5cb832 100644
+--- a/README
++++ b/README
+@@ -14,3 +14,8 @@ OpenBSD but in no way undermines compatibility of keys and signatures.
+ HOWTO and the manpage contain sample usage.
  
- uninstall:
--	rm -f $(DESTDIR)/$(bindir)/signify
--	rm -f $(DESTDIR)/$(mandir)/man1/signify.1
-+	@rm -f $(DESTDIR)/$(bindir)/signify
-+	@rm -f $(DESTDIR)/$(mandir)/man1/signify.1
+ mancha <mancha1 AT zoho DOT com>
++
++Based on http://sourceforge.net/projects/slackdepot/files/signify/,
++this fork builds libsignify additionally to be used with external tools
++
++Harshavardhana <harsha AT harshavardhana DOT net>
+\ No newline at end of file
+diff --git a/fe25519.h b/fe25519.h
+index 41b3cbb..6d347c7 100644
+--- a/fe25519.h
++++ b/fe25519.h
+@@ -29,9 +29,9 @@
+ #define fe25519_invert       crypto_sign_ed25519_ref_fe25519_invert
+ #define fe25519_pow2523      crypto_sign_ed25519_ref_fe25519_pow2523
+ 
+-typedef struct 
++typedef struct
+ {
+-  crypto_uint32 v[32]; 
++  crypto_uint32 v[32];
+ }
+ fe25519;
+ 
