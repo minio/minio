@@ -94,6 +94,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	for i := range chunks {
 		pointers[i] = &chunks[i][0]
 	}
+
 	data := (**C.uchar)(unsafe.Pointer(&pointers[:k][0]))
 	coding := (**C.uchar)(unsafe.Pointer(&pointers[k:][0]))
 

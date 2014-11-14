@@ -18,33 +18,33 @@ package erasure
 
 import (
 	"bytes"
+	. "gopkg.in/check.v1"
 	"testing"
 )
 
-func TestCachyEncode(t *testing.T) {
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
+
+func Test(t *testing.T) { TestingT(t) }
+
+func (s *MySuite) TestCachyEncode(c *C) {
 	ep, _ := ValidateParams(10, 5, 8, CAUCHY)
 	p := NewEncoder(ep)
 
 	data := make([]byte, 1000)
-	chunks, length := p.Encode(data)
-
-	t.Logf("chunks length: %d;\nlength: %d\n", len(chunks), length)
-	if length != len(data) {
-		t.Fatal()
-	}
+	_, length := p.Encode(data)
+	c.Assert(length, Equals, len(data))
 }
 
-func TestCauchyDecode(t *testing.T) {
+func (s *MySuite) TestCauchyDecode(c *C) {
 	ep, _ := ValidateParams(10, 5, 8, CAUCHY)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
 	p := NewEncoder(ep)
 	chunks, length := p.Encode(data)
-	t.Logf("chunks length: %d;\nlength: %d\n", len(chunks), length)
-	if length != len(data) {
-		t.Fatal()
-	}
+	c.Assert(length, Equals, len(data))
 
 	chunks[0] = nil
 	chunks[3] = nil
@@ -53,11 +53,9 @@ func TestCauchyDecode(t *testing.T) {
 	chunks[13] = nil
 
 	recovered_data, err := p.Decode(chunks, length)
-	if err != nil {
-		t.Fatalf("Error: %s", err)
-	}
+	c.Assert(err, Not(IsNil))
 
 	if i := bytes.Compare(recovered_data, data); i < 0 {
-		t.Fatalf("Error: recovered data is less than original data")
+		c.Fatalf("Error: recovered data is less than original data")
 	}
 }

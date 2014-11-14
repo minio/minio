@@ -181,9 +181,14 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	pointers := make([]*byte, e.p.n)
 
 	var i int
-	// Add data and code blocks to chunks
-	for i = 0; i < e.p.n; i++ {
+	// Add data blocks to chunks
+	for i = 0; i < e.p.k; i++ {
 		chunks[i] = block[i*chunk_size : (i+1)*chunk_size]
+		pointers[i] = &chunks[i][0]
+	}
+
+	for i = e.p.k; i < e.p.n; i++ {
+		chunks[i] = make([]byte, chunk_size)
 		pointers[i] = &chunks[i][0]
 	}
 
@@ -192,7 +197,6 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 
 	C.ec_encode_data(C.int(chunk_size), e.k, e.m, e.encode_tbls, data,
 		coding)
-
 	return chunks, block_len
 }
 
