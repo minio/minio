@@ -19,7 +19,10 @@ func Test(t *testing.T) { TestingT(t) }
 func (s *MySuite) TestPrintsGateway(c *C) {
 	// set up router with in memory storage driver
 	router := mux.NewRouter()
-	config := GatewayConfig{StorageDriver: InMemoryStorageDriver}
+	config := GatewayConfig{
+		StorageDriver: InMemoryStorageDriver,
+		BucketDriver:  SynchronizedBucketDriver,
+	}
 	RegisterGatewayHandlers(router, config)
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -62,7 +65,7 @@ func (s *MySuite) TestBucketCreation(c *C) {
 		requestBucketChan: make(chan BucketRequest),
 	}
 	defer close(config.requestBucketChan)
-	go SynchronizedBucketService(config)
+	go SynchronizedBucketDriver(config)
 	context := TestContext{}
 
 	// get new bucket A
@@ -107,7 +110,7 @@ func (s *MySuite) TestInMemoryBucketOperations(c *C) {
 		requestBucketChan: make(chan BucketRequest),
 	}
 	defer close(config.requestBucketChan)
-	go SynchronizedBucketService(config)
+	go SynchronizedBucketDriver(config)
 	context := TestContext{}
 
 	// get bucket
