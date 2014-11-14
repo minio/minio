@@ -29,9 +29,9 @@
 #define fe25519_invert       crypto_sign_ed25519_ref_fe25519_invert
 #define fe25519_pow2523      crypto_sign_ed25519_ref_fe25519_pow2523
 
-typedef struct 
+typedef struct
 {
-  crypto_uint32 v[32]; 
+  crypto_uint32 v[32];
 }
 fe25519;
 

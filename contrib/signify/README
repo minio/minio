@@ -16,6 +16,9 @@ HOWTO and the manpage contain sample usage.
 mancha <mancha1 AT zoho DOT com>
 
 Based on http://sourceforge.net/projects/slackdepot/files/signify/,
-this fork builds libsignify additionally to be used with external tools
+this fork builds libsignify in static and shared mode.
+
+This also exposes signify as a library for other people to use and
+embed it in their codebase.
 
 Harshavardhana <harsha AT harshavardhana DOT net>
