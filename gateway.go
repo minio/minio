@@ -12,6 +12,7 @@ import (
 // Stores system configuration, populated from CLI or test runner
 type GatewayConfig struct {
 	StorageDriver     StorageDriver
+	BucketDriver      BucketDriver
 	requestBucketChan chan BucketRequest
 }
 
@@ -31,6 +32,9 @@ type Bucket interface {
 	Get(Context, string) ([]byte, error)
 	Put(Context, string, []byte) error
 }
+
+// Bucket driver function, should read from a channel and respond through callback channels
+type BucketDriver func(config GatewayConfig)
 
 // Storage driver function, should read from a channel and respond through callback channels
 type StorageDriver func(bucket string, input chan ObjectRequest)
@@ -87,14 +91,14 @@ func (handler GatewayPutHandler) ServeHTTP(w http.ResponseWriter, req *http.Requ
 
 func RegisterGatewayHandlers(router *mux.Router, config GatewayConfig) {
 	config.requestBucketChan = make(chan BucketRequest)
-	go SynchronizedBucketService(config)
+	go config.BucketDriver(config)
 	getHandler := GatewayGetHandler{config}
 	putHandler := GatewayPutHandler{config}
 	router.Handle("/{bucket}/{path:.*}", getHandler).Methods("GET")
 	router.Handle("/{bucket}/{path:.*}", putHandler).Methods("PUT")
 }
 
-func SynchronizedBucketService(config GatewayConfig) {
+func SynchronizedBucketDriver(config GatewayConfig) {
 	buckets := make(map[string]*SynchronizedBucket)
 	for request := range config.requestBucketChan {
 		if buckets[request.name] == nil {
