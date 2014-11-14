@@ -4,13 +4,13 @@ all: build test
 test: cauchy vandermonde
 
 cauchy:
-	@go test -test.run="TestCauchy*"
+	@godep go test -test.run="TestCauchy*"
 
 vandermonde:
-	@go test -test.run="TestVanderMonde*"
+	@godep go test -test.run="TestVanderMonde*"
 
 isal/isal-l.so:
 	@$(MAKE) --quiet -C isal
 
 build: isal/isal-l.so
-	@go build
+	@godep go build
