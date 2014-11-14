@@ -1,0 +1,4 @@
+*.o
+signify
+*.a
+*.so*
