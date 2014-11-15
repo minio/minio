@@ -5,10 +5,10 @@ all: test install
 test:
 	mkdir -p cover
 	godep go test -race -coverprofile=cover/cover.out github.com/minio-io/minio
-	godep go test -race github.com/minio-io/minio/minio
+	godep go test -race github.com/minio-io/minio/cmd/minio
 
 install:
-	godep go install -race github.com/minio-io/minio/minio
+	godep go install -race github.com/minio-io/minio/cmd/minio
 
 save:
 	godep save ./...
