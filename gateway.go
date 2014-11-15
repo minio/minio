@@ -7,6 +7,7 @@ import (
 	"github.com/tchap/go-patricia/patricia"
 	"io/ioutil"
 	"net/http"
+	"path"
 )
 
 // Stores system configuration, populated from CLI or test runner
@@ -14,6 +15,7 @@ type GatewayConfig struct {
 	StorageDriver     StorageDriver
 	BucketDriver      BucketDriver
 	requestBucketChan chan BucketRequest
+	dataDir           string
 }
 
 // Message for requesting a bucket
@@ -37,7 +39,7 @@ type Bucket interface {
 type BucketDriver func(config GatewayConfig)
 
 // Storage driver function, should read from a channel and respond through callback channels
-type StorageDriver func(bucket string, input chan ObjectRequest)
+type StorageDriver func(bucket string, input chan ObjectRequest, config GatewayConfig)
 
 // TODO remove when building real context
 type fakeContext struct{}
@@ -103,7 +105,7 @@ func SynchronizedBucketDriver(config GatewayConfig) {
 	for request := range config.requestBucketChan {
 		if buckets[request.name] == nil {
 			bucketChannel := make(chan ObjectRequest)
-			go config.StorageDriver(request.name, bucketChannel)
+			go config.StorageDriver(request.name, bucketChannel, config)
 			buckets[request.name] = &SynchronizedBucket{
 				name:    request.name,
 				channel: bucketChannel,
@@ -176,18 +178,39 @@ func (bucket *SynchronizedBucket) closeChannel() {
 	close(bucket.channel)
 }
 
-func InMemoryStorageDriver(bucket string, input chan ObjectRequest) {
+func InMemoryStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
 	objects := patricia.NewTrie()
 	for request := range input {
 		prefix := patricia.Prefix(request.path)
-		fmt.Println("objects:", objects)
 		switch request.requestType {
 		case "GET":
-			fmt.Println("GET: " + request.path)
 			request.callback <- objects.Get(prefix)
 		case "PUT":
-			fmt.Println("PUT: " + request.path)
 			objects.Insert(prefix, request.object)
+			request.callback <- nil
+		default:
+			request.callback <- errors.New("Unexpected message")
+		}
+	}
+}
+
+func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
+	storage := FileStorage{
+		RootDir: config.dataDir,
+	}
+	for request := range input {
+		switch request.requestType {
+		case "GET":
+			objectPath := path.Join(bucket, request.path)
+			object, err := storage.Get(objectPath)
+			if err != nil {
+				request.callback <- nil
+			} else {
+				request.callback <- object
+			}
+		case "PUT":
+			objectPath := path.Join(bucket, request.path)
+			storage.Put(objectPath, request.object)
 			request.callback <- nil
 		default:
 			request.callback <- errors.New("Unexpected message")
