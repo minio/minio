@@ -6,17 +6,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
-	"testing"
 )
 
-type MySuite struct{}
+type GatewaySuite struct{}
 
-var _ = Suite(&MySuite{})
+var _ = Suite(&GatewaySuite{})
 
-func Test(t *testing.T) { TestingT(t) }
-
-func (s *MySuite) TestPrintsGateway(c *C) {
+func (s *GatewaySuite) TestPrintsGateway(c *C) {
 	// set up router with in memory storage driver
 	router := mux.NewRouter()
 	config := GatewayConfig{
@@ -59,7 +57,7 @@ func (s *MySuite) TestPrintsGateway(c *C) {
 
 type TestContext struct{}
 
-func (s *MySuite) TestBucketCreation(c *C) {
+func (s *GatewaySuite) TestBucketCreation(c *C) {
 	config := GatewayConfig{
 		StorageDriver:     InMemoryStorageDriver,
 		requestBucketChan: make(chan BucketRequest),
@@ -103,38 +101,50 @@ func (s *MySuite) TestBucketCreation(c *C) {
 	c.Assert(bucketB.GetName(context), Equals, "bucketB")
 }
 
-func (s *MySuite) TestInMemoryBucketOperations(c *C) {
-	// Test in memory bucket operations
-	config := GatewayConfig{
-		StorageDriver:     InMemoryStorageDriver,
-		requestBucketChan: make(chan BucketRequest),
-	}
-	defer close(config.requestBucketChan)
-	go SynchronizedBucketDriver(config)
-	context := TestContext{}
-
-	// get bucket
-	callback := make(chan Bucket)
-	config.requestBucketChan <- BucketRequest{
-		name:     "bucket",
-		context:  context,
-		callback: callback,
-	}
-	bucket := <-callback
-	c.Assert(bucket.GetName(context), Equals, "bucket")
-
-	// get missing value
-	nilResult, err := bucket.Get(context, "foo")
-	c.Assert(nilResult, IsNil)
-	c.Assert(err, Not(IsNil))
-	c.Assert(err.Error(), Equals, "Object not found")
-
-	// add new value
-	err = bucket.Put(context, "foo", []byte("bar"))
+func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
+	simpleFileStorageRootDir, err := makeTempTestDir()
 	c.Assert(err, IsNil)
+	defer os.RemoveAll(simpleFileStorageRootDir)
+	configs := []GatewayConfig{
+		GatewayConfig{
+			StorageDriver:     InMemoryStorageDriver,
+			requestBucketChan: make(chan BucketRequest),
+		},
+		GatewayConfig{
+			StorageDriver:     SimpleFileStorageDriver,
+			requestBucketChan: make(chan BucketRequest),
+			dataDir:           simpleFileStorageRootDir,
+		},
+	}
+	for _, config := range configs {
+		defer close(config.requestBucketChan)
+		go SynchronizedBucketDriver(config)
+		context := TestContext{}
 
-	// retrieve value
-	barResult, err := bucket.Get(context, "foo")
-	c.Assert(err, IsNil)
-	c.Assert(string(barResult), Equals, "bar")
+		// get bucket
+		callback := make(chan Bucket)
+		config.requestBucketChan <- BucketRequest{
+			name:     "bucket",
+			context:  context,
+			callback: callback,
+		}
+		bucket := <-callback
+		c.Assert(bucket.GetName(context), Equals, "bucket")
+
+		// get missing value
+		nilResult, err := bucket.Get(context, "foo")
+		c.Assert(nilResult, IsNil)
+		c.Assert(err, Not(IsNil))
+		c.Assert(err.Error(), Equals, "Object not found")
+
+		// add new value
+		err = bucket.Put(context, "foo", []byte("bar"))
+		c.Assert(err, IsNil)
+
+		// retrieve value
+		barResult, err := bucket.Get(context, "foo")
+		c.Assert(err, IsNil)
+		c.Assert(string(barResult), Equals, "bar")
+
+	}
 }
