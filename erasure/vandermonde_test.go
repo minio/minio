@@ -17,7 +17,6 @@
 package erasure
 
 import (
-	"bytes"
 	. "gopkg.in/check.v1"
 )
 
@@ -52,7 +51,5 @@ func (s *MySuite) TestVanderMondeDecode(c *C) {
 	recovered_data, err := p.Decode(chunks, length)
 	c.Assert(err, Not(IsNil))
 
-	if i := bytes.Compare(recovered_data, data); i < 0 {
-		c.Fatalf("Error: recovered data is less than original data")
-	}
+	c.Assert(recovered_data, DeepEquals, data)
 }
