@@ -10,6 +10,7 @@ test: build-erasure
 	godep go test -race -coverprofile=cover.out github.com/minio-io/minio
 
 install: build-erasure
+	godep go install github.com/minio-io/minio/cmd/minio-encode
 
 save:
 	godep save ./...
