@@ -20,7 +20,7 @@
 package erasure
 
 // #cgo CPPFLAGS: -Iisal/include
-// #cgo LDFLAGS: isal/isa-l.so
+// #cgo LDFLAGS: isal/isa-l.a
 // #include <stdlib.h>
 // #include <erasure-code.h>
 // #include <stdlib.h>
