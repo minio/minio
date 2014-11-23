@@ -10,7 +10,7 @@ vandermonde:
 	@godep go test -test.run="TestVanderMonde*"
 
 isal/isal-l.so:
-	@$(MAKE) --quiet -C isal
+	@$(MAKE) --quiet -C isal lib
 
 build: isal/isal-l.so
 	@godep go build
