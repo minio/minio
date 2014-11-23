@@ -3,6 +3,9 @@ Dependencies
 * go1.3.3
 * godep
   * go get github.com/tools/godep
+* yasm
+* cover
+  * go get code.google.com/p/go.tools/cmd/cover or yum install golang-cover
 
 Dependency management
 =====================
