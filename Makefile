@@ -7,7 +7,7 @@ build-erasure:
 
 
 test: build-erasure
-	godep go test -race -coverprofile=cover/cover.out github.com/minio-io/minio
+	godep go test -race -coverprofile=cover.out github.com/minio-io/minio
 
 install: build-erasure
 
@@ -24,4 +24,4 @@ run: all
 	minio gateway
 
 cover: test
-	go tool cover -html=cover/cover.out
+	go tool cover -html=cover.out
