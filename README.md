@@ -1,3 +1,20 @@
+Introduction
+============
+Minio is an open source object storage released under Apache license v2.
+
+It uses ``Rubberband Erasure`` coding to dynamically protect the data.
+Minio's was inspired by Amazon S3 API and Haystack Object Format
+
+Overview
+============
+<center>
+<picture>
+    <source src=https://github.com/Minio-io/minio/raw/master/Minio-Overview.webp type=image/webp >
+    <source src=https://github.com/Minio-io/minio/raw/master/Minio-Overview.png type=image/png >
+    <img src="https://github.com/Minio-io/minio/raw/master/Minio-Overview.png" alt="Minio Overview Diagram">
+</picture>
+</center>
+
 Dependencies
 ============
 * go1.3.3
