@@ -15,7 +15,7 @@ func main() {
 	app.Name = "minio-encode"
 	app.Usage = "erasure encode a byte stream"
 	app.Action = func(c *cli.Context) {
-		erasureParameters, _ := erasure.ValidateParams(10, 5, 8, erasure.VANDERMONDE)
+		erasureParameters, _ := erasure.ValidateParams(10, 5, 8, erasure.CAUCHY)
 
 		encoder := erasure.NewEncoder(erasureParameters)
 		input, err := ioutil.ReadAll(os.Stdin)
