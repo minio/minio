@@ -3,10 +3,12 @@
 all: test install
 
 build-erasure:
-	cd erasure && make
+	cd pkgs/erasure && make
 
+build-signify:
+	cd pkgs/signify && make
 
-test: build-erasure
+test: build-erasure build-signify
 	godep go test -race -coverprofile=cover.out github.com/minio-io/minio
 
 install: build-erasure

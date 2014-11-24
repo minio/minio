@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/codegangsta/cli"
-	"github.com/minio-io/minio/erasure"
+	"github.com/minio-io/minio/pkgs/erasure"
 )
 
 func main() {
