@@ -12,8 +12,8 @@ import (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "minio-encode"
-	app.Usage = "erasure encode a byte stream"
+	app.Name = "minio-decode"
+	app.Usage = "erasure decode a byte stream"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "input,i",
@@ -63,7 +63,7 @@ func main() {
 			var err error
 			chunks[i], err = ioutil.ReadFile(inputFilePath + "." + strconv.Itoa(i))
 			if err != nil {
-				log.Fatal(err)
+				continue
 			}
 		}
 
