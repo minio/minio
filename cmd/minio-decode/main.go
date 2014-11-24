@@ -80,10 +80,9 @@ func main() {
 
 		// set up encoder
 		erasureParameters, _ := erasure.ValidateParams(k, m, 8, erasure.CAUCHY)
-		encoder := erasure.NewEncoder(erasureParameters)
 
 		// decode data
-		decodedData, err := encoder.Decode(chunks, length)
+		decodedData, err := erasure.Decode(chunks, erasureParameters, length)
 		if err != nil {
 			log.Fatal(err)
 		}

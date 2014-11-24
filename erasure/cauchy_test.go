@@ -29,10 +29,8 @@ func Test(t *testing.T) { TestingT(t) }
 
 func (s *MySuite) TestCachyEncode(c *C) {
 	ep, _ := ValidateParams(10, 5, 8, CAUCHY)
-	p := NewEncoder(ep)
-
 	data := make([]byte, 1000)
-	_, length := p.Encode(data)
+	_, length := Encode(data, ep)
 	c.Assert(length, Equals, len(data))
 }
 
@@ -41,8 +39,7 @@ func (s *MySuite) TestCauchyDecode(c *C) {
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
-	p := NewEncoder(ep)
-	chunks, length := p.Encode(data)
+	chunks, length := Encode(data, ep)
 	c.Assert(length, Equals, len(data))
 
 	chunks[0] = nil
@@ -51,7 +48,7 @@ func (s *MySuite) TestCauchyDecode(c *C) {
 	chunks[9] = nil
 	chunks[13] = nil
 
-	recovered_data, err := p.Decode(chunks, length)
+	recovered_data, err := Decode(chunks, ep, length)
 	c.Assert(err, Not(IsNil))
 
 	c.Assert(recovered_data, DeepEquals, data)

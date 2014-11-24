@@ -200,10 +200,10 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	return chunks, block_len
 }
 
-func GetEncoder(ep EncoderParams) *Encoder {
+func GetEncoder(ep *EncoderParams) *Encoder {
 	return DefaultCache.GetC(ep)
 }
 
-func Encode(data []byte, ep EncoderParams) (chunks [][]byte, length int) {
+func Encode(data []byte, ep *EncoderParams) (chunks [][]byte, length int) {
 	return GetEncoder(ep).Encode(data)
 }

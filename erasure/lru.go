@@ -37,17 +37,17 @@ func GetCache(capacity int) *Cache {
 }
 
 // ``GetC()`` -- Grab encoder from LRU
-func (c *Cache) GetC(ep EncoderParams) *Encoder {
+func (c *Cache) GetC(ep *EncoderParams) *Encoder {
 	if encoder, ret := c._Get(ep); ret {
 		return encoder
 	}
-	encoder := NewEncoder(&ep)
+	encoder := NewEncoder(ep)
 	c._Put(ep, encoder)
 	return encoder
 }
 
 // ``_Get()`` -- Get key from existing LRU
-func (c *Cache) _Get(ep EncoderParams) (*Encoder, bool) {
+func (c *Cache) _Get(ep *EncoderParams) (*Encoder, bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	if encoder, ret := c.cache.Get(ep); ret {
@@ -57,7 +57,7 @@ func (c *Cache) _Get(ep EncoderParams) (*Encoder, bool) {
 }
 
 // ``_Put()`` -- Add key to existing LRU
-func (c *Cache) _Put(ep EncoderParams, encoder *Encoder) {
+func (c *Cache) _Put(ep *EncoderParams, encoder *Encoder) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.cache.Add(ep, encoder)
