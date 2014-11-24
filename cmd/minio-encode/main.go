@@ -71,10 +71,8 @@ func main() {
 
 		// set up encoder
 		erasureParameters, _ := erasure.ValidateParams(k, m, 8, erasure.CAUCHY)
-		encoder := erasure.NewEncoder(erasureParameters)
-
 		// encode data
-		encodedData, length := encoder.Encode(input)
+		encodedData, length := erasure.Encode(input, erasureParameters)
 
 		// write encoded data out
 		for key, data := range encodedData {
