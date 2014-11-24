@@ -25,6 +25,16 @@ func main() {
 			Value: "",
 			Usage: "Output file",
 		},
+		cli.IntFlag{
+			Name:  "k",
+			Value: 10,
+			Usage: "k value of encoder parameters",
+		},
+		cli.IntFlag{
+			Name:  "m",
+			Value: 5,
+			Usage: "m value of encoder parameters",
+		},
 	}
 	app.Action = func(c *cli.Context) {
 		// check if minio-encode called without parameters
@@ -44,6 +54,9 @@ func main() {
 			outputFilePath = c.String("output")
 		}
 
+		k := c.Int("k")
+		m := c.Int("m")
+
 		// get file
 		inputFile, err := os.Open(inputFilePath)
 		if err != nil {
@@ -57,7 +70,7 @@ func main() {
 		}
 
 		// set up encoder
-		erasureParameters, _ := erasure.ValidateParams(10, 5, 8, erasure.CAUCHY)
+		erasureParameters, _ := erasure.ValidateParams(k, m, 8, erasure.CAUCHY)
 		encoder := erasure.NewEncoder(erasureParameters)
 
 		// encode data
