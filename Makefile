@@ -11,6 +11,7 @@ test: build-erasure
 
 install: build-erasure
 	godep go install github.com/minio-io/minio/cmd/minio-encode
+	godep go install github.com/minio-io/minio/cmd/minio-decode
 
 save:
 	godep save ./...

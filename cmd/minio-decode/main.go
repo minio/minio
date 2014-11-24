@@ -57,14 +57,23 @@ func main() {
 		k := c.Int("k")
 		m := c.Int("m")
 
-		// get file
-		inputFile, err := os.Open(inputFilePath)
+		// get chunks
+		chunks := make([][]byte, k+m)
+		for i := 0; i < k+m; i++ {
+			var err error
+			chunks[i], err = ioutil.ReadFile(inputFilePath + "." + strconv.Itoa(i))
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		// get length
+		lengthBytes, err := ioutil.ReadFile(inputFilePath + ".length")
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		// read file
-		input, err := ioutil.ReadAll(inputFile)
+		lengthString := string(lengthBytes)
+		length, err := strconv.Atoi(lengthString)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -73,14 +82,14 @@ func main() {
 		erasureParameters, _ := erasure.ValidateParams(k, m, 8, erasure.CAUCHY)
 		encoder := erasure.NewEncoder(erasureParameters)
 
-		// encode data
-		encodedData, length := encoder.Encode(input)
-
-		// write encoded data out
-		for key, data := range encodedData {
-			ioutil.WriteFile(outputFilePath+"."+strconv.Itoa(key), data, 0600)
+		// decode data
+		decodedData, err := encoder.Decode(chunks, length)
+		if err != nil {
+			log.Fatal(err)
 		}
-		ioutil.WriteFile(outputFilePath+".length", []byte(strconv.Itoa(length)), 0600)
+
+		// write decode data out
+		ioutil.WriteFile(outputFilePath, decodedData, 0600)
 	}
 	app.Run(os.Args)
 }
