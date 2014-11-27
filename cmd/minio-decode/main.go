@@ -60,11 +60,7 @@ func main() {
 		// get chunks
 		chunks := make([][]byte, k+m)
 		for i := 0; i < k+m; i++ {
-			var err error
-			chunks[i], err = ioutil.ReadFile(inputFilePath + "." + strconv.Itoa(i))
-			if err != nil {
-				continue
-			}
+			chunks[i], _ = ioutil.ReadFile(inputFilePath + "." + strconv.Itoa(i))
 		}
 
 		// get length
