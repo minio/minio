@@ -38,8 +38,9 @@ const (
 )
 
 const (
-	DEFAULT_K = 10
-	DEFAULT_M = 3
+	K     = 10
+	M     = 3
+	ALIGN = 32
 )
 
 type EncoderParams struct {
@@ -148,16 +149,16 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 }
 
 func (e *Encoder) CalcChunkSize(block_len int) int {
-	var alignment int = e.p.k * e.p.w
-	var padding = block_len % alignment
-	var padded_len int
+	var alignment int = ALIGN
+	var remainder = block_len % alignment
+	var chunk_size int
 
-	if padding > 0 {
-		padded_len = block_len + (alignment - padding)
-	} else {
-		padded_len = block_len
+	chunk_size = block_len
+	if remainder > 0 {
+		chunk_size = block_len + (alignment - remainder)
 	}
-	return padded_len / e.p.k
+
+	return chunk_size / e.p.k
 }
 
 func (e *Encoder) Encode(block []byte) ([][]byte, int) {
