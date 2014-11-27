@@ -40,4 +40,4 @@ Compiling
 make
 ```
 
-[![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/your-repo/page-name)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme)](https://github.com/igrigorik/ga-beacon)
