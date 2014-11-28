@@ -17,27 +17,27 @@
 package erasure
 
 import (
+	"bytes"
 	. "gopkg.in/check.v1"
 )
 
 func (s *MySuite) TestVanderMondeEncode(c *C) {
-	ep, _ := ValidateParams(10, 5, 8, VANDERMONDE)
-	p := NewEncoder(ep)
+	ep, _ := ParseEncoderParams(10, 5, VANDERMONDE)
 
-	data := make([]byte, 1000)
-	chunks, length := p.Encode(data)
+	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
+
+	chunks, length := Encode(data, ep)
 
 	c.Logf("chunks length: %d;\nlength: %d\n", len(chunks), length)
 	c.Assert(length, Equals, len(data))
 }
 
 func (s *MySuite) TestVanderMondeDecode(c *C) {
-	ep, _ := ValidateParams(10, 5, 8, VANDERMONDE)
-	p := NewEncoder(ep)
+	ep, _ := ParseEncoderParams(10, 5, VANDERMONDE)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
-	chunks, length := p.Encode(data)
+	chunks, length := Encode(data, ep)
 	c.Logf("chunks length: %d", len(chunks))
 	c.Logf("length: %d", length)
 	c.Assert(length, Equals, len(data))
@@ -48,8 +48,10 @@ func (s *MySuite) TestVanderMondeDecode(c *C) {
 	chunks[9] = nil
 	chunks[13] = nil
 
-	recovered_data, err := p.Decode(chunks, length)
-	c.Assert(err, Not(IsNil))
+	recovered_data, err := Decode(chunks, ep, length)
+	c.Assert(err, IsNil)
 
-	c.Assert(recovered_data, DeepEquals, data)
+	if !bytes.Equal(recovered_data, data) {
+		c.Fatalf("Recovered data mismatches with original data")
+	}
 }

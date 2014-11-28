@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __MATRIX_DECODE_H__
-#define __MATRIX_DECODE_H__
+#ifndef __DECODE_H__
+#define __DECODE_H__
 
-int gf_gen_decode_matrix (int *src_err_list,
-                          unsigned char *encoding_matrix,
-                          unsigned char *decode_matrix, int k, int n,
-                          int errs, size_t matrix_size);
-#endif /* __MATRIX_DECODE_H__  */
+int minio_init_decoder (int *src_err_list,
+                        unsigned char *encoding_matrix,
+                        unsigned char **decode_matrix,
+                        unsigned char **decode_tbls,
+                        int k, int n, int errs);
+#endif /* __DECODE_H__  */
