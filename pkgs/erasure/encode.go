@@ -42,12 +42,14 @@ const (
 	M = 3
 )
 
+// EncoderParams is a configuration set for building an encoder. It is created using ValidateParams.
 type EncoderParams struct {
 	k,
 	m,
 	technique int // cauchy or vandermonde matrix (RS)
 }
 
+// Encoder is an object used to encode and decode data.
 type Encoder struct {
 	p *EncoderParams
 	k,
@@ -58,7 +60,11 @@ type Encoder struct {
 	decode_tbls *C.uchar
 }
 
-// Parameter validation
+// ParseEncoderParams creates an EncoderParams object.
+//
+// k and n represent the matrix size, which corresponds to the protection level.
+//
+// technique is the matrix type. Valid inputs are CAUCHY (recommended) or VANDERMONDE.
 func ParseEncoderParams(k, m, technique int) (*EncoderParams, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be zero")
@@ -88,6 +94,7 @@ func ParseEncoderParams(k, m, technique int) (*EncoderParams, error) {
 	}, nil
 }
 
+// NewEncoder creates an encoder with a given set of parameters.
 func NewEncoder(ep *EncoderParams) *Encoder {
 	var k = C.int(ep.k)
 	var m = C.int(ep.m)
@@ -110,6 +117,9 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
+// Encode encodes a block of data. The input is the original data. The output
+// is a 2 tuple containing (k + m) chunks of erasure encoded data and the
+// length of the original object.
 func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var block_len = len(block)
 
