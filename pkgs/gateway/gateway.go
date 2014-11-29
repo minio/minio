@@ -1,13 +1,15 @@
-package minio
+package gateway
 
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/tchap/go-patricia/patricia"
 	"io/ioutil"
 	"net/http"
 	"path"
+
+	"github.com/gorilla/mux"
+	"github.com/minio-io/minio/pkgs/storage"
+	"github.com/tchap/go-patricia/patricia"
 )
 
 // Stores system configuration, populated from CLI or test runner
@@ -195,14 +197,14 @@ func InMemoryStorageDriver(bucket string, input chan ObjectRequest, config Gatew
 }
 
 func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
-	storage := FileStorage{
+	fileStorage := storage.FileStorage{
 		RootDir: config.dataDir,
 	}
 	for request := range input {
 		switch request.requestType {
 		case "GET":
 			objectPath := path.Join(bucket, request.path)
-			object, err := storage.Get(objectPath)
+			object, err := fileStorage.Get(objectPath)
 			if err != nil {
 				request.callback <- nil
 			} else {
@@ -210,7 +212,7 @@ func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config Gat
 			}
 		case "PUT":
 			objectPath := path.Join(bucket, request.path)
-			storage.Put(objectPath, request.object)
+			fileStorage.Put(objectPath, request.object)
 			request.callback <- nil
 		default:
 			request.callback <- errors.New("Unexpected message")

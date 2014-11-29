@@ -1,4 +1,4 @@
-package minio
+package storage
 
 import (
 	"io/ioutil"

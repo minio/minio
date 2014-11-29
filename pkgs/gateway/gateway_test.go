@@ -1,13 +1,15 @@
-package minio
+package gateway
 
 import (
-	"github.com/gorilla/mux"
-	. "gopkg.in/check.v1"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/minio-io/minio/pkgs/miniotest"
+	. "gopkg.in/check.v1"
 )
 
 type GatewaySuite struct{}
@@ -102,7 +104,7 @@ func (s *GatewaySuite) TestBucketCreation(c *C) {
 }
 
 func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
-	simpleFileStorageRootDir, err := makeTempTestDir()
+	simpleFileStorageRootDir, err := miniotest.MakeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(simpleFileStorageRootDir)
 	configs := []GatewayConfig{
