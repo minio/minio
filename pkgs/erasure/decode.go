@@ -108,6 +108,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	return recovered_output[:length], nil
 }
 
-func Decode(chunks [][]byte, ep *EncoderParams, length int) (block []byte, err error) {
-	return GetEncoder(ep).Decode(chunks, length)
+func Decode(block [][]byte, ep *EncoderParams, length int) ([]byte, error) {
+	encoder := NewEncoder(ep)
+	return encoder.Decode(block, length)
 }
