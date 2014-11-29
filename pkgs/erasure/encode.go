@@ -88,7 +88,7 @@ func ParseEncoderParams(k, m, technique int) (*EncoderParams, error) {
 	}, nil
 }
 
-func newEncoder(ep *EncoderParams) *Encoder {
+func NewEncoder(ep *EncoderParams) *Encoder {
 	var k = C.int(ep.k)
 	var m = C.int(ep.m)
 
@@ -152,6 +152,6 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 }
 
 func Encode(block []byte, ep *EncoderParams) ([][]byte, int) {
-	encoder := newEncoder(ep)
+	encoder := NewEncoder(ep)
 	return encoder.Encode(block)
 }
