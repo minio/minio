@@ -23,10 +23,10 @@ import (
 )
 
 // Integer to Int conversion
-func Int2cInt(src_err_list []int) *C.int {
-	SrcErrInt := int(unsafe.Sizeof(src_err_list[0]))
-	switch SrcErrInt {
-	case SizeInt:
+func int2cInt(src_err_list []int) *C.int {
+	var SrcErrInt = int(unsafe.Sizeof(src_err_list[0]))
+	switch SizeInt {
+	case SrcErrInt:
 		return (*C.int)(unsafe.Pointer(&src_err_list[0]))
 	case SizeInt8:
 		Int8Array := make([]int8, len(src_err_list))

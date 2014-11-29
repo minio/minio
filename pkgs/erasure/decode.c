@@ -16,13 +16,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <erasure-code.h>
-#include "matrix_decode.h"
+#include "decode.h"
 
 static int src_in_err (int r, int *src_err_list)
 {
-
         int i;
         for (i = 0; src_err_list[i] != -1; i++) {
                 if (src_err_list[i] == r) {
@@ -37,25 +37,25 @@ static int src_in_err (int r, int *src_err_list)
   Generate decode matrix during the decoding phase
 */
 
-int gf_gen_decode_matrix (int *src_err_list,
-                          unsigned char *encode_matrix,
-                          unsigned char *decode_matrix,
-                          int k, int n, int errs,
-                          size_t matrix_size)
+int minio_init_decoder (int *src_err_list,
+                        unsigned char *encode_matrix,
+                        unsigned char **decode_matrix,
+                        unsigned char **decode_tbls,
+                        int k, int n, int errs)
 {
         int i, j, r, s, l, z;
-        unsigned char *input_matrix = NULL;
-        unsigned char *inverse_matrix = NULL;
+        unsigned char input_matrix[k * n];
+        unsigned char inverse_matrix[k * n];
+        unsigned char *tmp_decode_matrix;
+        unsigned char *tmp_decode_tbls;
 
-        input_matrix = malloc(k * n);
-        if (!input_matrix) {
+        tmp_decode_matrix = (unsigned char *) malloc (k * n);
+        if (!tmp_decode_matrix)
                 return -1;
-        }
 
-        inverse_matrix = malloc(matrix_size);
-        if (!inverse_matrix) {
+        tmp_decode_tbls = (unsigned char *) malloc (k * n * 32);
+        if (!tmp_decode_tbls)
                 return -1;
-        }
 
         for (i = 0, r = 0; i < k; i++, r++) {
                 while (src_in_err(r, src_err_list))
@@ -74,7 +74,7 @@ int gf_gen_decode_matrix (int *src_err_list,
                 if (src_err_list[l] < k) {
                         // decoding matrix elements for data chunks
                         for (j = 0; j < k; j++) {
-                                decode_matrix[k * l + j] =
+                                tmp_decode_matrix[k * l + j] =
                                         inverse_matrix[k *
                                                        src_err_list[l] + j];
                         }
@@ -88,11 +88,14 @@ int gf_gen_decode_matrix (int *src_err_list,
                                                     encode_matrix[k *
                                                                   src_err_list[l] + j]);
                                 }
-                                decode_matrix[k * l + i] = s;
+                                tmp_decode_matrix[k * l + i] = s;
                         }
                 }
         }
-        free(input_matrix);
-        free(inverse_matrix);
+
+        ec_init_tables(k, errs, tmp_decode_matrix, tmp_decode_tbls);
+
+        *decode_matrix = tmp_decode_matrix;
+        *decode_tbls = tmp_decode_tbls;
         return 0;
 }

@@ -15,7 +15,6 @@
  */
 
 // +build linux
-// amd64
 
 package erasure
 
@@ -25,10 +24,11 @@ package erasure
 // #include <erasure-code.h>
 // #include <stdlib.h>
 //
-// #include "cpufeatures.h"
+// #include "encode.h"
 import "C"
 import (
 	"errors"
+	//"fmt"
 	"unsafe"
 )
 
@@ -38,24 +38,20 @@ const (
 )
 
 const (
-	K     = 10
-	M     = 3
-	ALIGN = 32
+	K = 10
+	M = 3
 )
 
 type EncoderParams struct {
 	k,
 	m,
-	w,
-	n,
 	technique int // cauchy or vandermonde matrix (RS)
 }
 
 type Encoder struct {
 	p *EncoderParams
 	k,
-	m,
-	w C.int
+	m C.int
 	encode_matrix,
 	encode_tbls,
 	decode_matrix,
@@ -63,7 +59,7 @@ type Encoder struct {
 }
 
 // Parameter validation
-func ValidateParams(k, m, w, technique int) (*EncoderParams, error) {
+func ParseEncoderParams(k, m, technique int) (*EncoderParams, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be zero")
 	}
@@ -74,14 +70,6 @@ func ValidateParams(k, m, w, technique int) (*EncoderParams, error) {
 
 	if k+m > 255 {
 		return nil, errors.New("(k + m) cannot be bigger than Galois field GF(2^8) - 1")
-	}
-
-	if 1<<uint(w) < k+m {
-		return nil, errors.New("Wordsize should be bigger than Galois field GF(2^8) - 1")
-	}
-
-	if w < 0 {
-		return nil, errors.New("Wordsize cannot be negative")
 	}
 
 	switch technique {
@@ -96,51 +84,25 @@ func ValidateParams(k, m, w, technique int) (*EncoderParams, error) {
 	return &EncoderParams{
 		k:         k,
 		m:         m,
-		w:         w,
-		n:         k + m,
 		technique: technique,
 	}, nil
 }
 
-func NewEncoder(ep *EncoderParams) *Encoder {
+func newEncoder(ep *EncoderParams) *Encoder {
 	var k = C.int(ep.k)
 	var m = C.int(ep.m)
-	var w = C.int(ep.w)
-	var n = C.int(ep.n)
 
 	var encode_matrix *C.uchar
 	var encode_tbls *C.uchar
 
-	var matrix_size C.size_t
-	var encode_tbls_size C.size_t
-
-	matrix_size = C.size_t(k * n)
-	encode_matrix = (*C.uchar)(unsafe.Pointer(C.malloc(matrix_size)))
+	C.minio_init_encoder(C.int(ep.technique), k, m, &encode_matrix,
+		&encode_tbls)
 	defer C.free(unsafe.Pointer(encode_matrix))
-
-	encode_tbls_size = C.size_t(k * n * 32)
-	encode_tbls = (*C.uchar)(unsafe.Pointer(C.malloc(encode_tbls_size)))
 	defer C.free(unsafe.Pointer(encode_tbls))
-
-	if ep.technique == VANDERMONDE {
-		// Commonly used method for choosing coefficients in erasure encoding
-		// but does not guarantee invertable for every sub matrix.  For large
-		// k it is possible to find cases where the decode matrix chosen from
-		// sources and parity not in erasure are not invertable. Users may
-		// want to adjust for k > 5.
-		//   -- Intel
-		C.gf_gen_rs_matrix(encode_matrix, n, k)
-	} else if ep.technique == CAUCHY {
-		C.gf_gen_cauchy1_matrix(encode_matrix, n, k)
-	}
-
-	C.ec_init_tables(k, m, encode_matrix, encode_tbls)
-
 	return &Encoder{
 		p:             ep,
 		k:             k,
 		m:             m,
-		w:             w,
 		encode_matrix: encode_matrix,
 		encode_tbls:   encode_tbls,
 		decode_matrix: nil,
@@ -148,27 +110,15 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
-func (e *Encoder) CalcChunkSize(block_len int) int {
-	var alignment int = ALIGN
-	var remainder = block_len % alignment
-	var chunk_size int
-
-	chunk_size = block_len
-	if remainder > 0 {
-		chunk_size = block_len + (alignment - remainder)
-	}
-
-	return chunk_size / e.p.k
-}
-
 func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var block_len = len(block)
 
-	chunk_size := e.CalcChunkSize(block_len)
-	padded_len := chunk_size * e.p.k
+	chunk_size := int(C.calc_chunk_size(e.k, C.uint(block_len)))
+	chunk_len := chunk_size * e.p.k
+	pad_len := chunk_len - block_len
 
-	if (padded_len - block_len) > 0 {
-		s := make([]byte, (padded_len - block_len))
+	if pad_len > 0 {
+		s := make([]byte, pad_len)
 		// Expand with new padded blocks to the byte array
 		block = append(block, s...)
 	}
@@ -178,8 +128,8 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	block = append(block, c...)
 
 	// Allocate chunks
-	chunks := make([][]byte, e.p.n)
-	pointers := make([]*byte, e.p.n)
+	chunks := make([][]byte, e.p.k+e.p.m)
+	pointers := make([]*byte, e.p.k+e.p.m)
 
 	var i int
 	// Add data blocks to chunks
@@ -188,7 +138,7 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 		pointers[i] = &chunks[i][0]
 	}
 
-	for i = e.p.k; i < e.p.n; i++ {
+	for i = e.p.k; i < (e.p.k + e.p.m); i++ {
 		chunks[i] = make([]byte, chunk_size)
 		pointers[i] = &chunks[i][0]
 	}
