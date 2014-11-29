@@ -24,7 +24,7 @@ package erasure
 // #include <erasure-code.h>
 // #include <stdlib.h>
 //
-// #include "encode.h"
+// #include "common.h"
 import "C"
 import (
 	"errors"
@@ -123,7 +123,7 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var block_len = len(block)
 
-	chunk_size := int(C.calc_chunk_size(e.k, C.uint(block_len)))
+	chunk_size := int(C.minio_calc_chunk_size(e.k, C.uint32_t(block_len)))
 	chunk_len := chunk_size * e.p.k
 	pad_len := chunk_len - block_len
 

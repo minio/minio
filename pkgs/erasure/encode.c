@@ -18,11 +18,11 @@
 #include <stdio.h>
 
 #include <erasure-code.h>
-#include "encode.h"
+#include "common.h"
 
-void minio_init_encoder (int technique, int k, int m,
-                         unsigned char **encode_matrix,
-                         unsigned char **encode_tbls)
+int32_t minio_init_encoder (int technique, int k, int m,
+                            unsigned char **encode_matrix,
+                            unsigned char **encode_tbls)
 {
         size_t encode_matrix_size;
         size_t encode_tbls_size;
@@ -52,9 +52,11 @@ void minio_init_encoder (int technique, int k, int m,
 
         *encode_matrix = tmp_matrix;
         *encode_tbls = tmp_tbls;
+
+        return 0;
 }
 
-unsigned int calc_chunk_size (int k, unsigned int split_len)
+uint32_t minio_calc_chunk_size (int k, uint32_t split_len)
 {
         int alignment;
         int remainder;
@@ -69,7 +71,3 @@ unsigned int calc_chunk_size (int k, unsigned int split_len)
         }
         return padded_len / k;
 }
-/*
-void minio_encode (int k, int m, )
-{
-*/

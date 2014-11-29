@@ -24,8 +24,7 @@ package erasure
 // #include <erasure-code.h>
 // #include <stdlib.h>
 //
-// #include "decode.h"
-// #include "encode.h"
+// #include "common.h"
 import "C"
 import (
 	"errors"
@@ -36,6 +35,7 @@ import (
 func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	var decode_matrix *C.uchar
 	var decode_tbls *C.uchar
+	var source, target **C.uchar
 
 	k := int(e.p.k)
 	n := int(e.p.k + e.p.m)
@@ -44,7 +44,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		return nil, errors.New(fmt.Sprintf("chunks length must be %d", n))
 	}
 
-	chunk_size := int(C.calc_chunk_size(e.k, C.uint(length)))
+	chunk_size := int(C.minio_calc_chunk_size(e.k, C.uint32_t(length)))
 
 	src_err_list := make([]int, n+1)
 	var err_count int = 0
@@ -84,21 +84,14 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		pointers[i] = &chunks[i][0]
 	}
 
-	/*
-		// Pack recovery array as list of valid sources
-		// Its order must be the same as the order
-		// to generate matrix b in gf_gen_decode_matrix
-		var i int
-		for i = 0; i < e.p.k; i++ {
-			recov[i] = buffs[decode_index[i]]
-		}
-	*/
-
 	data := (**C.uchar)(unsafe.Pointer(&pointers[:k][0]))
 	coding := (**C.uchar)(unsafe.Pointer(&pointers[k:][0]))
 
+	C.minio_get_source_target(src_err_list_ptr, C.int(err_count-1),
+		e.k, e.m, data, coding, &source, &target)
+
 	C.ec_encode_data(C.int(chunk_size), e.k, C.int(err_count-1), decode_tbls,
-		data, coding)
+		source, target)
 
 	recovered_output := make([]byte, 0, chunk_size*k)
 	for i := 0; i < k; i++ {
