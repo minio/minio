@@ -112,6 +112,6 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 }
 
 func Decode(block [][]byte, ep *EncoderParams, length int) ([]byte, error) {
-	encoder := NewEncoder(ep)
+	encoder := newEncoder(ep)
 	return encoder.Decode(block, length)
 }

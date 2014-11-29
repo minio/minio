@@ -152,6 +152,6 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 }
 
 func Encode(block []byte, ep *EncoderParams) ([][]byte, int) {
-	encoder := NewEncoder(ep)
+	encoder := newEncoder(ep)
 	return encoder.Encode(block)
 }
