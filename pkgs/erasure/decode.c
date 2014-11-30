@@ -19,18 +19,64 @@
 #include <string.h>
 
 #include <erasure-code.h>
-#include "decode.h"
+#include "common.h"
 
-static int src_in_err (int r, int *src_err_list)
+int32_t minio_src_in_err (int r, int *src_err_list)
 {
         int i;
         for (i = 0; src_err_list[i] != -1; i++) {
                 if (src_err_list[i] == r) {
+                        // true
                         return 1;
                 }
         }
         // false
         return 0;
+}
+
+int32_t minio_get_source_target(int *src_err_list,
+                                int errs, int k, int m,
+                                unsigned char **data,
+                                unsigned char **coding,
+                                unsigned char ***source,
+                                unsigned char ***target)
+{
+        int i, j, l;
+        unsigned char *tmp_source[k];
+        unsigned char *tmp_target[m];
+
+        // Fill zeroes
+        memset (tmp_source, 0, sizeof(tmp_source));
+        memset (tmp_target, 0, sizeof(tmp_target));
+
+        // Separate out source and target buffers from input data/coding chunks
+        // This separation needs to happen at error chunks from input chunks
+        for (i = 0, j = 0, l = 0;
+             ((l < k) || (j < errs)) && (i < (k + m)); i++) {
+                if (!minio_src_in_err(i, src_err_list)) {
+                        if (l < k) {
+                                if (i < k)
+                                        tmp_source[l] =
+                                                (unsigned char *) data[i];
+                                else
+                                        tmp_source[l] =
+                                                (unsigned char *) coding[i - k];
+                                l++;
+                        }
+                } else {
+                        if (j < m) {
+                                if (i < k)
+                                        tmp_target[j] =
+                                                (unsigned char *) data[i];
+                                else
+                                        tmp_target[j] =
+                                                (unsigned char *) coding[i - k];
+                                j++;
+                        }
+                }
+        }
+        *source = tmp_source;
+        *target = tmp_target;
 }
 
 /*
@@ -58,7 +104,7 @@ int minio_init_decoder (int *src_err_list,
                 return -1;
 
         for (i = 0, r = 0; i < k; i++, r++) {
-                while (src_in_err(r, src_err_list))
+                while (minio_src_in_err(r, src_err_list))
                         r++;
                 for (j = 0; j < k; j++) {
                         input_matrix[k * i + j] = encode_matrix[k * r + j];
