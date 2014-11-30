@@ -4,8 +4,8 @@ all: build test
 test:
 	@godep go test
 
-isal/isal-l.so:
+isal/isal-l.a:
 	@$(MAKE) --quiet -C isal lib
 
-build: isal/isal-l.so
+build: isal/isal-l.a
 	@godep go build
