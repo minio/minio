@@ -75,7 +75,7 @@ func main() {
 		}
 
 		// set up encoder
-		erasureParameters, _ := erasure.ValidateParams(k, m, 8, erasure.CAUCHY)
+		erasureParameters, _ := erasure.ParseEncoderParams(k, m, erasure.CAUCHY)
 
 		// decode data
 		decodedData, err := erasure.Decode(chunks, erasureParameters, length)
