@@ -8,7 +8,7 @@ import (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "minio-encode"
+	app.Name = "erasure-demo"
 	app.Usage = "erasure encode a byte stream"
 	app.Commands = []cli.Command{
 		{
