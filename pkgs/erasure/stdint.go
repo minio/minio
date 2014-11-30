@@ -17,7 +17,7 @@
 package erasure
 
 //
-// int SizeInt()
+// int sizeInt()
 // {
 //      return sizeof(int);
 // }
@@ -28,21 +28,21 @@ var (
 	// See http://golang.org/ref/spec#Numeric_types
 
 	// SizeUint8 is the byte size of a uint8.
-	SizeUint8 = int(unsafe.Sizeof(uint8(0)))
+	sizeUint8 = int(unsafe.Sizeof(uint8(0)))
 	// SizeUint16 is the byte size of a uint16.
-	SizeUint16 = int(unsafe.Sizeof(uint16(0)))
+	sizeUint16 = int(unsafe.Sizeof(uint16(0)))
 	// SizeUint32 is the byte size of a uint32.
-	SizeUint32 = int(unsafe.Sizeof(uint32(0)))
+	sizeUint32 = int(unsafe.Sizeof(uint32(0)))
 	// SizeUint64 is the byte size of a uint64.
-	SizeUint64 = int(unsafe.Sizeof(uint64(0)))
+	sizeUint64 = int(unsafe.Sizeof(uint64(0)))
 
-	SizeInt = int(C.SizeInt())
+	sizeInt = int(C.sizeInt())
 	// SizeInt8  is the byte size of a int8.
-	SizeInt8 = int(unsafe.Sizeof(int8(0)))
+	sizeInt8 = int(unsafe.Sizeof(int8(0)))
 	// SizeInt16 is the byte size of a int16.
-	SizeInt16 = int(unsafe.Sizeof(int16(0)))
+	sizeInt16 = int(unsafe.Sizeof(int16(0)))
 	// SizeInt32 is the byte size of a int32.
-	SizeInt32 = int(unsafe.Sizeof(int32(0)))
+	sizeInt32 = int(unsafe.Sizeof(int32(0)))
 	// SizeInt64 is the byte size of a int64.
-	SizeInt64 = int(unsafe.Sizeof(int64(0)))
+	sizeInt64 = int(unsafe.Sizeof(int64(0)))
 )
