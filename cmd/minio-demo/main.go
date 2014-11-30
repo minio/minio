@@ -23,7 +23,7 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "protection-level",
-					Value: "10,5",
+					Value: "10,6",
 					Usage: "data,parity",
 				},
 			},
@@ -40,7 +40,7 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "protection-level",
-					Value: "10,5",
+					Value: "10,6",
 					Usage: "data,parity",
 				},
 			},
