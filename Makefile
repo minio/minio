@@ -1,19 +1,24 @@
 #GOPATH := $(CURDIR)/tmp/gopath
+MAKE_OPTIONS := -s
 
-all: test install
+all: getdeps test install
+
+getdeps:
+	@go get -u github.com/tools/godep && echo "Installing godep"
+	@go get -u code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
 
 build-erasure:
-	cd pkgs/erasure && make
+	@cd pkgs/erasure && ${MAKE} ${MAKE_OPTIONS}
 
 build-signify:
-	cd pkgs/signify && make
+	@cd pkgs/signify && ${MAKE} ${MAKE_OPTIONS}
 
 test: build-erasure build-signify
 	godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
 	godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
-	godep go install github.com/minio-io/minio/cmd/erasure-demo
+	@godep go install github.com/minio-io/minio/cmd/erasure-demo && echo "Installed erasure-demo into ${GOPATH}/bin"
 
 save:
 	godep save ./...

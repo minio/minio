@@ -1,43 +1,10 @@
-Introduction
-============
-Minio is an open source object storage released under Apache license v2.
+## Introduction
 
-It uses ``Rubberband Erasure`` coding to dynamically protect the data.
-Minio was inspired by Amazon S3 API and Haystack Object Format.
+Minio is an open source object storage released under [Apache license v2](./LICENSE) . It uses ``Rubberband Erasure`` coding to dynamically protect the data.
+Minio's design was inspired by Amazon's S3 for its API and Facebook's Haystack for its immutable data structure.
 
-Dependencies
-============
-* go1.3.3
-* godep
-  * go get github.com/tools/godep
-* yasm
-* cover
-  * go get code.google.com/p/go.tools/cmd/cover or yum install golang-cover
+### Build Minio from Source
 
-Dependency management
-=====================
-
-Install or updating a new dependency
-------------------------------------
-```sh
-go get -u github.com/example/dependency
-# import github.com/example/dependency in go src code
-godep save ./...
-```
-
-Commit all Godep/ modifications, including vendorized files.
-
-Restoring dev environment dependencies
---------------------------------------
-```sh
-godep restore
-```
-
-
-Compiling
-=========
-```sh
-make
-```
+[Source Install](./DEVELOPERS.md)
 
 [![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme)](https://github.com/igrigorik/ga-beacon)
