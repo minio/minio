@@ -24,35 +24,35 @@ import (
 
 // Integer to Int conversion
 func int2cInt(src_err_list []int) *C.int {
-	var SrcErrInt = int(unsafe.Sizeof(src_err_list[0]))
-	switch SizeInt {
-	case SrcErrInt:
+	var sizeErrInt = int(unsafe.Sizeof(src_err_list[0]))
+	switch sizeInt {
+	case sizeErrInt:
 		return (*C.int)(unsafe.Pointer(&src_err_list[0]))
-	case SizeInt8:
-		Int8Array := make([]int8, len(src_err_list))
+	case sizeInt8:
+		int8Array := make([]int8, len(src_err_list))
 		for i, v := range src_err_list {
-			Int8Array[i] = int8(v)
+			int8Array[i] = int8(v)
 		}
-		return (*C.int)(unsafe.Pointer(&Int8Array[0]))
-	case SizeInt16:
-		Int16Array := make([]int16, len(src_err_list))
+		return (*C.int)(unsafe.Pointer(&int8Array[0]))
+	case sizeInt16:
+		int16Array := make([]int16, len(src_err_list))
 		for i, v := range src_err_list {
-			Int16Array[i] = int16(v)
+			int16Array[i] = int16(v)
 		}
-		return (*C.int)(unsafe.Pointer(&Int16Array[0]))
-	case SizeInt32:
-		Int32Array := make([]int32, len(src_err_list))
+		return (*C.int)(unsafe.Pointer(&int16Array[0]))
+	case sizeInt32:
+		int32Array := make([]int32, len(src_err_list))
 		for i, v := range src_err_list {
-			Int32Array[i] = int32(v)
+			int32Array[i] = int32(v)
 		}
-		return (*C.int)(unsafe.Pointer(&Int32Array[0]))
-	case SizeInt64:
-		Int64Array := make([]int64, len(src_err_list))
+		return (*C.int)(unsafe.Pointer(&int32Array[0]))
+	case sizeInt64:
+		int64Array := make([]int64, len(src_err_list))
 		for i, v := range src_err_list {
-			Int64Array[i] = int64(v)
+			int64Array[i] = int64(v)
 		}
-		return (*C.int)(unsafe.Pointer(&Int64Array[0]))
+		return (*C.int)(unsafe.Pointer(&int64Array[0]))
 	default:
-		panic(fmt.Sprintf("Unsupported: %d", SizeInt))
+		panic(fmt.Sprintf("Unsupported: %d", sizeInt))
 	}
 }
