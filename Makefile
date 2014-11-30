@@ -13,7 +13,7 @@ test: build-erasure build-signify
 	godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
-	godep go install github.com/minio-io/minio/cmd/minio-demo
+	godep go install github.com/minio-io/minio/cmd/erasure-demo
 
 save:
 	godep save ./...
