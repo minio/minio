@@ -11,10 +11,6 @@
 			"Rev": "f7ebb761e83e21225d1d8954fde853bf8edd46c4"
 		},
 		{
-			"ImportPath": "github.com/golang/groupcache/lru",
-			"Rev": "d2a1805917c4ba5f227d5b1f9a871dd274a07542"
-		},
-		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "14f550f51af52180c2eefed15e5fd18d63c0a64a"
 		},
