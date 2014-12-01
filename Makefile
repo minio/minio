@@ -13,8 +13,11 @@ build-erasure:
 build-signify:
 	@cd pkgs/signify && ${MAKE} ${MAKE_OPTIONS}
 
-build-split:
-	@cd pkgs/split && ${MAKE} ${MAKE_OPTIONS}
+build-split: build-strbyteconv
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/split
+
+build-strbyteconv:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
 cover: build-erasure build-signify build-split
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
