@@ -51,7 +51,6 @@ Once we are finished the prerequisites in the previous step we now build minio
 ```sh
 $ go get -u github.com/minio-io/minio
 $ cd $GOPATH/src/github.com/minio-io/minio
-$ make getdeps
 $ make
 ...
 ```
@@ -61,7 +60,6 @@ $ make
 ```sh
 $ git clone https://github.com/minio-io/minio
 $ cd minio
-$ make getdeps
 $ make
 ```
 
