@@ -8,10 +8,12 @@ getdeps:
 	@go get code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
 
 build-erasure:
-	@cd pkgs/erasure && ${MAKE} ${MAKE_OPTIONS}
+	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/erasure/isal lib
+	@godep go test -race github.com/minio-io/minio/pkgs/erasure
+	@godep go test -coverprofile=cover.out github.com/minio-io/minio/pkgs/erasure
 
 build-signify:
-	@cd pkgs/signify && ${MAKE} ${MAKE_OPTIONS}
+	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/signify
 
 build-split: build-strbyteconv
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/split
@@ -27,13 +29,13 @@ install: build-erasure
 	@godep go install github.com/minio-io/minio/cmd/erasure-demo && echo "Installed erasure-demo into ${GOPATH}/bin"
 
 save:
-	godep save ./...
+	@godep save ./...
 
 restore:
-	godep restore
+	@godep restore
 
 env:
-	godep go env
+	@godep go env
 
-run: all
-	minio gateway
+clean:
+	@rm -v cover.out
