@@ -4,8 +4,8 @@ MAKE_OPTIONS := -s
 all: getdeps cover install
 
 getdeps:
-	@go get -u github.com/tools/godep && echo "Installing godep"
-	@go get -u code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
+	@go get github.com/tools/godep && echo "Installing godep"
+	@go get code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
 
 build-erasure:
 	@cd pkgs/erasure && ${MAKE} ${MAKE_OPTIONS}
