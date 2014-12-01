@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/codegangsta/cli"
 )
@@ -47,4 +50,48 @@ func main() {
 		},
 	}
 	app.Run(os.Args)
+}
+
+// config representing cli input
+type inputConfig struct {
+	input     string
+	output    string
+	k         int
+	m         int
+	blockSize int
+}
+
+// parses input and returns an inputConfig with parsed input
+func parseInput(c *cli.Context) (inputConfig, error) {
+	// get input path
+	inputFilePath := c.Args().Get(0)
+
+	// get output path
+	outputFilePath := inputFilePath
+	if c.String("output") != "" {
+		outputFilePath = c.String("output")
+	}
+
+	protectionLevel := c.String("protection-level")
+	protectionLevelSplit := strings.Split(protectionLevel, ",")
+	if len(protectionLevelSplit) != 2 {
+		return inputConfig{}, errors.New("Malformed input for protection-level")
+	}
+
+	k, err := strconv.Atoi(protectionLevelSplit[0])
+	if err != nil {
+		return inputConfig{}, err
+	}
+
+	m, err := strconv.Atoi(protectionLevelSplit[1])
+	if err != nil {
+		return inputConfig{}, err
+	}
+
+	return inputConfig{
+		input:  inputFilePath,
+		output: outputFilePath,
+		k:      k,
+		m:      m,
+	}, nil
 }
