@@ -11,18 +11,19 @@ $ sudo apt-get install yasm
 ```
 ##### Install Go 1.3+ (Ubuntu)
 
-[Download the archive](https://golang.org/dl/) and extract it into ``/usr/local``, creating a Go tree in ``/usr/local/go``. For example:
+[Download the archive](https://golang.org/dl/) and extract it into ``${HOME}/local``, creating a Go tree in ``${HOME}/local/go``. For example:
 ```sh
-$ tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
+$ mkdir -p ${HOME}/local
+$ tar -C ${HOME}/local -xzf go$VERSION.$OS-$ARCH.tar.gz
 ```
 
 Choose the archive file appropriate for your installation. For instance, if you are installing Go version 1.2.1 for 64-bit x86 on Linux, the archive you want is called ``go1.2.1.linux-amd64.tar.gz``
 
 (Typically these commands must be run as root or through sudo.)
 
-Add ``/usr/local/go/bin`` to the ``PATH`` environment variable. You can do this by adding this line to your /etc/profile (for a system-wide installation) or ``$HOME/.profile``:
+Add ``${HOME}/local/go/bin`` to the ``PATH`` environment variable. You can do this by adding this line to your ``$HOME/.profile``:
 ```sh
-$ export PATH=$PATH:/usr/local/go/bin
+$ export PATH=$PATH:${HOME}/local/go/bin
 ```
 
 ##### Setting up ``GOPATH`` environment variable
@@ -31,7 +32,7 @@ The ``GOPATH`` environment variable specifies the location of your workspace. It
 
 To get started, create a workspace directory and set GOPATH accordingly. Your workspace can be located wherever you like, but we'll use ``$HOME/mygo`` in this document. Note that this must not be the same path as your Go installation.
 ```sh
-$ mkdir $HOME/mygo
+$ mkdir -p $HOME/mygo
 $ export GOPATH=$HOME/mygo
 ```
 
