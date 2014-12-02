@@ -32,12 +32,6 @@ var _ = Suite(&MySuite{})
 
 func Test(t *testing.T) { TestingT(t) }
 
-func (s *MySuite) TestFileSplit(c *C) {
-	b := Split{}
-	err := b.GenChunks("TESTFILE", "1KB")
-	c.Assert(err, IsNil)
-}
-
 func (s *MySuite) TestSplitStream(c *C) {
 	var bytesBuffer bytes.Buffer
 	bytesWriter := bufio.NewWriter(&bytesBuffer)
@@ -59,6 +53,8 @@ func (s *MySuite) TestSplitStream(c *C) {
 }
 
 func (s *MySuite) TestFileSplit2(c *C) {
-	err := SplitFilesWithPrefix("TESTFILE", 1024, "TESTPREFIX")
+	err := SplitFilesWithPrefix("TESTFILE", "1KB", "TESTPREFIX")
 	c.Assert(err, IsNil)
+	err = SplitFilesWithPrefix("TESTFILE", "1KB", "")
+	c.Assert(err, Not(IsNil))
 }
