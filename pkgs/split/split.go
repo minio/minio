@@ -19,11 +19,6 @@
 
 package split
 
-// #include <stdlib.h>
-// #include <stdlib.h>
-//
-// #include "split.h"
-import "C"
 import (
 	"bufio"
 	"bytes"
@@ -32,36 +27,19 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
-	"unsafe"
 
 	"github.com/minio-io/minio/pkgs/strbyteconv"
 )
 
 type Split struct {
-	bytecnt C.ssize_t
-	bname   *C.char
-}
-
-func (b *Split) GenChunks(bname string, bytestr string) error {
-	bytecnt, err := strbyteconv.StringToBytes(bytestr)
-	if err != nil {
-		return err
-	}
-
-	b.bytecnt = C.ssize_t(bytecnt)
-	b.bname = C.CString(bname)
-	defer C.free(unsafe.Pointer(b.bname))
-
-	value := C.minio_split(b.bname, b.bytecnt)
-	if value < 0 {
-		return errors.New("File split failed")
-	}
-	return nil
-}
-
-type GoSplit struct {
 	file   string
 	offset uint64
+}
+
+// Message structure for results from the SplitStream goroutine
+type ByteMessage struct {
+	Data []byte
+	Err  error
 }
 
 // SplitStream reads from io.Reader, splits the data into chunks, and sends
@@ -117,20 +95,24 @@ func SplitStream(reader io.Reader, chunkSize uint64, ch chan ByteMessage) {
 	close(ch)
 }
 
-// Message structure for results from the SplitStream goroutine
-type ByteMessage struct {
-	Data []byte
-	Err  error
-}
-
 // Takes a file and splits it into chunks with size chunkSize. The output
 // filename is given with outputPrefix.
-func SplitFilesWithPrefix(filename string, chunkSize uint64, outputPrefix string) error {
+func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string) error {
 	// open file
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
+
+	if outputPrefix == "" {
+		return errors.New("Invalid argument outputPrefix cannot be empty string")
+	}
+
+	chunkSize, err := strbyteconv.StringToBytes(chunkstr)
+	if err != nil {
+		return err
+	}
+
 	// start stream splitting goroutine
 	ch := make(chan ByteMessage)
 	go SplitStream(file, chunkSize, ch)

@@ -8,4 +8,4 @@ test: build
 	@godep go test -race -coverprofile=cover.out
 
 clean:
-	@rm -v TESTFILE.* cover.out
+	@rm -fv TESTFILE.* TESTPREFIX.* cover.out
