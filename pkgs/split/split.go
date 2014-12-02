@@ -25,9 +25,16 @@ package split
 // #include "split.h"
 import "C"
 import (
+	"bufio"
+	"bytes"
 	"errors"
-	"github.com/minio-io/minio/pkgs/strbyteconv"
+	"io"
+	"io/ioutil"
+	"os"
+	"strconv"
 	"unsafe"
+
+	"github.com/minio-io/minio/pkgs/strbyteconv"
 )
 
 type Split struct {
@@ -48,6 +55,99 @@ func (b *Split) GenChunks(bname string, bytestr string) error {
 	value := C.minio_split(b.bname, b.bytecnt)
 	if value < 0 {
 		return errors.New("File split failed")
+	}
+	return nil
+}
+
+type GoSplit struct {
+	file   string
+	offset uint64
+}
+
+// SplitStream reads from io.Reader, splits the data into chunks, and sends
+// each chunk to the channel. This method runs until an EOF or error occurs. If
+// an error occurs, the method sends the error over the channel and returns.
+// Before returning, the channel is always closed.
+//
+// The user should run this as a gorountine and retrieve the data over the
+// channel.
+//
+//  channel := make(chan ByteMessage)
+//  go SplitStream(reader, chunkSize, channel)
+//  for chunk := range channel {
+//    log.Println(chunk.Data)
+//  }
+func SplitStream(reader io.Reader, chunkSize uint64, ch chan ByteMessage) {
+	// we read until EOF or another error
+	var readError error
+
+	// run this until an EOF or error occurs
+	for readError == nil {
+		// keep track of how much data has been read
+		var totalRead uint64
+		// Create a buffer to write the current chunk into
+		var bytesBuffer bytes.Buffer
+		bytesWriter := bufio.NewWriter(&bytesBuffer)
+		// read a full chunk
+		for totalRead < chunkSize && readError == nil {
+			var currentRead int
+			// if we didn't read a full chunk, we should attempt to read again.
+			// We create a byte array representing how much space is left
+			// unwritten in the given chunk
+			chunk := make([]byte, chunkSize-totalRead)
+			currentRead, readError = reader.Read(chunk)
+			// keep track of how much we have read in total
+			totalRead = totalRead + uint64(currentRead)
+			// prune the array to only what has been read, write to chunk buffer
+			chunk = chunk[0:currentRead]
+			bytesWriter.Write(chunk)
+		}
+		// flush stream to underlying byte buffer
+		bytesWriter.Flush()
+		// if we have data available, send it over the channel
+		if bytesBuffer.Len() != 0 {
+			ch <- ByteMessage{bytesBuffer.Bytes(), nil}
+		}
+	}
+	// if we have an error other than an EOF, send it over the channel
+	if readError != io.EOF {
+		ch <- ByteMessage{nil, readError}
+	}
+	// close the channel, signaling the channel reader that the stream is complete
+	close(ch)
+}
+
+// Message structure for results from the SplitStream goroutine
+type ByteMessage struct {
+	Data []byte
+	Err  error
+}
+
+// Takes a file and splits it into chunks with size chunkSize. The output
+// filename is given with outputPrefix.
+func SplitFilesWithPrefix(filename string, chunkSize uint64, outputPrefix string) error {
+	// open file
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	// start stream splitting goroutine
+	ch := make(chan ByteMessage)
+	go SplitStream(file, chunkSize, ch)
+
+	// used to write each chunk out as a separate file. {{outputPrefix}}.{{i}}
+	i := 0
+
+	// write each chunk out to a separate file
+	for chunk := range ch {
+		if chunk.Err != nil {
+			return chunk.Err
+		}
+		err := ioutil.WriteFile(outputPrefix+"."+strconv.Itoa(i), chunk.Data, 0600)
+		if err != nil {
+			return err
+		}
+		i = i + 1
 	}
 	return nil
 }

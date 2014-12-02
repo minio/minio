@@ -17,8 +17,13 @@
 package split
 
 import (
-	. "gopkg.in/check.v1"
+	"bufio"
+	"bytes"
+	"log"
+	"strconv"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}
@@ -29,6 +34,31 @@ func Test(t *testing.T) { TestingT(t) }
 
 func (s *MySuite) TestFileSplit(c *C) {
 	b := Split{}
-	err := b.GenChunks("TESTFILE", "20KB")
+	err := b.GenChunks("TESTFILE", "1KB")
+	c.Assert(err, IsNil)
+}
+
+func (s *MySuite) TestSplitStream(c *C) {
+	var bytesBuffer bytes.Buffer
+	bytesWriter := bufio.NewWriter(&bytesBuffer)
+	for i := 0; i < 100; i++ {
+		bytesWriter.Write([]byte(strconv.Itoa(i)))
+	}
+	bytesWriter.Flush()
+	log.Println(strconv.Itoa(bytesBuffer.Len()))
+	ch := make(chan ByteMessage)
+	reader := bytes.NewReader(bytesBuffer.Bytes())
+	go SplitStream(reader, 25, ch)
+	var resultsBuffer bytes.Buffer
+	resultsWriter := bufio.NewWriter(&resultsBuffer)
+	for chunk := range ch {
+		resultsWriter.Write(chunk.Data)
+	}
+	resultsWriter.Flush()
+	c.Assert(bytes.Compare(bytesBuffer.Bytes(), resultsBuffer.Bytes()), Equals, 0)
+}
+
+func (s *MySuite) TestFileSplit2(c *C) {
+	err := SplitFilesWithPrefix("TESTFILE", 1024, "TESTPREFIX")
 	c.Assert(err, IsNil)
 }
