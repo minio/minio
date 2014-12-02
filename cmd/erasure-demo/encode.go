@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"log"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/minio-io/minio/pkgs/erasure"
+	"github.com/minio-io/minio/pkgs/split"
 )
 
 func encode(c *cli.Context) {
@@ -24,6 +26,7 @@ func encode(c *cli.Context) {
 
 	// get file
 	inputFile, err := os.Open(config.input)
+	defer inputFile.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,11 +40,27 @@ func encode(c *cli.Context) {
 	// set up encoder
 	erasureParameters, _ := erasure.ParseEncoderParams(config.k, config.m, erasure.CAUCHY)
 	// encode data
-	encodedData, length := erasure.Encode(input, erasureParameters)
-
-	// write encoded data out
-	for key, data := range encodedData {
-		ioutil.WriteFile(config.output+"."+strconv.Itoa(key), data, 0600)
+	if config.blockSize == 0 {
+		encodedData, length := erasure.Encode(input, erasureParameters)
+		for key, data := range encodedData {
+			ioutil.WriteFile(config.output+"."+strconv.Itoa(key), data, 0600)
+			ioutil.WriteFile(config.output+".length", []byte(strconv.Itoa(length)), 0600)
+		}
+	} else {
+		chunkCount := 0
+		splitChannel := make(chan split.ByteMessage)
+		inputReader := bytes.NewReader(input)
+		go split.SplitStream(inputReader, config.blockSize, splitChannel)
+		for chunk := range splitChannel {
+			if chunk.Err != nil {
+				log.Fatal(chunk.Err)
+			}
+			encodedData, length := erasure.Encode(chunk.Data, erasureParameters)
+			for key, data := range encodedData {
+				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+"."+strconv.Itoa(key), data, 0600)
+				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+".length", []byte(strconv.Itoa(length)), 0600)
+			}
+			chunkCount += 1
+		}
 	}
-	ioutil.WriteFile(config.output+".length", []byte(strconv.Itoa(length)), 0600)
 }

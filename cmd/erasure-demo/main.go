@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
+	"github.com/minio-io/minio/pkgs/strbyteconv"
 )
 
 func main() {
@@ -28,6 +29,11 @@ func main() {
 					Name:  "protection-level",
 					Value: "10,6",
 					Usage: "data,parity",
+				},
+				cli.StringFlag{
+					Name:  "block-size",
+					Value: "1M",
+					Usage: "Size of blocks. Examples: 1K, 1M, full",
 				},
 			},
 		},
@@ -58,7 +64,7 @@ type inputConfig struct {
 	output    string
 	k         int
 	m         int
-	blockSize int
+	blockSize uint64
 }
 
 // parses input and returns an inputConfig with parsed input
@@ -88,10 +94,22 @@ func parseInput(c *cli.Context) (inputConfig, error) {
 		return inputConfig{}, err
 	}
 
+	var blockSize uint64
+	blockSize = 0
+	if c.String("block-size") != "" {
+		if c.String("block-size") != "full" {
+			blockSize, err = strbyteconv.StringToBytes(c.String("block-size"))
+			if err != nil {
+				return inputConfig{}, err
+			}
+		}
+	}
+
 	return inputConfig{
-		input:  inputFilePath,
-		output: outputFilePath,
-		k:      k,
-		m:      m,
+		input:     inputFilePath,
+		output:    outputFilePath,
+		k:         k,
+		m:         m,
+		blockSize: blockSize,
 	}, nil
 }
