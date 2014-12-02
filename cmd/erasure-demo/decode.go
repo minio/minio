@@ -24,36 +24,68 @@ func decode(c *cli.Context) {
 
 	k := config.k
 	m := config.m
-	// get chunks
-	chunks := make([][]byte, k+m)
-	for i := 0; i < k+m; i++ {
-		chunks[i], _ = ioutil.ReadFile(config.input + "." + strconv.Itoa(i))
+
+	// check if output file exists, fail if so
+	if _, err := os.Stat(config.output); !os.IsNotExist(err) {
+		log.Fatal("Output file exists")
 	}
 
-	// get length
-	lengthBytes, err := ioutil.ReadFile(config.input + ".length")
-	if err != nil {
-		log.Fatal(err)
-	}
-	lengthString := string(lengthBytes)
-	length, err := strconv.Atoi(lengthString)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// set up encoder
-	erasureParameters, _ := erasure.ParseEncoderParams(k, m, erasure.CAUCHY)
-
-	// decode data
-	decodedData, err := erasure.Decode(chunks, erasureParameters, length)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// write decode data out
-	if _, err := os.Stat(config.output); os.IsNotExist(err) {
-		ioutil.WriteFile(config.output, decodedData, 0600)
+	// get list of files
+	var inputFiles []string
+	if _, err := os.Stat(config.input + ".length"); os.IsNotExist(err) {
+		err = nil
+		chunkCount := 0
+		for !os.IsNotExist(err) {
+			_, err = os.Stat(config.input + "." + strconv.Itoa(chunkCount) + ".length")
+			chunkCount += 1
+		}
+		chunkCount = chunkCount - 1
+		inputFiles = make([]string, chunkCount)
+		for i := 0; i < chunkCount; i++ {
+			inputFiles[i] = config.input + "." + strconv.Itoa(i)
+		}
 	} else {
-		log.Fatal("Output file already exists")
+		inputFiles = []string{config.input}
+	}
+
+	// open file to write
+	outputFile, err := os.OpenFile(config.output, os.O_CREATE|os.O_WRONLY, 0600)
+	defer outputFile.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, inputFile := range inputFiles {
+		// get chunks
+		chunks := make([][]byte, k+m)
+		for i := 0; i < k+m; i++ {
+			chunks[i], _ = ioutil.ReadFile(inputFile + "." + strconv.Itoa(i))
+		}
+
+		// get length
+		lengthBytes, err := ioutil.ReadFile(inputFile + ".length")
+		if err != nil {
+			log.Fatal(err)
+		}
+		lengthString := string(lengthBytes)
+		length, err := strconv.Atoi(lengthString)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// set up encoder
+		erasureParameters, _ := erasure.ParseEncoderParams(k, m, erasure.CAUCHY)
+
+		// decode data
+		decodedData, err := erasure.Decode(chunks, erasureParameters, length)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// append decoded data
+		length, err = outputFile.Write(decodedData)
+		if err != nil {
+
+			log.Fatal(err)
+		}
 	}
 }
