@@ -15,13 +15,17 @@ build-erasure:
 build-signify:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/signify
 
+build-crc32c:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crc32c/cpu
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crc32c
+
 build-split: build-strbyteconv
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/split
 
 build-strbyteconv:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
-cover: build-erasure build-signify build-split
+cover: build-erasure build-signify build-split build-crc32c
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
