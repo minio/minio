@@ -3,7 +3,10 @@ MAKE_OPTIONS := -s
 
 all: getdeps cover install
 
-getdeps:
+checkdeps:
+	@./checkdeps.sh
+
+getdeps: checkdeps
 	@go get github.com/tools/godep && echo "Installing godep"
 	@go get code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
 
