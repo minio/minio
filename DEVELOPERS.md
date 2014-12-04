@@ -1,6 +1,16 @@
 ### Build Dependencies
 This installation document assumes Ubuntu 12.04 or later on x86-64.
 
+##### Install Git and GCC
+```sh
+$ sudo apt-get install git build-essential
+```
+
+##### Install Mercurial
+```sh
+$ sudo apt-get install mercurial
+```
+
 ##### Install YASM
 ```sh
 $ sudo apt-get install yasm
@@ -20,7 +30,7 @@ $ export PATH=$PATH:$GOPATH/bin
 ```
 
 ### Setup your Minio Github Repository &nbsp; &nbsp; <iframe src="http://ghbtns.com/github-btn.html?user=Minio-io&repo=minio&type=fork&count=true&size=large" height="30" width="170" frameborder="0" scrolling="0" style="width:170px; height: 30px;" allowTransparency="true"></iframe>
-Fork [Minio upstream](https://github.com/Minio-io/minio) source repository to your own personal repository. Copy the URL and pass it to ``go get`` command. Go uses git to clone a copy into your project workspace folder. 
+Fork [Minio upstream](https://github.com/Minio-io/minio) source repository to your own personal repository. Copy the URL and pass it to ``go get`` command. Go uses git to clone a copy into your project workspace folder.
 ```sh
 $ go get -u github.com/$USER_ID/minio
 $ cd $GOPATH/src/github.com/$USER_ID/minio/
