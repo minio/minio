@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-// +build linux
-// amd64
+// +build amd64
 
 package split
 

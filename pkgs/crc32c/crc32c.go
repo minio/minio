@@ -1,4 +1,4 @@
-// +build linux,amd64
+// +build amd64
 
 package crc32c
 

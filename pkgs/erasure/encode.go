@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-// +build linux
+// +build amd64
 
 package erasure
 
-// #cgo CPPFLAGS: -I./isal/include
-// #cgo LDFLAGS: ./isal/isa-l.a
+// #cgo CPPFLAGS: -Iisal/include
+// #cgo LDFLAGS: isal/isa-l.a
 // #include <stdlib.h>
 // #include <erasure-code.h>
 // #include <stdlib.h>
