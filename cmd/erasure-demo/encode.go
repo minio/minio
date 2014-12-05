@@ -48,7 +48,7 @@ func encode(c *cli.Context) {
 		}
 	} else {
 		chunkCount := 0
-		splitChannel := make(chan split.ByteMessage)
+		splitChannel := make(chan split.SplitMessage)
 		inputReader := bytes.NewReader(input)
 		go split.SplitStream(inputReader, config.blockSize, splitChannel)
 		for chunk := range splitChannel {
