@@ -17,8 +17,10 @@
 package strbyteconv
 
 import (
-	. "gopkg.in/check.v1"
+	"log"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}
@@ -43,7 +45,20 @@ func (s *MySuite) Test(c *C) {
 	value = BytesToString(100 * UNIT_TERABYTE)
 	c.Assert(value, Equals, "100TB")
 
-	bytes, err := StringToBytes("100KB")
+	bytes, err := StringToBytes("100B")
+	log.Println(err)
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100))
+
+	bytes, err = StringToBytes("100")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100))
+
+	bytes, err = StringToBytes("100KB")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100*UNIT_KILOBYTE))
+
+	bytes, err = StringToBytes("100K")
 	c.Assert(err, IsNil)
 	c.Assert(bytes, Equals, uint64(100*UNIT_KILOBYTE))
 
@@ -51,7 +66,15 @@ func (s *MySuite) Test(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bytes, Equals, uint64(100*UNIT_MEGABYTE))
 
+	bytes, err = StringToBytes("100M")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100*UNIT_MEGABYTE))
+
 	bytes, err = StringToBytes("100GB")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100*UNIT_GIGABYTE))
+
+	bytes, err = StringToBytes("100G")
 	c.Assert(err, IsNil)
 	c.Assert(bytes, Equals, uint64(100*UNIT_GIGABYTE))
 
@@ -59,4 +82,33 @@ func (s *MySuite) Test(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bytes, Equals, uint64(100*UNIT_TERABYTE))
 
+	bytes, err = StringToBytes("100T")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(100*UNIT_TERABYTE))
+
+	bytes, err = StringToBytes("0")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(0))
+
+	bytes, err = StringToBytes("23")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(23))
+
+	bytes, err = StringToBytes("0TB")
+	c.Assert(err, IsNil)
+	c.Assert(bytes, Equals, uint64(0))
+}
+
+func (s *MySuite) TestBadInput(c *C) {
+	_, err := StringToBytes("")
+	c.Assert(err, Not(IsNil))
+
+	_, err = StringToBytes("HELLO")
+	c.Assert(err, Not(IsNil))
+
+	_, err = StringToBytes("-20B")
+	c.Assert(err, Not(IsNil))
+
+	_, err = StringToBytes("-20MB")
+	c.Assert(err, Not(IsNil))
 }

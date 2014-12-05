@@ -59,14 +59,20 @@ func BytesToString(bytes uint64) string {
 
 func StringToBytes(s string) (uint64, error) {
 	var bytes uint64
+	var err error
 
-	StringPattern, err := regexp.Compile(`(?i)^(-?\d+)([KMGT])B?$`)
+	bytes, err = strconv.ParseUint(s, 10, 64)
+	if err == nil {
+		return bytes, nil
+	}
+
+	stringPattern, err := regexp.Compile(`(?i)^(-?\d+)([BKMGT])B?$`)
 	if err != nil {
 		return 0, err
 	}
 
-	parts := StringPattern.FindStringSubmatch(strings.TrimSpace(s))
-	if len(parts) < 3 {
+	parts := stringPattern.FindStringSubmatch(strings.TrimSpace(s))
+	if len(parts) < 2 {
 		return 0, errors.New("Incorrect string format must be K,KB,M,MB,G,GB")
 	}
 
@@ -87,6 +93,8 @@ func StringToBytes(s string) (uint64, error) {
 		bytes = value * UNIT_KILOBYTE
 	case "B":
 		bytes = value * UNIT_BYTE
+	default:
+		return 0, errors.New("Incorrect string format must be K,KB,M,MB,G,GB")
 	}
 
 	return bytes, nil
