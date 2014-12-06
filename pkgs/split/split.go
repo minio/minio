@@ -22,23 +22,24 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"github.com/minio-io/minio/pkgs/strbyteconv"
 	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
-
-	"github.com/minio-io/minio/pkgs/strbyteconv"
+	"strings"
 )
 
-type Split struct {
-	file   string
-	offset uint64
-}
-
 // Message structure for results from the SplitStream goroutine
-type ByteMessage struct {
+type SplitMessage struct {
 	Data []byte
 	Err  error
+}
+
+type JoinMessage struct {
+	Reader io.Reader
+	Length int64
+	Err    error
 }
 
 // SplitStream reads from io.Reader, splits the data into chunks, and sends
@@ -49,12 +50,12 @@ type ByteMessage struct {
 // The user should run this as a gorountine and retrieve the data over the
 // channel.
 //
-//  channel := make(chan ByteMessage)
+//  channel := make(chan SplitMessage)
 //  go SplitStream(reader, chunkSize, channel)
 //  for chunk := range channel {
 //    log.Println(chunk.Data)
 //  }
-func SplitStream(reader io.Reader, chunkSize uint64, ch chan ByteMessage) {
+func SplitStream(reader io.Reader, chunkSize uint64, ch chan SplitMessage) {
 	// we read until EOF or another error
 	var readError error
 
@@ -83,15 +84,94 @@ func SplitStream(reader io.Reader, chunkSize uint64, ch chan ByteMessage) {
 		bytesWriter.Flush()
 		// if we have data available, send it over the channel
 		if bytesBuffer.Len() != 0 {
-			ch <- ByteMessage{bytesBuffer.Bytes(), nil}
+			ch <- SplitMessage{bytesBuffer.Bytes(), nil}
 		}
 	}
 	// if we have an error other than an EOF, send it over the channel
 	if readError != io.EOF {
-		ch <- ByteMessage{nil, readError}
+		ch <- SplitMessage{nil, readError}
 	}
 	// close the channel, signaling the channel reader that the stream is complete
 	close(ch)
+}
+
+func JoinStream(dirname string, inputPrefix string, ch chan JoinMessage) {
+	var readError error
+
+	var bytesBuffer bytes.Buffer
+	bytesWriter := bufio.NewWriter(&bytesBuffer)
+	// read a full directory
+	fileInfos, readError := ioutil.ReadDir(dirname)
+	if readError != nil {
+		ch <- JoinMessage{nil, 0, readError}
+	}
+
+	var newfileInfos []os.FileInfo
+	for _, fi := range fileInfos {
+		if strings.Contains(fi.Name(), inputPrefix) == true {
+			newfileInfos = append(newfileInfos, fi)
+			continue
+		}
+	}
+
+	if len(newfileInfos) == 0 {
+		ch <- JoinMessage{nil, 0, errors.New("no files found for given prefix")}
+	}
+
+	for i := range newfileInfos {
+		slice, err := ioutil.ReadFile(newfileInfos[i].Name())
+		if err != nil {
+			ch <- JoinMessage{nil, 0, err}
+		}
+		bytesWriter.Write(slice)
+		bytesWriter.Flush()
+		if bytesBuffer.Len() != 0 {
+			ch <- JoinMessage{&bytesBuffer, newfileInfos[i].Size(), nil}
+		}
+	}
+
+	// close the channel, signaling the channel reader that the stream is complete
+	close(ch)
+}
+
+func JoinFilesWithPrefix(dirname string, inputPrefix string, outputFile string) error {
+	if dirname == "" {
+		return errors.New("Invalid directory")
+	}
+
+	if inputPrefix == "" {
+		return errors.New("Invalid argument inputPrefix cannot be empty string")
+	}
+
+	if outputFile == "" {
+		return errors.New("Invalid output file")
+	}
+
+	ch := make(chan JoinMessage)
+	go JoinStream(dirname, inputPrefix, ch)
+
+	var multiReaders []io.Reader
+	var aggregatedLength int64
+	for output := range ch {
+		if output.Err != nil {
+			return output.Err
+		}
+		multiReaders = append(multiReaders, output.Reader)
+		aggregatedLength += output.Length
+	}
+
+	newReader := io.MultiReader(multiReaders...)
+	aggregatedBytes := make([]byte, aggregatedLength)
+	_, err := newReader.Read(aggregatedBytes)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(outputFile, aggregatedBytes, 0600)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Takes a file and splits it into chunks with size chunkSize. The output
@@ -99,6 +179,7 @@ func SplitStream(reader io.Reader, chunkSize uint64, ch chan ByteMessage) {
 func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string) error {
 	// open file
 	file, err := os.Open(filename)
+	defer file.Close()
 	if err != nil {
 		return err
 	}
@@ -113,7 +194,7 @@ func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string)
 	}
 
 	// start stream splitting goroutine
-	ch := make(chan ByteMessage)
+	ch := make(chan SplitMessage)
 	go SplitStream(file, chunkSize, ch)
 
 	// used to write each chunk out as a separate file. {{outputPrefix}}.{{i}}

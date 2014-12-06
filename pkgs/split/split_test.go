@@ -40,7 +40,7 @@ func (s *MySuite) TestSplitStream(c *C) {
 	}
 	bytesWriter.Flush()
 	log.Println(strconv.Itoa(bytesBuffer.Len()))
-	ch := make(chan ByteMessage)
+	ch := make(chan SplitMessage)
 	reader := bytes.NewReader(bytesBuffer.Bytes())
 	go SplitStream(reader, 25, ch)
 	var resultsBuffer bytes.Buffer
@@ -52,9 +52,14 @@ func (s *MySuite) TestSplitStream(c *C) {
 	c.Assert(bytes.Compare(bytesBuffer.Bytes(), resultsBuffer.Bytes()), Equals, 0)
 }
 
-func (s *MySuite) TestFileSplit2(c *C) {
+func (s *MySuite) TestFileSplitJoin(c *C) {
 	err := SplitFilesWithPrefix("TESTFILE", "1KB", "TESTPREFIX")
 	c.Assert(err, IsNil)
 	err = SplitFilesWithPrefix("TESTFILE", "1KB", "")
 	c.Assert(err, Not(IsNil))
+
+	err = JoinFilesWithPrefix(".", "TESTPREFIX", "")
+	c.Assert(err, Not(IsNil))
+	err = JoinFilesWithPrefix(".", "TESTPREFIX", "NEWFILE")
+	c.Assert(err, IsNil)
 }
