@@ -76,11 +76,15 @@ func decode(c *cli.Context) {
 		// set up encoder
 		erasureParameters, _ := erasure.ParseEncoderParams(k, m, erasure.CAUCHY)
 
+		// Get decoder
+		encoder := erasure.NewEncoder(erasureParameters)
+
 		// decode data
-		decodedData, err := erasure.Decode(chunks, erasureParameters, length)
+		decodedData, err := encoder.Decode(chunks, length)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		// append decoded data
 		length, err = outputFile.Write(decodedData)
 		if err != nil {

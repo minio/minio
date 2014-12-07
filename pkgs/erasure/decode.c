@@ -21,11 +21,12 @@
 #include <erasure-code.h>
 #include "common.h"
 
-int32_t minio_src_in_err (int r, int *src_err_list)
+static
+int32_t _minio_src_index_in_error (int r, int32_t *error_index)
 {
         int i;
-        for (i = 0; src_err_list[i] != -1; i++) {
-                if (src_err_list[i] == r) {
+        for (i = 0; error_index[i] != -1; i++) {
+                if (error_index[i] == r) {
                         // true
                         return 1;
                 }
@@ -34,47 +35,29 @@ int32_t minio_src_in_err (int r, int *src_err_list)
         return 0;
 }
 
-int32_t minio_get_source_target(int *src_err_list,
-                                int errs, int k, int m,
-                                unsigned char **data,
-                                unsigned char **coding,
-                                unsigned char ***source,
-                                unsigned char ***target)
+int32_t minio_get_source_target (int errs, int k, int m,
+                                 int32_t *error_index,
+                                 uint32_t *decode_index,
+                                 uint8_t **buffs,
+                                 uint8_t ***source,
+                                 uint8_t ***target)
 {
-        int i, j, l;
-        unsigned char *tmp_source[k];
-        unsigned char *tmp_target[m];
+        int i;
+        uint8_t *tmp_source[k];
+        uint8_t *tmp_target[m];
 
-        // Fill zeroes
-        memset (tmp_source, 0, sizeof(tmp_source));
-        memset (tmp_target, 0, sizeof(tmp_target));
+        memset (tmp_source, 0, k);
+        memset (tmp_target, 0, m);
 
-        // Separate out source and target buffers from input data/coding chunks
-        // This separation needs to happen at error chunks from input chunks
-        for (i = 0, j = 0, l = 0;
-             ((l < k) || (j < errs)) && (i < (k + m)); i++) {
-                if (!minio_src_in_err(i, src_err_list)) {
-                        if (l < k) {
-                                if (i < k)
-                                        tmp_source[l] =
-                                                (unsigned char *) data[i];
-                                else
-                                        tmp_source[l] =
-                                                (unsigned char *) coding[i - k];
-                                l++;
-                        }
-                } else {
-                        if (j < m) {
-                                if (i < k)
-                                        tmp_target[j] =
-                                                (unsigned char *) data[i];
-                                else
-                                        tmp_target[j] =
-                                                (unsigned char *) coding[i - k];
-                                j++;
-                        }
-                }
+        for (i = 0; i < k; i++) {
+                tmp_source[i] = (uint8_t *) buffs[decode_index[i]];
         }
+
+        for (i = 0; i < m; i++) {
+                if (i < errs)
+                        tmp_target[i] = (uint8_t *) buffs[error_index[i]];
+        }
+
         *source = tmp_source;
         *target = tmp_target;
 }
@@ -83,32 +66,27 @@ int32_t minio_get_source_target(int *src_err_list,
   Generate decode matrix during the decoding phase
 */
 
-int minio_init_decoder (int *src_err_list,
-                        unsigned char *encode_matrix,
-                        unsigned char **decode_matrix,
-                        unsigned char **decode_tbls,
-                        int k, int n, int errs)
+int minio_init_decoder (int32_t *error_index,
+                        int k, int n, int errs,
+                        uint8_t *encode_matrix,
+                        uint8_t **decode_matrix,
+                        uint8_t **decode_tbls,
+                        uint32_t **decode_index)
 {
         int i, j, r, s, l, z;
-        unsigned char input_matrix[k * n];
-        unsigned char inverse_matrix[k * n];
-        unsigned char *tmp_decode_matrix;
-        unsigned char *tmp_decode_tbls;
-
-        tmp_decode_matrix = (unsigned char *) malloc (k * n);
-        if (!tmp_decode_matrix)
-                return -1;
-
-        tmp_decode_tbls = (unsigned char *) malloc (k * n * 32);
-        if (!tmp_decode_tbls)
-                return -1;
+        uint8_t input_matrix[k * n];
+        uint8_t inverse_matrix[k * n];
+        uint8_t tmp_decode_matrix[k * n];
+        uint8_t tmp_decode_tbls[k * n * 32];
+        uint32_t tmp_decode_index[k];
 
         for (i = 0, r = 0; i < k; i++, r++) {
-                while (minio_src_in_err(r, src_err_list))
+                while (_minio_src_index_in_error(r, error_index))
                         r++;
                 for (j = 0; j < k; j++) {
                         input_matrix[k * i + j] = encode_matrix[k * r + j];
                 }
+                tmp_decode_index[i] = r;
         }
 
         // Not all Vandermonde matrix can be inverted
@@ -117,12 +95,12 @@ int minio_init_decoder (int *src_err_list,
         }
 
         for (l = 0; l < errs; l++) {
-                if (src_err_list[l] < k) {
+                if (error_index[l] < k) {
                         // decoding matrix elements for data chunks
                         for (j = 0; j < k; j++) {
                                 tmp_decode_matrix[k * l + j] =
                                         inverse_matrix[k *
-                                                       src_err_list[l] + j];
+                                                       error_index[l] + j];
                         }
                 } else {
                         int s = 0;
@@ -132,16 +110,18 @@ int minio_init_decoder (int *src_err_list,
                                 for (j = 0; j < k; j++) {
                                         s ^= gf_mul(inverse_matrix[j * k + i],
                                                     encode_matrix[k *
-                                                                  src_err_list[l] + j]);
+                                                                  error_index[l] + j]);
                                 }
                                 tmp_decode_matrix[k * l + i] = s;
                         }
                 }
         }
 
-        ec_init_tables(k, errs, tmp_decode_matrix, tmp_decode_tbls);
+        ec_init_tables (k, errs, tmp_decode_matrix, tmp_decode_tbls);
 
         *decode_matrix = tmp_decode_matrix;
         *decode_tbls = tmp_decode_tbls;
+        *decode_index = tmp_decode_index;
+
         return 0;
 }

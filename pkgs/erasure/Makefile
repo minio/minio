@@ -1,13 +1,8 @@
 all: build test
 .PHONY: all
 
-test: test-race test-cover
-
-test-race:
-	@godep go test -race
-
-test-cover:
-	@godep go test -coverprofile=cover.out
+test:
+	@godep go test -race -coverprofile=cover.out
 
 isal/isal-l.a:
 	@$(MAKE) -C isal lib

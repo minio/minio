@@ -39,9 +39,13 @@ func encode(c *cli.Context) {
 
 	// set up encoder
 	erasureParameters, _ := erasure.ParseEncoderParams(config.k, config.m, erasure.CAUCHY)
+
+	// Init new encoder
+	encoder := erasure.NewEncoder(erasureParameters)
+
 	// encode data
 	if config.blockSize == 0 {
-		encodedData, length := erasure.Encode(input, erasureParameters)
+		encodedData, length := encoder.Encode(input)
 		for key, data := range encodedData {
 			ioutil.WriteFile(config.output+"."+strconv.Itoa(key), data, 0600)
 			ioutil.WriteFile(config.output+".length", []byte(strconv.Itoa(length)), 0600)
@@ -55,7 +59,7 @@ func encode(c *cli.Context) {
 			if chunk.Err != nil {
 				log.Fatal(chunk.Err)
 			}
-			encodedData, length := erasure.Encode(chunk.Data, erasureParameters)
+			encodedData, length := encoder.Encode(chunk.Data)
 			for key, data := range encodedData {
 				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+"."+strconv.Itoa(key), data, 0600)
 				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+".length", []byte(strconv.Itoa(length)), 0600)

@@ -21,18 +21,16 @@
 #include "common.h"
 
 int32_t minio_init_encoder (int technique, int k, int m,
-                            unsigned char **encode_matrix,
-                            unsigned char **encode_tbls)
+                            uint8_t **encode_matrix,
+                            uint8_t **encode_tbls)
 {
         size_t encode_matrix_size;
         size_t encode_tbls_size;
-        unsigned char *tmp_matrix, *tmp_tbls;
+        uint8_t *tmp_matrix;
+        uint8_t *tmp_tbls;
 
-	encode_matrix_size = k * (k + m);
-        encode_tbls_size = k * (k + m) * 32;
-
-	tmp_matrix = (unsigned char *) malloc (encode_matrix_size);
-        tmp_tbls = (unsigned char *) malloc (encode_tbls_size);
+        tmp_matrix = (uint8_t *) malloc (k * (k + m));
+        tmp_tbls = (uint8_t *) malloc (k * (k + m) * 32);
 
 	if (technique == 0) {
                 /*

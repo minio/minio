@@ -31,6 +31,7 @@
 #ifndef _ERASURE_CODE_H_
 #define _ERASURE_CODE_H_
 
+#include <stdint.h>
 /**
  *  @file erasure_code.h
  *  @brief Interface to functions supporting erasure code encode and decode.
@@ -71,7 +72,7 @@ extern "C" {
  * @returns none
  */
 
-void ec_init_tables(int k, int rows, unsigned char* a, unsigned char* gftbls);
+void ec_init_tables(int k, int rows, uint8_t* a, uint8_t* gftbls);
 
 /**
  * @brief Generate or decode erasure codes on blocks of data.
@@ -93,7 +94,7 @@ void ec_init_tables(int k, int rows, unsigned char* a, unsigned char* gftbls);
  * @returns none
  */
 
-void ec_encode_data_sse(int len, int k, int rows, unsigned char *gftbls, unsigned char **data, unsigned char **coding);
+void ec_encode_data_sse(int len, int k, int rows, uint8_t *gftbls, uint8_t **data, uint8_t **coding);
 
 
 /**
@@ -118,7 +119,7 @@ void ec_encode_data_sse(int len, int k, int rows, unsigned char *gftbls, unsigne
  * @returns none
  */
 
-void ec_encode_data(int len, int k, int rows, unsigned char *gftbls, unsigned char **data, unsigned char **coding);
+void ec_encode_data(int len, int k, int rows, uint8_t *gftbls, uint8_t **data, uint8_t **coding);
 
 
 /**
@@ -140,7 +141,7 @@ void ec_encode_data(int len, int k, int rows, unsigned char *gftbls, unsigned ch
  * @returns none
  */
 
-void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v, unsigned char **src, unsigned char **dest);
+void ec_encode_data_base(int len, int srcs, int dests, uint8_t *v, uint8_t **src, uint8_t **dest);
 
 
 /**
@@ -161,8 +162,8 @@ void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v, unsigne
  * @returns none
  */
 
-void gf_vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char *dest);
+void gf_vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t *dest);
 
 /**
  * @brief GF(2^8) vector dot product.
@@ -182,8 +183,8 @@ void gf_vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char *dest);
+void gf_vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t *dest);
 
 /**
  * @brief GF(2^8) vector dot product.
@@ -203,8 +204,8 @@ void gf_vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char *dest);
+void gf_vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t *dest);
 
 /**
  * @brief GF(2^8) vector dot product with two outputs.
@@ -225,8 +226,8 @@ void gf_vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_2vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_2vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with two outputs.
@@ -247,8 +248,8 @@ void gf_2vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_2vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_2vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with two outputs.
@@ -269,8 +270,8 @@ void gf_2vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_2vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_2vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with three outputs.
@@ -291,8 +292,8 @@ void gf_2vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_3vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_3vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with three outputs.
@@ -313,8 +314,8 @@ void gf_3vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_3vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_3vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with three outputs.
@@ -335,8 +336,8 @@ void gf_3vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_3vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_3vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with four outputs.
@@ -357,8 +358,8 @@ void gf_3vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_4vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_4vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with four outputs.
@@ -379,8 +380,8 @@ void gf_4vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_4vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_4vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with four outputs.
@@ -401,8 +402,8 @@ void gf_4vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_4vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_4vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with five outputs.
@@ -423,8 +424,8 @@ void gf_4vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_5vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_5vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with five outputs.
@@ -445,8 +446,8 @@ void gf_5vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_5vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_5vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with five outputs.
@@ -467,8 +468,8 @@ void gf_5vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_5vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_5vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with six outputs.
@@ -489,8 +490,8 @@ void gf_5vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_6vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_6vect_dot_prod_sse(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with six outputs.
@@ -511,8 +512,8 @@ void gf_6vect_dot_prod_sse(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_6vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_6vect_dot_prod_avx(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product with six outputs.
@@ -533,8 +534,8 @@ void gf_6vect_dot_prod_avx(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_6vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
-			unsigned char **src, unsigned char **dest);
+void gf_6vect_dot_prod_avx2(int len, int vlen, uint8_t *gftbls,
+			uint8_t **src, uint8_t **dest);
 
 /**
  * @brief GF(2^8) vector dot product, runs baseline version.
@@ -556,8 +557,8 @@ void gf_6vect_dot_prod_avx2(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_vect_dot_prod_base(int len, int vlen, unsigned char *gftbls,
-                        unsigned char **src, unsigned char *dest);
+void gf_vect_dot_prod_base(int len, int vlen, uint8_t *gftbls,
+                        uint8_t **src, uint8_t *dest);
 
 /**
  * @brief GF(2^8) vector dot product, runs appropriate version.
@@ -579,8 +580,8 @@ void gf_vect_dot_prod_base(int len, int vlen, unsigned char *gftbls,
  * @returns none
  */
 
-void gf_vect_dot_prod(int len, int vlen, unsigned char *gftbls,
-                        unsigned char **src, unsigned char *dest);
+void gf_vect_dot_prod(int len, int vlen, uint8_t *gftbls,
+                        uint8_t **src, uint8_t *dest);
 
 /**********************************************************************
  * The remaining are lib support functions used in GF(2^8) operations.
@@ -594,7 +595,7 @@ void gf_vect_dot_prod(int len, int vlen, unsigned char *gftbls,
  * @returns  Product of a and b in GF(2^8)
  */
 
-unsigned char gf_mul(unsigned char a, unsigned char b);
+uint8_t gf_mul(uint8_t a, uint8_t b);
 
 /**
  * @brief Single element GF(2^8) inverse.
@@ -603,7 +604,7 @@ unsigned char gf_mul(unsigned char a, unsigned char b);
  * @returns  Field element b such that a x b = {1}
  */
 
-unsigned char gf_inv(unsigned char a);
+uint8_t gf_inv(uint8_t a);
 
 /**
  * @brief Generate a matrix of coefficients to be used for encoding.
@@ -622,7 +623,7 @@ unsigned char gf_inv(unsigned char a);
  * @returns  none
  */
 
-void gf_gen_rs_matrix(unsigned char *a, int m, int k);
+void gf_gen_rs_matrix(uint8_t *a, int m, int k);
 
 /**
  * @brief Generate a Cauchy matrix of coefficients to be used for encoding.
@@ -637,7 +638,7 @@ void gf_gen_rs_matrix(unsigned char *a, int m, int k);
  * @returns  none
  */
 
-void gf_gen_cauchy1_matrix(unsigned char *a, int m, int k);
+void gf_gen_cauchy1_matrix(uint8_t *a, int m, int k);
 
 /**
  * @brief Invert a matrix in GF(2^8)
@@ -648,7 +649,7 @@ void gf_gen_cauchy1_matrix(unsigned char *a, int m, int k);
  * @returns 0 successful, other fail on singular input matrix
  */
 
-int gf_invert_matrix(unsigned char *in, unsigned char *out, const int n);
+int gf_invert_matrix(uint8_t *in, uint8_t *out, const int n);
 
 /*************************************************************/
 

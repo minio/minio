@@ -28,12 +28,13 @@
 **********************************************************************/
 
 #include <limits.h>
+#include <stdint.h>
 #include <string.h>             // for memset
 #include "erasure-code.h"
 #include "ec-base.h"            // for GF tables
 #include "erasure/types.h"
 
-unsigned char gf_mul(unsigned char a, unsigned char b)
+uint8_t gf_mul(uint8_t a, uint8_t b)
 {
 #ifndef GF_LARGE_TABLES
         int i;
@@ -47,7 +48,7 @@ unsigned char gf_mul(unsigned char a, unsigned char b)
 #endif
 }
 
-unsigned char gf_inv(unsigned char a)
+uint8_t gf_inv(uint8_t a)
 {
 #ifndef GF_LARGE_TABLES
         if (a == 0)
@@ -59,10 +60,10 @@ unsigned char gf_inv(unsigned char a)
 #endif
 }
 
-void gf_gen_rs_matrix(unsigned char *a, int m, int k)
+void gf_gen_rs_matrix(uint8_t *a, int m, int k)
 {
         int i, j;
-        unsigned char p, gen = 1;
+        uint8_t p, gen = 1;
 
         memset(a, 0, k * m);
         for (i = 0; i < k; i++)
@@ -78,10 +79,10 @@ void gf_gen_rs_matrix(unsigned char *a, int m, int k)
         }
 }
 
-void gf_gen_cauchy1_matrix(unsigned char *a, int m, int k)
+void gf_gen_cauchy1_matrix(uint8_t *a, int m, int k)
 {
         int i, j;
-        unsigned char *p;
+        uint8_t *p;
 
         // Identity matrix in high position
         memset(a, 0, k * m);
@@ -96,10 +97,10 @@ void gf_gen_cauchy1_matrix(unsigned char *a, int m, int k)
 
 }
 
-int gf_invert_matrix(unsigned char *in_mat, unsigned char *out_mat, const int n)
+int gf_invert_matrix(uint8_t *in_mat, uint8_t *out_mat, const int n)
 {
         int i, j, k;
-        unsigned char temp;
+        uint8_t temp;
 
         // Set out_mat[] to the identity matrix
         for (i = 0; i < n * n; i++)     // memset(out_mat, 0, n*n)
@@ -154,16 +155,16 @@ int gf_invert_matrix(unsigned char *in_mat, unsigned char *out_mat, const int n)
 // Calculates const table gftbl in GF(2^8) from single input A
 // gftbl(A) = {A{00}, A{01}, A{02}, ... , A{0f} }, {A{00}, A{10}, A{20}, ... , A{f0} }
 
-void gf_vect_mul_init(unsigned char c, unsigned char *tbl)
+void gf_vect_mul_init(uint8_t c, uint8_t *tbl)
 {
-        unsigned char c2 = (c << 1) ^ ((c & 0x80) ? 0x1d : 0);  //Mult by GF{2}
-        unsigned char c4 = (c2 << 1) ^ ((c2 & 0x80) ? 0x1d : 0);        //Mult by GF{2}
-        unsigned char c8 = (c4 << 1) ^ ((c4 & 0x80) ? 0x1d : 0);        //Mult by GF{2}
+        uint8_t c2 = (c << 1) ^ ((c & 0x80) ? 0x1d : 0);  //Mult by GF{2}
+        uint8_t c4 = (c2 << 1) ^ ((c2 & 0x80) ? 0x1d : 0);        //Mult by GF{2}
+        uint8_t c8 = (c4 << 1) ^ ((c4 & 0x80) ? 0x1d : 0);        //Mult by GF{2}
 
 #if __WORDSIZE == 64 || _WIN64 || __x86_64__
         unsigned long long v1, v2, v4, v8, *t;
         unsigned long long v10, v20, v40, v80;
-        unsigned char c17, c18, c20, c24;
+        uint8_t c17, c18, c20, c24;
 
         t = (unsigned long long *)tbl;
 
@@ -191,8 +192,8 @@ void gf_vect_mul_init(unsigned char c, unsigned char *tbl)
         t[3] = v80 ^ v40;
 
 #else // 32-bit or other
-        unsigned char c3, c5, c6, c7, c9, c10, c11, c12, c13, c14, c15;
-        unsigned char c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
+        uint8_t c3, c5, c6, c7, c9, c10, c11, c12, c13, c14, c15;
+        uint8_t c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
             c31;
 
         c3 = c2 ^ c;
@@ -261,11 +262,11 @@ void gf_vect_mul_init(unsigned char c, unsigned char *tbl)
 #endif //__WORDSIZE == 64 || _WIN64 || __x86_64__
 }
 
-void gf_vect_dot_prod_base(int len, int vlen, unsigned char *v,
-                           unsigned char **src, unsigned char *dest)
+void gf_vect_dot_prod_base(int len, int vlen, uint8_t *v,
+                           uint8_t **src, uint8_t *dest)
 {
         int i, j;
-        unsigned char s;
+        uint8_t s;
         for (i = 0; i < len; i++) {
                 s = 0;
                 for (j = 0; j < vlen; j++)
@@ -275,11 +276,11 @@ void gf_vect_dot_prod_base(int len, int vlen, unsigned char *v,
         }
 }
 
-void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v,
-                         unsigned char **src, unsigned char **dest)
+void ec_encode_data_base(int len, int srcs, int dests, uint8_t *v,
+                         uint8_t **src, uint8_t **dest)
 {
         int i, j, l;
-        unsigned char s;
+        uint8_t s;
 
         for (l = 0; l < dests; l++) {
                 for (i = 0; i < len; i++) {
@@ -292,10 +293,10 @@ void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v,
         }
 }
 
-void gf_vect_mul_base(int len, unsigned char *a, unsigned char *src, unsigned char *dest)
+void gf_vect_mul_base(int len, uint8_t *a, uint8_t *src, uint8_t *dest)
 {
         //2nd element of table array is ref value used to fill it in
-        unsigned char c = a[1];
+        uint8_t c = a[1];
         while (len-- > 0)
                 *dest++ = gf_mul(c, *src++);
 }
