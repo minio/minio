@@ -22,7 +22,6 @@ package erasure
 // #cgo LDFLAGS: isal/isa-l.a
 // #include <stdlib.h>
 // #include <erasure-code.h>
-// #include <stdlib.h>
 //
 // #include "common.h"
 import "C"
@@ -57,7 +56,7 @@ type Encoder struct {
 	encode_matrix,
 	encode_tbls,
 	decode_matrix,
-	decode_tbls *C.uchar
+	decode_tbls *C.uint8_t
 }
 
 // ParseEncoderParams creates an EncoderParams object.
@@ -99,13 +98,12 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	var k = C.int(ep.k)
 	var m = C.int(ep.m)
 
-	var encode_matrix *C.uchar
-	var encode_tbls *C.uchar
+	var encode_matrix *C.uint8_t
+	var encode_tbls *C.uint8_t
 
 	C.minio_init_encoder(C.int(ep.technique), k, m, &encode_matrix,
 		&encode_tbls)
-	defer C.free(unsafe.Pointer(encode_matrix))
-	defer C.free(unsafe.Pointer(encode_tbls))
+
 	return &Encoder{
 		p:             ep,
 		k:             k,
@@ -153,15 +151,10 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 		pointers[i] = &chunks[i][0]
 	}
 
-	data := (**C.uchar)(unsafe.Pointer(&pointers[:e.p.k][0]))
-	coding := (**C.uchar)(unsafe.Pointer(&pointers[e.p.k:][0]))
+	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:e.p.k][0]))
+	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[e.p.k:][0]))
 
 	C.ec_encode_data(C.int(chunk_size), e.k, e.m, e.encode_tbls, data,
 		coding)
 	return chunks, block_len
-}
-
-func Encode(block []byte, ep *EncoderParams) ([][]byte, int) {
-	encoder := NewEncoder(ep)
-	return encoder.Encode(block)
 }

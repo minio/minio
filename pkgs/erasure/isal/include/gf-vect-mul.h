@@ -61,7 +61,7 @@ extern "C" {
  * @returns 0 pass, other fail
  */
 
-int gf_vect_mul_sse(int len, unsigned char *gftbl, void *src, void *dest);
+int gf_vect_mul_sse(int len, uint8_t *gftbl, void *src, void *dest);
 
 
  /**
@@ -82,7 +82,7 @@ int gf_vect_mul_sse(int len, unsigned char *gftbl, void *src, void *dest);
  * @returns 0 pass, other fail
  */
 
-int gf_vect_mul_avx(int len, unsigned char *gftbl, void *src, void *dest);
+int gf_vect_mul_avx(int len, uint8_t *gftbl, void *src, void *dest);
 
 
 /**
@@ -105,7 +105,7 @@ int gf_vect_mul_avx(int len, unsigned char *gftbl, void *src, void *dest);
  * @returns 0 pass, other fail
  */
 
-int gf_vect_mul(int len, unsigned char *gftbl, void *src, void *dest);
+int gf_vect_mul(int len, uint8_t *gftbl, void *src, void *dest);
 
 
 /**
@@ -118,7 +118,7 @@ int gf_vect_mul(int len, unsigned char *gftbl, void *src, void *dest);
  * @param gftbl Table output.
  */
 
-void gf_vect_mul_init(unsigned char c, unsigned char* gftbl);
+void gf_vect_mul_init(uint8_t c, uint8_t* gftbl);
 
 
 /**
@@ -138,8 +138,8 @@ void gf_vect_mul_init(unsigned char c, unsigned char* gftbl);
  * @param dest  Pointer to destination data array. Must be aligned to 32B.
  */
 
-void gf_vect_mul_base(int len, unsigned char *a, unsigned char *src,
-			unsigned char *dest);
+void gf_vect_mul_base(int len, uint8_t *a, uint8_t *src,
+			uint8_t *dest);
 
 #ifdef __cplusplus
 }

@@ -27,10 +27,11 @@
   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **********************************************************************/
 #include <limits.h>
+#include <stdint.h>
 #include "erasure-code.h"
 #include "erasure/types.h"
 
-void ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls)
+void ec_init_tables(int k, int rows, uint8_t *a, uint8_t *g_tbls)
 {
         int i, j;
 
@@ -43,8 +44,8 @@ void ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls)
 }
 
 #if __WORDSIZE == 64 || _WIN64 || __x86_64__
-void ec_encode_data_sse(int len, int k, int rows, unsigned char *g_tbls, unsigned char **data,
-                        unsigned char **coding)
+void ec_encode_data_sse(int len, int k, int rows, uint8_t *g_tbls, uint8_t **data,
+                        uint8_t **coding)
 {
 
         if (len < 16) {
@@ -74,8 +75,8 @@ void ec_encode_data_sse(int len, int k, int rows, unsigned char *g_tbls, unsigne
 
 }
 
-void ec_encode_data_avx(int len, int k, int rows, unsigned char *g_tbls, unsigned char **data,
-                        unsigned char **coding)
+void ec_encode_data_avx(int len, int k, int rows, uint8_t *g_tbls, uint8_t **data,
+                        uint8_t **coding)
 {
 
         if (len < 16) {
@@ -105,8 +106,8 @@ void ec_encode_data_avx(int len, int k, int rows, unsigned char *g_tbls, unsigne
 
 }
 
-void ec_encode_data_avx2(int len, int k, int rows, unsigned char *g_tbls, unsigned char **data,
-                         unsigned char **coding)
+void ec_encode_data_avx2(int len, int k, int rows, uint8_t *g_tbls, uint8_t **data,
+                         uint8_t **coding)
 {
 
         if (len < 32) {

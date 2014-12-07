@@ -12,8 +12,7 @@ getdeps: checkdeps
 
 build-erasure:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/erasure/isal lib
-	@godep go test -race github.com/minio-io/minio/pkgs/erasure
-	@godep go test -coverprofile=cover.out github.com/minio-io/minio/pkgs/erasure
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/erasure
 
 build-signify:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/signify
