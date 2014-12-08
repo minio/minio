@@ -1,4 +1,4 @@
-package storage
+package fsstorage
 
 import (
 	. "gopkg.in/check.v1"
@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-type FileStorageSuite struct{}
+type FileSystemStorageSuite struct{}
 
 var _ = Suite(&FileStorageSuite{})
 
