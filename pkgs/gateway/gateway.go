@@ -8,7 +8,7 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkgs/storage"
+	"github.com/minio-io/minio/pkgs/storage/fsstorage"
 	"github.com/tchap/go-patricia/patricia"
 )
 
@@ -197,7 +197,7 @@ func InMemoryStorageDriver(bucket string, input chan ObjectRequest, config Gatew
 }
 
 func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
-	fileStorage := storage.FileStorage{
+	fileStorage := fsstorage.FileSystemStorage{
 		RootDir: config.dataDir,
 	}
 	for request := range input {

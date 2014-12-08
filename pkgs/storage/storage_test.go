@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestPrintsStorage(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(StorageHandler))
+	server := httptest.NewServer(http.HandlerFunc(storageHandler))
 	defer server.Close()
 	res, err := http.Get(server.URL)
 	if err != nil {
@@ -24,4 +25,8 @@ func TestPrintsStorage(t *testing.T) {
 	if bodyString != "Storage" {
 		log.Fatal("Expected 'Storage', Received '" + bodyString + "'")
 	}
+}
+
+func storageHandler(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "Storage")
 }
