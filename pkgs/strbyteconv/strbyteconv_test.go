@@ -17,7 +17,6 @@
 package strbyteconv
 
 import (
-	"log"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -46,7 +45,6 @@ func (s *MySuite) Test(c *C) {
 	c.Assert(value, Equals, "100TB")
 
 	bytes, err := StringToBytes("100B")
-	log.Println(err)
 	c.Assert(err, IsNil)
 	c.Assert(bytes, Equals, uint64(100))
 
