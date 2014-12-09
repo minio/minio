@@ -19,7 +19,6 @@ package split
 import (
 	"bufio"
 	"bytes"
-	"log"
 	"strconv"
 	"testing"
 
@@ -39,7 +38,6 @@ func (s *MySuite) TestSplitStream(c *C) {
 		bytesWriter.Write([]byte(strconv.Itoa(i)))
 	}
 	bytesWriter.Flush()
-	log.Println(strconv.Itoa(bytesBuffer.Len()))
 	ch := make(chan SplitMessage)
 	reader := bytes.NewReader(bytesBuffer.Bytes())
 	go SplitStream(reader, 25, ch)
