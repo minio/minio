@@ -10,6 +10,18 @@ import (
 	"github.com/minio-io/minio/pkgs/storage/fsstorage"
 )
 
+func fsGetList(config inputConfig) (io.Reader, error) {
+	var objectStorage storage.ObjectStorage
+	rootDir := path.Join(config.rootDir, config.storageDriver)
+	objectStorage = fsstorage.FileSystemStorage{RootDir: rootDir}
+	objectlist, err := objectStorage.GetList()
+	if err != nil {
+		return nil, err
+	}
+	objectListBuffer := bytes.NewBuffer(objectlist)
+	return objectListBuffer, nil
+}
+
 func fsGet(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
