@@ -32,7 +32,7 @@ build-split: build-strbyteconv
 build-strbyteconv:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
-cover: build-erasure build-signify build-split build-crc32c
+cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 

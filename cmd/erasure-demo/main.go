@@ -176,5 +176,23 @@ func getMinioDir() string {
 		log.Fatal(err)
 	}
 	homePath := user.HomeDir
-	return path.Join(homePath, ".minio")
+	minioPath := path.Join(homePath, ".minio")
+	err = _initMinioDir(minioPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return minioPath
+}
+
+func _initMinioDir(dirPath string) error {
+	_, err := os.Lstat(dirPath)
+	if err != nil {
+		log.Printf("%s not found, creating a new-one for the first time",
+			dirPath)
+		err = os.Mkdir(dirPath, 0700)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
