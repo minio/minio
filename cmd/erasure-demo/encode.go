@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/codegangsta/cli"
+	"github.com/minio-io/minio/pkgs/checksum/crc32c"
 	"github.com/minio-io/minio/pkgs/erasure"
 	"github.com/minio-io/minio/pkgs/split"
 )
@@ -47,6 +48,12 @@ func encode(c *cli.Context) {
 	if config.blockSize == 0 {
 		encodedData, length := encoder.Encode(input)
 		for key, data := range encodedData {
+			crc, err := crc32c.Crc32c(data)
+			if err != nil {
+				log.Fatal(err)
+			}
+			crcString := strconv.Itoa(int(crc))
+			ioutil.WriteFile(config.output+"."+strconv.Itoa(key)+".cksum", []byte(crcString), 0600)
 			ioutil.WriteFile(config.output+"."+strconv.Itoa(key), data, 0600)
 			ioutil.WriteFile(config.output+".length", []byte(strconv.Itoa(length)), 0600)
 		}
@@ -61,9 +68,15 @@ func encode(c *cli.Context) {
 			}
 			encodedData, length := encoder.Encode(chunk.Data)
 			for key, data := range encodedData {
+				crc, err := crc32c.Crc32c(data)
+				if err != nil {
+					log.Fatal(err)
+				}
+				crcString := strconv.Itoa(int(crc))
+				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+"."+strconv.Itoa(key)+".cksum", []byte(crcString), 0600)
 				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+"."+strconv.Itoa(key), data, 0600)
-				ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+".length", []byte(strconv.Itoa(length)), 0600)
 			}
+			ioutil.WriteFile(config.output+"."+strconv.Itoa(chunkCount)+".length", []byte(strconv.Itoa(length)), 0600)
 			chunkCount += 1
 		}
 	}

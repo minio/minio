@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/codegangsta/cli"
+	"github.com/minio-io/minio/pkgs/checksum/crc32c"
 	"github.com/minio-io/minio/pkgs/erasure"
 )
 
@@ -58,8 +59,23 @@ func decode(c *cli.Context) {
 	for _, inputFile := range inputFiles {
 		// get chunks
 		chunks := make([][]byte, k+m)
+		// get checksum
+		cksums := make([][]byte, k+m)
 		for i := 0; i < k+m; i++ {
 			chunks[i], _ = ioutil.ReadFile(inputFile + "." + strconv.Itoa(i))
+			cksums[i], _ = ioutil.ReadFile(inputFile + "." + strconv.Itoa(i) + ".cksum")
+		}
+
+		for i := 0; i < k+m; i++ {
+			crcChunk, err := crc32c.Crc32c(chunks[i])
+			if err != nil {
+				chunks[i] = nil
+				continue
+			}
+			crcChunkStr := strconv.Itoa(int(crcChunk))
+			if string(cksums[i]) != crcChunkStr {
+				chunks[i] = nil
+			}
 		}
 
 		// get length
@@ -67,6 +83,7 @@ func decode(c *cli.Context) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		lengthString := string(lengthBytes)
 		length, err := strconv.Atoi(lengthString)
 		if err != nil {
