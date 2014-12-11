@@ -29,7 +29,15 @@ func put(c *cli.Context) {
 	switch config.storageDriver {
 	case "fs":
 		{
-			fsPut(config, c.Args().Get(0), inputFile)
+			if err := fsPut(config, c.Args().Get(0), inputFile); err != nil {
+				log.Fatal(err)
+			}
+		}
+	case "erasure":
+		{
+			if err := erasurePut(config, c.Args().Get(0), inputFile); err != nil {
+				log.Fatal(err)
+			}
 		}
 	default:
 		{

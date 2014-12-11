@@ -29,6 +29,12 @@ func get(c *cli.Context) {
 				}
 			}
 		}
+	case "erasure":
+		{
+			if objectReader, err = erasureGet(config, objectName); err != nil {
+				log.Fatal(err)
+			}
+		}
 	default:
 		{
 			log.Fatal("Unknown driver")
