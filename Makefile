@@ -32,8 +32,16 @@ build-split: build-strbyteconv
 build-strbyteconv:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
-cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1
+build-storage: build-storage-fs build-storage-append
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
+
+build-storage-fs:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/fsstorage
+
+build-storage-append:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/appendstorage
+
+cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1 build-storage
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
