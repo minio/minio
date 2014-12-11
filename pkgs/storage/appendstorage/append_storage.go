@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/minio-io/minio/pkgs/checksum/crc32c"
 	"github.com/minio-io/minio/pkgs/storage"
 )
 
@@ -96,6 +97,10 @@ func (aStorage *appendStorage) Put(objectPath string, object io.Reader) error {
 	}
 	header.Offset = offset
 	header.Length = len(objectBytes)
+	header.Crc, err = crc32c.Crc32c(objectBytes)
+	if err != nil {
+		return err
+	}
 	aStorage.objects[objectPath] = header
 	var mapBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&mapBuffer)
