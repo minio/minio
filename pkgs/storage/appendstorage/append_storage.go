@@ -68,10 +68,18 @@ func (storage *appendStorage) Get(objectPath string) (io.Reader, error) {
 
 	offset := header.Offset
 	length := header.Length
+	crc := header.Crc
 
 	object := make([]byte, length)
 	_, err := storage.file.ReadAt(object, offset)
 	if err != nil {
+		return nil, err
+	}
+	newcrc, err := crc32c.Crc32c(object)
+	if err != nil {
+		return nil, err
+	}
+	if newcrc != crc {
 		return nil, err
 	}
 	return bytes.NewBuffer(object), nil
