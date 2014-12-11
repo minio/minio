@@ -68,8 +68,9 @@ Running this already gives you a ton of functionality, plus support for things l
 
 Being a programmer can be a lonely job. Thankfully by the power of automation that is not the case! Let's create a greeter app to fend off our demons of loneliness!
 
+Start by creating a directory named `greet`, and within it, add a file, `greet.go` with the following code in it:
+
 ``` go
-/* greet.go */
 package main
 
 import (
@@ -84,7 +85,7 @@ func main() {
   app.Action = func(c *cli.Context) {
     println("Hello friend!")
   }
-  
+
   app.Run(os.Args)
 }
 ```
@@ -171,6 +172,8 @@ app.Flags = []cli.Flag {
 }
 ```
 
+That flag can then be set with `--lang spanish` or `-l spanish`. Note that giving two different forms of the same flag in the same command invocation is an error.
+
 #### Values from the Environment
 
 You can also have the default value set from the environment via `EnvVar`.  e.g.
@@ -186,7 +189,18 @@ app.Flags = []cli.Flag {
 }
 ```
 
-That flag can then be set with `--lang spanish` or `-l spanish`. Note that giving two different forms of the same flag in the same command invocation is an error.
+The `EnvVar` may also be given as a comma-delimited "cascade", where the first environment variable that resolves is used as the default.
+
+``` go
+app.Flags = []cli.Flag {
+  cli.StringFlag{
+    Name: "lang, l",
+    Value: "english",
+    Usage: "language for the greeting",
+    EnvVar: "LEGACY_COMPAT_LANG,APP_LANG,LANG",
+  },
+}
+```
 
 ### Subcommands
 
@@ -282,6 +296,3 @@ Feel free to put up a pull request to fix a bug or maybe add a feature. I will g
 If you are have contributed something significant to the project, I will most likely add you as a collaborator. As a collaborator you are given the ability to merge others pull requests. It is very important that new code does not break existing code, so be careful about what code you do choose to merge. If you have any questions feel free to link @codegangsta to the issue in question and we can review it together.
 
 If you feel like you have contributed to the project but have not yet been added as a collaborator, I probably forgot to add you. Hit @codegangsta up over email and we will get it figured out.
-
-## About
-cli.go is written by none other than the [Code Gangsta](http://codegangsta.io)
