@@ -43,9 +43,9 @@ const (
 
 // EncoderParams is a configuration set for building an encoder. It is created using ValidateParams.
 type EncoderParams struct {
-	k,
-	m,
-	technique int // cauchy or vandermonde matrix (RS)
+	K,
+	M,
+	Technique int // cauchy or vandermonde matrix (RS)
 }
 
 // Encoder is an object used to encode and decode data.
@@ -87,21 +87,21 @@ func ParseEncoderParams(k, m, technique int) (*EncoderParams, error) {
 	}
 
 	return &EncoderParams{
-		k:         k,
-		m:         m,
-		technique: technique,
+		K:         k,
+		M:         m,
+		Technique: technique,
 	}, nil
 }
 
 // NewEncoder creates an encoder with a given set of parameters.
 func NewEncoder(ep *EncoderParams) *Encoder {
-	var k = C.int(ep.k)
-	var m = C.int(ep.m)
+	var k = C.int(ep.K)
+	var m = C.int(ep.M)
 
 	var encode_matrix *C.uint8_t
 	var encode_tbls *C.uint8_t
 
-	C.minio_init_encoder(C.int(ep.technique), k, m, &encode_matrix,
+	C.minio_init_encoder(C.int(ep.Technique), k, m, &encode_matrix,
 		&encode_tbls)
 
 	return &Encoder{
@@ -122,7 +122,7 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var block_len = len(block)
 
 	chunk_size := int(C.minio_calc_chunk_size(e.k, C.uint32_t(block_len)))
-	chunk_len := chunk_size * e.p.k
+	chunk_len := chunk_size * e.p.K
 	pad_len := chunk_len - block_len
 
 	if pad_len > 0 {
@@ -131,28 +131,28 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 		block = append(block, s...)
 	}
 
-	coded_len := chunk_size * e.p.m
+	coded_len := chunk_size * e.p.M
 	c := make([]byte, coded_len)
 	block = append(block, c...)
 
 	// Allocate chunks
-	chunks := make([][]byte, e.p.k+e.p.m)
-	pointers := make([]*byte, e.p.k+e.p.m)
+	chunks := make([][]byte, e.p.K+e.p.M)
+	pointers := make([]*byte, e.p.K+e.p.M)
 
 	var i int
 	// Add data blocks to chunks
-	for i = 0; i < e.p.k; i++ {
+	for i = 0; i < e.p.K; i++ {
 		chunks[i] = block[i*chunk_size : (i+1)*chunk_size]
 		pointers[i] = &chunks[i][0]
 	}
 
-	for i = e.p.k; i < (e.p.k + e.p.m); i++ {
+	for i = e.p.K; i < (e.p.K + e.p.M); i++ {
 		chunks[i] = make([]byte, chunk_size)
 		pointers[i] = &chunks[i][0]
 	}
 
-	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:e.p.k][0]))
-	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[e.p.k:][0]))
+	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:e.p.K][0]))
+	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[e.p.K:][0]))
 
 	C.ec_encode_data(C.int(chunk_size), e.k, e.m, e.encode_tbls, data,
 		coding)

@@ -28,9 +28,8 @@ type encodedStorage struct {
 type StorageEntry struct {
 	Path          string
 	Md5sum        string
-	Crc           uint32
 	Blocks        []StorageBlockEntry
-	Encoderparams *erasure.EncoderParams
+	Encoderparams erasure.EncoderParams
 }
 
 type StorageBlockEntry struct {
@@ -109,11 +108,14 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 	}
 	encoder := erasure.NewEncoder(encoderParameters)
 	entry := StorageEntry{
-		Path:          objectPath,
-		Md5sum:        "md5sum",
-		Crc:           0,
-		Blocks:        make([]StorageBlockEntry, 0),
-		Encoderparams: encoderParameters,
+		Path:   objectPath,
+		Md5sum: "md5sum",
+		Blocks: make([]StorageBlockEntry, 0),
+		Encoderparams: erasure.EncoderParams{
+			K:         eStorage.K,
+			M:         eStorage.M,
+			Technique: erasure.CAUCHY,
+		},
 	}
 	i := 0
 	// encode
@@ -163,7 +165,12 @@ func (eStorage *encodedStorage) storeBlocks(path string, blocks [][]byte) []erro
 }
 
 func (eStorage *encodedStorage) readObject(objectPath string, entry StorageEntry, writer *io.PipeWriter) {
-	encoder := erasure.NewEncoder(entry.Encoderparams)
+	ep, err := erasure.ParseEncoderParams(entry.Encoderparams.K, entry.Encoderparams.M, entry.Encoderparams.Technique)
+	if err != nil {
+		writer.CloseWithError(err)
+		return
+	}
+	encoder := erasure.NewEncoder(ep)
 	for i, chunk := range entry.Blocks {
 		blockSlices := eStorage.getBlockSlices(objectPath + "$" + strconv.Itoa(i))
 		var blocks [][]byte
