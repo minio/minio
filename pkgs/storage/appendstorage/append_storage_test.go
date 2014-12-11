@@ -1,6 +1,7 @@
 package appendstorage
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -28,24 +29,27 @@ func (s *AppendStorageSuite) TestAppendStoragePutAtRootPath(c *C) {
 	objectStorage, err = NewStorage(rootDir, 0)
 	c.Assert(err, IsNil)
 
-	err = objectStorage.Put("path1", []byte("object1"))
+	err = objectStorage.Put("path1", bytes.NewBuffer([]byte("object1")))
 	c.Assert(err, IsNil)
 
 	// assert object1 was created in correct path
-	object1, err := objectStorage.Get("path1")
+	objectResult1, err := objectStorage.Get("path1")
 	c.Assert(err, IsNil)
+	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 
-	err = objectStorage.Put("path2", []byte("object2"))
+	err = objectStorage.Put("path2", bytes.NewBuffer([]byte("object2")))
 	c.Assert(err, IsNil)
 
 	// assert object1 was created in correct path
-	object2, err := objectStorage.Get("path2")
+	objectResult2, err := objectStorage.Get("path2")
 	c.Assert(err, IsNil)
+	object2, _ := ioutil.ReadAll(objectResult2)
 	c.Assert(string(object2), Equals, "object2")
 
-	object1, err = objectStorage.Get("path1")
+	objectResult1, err = objectStorage.Get("path1")
 	c.Assert(err, IsNil)
+	object1, _ = ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 }
 
@@ -59,19 +63,21 @@ func (s *AppendStorageSuite) TestAppendStoragePutDirPath(c *C) {
 	c.Assert(err, IsNil)
 
 	// add object 1
-	objectStorage.Put("path1/path2/path3", []byte("object"))
+	objectStorage.Put("path1/path2/path3", bytes.NewBuffer([]byte("object")))
 
 	// assert object1 was created in correct path
-	object1, err := objectStorage.Get("path1/path2/path3")
+	objectResult1, err := objectStorage.Get("path1/path2/path3")
 	c.Assert(err, IsNil)
+	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object")
 
 	// add object 2
-	objectStorage.Put("path1/path1/path1", []byte("object2"))
+	objectStorage.Put("path1/path1/path1", bytes.NewBuffer([]byte("object2")))
 
 	// assert object1 was created in correct path
-	object2, err := objectStorage.Get("path1/path1/path1")
+	objectResult2, err := objectStorage.Get("path1/path1/path1")
 	c.Assert(err, IsNil)
+	object2, _ := ioutil.ReadAll(objectResult2)
 	c.Assert(string(object2), Equals, "object2")
 }
 
@@ -83,11 +89,11 @@ func (s *AppendStorageSuite) TestSerialization(c *C) {
 	objectStorage, err := NewStorage(rootDir, 0)
 	c.Assert(err, IsNil)
 
-	err = objectStorage.Put("path1", []byte("object1"))
+	err = objectStorage.Put("path1", bytes.NewBuffer([]byte("object1")))
 	c.Assert(err, IsNil)
-	err = objectStorage.Put("path2", []byte("object2"))
+	err = objectStorage.Put("path2", bytes.NewBuffer([]byte("object2")))
 	c.Assert(err, IsNil)
-	err = objectStorage.Put("path3/obj3", []byte("object3"))
+	err = objectStorage.Put("path3/obj3", bytes.NewBuffer([]byte("object3")))
 	c.Assert(err, IsNil)
 
 	es := objectStorage.(*appendStorage)
@@ -96,18 +102,18 @@ func (s *AppendStorageSuite) TestSerialization(c *C) {
 	objectStorage2, err := NewStorage(rootDir, 0)
 	c.Assert(err, IsNil)
 
-	object1, err := objectStorage2.Get("path1")
+	objectResult1, err := objectStorage2.Get("path1")
 	c.Assert(err, IsNil)
+	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 
-	object2, err := objectStorage2.Get("path2")
+	objectResult2, err := objectStorage2.Get("path2")
 	c.Assert(err, IsNil)
+	object2, _ := ioutil.ReadAll(objectResult2)
 	c.Assert(string(object2), Equals, "object2")
 
-	object3, err := objectStorage2.Get("path3/obj3")
+	objectResult3, err := objectStorage2.Get("path3/obj3")
 	c.Assert(err, IsNil)
+	object3, _ := ioutil.ReadAll(objectResult3)
 	c.Assert(string(object3), Equals, "object3")
-}
-
-func (s *AppendStorageSuite) TestSlice(c *C) {
 }
