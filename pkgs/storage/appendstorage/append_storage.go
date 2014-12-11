@@ -3,6 +3,7 @@ package appendstorage
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
@@ -96,4 +97,8 @@ func (storage *appendStorage) Put(objectPath string, object []byte) error {
 	encoder.Encode(storage.objects)
 	ioutil.WriteFile(storage.objectsFile, mapBuffer.Bytes(), 0600)
 	return nil
+}
+
+func (storage *appendStorage) GetList() ([]byte, error) {
+	return nil, errors.New("Not Implemented")
 }

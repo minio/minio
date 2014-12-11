@@ -1,26 +1,28 @@
 package fsstorage
 
 import (
-	. "gopkg.in/check.v1"
 	"io/ioutil"
 	"os"
+
+	"github.com/minio-io/minio/pkgs/storage"
+	. "gopkg.in/check.v1"
 )
 
 type FileSystemStorageSuite struct{}
 
-var _ = Suite(&FileStorageSuite{})
+var _ = Suite(&FileSystemStorageSuite{})
 
 func makeTempTestDir() (string, error) {
 	return ioutil.TempDir("/tmp", "minio-test-")
 }
 
-func (s *FileStorageSuite) TestFileStoragePutAtRootPath(c *C) {
+func (s *FileSystemStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 	rootDir, err := makeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
-	var storage ObjectStorage
-	storage = FileStorage{
+	var storage storage.ObjectStorage
+	storage = FileSystemStorage{
 		RootDir: rootDir,
 	}
 
@@ -32,13 +34,13 @@ func (s *FileStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 	c.Assert(string(object1), Equals, "object1")
 }
 
-func (s *FileStorageSuite) TestFileStoragePutDirPath(c *C) {
+func (s *FileSystemStorageSuite) TestFileStoragePutDirPath(c *C) {
 	rootDir, err := makeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
-	var storage ObjectStorage
-	storage = FileStorage{
+	var storage storage.ObjectStorage
+	storage = FileSystemStorage{
 		RootDir: rootDir,
 	}
 
