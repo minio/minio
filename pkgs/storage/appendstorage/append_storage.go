@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -58,7 +59,7 @@ func NewStorage(rootDir string, slice int) (storage.ObjectStorage, error) {
 	}, nil
 }
 
-func (storage *appendStorage) Get(objectPath string) ([]byte, error) {
+func (storage *appendStorage) Get(objectPath string) (io.Reader, error) {
 	header, ok := storage.objects[objectPath]
 	if ok == false {
 		return nil, nil
@@ -72,10 +73,10 @@ func (storage *appendStorage) Get(objectPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return object, nil
+	return bytes.NewBuffer(object), nil
 }
 
-func (aStorage *appendStorage) Put(objectPath string, object []byte) error {
+func (aStorage *appendStorage) Put(objectPath string, object io.Reader) error {
 	header := Header{
 		Path:   objectPath,
 		Offset: 0,
@@ -86,11 +87,15 @@ func (aStorage *appendStorage) Put(objectPath string, object []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := aStorage.file.Write(object); err != nil {
+	objectBytes, err := ioutil.ReadAll(object)
+	if err != nil {
+		return err
+	}
+	if _, err := aStorage.file.Write(objectBytes); err != nil {
 		return err
 	}
 	header.Offset = offset
-	header.Length = len(object)
+	header.Length = len(objectBytes)
 	aStorage.objects[objectPath] = header
 	var mapBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&mapBuffer)

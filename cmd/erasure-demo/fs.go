@@ -35,8 +35,7 @@ func fsGet(config inputConfig, objectPath string) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	objectBuffer := bytes.NewBuffer(object)
-	return objectBuffer, nil
+	return object, nil
 }
 
 func fsPut(config inputConfig, objectPath string, reader io.Reader) error {
@@ -46,11 +45,8 @@ func fsPut(config inputConfig, objectPath string, reader io.Reader) error {
 		return err
 	}
 	var objectStorage storage.ObjectStorage
-	buffer := new(bytes.Buffer)
-	buffer.ReadFrom(reader)
-	object := buffer.Bytes()
 	objectStorage = fsstorage.FileSystemStorage{RootDir: rootDir}
-	if err = objectStorage.Put(objectPath, object); err != nil {
+	if err = objectStorage.Put(objectPath, reader); err != nil {
 		return err
 	}
 	return nil

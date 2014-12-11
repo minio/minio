@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -212,7 +213,7 @@ func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config Gat
 			}
 		case "PUT":
 			objectPath := path.Join(bucket, request.path)
-			fileStorage.Put(objectPath, request.object)
+			fileStorage.Put(objectPath, bytes.NewBuffer(request.object))
 			request.callback <- nil
 		default:
 			request.callback <- errors.New("Unexpected message")

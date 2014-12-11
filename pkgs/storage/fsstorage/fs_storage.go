@@ -1,6 +1,7 @@
 package fsstorage
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -32,14 +33,18 @@ func (fsStorage FileSystemStorage) List(listPath string) ([]storage.ObjectDescri
 	return descriptions, nil
 }
 
-func (storage FileSystemStorage) Get(objectPath string) ([]byte, error) {
-	return ioutil.ReadFile(path.Join(storage.RootDir, objectPath))
+func (storage FileSystemStorage) Get(objectPath string) (io.Reader, error) {
+	return os.Open(path.Join(storage.RootDir, objectPath))
 }
 
-func (storage FileSystemStorage) Put(objectPath string, object []byte) error {
+func (storage FileSystemStorage) Put(objectPath string, object io.Reader) error {
 	err := os.MkdirAll(filepath.Dir(path.Join(storage.RootDir, objectPath)), 0700)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path.Join(storage.RootDir, objectPath), object, 0600)
+	objectBytes, err := ioutil.ReadAll(object)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path.Join(storage.RootDir, objectPath), objectBytes, 0600)
 }

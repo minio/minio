@@ -1,6 +1,7 @@
 package fsstorage
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -29,11 +30,13 @@ func (s *FileSystemStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 		RootDir: rootDir,
 	}
 
-	objectStorage.Put("path1", []byte("object1"))
+	objectBuffer := bytes.NewBuffer([]byte("object1"))
+	objectStorage.Put("path1", objectBuffer)
 
 	// assert object1 was created in correct path
-	object1, err := objectStorage.Get("path1")
+	objectResult1, err := objectStorage.Get("path1")
 	c.Assert(err, IsNil)
+	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 
 	objectList, err := objectStorage.List("/")
@@ -51,19 +54,23 @@ func (s *FileSystemStorageSuite) TestFileStoragePutDirPath(c *C) {
 		RootDir: rootDir,
 	}
 
-	objectStorage.Put("path1/path2/path3", []byte("object"))
+	objectBuffer1 := bytes.NewBuffer([]byte("object1"))
+	objectStorage.Put("path1/path2/path3", objectBuffer1)
 
 	// assert object1 was created in correct path
-	object1, err := objectStorage.Get("path1/path2/path3")
+	objectResult1, err := objectStorage.Get("path1/path2/path3")
 	c.Assert(err, IsNil)
-	c.Assert(string(object1), Equals, "object")
+	object1, _ := ioutil.ReadAll(objectResult1)
+	c.Assert(string(object1), Equals, "object1")
 
 	// add second object
-	err = objectStorage.Put("path2/path2/path2", []byte("object2"))
+	objectBuffer2 := bytes.NewBuffer([]byte("object2"))
+	err = objectStorage.Put("path2/path2/path2", objectBuffer2)
 	c.Assert(err, IsNil)
 
 	// add third object
-	err = objectStorage.Put("object3", []byte("object3"))
+	objectBuffer3 := bytes.NewBuffer([]byte("object3"))
+	err = objectStorage.Put("object3", objectBuffer3)
 	c.Assert(err, IsNil)
 
 	objectList, err := objectStorage.List("/")
