@@ -12,9 +12,15 @@ func put(c *cli.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	filePath := c.Args().Get(0)
-	if len(filePath) == 0 {
-		log.Fatal("Please specify a valid object name \n # erasure-demo put <OBJECTNAME>")
+	objectPath := c.Args().Get(0)
+	var filePath string
+	switch len(c.Args()) {
+	case 1:
+		filePath = objectPath
+	case 2:
+		filePath = c.Args().Get(1)
+	default:
+		log.Fatal("Please specify a valid object name \n # erasure-demo put [OBJECTNAME] [FILENAME]")
 	}
 	inputFile, err := os.Open(filePath)
 	if err != nil {
