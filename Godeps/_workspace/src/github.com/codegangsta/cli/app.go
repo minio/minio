@@ -24,6 +24,8 @@ type App struct {
 	EnableBashCompletion bool
 	// Boolean to hide built-in help command
 	HideHelp bool
+	// Boolean to hide built-in version flag
+	HideVersion bool
 	// An action to execute when the bash-completion flag is set
 	BashComplete func(context *Context)
 	// An action to execute before any subcommands are run, but after the context is ready
@@ -75,7 +77,10 @@ func (a *App) Run(arguments []string) error {
 	if a.EnableBashCompletion {
 		a.appendFlag(BashCompletionFlag)
 	}
-	a.appendFlag(VersionFlag)
+
+	if !a.HideVersion {
+		a.appendFlag(VersionFlag)
+	}
 
 	// parse flags
 	set := flagSet(a.Name, a.Flags)

@@ -54,7 +54,7 @@ func TestStringFlagHelpOutput(t *testing.T) {
 }
 
 func TestStringFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_FOO", "derp")
 	for _, test := range stringFlagTests {
 		flag := cli.StringFlag{Name: test.name, Value: test.value, EnvVar: "APP_FOO"}
@@ -106,7 +106,7 @@ func TestStringSliceFlagHelpOutput(t *testing.T) {
 }
 
 func TestStringSliceFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_QWWX", "11,4")
 	for _, test := range stringSliceFlagTests {
 		flag := cli.StringSliceFlag{Name: test.name, Value: test.value, EnvVar: "APP_QWWX"}
@@ -139,7 +139,7 @@ func TestIntFlagHelpOutput(t *testing.T) {
 }
 
 func TestIntFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_BAR", "2")
 	for _, test := range intFlagTests {
 		flag := cli.IntFlag{Name: test.name, EnvVar: "APP_BAR"}
@@ -172,7 +172,7 @@ func TestDurationFlagHelpOutput(t *testing.T) {
 }
 
 func TestDurationFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_BAR", "2h3m6s")
 	for _, test := range durationFlagTests {
 		flag := cli.DurationFlag{Name: test.name, EnvVar: "APP_BAR"}
@@ -212,7 +212,7 @@ func TestIntSliceFlagHelpOutput(t *testing.T) {
 }
 
 func TestIntSliceFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_SMURF", "42,3")
 	for _, test := range intSliceFlagTests {
 		flag := cli.IntSliceFlag{Name: test.name, Value: test.value, EnvVar: "APP_SMURF"}
@@ -245,7 +245,7 @@ func TestFloat64FlagHelpOutput(t *testing.T) {
 }
 
 func TestFloat64FlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_BAZ", "99.4")
 	for _, test := range float64FlagTests {
 		flag := cli.Float64Flag{Name: test.name, EnvVar: "APP_BAZ"}
@@ -280,7 +280,7 @@ func TestGenericFlagHelpOutput(t *testing.T) {
 }
 
 func TestGenericFlagWithEnvVarHelpOutput(t *testing.T) {
-
+	os.Clearenv()
 	os.Setenv("APP_ZAP", "3")
 	for _, test := range genericFlagTests {
 		flag := cli.GenericFlag{Name: test.name, EnvVar: "APP_ZAP"}
@@ -309,10 +309,29 @@ func TestParseMultiString(t *testing.T) {
 }
 
 func TestParseMultiStringFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_COUNT", "20")
 	(&cli.App{
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "count, c", EnvVar: "APP_COUNT"},
+		},
+		Action: func(ctx *cli.Context) {
+			if ctx.String("count") != "20" {
+				t.Errorf("main name not set")
+			}
+			if ctx.String("c") != "20" {
+				t.Errorf("short name not set")
+			}
+		},
+	}).Run([]string{"run"})
+}
+
+func TestParseMultiStringFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_COUNT", "20")
+	(&cli.App{
+		Flags: []cli.Flag{
+			cli.StringFlag{Name: "count, c", EnvVar: "COMPAT_COUNT,APP_COUNT"},
 		},
 		Action: func(ctx *cli.Context) {
 			if ctx.String("count") != "20" {
@@ -342,11 +361,31 @@ func TestParseMultiStringSlice(t *testing.T) {
 }
 
 func TestParseMultiStringSliceFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_INTERVALS", "20,30,40")
 
 	(&cli.App{
 		Flags: []cli.Flag{
 			cli.StringSliceFlag{Name: "intervals, i", Value: &cli.StringSlice{}, EnvVar: "APP_INTERVALS"},
+		},
+		Action: func(ctx *cli.Context) {
+			if !reflect.DeepEqual(ctx.StringSlice("intervals"), []string{"20", "30", "40"}) {
+				t.Errorf("main name not set from env")
+			}
+			if !reflect.DeepEqual(ctx.StringSlice("i"), []string{"20", "30", "40"}) {
+				t.Errorf("short name not set from env")
+			}
+		},
+	}).Run([]string{"run"})
+}
+
+func TestParseMultiStringSliceFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_INTERVALS", "20,30,40")
+
+	(&cli.App{
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{Name: "intervals, i", Value: &cli.StringSlice{}, EnvVar: "COMPAT_INTERVALS,APP_INTERVALS"},
 		},
 		Action: func(ctx *cli.Context) {
 			if !reflect.DeepEqual(ctx.StringSlice("intervals"), []string{"20", "30", "40"}) {
@@ -377,10 +416,30 @@ func TestParseMultiInt(t *testing.T) {
 }
 
 func TestParseMultiIntFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_TIMEOUT_SECONDS", "10")
 	a := cli.App{
 		Flags: []cli.Flag{
 			cli.IntFlag{Name: "timeout, t", EnvVar: "APP_TIMEOUT_SECONDS"},
+		},
+		Action: func(ctx *cli.Context) {
+			if ctx.Int("timeout") != 10 {
+				t.Errorf("main name not set")
+			}
+			if ctx.Int("t") != 10 {
+				t.Errorf("short name not set")
+			}
+		},
+	}
+	a.Run([]string{"run"})
+}
+
+func TestParseMultiIntFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_TIMEOUT_SECONDS", "10")
+	a := cli.App{
+		Flags: []cli.Flag{
+			cli.IntFlag{Name: "timeout, t", EnvVar: "COMPAT_TIMEOUT_SECONDS,APP_TIMEOUT_SECONDS"},
 		},
 		Action: func(ctx *cli.Context) {
 			if ctx.Int("timeout") != 10 {
@@ -411,11 +470,31 @@ func TestParseMultiIntSlice(t *testing.T) {
 }
 
 func TestParseMultiIntSliceFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_INTERVALS", "20,30,40")
 
 	(&cli.App{
 		Flags: []cli.Flag{
 			cli.IntSliceFlag{Name: "intervals, i", Value: &cli.IntSlice{}, EnvVar: "APP_INTERVALS"},
+		},
+		Action: func(ctx *cli.Context) {
+			if !reflect.DeepEqual(ctx.IntSlice("intervals"), []int{20, 30, 40}) {
+				t.Errorf("main name not set from env")
+			}
+			if !reflect.DeepEqual(ctx.IntSlice("i"), []int{20, 30, 40}) {
+				t.Errorf("short name not set from env")
+			}
+		},
+	}).Run([]string{"run"})
+}
+
+func TestParseMultiIntSliceFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_INTERVALS", "20,30,40")
+
+	(&cli.App{
+		Flags: []cli.Flag{
+			cli.IntSliceFlag{Name: "intervals, i", Value: &cli.IntSlice{}, EnvVar: "COMPAT_INTERVALS,APP_INTERVALS"},
 		},
 		Action: func(ctx *cli.Context) {
 			if !reflect.DeepEqual(ctx.IntSlice("intervals"), []int{20, 30, 40}) {
@@ -446,10 +525,30 @@ func TestParseMultiFloat64(t *testing.T) {
 }
 
 func TestParseMultiFloat64FromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_TIMEOUT_SECONDS", "15.5")
 	a := cli.App{
 		Flags: []cli.Flag{
 			cli.Float64Flag{Name: "timeout, t", EnvVar: "APP_TIMEOUT_SECONDS"},
+		},
+		Action: func(ctx *cli.Context) {
+			if ctx.Float64("timeout") != 15.5 {
+				t.Errorf("main name not set")
+			}
+			if ctx.Float64("t") != 15.5 {
+				t.Errorf("short name not set")
+			}
+		},
+	}
+	a.Run([]string{"run"})
+}
+
+func TestParseMultiFloat64FromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_TIMEOUT_SECONDS", "15.5")
+	a := cli.App{
+		Flags: []cli.Flag{
+			cli.Float64Flag{Name: "timeout, t", EnvVar: "COMPAT_TIMEOUT_SECONDS,APP_TIMEOUT_SECONDS"},
 		},
 		Action: func(ctx *cli.Context) {
 			if ctx.Float64("timeout") != 15.5 {
@@ -481,10 +580,30 @@ func TestParseMultiBool(t *testing.T) {
 }
 
 func TestParseMultiBoolFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_DEBUG", "1")
 	a := cli.App{
 		Flags: []cli.Flag{
 			cli.BoolFlag{Name: "debug, d", EnvVar: "APP_DEBUG"},
+		},
+		Action: func(ctx *cli.Context) {
+			if ctx.Bool("debug") != true {
+				t.Errorf("main name not set from env")
+			}
+			if ctx.Bool("d") != true {
+				t.Errorf("short name not set from env")
+			}
+		},
+	}
+	a.Run([]string{"run"})
+}
+
+func TestParseMultiBoolFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_DEBUG", "1")
+	a := cli.App{
+		Flags: []cli.Flag{
+			cli.BoolFlag{Name: "debug, d", EnvVar: "COMPAT_DEBUG,APP_DEBUG"},
 		},
 		Action: func(ctx *cli.Context) {
 			if ctx.Bool("debug") != true {
@@ -516,10 +635,30 @@ func TestParseMultiBoolT(t *testing.T) {
 }
 
 func TestParseMultiBoolTFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_DEBUG", "0")
 	a := cli.App{
 		Flags: []cli.Flag{
 			cli.BoolTFlag{Name: "debug, d", EnvVar: "APP_DEBUG"},
+		},
+		Action: func(ctx *cli.Context) {
+			if ctx.BoolT("debug") != false {
+				t.Errorf("main name not set from env")
+			}
+			if ctx.BoolT("d") != false {
+				t.Errorf("short name not set from env")
+			}
+		},
+	}
+	a.Run([]string{"run"})
+}
+
+func TestParseMultiBoolTFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_DEBUG", "0")
+	a := cli.App{
+		Flags: []cli.Flag{
+			cli.BoolTFlag{Name: "debug, d", EnvVar: "COMPAT_DEBUG,APP_DEBUG"},
 		},
 		Action: func(ctx *cli.Context) {
 			if ctx.BoolT("debug") != false {
@@ -569,6 +708,7 @@ func TestParseGeneric(t *testing.T) {
 }
 
 func TestParseGenericFromEnv(t *testing.T) {
+	os.Clearenv()
 	os.Setenv("APP_SERVE", "20,30")
 	a := cli.App{
 		Flags: []cli.Flag{
@@ -580,6 +720,22 @@ func TestParseGenericFromEnv(t *testing.T) {
 			}
 			if !reflect.DeepEqual(ctx.Generic("s"), &Parser{"20", "30"}) {
 				t.Errorf("short name not set from env")
+			}
+		},
+	}
+	a.Run([]string{"run"})
+}
+
+func TestParseGenericFromEnvCascade(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("APP_FOO", "99,2000")
+	a := cli.App{
+		Flags: []cli.Flag{
+			cli.GenericFlag{Name: "foos", Value: &Parser{}, EnvVar: "COMPAT_FOO,APP_FOO"},
+		},
+		Action: func(ctx *cli.Context) {
+			if !reflect.DeepEqual(ctx.Generic("foos"), &Parser{"99", "2000"}) {
+				t.Errorf("value not set from env")
 			}
 		},
 	}
