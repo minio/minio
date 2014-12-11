@@ -31,8 +31,14 @@ func get(c *cli.Context) {
 		}
 	case "erasure":
 		{
-			if objectReader, err = erasureGet(config, objectName); err != nil {
-				log.Fatal(err)
+			if len(objectName) == 0 {
+				if objectReader, err = erasureGetList(config); err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				if objectReader, err = erasureGet(config, objectName); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	default:

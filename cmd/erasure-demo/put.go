@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path"
 
 	"github.com/codegangsta/cli"
 )
@@ -12,12 +13,13 @@ func put(c *cli.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	objectPath := c.Args().Get(0)
-	var filePath string
+	var filePath, objectName string
 	switch len(c.Args()) {
 	case 1:
-		filePath = objectPath
+		objectName = path.Base(c.Args().Get(0))
+		filePath = c.Args().Get(0)
 	case 2:
+		objectName = c.Args().Get(0)
 		filePath = c.Args().Get(1)
 	default:
 		log.Fatal("Please specify a valid object name \n # erasure-demo put [OBJECTNAME] [FILENAME]")
@@ -29,13 +31,13 @@ func put(c *cli.Context) {
 	switch config.storageDriver {
 	case "fs":
 		{
-			if err := fsPut(config, c.Args().Get(0), inputFile); err != nil {
+			if err := fsPut(config, objectName, inputFile); err != nil {
 				log.Fatal(err)
 			}
 		}
 	case "erasure":
 		{
-			if err := erasurePut(config, c.Args().Get(0), inputFile); err != nil {
+			if err := erasurePut(config, objectName, inputFile); err != nil {
 				log.Fatal(err)
 			}
 		}
