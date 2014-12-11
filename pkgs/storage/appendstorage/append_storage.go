@@ -24,7 +24,7 @@ type Header struct {
 	Path   string
 	Offset int64
 	Length int
-	Crc    []byte
+	Crc    uint32
 }
 
 func NewStorage(rootDir string, slice int) (storage.ObjectStorage, error) {
@@ -44,7 +44,7 @@ func NewStorage(rootDir string, slice int) (storage.ObjectStorage, error) {
 		}
 		dec := gob.NewDecoder(mapFile)
 		err = dec.Decode(&objects)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return &appendStorage{}, nil
 		}
 	}
@@ -81,7 +81,7 @@ func (aStorage *appendStorage) Put(objectPath string, object io.Reader) error {
 		Path:   objectPath,
 		Offset: 0,
 		Length: 0,
-		Crc:    nil,
+		Crc:    0,
 	}
 	offset, err := aStorage.file.Seek(0, os.SEEK_END)
 	if err != nil {

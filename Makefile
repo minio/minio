@@ -33,7 +33,6 @@ build-strbyteconv:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
 build-storage: build-storage-fs build-storage-append build-storage-encoded
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage
 
 build-storage-fs:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/fsstorage
