@@ -5,23 +5,31 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/minio-io/minio/pkgs/storage"
 )
 
 type FileSystemStorage struct {
 	RootDir string
 }
 
-func (storage FileSystemStorage) GetList() ([]byte, error) {
-	fileInfos, err := ioutil.ReadDir(storage.RootDir)
+func (fsStorage FileSystemStorage) List(listPath string) ([]storage.ObjectDescription, error) {
+	fileInfos, err := ioutil.ReadDir(path.Join(fsStorage.RootDir, listPath))
 	if err != nil {
 		return nil, err
 	}
 
-	var list []byte
+	var descriptions []storage.ObjectDescription
+
 	for _, fi := range fileInfos {
-		list = append(list, "{"+fi.Name()+"}\n"...)
+		description := storage.ObjectDescription{
+			Path:  fi.Name(),
+			IsDir: fi.IsDir(),
+			Hash:  "", // TODO
+		}
+		descriptions = append(descriptions, description)
 	}
-	return list, nil
+	return descriptions, nil
 }
 
 func (storage FileSystemStorage) Get(objectPath string) ([]byte, error) {
