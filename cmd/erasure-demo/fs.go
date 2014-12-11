@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path"
@@ -14,11 +15,15 @@ func fsGetList(config inputConfig) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
 	objectStorage = fsstorage.FileSystemStorage{RootDir: rootDir}
-	objectlist, err := objectStorage.GetList()
+	objectList, err := objectStorage.List("/")
 	if err != nil {
 		return nil, err
 	}
-	objectListBuffer := bytes.NewBuffer(objectlist)
+	var objectListBytes []byte
+	if objectListBytes, err = json.Marshal(objectList); err != nil {
+		return nil, err
+	}
+	objectListBuffer := bytes.NewBuffer(objectListBytes)
 	return objectListBuffer, nil
 }
 

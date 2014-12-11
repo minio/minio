@@ -75,30 +75,30 @@ func (storage *appendStorage) Get(objectPath string) ([]byte, error) {
 	return object, nil
 }
 
-func (storage *appendStorage) Put(objectPath string, object []byte) error {
+func (aStorage *appendStorage) Put(objectPath string, object []byte) error {
 	header := Header{
 		Path:   objectPath,
 		Offset: 0,
 		Length: 0,
 		Crc:    nil,
 	}
-	offset, err := storage.file.Seek(0, os.SEEK_END)
+	offset, err := aStorage.file.Seek(0, os.SEEK_END)
 	if err != nil {
 		return err
 	}
-	if _, err := storage.file.Write(object); err != nil {
+	if _, err := aStorage.file.Write(object); err != nil {
 		return err
 	}
 	header.Offset = offset
 	header.Length = len(object)
-	storage.objects[objectPath] = header
+	aStorage.objects[objectPath] = header
 	var mapBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&mapBuffer)
-	encoder.Encode(storage.objects)
-	ioutil.WriteFile(storage.objectsFile, mapBuffer.Bytes(), 0600)
+	encoder.Encode(aStorage.objects)
+	ioutil.WriteFile(aStorage.objectsFile, mapBuffer.Bytes(), 0600)
 	return nil
 }
 
-func (storage *appendStorage) GetList() ([]byte, error) {
+func (aStorage *appendStorage) List(listPath string) ([]storage.ObjectDescription, error) {
 	return nil, errors.New("Not Implemented")
 }
