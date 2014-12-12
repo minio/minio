@@ -3,13 +3,14 @@ package storage
 import "io"
 
 type ObjectStorage interface {
-	List(path string) ([]ObjectDescription, error)
+	List() ([]ObjectDescription, error)
 	Get(path string) (io.Reader, error)
 	Put(path string, object io.Reader) error
 }
 
 type ObjectDescription struct {
-	Path  string
-	IsDir bool
-	Hash  string
+	Name            string
+	Md5sum          string
+	Protectionlevel string
+	//	Hash   string - TODO
 }
