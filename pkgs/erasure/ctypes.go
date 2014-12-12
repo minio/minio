@@ -16,6 +16,7 @@
 
 package erasure
 
+// #include <stdint.h>
 import "C"
 import (
 	"fmt"

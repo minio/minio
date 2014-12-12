@@ -8,7 +8,7 @@ checkdeps:
 
 getdeps: checkdeps
 	@go get github.com/tools/godep && echo "Installing godep"
-	@go get code.google.com/p/go.tools/cmd/cover && echo "Installing cover"
+	@go get golang.org/x/tools/cmd/cover && echo "Installing cover"
 
 build-erasure:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkgs/erasure/isal lib
