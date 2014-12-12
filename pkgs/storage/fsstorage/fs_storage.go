@@ -10,11 +10,18 @@ import (
 	"github.com/minio-io/minio/pkgs/storage"
 )
 
-type FileSystemStorage struct {
+type fileSystemStorage struct {
 	RootDir string
 }
 
-func (fsStorage FileSystemStorage) List(listPath string) ([]storage.ObjectDescription, error) {
+func NewStorage(rootDir string) (storage.ObjectStorage, error) {
+	newStorage := fileSystemStorage{
+		RootDir: rootDir,
+	}
+	return &newStorage, nil
+}
+
+func (fsStorage *fileSystemStorage) List(listPath string) ([]storage.ObjectDescription, error) {
 	fileInfos, err := ioutil.ReadDir(path.Join(fsStorage.RootDir, listPath))
 	if err != nil {
 		return nil, err
@@ -33,11 +40,11 @@ func (fsStorage FileSystemStorage) List(listPath string) ([]storage.ObjectDescri
 	return descriptions, nil
 }
 
-func (storage FileSystemStorage) Get(objectPath string) (io.Reader, error) {
+func (storage *fileSystemStorage) Get(objectPath string) (io.Reader, error) {
 	return os.Open(path.Join(storage.RootDir, objectPath))
 }
 
-func (storage FileSystemStorage) Put(objectPath string, object io.Reader) error {
+func (storage *fileSystemStorage) Put(objectPath string, object io.Reader) error {
 	err := os.MkdirAll(filepath.Dir(path.Join(storage.RootDir, objectPath)), 0700)
 	if err != nil {
 		return err

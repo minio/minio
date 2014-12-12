@@ -9,6 +9,7 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
+	"github.com/minio-io/minio/pkgs/storage/encodedstorage"
 	"github.com/minio-io/minio/pkgs/storage/fsstorage"
 	"github.com/tchap/go-patricia/patricia"
 )
@@ -18,7 +19,10 @@ type GatewayConfig struct {
 	StorageDriver     StorageDriver
 	BucketDriver      BucketDriver
 	requestBucketChan chan BucketRequest
-	dataDir           string
+	DataDir           string
+	K,
+	M int
+	BlockSize uint64
 }
 
 // Message for requesting a bucket
@@ -197,10 +201,34 @@ func InMemoryStorageDriver(bucket string, input chan ObjectRequest, config Gatew
 	}
 }
 
-func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
-	fileStorage := fsstorage.FileSystemStorage{
-		RootDir: config.dataDir,
+func SimpleEncodedStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
+	eStorage, _ := encodedstorage.NewStorage(config.DataDir, config.K, config.M, config.BlockSize)
+	for request := range input {
+		switch request.requestType {
+		case "GET":
+			objectPath := path.Join(bucket, request.path)
+			object, err := eStorage.Get(objectPath)
+			if err != nil {
+				request.callback <- err
+			} else {
+				request.callback <- object
+			}
+		case "PUT":
+			objectPath := path.Join(bucket, request.path)
+			err := eStorage.Put(objectPath, bytes.NewBuffer(request.object))
+			if err != nil {
+				request.callback <- err
+			} else {
+				request.callback <- nil
+			}
+		default:
+			request.callback <- errors.New("Unexpected message")
+		}
 	}
+}
+
+func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
+	fileStorage := fsstorage.NewStorage(config.DataDir)
 	for request := range input {
 		switch request.requestType {
 		case "GET":

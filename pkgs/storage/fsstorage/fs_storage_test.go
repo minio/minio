@@ -10,9 +10,9 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type FileSystemStorageSuite struct{}
+type fileSystemStorageSuite struct{}
 
-var _ = Suite(&FileSystemStorageSuite{})
+var _ = Suite(&fileSystemStorageSuite{})
 
 func Test(t *testing.T) { TestingT(t) }
 
@@ -20,15 +20,13 @@ func makeTempTestDir() (string, error) {
 	return ioutil.TempDir("/tmp", "minio-test-")
 }
 
-func (s *FileSystemStorageSuite) TestFileStoragePutAtRootPath(c *C) {
+func (s *fileSystemStorageSuite) TestfileStoragePutAtRootPath(c *C) {
 	rootDir, err := makeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
 	var objectStorage storage.ObjectStorage
-	objectStorage = FileSystemStorage{
-		RootDir: rootDir,
-	}
+	objectStorage, _ = NewStorage(rootDir)
 
 	objectBuffer := bytes.NewBuffer([]byte("object1"))
 	objectStorage.Put("path1", objectBuffer)
@@ -44,15 +42,13 @@ func (s *FileSystemStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 	c.Assert(objectList[0].Path, Equals, "path1")
 }
 
-func (s *FileSystemStorageSuite) TestFileStoragePutDirPath(c *C) {
+func (s *fileSystemStorageSuite) TestfileStoragePutDirPath(c *C) {
 	rootDir, err := makeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
 	var objectStorage storage.ObjectStorage
-	objectStorage = FileSystemStorage{
-		RootDir: rootDir,
-	}
+	objectStorage, _ = NewStorage(rootDir)
 
 	objectBuffer1 := bytes.NewBuffer([]byte("object1"))
 	objectStorage.Put("path1/path2/path3", objectBuffer1)

@@ -104,9 +104,13 @@ func (s *GatewaySuite) TestBucketCreation(c *C) {
 }
 
 func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
-	simpleFileStorageRootDir, err := miniotest.MakeTempTestDir()
-	c.Assert(err, IsNil)
+	simpleFileStorageRootDir, err1 := miniotest.MakeTempTestDir()
+	c.Assert(err1, IsNil)
+	simpleEncodedStorageRootDir, err2 := miniotest.MakeTempTestDir()
+	c.Assert(err2, IsNil)
 	defer os.RemoveAll(simpleFileStorageRootDir)
+	defer os.RemoveAll(simpleEncodedStorageRootDir)
+
 	configs := []GatewayConfig{
 		GatewayConfig{
 			StorageDriver:     InMemoryStorageDriver,
@@ -115,7 +119,15 @@ func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
 		GatewayConfig{
 			StorageDriver:     SimpleFileStorageDriver,
 			requestBucketChan: make(chan BucketRequest),
-			dataDir:           simpleFileStorageRootDir,
+			DataDir:           simpleFileStorageRootDir,
+		},
+		GatewayConfig{
+			StorageDriver:     SimpleEncodedStorageDriver,
+			requestBucketChan: make(chan BucketRequest),
+			DataDir:           simpleEncodedStorageRootDir,
+			K:                 10,
+			M:                 6,
+			BlockSize:         1024 * 1024,
 		},
 	}
 	for _, config := range configs {
@@ -147,6 +159,5 @@ func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
 		barResult, err := bucket.Get(context, "foo")
 		c.Assert(err, IsNil)
 		c.Assert(string(barResult), Equals, "bar")
-
 	}
 }
