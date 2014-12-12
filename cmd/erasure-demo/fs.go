@@ -15,7 +15,7 @@ func fsGetList(config inputConfig) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
 	objectStorage, _ = fsstorage.NewStorage(rootDir)
-	objectList, err := objectStorage.List("/")
+	objectList, err := objectStorage.List()
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,8 @@
 package main
 
 import (
-	"errors"
+	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path"
@@ -11,8 +12,23 @@ import (
 )
 
 func erasureGetList(config inputConfig) (io.Reader, error) {
-	// do nothing
-	return nil, errors.New("Not Implemented")
+	var objectStorage storage.ObjectStorage
+	rootDir := path.Join(config.rootDir, config.storageDriver)
+	objectStorage, err := es.NewStorage(rootDir, config.k, config.m, config.blockSize)
+	if err != nil {
+		return nil, err
+	}
+	objectDescList, err := objectStorage.List()
+	if err != nil {
+		return nil, err
+	}
+	var objectDescListBytes []byte
+	if objectDescListBytes, err = json.Marshal(objectDescList); err != nil {
+		return nil, err
+	}
+	objectDescListBuffer := bytes.NewBuffer(objectDescListBytes)
+
+	return objectDescListBuffer, nil
 }
 
 func erasureGet(config inputConfig, objectPath string) (io.Reader, error) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -93,8 +94,20 @@ func (eStorage *encodedStorage) Get(objectPath string) (io.Reader, error) {
 	return reader, nil
 }
 
-func (eStorage *encodedStorage) List(listPath string) ([]storage.ObjectDescription, error) {
-	return nil, errors.New("Not Implemented")
+func (eStorage *encodedStorage) List() ([]storage.ObjectDescription, error) {
+	var objectDescList []storage.ObjectDescription
+	for objectName, objectEntry := range eStorage.objects {
+		var objectDescription storage.ObjectDescription
+		protectionLevel := strconv.Itoa(objectEntry.Encoderparams.K) + "," + strconv.Itoa(objectEntry.Encoderparams.M)
+		objectDescription.Name = objectName
+		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
+		objectDescription.Protectionlevel = protectionLevel
+		objectDescList = append(objectDescList, objectDescription)
+	}
+	if len(objectDescList) == 0 {
+		return nil, errors.New("No objects found")
+	}
+	return objectDescList, nil
 }
 
 func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
@@ -124,8 +137,6 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 	// encode
 	for chunk := range chunks {
 		if chunk.Err == nil {
-			// md5sum on chunk
-			hash.Write(chunk.Data)
 			// encode each
 			blocks, length := encoder.Encode(chunk.Data)
 			// store each
@@ -135,6 +146,8 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 					return err
 				}
 			}
+			// md5sum only after chunk is committed to disk
+			hash.Write(chunk.Data)
 			blockEntry := StorageBlockEntry{
 				Index:  i,
 				Length: length,

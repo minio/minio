@@ -117,6 +117,17 @@ func (aStorage *appendStorage) Put(objectPath string, object io.Reader) error {
 	return nil
 }
 
-func (aStorage *appendStorage) List(listPath string) ([]storage.ObjectDescription, error) {
-	return nil, errors.New("Not Implemented")
+func (aStorage *appendStorage) List() ([]storage.ObjectDescription, error) {
+	var objectDescList []storage.ObjectDescription
+	for objectName, _ := range aStorage.objects {
+		var objectDescription storage.ObjectDescription
+		objectDescription.Name = objectName
+		objectDescription.Md5sum = ""
+		objectDescription.Protectionlevel = ""
+		objectDescList = append(objectDescList, objectDescription)
+	}
+	if len(objectDescList) == 0 {
+		return nil, errors.New("No objects found")
+	}
+	return objectDescList, nil
 }

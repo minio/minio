@@ -38,9 +38,9 @@ func (s *EncodedStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 
-	//	objectList, err := objectStorage.List("/")
-	//	c.Assert(err, IsNil)
-	//	c.Assert(objectList[0].Path, Equals, "path1")
+	objectList, err := objectStorage.List()
+	c.Assert(err, IsNil)
+	c.Assert(objectList[0].Name, Equals, "path1")
 }
 
 func (s *EncodedStorageSuite) TestFileStoragePutDirPath(c *C) {
@@ -70,28 +70,6 @@ func (s *EncodedStorageSuite) TestFileStoragePutDirPath(c *C) {
 	objectBuffer3 := bytes.NewBuffer([]byte("object3"))
 	err = objectStorage.Put("object3", objectBuffer3)
 	c.Assert(err, IsNil)
-
-	// TODO support list
-	//	objectList, err := objectStorage.List("/")
-	//	c.Assert(err, IsNil)
-	//	c.Assert(objectList[0], Equals, storage.ObjectDescription{Path: "object3", IsDir: false, Hash: ""})
-	//	c.Assert(objectList[1], Equals, storage.ObjectDescription{Path: "path1", IsDir: true, Hash: ""})
-	//	c.Assert(objectList[2], Equals, storage.ObjectDescription{Path: "path2", IsDir: true, Hash: ""})
-	//	c.Assert(len(objectList), Equals, 3)
-	//
-	//	objectList, err = objectStorage.List("/path1")
-	//	c.Assert(err, IsNil)
-	//	c.Assert(objectList[0], Equals, storage.ObjectDescription{Path: "path2", IsDir: true, Hash: ""})
-	//	c.Assert(len(objectList), Equals, 1)
-	//
-	//	objectList, err = objectStorage.List("/path1/path2")
-	//	c.Assert(err, IsNil)
-	//	c.Assert(objectList[0], Equals, storage.ObjectDescription{Path: "path3", IsDir: false, Hash: ""})
-	//	c.Assert(len(objectList), Equals, 1)
-	//
-	//	objectList, err = objectStorage.List("/path1/path2/path3")
-	//	c.Assert(err, Not(IsNil))
-	//	c.Assert(objectList, IsNil)
 }
 
 func (s *EncodedStorageSuite) TestObjectWithChunking(c *C) {

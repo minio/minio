@@ -21,8 +21,8 @@ func NewStorage(rootDir string) (storage.ObjectStorage, error) {
 	return &newStorage, nil
 }
 
-func (fsStorage *fileSystemStorage) List(listPath string) ([]storage.ObjectDescription, error) {
-	fileInfos, err := ioutil.ReadDir(path.Join(fsStorage.RootDir, listPath))
+func (fsStorage *fileSystemStorage) List() ([]storage.ObjectDescription, error) {
+	fileInfos, err := ioutil.ReadDir(fsStorage.RootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -31,9 +31,9 @@ func (fsStorage *fileSystemStorage) List(listPath string) ([]storage.ObjectDescr
 
 	for _, fi := range fileInfos {
 		description := storage.ObjectDescription{
-			Path:  fi.Name(),
-			IsDir: fi.IsDir(),
-			Hash:  "", // TODO
+			Name:            fi.Name(),
+			Md5sum:          "",
+			Protectionlevel: "",
 		}
 		descriptions = append(descriptions, description)
 	}
