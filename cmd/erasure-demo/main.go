@@ -69,8 +69,8 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "driver",
-					Value: "fs",
-					Usage: "fs",
+					Value: "erasure",
+					Usage: "erasure",
 				},
 			},
 		},
@@ -85,9 +85,19 @@ func main() {
 					Usage: "",
 				},
 				cli.StringFlag{
+					Name:  "protection-level",
+					Value: "10,6",
+					Usage: "data,parity",
+				},
+				cli.StringFlag{
+					Name:  "block-size",
+					Value: "1M",
+					Usage: "Size of blocks. Examples: 1K, 1M, full",
+				},
+				cli.StringFlag{
 					Name:  "driver",
-					Value: "fs",
-					Usage: "fs",
+					Value: "erasure",
+					Usage: "erasure",
 				},
 			},
 		},

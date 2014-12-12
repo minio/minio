@@ -18,7 +18,7 @@ func erasureGetList(config inputConfig) (io.Reader, error) {
 func erasureGet(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
-	objectStorage, err := es.NewStorage(rootDir, 10, 6, 1024*1024)
+	objectStorage, err := es.NewStorage(rootDir, config.k, config.m, config.blockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func erasurePut(config inputConfig, objectPath string, reader io.Reader) error {
 		return err
 	}
 	var objectStorage storage.ObjectStorage
-	if objectStorage, err = es.NewStorage(rootDir, 10, 6, 1024*1024); err != nil {
+	if objectStorage, err = es.NewStorage(rootDir, config.k, config.m, config.blockSize); err != nil {
 		return err
 	}
 	if err = objectStorage.Put(objectPath, reader); err != nil {
