@@ -2,6 +2,7 @@ package encodedstorage
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/gob"
 	"errors"
 	"io"
@@ -27,7 +28,7 @@ type encodedStorage struct {
 
 type StorageEntry struct {
 	Path          string
-	Md5sum        string
+	Md5sum        []byte
 	Blocks        []StorageBlockEntry
 	Encoderparams erasure.EncoderParams
 }
@@ -109,7 +110,7 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 	encoder := erasure.NewEncoder(encoderParameters)
 	entry := StorageEntry{
 		Path:   objectPath,
-		Md5sum: "md5sum",
+		Md5sum: nil,
 		Blocks: make([]StorageBlockEntry, 0),
 		Encoderparams: erasure.EncoderParams{
 			K:         eStorage.K,
@@ -117,10 +118,14 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 			Technique: erasure.CAUCHY,
 		},
 	}
+	// allocate md5
+	hash := md5.New()
 	i := 0
 	// encode
 	for chunk := range chunks {
 		if chunk.Err == nil {
+			// md5sum on chunk
+			hash.Write(chunk.Data)
 			// encode each
 			blocks, length := encoder.Encode(chunk.Data)
 			// store each
@@ -140,6 +145,7 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 		}
 		i++
 	}
+	entry.Md5sum = hash.Sum(nil)
 	eStorage.objects[objectPath] = entry
 	var gobBuffer bytes.Buffer
 	gobEncoder := gob.NewEncoder(&gobBuffer)
