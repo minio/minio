@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkgs/miniotest"
+	"github.com/minio-io/minio/pkgs/utils"
 	. "gopkg.in/check.v1"
 )
 
@@ -104,9 +104,9 @@ func (s *GatewaySuite) TestBucketCreation(c *C) {
 }
 
 func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
-	simpleFileStorageRootDir, err1 := miniotest.MakeTempTestDir()
+	simpleFileStorageRootDir, err1 := utils.MakeTempTestDir()
 	c.Assert(err1, IsNil)
-	simpleEncodedStorageRootDir, err2 := miniotest.MakeTempTestDir()
+	simpleEncodedStorageRootDir, err2 := utils.MakeTempTestDir()
 	c.Assert(err2, IsNil)
 	defer os.RemoveAll(simpleFileStorageRootDir)
 	defer os.RemoveAll(simpleEncodedStorageRootDir)
