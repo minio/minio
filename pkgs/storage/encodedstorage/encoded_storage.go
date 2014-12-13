@@ -51,6 +51,10 @@ type storeResponse struct {
 
 func NewStorage(rootDir string, k, m int, blockSize uint64) (storage.ObjectStorage, error) {
 	// create storage files
+	if k == 0 || m == 0 {
+		return nil, errors.New("Invalid protection level")
+	}
+
 	storageNodes := make([]storage.ObjectStorage, k+m)
 	for i := 0; i < k+m; i++ {
 		storageNode, err := appendstorage.NewStorage(rootDir, i)
@@ -192,6 +196,10 @@ func (eStorage *encodedStorage) readObject(objectPath string, entry StorageEntry
 	encoder := erasure.NewEncoder(ep)
 	for i, chunk := range entry.Blocks {
 		blockSlices := eStorage.getBlockSlices(objectPath + "$" + strconv.Itoa(i))
+		if len(blockSlices) == 0 {
+			writer.CloseWithError(errors.New("slices missing!!"))
+			return
+		}
 		var blocks [][]byte
 		for _, slice := range blockSlices {
 			if slice.err != nil {

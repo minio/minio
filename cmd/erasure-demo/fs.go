@@ -14,7 +14,7 @@ import (
 func fsGetList(config inputConfig) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
-	objectStorage, _ = fsstorage.NewStorage(rootDir)
+	objectStorage, _ = fsstorage.NewStorage(rootDir, config.blockSize)
 	objectList, err := objectStorage.List()
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func fsGetList(config inputConfig) (io.Reader, error) {
 func fsGet(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
-	objectStorage, _ = fsstorage.NewStorage(rootDir)
+	objectStorage, _ = fsstorage.NewStorage(rootDir, config.blockSize)
 	object, err := objectStorage.Get(objectPath)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func fsPut(config inputConfig, objectPath string, reader io.Reader) error {
 		return err
 	}
 	var objectStorage storage.ObjectStorage
-	objectStorage, _ = fsstorage.NewStorage(rootDir)
+	objectStorage, _ = fsstorage.NewStorage(rootDir, config.blockSize)
 	if err = objectStorage.Put(objectPath, reader); err != nil {
 		return err
 	}

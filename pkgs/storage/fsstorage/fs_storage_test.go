@@ -26,15 +26,19 @@ func (s *fileSystemStorageSuite) TestfileStoragePutAtRootPath(c *C) {
 	defer os.RemoveAll(rootDir)
 
 	var objectStorage storage.ObjectStorage
-	objectStorage, _ = NewStorage(rootDir)
+	objectStorage, _ = NewStorage(rootDir, 1024)
 
 	objectBuffer := bytes.NewBuffer([]byte("object1"))
-	objectStorage.Put("path1", objectBuffer)
+	err = objectStorage.Put("path1", objectBuffer)
+	c.Assert(err, IsNil)
 
 	// assert object1 was created in correct path
 	objectResult1, err := objectStorage.Get("path1")
 	c.Assert(err, IsNil)
-	object1, _ := ioutil.ReadAll(objectResult1)
+
+	object1, err := ioutil.ReadAll(objectResult1)
+	c.Assert(err, IsNil)
+
 	c.Assert(string(object1), Equals, "object1")
 
 	objectList, err := objectStorage.List()
