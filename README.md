@@ -7,4 +7,9 @@ Minio's design was inspired by Amazon's S3 for its API and Facebook's Haystack f
 
 [Source Install](./DEVELOPERS.md)
 
+### Join Community
+
+* IRC join channel #minio @ irc.freenode.net
+* Google Groups - minio-dev@googlegroups.com
+
 [![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme)](https://github.com/igrigorik/ga-beacon)
