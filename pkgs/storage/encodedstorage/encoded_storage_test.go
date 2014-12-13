@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/minio-io/minio/pkgs/storage"
+	"github.com/minio-io/minio/pkgs/utils"
 	. "gopkg.in/check.v1"
 )
 
@@ -17,12 +18,8 @@ var _ = Suite(&EncodedStorageSuite{})
 
 func Test(t *testing.T) { TestingT(t) }
 
-func makeTempTestDir() (string, error) {
-	return ioutil.TempDir("/tmp", "minio-test-")
-}
-
 func (s *EncodedStorageSuite) TestFileStoragePutAtRootPath(c *C) {
-	rootDir, err := makeTempTestDir()
+	rootDir, err := utils.MakeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
@@ -44,7 +41,7 @@ func (s *EncodedStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 }
 
 func (s *EncodedStorageSuite) TestFileStoragePutDirPath(c *C) {
-	rootDir, err := makeTempTestDir()
+	rootDir, err := utils.MakeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
@@ -73,7 +70,7 @@ func (s *EncodedStorageSuite) TestFileStoragePutDirPath(c *C) {
 }
 
 func (s *EncodedStorageSuite) TestObjectWithChunking(c *C) {
-	rootDir, err := makeTempTestDir()
+	rootDir, err := utils.MakeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 

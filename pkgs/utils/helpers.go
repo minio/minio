@@ -1,4 +1,4 @@
-package miniotest
+package utils
 
 import "io/ioutil"
 

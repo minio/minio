@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/minio-io/minio/pkgs/storage"
+	"github.com/minio-io/minio/pkgs/utils"
 	. "gopkg.in/check.v1"
 )
 
@@ -16,12 +17,8 @@ var _ = Suite(&fileSystemStorageSuite{})
 
 func Test(t *testing.T) { TestingT(t) }
 
-func makeTempTestDir() (string, error) {
-	return ioutil.TempDir("/tmp", "minio-test-")
-}
-
 func (s *fileSystemStorageSuite) TestfileStoragePutAtRootPath(c *C) {
-	rootDir, err := makeTempTestDir()
+	rootDir, err := utils.MakeTempTestDir()
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(rootDir)
 
