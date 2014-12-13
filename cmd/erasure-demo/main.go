@@ -72,6 +72,16 @@ func main() {
 					Value: "erasure",
 					Usage: "erasure",
 				},
+				cli.StringFlag{
+					Name:  "protection-level",
+					Value: "10,6",
+					Usage: "data,parity",
+				},
+				cli.StringFlag{
+					Name:  "block-size",
+					Value: "1M",
+					Usage: "Size of blocks. Examples: 1K, 1M, full",
+				},
 			},
 		},
 		{

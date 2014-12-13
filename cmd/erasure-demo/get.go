@@ -46,5 +46,8 @@ func get(c *cli.Context) {
 			log.Fatal("Unknown driver")
 		}
 	}
+	if objectReader == nil {
+		log.Fatal("Object not found")
+	}
 	io.Copy(os.Stdout, objectReader)
 }

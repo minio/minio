@@ -228,7 +228,7 @@ func SimpleEncodedStorageDriver(bucket string, input chan ObjectRequest, config 
 }
 
 func SimpleFileStorageDriver(bucket string, input chan ObjectRequest, config GatewayConfig) {
-	fileStorage, _ := fsstorage.NewStorage(config.DataDir)
+	fileStorage, _ := fsstorage.NewStorage(config.DataDir, config.BlockSize)
 	for request := range input {
 		switch request.requestType {
 		case "GET":
