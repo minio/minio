@@ -32,7 +32,6 @@
 //
 // Example
 //
-//
 // Creating and using an encoder
 //  var bytes []byte
 //  params := erasure.ParseEncoderParams(10, 5, erasure.CAUCHY)
