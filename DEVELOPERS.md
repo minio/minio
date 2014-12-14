@@ -53,7 +53,7 @@ We welcome your contributions. To make the process as seamless as possible, we a
   - Commit your changes (git commit -am 'Add some feature')
   - Push to the branch (git push origin my-new-feature)
   - Create new Pull Request
-* If you have additional dependencies ``minio`` uses [https://github.com/tools/godep](https://github.com/tools/godep)
+* If you have additional dependencies for ``minio``, ``minio`` manages its depedencies using [godep](https://github.com/tools/godep)
   - Run `go get foo/bar`
   - Edit your code to import foo/bar
   - Run `make save` from top-level directory (or `godep restore && godep save ./...`).
