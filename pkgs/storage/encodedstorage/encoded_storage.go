@@ -16,6 +16,7 @@ import (
 	"github.com/minio-io/minio/pkgs/split"
 	"github.com/minio-io/minio/pkgs/storage"
 	"github.com/minio-io/minio/pkgs/storage/appendstorage"
+	"github.com/spaolacci/murmur3"
 )
 
 type encodedStorage struct {
@@ -30,6 +31,7 @@ type encodedStorage struct {
 type StorageEntry struct {
 	Path          string
 	Md5sum        []byte
+	Murmurhash    uint64
 	Blocks        []StorageBlockEntry
 	Encoderparams erasure.EncoderParams
 }
@@ -105,6 +107,7 @@ func (eStorage *encodedStorage) List() ([]storage.ObjectDescription, error) {
 		protectionLevel := strconv.Itoa(objectEntry.Encoderparams.K) + "," + strconv.Itoa(objectEntry.Encoderparams.M)
 		objectDescription.Name = objectName
 		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
+		objectDescription.Hash = strconv.FormatUint(objectEntry.Murmurhash, 16)
 		objectDescription.Protectionlevel = protectionLevel
 		objectDescList = append(objectDescList, objectDescription)
 	}
@@ -126,15 +129,18 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 	}
 	encoder := erasure.NewEncoder(encoderParameters)
 	entry := StorageEntry{
-		Path:   objectPath,
-		Md5sum: nil,
-		Blocks: make([]StorageBlockEntry, 0),
+		Path:       objectPath,
+		Md5sum:     nil,
+		Murmurhash: 0,
+		Blocks:     make([]StorageBlockEntry, 0),
 		Encoderparams: erasure.EncoderParams{
 			K:         eStorage.K,
 			M:         eStorage.M,
 			Technique: erasure.CAUCHY,
 		},
 	}
+	// Hash
+	murmur := murmur3.Sum64([]byte(objectPath))
 	// allocate md5
 	hash := md5.New()
 	i := 0
@@ -163,6 +169,7 @@ func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 		i++
 	}
 	entry.Md5sum = hash.Sum(nil)
+	entry.Murmurhash = murmur
 	eStorage.objects[objectPath] = entry
 	var gobBuffer bytes.Buffer
 	gobEncoder := gob.NewEncoder(&gobBuffer)
