@@ -21,7 +21,7 @@ build-cpu:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/cpu
 
 build-sha1:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/checksum/sha1/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/sha1/
 
 build-crc32c:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/checksum/crc32c
@@ -49,7 +49,7 @@ cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1
 install: build-erasure
 	@godep go install github.com/minio-io/minio/cmd/erasure-demo && echo "Installed erasure-demo into ${GOPATH}/bin"
 
-save:
+save: restore
 	@godep save ./...
 
 restore:

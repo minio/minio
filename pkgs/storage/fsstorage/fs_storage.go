@@ -31,6 +31,7 @@ import (
 	"github.com/minio-io/minio/pkgs/split"
 	"github.com/minio-io/minio/pkgs/storage"
 	"github.com/minio-io/minio/pkgs/storage/appendstorage"
+	"github.com/spaolacci/murmur3"
 )
 
 type fileSystemStorage struct {
@@ -43,6 +44,7 @@ type fileSystemStorage struct {
 type StorageEntry struct {
 	Path        string
 	Md5sum      []byte
+	Murmurhash  uint64
 	ChunkLength int
 }
 
@@ -82,6 +84,7 @@ func (fsStorage *fileSystemStorage) List() ([]storage.ObjectDescription, error) 
 		var objectDescription storage.ObjectDescription
 		objectDescription.Name = objectName
 		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
+		objectDescription.Hash = strconv.FormatUint(objectEntry.Murmurhash, 16)
 		objectDescription.Protectionlevel = ""
 		objectDescList = append(objectDescList, objectDescription)
 	}
@@ -135,9 +138,11 @@ func (fsStorage *fileSystemStorage) Put(objectPath string, object io.Reader) err
 	entry := StorageEntry{
 		Path:        objectPath,
 		Md5sum:      nil,
+		Murmurhash:  0,
 		ChunkLength: 0,
 	}
 
+	murmur := murmur3.Sum64([]byte(objectPath))
 	hash := md5.New()
 	i := 0
 	for chunk := range chunks {
@@ -154,6 +159,7 @@ func (fsStorage *fileSystemStorage) Put(objectPath string, object io.Reader) err
 	}
 	entry.Md5sum = hash.Sum(nil)
 	entry.ChunkLength = i
+	entry.Murmurhash = murmur
 	fsStorage.objects[objectPath] = entry
 	var gobBuffer bytes.Buffer
 	gobEncoder := gob.NewEncoder(&gobBuffer)

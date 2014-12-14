@@ -13,5 +13,5 @@ type ObjectDescription struct {
 	Name            string
 	Md5sum          string
 	Protectionlevel string
-	//	Hash   string - TODO
+	Hash            string
 }

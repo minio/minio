@@ -139,6 +139,7 @@ func (aStorage *appendStorage) List() ([]storage.ObjectDescription, error) {
 		var objectDescription storage.ObjectDescription
 		objectDescription.Name = objectName
 		objectDescription.Md5sum = ""
+		objectDescription.Hash = ""
 		objectDescription.Protectionlevel = ""
 		objectDescList = append(objectDescList, objectDescription)
 	}
