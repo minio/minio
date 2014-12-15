@@ -17,18 +17,6 @@ func get(c *cli.Context) {
 	objectName := c.Args().Get(0)
 
 	switch config.storageDriver {
-	case "fs":
-		{
-			if len(objectName) == 0 {
-				if objectReader, err = fsGetList(config); err != nil {
-					log.Fatal(err)
-				}
-			} else {
-				if objectReader, err = fsGet(config, objectName); err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
 	case "erasure":
 		{
 			if len(objectName) == 0 {

@@ -117,11 +117,6 @@ func (s *GatewaySuite) TestInMemoryBucketOperations(c *C) {
 			requestBucketChan: make(chan BucketRequest),
 		},
 		GatewayConfig{
-			StorageDriver:     SimpleFileStorageDriver,
-			requestBucketChan: make(chan BucketRequest),
-			DataDir:           simpleFileStorageRootDir,
-		},
-		GatewayConfig{
 			StorageDriver:     SimpleEncodedStorageDriver,
 			requestBucketChan: make(chan BucketRequest),
 			DataDir:           simpleEncodedStorageRootDir,
