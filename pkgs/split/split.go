@@ -55,7 +55,13 @@ type JoinMessage struct {
 //  for chunk := range channel {
 //    log.Println(chunk.Data)
 //  }
-func SplitStream(reader io.Reader, chunkSize uint64, ch chan SplitMessage) {
+func SplitStream(reader io.Reader, chunkSize uint64) <-chan SplitMessage {
+	ch := make(chan SplitMessage)
+	go splitStreamGoRoutine(reader, chunkSize, ch)
+	return ch
+}
+
+func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan SplitMessage) {
 	// we read until EOF or another error
 	var readError error
 
@@ -199,8 +205,7 @@ func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string)
 	}
 
 	// start stream splitting goroutine
-	ch := make(chan SplitMessage)
-	go SplitStream(file, chunkSize, ch)
+	ch := SplitStream(file, chunkSize)
 
 	// used to write each chunk out as a separate file. {{outputPrefix}}.{{i}}
 	i := 0

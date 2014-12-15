@@ -136,8 +136,7 @@ func (eStorage *encodedStorage) List(objectPath string) ([]storage.ObjectDescrip
 
 func (eStorage *encodedStorage) Put(objectPath string, object io.Reader) error {
 	// split
-	chunks := make(chan split.SplitMessage)
-	go split.SplitStream(object, eStorage.BlockSize, chunks)
+	chunks := split.SplitStream(object, eStorage.BlockSize)
 
 	// for each chunk
 	encoderParameters, err := erasure.ParseEncoderParams(eStorage.K, eStorage.M, erasure.CAUCHY)
