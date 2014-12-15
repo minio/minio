@@ -10,8 +10,7 @@ type ObjectStorage interface {
 }
 
 type ObjectDescription struct {
-	Name            string
-	Md5sum          string
-	Protectionlevel string
-	Hash            string
+	Name    string
+	Md5sum  string
+	Murmur3 string
 }

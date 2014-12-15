@@ -120,11 +120,10 @@ func (eStorage *encodedStorage) List() ([]storage.ObjectDescription, error) {
 	var objectDescList []storage.ObjectDescription
 	for objectName, objectEntry := range eStorage.objects {
 		var objectDescription storage.ObjectDescription
-		protectionLevel := strconv.Itoa(objectEntry.Encoderparams.K) + "," + strconv.Itoa(objectEntry.Encoderparams.M)
+		//protectionLevel := strconv.Itoa(objectEntry.Encoderparams.K) + "," + strconv.Itoa(objectEntry.Encoderparams.M)
 		objectDescription.Name = objectName
 		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
-		objectDescription.Hash = strconv.FormatUint(objectEntry.Murmurhash, 16)
-		objectDescription.Protectionlevel = protectionLevel
+		objectDescription.Murmur3 = strconv.FormatUint(objectEntry.Murmurhash, 16)
 		objectDescList = append(objectDescList, objectDescription)
 	}
 	if len(objectDescList) == 0 {
