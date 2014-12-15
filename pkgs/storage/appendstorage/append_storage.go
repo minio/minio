@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/minio-io/minio/pkgs/checksum/crc32c"
 	"github.com/minio-io/minio/pkgs/storage"
@@ -133,14 +134,16 @@ func (aStorage *appendStorage) Put(objectPath string, object io.Reader) error {
 	return nil
 }
 
-func (aStorage *appendStorage) List() ([]storage.ObjectDescription, error) {
+func (aStorage *appendStorage) List(objectPath string) ([]storage.ObjectDescription, error) {
 	var objectDescList []storage.ObjectDescription
 	for objectName, _ := range aStorage.objects {
-		var objectDescription storage.ObjectDescription
-		objectDescription.Name = objectName
-		objectDescription.Md5sum = ""
-		objectDescription.Murmur3 = ""
-		objectDescList = append(objectDescList, objectDescription)
+		if strings.HasPrefix(objectName, objectPath) {
+			var objectDescription storage.ObjectDescription
+			objectDescription.Name = objectName
+			objectDescription.Md5sum = ""
+			objectDescription.Murmur3 = ""
+			objectDescList = append(objectDescList, objectDescription)
+		}
 	}
 	if len(objectDescList) == 0 {
 		return nil, errors.New("No objects found")

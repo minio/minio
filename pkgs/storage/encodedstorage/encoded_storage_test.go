@@ -35,7 +35,7 @@ func (s *EncodedStorageSuite) TestFileStoragePutAtRootPath(c *C) {
 	object1, _ := ioutil.ReadAll(objectResult1)
 	c.Assert(string(object1), Equals, "object1")
 
-	objectList, err := objectStorage.List()
+	objectList, err := objectStorage.List("")
 	c.Assert(err, IsNil)
 	c.Assert(objectList[0].Name, Equals, "path1")
 }

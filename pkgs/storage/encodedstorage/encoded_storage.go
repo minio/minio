@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/minio-io/minio/pkgs/erasure"
 	"github.com/minio-io/minio/pkgs/split"
@@ -116,15 +117,16 @@ func (eStorage *encodedStorage) Get(objectPath string) (io.Reader, error) {
 	return reader, nil
 }
 
-func (eStorage *encodedStorage) List() ([]storage.ObjectDescription, error) {
+func (eStorage *encodedStorage) List(objectPath string) ([]storage.ObjectDescription, error) {
 	var objectDescList []storage.ObjectDescription
 	for objectName, objectEntry := range eStorage.objects {
-		var objectDescription storage.ObjectDescription
-		//protectionLevel := strconv.Itoa(objectEntry.Encoderparams.K) + "," + strconv.Itoa(objectEntry.Encoderparams.M)
-		objectDescription.Name = objectName
-		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
-		objectDescription.Murmur3 = strconv.FormatUint(objectEntry.Murmurhash, 16)
-		objectDescList = append(objectDescList, objectDescription)
+		if strings.HasPrefix(objectName, objectPath) {
+			var objectDescription storage.ObjectDescription
+			objectDescription.Name = objectName
+			objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
+			objectDescription.Murmur3 = strconv.FormatUint(objectEntry.Murmurhash, 16)
+			objectDescList = append(objectDescList, objectDescription)
+		}
 	}
 	if len(objectDescList) == 0 {
 		return nil, errors.New("No objects found")
