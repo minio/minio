@@ -20,7 +20,7 @@ func get(c *cli.Context) {
 	case "erasure":
 		{
 			if len(objectName) == 0 {
-				if objectReader, err = erasureGetList(config); err != nil {
+				if objectReader, err = erasureGetList(config, ""); err != nil {
 					log.Fatal(err)
 				}
 			} else {

@@ -11,14 +11,14 @@ import (
 	es "github.com/minio-io/minio/pkgs/storage/encodedstorage"
 )
 
-func erasureGetList(config inputConfig) (io.Reader, error) {
+func erasureGetList(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
 	rootDir := path.Join(config.rootDir, config.storageDriver)
 	objectStorage, err := es.NewStorage(rootDir, config.k, config.m, config.blockSize)
 	if err != nil {
 		return nil, err
 	}
-	objectDescList, err := objectStorage.List()
+	objectDescList, err := objectStorage.List(objectPath)
 	if err != nil {
 		return nil, err
 	}
