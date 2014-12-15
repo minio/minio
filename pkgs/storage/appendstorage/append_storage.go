@@ -80,7 +80,7 @@ func NewStorage(rootDir string, slice int) (storage.ObjectStorage, error) {
 func (storage *appendStorage) Get(objectPath string) (io.Reader, error) {
 	header, ok := storage.objects[objectPath]
 	if ok == false {
-		return nil, nil
+		return nil, errors.New("Object not found")
 	}
 
 	offset := header.Offset

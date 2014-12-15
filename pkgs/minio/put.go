@@ -1,4 +1,4 @@
-package main
+package minio
 
 import (
 	"log"
@@ -8,7 +8,7 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func put(c *cli.Context) {
+func Put(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)
@@ -25,19 +25,19 @@ func put(c *cli.Context) {
 		log.Fatal("Please specify a valid object name \n # erasure-demo put [OBJECTNAME] [FILENAME]")
 	}
 	inputFile, err := os.Open(filePath)
+	defer inputFile.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
-	switch config.storageDriver {
-	case "erasure":
-		{
-			if err := erasurePut(config, objectName, inputFile); err != nil {
-				log.Fatal(err)
-			}
-		}
-	default:
-		{
-			log.Fatal("Unknown driver")
-		}
+
+	// Staging parity
+	stagingConfig := config
+	stagingConfig.k = 2
+	stagingConfig.m = 1
+	stagingConfig.rootDir = config.stagingDir
+
+	if err := erasurePut(stagingConfig, objectName, inputFile); err != nil {
+		log.Fatal(err)
 	}
+
 }

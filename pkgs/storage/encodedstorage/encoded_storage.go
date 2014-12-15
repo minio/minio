@@ -110,7 +110,7 @@ func NewStorage(rootDir string, k, m int, blockSize uint64) (storage.ObjectStora
 func (eStorage *encodedStorage) Get(objectPath string) (io.Reader, error) {
 	entry, ok := eStorage.objects[objectPath]
 	if ok == false {
-		return nil, nil
+		return nil, errors.New("Object not found")
 	}
 	reader, writer := io.Pipe()
 	go eStorage.readObject(objectPath, entry, writer)

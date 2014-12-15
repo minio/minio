@@ -1,11 +1,10 @@
-package main
+package minio
 
 import (
 	"bytes"
 	"encoding/json"
 	"io"
 	"os"
-	"path"
 
 	"github.com/minio-io/minio/pkgs/storage"
 	es "github.com/minio-io/minio/pkgs/storage/encodedstorage"
@@ -13,8 +12,7 @@ import (
 
 func erasureGetList(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
-	rootDir := path.Join(config.rootDir, config.storageDriver)
-	objectStorage, err := es.NewStorage(rootDir, config.k, config.m, config.blockSize)
+	objectStorage, err := es.NewStorage(config.rootDir, config.k, config.m, config.blockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +31,7 @@ func erasureGetList(config inputConfig, objectPath string) (io.Reader, error) {
 
 func erasureGet(config inputConfig, objectPath string) (io.Reader, error) {
 	var objectStorage storage.ObjectStorage
-	rootDir := path.Join(config.rootDir, config.storageDriver)
-	objectStorage, err := es.NewStorage(rootDir, config.k, config.m, config.blockSize)
+	objectStorage, err := es.NewStorage(config.rootDir, config.k, config.m, config.blockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -47,12 +44,11 @@ func erasureGet(config inputConfig, objectPath string) (io.Reader, error) {
 
 func erasurePut(config inputConfig, objectPath string, reader io.Reader) error {
 	var err error
-	rootDir := path.Join(config.rootDir, config.storageDriver)
-	if err := os.MkdirAll(rootDir, 0700); err != nil {
+	if err := os.MkdirAll(config.rootDir, 0700); err != nil {
 		return err
 	}
 	var objectStorage storage.ObjectStorage
-	if objectStorage, err = es.NewStorage(rootDir, config.k, config.m, config.blockSize); err != nil {
+	if objectStorage, err = es.NewStorage(config.rootDir, config.k, config.m, config.blockSize); err != nil {
 		return err
 	}
 	if err = objectStorage.Put(objectPath, reader); err != nil {
