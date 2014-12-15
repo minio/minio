@@ -32,10 +32,7 @@ build-split: build-strbyteconv
 build-strbyteconv:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/strbyteconv
 
-build-storage: build-storage-append build-storage-encoded build-storage-fs
-
-build-storage-fs:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/fsstorage
+build-storage: build-storage-append build-storage-encoded
 
 build-storage-append:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/appendstorage
