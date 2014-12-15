@@ -95,7 +95,13 @@ func SplitStream(reader io.Reader, chunkSize uint64, ch chan SplitMessage) {
 	close(ch)
 }
 
-func JoinStream(dirname string, inputPrefix string, ch chan JoinMessage) {
+func JoinStream(dirname string, inputPrefix string) <-chan JoinMessage {
+	ch := make(chan JoinMessage)
+	go joinStreamGoRoutine(dirname, inputPrefix, ch)
+	return ch
+}
+
+func joinStreamGoRoutine(dirname string, inputPrefix string, ch chan JoinMessage) {
 	var readError error
 
 	var bytesBuffer bytes.Buffer
@@ -147,8 +153,7 @@ func JoinFilesWithPrefix(dirname string, inputPrefix string, outputFile string) 
 		return errors.New("Invalid output file")
 	}
 
-	ch := make(chan JoinMessage)
-	go JoinStream(dirname, inputPrefix, ch)
+	ch := JoinStream(dirname, inputPrefix)
 
 	var multiReaders []io.Reader
 	var aggregatedLength int64
