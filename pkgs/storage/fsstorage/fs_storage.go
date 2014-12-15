@@ -84,8 +84,7 @@ func (fsStorage *fileSystemStorage) List() ([]storage.ObjectDescription, error) 
 		var objectDescription storage.ObjectDescription
 		objectDescription.Name = objectName
 		objectDescription.Md5sum = hex.EncodeToString(objectEntry.Md5sum)
-		objectDescription.Hash = strconv.FormatUint(objectEntry.Murmurhash, 16)
-		objectDescription.Protectionlevel = ""
+		objectDescription.Murmur3 = strconv.FormatUint(objectEntry.Murmurhash, 16)
 		objectDescList = append(objectDescList, objectDescription)
 	}
 	if len(objectDescList) == 0 {
