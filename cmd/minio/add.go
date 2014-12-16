@@ -8,7 +8,7 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func put(c *cli.Context) {
+func add(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)
