@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
-	"github.com/minio-io/minio/pkgs/minio"
 )
 
 func main() {
@@ -15,16 +14,16 @@ func main() {
 		{
 			Name:   "encode",
 			Usage:  "erasure encode a byte stream",
-			Action: minio.Encode,
+			Action: encode,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "root",
-					Value: minio.Getobjectdir(".minio/erasure"),
+					Value: getObjectdir(".minio/erasure"),
 					Usage: "",
 				},
 				cli.StringFlag{
 					Name:  "staging",
-					Value: minio.Getobjectdir(".minio/staging"),
+					Value: getObjectdir(".minio/staging"),
 					Usage: "",
 				},
 				cli.StringFlag{
@@ -42,11 +41,11 @@ func main() {
 		{
 			Name:   "get",
 			Usage:  "get an object",
-			Action: minio.Get,
+			Action: get,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "root",
-					Value: minio.Getobjectdir(".minio/erasure"),
+					Value: getObjectdir(".minio/erasure"),
 					Usage: "",
 				},
 				cli.StringFlag{
@@ -64,11 +63,11 @@ func main() {
 		{
 			Name:   "put",
 			Usage:  "put an object",
-			Action: minio.Put,
+			Action: put,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "staging",
-					Value: minio.Getobjectdir(".minio/staging"),
+					Value: getObjectdir(".minio/staging"),
 					Usage: "",
 				},
 				cli.StringFlag{
@@ -81,11 +80,11 @@ func main() {
 		{
 			Name:   "list",
 			Usage:  "list objects",
-			Action: minio.List,
+			Action: list,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "root",
-					Value: minio.Getobjectdir(".minio/erasure"),
+					Value: getObjectdir(".minio/erasure"),
 					Usage: "",
 				},
 			},

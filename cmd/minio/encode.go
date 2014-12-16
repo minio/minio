@@ -1,4 +1,4 @@
-package minio
+package main
 
 import (
 	"log"
@@ -6,7 +6,7 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func Encode(c *cli.Context) {
+func encode(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)

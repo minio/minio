@@ -1,4 +1,4 @@
-package minio
+package main
 
 import (
 	"io"
@@ -8,7 +8,7 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func List(c *cli.Context) {
+func list(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)
