@@ -22,7 +22,10 @@ func get(c *cli.Context) {
 		log.Fatal("Please specify a valid object name \n # erasure-demo get [OBJECTNAME]")
 	}
 
-	if objectReader, err = erasureGet(config, objectName); err != nil {
+	getConfig := config
+	getConfig.k = 10
+	getConfig.m = 6
+	if objectReader, err = erasureGet(getConfig, objectName); err != nil {
 		log.Fatal(err)
 	}
 

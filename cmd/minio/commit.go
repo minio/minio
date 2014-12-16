@@ -1,12 +1,29 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
+	"os"
+	"path"
 
 	"github.com/codegangsta/cli"
 )
 
-func encode(c *cli.Context) {
+func cleanupStagingDir(stagingDir string) {
+	filelist, err := ioutil.ReadDir(stagingDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range filelist {
+		_file := path.Join(stagingDir, file.Name())
+		if err := os.Remove(_file); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func commit(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)
@@ -34,4 +51,7 @@ func encode(c *cli.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Cleanup stagingDir
+	cleanupStagingDir(config.stagingDir)
 }

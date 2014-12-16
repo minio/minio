@@ -12,9 +12,9 @@ func main() {
 	app.Usage = "minio - object storage"
 	app.Commands = []cli.Command{
 		{
-			Name:   "encode",
-			Usage:  "erasure encode a byte stream",
-			Action: encode,
+			Name:   "commit",
+			Usage:  "provide higher protection for uploaded object",
+			Action: commit,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "root",
@@ -49,11 +49,6 @@ func main() {
 					Usage: "",
 				},
 				cli.StringFlag{
-					Name:  "protection-level",
-					Value: "10,6",
-					Usage: "data,parity",
-				},
-				cli.StringFlag{
 					Name:  "block-size",
 					Value: "1M",
 					Usage: "Size of blocks. Examples: 1K, 1M, full",
@@ -61,9 +56,9 @@ func main() {
 			},
 		},
 		{
-			Name:   "put",
-			Usage:  "put an object",
-			Action: put,
+			Name:   "add",
+			Usage:  "add an object",
+			Action: add,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "staging",
