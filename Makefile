@@ -44,7 +44,7 @@ cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
-	@godep go install github.com/minio-io/minio/cmd/erasure-demo && echo "Installed erasure-demo into ${GOPATH}/bin"
+	@godep go install github.com/minio-io/minio/cmd/minio && echo "Installed minio into ${GOPATH}/bin"
 
 save: restore
 	@godep save ./...
