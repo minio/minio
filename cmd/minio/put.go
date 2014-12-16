@@ -1,4 +1,4 @@
-package minio
+package main
 
 import (
 	"log"
@@ -8,7 +8,7 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func Put(c *cli.Context) {
+func put(c *cli.Context) {
 	config, err := parseInput(c)
 	if err != nil {
 		log.Fatal(err)

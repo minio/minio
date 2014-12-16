@@ -1,4 +1,4 @@
-package minio
+package main
 
 import (
 	"errors"
@@ -75,7 +75,7 @@ func parseInput(c *cli.Context) (inputConfig, error) {
 	return config, nil
 }
 
-func Getobjectdir(basename string) string {
+func getObjectdir(basename string) string {
 	user, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
