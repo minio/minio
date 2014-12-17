@@ -26,6 +26,9 @@ build-sha1:
 build-crc32c:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/checksum/crc32c
 
+build-scsi:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/scsi
+
 build-split: build-strbyteconv
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/split
 
@@ -40,7 +43,7 @@ build-storage-append:
 build-storage-encoded:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/encodedstorage
 
-cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1 build-storage
+cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1 build-scsi build-storage
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
