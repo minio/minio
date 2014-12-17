@@ -38,9 +38,8 @@ func (s *MySuite) TestSplitStream(c *C) {
 		bytesWriter.Write([]byte(strconv.Itoa(i)))
 	}
 	bytesWriter.Flush()
-	ch := make(chan SplitMessage)
 	reader := bytes.NewReader(bytesBuffer.Bytes())
-	go SplitStream(reader, 25, ch)
+	ch := SplitStream(reader, 25)
 	var resultsBuffer bytes.Buffer
 	resultsWriter := bufio.NewWriter(&resultsBuffer)
 	for chunk := range ch {
