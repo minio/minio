@@ -28,7 +28,7 @@ type option struct {
 	Functionname string
 }
 
-type application struct {
+type command struct {
 	Name    string
 	Usage   string
 	Month   string
@@ -36,20 +36,20 @@ type application struct {
 	Options []option
 }
 
-func (f source) generate(appName string, def application) error {
-	wr, err := os.Create(path.Join(appName, f.Name))
+func (f source) get(commandName string, definition command) error {
+	wr, err := os.Create(path.Join(commandName, f.Name))
 	if err != nil {
 		return err
 	}
 
 	defer wr.Close()
-	return f.TempLate.Execute(wr, def)
+	return f.TempLate.Execute(wr, definition)
 }
 
-func initApplication(appname, usage string, inputOptions []string) application {
+func initCommand(commandname, usage string, inputOptions []string) command {
 	year, month, _ := time.Now().Date()
-	return application{
-		Name:    appname,
+	return command{
+		Name:    commandname,
 		Usage:   usage,
 		Month:   month.String(),
 		Year:    year,
@@ -87,14 +87,14 @@ func main() {
 
 	inputOptions := strings.Split(flOptions, ",")
 
-	appname := flag.Arg(0)
+	commandname := flag.Arg(0)
 
-	if appname == "" {
-		log.Fatal("app name must not be blank\n")
+	if commandname == "" {
+		log.Fatal("command name must not be blank\n")
 	}
 
 	if inputOptions[0] == "" {
-		log.Fatal("-options option1 should be specified with appname")
+		log.Fatal("-options option1 should be specified with command name")
 	}
 
 	gopath := os.Getenv("GOPATH")
@@ -124,40 +124,34 @@ func main() {
 	var optionsTemplate = template.Must(template.ParseFiles(optionsTemplatePath))
 	var readmeTemplate = template.Must(template.ParseFiles(readmeTemplatePath))
 
-	if _, err := os.Stat(appname); err == nil {
-		// if exists, we overwrite by default
-		err = os.RemoveAll(appname)
-		utils.Assert(err)
-	}
-
-	err := os.Mkdir(appname, 0755)
+	err := os.Mkdir(commandname, 0755)
 	utils.Assert(err)
 
-	application := initApplication(appname, flUsage, inputOptions)
+	command := initCommand(commandname, flUsage, inputOptions)
 
 	optionsGo := source{
-		Name:     appname + "-options.go",
+		Name:     commandname + "-options.go",
 		TempLate: *optionsTemplate,
 	}
 
 	readmeMd := source{
-		Name:     appname + ".md",
+		Name:     commandname + ".md",
 		TempLate: *readmeTemplate,
 	}
 
 	mainGo := source{
-		Name:     appname + ".go",
+		Name:     commandname + ".go",
 		TempLate: *mainTemplate,
 	}
 
-	err = readmeMd.generate(appname, application)
+	err = readmeMd.get(commandname, command)
 	utils.Assert(err)
 
-	mainGo.generate(appname, application)
+	mainGo.get(commandname, command)
 	utils.Assert(err)
 
-	optionsGo.generate(appname, application)
+	optionsGo.get(commandname, command)
 
-	err = GoFormat(appname)
+	err = GoFormat(commandname)
 	utils.Assert(err)
 }
