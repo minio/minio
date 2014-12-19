@@ -14,24 +14,28 @@
  * limitations under the License.
  */
 
-package utils
+package main
 
 import (
-	"io/ioutil"
-	"log"
-	"strings"
+       "github.com/codegangsta/cli"
 )
 
-func MakeTempTestDir() (string, error) {
-	return ioutil.TempDir("/tmp", "minio-test-")
+var Options = []cli.Command{
+	{{range .Options}}{{.Definename}},
+    {{end}}
 }
 
-func Assert(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
+{{range .Options}}
+var {{.Definename}} = cli.Command{
+	Name:  "{{.Name}}",
+	Usage: "",
+	Description: `
+`,
+	Action: {{.Functionname}},
 }
+{{end}}
 
-func FirstUpper(str string) string {
-	return strings.ToUpper(str[0:1]) + str[1:]
+{{range .Options}}
+func {{.Functionname}}(c *cli.Context) {
 }
+{{end}}
