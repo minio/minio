@@ -3,9 +3,11 @@
 package utils
 
 import (
-	. "gopkg.in/check.v1"
+	"io/ioutil"
 	"os/exec"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}
@@ -29,6 +31,8 @@ func (s *MySuite) TestPiping(c *C) {
 		// Run
 		output, err := ExecPipe(ls, sort)
 		c.Assert(err, IsNil)
-		c.Assert(len(output), Not(Equals), 0)
+		outputBytes, err := ioutil.ReadAll(output)
+		c.Assert(err, IsNil)
+		c.Assert(len(outputBytes), Not(Equals), 0)
 	}
 }
