@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os/exec"
 )
 
@@ -10,7 +11,7 @@ import (
 // Each command's standard output is connected to the standard input of the next command
 // and the output of the final command is returned
 
-func ExecPipe(cmds ...*exec.Cmd) (pipeLineOutput []byte, pipeLineError error) {
+func ExecPipe(cmds ...*exec.Cmd) (pipeLineOutput io.Reader, pipeLineError error) {
 	// Require at least one command
 	if len(cmds) < 1 {
 		return nil, errors.New("Invalid argument")
@@ -30,17 +31,17 @@ func ExecPipe(cmds ...*exec.Cmd) (pipeLineOutput []byte, pipeLineError error) {
 	// Start each command
 	for _, cmd := range cmds {
 		if err := cmd.Start(); err != nil {
-			return output.Bytes(), err
+			return &output, err
 		}
 	}
 
 	// We should Wait() for each command to complete
 	for _, cmd := range cmds {
 		if err := cmd.Wait(); err != nil {
-			return output.Bytes(), err
+			return &output, err
 		}
 	}
 
 	// Return the output
-	return output.Bytes(), nil
+	return &output, nil
 }
