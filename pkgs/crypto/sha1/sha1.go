@@ -23,9 +23,12 @@ package sha1
 // void sha1_transform(int32_t *hash, const char* input, size_t num_blocks);
 import "C"
 import (
+	gosha1 "crypto/sha1"
 	"errors"
-	"github.com/minio-io/minio/pkgs/cpu"
+	"io"
 	"unsafe"
+
+	"github.com/minio-io/minio/pkgs/cpu"
 )
 
 const (
@@ -68,4 +71,20 @@ func Sha1(buffer []byte) ([]int32, error) {
 	C.sha1_transform(cshbuf, cbuffer, C.size_t(rounds))
 
 	return shbuf, nil
+}
+
+func Sum(reader io.Reader) ([]byte, error) {
+	hash := gosha1.New()
+	var err error
+	for err == nil {
+		length := 0
+		byteBuffer := make([]byte, 1024*1024)
+		length, err = reader.Read(byteBuffer)
+		byteBuffer = byteBuffer[0:length]
+		hash.Write(byteBuffer)
+	}
+	if err != io.EOF {
+		return nil, err
+	}
+	return hash.Sum(nil), nil
 }

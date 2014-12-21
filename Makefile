@@ -20,8 +20,17 @@ build-signify:
 build-cpu:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/cpu
 
+build-md5:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/md5/
+
 build-sha1:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/sha1/
+
+build-sha256:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/sha256/
+
+build-sha512:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/sha512/
 
 build-crc32c:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/checksum/crc32c
@@ -43,7 +52,7 @@ build-storage-append:
 build-storage-encoded:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/storage/encodedstorage
 
-cover: build-erasure build-signify build-split build-crc32c build-cpu build-sha1 build-scsi build-storage
+cover: build-erasure build-signify build-split build-crc32c build-cpu build-scsi build-storage build-md5 build-sha1 build-sha256 build-sha512
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/gateway
 
 install: build-erasure
