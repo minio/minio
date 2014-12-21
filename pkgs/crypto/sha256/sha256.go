@@ -17,6 +17,10 @@ package sha256
 // #define SHA256_H6       0x1f83d9abUL
 // #define SHA256_H7       0x5be0cd19UL
 import "C"
+import (
+	gosha256 "crypto/sha256"
+	"io"
+)
 
 /*
 func Sha256(buffer []byte) ([]uint32, error) {
@@ -37,3 +41,19 @@ func Sha256(buffer []byte) ([]uint32, error) {
 	}
 }
 */
+
+func Sum(reader io.Reader) ([]byte, error) {
+	hash := gosha256.New()
+	var err error
+	for err == nil {
+		length := 0
+		byteBuffer := make([]byte, 1024*1024)
+		length, err = reader.Read(byteBuffer)
+		byteBuffer = byteBuffer[0:length]
+		hash.Write(byteBuffer)
+	}
+	if err != io.EOF {
+		return nil, err
+	}
+	return hash.Sum(nil), nil
+}
