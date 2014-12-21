@@ -58,6 +58,7 @@ cover: build-erasure build-signify build-split build-crc32c build-cpu build-scsi
 install: build-erasure
 	@godep go install github.com/minio-io/minio/cmd/minio && echo "Installed minio into ${GOPATH}/bin"
 	@godep go install github.com/minio-io/minio/cmd/minio-cli && echo "Installed minio-cli into ${GOPATH}/bin"
+	@godep go install github.com/minio-io/minio/cmd/minio-hash && echo "Installed minio-hash into ${GOPATH}/bin"
 
 save: restore
 	@godep save ./...
