@@ -24,8 +24,8 @@ import (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "minio-hash"
-	app.Usage = ""
+	app.Name = "crypto"
+	app.Usage = "calculate cryptosum on a given stream"
 	app.Commands = Options
 	app.Run(os.Args)
 }

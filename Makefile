@@ -22,6 +22,7 @@ build-cpu:
 
 build-md5:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/md5/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/md5c/
 
 build-sha1:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkgs/crypto/sha1/
@@ -58,7 +59,7 @@ cover: build-erasure build-signify build-split build-crc32c build-cpu build-scsi
 install: build-erasure
 	@godep go install github.com/minio-io/minio/cmd/minio && echo "Installed minio into ${GOPATH}/bin"
 	@godep go install github.com/minio-io/minio/cmd/minio-cli && echo "Installed minio-cli into ${GOPATH}/bin"
-	@godep go install github.com/minio-io/minio/cmd/minio-hash && echo "Installed minio-hash into ${GOPATH}/bin"
+	@godep go install github.com/minio-io/minio/cmd/crypto && echo "Installed crypto into ${GOPATH}/bin"
 
 save: restore
 	@godep save ./...
