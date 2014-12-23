@@ -1,5 +1,7 @@
 ## Introduction
 
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Minio-io/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Minio is an open source object storage released under [Apache license v2](./LICENSE) . It uses ``Rubberband Erasure`` coding to dynamically protect the data.
 Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack for its immutable data structure.
 
