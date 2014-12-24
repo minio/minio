@@ -10,11 +10,6 @@ if [ $? -ne 0 ]; then
   MISSING="${MISSING} git"
 fi
 
-env hg --version > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    MISSING="${MISSING} mercurial"
-fi
-
 env gcc --version > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     MISSING="${MISSING} build-essential"
