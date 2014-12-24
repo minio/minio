@@ -6,11 +6,6 @@ This installation document assumes Ubuntu 12.04 or later on x86-64.
 $ sudo apt-get install git build-essential
 ```
 
-##### Install Mercurial
-```sh
-$ sudo apt-get install mercurial
-```
-
 ##### Install YASM
 ```sh
 $ sudo apt-get install yasm
@@ -24,6 +19,7 @@ $ wget https://storage.googleapis.com/golang/go1.4.linux-amd64.tar.gz
 $ mkdir -p ${HOME}/local
 $ tar -C ${HOME}/local -xzf go1.4.linux-amd64.tar.gz
 $ export PATH=$PATH:${HOME}/local/go/bin
+$ export GOROOT=${HOME}/local/go
 $ mkdir -p $HOME/mygo
 $ export GOPATH=$HOME/mygo
 $ export PATH=$PATH:$GOPATH/bin
