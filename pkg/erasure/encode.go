@@ -33,7 +33,7 @@ import (
 
 const (
 	VANDERMONDE = iota
-	CAUCHY      = iota
+	CAUCHY
 )
 
 const (

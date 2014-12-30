@@ -20,9 +20,8 @@ package scsi
 
 var (
 	// From 2.6.x kernel onwards, no need to support procfs
-	SYSFSROOT                = "/sys"
 	SYSFS_SCSI_DEVICES       = "/sys/bus/scsi/devices/"
-	SYSFS_BLOCK              = "/block/"
+	SYSFS_BLOCK              = "/sys/block/"
 	SYSFS_CLASS_SCSI_DEVICES = "/sys/class/scsi_device/"
 	UDEV                     = "/dev/"
 	DEV_DISK_BYID_DIR        = "/dev/disk/by-id"

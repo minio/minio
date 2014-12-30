@@ -18,7 +18,9 @@
 
 package cpu
 
-// #include "cpu.h"
+// int has_sse41 (void);
+// int has_avx (void);
+// int has_avx2 (void);
 import "C"
 
 func HasSSE41() bool {
