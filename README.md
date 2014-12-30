@@ -9,7 +9,6 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 
 ### Join Community
 * [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Minio-io/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-* IRC join channel #minio @ irc.freenode.net
 * Google Groups - minio-dev@googlegroups.com
 
 ### Developers
