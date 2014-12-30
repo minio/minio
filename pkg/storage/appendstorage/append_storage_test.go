@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/minio-io/minio/pkgs/storage"
-	"github.com/minio-io/minio/pkgs/utils"
+	"github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils"
 	. "gopkg.in/check.v1"
 )
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkgs/utils"
+	"github.com/minio-io/minio/pkg/utils"
 	. "gopkg.in/check.v1"
 )
 

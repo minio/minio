@@ -25,10 +25,10 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
-	"github.com/minio-io/minio/pkgs/crypto/md5"
-	"github.com/minio-io/minio/pkgs/crypto/sha1"
-	"github.com/minio-io/minio/pkgs/crypto/sha256"
-	"github.com/minio-io/minio/pkgs/crypto/sha512"
+	"github.com/minio-io/minio/pkg/crypto/md5"
+	"github.com/minio-io/minio/pkg/crypto/sha1"
+	"github.com/minio-io/minio/pkg/crypto/sha256"
+	"github.com/minio-io/minio/pkg/crypto/sha512"
 )
 
 var Options = []cli.Command{

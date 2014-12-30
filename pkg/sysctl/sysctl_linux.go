@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/minio-io/minio/pkgs/utils"
+	"github.com/minio-io/minio/pkg/utils"
 )
 
 type Sysctl struct {

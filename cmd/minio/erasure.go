@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/minio-io/minio/pkgs/storage"
-	es "github.com/minio-io/minio/pkgs/storage/encodedstorage"
+	"github.com/minio-io/minio/pkg/storage"
+	es "github.com/minio-io/minio/pkg/storage/encodedstorage"
 )
 
 func erasureGetList(config inputConfig, objectPath string) (io.Reader, error) {
