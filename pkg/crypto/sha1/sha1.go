@@ -28,7 +28,7 @@ import (
 	"io"
 	"unsafe"
 
-	"github.com/minio-io/minio/pkgs/cpu"
+	"github.com/minio-io/minio/pkg/cpu"
 )
 
 const (

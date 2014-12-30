@@ -25,7 +25,7 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkgs/storage/encodedstorage"
+	"github.com/minio-io/minio/pkg/storage/encodedstorage"
 	"github.com/tchap/go-patricia/patricia"
 )
 

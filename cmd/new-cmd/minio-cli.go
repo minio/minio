@@ -9,7 +9,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/minio-io/minio/pkgs/utils"
+	"github.com/minio-io/minio/pkg/utils"
 )
 
 type source struct {
@@ -19,7 +19,7 @@ type source struct {
 
 const (
 	// Relative path from GOPATH default
-	TEMPLATEREPO = "/src/github.com/minio-io/minio/templates/"
+	TEMPLATEREPO = "/src/github.com/minio-io/minio/cmd/minio-cli/templates/"
 )
 
 type option struct {

@@ -29,10 +29,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio-io/minio/pkgs/erasure"
-	"github.com/minio-io/minio/pkgs/split"
-	"github.com/minio-io/minio/pkgs/storage"
-	"github.com/minio-io/minio/pkgs/storage/appendstorage"
+	"github.com/minio-io/minio/pkg/erasure"
+	"github.com/minio-io/minio/pkg/split"
+	"github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/storage/appendstorage"
 	"github.com/spaolacci/murmur3"
 )
 

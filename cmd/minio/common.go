@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/minio-io/minio/pkgs/strbyteconv"
+	"github.com/minio-io/minio/pkg/strbyteconv"
 )
 
 // config representing cli input

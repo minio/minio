@@ -22,7 +22,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/minio-io/minio/pkgs/strbyteconv"
+	"github.com/minio-io/minio/pkg/strbyteconv"
 	"io"
 	"io/ioutil"
 	"os"
