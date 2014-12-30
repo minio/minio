@@ -17,4 +17,7 @@ func (s *MySuite) TestSCSI(c *C) {
 	err := d.Get()
 	c.Assert(err, IsNil)
 	c.Assert(len(d.List), Equals, 1)
+
+	c.Assert(len(d.List[0].Scsiattrmap), Not(Equals), 0)
+	c.Assert(len(d.List[0].Diskattrmap), Not(Equals), 0)
 }

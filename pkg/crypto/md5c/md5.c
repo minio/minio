@@ -36,7 +36,16 @@
  */
 
 #include <string.h>
-#include "md5.h"
+
+/* Any 32-bit or wider unsigned integer data type will do */
+typedef unsigned int MD5_u32plus;
+
+typedef struct {
+        MD5_u32plus lo, hi;
+        MD5_u32plus a, b, c, d;
+        unsigned char buffer[64];
+        MD5_u32plus block[16];
+} MD5_CTX;
 
 /*
  * The basic MD5 functions.
