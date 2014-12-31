@@ -35,6 +35,7 @@ Installed new-cmd into /home/userid/work/minio/gopath/bin
   - Run `make save` from top-level directory (or `godep restore && godep save ./...`).
 * When you're ready to create a pull request, be sure to:
   - Have test cases for the new code. If you have questions about how to do it, please ask in your pull request.
-  - Run go fmt
-  - Squash your commits into a single commit. git rebase -i. It's okay to force update your pull request.
-  - Make sure go test -race ./... passes, and go build completes.
+  - Run `go fmt`
+  - Squash your commits into a single commit. `git rebase -i`. It's okay to force update your pull request.
+  - Make sure `go test -race ./...` and `go build` completes.
+* Make sure read Golang's [Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments) article, `Minio` project is strictly conformant with this style - if you happen to see an offending code, please feel free to send a pull request 
