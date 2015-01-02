@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"path"
 	"strings"
 	"text/template"
 
@@ -34,36 +33,9 @@ func parseInput(c *cli.Context) {
 		commandUsage = c.String("usage")
 	}
 
-	var templatePath string
-	if c.String("path") != "" {
-		templatePath = c.String("path")
-	}
-
-	gopath := os.Getenv("GOPATH")
-
-	var mainTemplatePath, optionsTemplatePath, readmeTemplatePath string
-	if templatePath == TEMPLATEREPO {
-		mainTemplatePath = path.Join(gopath, templatePath, "main.tmpl")
-		optionsTemplatePath = path.Join(gopath, templatePath, "options.tmpl")
-		readmeTemplatePath = path.Join(gopath, templatePath, "README.tmpl")
-	} else {
-		mainTemplatePath = path.Join(templatePath, "main.tmpl")
-		optionsTemplatePath = path.Join(templatePath, "options.tmpl")
-		readmeTemplatePath = path.Join(templatePath, "README.tmpl")
-	}
-	if _, err := os.Stat(mainTemplatePath); err != nil {
-		log.Fatal(err)
-	}
-	if _, err := os.Stat(optionsTemplatePath); err != nil {
-		log.Fatal(err)
-	}
-	if _, err := os.Stat(readmeTemplatePath); err != nil {
-		log.Fatal(err)
-	}
-
-	var mainTemplate = template.Must(template.ParseFiles(mainTemplatePath))
-	var optionsTemplate = template.Must(template.ParseFiles(optionsTemplatePath))
-	var readmeTemplate = template.Must(template.ParseFiles(readmeTemplatePath))
+	var mainObject = template.Must(template.New("main").Parse(commandTemplate))
+	var optionsObject = template.Must(template.New("options").Parse(optionsTemplate))
+	var readmeObject = template.Must(template.New("readme").Parse(readmeTemplate))
 
 	err := os.Mkdir(commandName, 0755)
 	utils.Assert(err)
@@ -72,17 +44,17 @@ func parseInput(c *cli.Context) {
 
 	optionsGo := source{
 		Name:     commandName + "-options.go",
-		TempLate: *optionsTemplate,
+		TempLate: *optionsObject,
 	}
 
 	readmeMd := source{
 		Name:     commandName + ".md",
-		TempLate: *readmeTemplate,
+		TempLate: *readmeObject,
 	}
 
 	mainGo := source{
 		Name:     commandName + ".go",
-		TempLate: *mainTemplate,
+		TempLate: *mainObject,
 	}
 
 	err = readmeMd.get(commandName, command)
