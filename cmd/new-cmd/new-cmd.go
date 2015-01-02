@@ -15,11 +15,6 @@ type source struct {
 	TempLate template.Template
 }
 
-const (
-	// Relative path from GOPATH default
-	TEMPLATEREPO = "/src/github.com/minio-io/minio/cmd/new-cmd/templates/"
-)
-
 type option struct {
 	Name         string
 	Definename   string
@@ -83,11 +78,6 @@ func main() {
 			Name:  "options",
 			Value: "",
 			Usage: "Command-separated list of options to build",
-		},
-		cli.StringFlag{
-			Name:  "path",
-			Value: TEMPLATEREPO,
-			Usage: "Non standard templates path",
 		},
 		cli.StringFlag{
 			Name:  "usage",
