@@ -22,7 +22,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/minio-io/minio/pkg/strbyteconv"
 	"io"
 	"io/ioutil"
 	"os"
@@ -101,93 +100,48 @@ func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan SplitMessa
 	close(ch)
 }
 
-func JoinStream(dirname string, inputPrefix string) <-chan JoinMessage {
-	ch := make(chan JoinMessage)
-	go joinStreamGoRoutine(dirname, inputPrefix, ch)
-	return ch
-}
-
-func joinStreamGoRoutine(dirname string, inputPrefix string, ch chan JoinMessage) {
-	var readError error
-
-	var bytesBuffer bytes.Buffer
-	bytesWriter := bufio.NewWriter(&bytesBuffer)
-	// read a full directory
+func JoinFiles(dirname string, inputPrefix string) io.Reader {
+	reader, writer := io.Pipe()
 	fileInfos, readError := ioutil.ReadDir(dirname)
 	if readError != nil {
-		ch <- JoinMessage{nil, 0, readError}
+		writer.CloseWithError(readError)
 	}
 
 	var newfileInfos []os.FileInfo
 	for _, fi := range fileInfos {
 		if strings.Contains(fi.Name(), inputPrefix) == true {
 			newfileInfos = append(newfileInfos, fi)
-			continue
 		}
 	}
 
 	if len(newfileInfos) == 0 {
-		ch <- JoinMessage{nil, 0, errors.New("no files found for given prefix")}
+		writer.CloseWithError(errors.New("no files found for given prefix"))
 	}
 
-	for i := range newfileInfos {
-		slice, err := ioutil.ReadFile(newfileInfos[i].Name())
-		if err != nil {
-			ch <- JoinMessage{nil, 0, err}
-		}
-		bytesWriter.Write(slice)
-		bytesWriter.Flush()
-		if bytesBuffer.Len() != 0 {
-			ch <- JoinMessage{&bytesBuffer, newfileInfos[i].Size(), nil}
-		}
-	}
-
-	// close the channel, signaling the channel reader that the stream is complete
-	close(ch)
+	go joinFilesGoRoutine(newfileInfos, writer)
+	return reader
 }
 
-func JoinFilesWithPrefix(dirname string, inputPrefix string, outputFile string) error {
-	if dirname == "" {
-		return errors.New("Invalid directory")
-	}
-
-	if inputPrefix == "" {
-		return errors.New("Invalid argument inputPrefix cannot be empty string")
-	}
-
-	if outputFile == "" {
-		return errors.New("Invalid output file")
-	}
-
-	ch := JoinStream(dirname, inputPrefix)
-
-	var multiReaders []io.Reader
-	var aggregatedLength int64
-	for output := range ch {
-		if output.Err != nil {
-			return output.Err
+func joinFilesGoRoutine(fileInfos []os.FileInfo, writer *io.PipeWriter) {
+	for _, fileInfo := range fileInfos {
+		file, err := os.Open(fileInfo.Name())
+		defer file.Close()
+		for err != nil {
+			writer.CloseWithError(err)
+			return
 		}
-		multiReaders = append(multiReaders, output.Reader)
-		aggregatedLength += output.Length
+		_, err = io.Copy(writer, file)
+		if err != nil {
+			writer.CloseWithError(err)
+			return
+		}
 	}
-
-	newReader := io.MultiReader(multiReaders...)
-	aggregatedBytes := make([]byte, aggregatedLength)
-	_, err := newReader.Read(aggregatedBytes)
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(outputFile, aggregatedBytes, 0600)
-	if err != nil {
-		return err
-	}
-	return nil
+	writer.Close()
 }
 
 // Takes a file and splits it into chunks with size chunkSize. The output
 // filename is given with outputPrefix.
-func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string) error {
+func SplitFileWithPrefix(filename string, chunkSize uint64, outputPrefix string) error {
 	// open file
 	file, err := os.Open(filename)
 	defer file.Close()
@@ -197,11 +151,6 @@ func SplitFilesWithPrefix(filename string, chunkstr string, outputPrefix string)
 
 	if outputPrefix == "" {
 		return errors.New("Invalid argument outputPrefix cannot be empty string")
-	}
-
-	chunkSize, err := strbyteconv.StringToBytes(chunkstr)
-	if err != nil {
-		return err
 	}
 
 	// start stream splitting goroutine
