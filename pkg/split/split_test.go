@@ -19,6 +19,8 @@ package split
 import (
 	"bufio"
 	"bytes"
+	"io"
+	"os"
 	"strconv"
 	"testing"
 
@@ -50,13 +52,17 @@ func (s *MySuite) TestSplitStream(c *C) {
 }
 
 func (s *MySuite) TestFileSplitJoin(c *C) {
-	err := SplitFilesWithPrefix("TESTFILE", "1KB", "TESTPREFIX")
+	err := SplitFileWithPrefix("TESTFILE", 1024, "TESTPREFIX")
 	c.Assert(err, IsNil)
-	err = SplitFilesWithPrefix("TESTFILE", "1KB", "")
+	err = SplitFileWithPrefix("TESTFILE", 1024, "")
 	c.Assert(err, Not(IsNil))
 
-	err = JoinFilesWithPrefix(".", "TESTPREFIX", "")
+	devnull, err := os.OpenFile(os.DevNull, 2, os.ModeAppend)
+	defer devnull.Close()
+	reader := JoinFiles(".", "ERROR")
+	_, err = io.Copy(devnull, reader)
 	c.Assert(err, Not(IsNil))
-	err = JoinFilesWithPrefix(".", "TESTPREFIX", "NEWFILE")
+	reader = JoinFiles(".", "TESTPREFIX")
+	_, err = io.Copy(devnull, reader)
 	c.Assert(err, IsNil)
 }
