@@ -3,7 +3,7 @@
 % Minio community
 % January 2015
 # NAME
-split-file - 
+split - 
 
 # SYNOPSIS
 
