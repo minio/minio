@@ -24,7 +24,7 @@ import (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "split-file"
+	app.Name = "split"
 	app.Usage = ""
 	app.Commands = Options
 	app.Author = "Minio"
