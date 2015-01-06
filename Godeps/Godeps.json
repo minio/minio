@@ -19,6 +19,11 @@
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
+			"ImportPath": "github.com/minio-io/go-patricia/patricia",
+			"Comment": "v1.0.1-2-g9469ac2",
+			"Rev": "9469ac299b073cc3adb646559a176ba4041fefd5"
+		},
+		{
 			"ImportPath": "github.com/spaolacci/murmur3",
 			"Rev": "9d87265e0948d305ffe0383d54e59c3ac3482454"
 		},

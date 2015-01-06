@@ -61,6 +61,7 @@ install: build-erasure
 	@godep go install github.com/minio-io/minio/cmd/new-cmd && echo "Installed new-cmd into ${GOPATH}/bin"
 	@godep go install github.com/minio-io/minio/cmd/crypto && echo "Installed crypto into ${GOPATH}/bin"
 	@godep go install github.com/minio-io/minio/cmd/split && echo "Installed split into ${GOPATH}/bin"
+	@godep go install github.com/minio-io/minio/cmd/index && echo "Installed index into ${GOPATH}/bin"
 
 save: restore
 	@godep save ./...
