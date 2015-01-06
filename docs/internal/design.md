@@ -1,4 +1,0 @@
-- Erasure code - http://bit.ly/1yqxkUt (intel isal library)
-- Future erasure codes to look at - Fountain Codes, Simple XOR techniques, Custom
-- Bootstrap techniques - no downtime scenario
-- Simple API's
