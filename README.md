@@ -15,6 +15,14 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 | Windows | Not yet |
 | Mac OSX | Not yet |
 
+### Supported architectures
+
+| Arch | Supported |
+| ------------- | ------------- |
+| x86_64 | Yes |
+| arm64 | Not yet|
+| i686 | Never |
+
 ### Join Community
 * A quick chat? [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Minio-io/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * Have questions? [![Quora](http://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Quora_logo.svg/55px-Quora_logo.svg.png)](http://www.quora.com/Minio)
