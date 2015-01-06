@@ -36,6 +36,15 @@ if [ $? -ne 0 ]; then
     MISSING="${MISSING} build-essential"
 fi
 
+env yasm --version > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    MISSING="${MISSING} yasm"
+fi
+
+if ! yasm -f elf64 -i isal/include isal/src/gf-vect-dot-prod-avx2.asm -o /dev/null 2>/dev/null ; then
+    MISSING="${MISSING} yasm(elf64 support)"
+fi
+
 ## If dependencies are missing, warn the user and abort
 if [ "x${MISSING}" != "x" ]; then
   echo "ERROR"
