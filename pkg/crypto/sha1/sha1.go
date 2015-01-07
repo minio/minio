@@ -24,55 +24,50 @@ package sha1
 import "C"
 import (
 	gosha1 "crypto/sha1"
-	"errors"
 	"io"
-	"unsafe"
-
-	"github.com/minio-io/minio/pkg/cpu"
 )
 
+/*
 const (
 	SHA1_BLOCKSIZE  = 64
 	SHA1_DIGESTSIZE = 20
 )
 
+
 func Sha1(buffer []byte) ([]int32, error) {
-	if !cpu.HasAVX2() {
-		// Unsupported processor but do not error out tests
-		return []int32{0}, nil
+	if cpu.HasAVX2() {
+		var shbuf []int32
+		var cbuffer *C.char
+
+		shbuf = make([]int32, SHA1_DIGESTSIZE)
+		var length = len(buffer)
+		if length == 0 {
+			return []int32{0}, errors.New("Invalid input")
+		}
+
+		rem := length % SHA1_BLOCKSIZE
+		padded_len := length
+
+		if rem > 0 {
+			padded_len = length + (SHA1_BLOCKSIZE - rem)
+		}
+
+		rounds := padded_len / SHA1_BLOCKSIZE
+		pad := padded_len - length
+		if pad > 0 {
+			s := make([]byte, pad)
+			// Expand with new padded blocks to the byte array
+			buffer = append(buffer, s...)
+		}
+
+		cshbuf := (*C.int32_t)(unsafe.Pointer(&shbuf[0]))
+		cbuffer = (*C.char)(unsafe.Pointer(&buffer[0]))
+		C.sha1_transform(cshbuf, cbuffer, C.size_t(rounds))
+
+		return 0, nil
 	}
-
-	var shbuf []int32
-	var cbuffer *C.char
-
-	shbuf = make([]int32, SHA1_DIGESTSIZE)
-	var length = len(buffer)
-	if length == 0 {
-		return []int32{0}, errors.New("Invalid input")
-	}
-
-	rem := length % SHA1_BLOCKSIZE
-	padded_len := length
-
-	if rem > 0 {
-		padded_len = length + (SHA1_BLOCKSIZE - rem)
-	}
-
-	rounds := padded_len / SHA1_BLOCKSIZE
-	pad := padded_len - length
-	if pad > 0 {
-		s := make([]byte, pad)
-		// Expand with new padded blocks to the byte array
-		buffer = append(buffer, s...)
-	}
-
-	cshbuf := (*C.int32_t)(unsafe.Pointer(&shbuf[0]))
-	cbuffer = (*C.char)(unsafe.Pointer(&buffer[0]))
-	C.sha1_transform(cshbuf, cbuffer, C.size_t(rounds))
-
-	return shbuf, nil
 }
-
+*/
 func Sum(reader io.Reader) ([]byte, error) {
 	hash := gosha1.New()
 	var err error

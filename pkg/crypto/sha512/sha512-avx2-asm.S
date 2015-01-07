@@ -49,8 +49,7 @@
 # This code schedules 1 blocks at a time, with 4 lanes per block
 ########################################################################
 
-#include "asm.S"
-
+#ifdef HAS_AVX2
 .text
 
 # Virtual Registers
@@ -739,3 +738,4 @@ PSHUFFLE_BYTE_FLIP_MASK:
 MASK_YMM_LO:
 	.octa 0x00000000000000000000000000000000
 	.octa 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+#endif

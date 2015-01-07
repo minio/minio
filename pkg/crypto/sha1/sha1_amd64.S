@@ -67,6 +67,7 @@
  *
  */
 
+#ifdef HAS_AVX2
 #include "asm.S"
 
 #define	CTX	%rdi	/* arg1 */
@@ -698,3 +699,4 @@ BSWAP_SHUFB_CTL:
 	ret
 
 	ENDPROC(sha1_transform)
+#endif

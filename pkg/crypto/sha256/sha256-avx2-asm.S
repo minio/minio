@@ -48,6 +48,7 @@
 # This code schedules 2 blocks at a time, with 4 lanes per block
 ########################################################################
 
+#ifdef HAS_AVX2
 #include "asm.S"
 
 ## assume buffers not aligned
@@ -768,3 +769,4 @@ _SHUF_00BA:
 # shuffle xDxC -> DC00
 _SHUF_DC00:
 	.octa 0x0b0a090803020100FFFFFFFFFFFFFFFF,0x0b0a090803020100FFFFFFFFFFFFFFFF
+#endif
