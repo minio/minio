@@ -17,10 +17,7 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -34,7 +31,7 @@ import (
 var Options = []cli.Command{
 	Md5sum,
 	Sha1sum,
-	// Sha1sumFast, // not working
+	// Sha1sumFast, // TODO
 	Sha256sum,
 	Sha512sum,
 }
@@ -55,6 +52,7 @@ var Sha1sum = cli.Command{
 	Action: doSha1sum,
 }
 
+/* TODO
 var Sha1sumFast = cli.Command{
 	Name:  "sha1sum-fast",
 	Usage: "",
@@ -62,6 +60,7 @@ var Sha1sumFast = cli.Command{
 `,
 	Action: doSha1sumFast,
 }
+*/
 
 var Sha256sum = cli.Command{
 	Name:  "sha256sum",
@@ -95,6 +94,7 @@ func doSha1sum(c *cli.Context) {
 	fmt.Printf("%x", hash)
 }
 
+/* TODO
 func doSha1sumFast(c *cli.Context) {
 	buffer, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -108,6 +108,7 @@ func doSha1sumFast(c *cli.Context) {
 	binary.Write(&bytesBuffer, binary.LittleEndian, hash)
 	fmt.Printf("%x", bytesBuffer.Bytes())
 }
+*/
 
 func doSha256sum(c *cli.Context) {
 	hash, err := sha256.Sum(os.Stdin)

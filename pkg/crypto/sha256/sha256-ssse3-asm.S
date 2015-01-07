@@ -46,6 +46,7 @@
 #
 ########################################################################
 
+#ifdef HAS_SSE41
 #include "asm.S"
 
 ## assume buffers not aligned
@@ -504,3 +505,4 @@ _SHUF_00BA:
 # shuffle xDxC -> DC00
 _SHUF_DC00:
 	.octa 0x0b0a090803020100FFFFFFFFFFFFFFFF
+#endif
