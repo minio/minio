@@ -7,6 +7,9 @@ $ sudo apt-get install git build-essential
 ```
 
 ##### Install YASM
+
+Minio depends on Intel ISAL library for erasure coding, ISAL uses Intel AVX2 processor instructions, to compile these files one needs to install ``yasm`` which supports AVX2 instructions. AVX2 support only ended in ``yasm`` from version ``1.2.0``, any version below ``1.2.0`` will throw a build error as referenced in issue [here](https://github.com/Minio-io/minio/issues/163)
+
 ```sh
 $ sudo apt-get install yasm
 ```

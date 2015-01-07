@@ -42,7 +42,7 @@ if [ $? -ne 0 ]; then
 fi
 
 if ! yasm -f elf64 -i isal/include isal/src/gf-vect-dot-prod-avx2.asm -o /dev/null 2>/dev/null ; then
-    MISSING="${MISSING} yasm(elf64 support)"
+    MISSING="${MISSING} yasm(1.2.0)"
 fi
 
 ## If dependencies are missing, warn the user and abort
@@ -54,7 +54,7 @@ if [ "x${MISSING}" != "x" ]; then
   echo "** ${MISSING} **"
   echo
   echo "Please install them "
-  echo "$ sudo apt-get install ${MISSING}"
+  echo "${MISSING}"
   echo
   exit 1
 fi
