@@ -29,7 +29,7 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 
 | Arch | Supported |
 | ------------- | ------------- |
-| x86_64 | Yes |
+| x86-64 | Yes |
 | arm64 | Not yet|
 | i386 | Never |
 
