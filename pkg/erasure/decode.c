@@ -60,6 +60,8 @@ int32_t minio_get_source_target (int errs, int k, int m,
 
         *source = tmp_source;
         *target = tmp_target;
+
+	return 0;
 }
 
 /*

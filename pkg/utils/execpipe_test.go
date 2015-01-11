@@ -23,7 +23,7 @@ func (s *MySuite) TestPiping(c *C) {
 	// Run the command on each directory
 	for _, dir := range dirs {
 		// find $DIR -type f # Find all files
-		ls := exec.Command("ls", dir, "-l")
+		ls := exec.Command("ls", "-l", dir)
 
 		// | sort -t. -k2 # Sort by file extension
 		sort := exec.Command("sort", "-t.", "-k2")

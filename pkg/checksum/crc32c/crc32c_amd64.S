@@ -168,7 +168,7 @@ continue_block:
 
 	## branch into array
 	lea	jump_table(%rip), bufp
-	movzxw  (bufp, %rax, 2), len
+	movzwq  (bufp, %rax, 2), len
 	offset=crc_array-jump_table
 	lea     offset(bufp, len, 1), bufp
 	jmp     *bufp
@@ -194,18 +194,22 @@ full_block:
 crc_array:
 	i=128
 .rept 128-1
+#if !defined(__clang__)
 .altmacro
 LABEL crc_ %i
 .noaltmacro
+#endif
 	crc32q   -i*8(block_0), crc_init
 	crc32q   -i*8(block_1), crc1
 	crc32q   -i*8(block_2), crc2
 	i=(i-1)
 .endr
 
+#if !defined(__clang__)
 .altmacro
 LABEL crc_ %i
 .noaltmacro
+#endif
 	crc32q   -i*8(block_0), crc_init
 	crc32q   -i*8(block_1), crc1
 # SKIP  crc32  -i*8(block_2), crc2 ; Don't do this one yet

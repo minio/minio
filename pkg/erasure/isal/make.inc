@@ -63,6 +63,11 @@ ASFLAGS_win64 = -f win64
 CFLAGS_icl    = -Qstd=c99
 ARFLAGS_win64 = -out:$@
 
+# arch=osx build options
+ASFLAGS_osx = -f macho64
+ARFLAGS_osx = -r $@
+STRIP_gcc = strip -d $@
+
 # arch=mingw build options
 ASFLAGS_mingw = -f win64
 ARFLAGS_mingw = cr $@
@@ -101,9 +106,13 @@ ifeq ($(arch),win64)
   lib_name := $(basename $(lib_name)).lib
 endif
 lsrcwin64 = $(lsrc)
+lsrcosx = $(lsrc)
 unit_testswin64 = $(unit_tests)
+unit_testsosx = $(unit_tests)
 exampleswin64 = $(examples)
+examplesosx = $(examples)
 perf_testswin64 = $(perf_tests)
+perf_testsosx = $(perf_tests)
 
 # Build and run unit tests, performance tests, etc.
 all_tests = $(sort $(perf_tests$(arch)) $(unit_tests$(arch)) $(examples$(arch)) $(other_tests))
@@ -198,7 +207,6 @@ perf_report:
 	$(MAKE) -k perf | tee -a $(rpt_name)
 	@echo Summary:
 	-grep runtime $(rpt_name)
-
 
 clean:
 	@echo Cleaning up

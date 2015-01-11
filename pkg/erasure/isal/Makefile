@@ -30,7 +30,7 @@
 
 units = src
 
-default: slib
+default: lib
 
 include $(foreach unit,$(units), $(unit)/Makefile)
 

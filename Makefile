@@ -14,9 +14,6 @@ build-erasure:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/erasure/isal lib
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/erasure
 
-build-signify:
-	@$(MAKE) $(MAKE_OPTIONS) -C pkg/signify
-
 build-cpu:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/cpu
 
@@ -53,7 +50,7 @@ build-storage-append:
 build-storage-encoded:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/encodedstorage
 
-cover: build-erasure build-signify build-split build-crc32c build-cpu build-scsi build-storage build-md5 build-sha1 build-sha256 build-sha512
+cover: build-erasure build-split build-crc32c build-cpu build-scsi build-storage build-md5 build-sha1 build-sha256 build-sha512
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/gateway
 
 install: build-erasure

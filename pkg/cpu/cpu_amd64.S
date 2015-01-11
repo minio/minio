@@ -14,9 +14,18 @@
  * limitations under the License.
  */
 
+#ifdef __APPLE__
+#define HAS_SSE _has_sse41
+#define HAS_AVX _has_avx
+#define HAS_AVX2 _has_avx2
+#else
+#define HAS_SSE has_sse41
+#define HAS_AVX has_avx
+#define HAS_AVX2 has_avx2
+#endif
+
 	.file	"cpufeatures.c"
 	.text
-	.type	cpuid, @function
 cpuid:
 .LFB2:
 	.cfi_startproc
@@ -56,10 +65,8 @@ cpuid:
 	ret
 	.cfi_endproc
 .LFE2:
-	.size	cpuid, .-cpuid
-	.globl	has_sse41
-	.type	has_sse41, @function
-has_sse41:
+	.globl	HAS_SSE
+HAS_SSE:
 .LFB3:
 	.cfi_startproc
 	pushq	%rbp
@@ -82,10 +89,8 @@ has_sse41:
 	ret
 	.cfi_endproc
 .LFE3:
-	.size	has_sse41, .-has_sse41
-	.globl	has_avx
-	.type	has_avx, @function
-has_avx:
+	.globl	HAS_AVX
+HAS_AVX:
 .LFB4:
 	.cfi_startproc
 	pushq	%rbp
@@ -108,10 +113,8 @@ has_avx:
 	ret
 	.cfi_endproc
 .LFE4:
-	.size	has_avx, .-has_avx
-	.globl	has_avx2
-	.type	has_avx2, @function
-has_avx2:
+	.globl	HAS_AVX2
+HAS_AVX2:
 .LFB5:
 	.cfi_startproc
 	pushq	%rbp
@@ -133,7 +136,3 @@ has_avx2:
 	.cfi_def_cfa 7, 8
 	ret
 	.cfi_endproc
-.LFE5:
-	.size	has_avx2, .-has_avx2
-	.ident	"GCC: (Ubuntu 4.8.2-19ubuntu1) 4.8.2"
-	.section	.note.GNU-stack,"",@progbits
