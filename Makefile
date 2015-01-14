@@ -56,4 +56,5 @@ env:
 	@godep go env
 
 clean:
+	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal clean
 	@rm -v cover.out
