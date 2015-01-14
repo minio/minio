@@ -52,9 +52,9 @@ func (s *MySuite) TestSplitStream(c *C) {
 }
 
 func (s *MySuite) TestFileSplitJoin(c *C) {
-	err := SplitFileWithPrefix("TESTFILE", 1024, "TESTPREFIX")
+	err := SplitFileWithPrefix("test-data/TESTFILE", 1024, "TESTPREFIX")
 	c.Assert(err, IsNil)
-	err = SplitFileWithPrefix("TESTFILE", 1024, "")
+	err = SplitFileWithPrefix("test-data/TESTFILE", 1024, "")
 	c.Assert(err, Not(IsNil))
 
 	devnull, err := os.OpenFile(os.DevNull, 2, os.ModeAppend)
