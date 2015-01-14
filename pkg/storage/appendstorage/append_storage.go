@@ -27,8 +27,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/checksum/crc32c"
 	"github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
 )
 
 type appendStorage struct {

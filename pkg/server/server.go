@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gateway
+package server
 
 import (
 	"bytes"

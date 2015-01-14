@@ -1,4 +1,4 @@
-package gateway
+package server
 
 import (
 	"io/ioutil"

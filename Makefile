@@ -13,36 +13,27 @@ getdeps: checkdeps
 build-utils:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/cpu
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/unitconv
-
-build-crypto:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/crypto/md5/
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/crypto/sha1/
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/crypto/sha256/
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/crypto/sha512/
-
-build-checksum:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/checksum/crc32c
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/split
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/md5/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha1/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha256/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha512/
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
 
 build-os:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/sysctl
 
-build-fileutils: build-utils
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/fileutils/split
-
-build-storage: build-erasure build-storage-append build-storage-encoded
-
-build-erasure:
+build-storage:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal lib
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/erasure
-
-build-storage-append:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/appendstorage
-
-build-storage-encoded:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/encodedstorage
 
-cover: build-fileutils build-checksum build-os build-storage build-crypto
+build-server:
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/server
+
+cover: build-storage build-os build-server build-utils
 
 install: cover
 
@@ -56,5 +47,7 @@ env:
 	@godep go env
 
 clean:
+	@echo "Cleaning up all the generated files"
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal clean
-	@rm -v cover.out
+	@rm -fv pkg/utils/split/TESTPREFIX.*
+	@rm -fv cover.out
