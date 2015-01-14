@@ -10,15 +10,12 @@ $ ln -s ${PWD} $GOPATH/src/github.com/minio-io/
 ### Compiling Minio from source
 Minio uses ``Makefile`` to wrap around some of the limitations of ``go build``. To compile Minio source, simply change to your workspace folder and type ``make``.
 ```sh
-$ cd $GOPATH/src/github.com/$USER_ID/minio/
 $ make
 Checking if proper environment variables are set.. Done
 ...
 Checking dependencies for Minio.. Done
 ...
 ...
-Installed minio into /home/userid/work/minio/gopath/bin
-Installed new-cmd into /home/userid/work/minio/gopath/bin
 ```
 ###  Developer Guidelines
 ``Minio`` community welcomes your contribution. To make the process as seamless as possible, we ask for the following:

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package strbyteconv
+package unitconv
 
 import (
 	"errors"
