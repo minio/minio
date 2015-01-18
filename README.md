@@ -8,9 +8,9 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 * Ask questions on Quora  [![Quora](http://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Quora_logo.svg/55px-Quora_logo.svg.png)](http://www.quora.com/Minio)
 
 ### Developers
-* [Get Source](./DEVELOPER.md)
+* [Get Source](./CONTRIBUTING.md)
 * [Build Dependencies](./BUILDDEPS.md)
-* [Development Workflow](./DEVELOPER.md#developer-guidelines)
+* [Development Workflow](./CONTRIBUTING.md#developer-guidelines)
 * [Developer discussions and bugs](https://github.com/Minio-io/minio/issues)
 
 ### Download
