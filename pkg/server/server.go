@@ -1,9 +1,12 @@
 package server
 
 import (
+	"io"
 	"log"
+	"net/http"
 	"reflect"
 
+	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/httpserver"
 	"github.com/minio-io/minio/pkg/storage"
 )
@@ -16,7 +19,7 @@ func Start() {
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
-	ctrlChan, statusChan = httpserver.Start(storage.GetHttpHandler())
+	ctrlChan, statusChan = httpserver.Start(getHttpHandler())
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
@@ -35,10 +38,10 @@ func Start() {
 					aliveStatusChans = append(aliveStatusChans, ch)
 				}
 			}
+			// create new select cases without defunct channel
 			statusChans = aliveStatusChans
 			cases = createSelectCases(statusChans)
 		}
-		// create new select case
 	}
 }
 
@@ -51,4 +54,14 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 		}
 	}
 	return cases
+}
+
+func getHttpHandler() http.Handler {
+	mux := mux.NewRouter()
+	mux.HandleFunc("/", storageHandler)
+	return mux
+}
+
+func storageHandler(w http.ResponseWriter, req *http.Request) {
+	io.WriteString(w, "MINIO")
 }
