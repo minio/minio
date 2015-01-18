@@ -1,22 +1,6 @@
 package storage
 
-import (
-	"errors"
-	"io"
-	"net/http"
-
-	"github.com/gorilla/mux"
-)
-
-func GetHttpHandler() http.Handler {
-	mux := mux.NewRouter()
-	mux.HandleFunc("/", storageHandler)
-	return mux
-}
-
-func storageHandler(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, "MINIO")
-}
+import "errors"
 
 func Start() (chan<- string, <-chan error) {
 	ctrlChannel := make(chan string)
