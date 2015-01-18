@@ -27,13 +27,8 @@ build-os:
 build-storage:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal lib
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/erasure
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/appendstorage
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/encodedstorage
 
-build-server:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/server
-
-cover: build-storage build-os build-server build-utils
+cover: build-storage build-os build-utils
 
 install: cover
 

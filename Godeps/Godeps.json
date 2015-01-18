@@ -6,31 +6,12 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-42-gfbda1ce",
-			"Rev": "fbda1ce02d5dabcee952040e5f4025753b6c9ce0"
-		},
-		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
-		},
-		{
-			"ImportPath": "github.com/minio-io/go-patricia/patricia",
-			"Comment": "v1.0.1-2-g9469ac2",
-			"Rev": "9469ac299b073cc3adb646559a176ba4041fefd5"
-		},
-		{
-			"ImportPath": "github.com/spaolacci/murmur3",
-			"Rev": "9d87265e0948d305ffe0383d54e59c3ac3482454"
-		},
-		{
-			"ImportPath": "github.com/tchap/go-patricia/patricia",
-			"Comment": "v1.0.1",
-			"Rev": "f64d0a63cd3363481c898faa9339de04d12213f9"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
