@@ -1,23 +1,25 @@
 package server
 
 import (
-	"io"
 	"log"
 	"net/http"
 	"reflect"
 
 	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/httpserver"
-	"github.com/minio-io/minio/pkg/storage"
+	storageModule "github.com/minio-io/minio/pkg/storage"
 )
+
+var storage *storageModule.Storage
 
 func Start() {
 	ctrlChans := make([]chan<- string, 0)
 	statusChans := make([]<-chan error, 0)
 
-	ctrlChan, statusChan := storage.Start()
+	ctrlChan, statusChan, storageSystem := storageModule.Start()
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
+	storage = storageSystem
 
 	ctrlChan, statusChan = httpserver.Start(getHttpHandler())
 	ctrlChans = append(ctrlChans, ctrlChan)
@@ -58,10 +60,13 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 
 func getHttpHandler() http.Handler {
 	mux := mux.NewRouter()
-	mux.HandleFunc("/", storageHandler)
+	mux.HandleFunc("/{bucket}/{object:.*}", storageHandler)
 	return mux
 }
 
 func storageHandler(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, "MINIO")
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	storage.CopyObjectToWriter(w, bucket, object)
 }
