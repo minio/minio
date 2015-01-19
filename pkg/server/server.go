@@ -61,6 +61,7 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 func getHttpHandler() http.Handler {
 	mux := mux.NewRouter()
 	mux.HandleFunc("/{bucket}/{object:.*}", getObjectHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}/{object:.*}", putObjectHandler).Methods("PUT")
 	return mux
 }
 
@@ -69,4 +70,11 @@ func getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 	storage.CopyObjectToWriter(w, bucket, object)
+}
+
+func putObjectHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	storage.StoreObject(bucket, object, req.Body)
 }
