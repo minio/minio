@@ -16,4 +16,5 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Han
 	log.Println("Starting HTTP Server")
 	err := http.ListenAndServe(":8080", router)
 	errorChannel <- err
+	close(errorChannel)
 }

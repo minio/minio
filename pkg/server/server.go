@@ -27,7 +27,7 @@ func Start() {
 
 	cases := createSelectCases(statusChans)
 
-	for {
+	for len(cases) > 0 {
 		chosen, value, recvOk := reflect.Select(cases)
 		if recvOk == true {
 			// Status Message Received
