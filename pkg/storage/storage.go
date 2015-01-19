@@ -35,7 +35,9 @@ func Start() (chan<- string, <-chan error, *Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, &Storage{}
+	return ctrlChannel, errorChannel, &Storage{
+		data: make(map[string][]byte),
+	}
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error) {
