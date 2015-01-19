@@ -60,11 +60,11 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 
 func getHttpHandler() http.Handler {
 	mux := mux.NewRouter()
-	mux.HandleFunc("/{bucket}/{object:.*}", storageHandler)
+	mux.HandleFunc("/{bucket}/{object:.*}", getObjectHandler).Methods("GET")
 	return mux
 }
 
-func storageHandler(w http.ResponseWriter, req *http.Request) {
+func getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
