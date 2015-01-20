@@ -10,16 +10,27 @@ type Storage struct {
 	data map[string][]byte
 }
 
-func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) error {
+type GenericError struct {
+	bucket string
+	path   string
+}
+
+type ObjectNotFound GenericError
+
+func (self ObjectNotFound) Error() string {
+	return "Not Found: " + self.bucket + "#" + self.path
+}
+
+func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// TODO synchronize access
 	// get object
 	key := bucket + ":" + object
 	if val, ok := storage.data[key]; ok {
 		objectBuffer := bytes.NewBuffer(val)
-		_, err := io.Copy(w, objectBuffer)
-		return err
+		written, err := io.Copy(w, objectBuffer)
+		return written, err
 	} else {
-		return errors.New("Not Found")
+		return 0, ObjectNotFound{bucket: bucket, path: object}
 	}
 }
 
