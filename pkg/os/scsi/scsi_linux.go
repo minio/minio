@@ -19,7 +19,6 @@
 package scsi
 
 import (
-	"errors"
 	"io/ioutil"
 	"path"
 )
@@ -86,11 +85,11 @@ func (d *Devices) getInfo(disk string) (map[string][]byte, error) {
 	}
 
 	if len(diskAttrsList) == 0 {
-		return nil, errors.New("No disk attributes found")
+		return nil, NoDiskAttributesFound{}
 	}
 
 	if len(diskQueueAttrs) == 0 {
-		return nil, errors.New("No disk queue attributes found")
+		return nil, NoDiskQueueAttributesFound{}
 	}
 
 	diskAttrMap := getattrs(sysfs_block_dev, diskAttrsList)
@@ -118,7 +117,7 @@ func (d *Devices) Get() error {
 
 	scsidevices = filterdevices(sysFiles)
 	if len(scsidevices) == 0 {
-		return errors.New("No scsi devices found on the system")
+		return NoScsiDevicesFoundOnSystem{}
 	}
 
 	for _, scsi := range scsidevices {
@@ -135,7 +134,7 @@ func (d *Devices) Get() error {
 		}
 
 		if len(scsidevList) > 1 {
-			return errors.New("Scsi address points to multiple block devices")
+			return ScsiAddressPointsToMultipleBlockDevices{}
 		}
 
 		_scsi.Disk = UDEV + scsidevList[0].Name()
@@ -156,7 +155,7 @@ func (d *Devices) Get() error {
 		}
 
 		if len(scsiAttrList) == 0 {
-			return errors.New("No scsi attributes found")
+			return NoScsiAttributesFound{}
 		}
 		attrMap := getattrs(scsiAttrPath, scsiAttrList)
 		_scsi.Scsiattrmap = attrMap
