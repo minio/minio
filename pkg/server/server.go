@@ -10,8 +10,8 @@ import (
 )
 
 func Start() {
-	ctrlChans := make([]chan<- string, 0)
-	statusChans := make([]<-chan error, 0)
+	var ctrlChans []chan<- string
+	var statusChans []<-chan error
 
 	ctrlChan, statusChan, storage := storageModule.Start()
 	ctrlChans = append(ctrlChans, ctrlChan)
@@ -30,7 +30,7 @@ func Start() {
 			log.Println(chosen, value.Interface(), recvOk)
 		} else {
 			// Channel closed, remove from list
-			aliveStatusChans := make([]<-chan error, 0)
+			var aliveStatusChans []<-chan error
 			for i, ch := range statusChans {
 				if i != chosen {
 					aliveStatusChans = append(aliveStatusChans, ch)
