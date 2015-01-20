@@ -1,6 +1,7 @@
 package minioapi
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -25,7 +26,24 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	server.storage.CopyObjectToWriter(w, bucket, object)
+
+	_, err := server.storage.CopyObjectToWriter(w, bucket, object)
+	switch err := err.(type) {
+	case nil: // success
+		{
+			log.Println("Found: " + bucket + "#" + object)
+		}
+	case mstorage.ObjectNotFound:
+		{
+			log.Println(err)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	default:
+		{
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
 }
 
 func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
