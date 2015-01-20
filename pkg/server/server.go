@@ -2,26 +2,22 @@ package server
 
 import (
 	"log"
-	"net/http"
 	"reflect"
 
-	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/httpserver"
 	storageModule "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
-
-var storage *storageModule.Storage
 
 func Start() {
 	ctrlChans := make([]chan<- string, 0)
 	statusChans := make([]<-chan error, 0)
 
-	ctrlChan, statusChan, storageSystem := storageModule.Start()
+	ctrlChan, statusChan, storage := storageModule.Start()
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
-	storage = storageSystem
 
-	ctrlChan, statusChan = httpserver.Start(getHttpHandler())
+	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage))
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
@@ -56,25 +52,4 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 		}
 	}
 	return cases
-}
-
-func getHttpHandler() http.Handler {
-	mux := mux.NewRouter()
-	mux.HandleFunc("/{bucket}/{object:.*}", getObjectHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}/{object:.*}", putObjectHandler).Methods("PUT")
-	return mux
-}
-
-func getObjectHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
-	storage.CopyObjectToWriter(w, bucket, object)
-}
-
-func putObjectHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
-	storage.StoreObject(bucket, object, req.Body)
 }
