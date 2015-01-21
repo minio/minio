@@ -28,7 +28,11 @@ endif
 #	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/sysctl
 
 build-storage:
+ifeq ($(ARCH), Darwin)
+	@$(MAKE) $(MAKE_OPTIONS) arch=osx -C pkg/storage/erasure/isal lib
+else
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal lib
+endif
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/erasure
 
 build-minioapi:
