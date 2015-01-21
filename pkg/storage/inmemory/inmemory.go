@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
@@ -65,7 +64,7 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) e
 }
 
 func (storage *Storage) StoreBucket(bucketName string) error {
-	if !isValidBucket(bucketName) {
+	if !mstorage.IsValidBucket(bucketName) {
 		return mstorage.BucketNameInvalid{Bucket: bucketName}
 	}
 
@@ -114,20 +113,6 @@ func Start() (chan<- string, <-chan error, *Storage) {
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
-}
-
-func isValidBucket(bucket string) bool {
-	if len(bucket) < 3 || len(bucket) > 63 {
-		return false
-	}
-	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
-		return false
-	}
-	if match, _ := regexp.MatchString("\\.\\.", bucket); match == true {
-		return false
-	}
-	match, _ := regexp.MatchString("[a-zA-Z0-9\\.\\-]", bucket)
-	return match
 }
 
 func (storage *Storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
