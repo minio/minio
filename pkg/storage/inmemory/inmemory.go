@@ -64,7 +64,7 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) e
 }
 
 func (storage *Storage) StoreBucket(bucketName string) error {
-	if !isValidBucket(bucketName) {
+	if !mstorage.IsValidBucket(bucketName) {
 		return mstorage.BucketNameInvalid{Bucket: bucketName}
 	}
 
@@ -113,42 +113,6 @@ func Start() (chan<- string, <-chan error, *Storage) {
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
-}
-
-func isValidBucket(bucket string) bool {
-	l := len(bucket)
-	if l < 3 || l > 63 {
-		return false
-	}
-
-	valid := false
-	prev := byte('.')
-	for i := 0; i < len(bucket); i++ {
-		c := bucket[i]
-		switch {
-		default:
-			return false
-		case 'a' <= c && c <= 'z':
-			valid = true
-		case '0' <= c && c <= '9':
-			// Is allowed, but bucketname can't be just numbers.
-			// Therefore, don't set valid to true
-		case c == '-':
-			if prev == '.' {
-				return false
-			}
-		case c == '.':
-			if prev == '.' || prev == '-' {
-				return false
-			}
-		}
-		prev = c
-	}
-
-	if prev == '-' || prev == '.' {
-		return false
-	}
-	return valid
 }
 
 func (storage *Storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {

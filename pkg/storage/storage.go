@@ -18,6 +18,7 @@ package storage
 
 import (
 	"io"
+	"regexp"
 )
 
 type Storage interface {
@@ -42,4 +43,18 @@ type ObjectMetadata struct {
 	SecCreated int64
 	Size       int
 	ETag       string
+}
+
+func IsValidBucket(bucket string) bool {
+	if len(bucket) < 3 || len(bucket) > 63 {
+		return false
+	}
+	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
+		return false
+	}
+	if match, _ := regexp.MatchString("\\.\\.", bucket); match == true {
+		return false
+	}
+	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\.\\-]+[a-zA-Z0-9]$", bucket)
+	return match
 }
