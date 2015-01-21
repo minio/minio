@@ -7,9 +7,9 @@ import (
 type ListResponse struct {
 	XMLName     xml.Name `xml:"ListBucketResult"`
 	Name        string   `xml:"Name"`
-	Prefix      string
+	toragerefix string
 	Marker      string
-	MaxKeys     int32
+	MaxKeys     int
 	IsTruncated bool
 	Contents    []Content `xml:"Contents",innerxml`
 }
@@ -18,7 +18,7 @@ type Content struct {
 	Key          string
 	LastModified string
 	ETag         string
-	Size         uint64
+	Size         int
 	StorageClass string
 	Owner        Owner
 }

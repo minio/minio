@@ -3,13 +3,25 @@ package storage
 import (
 	"bytes"
 	"io"
+	"log"
+	"strings"
+	"time"
 )
 
 type Storage struct {
-	data map[string][]byte
+	data map[string]storedObject
 }
 
-type ObjectMetadata struct{}
+type storedObject struct {
+	metadata ObjectMetadata
+	data     []byte
+}
+
+type ObjectMetadata struct {
+	Key        string
+	SecCreated int64
+	Size       int
+}
 
 type GenericError struct {
 	bucket string
@@ -27,7 +39,7 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	// get object
 	key := bucket + ":" + object
 	if val, ok := storage.data[key]; ok {
-		objectBuffer := bytes.NewBuffer(val)
+		objectBuffer := bytes.NewBuffer(val.data)
 		written, err := io.Copy(w, objectBuffer)
 		return written, err
 	} else {
@@ -35,16 +47,30 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 }
 
-func (storage *Storage) StoreObject(bucket string, object string, data io.Reader) {
-	key := bucket + ":" + object
+func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) {
+	objectKey := bucket + ":" + key
 	var bytesBuffer bytes.Buffer
+	newObject := storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
-		storage.data[key] = bytesBuffer.Bytes()
+		newObject.metadata = ObjectMetadata{
+			Key:        key,
+			SecCreated: time.Now().Unix(),
+			Size:       len(bytesBuffer.Bytes()),
+		}
+		newObject.data = bytesBuffer.Bytes()
 	}
+	storage.data[objectKey] = newObject
 }
 
 func (storage *Storage) ListObjects(bucket, prefix string, count int) []ObjectMetadata {
-	return []ObjectMetadata{}
+	var results []ObjectMetadata
+	for key, object := range storage.data {
+		log.Println(key)
+		if strings.HasPrefix(key, bucket+":") {
+			results = append(results, object.metadata)
+		}
+	}
+	return results
 }
 
 func Start() (chan<- string, <-chan error, *Storage) {
@@ -52,7 +78,7 @@ func Start() (chan<- string, <-chan error, *Storage) {
 	errorChannel := make(chan error)
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, &Storage{
-		data: make(map[string][]byte),
+		data: make(map[string]storedObject),
 	}
 }
 
