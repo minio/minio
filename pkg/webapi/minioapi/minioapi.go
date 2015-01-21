@@ -43,6 +43,7 @@ func HttpHandler(storage *mstorage.Storage) http.Handler {
 	}
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
+	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
@@ -200,7 +201,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 		content := Content{
 			Key:          object.Key,
 			LastModified: formatDate(object.SecCreated),
-			ETag:         object.Key,
+			ETag:         object.ETag,
 			Size:         object.Size,
 			StorageClass: "STANDARD",
 			Owner:        owner,
