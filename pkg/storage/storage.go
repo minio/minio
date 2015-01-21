@@ -18,10 +18,13 @@ package storage
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"strings"
 	"time"
+
+	"crypto/sha256"
 )
 
 type Storage struct {
@@ -49,6 +52,7 @@ type ObjectMetadata struct {
 	Key        string
 	SecCreated int64
 	Size       int
+	ETag       string
 }
 
 func isValidBucket(bucket string) bool {
@@ -108,10 +112,13 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) e
 	var bytesBuffer bytes.Buffer
 	newObject := storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
+		size := bytesBuffer.Len()
+		etag := fmt.Sprintf("%x", sha256.Sum256(bytesBuffer.Bytes()))
 		newObject.metadata = ObjectMetadata{
 			Key:        key,
 			SecCreated: time.Now().Unix(),
-			Size:       len(bytesBuffer.Bytes()),
+			Size:       size,
+			ETag:       etag,
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}

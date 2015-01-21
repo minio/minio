@@ -200,7 +200,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 		content := Content{
 			Key:          object.Key,
 			LastModified: formatDate(object.SecCreated),
-			ETag:         object.Key,
+			ETag:         object.ETag,
 			Size:         object.Size,
 			StorageClass: "STANDARD",
 			Owner:        owner,

@@ -47,7 +47,7 @@ func TestMinioApi(t *testing.T) {
 			Owner:        owner,
 		},
 	}
-	data := &ListResponse{
+	data := &ObjectListResponse{
 		Name:     "name",
 		Contents: contents,
 	}
