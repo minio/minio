@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -116,39 +117,17 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 }
 
 func isValidBucket(bucket string) bool {
-	l := len(bucket)
-	if l < 3 || l > 63 {
+	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
 	}
-
-	valid := false
-	prev := byte('.')
-	for i := 0; i < len(bucket); i++ {
-		c := bucket[i]
-		switch {
-		default:
-			return false
-		case 'a' <= c && c <= 'z':
-			valid = true
-		case '0' <= c && c <= '9':
-			// Is allowed, but bucketname can't be just numbers.
-			// Therefore, don't set valid to true
-		case c == '-':
-			if prev == '.' {
-				return false
-			}
-		case c == '.':
-			if prev == '.' || prev == '-' {
-				return false
-			}
-		}
-		prev = c
-	}
-
-	if prev == '-' || prev == '.' {
+	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
 		return false
 	}
-	return valid
+	if match, _ := regexp.MatchString("\\.\\.", bucket); match == true {
+		return false
+	}
+	match, _ := regexp.MatchString("[a-zA-Z0-9\\.\\-]", bucket)
+	return match
 }
 
 func (storage *Storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
