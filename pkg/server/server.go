@@ -17,7 +17,7 @@ func Start() {
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
-	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage))
+	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), ":8080")
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
