@@ -55,6 +55,6 @@ func IsValidBucket(bucket string) bool {
 	if match, _ := regexp.MatchString("\\.\\.", bucket); match == true {
 		return false
 	}
-	match, _ := regexp.MatchString("[a-zA-Z0-9\\.\\-]", bucket)
+	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\.\\-]+[a-zA-Z0-9]$", bucket)
 	return match
 }
