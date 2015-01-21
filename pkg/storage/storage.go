@@ -34,6 +34,15 @@ func (self ObjectNotFound) Error() string {
 	return "Not Found: " + self.bucket + "#" + self.path
 }
 
+type ObjectExists struct {
+	bucket string
+	key    string
+}
+
+func (self ObjectExists) Error() string {
+	return "Object exists: " + self.bucket + "#" + self.key
+}
+
 func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// TODO synchronize access
 	// get object
@@ -47,8 +56,11 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 }
 
-func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) {
+func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) error {
 	objectKey := bucket + ":" + key
+	if _, ok := storage.data[objectKey]; ok == true {
+		return ObjectExists{bucket: bucket, key: key}
+	}
 	var bytesBuffer bytes.Buffer
 	newObject := storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
@@ -60,6 +72,7 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) {
 		newObject.data = bytesBuffer.Bytes()
 	}
 	storage.data[objectKey] = newObject
+	return nil
 }
 
 func (storage *Storage) ListObjects(bucket, prefix string, count int) []ObjectMetadata {
