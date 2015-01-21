@@ -20,9 +20,9 @@ build-utils:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha512/
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
 
-build-os:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/sysctl
+#build-os:
+#	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi
+#	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/sysctl
 
 build-storage:
 	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal lib
@@ -31,7 +31,7 @@ build-storage:
 build-minioapi:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/webapi/minioapi
 
-cover: build-storage build-os build-utils build-minioapi
+cover: build-storage build-utils build-minioapi
 
 install: cover
 
