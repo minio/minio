@@ -2,13 +2,14 @@ package storage
 
 import (
 	"bytes"
-	"errors"
 	"io"
 )
 
 type Storage struct {
 	data map[string][]byte
 }
+
+type ObjectMetadata struct{}
 
 type GenericError struct {
 	bucket string
@@ -42,6 +43,10 @@ func (storage *Storage) StoreObject(bucket string, object string, data io.Reader
 	}
 }
 
+func (storage *Storage) ListObjects(bucket, prefix string, count int) []ObjectMetadata {
+	return []ObjectMetadata{}
+}
+
 func Start() (chan<- string, <-chan error, *Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
@@ -52,8 +57,5 @@ func Start() (chan<- string, <-chan error, *Storage) {
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error) {
-	errorChannel <- errors.New("STORAGE MSG")
-	errorChannel <- errors.New("STORAGE MSG")
-	errorChannel <- errors.New("STORAGE MSG")
 	close(errorChannel)
 }
