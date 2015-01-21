@@ -55,6 +55,11 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	metadata := server.storage.GetObjectMetadata(bucket, object)
+	lastModifiedTime := time.Unix(metadata.SecCreated, 0)
+	lastModified := lastModifiedTime.Format(time.RFC1123)
+	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("Last-Modified", lastModified)
 	_, err := server.storage.CopyObjectToWriter(w, bucket, object)
 	switch err := err.(type) {
 	case nil: // success

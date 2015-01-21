@@ -150,3 +150,9 @@ func isValidBucket(bucket string) bool {
 	}
 	return valid
 }
+
+func (storage *Storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
+	objectKey := bucket + ":" + key
+
+	return storage.objectdata[objectKey].metadata
+}
