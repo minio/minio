@@ -1,37 +1,37 @@
 package storage
 
 type GenericError struct {
-	bucket string
-	path   string
+	Bucket string
+	Path   string
 }
 
 type ObjectExists struct {
-	bucket string
-	key    string
+	Bucket string
+	Key    string
 }
 
 type BucketNameInvalid struct {
-	bucket string
+	Bucket string
 }
 
 type BucketExists struct {
-	bucket string
+	Bucket string
 }
 
 type ObjectNotFound GenericError
 
 func (self ObjectNotFound) Error() string {
-	return "Object not Found: " + self.bucket + "#" + self.path
+	return "Object not Found: " + self.Bucket + "#" + self.Path
 }
 
 func (self ObjectExists) Error() string {
-	return "Object exists: " + self.bucket + "#" + self.key
+	return "Object exists: " + self.Bucket + "#" + self.Key
 }
 
 func (self BucketNameInvalid) Error() string {
-	return "Bucket name invalid: " + self.bucket
+	return "Bucket name invalid: " + self.Bucket
 }
 
 func (self BucketExists) Error() string {
-	return "Bucket exists: " + self.bucket
+	return "Bucket exists: " + self.Bucket
 }

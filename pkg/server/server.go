@@ -21,7 +21,8 @@ import (
 	"reflect"
 
 	"github.com/minio-io/minio/pkg/httpserver"
-	storageModule "github.com/minio-io/minio/pkg/storage"
+	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/storage/inmemory"
 	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
 
@@ -29,7 +30,11 @@ func Start() {
 	var ctrlChans []chan<- string
 	var statusChans []<-chan error
 
-	ctrlChan, statusChan, storage := storageModule.Start()
+	var ctrlChan chan<- string
+	var statusChan <-chan error
+	var storage mstorage.Storage
+
+	ctrlChan, statusChan, storage = inmemory.Start()
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
