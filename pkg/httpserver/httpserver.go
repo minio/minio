@@ -19,6 +19,7 @@ package httpserver
 import (
 	"log"
 	"net/http"
+	"time"
 )
 
 func Start(handler http.Handler, address string) (chan<- string, <-chan error) {
@@ -30,7 +31,15 @@ func Start(handler http.Handler, address string) (chan<- string, <-chan error) {
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, address string) {
 	log.Println("Starting HTTP Server on " + address)
-	err := http.ListenAndServe(address, router)
+	// Minio server config
+	server := &http.Server{
+		Addr:           address,
+		Handler:        router,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	err := server.ListenAndServe()
 	errorChannel <- err
 	close(errorChannel)
 }

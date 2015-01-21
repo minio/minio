@@ -20,14 +20,24 @@ import (
 	"encoding/xml"
 )
 
-type ListResponse struct {
-	XMLName      xml.Name `xml:"ListBucketResult"`
-	Name         string   `xml:"Name"`
-	storagerefix string
-	Marker       string
-	MaxKeys      int
-	IsTruncated  bool
-	Contents     []Content `xml:"Contents",innerxml`
+type ObjectListResponse struct {
+	XMLName     xml.Name `xml:"ListBucketResult"`
+	Name        string   `xml:"Name"`
+	Marker      string
+	MaxKeys     int
+	IsTruncated bool
+	Contents    []Content `xml:"Contents",innerxml`
+}
+
+type BucketListResponse struct {
+	XMLName xml.Name `xml:"ListAllMyBucketsResult"`
+	Owner   Owner
+	Buckets []Bucket `xml:"Buckets",innerxml`
+}
+
+type Bucket struct {
+	Name         string
+	CreationDate string
 }
 
 type Content struct {
