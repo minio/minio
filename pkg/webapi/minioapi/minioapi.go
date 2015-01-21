@@ -29,14 +29,14 @@ import (
 )
 
 type minioApi struct {
-	storage *mstorage.Storage
+	storage mstorage.Storage
 }
 
 type encoder interface {
 	Encode(v interface{}) error
 }
 
-func HttpHandler(storage *mstorage.Storage) http.Handler {
+func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux := mux.NewRouter()
 	api := minioApi{
 		storage: storage,
