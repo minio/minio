@@ -115,8 +115,12 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
 }
 
-func (storage *storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
+func (storage *storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMetadata, error) {
 	objectKey := bucket + ":" + key
 
-	return storage.objectdata[objectKey].metadata
+	if object, ok := storage.objectdata[objectKey]; ok == true {
+		return object.metadata, nil
+	} else {
+		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Path: key}
+	}
 }

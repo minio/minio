@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -47,6 +48,7 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
+	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	return mux
 }
 
@@ -55,11 +57,12 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	metadata := server.storage.GetObjectMetadata(bucket, object)
+	metadata, err := server.storage.GetObjectMetadata(bucket, object)
 	lastModified := metadata.Created.Format(time.RFC1123)
 	w.Header().Set("ETag", metadata.ETag)
 	w.Header().Set("Last-Modified", lastModified)
-	_, err := server.storage.CopyObjectToWriter(w, bucket, object)
+	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
+	w.Header().Set("Content-Type", "text/plain")
 	switch err := err.(type) {
 	case nil: // success
 		{
@@ -76,6 +79,33 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
+	if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+}
+
+func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	metadata, err := server.storage.GetObjectMetadata(bucket, object)
+	switch err := err.(type) {
+	case nil: // success
+	case mstorage.ObjectNotFound:
+		log.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	default:
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	lastModified := metadata.Created.Format(time.RFC1123)
+	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
