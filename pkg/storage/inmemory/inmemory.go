@@ -12,7 +12,7 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
-type Storage struct {
+type storage struct {
 	bucketdata map[string]storedBucket
 	objectdata map[string]storedObject
 }
@@ -28,7 +28,7 @@ type storedObject struct {
 	data     []byte
 }
 
-func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// TODO synchronize access
 	// get object
 	key := bucket + ":" + object
@@ -41,7 +41,7 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 }
 
-func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) error {
+func (storage *storage) StoreObject(bucket string, key string, data io.Reader) error {
 	objectKey := bucket + ":" + key
 	if _, ok := storage.objectdata[objectKey]; ok == true {
 		return mstorage.ObjectExists{Bucket: bucket, Key: key}
@@ -63,7 +63,7 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) e
 	return nil
 }
 
-func (storage *Storage) StoreBucket(bucketName string) error {
+func (storage *storage) StoreBucket(bucketName string) error {
 	if !mstorage.IsValidBucket(bucketName) {
 		return mstorage.BucketNameInvalid{Bucket: bucketName}
 	}
@@ -81,7 +81,7 @@ func (storage *Storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
-func (storage *Storage) ListObjects(bucket, prefix string, count int) []mstorage.ObjectMetadata {
+func (storage *storage) ListObjects(bucket, prefix string, count int) []mstorage.ObjectMetadata {
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	for key, object := range storage.objectdata {
@@ -92,7 +92,7 @@ func (storage *Storage) ListObjects(bucket, prefix string, count int) []mstorage
 	return results
 }
 
-func (storage *Storage) ListBuckets(prefix string) []mstorage.BucketMetadata {
+func (storage *storage) ListBuckets(prefix string) []mstorage.BucketMetadata {
 	// TODO prefix handling
 	var results []mstorage.BucketMetadata
 	for _, bucket := range storage.bucketdata {
@@ -101,11 +101,11 @@ func (storage *Storage) ListBuckets(prefix string) []mstorage.BucketMetadata {
 	return results
 }
 
-func Start() (chan<- string, <-chan error, *Storage) {
+func Start() (chan<- string, <-chan error, *storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, &Storage{
+	return ctrlChannel, errorChannel, &storage{
 		bucketdata: make(map[string]storedBucket),
 		objectdata: make(map[string]storedObject),
 	}
@@ -115,7 +115,7 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
 }
 
-func (storage *Storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
+func (storage *storage) GetObjectMetadata(bucket, key string) mstorage.ObjectMetadata {
 	objectKey := bucket + ":" + key
 
 	return storage.objectdata[objectKey].metadata
