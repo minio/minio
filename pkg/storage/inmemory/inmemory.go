@@ -52,10 +52,10 @@ func (storage *Storage) StoreObject(bucket string, key string, data io.Reader) e
 		size := bytesBuffer.Len()
 		etag := fmt.Sprintf("%x", sha256.Sum256(bytesBuffer.Bytes()))
 		newObject.metadata = mstorage.ObjectMetadata{
-			Key:        key,
-			SecCreated: time.Now().Unix(),
-			Size:       size,
-			ETag:       etag,
+			Key:     key,
+			Created: time.Now(),
+			Size:    size,
+			ETag:    etag,
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}
@@ -74,7 +74,7 @@ func (storage *Storage) StoreBucket(bucketName string) error {
 	newBucket := storedBucket{}
 	newBucket.metadata = mstorage.BucketMetadata{
 		Name:    bucketName,
-		Created: time.Now().Unix(),
+		Created: time.Now(),
 	}
 	log.Println(bucketName)
 	storage.bucketdata[bucketName] = newBucket
