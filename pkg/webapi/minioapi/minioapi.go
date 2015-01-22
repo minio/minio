@@ -56,8 +56,7 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	object := vars["object"]
 
 	metadata := server.storage.GetObjectMetadata(bucket, object)
-	lastModifiedTime := time.Unix(metadata.SecCreated, 0)
-	lastModified := lastModifiedTime.Format(time.RFC1123)
+	lastModified := metadata.Created.Format(time.RFC1123)
 	w.Header().Set("ETag", metadata.ETag)
 	w.Header().Set("Last-Modified", lastModified)
 	_, err := server.storage.CopyObjectToWriter(w, bucket, object)
@@ -205,7 +204,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	for _, object := range objects {
 		content := Content{
 			Key:          object.Key,
-			LastModified: formatDate(object.SecCreated),
+			LastModified: formatDate(object.Created),
 			ETag:         object.ETag,
 			Size:         object.Size,
 			StorageClass: "STANDARD",
@@ -222,7 +221,6 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	return
 }
 
-func formatDate(sec int64) string {
-	timeStamp := time.Unix(sec, 0)
-	return timeStamp.Format("2006-01-02T15:04:05.000Z")
+func formatDate(t time.Time) string {
+	return t.Format("2006-01-02T15:04:05.000Z")
 }

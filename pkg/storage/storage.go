@@ -19,6 +19,7 @@ package storage
 import (
 	"io"
 	"regexp"
+	"time"
 )
 
 type Storage interface {
@@ -35,14 +36,14 @@ type Storage interface {
 
 type BucketMetadata struct {
 	Name    string
-	Created int64
+	Created time.Time
 }
 
 type ObjectMetadata struct {
-	Key        string
-	SecCreated int64
-	Size       int
-	ETag       string
+	Key     string
+	Created time.Time
+	Size    int
+	ETag    string
 }
 
 func IsValidBucket(bucket string) bool {
