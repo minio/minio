@@ -175,7 +175,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
 	if contentType == xmlType {
-		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
+		w.Header().Set("Content-Type", "application/xml")
 		encoder = xml.NewEncoder(&bytesBuffer)
 	} else if contentType == jsonType {
 		w.Header().Set("Content-Type", "application/json")
