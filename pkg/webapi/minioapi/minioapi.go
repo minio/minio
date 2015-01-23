@@ -157,7 +157,6 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	contentType := "xml"
-
 	if _, ok := req.Header["Accept"]; ok {
 		if req.Header["Accept"][0] == "application/json" {
 			contentType = "json"
@@ -176,8 +175,8 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
 		encoder = xml.NewEncoder(&bytesBuffer)
 	}
-	encoder.Encode(response)
 
+	encoder.Encode(response)
 	w.Write(bytesBuffer.Bytes())
 }
 
@@ -228,7 +227,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketLi
 }
 
 func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata) (data ObjectListResponse) {
-	contents := []Content{}
+	var contents []*Item
 
 	owner := Owner{
 		ID:          "minio",
@@ -236,7 +235,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	}
 
 	for _, object := range objects {
-		content := Content{
+		content := &Item{
 			Key:          object.Key,
 			LastModified: formatDate(object.Created),
 			ETag:         object.ETag,
@@ -249,7 +248,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	data = ObjectListResponse{
 		Name:        bucket,
 		Contents:    contents,
-		MaxKeys:     len(objects),
+		MaxKeys:     MAX_OBJECT_LIST,
 		IsTruncated: false,
 	}
 	return

@@ -20,13 +20,17 @@ import (
 	"encoding/xml"
 )
 
+const (
+	MAX_OBJECT_LIST = 1000
+)
+
 type ObjectListResponse struct {
 	XMLName     xml.Name `xml:"ListBucketResult"`
-	Name        string   `xml:"Name"`
+	Name        string
 	Marker      string
 	MaxKeys     int
 	IsTruncated bool
-	Contents    []Content `xml:"Contents",innerxml`
+	Contents    []*Item `xml:"Contents",innerxml`
 }
 
 type BucketListResponse struct {
@@ -42,7 +46,7 @@ type Bucket struct {
 	CreationDate string
 }
 
-type Content struct {
+type Item struct {
 	Key          string
 	LastModified string
 	ETag         string
