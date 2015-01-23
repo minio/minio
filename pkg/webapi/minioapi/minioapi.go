@@ -115,9 +115,12 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	if ok == false {
 		prefix = ""
 	}
+
 	contentType := "xml"
-	if req.Header["Accept"][0] == "application/json" {
-		contentType = "json"
+	if _, ok := req.Header["Accept"]; ok {
+		if req.Header["Accept"][0] == "application/json" {
+			contentType = "json"
+		}
 	}
 	buckets := server.storage.ListBuckets(prefix)
 	response := generateBucketsListResult(buckets)
@@ -128,13 +131,11 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		w.Header().Set("Content-Type", "application/json")
 		encoder = json.NewEncoder(&bytesBuffer)
 	} else {
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
 		encoder = xml.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
-
 	w.Write(bytesBuffer.Bytes())
-
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
@@ -157,8 +158,10 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 
 	contentType := "xml"
 
-	if req.Header["Accept"][0] == "application/json" {
-		contentType = "json"
+	if _, ok := req.Header["Accept"]; ok {
+		if req.Header["Accept"][0] == "application/json" {
+			contentType = "json"
+		}
 	}
 
 	objects := server.storage.ListObjects(bucket, prefix, 1000)
@@ -170,7 +173,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		w.Header().Set("Content-Type", "application/json")
 		encoder = json.NewEncoder(&bytesBuffer)
 	} else {
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
 		encoder = xml.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
@@ -202,7 +205,7 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketListResponse) {
-	listbuckets := []Bucket{}
+	var listbuckets []*Bucket
 
 	owner := Owner{
 		ID:          "minio",
@@ -210,7 +213,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketLi
 	}
 
 	for _, bucket := range buckets {
-		listbucket := Bucket{
+		listbucket := &Bucket{
 			Name:         bucket.Name,
 			CreationDate: formatDate(bucket.Created),
 		}
@@ -218,9 +221,9 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketLi
 	}
 
 	data = BucketListResponse{
-		Owner:   owner,
-		Buckets: listbuckets,
+		Owner: owner,
 	}
+	data.Buckets.Bucket = listbuckets
 	return
 }
 

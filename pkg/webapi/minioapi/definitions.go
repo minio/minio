@@ -32,7 +32,9 @@ type ObjectListResponse struct {
 type BucketListResponse struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult"`
 	Owner   Owner
-	Buckets []Bucket `xml:"Buckets",innerxml`
+	Buckets struct {
+		Bucket []*Bucket
+	} `xml:"Buckets",innerxml` // Buckets are nested
 }
 
 type Bucket struct {
