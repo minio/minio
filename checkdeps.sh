@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 echo -n "Checking if proper environment variables are set.. "
 
