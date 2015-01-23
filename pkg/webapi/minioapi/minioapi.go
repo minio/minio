@@ -29,10 +29,18 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
+type contentType int
+
+const (
+	xmlType  contentType = iota
+	jsonType             = iota
+)
+
 type minioApi struct {
 	storage mstorage.Storage
 }
 
+// No encoder interface exists, so we create one.
 type encoder interface {
 	Encode(v interface{}) error
 }
@@ -53,21 +61,28 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	return mux
 }
 
+func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
+	lastModified := metadata.Created.Format(time.RFC1123)
+	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
+	w.Header().Set("Content-Type", "text/plain")
+}
+
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
 	metadata, err := server.storage.GetObjectMetadata(bucket, object)
-	lastModified := metadata.Created.Format(time.RFC1123)
-	w.Header().Set("ETag", metadata.ETag)
-	w.Header().Set("Last-Modified", lastModified)
-	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
-	w.Header().Set("Content-Type", "text/plain")
 	switch err := err.(type) {
 	case nil: // success
 		{
 			log.Println("Found: " + bucket + "#" + object)
+			writeObjectHeaders(w, metadata)
+			if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
+				log.Println(err)
+			}
 		}
 	case mstorage.ObjectNotFound:
 		{
@@ -80,9 +95,6 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
-	if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-	}
 }
 
 func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Request) {
@@ -92,21 +104,15 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 
 	metadata, err := server.storage.GetObjectMetadata(bucket, object)
 	switch err := err.(type) {
-	case nil: // success
+	case nil:
+		writeObjectHeaders(w, metadata)
 	case mstorage.ObjectNotFound:
 		log.Println(err)
 		w.WriteHeader(http.StatusNotFound)
-		return
 	default:
 		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
-		return
 	}
-	lastModified := metadata.Created.Format(time.RFC1123)
-	w.Header().Set("ETag", metadata.ETag)
-	w.Header().Set("Last-Modified", lastModified)
-	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
-	w.Header().Set("Content-Type", "text/plain")
 }
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
@@ -116,10 +122,10 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		prefix = ""
 	}
 
-	contentType := "xml"
+	contentType := xmlType
 	if _, ok := req.Header["Accept"]; ok {
 		if req.Header["Accept"][0] == "application/json" {
-			contentType = "json"
+			contentType = jsonType
 		}
 	}
 	buckets := server.storage.ListBuckets(prefix)
@@ -127,12 +133,12 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
-	if contentType == "json" {
+	if contentType == xmlType {
+		w.Header().Set("Content-Type", "application/xml")
+		encoder = xml.NewEncoder(&bytesBuffer)
+	} else if contentType == jsonType {
 		w.Header().Set("Content-Type", "application/json")
 		encoder = json.NewEncoder(&bytesBuffer)
-	} else {
-		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
-		encoder = xml.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
 	w.Write(bytesBuffer.Bytes())
@@ -156,10 +162,10 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		prefix = ""
 	}
 
-	contentType := "xml"
+	contentType := xmlType
 	if _, ok := req.Header["Accept"]; ok {
 		if req.Header["Accept"][0] == "application/json" {
-			contentType = "json"
+			contentType = jsonType
 		}
 	}
 
@@ -168,12 +174,12 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
-	if contentType == "json" {
-		w.Header().Set("Content-Type", "application/json")
-		encoder = json.NewEncoder(&bytesBuffer)
-	} else {
+	if contentType == xmlType {
 		w.Header().Set("Content-Type", `xml version="1.0" encoding="UTF-8"`)
 		encoder = xml.NewEncoder(&bytesBuffer)
+	} else if contentType == jsonType {
+		w.Header().Set("Content-Type", "application/json")
+		encoder = json.NewEncoder(&bytesBuffer)
 	}
 
 	encoder.Encode(response)
