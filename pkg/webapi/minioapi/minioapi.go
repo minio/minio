@@ -32,8 +32,8 @@ import (
 type contentType int
 
 const (
-	xmlType  contentType = iota
-	jsonType             = iota
+	xmlType contentType = iota
+	jsonType
 )
 
 const (
@@ -63,14 +63,6 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 	return mux
-}
-
-func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
-	lastModified := metadata.Created.Format(time.RFC1123)
-	w.Header().Set("ETag", metadata.ETag)
-	w.Header().Set("Last-Modified", lastModified)
-	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
-	w.Header().Set("Content-Type", "text/plain")
 }
 
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
@@ -121,8 +113,9 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	prefix, ok := vars["prefix"]
-	if ok == false {
+	var prefix string
+	var ok bool
+	if prefix, ok = vars["prefix"]; ok == false {
 		prefix = ""
 	}
 
@@ -150,17 +143,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-
-	//delimiter, ok := vars["delimiter"]
-	//encodingType, ok := vars["encoding-type"]
-	//marker, ok := vars["marker"]
-	//maxKeys, ok := vars["max-keys"]
 	bucket := vars["bucket"]
-	//bucket, ok := vars["bucket"]
-	//if ok == false {
-	//	w.WriteHeader(http.StatusBadRequest)
-	//	return
-	//}
 	prefix, ok := vars["prefix"]
 	if ok == false {
 		prefix = ""
@@ -211,6 +194,16 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		w.Write([]byte(err.Error()))
 		return
 	}
+}
+
+// Helpers
+
+func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
+	lastModified := metadata.Created.Format(time.RFC1123)
+	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketListResponse) {
