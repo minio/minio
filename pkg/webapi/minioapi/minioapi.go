@@ -36,6 +36,10 @@ const (
 	jsonType             = iota
 )
 
+const (
+	dateFormat = "2006-01-02T15:04:05.000Z"
+)
+
 type minioApi struct {
 	storage mstorage.Storage
 }
@@ -220,7 +224,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketLi
 	for _, bucket := range buckets {
 		listbucket := &Bucket{
 			Name:         bucket.Name,
-			CreationDate: formatDate(bucket.Created),
+			CreationDate: bucket.Created.Format(dateFormat),
 		}
 		listbuckets = append(listbuckets, listbucket)
 	}
@@ -243,7 +247,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	for _, object := range objects {
 		content := &Item{
 			Key:          object.Key,
-			LastModified: formatDate(object.Created),
+			LastModified: object.Created.Format(dateFormat),
 			ETag:         object.ETag,
 			Size:         object.Size,
 			StorageClass: "STANDARD",
@@ -258,8 +262,4 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 		IsTruncated: false,
 	}
 	return
-}
-
-func formatDate(t time.Time) string {
-	return t.Format("2006-01-02T15:04:05.000Z")
 }
