@@ -1,7 +1,6 @@
 #GOPATH := $(CURDIR)/tmp/gopath
 MAKE_OPTIONS := -s
 ARCH := $(shell uname -s)
-GCCVERSIONGTEQ4 := $(shell expr `gcc -dumpversion | cut -f1 -d.` \>= 4)
 
 all: getdeps install
 
@@ -20,13 +19,7 @@ build-utils:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha1
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha256
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha512
-ifeq ($(ARCH), Darwin)
-ifeq ($(GCCVERSIONGTEQ4), "1")
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
-endif
-else
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
-endif
 
 #build-os:
 #	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi

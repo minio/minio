@@ -50,9 +50,9 @@ This installation document assumes Mac OSX Yosemite 10.10 or later on x86-64 pla
 $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
-##### Install Git and GCC
+##### Install Git
 ```sh
-$ brew install git gcc
+$ brew install git
 ```
 
 ##### Install YASM
@@ -64,7 +64,6 @@ $ brew install yasm
 ```
 
 ##### Install Go 1.4+
-
 On MacOSX ``brew.sh`` is the best way to install golang
 
 For example:
