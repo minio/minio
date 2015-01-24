@@ -40,6 +40,7 @@ type BucketMetadata struct {
 }
 
 type ObjectMetadata struct {
+	Bucket  string
 	Key     string
 	Created time.Time
 	Size    int

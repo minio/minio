@@ -10,15 +10,15 @@ type ObjectExists struct {
 	Key    string
 }
 
-type BucketNameInvalid struct {
-	Bucket string
-}
-
-type BucketExists struct {
-	Bucket string
-}
-
 type ObjectNotFound GenericError
+
+type GenericBucketError struct {
+	Bucket string
+}
+
+type BucketNameInvalid GenericBucketError
+type BucketExists GenericBucketError
+type BucketNotFound GenericBucketError
 
 func (self ObjectNotFound) Error() string {
 	return "Object not Found: " + self.Bucket + "#" + self.Path
@@ -34,4 +34,8 @@ func (self BucketNameInvalid) Error() string {
 
 func (self BucketExists) Error() string {
 	return "Bucket exists: " + self.Bucket
+}
+
+func (self BucketNotFound) Error() string {
+	return "Bucket not Found: " + self.Bucket
 }
