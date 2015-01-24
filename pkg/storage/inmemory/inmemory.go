@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
@@ -43,15 +42,21 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 
 func (storage *storage) StoreObject(bucket string, key string, data io.Reader) error {
 	objectKey := bucket + ":" + key
+
+	if _, ok := storage.bucketdata[bucket]; ok == false {
+		return mstorage.BucketNotFound{Bucket: bucket}
+	}
+
 	if _, ok := storage.objectdata[objectKey]; ok == true {
 		return mstorage.ObjectExists{Bucket: bucket, Key: key}
 	}
 	var bytesBuffer bytes.Buffer
-	newObject := storedObject{}
+	var newObject = storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
 		size := bytesBuffer.Len()
 		etag := fmt.Sprintf("%x", sha256.Sum256(bytesBuffer.Bytes()))
 		newObject.metadata = mstorage.ObjectMetadata{
+			Bucket:  bucket,
 			Key:     key,
 			Created: time.Now(),
 			Size:    size,
@@ -71,13 +76,13 @@ func (storage *storage) StoreBucket(bucketName string) error {
 	if _, ok := storage.bucketdata[bucketName]; ok == true {
 		return mstorage.BucketExists{Bucket: bucketName}
 	}
-	newBucket := storedBucket{}
-	newBucket.metadata = mstorage.BucketMetadata{
-		Name:    bucketName,
-		Created: time.Now(),
-	}
-	log.Println(bucketName)
+
+	var newBucket = storedBucket{}
+	newBucket.metadata = mstorage.BucketMetadata{}
+	newBucket.metadata.Name = bucketName
+	newBucket.metadata.Created = time.Now()
 	storage.bucketdata[bucketName] = newBucket
+
 	return nil
 }
 
@@ -85,8 +90,10 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) []mstorage
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	for key, object := range storage.objectdata {
-		if strings.HasPrefix(key, bucket+":") {
-			results = append(results, object.metadata)
+		if bucket == object.metadata.Bucket {
+			if strings.HasPrefix(key, bucket+":") {
+				results = append(results, object.metadata)
+			}
 		}
 	}
 	return results

@@ -51,9 +51,8 @@ type encoder interface {
 
 func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux := mux.NewRouter()
-	api := minioApi{
-		storage: storage,
-	}
+	var api = minioApi{}
+	api.storage = storage
 
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
@@ -61,6 +60,7 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
+
 	return mux
 }
 
@@ -112,9 +112,8 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	var prefix string
-	var ok bool
-	if prefix, ok = vars["prefix"]; ok == false {
+	prefix, ok := vars["prefix"]
+	if !ok {
 		prefix = ""
 	}
 
@@ -144,7 +143,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	prefix, ok := vars["prefix"]
-	if ok == false {
+	if !ok {
 		prefix = ""
 	}
 
@@ -195,8 +194,7 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-// Helpers
-
+// Write Object Header helper
 func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	w.Header().Set("ETag", metadata.ETag)
@@ -205,53 +203,48 @@ func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata)
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-func generateBucketsListResult(buckets []mstorage.BucketMetadata) (data BucketListResponse) {
+func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResponse {
 	var listbuckets []*Bucket
+	var data = BucketListResponse{}
+	var owner = Owner{}
 
-	owner := Owner{
-		ID:          "minio",
-		DisplayName: "minio",
-	}
+	owner.ID = "minio"
+	owner.DisplayName = "minio"
 
 	for _, bucket := range buckets {
-		listbucket := &Bucket{
-			Name:         bucket.Name,
-			CreationDate: bucket.Created.Format(dateFormat),
-		}
+		var listbucket = &Bucket{}
+		listbucket.Name = bucket.Name
+		listbucket.CreationDate = bucket.Created.Format(dateFormat)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
-	data = BucketListResponse{
-		Owner: owner,
-	}
+	data.Owner = owner
 	data.Buckets.Bucket = listbuckets
-	return
+
+	return data
 }
 
-func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata) (data ObjectListResponse) {
+func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata) ObjectListResponse {
 	var contents []*Item
+	var owner = Owner{}
+	var data = ObjectListResponse{}
 
-	owner := Owner{
-		ID:          "minio",
-		DisplayName: "minio",
-	}
+	owner.ID = "minio"
+	owner.DisplayName = "minio"
 
 	for _, object := range objects {
-		content := &Item{
-			Key:          object.Key,
-			LastModified: object.Created.Format(dateFormat),
-			ETag:         object.ETag,
-			Size:         object.Size,
-			StorageClass: "STANDARD",
-			Owner:        owner,
-		}
+		var content = &Item{}
+		content.Key = object.Key
+		content.LastModified = object.Created.Format(dateFormat)
+		content.ETag = object.ETag
+		content.Size = object.Size
+		content.StorageClass = "STANDARD"
+		content.Owner = owner
 		contents = append(contents, content)
 	}
-	data = ObjectListResponse{
-		Name:        bucket,
-		Contents:    contents,
-		MaxKeys:     MAX_OBJECT_LIST,
-		IsTruncated: false,
-	}
-	return
+	data.Name = bucket
+	data.Contents = contents
+	data.MaxKeys = MAX_OBJECT_LIST
+	data.IsTruncated = false
+	return data
 }
