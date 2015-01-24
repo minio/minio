@@ -23,7 +23,7 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 | ------------- | ------------- |
 | Linux  | Yes  |
 | Windows | Not yet |
-| Mac OSX | Yes(with GCC) |
+| Mac OSX | Yes |
 
 ### Supported architectures
 
