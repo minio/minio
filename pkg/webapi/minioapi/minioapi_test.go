@@ -21,7 +21,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/minio-io/minio/pkg/storage/inmemory"
 	. "gopkg.in/check.v1"
@@ -62,6 +64,10 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 
+	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	c.Assert(err, IsNil)
+	verifyHeaders(c, response.Header, metadata.Created, 0, "text/plain", metadata.ETag)
+
 	// TODO Test Headers
 }
 
@@ -83,7 +89,9 @@ func (s *MySuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello world")))
 
-	// TODO Test Headers
+	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	c.Assert(err, IsNil)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "text/plain", metadata.ETag)
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
@@ -107,30 +115,175 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 	// TODO Test Headers
 
-	// test object 1
+	//// test object 1
+
+	// get object
 	response, err = http.Get(testServer.URL + "/bucket/object1")
 	c.Assert(err, IsNil)
+
+	// get metadata
+	metadata, err := storage.GetObjectMetadata("bucket", "object1")
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify headers
+	verifyHeaders(c, response.Header, metadata.Created, len("hello one"), "text/plain", metadata.ETag)
+	c.Assert(err, IsNil)
+
+	// verify response data
 	responseBody, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
-	// TODO Test Headers
 
 	// test object 2
+	// get object
 	response, err = http.Get(testServer.URL + "/bucket/object2")
 	c.Assert(err, IsNil)
+
+	// get metadata
+	metadata, err = storage.GetObjectMetadata("bucket", "object2")
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify headers
+	verifyHeaders(c, response.Header, metadata.Created, len("hello two"), "text/plain", metadata.ETag)
+	c.Assert(err, IsNil)
+
+	// verify response data
 	responseBody, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello two")))
-	// TODO Test Headers
 
 	// test object 3
+	// get object
 	response, err = http.Get(testServer.URL + "/bucket/object3")
 	c.Assert(err, IsNil)
+
+	// get metadata
+	metadata, err = storage.GetObjectMetadata("bucket", "object3")
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify headers
+	verifyHeaders(c, response.Header, metadata.Created, len("hello three"), "text/plain", metadata.ETag)
+	c.Assert(err, IsNil)
+
+	// verify object
 	responseBody, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
-	// TODO Test Headers
 }
+
+func (s *MySuite) TestHeader(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	response, err := http.Get(testServer.URL + "/bucket/object")
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
+
+	buffer := bytes.NewBufferString("hello world")
+	storage.StoreBucket("bucket")
+	storage.StoreObject("bucket", "object", buffer)
+
+	response, err = http.Get(testServer.URL + "/bucket/object")
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	c.Assert(err, IsNil)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "text/plain", metadata.ETag)
+}
+
+func (s *MySuite) TestPutBucket(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	buckets := storage.ListBuckets("bucket")
+	c.Assert(len(buckets), Equals, 0)
+
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// check bucket exists
+	buckets = storage.ListBuckets("bucket")
+	c.Assert(len(buckets), Equals, 1)
+	c.Assert(buckets[0].Name, Equals, "bucket")
+}
+
+func (s *MySuite) TestPutObject(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	objects := storage.ListObjects("bucket", "", 1000)
+	c.Assert(len(objects), Equals, 0)
+
+	date1 := time.Now()
+
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	date2 := time.Now()
+
+	objects = storage.ListObjects("bucket", "", 1000)
+	c.Assert(len(objects), Equals, 1)
+
+	var writer bytes.Buffer
+
+	storage.CopyObjectToWriter(&writer, "bucket", "two")
+
+	c.Assert(bytes.Equal(writer.Bytes(), []byte("hello world")), Equals, true)
+
+	metadata, err := storage.GetObjectMetadata("bucket", "two")
+	c.Assert(err, IsNil)
+	lastModified := metadata.Created
+
+	c.Assert(date1.Before(lastModified), Equals, true)
+	c.Assert(lastModified.Before(date2), Equals, true)
+}
+
+func (s *MySuite) TestListBuckets(c *C) {
+	// TODO Implement
+}
+
+func (s *MySuite) TestListObjects(c *C) {
+	// TODO Implement
+}
+
+func (s *MySuite) TestShouldNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+	// TODO Implement
+}
+
+func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
+	// Verify date
+	c.Assert(header["Last-Modified"][0], Equals, date.Format(time.RFC1123))
+
+	// verify size
+	c.Assert(header["Content-Length"][0], Equals, strconv.Itoa(size))
+
+	// verify content type
+	c.Assert(header["Content-Type"][0], Equals, contentType)
+
+	// verify etag
+	c.Assert(header["Etag"][0], Equals, etag)
+}
+
+// Test date format
+
+// Test HEAD
