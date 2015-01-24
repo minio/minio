@@ -231,11 +231,19 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	date1 := time.Now()
 
-	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
+	// Put Bucket before - Put Object into a bucket
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
 	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
