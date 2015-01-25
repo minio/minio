@@ -153,7 +153,12 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			contentType = jsonType
 		}
 	}
-	buckets := server.storage.ListBuckets(prefix)
+	buckets, err := server.storage.ListBuckets(prefix)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	response := generateBucketsListResult(buckets)
 
 	var bytesBuffer bytes.Buffer
@@ -189,7 +194,12 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	}
 
-	objects, isTruncated := server.storage.ListObjects(bucket, prefix, 1000)
+	objects, isTruncated, err := server.storage.ListObjects(bucket, prefix, 1000)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	response := generateObjectsListResult(bucket, objects, isTruncated)
 
 	var bytesBuffer bytes.Buffer

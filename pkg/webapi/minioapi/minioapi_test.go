@@ -214,8 +214,9 @@ func (s *MySuite) TestPutBucket(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	buckets := storage.ListBuckets("bucket")
+	buckets, err := storage.ListBuckets("bucket")
 	c.Assert(len(buckets), Equals, 0)
+	c.Assert(err, IsNil)
 
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
@@ -226,8 +227,9 @@ func (s *MySuite) TestPutBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// check bucket exists
-	buckets = storage.ListBuckets("bucket")
+	buckets, err = storage.ListBuckets("bucket")
 	c.Assert(len(buckets), Equals, 1)
+	c.Assert(err, IsNil)
 	c.Assert(buckets[0].Name, Equals, "bucket")
 }
 
@@ -237,8 +239,10 @@ func (s *MySuite) TestPutObject(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	objects, _ := storage.ListObjects("bucket", "", 1000)
+	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 0)
+	c.Assert(isTruncated, Equals, false)
+	c.Assert(err, IsNil)
 
 	date1 := time.Now()
 
@@ -260,8 +264,10 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	date2 := time.Now()
 
-	objects, _ = storage.ListObjects("bucket", "", 1000)
+	objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 1)
+	c.Assert(isTruncated, Equals, false)
+	c.Assert(err, IsNil)
 
 	var writer bytes.Buffer
 
