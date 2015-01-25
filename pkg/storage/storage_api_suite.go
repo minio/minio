@@ -61,22 +61,25 @@ func testPaging(c *C, create func() Storage) {
 	storage := create()
 	storage.StoreBucket("bucket")
 	storage.ListObjects("bucket", "", 1000)
-	objects, isTruncated := storage.ListObjects("bucket", "", 1000)
+	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 0)
 	c.Assert(isTruncated, Equals, false)
+	c.Assert(err, IsNil)
 	for i := 1; i <= 1000; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
-		objects, isTruncated = storage.ListObjects("bucket", "", 1000)
+		objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
 		c.Assert(len(objects), Equals, i)
 		c.Assert(isTruncated, Equals, false)
+		c.Assert(err, IsNil)
 	}
 	for i := 1001; i <= 2000; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
-		objects, isTruncated = storage.ListObjects("bucket", "", 1000)
+		objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
 		c.Assert(len(objects), Equals, 1000)
 		c.Assert(isTruncated, Equals, true)
+		c.Assert(err, IsNil)
 	}
 }
 
