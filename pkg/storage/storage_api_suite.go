@@ -57,6 +57,20 @@ func testMultipleObjectCreation(c *C, create func() Storage) {
 }
 
 func testPaging(c *C, create func() Storage) {
+	storage := create()
+	storage.StoreBucket("bucket")
+	storage.ListObjects("bucket", "", 1000)
+	c.Assert(len(storage.ListObjects("bucket", "", 1000)), Equals, 0)
+	for i := 1; i <= 1000; i++ {
+		key := "obj" + strconv.Itoa(i)
+		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
+		c.Assert(len(storage.ListObjects("bucket", "", i)), Equals, i)
+	}
+	for i := 1001; i <= 2000; i++ {
+		key := "obj" + strconv.Itoa(i)
+		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
+		c.Assert(len(storage.ListObjects("bucket", "", 1000)), Equals, 1000)
+	}
 }
 
 func testObjectOverwriteFails(c *C, create func() Storage) {
