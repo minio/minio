@@ -174,6 +174,17 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
 }
 
+func (s *MySuite) TestNotImplemented(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	response, err := http.Get(testServer.URL + "/bucket/object?acl")
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
+}
+
 func (s *MySuite) TestHeader(c *C) {
 	_, _, storage := inmemory.Start()
 	httpHandler := HttpHandler(storage)

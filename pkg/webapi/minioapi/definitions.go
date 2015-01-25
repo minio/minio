@@ -59,3 +59,24 @@ type Owner struct {
 	ID          string
 	DisplayName string
 }
+
+var unimplementedBucketResourceNames = map[string]bool{
+	"acl":            true,
+	"lifecycle":      true,
+	"policy":         true,
+	"location":       true,
+	"logging":        true,
+	"notification":   true,
+	"versions":       true,
+	"requestPayment": true,
+	"versioning":     true,
+	"website":        true,
+	"uploads":        true,
+}
+
+var unimplementedObjectResourceNames = map[string]bool{
+	"uploadId": true,
+	"acl":      true,
+	"torrent":  true,
+	"uploads":  true,
+}

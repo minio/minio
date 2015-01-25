@@ -64,7 +64,32 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	return mux
 }
 
+func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bool {
+	q := req.URL.Query()
+	for name := range q {
+		if unimplementedBucketResourceNames[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func (server *minioApi) ignoreUnImplementedObjectResources(req *http.Request) bool {
+	q := req.URL.Query()
+	for name := range q {
+		if unimplementedObjectResourceNames[name] {
+			return true
+		}
+	}
+	return false
+}
+
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedObjectResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -111,6 +136,11 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 }
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
 	vars := mux.Vars(req)
 	prefix, ok := vars["prefix"]
 	if !ok {
@@ -140,6 +170,11 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedObjectResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	prefix, ok := vars["prefix"]
@@ -172,6 +207,11 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -184,6 +224,11 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	err := server.storage.StoreBucket(bucket)
