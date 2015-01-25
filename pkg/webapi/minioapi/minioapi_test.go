@@ -289,6 +289,14 @@ func (s *MySuite) TestShouldNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
 	// TODO Implement
 }
 
+func (s *MySuite) TestHeadOnObject(c *C) {
+	// TODO
+}
+
+func (s *MySuite) TestDateFormat(c *C) {
+	// TODO
+}
+
 func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
 	// Verify date
 	c.Assert(header["Last-Modified"][0], Equals, date.Format(time.RFC1123))
@@ -302,7 +310,3 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 	// verify etag
 	c.Assert(header["Etag"][0], Equals, etag)
 }
-
-// Test date format
-
-// Test HEAD
