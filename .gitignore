@@ -2,3 +2,4 @@
 cover.out
 *~
 minio
+**/*.test
