@@ -189,8 +189,8 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	}
 
-	objects := server.storage.ListObjects(bucket, prefix, 1000)
-	response := generateObjectsListResult(bucket, objects)
+	objects, isTruncated := server.storage.ListObjects(bucket, prefix, 1000)
+	response := generateObjectsListResult(bucket, objects, isTruncated)
 
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
@@ -269,7 +269,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	return data
 }
 
-func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata) ObjectListResponse {
+func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata, isTruncated bool) ObjectListResponse {
 	var contents []*Item
 	var owner = Owner{}
 	var data = ObjectListResponse{}
@@ -290,6 +290,6 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata)
 	data.Name = bucket
 	data.Contents = contents
 	data.MaxKeys = MAX_OBJECT_LIST
-	data.IsTruncated = false
+	data.IsTruncated = isTruncated
 	return data
 }

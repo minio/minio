@@ -86,20 +86,20 @@ func (storage *storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
-func (storage *storage) ListObjects(bucket, prefix string, count int) []mstorage.ObjectMetadata {
+func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorage.ObjectMetadata, bool) {
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	for key, object := range storage.objectdata {
+		if len(results) == count {
+			return results, true
+		}
 		if bucket == object.metadata.Bucket {
 			if strings.HasPrefix(key, bucket+":") {
 				results = append(results, object.metadata)
 			}
 		}
-		if len(results) == count {
-			return results
-		}
 	}
-	return results
+	return results, false
 }
 
 func (storage *storage) ListBuckets(prefix string) []mstorage.BucketMetadata {

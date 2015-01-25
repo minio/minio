@@ -31,7 +31,7 @@ type Storage interface {
 	GetObjectMetadata(bucket string, object string) (ObjectMetadata, error)
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)
 	StoreObject(bucket string, key string, data io.Reader) error
-	ListObjects(bucket, prefix string, count int) []ObjectMetadata
+	ListObjects(bucket, prefix string, count int) ([]ObjectMetadata, bool)
 }
 
 type BucketMetadata struct {

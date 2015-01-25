@@ -237,7 +237,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	objects := storage.ListObjects("bucket", "", 1000)
+	objects, _ := storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 0)
 
 	date1 := time.Now()
@@ -260,7 +260,7 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	date2 := time.Now()
 
-	objects = storage.ListObjects("bucket", "", 1000)
+	objects, _ = storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 1)
 
 	var writer bytes.Buffer
