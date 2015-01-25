@@ -170,7 +170,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedObjectResources(req) {
+	if server.ignoreUnImplementedBucketResources(req) {
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
