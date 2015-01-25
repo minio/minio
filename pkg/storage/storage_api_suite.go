@@ -14,6 +14,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testPaging(c, create)
 	testObjectOverwriteFails(c, create)
 	testNonExistantBucketOperations(c, create)
+	testBucketRecreateFails(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -74,8 +75,24 @@ func testPaging(c *C, create func() Storage) {
 }
 
 func testObjectOverwriteFails(c *C, create func() Storage) {
-	// test overwriting object fails
+	storage := create()
+	storage.StoreBucket("bucket")
+	err := storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	c.Assert(err, IsNil)
+	err = storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	c.Assert(err, Not(IsNil))
 }
+
 func testNonExistantBucketOperations(c *C, create func() Storage) {
-	// test writing object in non-existant bucket fails
+	storage := create()
+	err := storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	c.Assert(err, Not(IsNil))
+}
+
+func testBucketRecreateFails(c *C, create func() Storage) {
+	storage := create()
+	err := storage.StoreBucket("string")
+	c.Assert(err, IsNil)
+	err = storage.StoreBucket("string")
+	c.Assert(err, Not(IsNil))
 }
