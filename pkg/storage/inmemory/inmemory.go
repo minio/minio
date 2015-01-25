@@ -95,6 +95,9 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) []mstorage
 				results = append(results, object.metadata)
 			}
 		}
+		if len(results) == count {
+			return results
+		}
 	}
 	return results
 }
