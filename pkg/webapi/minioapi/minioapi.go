@@ -29,10 +29,8 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
-type contentType int
-
 const (
-	xmlType contentType = iota
+	xmlType = iota
 	jsonType
 )
 
@@ -135,6 +133,24 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	}
 }
 
+func populateHeaders(w http.ResponseWriter, response interface{}, contentType int) []byte {
+	var bytesBuffer bytes.Buffer
+	var encoder encoder
+	if contentType == xmlType {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
+		encoder = xml.NewEncoder(&bytesBuffer)
+	} else if contentType == jsonType {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
+		encoder = json.NewEncoder(&bytesBuffer)
+	}
+	encoder.Encode(response)
+	return bytesBuffer.Bytes()
+}
+
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	if server.ignoreUnImplementedBucketResources(req) {
 		w.WriteHeader(http.StatusNotImplemented)
@@ -160,22 +176,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	response := generateBucketsListResult(buckets)
-
-	var bytesBuffer bytes.Buffer
-	var encoder encoder
-	if contentType == xmlType {
-		w.Header().Set("Content-Type", "application/xml")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = xml.NewEncoder(&bytesBuffer)
-	} else if contentType == jsonType {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = json.NewEncoder(&bytesBuffer)
-	}
-	encoder.Encode(response)
-	w.Write(bytesBuffer.Bytes())
+	w.Write(populateHeaders(w, response, contentType))
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
@@ -205,23 +206,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	response := generateObjectsListResult(bucket, objects, isTruncated)
-
-	var bytesBuffer bytes.Buffer
-	var encoder encoder
-	if contentType == xmlType {
-		w.Header().Set("Content-Type", "application/xml")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = xml.NewEncoder(&bytesBuffer)
-	} else if contentType == jsonType {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = json.NewEncoder(&bytesBuffer)
-	}
-
-	encoder.Encode(response)
-	w.Write(bytesBuffer.Bytes())
+	w.Write(populateHeaders(w, response, contentType))
 }
 
 func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
@@ -239,6 +224,8 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		w.Write([]byte(err.Error()))
 		return
 	}
+	w.Header().Set("Server", "Minio")
+	w.Header().Set("Connection", "close")
 }
 
 func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
