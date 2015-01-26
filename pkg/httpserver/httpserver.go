@@ -22,24 +22,39 @@ import (
 	"time"
 )
 
-func Start(handler http.Handler, address string) (chan<- string, <-chan error) {
+type HttpServer struct {
+	Address  string
+	TLS      bool
+	CertFile string
+	KeyFile  string
+}
+
+func Start(handler http.Handler, srv HttpServer) (chan<- string, <-chan error) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	go start(ctrlChannel, errorChannel, handler, address)
+	go start(ctrlChannel, errorChannel, handler, srv)
 	return ctrlChannel, errorChannel
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, address string) {
-	log.Println("Starting HTTP Server on " + address)
+func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, srv HttpServer) {
+	var err error
+
 	// Minio server config
 	server := &http.Server{
-		Addr:           address,
+		Addr:           srv.Address,
 		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-	err := server.ListenAndServe()
+	log.Println("Starting HTTP Server on " + srv.Address)
+
+	if srv.TLS {
+		server.TLSConfig = getDefaultTLSConfig()
+		err = server.ListenAndServeTLS(srv.CertFile, srv.KeyFile)
+	} else {
+		err = server.ListenAndServe()
+	}
 	errorChannel <- err
 	close(errorChannel)
 }
