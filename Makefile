@@ -36,9 +36,10 @@ endif
 build-minioapi:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/webapi/minioapi
 
-cover: build-storage build-utils build-minioapi
+minio: build-storage build-utils build-minioapi
 
-install: cover
+install: minio
+	@godep go install github.com/minio-io/minio && echo "Installed minio"
 
 save: restore
 	@godep save ./...
