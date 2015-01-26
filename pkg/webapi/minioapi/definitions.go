@@ -50,7 +50,7 @@ type Item struct {
 	Key          string
 	LastModified string
 	ETag         string
-	Size         int
+	Size         int64
 	StorageClass string
 	Owner        Owner
 }
