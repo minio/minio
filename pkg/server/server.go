@@ -26,19 +26,29 @@ import (
 	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
 
-func Start() {
+func Start(hostname string, tls bool, certFile, keyFile string) {
 	var ctrlChans []chan<- string
 	var statusChans []<-chan error
 
 	var ctrlChan chan<- string
 	var statusChan <-chan error
 	var storage mstorage.Storage
+	var srv = httpserver.HttpServer{}
+	srv.Address = hostname
+	srv.TLS = tls
+
+	if certFile != "" {
+		srv.CertFile = certFile
+	}
+	if keyFile != "" {
+		srv.KeyFile = keyFile
+	}
 
 	ctrlChan, statusChan, storage = inmemory.Start()
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
-	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), ":8080")
+	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), srv)
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
