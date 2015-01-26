@@ -46,6 +46,10 @@ int32_t minio_get_source_target (int errs, int k, int m,
         uint8_t *tmp_source[k];
         uint8_t *tmp_target[m];
 
+        if (k < 0 || m < 0) {
+                return -1;
+        }
+
         memset (tmp_source, 0, k);
         memset (tmp_target, 0, m);
 
