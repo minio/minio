@@ -43,7 +43,7 @@ type ObjectMetadata struct {
 	Bucket  string
 	Key     string
 	Created time.Time
-	Size    int
+	Size    int64
 	ETag    string
 }
 
@@ -59,4 +59,8 @@ func IsValidBucket(bucket string) bool {
 	}
 	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\.\\-]+[a-zA-Z0-9]$", bucket)
 	return match
+}
+
+func IsValidObject(object string) bool {
+	return true
 }

@@ -36,7 +36,7 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 		written, err := io.Copy(w, objectBuffer)
 		return written, err
 	} else {
-		return 0, mstorage.ObjectNotFound{Bucket: bucket, Path: object}
+		return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 	}
 }
 
@@ -59,7 +59,7 @@ func (storage *storage) StoreObject(bucket string, key string, data io.Reader) e
 			Bucket:  bucket,
 			Key:     key,
 			Created: time.Now(),
-			Size:    size,
+			Size:    int64(size),
 			ETag:    etag,
 		}
 		newObject.data = bytesBuffer.Bytes()
@@ -131,6 +131,6 @@ func (storage *storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMe
 	if object, ok := storage.objectdata[objectKey]; ok == true {
 		return object.metadata, nil
 	} else {
-		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Path: key}
+		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: key}
 	}
 }
