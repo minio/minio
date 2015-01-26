@@ -165,9 +165,13 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	var encoder encoder
 	if contentType == xmlType {
 		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
 		encoder = xml.NewEncoder(&bytesBuffer)
 	} else if contentType == jsonType {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
 		encoder = json.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
@@ -206,9 +210,13 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	var encoder encoder
 	if contentType == xmlType {
 		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
 		encoder = xml.NewEncoder(&bytesBuffer)
 	} else if contentType == jsonType {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
 		encoder = json.NewEncoder(&bytesBuffer)
 	}
 
@@ -247,15 +255,19 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		w.Write([]byte(err.Error()))
 		return
 	}
+	w.Header().Set("Server", "Minio")
+	w.Header().Set("Connection", "close")
 }
 
 // Write Object Header helper
 func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("Server", "Minio")
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Length", strconv.Itoa(metadata.Size))
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Connection", "close")
 }
 
 func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResponse {
