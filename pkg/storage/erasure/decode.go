@@ -19,6 +19,7 @@
 package erasure
 
 // #cgo CPPFLAGS: -Iisal/include
+// #cgo CFLAGS: -O0
 // #include <stdlib.h>
 // #include <erasure-code.h>
 //
@@ -81,8 +82,12 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 
 	data := (**C.uint8_t)(unsafe.Pointer(&pointers[0]))
 
-	C.minio_get_source_target(C.int(err_count-1), e.k, e.m, error_index_ptr,
+	ret := C.minio_get_source_target(C.int(err_count-1), e.k, e.m, error_index_ptr,
 		decode_index, data, &source, &target)
+
+	if int(ret) == -1 {
+		return nil, errors.New("Decoding source target failed")
+	}
 
 	C.ec_encode_data(C.int(chunk_size), e.k, C.int(err_count-1), decode_tbls,
 		source, target)
