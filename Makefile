@@ -48,6 +48,6 @@ env:
 
 clean:
 	@echo "Cleaning up all the generated files"
-	@$(MAKE) $(MAKE_OPTIONS) -C pkg/storage/erasure/isal clean
 	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv cover.out
+	@rm -fv pkg/storage/erasure/*.syso
