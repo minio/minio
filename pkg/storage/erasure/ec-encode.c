@@ -17,8 +17,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <erasure-code.h>
-#include "common.h"
+#include "ec-code.h"
+#include "ec-common.h"
 
 int32_t minio_init_encoder (int technique, int k, int m,
                             uint8_t **encode_matrix,

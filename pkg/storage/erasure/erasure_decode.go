@@ -18,12 +18,10 @@
 
 package erasure
 
-// #cgo CPPFLAGS: -Iisal/include
 // #cgo CFLAGS: -O0
 // #include <stdlib.h>
-// #include <erasure-code.h>
-//
-// #include "common.h"
+// #include "ec-code.h"
+// #include "ec-common.h"
 import "C"
 import (
 	"errors"

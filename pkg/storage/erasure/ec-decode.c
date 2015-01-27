@@ -18,8 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <erasure-code.h>
-#include "common.h"
+#include "ec-code.h"
+#include "ec-common.h"
 
 static
 int32_t _minio_src_index_in_error (int r, int32_t *error_index)

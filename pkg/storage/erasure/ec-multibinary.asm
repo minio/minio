@@ -79,7 +79,7 @@
 
 %else
 
-%include "reg-sizes.asm"
+%include "ec-reg-sizes.asm"
 default rel
 [bits 64]
 
