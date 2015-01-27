@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -89,10 +90,18 @@ func (storage *storage) StoreBucket(bucketName string) error {
 func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorage.ObjectMetadata, bool, error) {
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
-	for key, object := range storage.objectdata {
+	var keys []string
+	for key := range storage.objectdata {
+		if strings.HasPrefix(key, bucket+":"+prefix) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
 		if len(results) == count {
 			return results, true, nil
 		}
+		object := storage.objectdata[key]
 		if bucket == object.metadata.Bucket {
 			if strings.HasPrefix(key, bucket+":") {
 				results = append(results, object.metadata)
