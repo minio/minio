@@ -30,9 +30,9 @@
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>             // for memset
-#include "erasure-code.h"
+#include "ec-code.h"
 #include "ec-base.h"            // for GF tables
-#include "erasure/types.h"
+#include "ec-ctypes.h"
 
 uint8_t gf_mul(uint8_t a, uint8_t b)
 {

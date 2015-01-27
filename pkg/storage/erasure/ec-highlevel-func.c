@@ -28,8 +28,8 @@
 **********************************************************************/
 #include <limits.h>
 #include <stdint.h>
-#include "erasure-code.h"
-#include "erasure/types.h"
+#include "ec-code.h"
+#include "ec-ctypes.h"
 
 void ec_init_tables(int k, int rows, uint8_t *a, uint8_t *g_tbls)
 {

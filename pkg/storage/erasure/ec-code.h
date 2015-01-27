@@ -50,7 +50,7 @@
  *
  */
 
-#include "gf-vect-mul.h"
+#include "ec-vect-mul.h"
 
 #ifdef __cplusplus
 extern "C" {
