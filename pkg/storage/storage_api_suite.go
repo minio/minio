@@ -11,10 +11,10 @@ import (
 func APITestSuite(c *C, create func() Storage) {
 	testCreateBucket(c, create)
 	testMultipleObjectCreation(c, create)
-	//testPaging(c, create)
-	//testObjectOverwriteFails(c, create)
-	//testNonExistantBucketOperations(c, create)
-	//testBucketRecreateFails(c, create)
+	testPaging(c, create)
+	testObjectOverwriteFails(c, create)
+	testNonExistantBucketOperations(c, create)
+	testBucketRecreateFails(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -58,24 +58,24 @@ func testMultipleObjectCreation(c *C, create func() Storage) {
 func testPaging(c *C, create func() Storage) {
 	storage := create()
 	storage.StoreBucket("bucket")
-	storage.ListObjects("bucket", "", 1000)
-	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
+	storage.ListObjects("bucket", "", 5)
+	objects, isTruncated, err := storage.ListObjects("bucket", "", 5)
 	c.Check(len(objects), Equals, 0)
 	c.Check(isTruncated, Equals, false)
 	c.Check(err, IsNil)
-	for i := 1; i <= 1000; i++ {
+	for i := 1; i <= 5; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
-		objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
+		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
 		c.Check(len(objects), Equals, i)
 		c.Check(isTruncated, Equals, false)
 		c.Check(err, IsNil)
 	}
-	for i := 1001; i <= 2000; i++ {
+	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
-		objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
-		c.Check(len(objects), Equals, 1000)
+		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
+		c.Check(len(objects), Equals, 5)
 		c.Check(isTruncated, Equals, true)
 		c.Check(err, IsNil)
 	}
@@ -86,8 +86,13 @@ func testObjectOverwriteFails(c *C, create func() Storage) {
 	storage.StoreBucket("bucket")
 	err := storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
 	c.Check(err, IsNil)
-	err = storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	err = storage.StoreObject("bucket", "object", bytes.NewBufferString("three"))
 	c.Check(err, Not(IsNil))
+	var bytesBuffer bytes.Buffer
+	length, err := storage.CopyObjectToWriter(&bytesBuffer, "bucket", "object")
+	c.Check(length, Equals, int64(len("one")))
+	c.Check(err, IsNil)
+	c.Check(string(bytesBuffer.Bytes()), Equals, "one")
 }
 
 func testNonExistantBucketOperations(c *C, create func() Storage) {
