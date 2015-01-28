@@ -1,5 +1,9 @@
 package storage
 
+type BackendError struct {
+	Path string
+}
+
 type GenericError struct {
 	Bucket string
 	Path   string
@@ -47,6 +51,7 @@ func EmbedError(bucket, object string, err error) ImplementationError {
 	}
 }
 
+type BackendCorrupted BackendError
 type BucketNameInvalid GenericBucketError
 type BucketExists GenericBucketError
 type BucketNotFound GenericBucketError
@@ -74,4 +79,8 @@ func (self BucketNotFound) Error() string {
 
 func (self ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + self.Bucket + "#" + self.Object
+}
+
+func (self BackendCorrupted) Error() string {
+	return "Backend corrupted: " + self.Path
 }
