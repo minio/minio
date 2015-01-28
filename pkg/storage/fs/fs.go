@@ -176,6 +176,13 @@ func (storage *storage) StoreObject(bucket string, key string, data io.Reader) e
 
 	// get object path
 	objectPath := path.Join(storage.root, bucket, key)
+	objectDir := path.Dir(objectPath)
+	if _, err := os.Stat(objectDir); os.IsNotExist(err) {
+		err = os.MkdirAll(objectDir, 0700)
+		if err != nil {
+			return mstorage.EmbedError(bucket, key, err)
+		}
+	}
 
 	// check if object exists
 	if _, err := os.Stat(objectPath); !os.IsNotExist(err) {
