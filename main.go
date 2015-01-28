@@ -1,46 +1,28 @@
 package main
 
 import (
-	"os"
-
-	"github.com/codegangsta/cli"
 	"github.com/minio-io/minio/pkg/server"
+	"github.com/spf13/cobra"
 )
 
-func parseInput(c *cli.Context) {
-	tls := c.Bool("tls")
-	certFile := c.String("cert")
-	keyFile := c.String("key")
-	inmemory := c.Bool("inmemory")
-	server.Start(":8080", tls, certFile, keyFile, inmemory)
-}
-
 func main() {
-	app := cli.NewApp()
-	app.Name = "minio"
-	app.Usage = "Minio Server"
-	var flags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "tls",
-			Usage: "Enable tls",
-		},
-		cli.StringFlag{
-			Name:  "cert",
-			Value: "",
-			Usage: "cert file path",
-		},
-		cli.StringFlag{
-			Name:  "key",
-			Value: "",
-			Usage: "key file path",
-		},
-		cli.BoolFlag{
-			Name:  "inmemory",
-			Usage: "in memory storage",
+	var tls bool
+	var inmemory bool
+	var address string
+	var certFile string
+	var keyFile string
+	var minioCommand = &cobra.Command{
+		Use:   "minio",
+		Short: "minio is a minimal object storage system",
+		Long:  "",
+		Run: func(cmd *cobra.Command, args []string) {
+			server.Start(address, tls, certFile, keyFile, inmemory)
 		},
 	}
-	app.Flags = flags
-	app.Action = parseInput
-	app.Author = "Minio"
-	app.Run(os.Args)
+	minioCommand.PersistentFlags().BoolVarP(&tls, "tls", "t", false, "enable tls")
+	minioCommand.PersistentFlags().BoolVarP(&inmemory, "inmemory", "m", false, "in memory object storage")
+	minioCommand.PersistentFlags().StringVarP(&address, "http-address", "a", ":8080", "http address")
+	minioCommand.PersistentFlags().StringVarP(&certFile, "cert", "c", "", "cert file path")
+	minioCommand.PersistentFlags().StringVarP(&keyFile, "key", "k", "", "key file path")
+	minioCommand.Execute()
 }
