@@ -34,10 +34,32 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
 }
 
-// Bucket Operaotions
+// Bucket Operations
 
 func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
-	return []mstorage.BucketMetadata{}, errors.New("Not Implemented")
+	if mstorage.IsValidBucket(bucket) == false {
+		return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
+	}
+
+	files, err := ioutil.ReadDir(storage.root)
+	if err != nil {
+		return []mstorage.BucketMetadata{}, mstorage.EmbedError("bucket", "", err)
+	}
+
+	var metadataList []mstorage.BucketMetadata
+	for _, file := range files {
+		if !file.IsDir() {
+			return []mstorage.BucketMetadata{}, mstorage.BackendCorrupted{Path: storage.root}
+		}
+		if strings.HasPrefix(file.Name(), prefix) {
+			metadata := mstorage.BucketMetadata{
+				Name:    file.Name(),
+				Created: file.ModTime(), // TODO - provide real created time
+			}
+			metadataList = append(metadata, metadataList)
+		}
+	}
+	return metadataList, nil
 }
 
 func (storage *storage) StoreBucket(bucket string) error {
