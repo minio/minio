@@ -11,7 +11,8 @@ func parseInput(c *cli.Context) {
 	tls := c.Bool("tls")
 	certFile := c.String("cert")
 	keyFile := c.String("key")
-	server.Start(":8080", tls, certFile, keyFile)
+	inmemory := c.Bool("inmemory")
+	server.Start(":8080", tls, certFile, keyFile, inmemory)
 }
 
 func main() {
@@ -32,6 +33,10 @@ func main() {
 			Name:  "key",
 			Value: "",
 			Usage: "key file path",
+		},
+		cli.BoolFlag{
+			Name:  "inmemory",
+			Usage: "in memory storage",
 		},
 	}
 	app.Flags = flags

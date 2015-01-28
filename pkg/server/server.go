@@ -18,15 +18,19 @@ package server
 
 import (
 	"log"
+	"os"
+	"os/user"
+	"path"
 	"reflect"
 
 	"github.com/minio-io/minio/pkg/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/storage/fs"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
 	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
 
-func Start(hostname string, tls bool, certFile, keyFile string) {
+func Start(hostname string, tls bool, certFile, keyFile string, inMemoryStorage bool) {
 	var ctrlChans []chan<- string
 	var statusChans []<-chan error
 
@@ -44,9 +48,26 @@ func Start(hostname string, tls bool, certFile, keyFile string) {
 		srv.KeyFile = keyFile
 	}
 
-	ctrlChan, statusChan, storage = inmemory.Start()
-	ctrlChans = append(ctrlChans, ctrlChan)
-	statusChans = append(statusChans, statusChan)
+	if inMemoryStorage {
+		ctrlChan, statusChan, storage = inmemory.Start()
+		ctrlChans = append(ctrlChans, ctrlChan)
+		statusChans = append(statusChans, statusChan)
+	} else {
+		currentUser, err := user.Current()
+		if err != nil {
+			log.Fatal(err)
+		}
+		rootPath := path.Join(currentUser.HomeDir, "minio-storage")
+		_, err = os.Stat(rootPath)
+		if os.IsNotExist(err) {
+			err = os.Mkdir(rootPath, 0700)
+		} else if err != nil {
+			log.Fatal("Could not create $HOME/minio-storage", err)
+		}
+		ctrlChan, statusChan, storage = fs.Start(rootPath)
+		ctrlChans = append(ctrlChans, ctrlChan)
+		statusChans = append(statusChans, statusChan)
+	}
 
 	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), srv)
 	ctrlChans = append(ctrlChans, ctrlChan)

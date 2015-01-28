@@ -15,6 +15,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testObjectOverwriteFails(c, create)
 	testNonExistantBucketOperations(c, create)
 	testBucketRecreateFails(c, create)
+	testPutObjectInSubdir(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -141,4 +142,17 @@ func testBucketRecreateFails(c *C, create func() Storage) {
 	c.Assert(err, IsNil)
 	err = storage.StoreBucket("string")
 	c.Assert(err, Not(IsNil))
+}
+
+func testPutObjectInSubdir(c *C, create func() Storage) {
+	storage := create()
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+	err = storage.StoreObject("bucket", "dir1/dir2/object", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	var bytesBuffer bytes.Buffer
+	length, err := storage.CopyObjectToWriter(&bytesBuffer, "bucket", "dir1/dir2/object")
+	c.Assert(len(bytesBuffer.Bytes()), Equals, len("hello world"))
+	c.Assert(int64(len(bytesBuffer.Bytes())), Equals, length)
+	c.Assert(err, IsNil)
 }
