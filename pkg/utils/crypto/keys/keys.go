@@ -1,7 +1,10 @@
 package keys
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 )
 
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -34,13 +37,16 @@ func GetRandomAlphaNumericFull(size int) ([]byte, error) {
 
 func GetRandomBase64(size int) ([]byte, error) {
 	rb := make([]byte, size)
-	n, err := rand.Read(rb)
+	_, err := rand.Read(rb)
 	if err != nil {
 		return nil, err
 	}
-	dest := make([]byte, n)
-	base64.URLEncoding.EncodeTo(dest, rb)
-	return dest, nil
+	var bytesBuffer bytes.Buffer
+	writer := bufio.NewWriter(&bytesBuffer)
+	encoder := base64.NewEncoder(base64.StdEncoding, writer)
+	encoder.Write(rb)
+	encoder.Close()
+	return bytesBuffer.Bytes(), nil
 }
 
 func ValidateAccessKey(key []byte) bool {
