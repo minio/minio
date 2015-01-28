@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -37,8 +36,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 // Bucket Operations
 
 func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
-	if mstorage.IsValidBucket(bucket) == false {
-		return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
+	if mstorage.IsValidBucket(prefix) == false {
+		return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: prefix}
 	}
 
 	files, err := ioutil.ReadDir(storage.root)
@@ -56,7 +55,7 @@ func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, e
 				Name:    file.Name(),
 				Created: file.ModTime(), // TODO - provide real created time
 			}
-			metadataList = append(metadata, metadataList)
+			metadataList = append(metadataList, metadata)
 		}
 	}
 	return metadataList, nil
