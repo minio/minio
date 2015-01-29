@@ -22,38 +22,41 @@ import (
 	"time"
 )
 
-type HttpServer struct {
+type HttpServerConfig struct {
 	Address  string
 	TLS      bool
 	CertFile string
 	KeyFile  string
 }
 
-func Start(handler http.Handler, srv HttpServer) (chan<- string, <-chan error) {
+type HttpServer struct{}
+
+func Start(handler http.Handler, config HttpServerConfig) (chan<- string, <-chan error, *HttpServer) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	go start(ctrlChannel, errorChannel, handler, srv)
-	return ctrlChannel, errorChannel
+	server := HttpServer{}
+	go start(ctrlChannel, errorChannel, handler, config, &server)
+	return ctrlChannel, errorChannel, &server
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, srv HttpServer) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, config HttpServerConfig, server *HttpServer) {
 	var err error
 
 	// Minio server config
-	server := &http.Server{
-		Addr:           srv.Address,
+	httpServer := &http.Server{
+		Addr:           config.Address,
 		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-	log.Println("Starting HTTP Server on " + srv.Address)
+	log.Println("Starting HTTP Server on:", config.Address)
 
-	if srv.TLS {
-		server.TLSConfig = getDefaultTLSConfig()
-		err = server.ListenAndServeTLS(srv.CertFile, srv.KeyFile)
+	if config.TLS {
+		httpServer.TLSConfig = getDefaultTLSConfig()
+		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	} else {
-		err = server.ListenAndServe()
+		err = httpServer.ListenAndServe()
 	}
 	errorChannel <- err
 	close(errorChannel)
