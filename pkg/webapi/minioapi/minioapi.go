@@ -29,8 +29,10 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
+type contentType int
+
 const (
-	xmlType = iota
+	xmlType contentType = iota
 	jsonType
 )
 
@@ -74,12 +76,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		prefix = ""
 	}
 
-	contentType := xmlType
-	if _, ok := req.Header["Accept"]; ok {
-		if req.Header["Accept"][0] == "application/json" {
-			contentType = jsonType
-		}
-	}
+	acceptsContentType := getContentType(req)
 	buckets, err := server.storage.ListBuckets(prefix)
 	if err != nil {
 		log.Println(err)
@@ -87,7 +84,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	response := generateBucketsListResult(buckets)
-	w.Write(writeObjectHeadersAndResponse(w, response, contentType))
+	w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
@@ -103,12 +100,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		prefix = ""
 	}
 
-	contentType := xmlType
-	if _, ok := req.Header["Accept"]; ok {
-		if req.Header["Accept"][0] == "application/json" {
-			contentType = jsonType
-		}
-	}
+	acceptsContentType := getContentType(req)
 
 	objects, isTruncated, err := server.storage.ListObjects(bucket, prefix, 1000)
 	if err != nil {
@@ -117,7 +109,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	response := generateObjectsListResult(bucket, objects, isTruncated)
-	w.Write(writeObjectHeadersAndResponse(w, response, contentType))
+	w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 }
 
 func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
@@ -208,13 +200,13 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	w.Header().Set("Connection", "close")
 }
 
-func writeObjectHeadersAndResponse(w http.ResponseWriter, response interface{}, contentType int) []byte {
+func writeObjectHeadersAndResponse(w http.ResponseWriter, response interface{}, acceptsType contentType) []byte {
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
-	if contentType == xmlType {
+	if acceptsType == xmlType {
 		w.Header().Set("Content-Type", "application/xml")
 		encoder = xml.NewEncoder(&bytesBuffer)
-	} else if contentType == jsonType {
+	} else if acceptsType == jsonType {
 		w.Header().Set("Content-Type", "application/json")
 		encoder = json.NewEncoder(&bytesBuffer)
 	}
@@ -256,7 +248,9 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	return data
 }
 
-//// Unimplemented Resources
+//// helpers
+
+// Checks requests for unimplemented resources
 func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
@@ -277,7 +271,14 @@ func (server *minioApi) ignoreUnImplementedObjectResources(req *http.Request) bo
 	return false
 }
 
-//// helpers
+func getContentType(req *http.Request) contentType {
+	if _, ok := req.Header["Accept"]; ok {
+		if req.Header["Accept"][0] == "application/json" {
+			return jsonType
+		}
+	}
+	return xmlType
+}
 
 // takes a set of objects and prepares the objects for serialization
 // input:
