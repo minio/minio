@@ -112,10 +112,11 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorag
 }
 
 func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
-	// TODO prefix handling
 	var results []mstorage.BucketMetadata
-	for _, bucket := range storage.bucketdata {
-		results = append(results, bucket.metadata)
+	for key, bucket := range storage.bucketdata {
+		if strings.HasPrefix(key, prefix) {
+			results = append(results, bucket.metadata)
+		}
 	}
 	return results, nil
 }

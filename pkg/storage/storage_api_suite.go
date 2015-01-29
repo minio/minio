@@ -16,6 +16,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testNonExistantBucketOperations(c, create)
 	testBucketRecreateFails(c, create)
 	testPutObjectInSubdir(c, create)
+	testListBuckets(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -154,5 +155,41 @@ func testPutObjectInSubdir(c *C, create func() Storage) {
 	length, err := storage.CopyObjectToWriter(&bytesBuffer, "bucket", "dir1/dir2/object")
 	c.Assert(len(bytesBuffer.Bytes()), Equals, len("hello world"))
 	c.Assert(int64(len(bytesBuffer.Bytes())), Equals, length)
+	c.Assert(err, IsNil)
+}
+
+func testListBuckets(c *C, create func() Storage) {
+	storage := create()
+
+	// test empty list
+	buckets, err := storage.ListBuckets("")
+	c.Assert(len(buckets), Equals, 0)
+	c.Assert(err, IsNil)
+
+	// add one and test exists
+	err = storage.StoreBucket("bucket1")
+	c.Assert(err, IsNil)
+
+	buckets, err = storage.ListBuckets("")
+	c.Assert(len(buckets), Equals, 1)
+	c.Assert(err, IsNil)
+
+	// add two and test exists
+	err = storage.StoreBucket("bucket2")
+	c.Assert(err, IsNil)
+
+	buckets, err = storage.ListBuckets("")
+	c.Assert(len(buckets), Equals, 2)
+	c.Assert(err, IsNil)
+
+	// add three and test exists + prefix
+	err = storage.StoreBucket("bucket22")
+
+	buckets, err = storage.ListBuckets("")
+	c.Assert(len(buckets), Equals, 3)
+	c.Assert(err, IsNil)
+
+	buckets, err = storage.ListBuckets("bucket2")
+	c.Assert(len(buckets), Equals, 2)
 	c.Assert(err, IsNil)
 }
