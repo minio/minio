@@ -36,8 +36,10 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 // Bucket Operations
 
 func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
-	if mstorage.IsValidBucket(prefix) == false {
-		return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: prefix}
+	if prefix != "" {
+		if mstorage.IsValidBucket(prefix) == false {
+			return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: prefix}
+		}
 	}
 
 	files, err := ioutil.ReadDir(storage.root)
