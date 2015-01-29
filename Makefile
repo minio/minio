@@ -20,6 +20,7 @@ build-utils:
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha256
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha512
 	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
+	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/database/tiedot
 
 #build-os:
 #	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi
