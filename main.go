@@ -28,10 +28,6 @@ func main() {
 			Value: "",
 			Usage: "key.pem",
 		},
-		cli.BoolFlag{
-			Name:  "tls,t",
-			Usage: "http address to listen on",
-		},
 		cli.StringFlag{
 			Name:  "storage-type,s",
 			Value: "file",
@@ -39,12 +35,12 @@ func main() {
 		},
 	}
 	app.Action = func(c *cli.Context) {
-		tls := c.Bool("tls")
 		storageTypeStr := c.String("storage-type")
 		address := c.String("http-address")
 		log.Println(address)
 		certFile := c.String("cert")
 		keyFile := c.String("key")
+		tls := (certFile != "" && keyFile != "")
 		storageType := getStorageType(storageTypeStr)
 		serverConfig := server.ServerConfig{
 			Address:     address,
