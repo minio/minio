@@ -109,8 +109,10 @@ func Start(config ServerConfig) {
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
+	// listen for critical errors
+	// TODO Handle critical errors appropriately when they arise
+	// reflected looping is necessary to remove dead channels from loop and not flood switch
 	cases := createSelectCases(statusChans)
-
 	for len(cases) > 0 {
 		chosen, value, recvOk := reflect.Select(cases)
 		if recvOk == true {
@@ -131,6 +133,9 @@ func Start(config ServerConfig) {
 	}
 }
 
+// creates select cases for reflect to switch over dynamically
+// this is necessary in order to remove dead channels and not flood
+// the loop with closed channel errors
 func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 	cases := make([]reflect.SelectCase, len(channels))
 	for i, ch := range channels {
