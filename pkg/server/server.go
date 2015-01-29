@@ -30,7 +30,22 @@ import (
 	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
 
-func Start(hostname string, tls bool, certFile, keyFile string, inMemoryStorage bool) {
+type ServerConfig struct {
+	Address     string
+	Tls         bool
+	CertFile    string
+	KeyFile     string
+	StorageType StorageType
+}
+
+type StorageType int
+
+const (
+	InMemoryStorage = iota
+	FileStorage
+)
+
+func Start(config ServerConfig) {
 	var ctrlChans []chan<- string
 	var statusChans []<-chan error
 
@@ -38,21 +53,21 @@ func Start(hostname string, tls bool, certFile, keyFile string, inMemoryStorage 
 	var statusChan <-chan error
 	var storage mstorage.Storage
 	var srv = httpserver.HttpServer{}
-	srv.Address = hostname
-	srv.TLS = tls
+	srv.Address = config.Address
+	srv.TLS = config.Tls
 
-	if certFile != "" {
-		srv.CertFile = certFile
+	if config.CertFile != "" {
+		srv.CertFile = config.CertFile
 	}
-	if keyFile != "" {
-		srv.KeyFile = keyFile
+	if config.KeyFile != "" {
+		srv.KeyFile = config.KeyFile
 	}
 
-	if inMemoryStorage {
+	if config.StorageType == InMemoryStorage {
 		ctrlChan, statusChan, storage = inmemory.Start()
 		ctrlChans = append(ctrlChans, ctrlChan)
 		statusChans = append(statusChans, statusChan)
-	} else {
+	} else if config.StorageType == FileStorage {
 		currentUser, err := user.Current()
 		if err != nil {
 			log.Fatal(err)
@@ -67,6 +82,8 @@ func Start(hostname string, tls bool, certFile, keyFile string, inMemoryStorage 
 		ctrlChan, statusChan, storage = fs.Start(rootPath)
 		ctrlChans = append(ctrlChans, ctrlChan)
 		statusChans = append(statusChans, statusChan)
+	} else {
+
 	}
 
 	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), srv)
