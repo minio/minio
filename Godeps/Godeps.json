@@ -31,20 +31,17 @@
 			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
 		},
 		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-42-gfbda1ce",
+			"Rev": "fbda1ce02d5dabcee952040e5f4025753b6c9ce0"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
-		},
-		{
-			"ImportPath": "github.com/spf13/cobra",
-			"Rev": "e1e66f7b4e667751cf530ddb6e72b79d6eeb0235"
-		},
-		{
-			"ImportPath": "github.com/spf13/pflag",
-			"Rev": "f82776d6cc998e3c026baef7b24409ff49fe5c8d"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
