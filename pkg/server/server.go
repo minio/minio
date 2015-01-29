@@ -46,47 +46,66 @@ const (
 )
 
 func Start(config ServerConfig) {
+	// maintain a list of input and output channels for communicating with services
 	var ctrlChans []chan<- string
 	var statusChans []<-chan error
 
+	// a pair of control channels, we use these primarily to add to the lists above
 	var ctrlChan chan<- string
 	var statusChan <-chan error
+
+	// configure web server
 	var storage mstorage.Storage
-	var srv = httpserver.HttpServer{}
-	srv.Address = config.Address
-	srv.TLS = config.Tls
+	var httpConfig = httpserver.HttpServerConfig{}
+	httpConfig.Address = config.Address
+	httpConfig.TLS = config.Tls
 
 	if config.CertFile != "" {
-		srv.CertFile = config.CertFile
+		httpConfig.CertFile = config.CertFile
 	}
 	if config.KeyFile != "" {
-		srv.KeyFile = config.KeyFile
+		httpConfig.KeyFile = config.KeyFile
 	}
 
-	if config.StorageType == InMemoryStorage {
-		ctrlChan, statusChan, storage = inmemory.Start()
-		ctrlChans = append(ctrlChans, ctrlChan)
-		statusChans = append(statusChans, statusChan)
-	} else if config.StorageType == FileStorage {
-		currentUser, err := user.Current()
-		if err != nil {
-			log.Fatal(err)
+	// instantiate storage
+	// preconditions:
+	//    - storage type specified
+	//    - any configuration for storage is populated
+	// postconditions:
+	//    - storage driver is initialized
+	//    - ctrlChans has channel to communicate to storage
+	//    - statusChans has channel for messages coming from storage
+	switch {
+	case config.StorageType == InMemoryStorage:
+		{
+			ctrlChan, statusChan, storage = inmemory.Start()
+			ctrlChans = append(ctrlChans, ctrlChan)
+			statusChans = append(statusChans, statusChan)
 		}
-		rootPath := path.Join(currentUser.HomeDir, "minio-storage")
-		_, err = os.Stat(rootPath)
-		if os.IsNotExist(err) {
-			err = os.Mkdir(rootPath, 0700)
-		} else if err != nil {
-			log.Fatal("Could not create $HOME/minio-storage", err)
+	case config.StorageType == FileStorage:
+		{
+			// TODO Replace this with a more configurable and robust version
+			currentUser, err := user.Current()
+			if err != nil {
+				log.Fatal(err)
+			}
+			rootPath := path.Join(currentUser.HomeDir, "minio-storage")
+			_, err = os.Stat(rootPath)
+			if os.IsNotExist(err) {
+				err = os.Mkdir(rootPath, 0700)
+			} else if err != nil {
+				log.Fatal("Could not create $HOME/minio-storage", err)
+			}
+			ctrlChan, statusChan, storage = fs.Start(rootPath)
+			ctrlChans = append(ctrlChans, ctrlChan)
+			statusChans = append(statusChans, statusChan)
 		}
-		ctrlChan, statusChan, storage = fs.Start(rootPath)
-		ctrlChans = append(ctrlChans, ctrlChan)
-		statusChans = append(statusChans, statusChan)
-	} else {
-
+	default: // should never happen
+		log.Fatal("No storage driver found")
 	}
 
-	ctrlChan, statusChan = httpserver.Start(minioapi.HttpHandler(storage), srv)
+	// start minio api in a web server, pass storage driver into it
+	ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(storage), httpConfig)
 	ctrlChans = append(ctrlChans, ctrlChan)
 	statusChans = append(statusChans, statusChan)
 
