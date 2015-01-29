@@ -61,14 +61,14 @@ func main() {
 func getStorageType(input string) server.StorageType {
 	switch {
 	case input == "file":
-		return server.InMemoryStorage
+		return server.FileStorage
 	case input == "inmemory":
 		return server.InMemoryStorage
 	default:
 		{
-			log.Fatal("Unknown server type:", input)
-			// needed for compile, should never return after fatal log msg
-			return server.InMemoryStorage
+			log.Println("Unknown storage type:", input)
+			log.Println("Choosing default storage type as 'file'..")
+			return server.FileStorage
 		}
 	}
 }
