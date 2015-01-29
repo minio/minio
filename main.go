@@ -56,22 +56,6 @@ func main() {
 		server.Start(serverConfig)
 	}
 	app.Run(os.Args)
-
-	//	var minioCommand = &cobra.Command{
-	//		Use:   "minio",
-	//		Short: "minio is a minimal object storage system",
-	//		Long:  "",
-	//		Run: func(cmd *cobra.Command, args []string) {
-	//			storageType := getStorageType(storageTypeStr)
-	//			server.Start(serverConfig)
-	//		},
-	//	}
-	//	minioCommand.PersistentFlags().BoolVarP(&tls, "tls", "t", false, "enable tls")
-	//	minioCommand.PersistentFlags().StringVarP(&storageTypeStr, "storage-type", "s", "file", "file,inmemory")
-	//	minioCommand.PersistentFlags().StringVarP(&address, "http-address", "a", ":8080", "http address")
-	//	minioCommand.PersistentFlags().StringVarP(&certFile, "cert", "c", "", "cert file path")
-	//	minioCommand.PersistentFlags().StringVarP(&keyFile, "key", "k", "", "key file path")
-	//	minioCommand.Execute()
 }
 
 func getStorageType(input string) server.StorageType {
