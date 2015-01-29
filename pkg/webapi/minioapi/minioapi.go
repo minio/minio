@@ -62,24 +62,80 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	return mux
 }
 
-func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bool {
-	q := req.URL.Query()
-	for name := range q {
-		if unimplementedBucketResourceNames[name] {
-			return true
+func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
+	vars := mux.Vars(req)
+	prefix, ok := vars["prefix"]
+	if !ok {
+		prefix = ""
+	}
+
+	contentType := xmlType
+	if _, ok := req.Header["Accept"]; ok {
+		if req.Header["Accept"][0] == "application/json" {
+			contentType = jsonType
 		}
 	}
-	return false
+	buckets, err := server.storage.ListBuckets(prefix)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	response := generateBucketsListResult(buckets)
+	w.Write(writeObjectHeadersAndResponse(w, response, contentType))
 }
 
-func (server *minioApi) ignoreUnImplementedObjectResources(req *http.Request) bool {
-	q := req.URL.Query()
-	for name := range q {
-		if unimplementedObjectResourceNames[name] {
-			return true
+func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	prefix, ok := vars["prefix"]
+	if !ok {
+		prefix = ""
+	}
+
+	contentType := xmlType
+	if _, ok := req.Header["Accept"]; ok {
+		if req.Header["Accept"][0] == "application/json" {
+			contentType = jsonType
 		}
 	}
-	return false
+
+	objects, isTruncated, err := server.storage.ListObjects(bucket, prefix, 1000)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	response := generateObjectsListResult(bucket, objects, isTruncated)
+	w.Write(writeObjectHeadersAndResponse(w, response, contentType))
+}
+
+func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+	if server.ignoreUnImplementedBucketResources(req) {
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	err := server.storage.StoreBucket(bucket)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Server", "Minio")
+	w.Header().Set("Connection", "close")
 }
 
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
@@ -133,82 +189,6 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	}
 }
 
-func populateHeaders(w http.ResponseWriter, response interface{}, contentType int) []byte {
-	var bytesBuffer bytes.Buffer
-	var encoder encoder
-	if contentType == xmlType {
-		w.Header().Set("Content-Type", "application/xml")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = xml.NewEncoder(&bytesBuffer)
-	} else if contentType == jsonType {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		encoder = json.NewEncoder(&bytesBuffer)
-	}
-	encoder.Encode(response)
-	return bytesBuffer.Bytes()
-}
-
-func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
-	vars := mux.Vars(req)
-	prefix, ok := vars["prefix"]
-	if !ok {
-		prefix = ""
-	}
-
-	contentType := xmlType
-	if _, ok := req.Header["Accept"]; ok {
-		if req.Header["Accept"][0] == "application/json" {
-			contentType = jsonType
-		}
-	}
-	buckets, err := server.storage.ListBuckets(prefix)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	response := generateBucketsListResult(buckets)
-	w.Write(populateHeaders(w, response, contentType))
-}
-
-func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	prefix, ok := vars["prefix"]
-	if !ok {
-		prefix = ""
-	}
-
-	contentType := xmlType
-	if _, ok := req.Header["Accept"]; ok {
-		if req.Header["Accept"][0] == "application/json" {
-			contentType = jsonType
-		}
-	}
-
-	objects, isTruncated, err := server.storage.ListObjects(bucket, prefix, 1000)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	response := generateObjectsListResult(bucket, objects, isTruncated)
-	w.Write(populateHeaders(w, response, contentType))
-}
-
 func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if server.ignoreUnImplementedBucketResources(req) {
 		w.WriteHeader(http.StatusNotImplemented)
@@ -228,22 +208,20 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	w.Header().Set("Connection", "close")
 }
 
-func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	err := server.storage.StoreBucket(bucket)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
-		return
+func writeObjectHeadersAndResponse(w http.ResponseWriter, response interface{}, contentType int) []byte {
+	var bytesBuffer bytes.Buffer
+	var encoder encoder
+	if contentType == xmlType {
+		w.Header().Set("Content-Type", "application/xml")
+		encoder = xml.NewEncoder(&bytesBuffer)
+	} else if contentType == jsonType {
+		w.Header().Set("Content-Type", "application/json")
+		encoder = json.NewEncoder(&bytesBuffer)
 	}
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Connection", "close")
+	encoder.Encode(response)
+	return bytesBuffer.Bytes()
 }
 
 // Write Object Header helper
@@ -278,6 +256,37 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	return data
 }
 
+//// Unimplemented Resources
+func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bool {
+	q := req.URL.Query()
+	for name := range q {
+		if unimplementedBucketResourceNames[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func (server *minioApi) ignoreUnImplementedObjectResources(req *http.Request) bool {
+	q := req.URL.Query()
+	for name := range q {
+		if unimplementedObjectResourceNames[name] {
+			return true
+		}
+	}
+	return false
+}
+
+//// helpers
+
+// takes a set of objects and prepares the objects for serialization
+// input:
+// bucket name
+// array of object metadata
+// results truncated flag
+//
+// output:
+// populated struct that can be serialized to match xml and json api spec output
 func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata, isTruncated bool) ObjectListResponse {
 	var contents []*Item
 	var owner = Owner{}
