@@ -40,6 +40,9 @@ func main() {
 		log.Println(address)
 		certFile := c.String("cert")
 		keyFile := c.String("key")
+		if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
+			log.Fatal("Both certificate and key must be provided to enable https")
+		}
 		tls := (certFile != "" && keyFile != "")
 		storageType := getStorageType(storageTypeStr)
 		serverConfig := server.ServerConfig{
