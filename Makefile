@@ -11,31 +11,19 @@ getdeps: checkdeps
 	@go get github.com/tools/godep && echo "Installed godep"
 	@go get golang.org/x/tools/cmd/cover && echo "Installed cover"
 
-build-utils:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/cpu
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/unitconv
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/split
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/md5
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha1
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha256
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/sha512
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/checksum/crc32c
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/database/tiedot
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/keys
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/utils/crypto/x509
-
-#build-os:
-#	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/scsi
-#	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/os/sysctl
-
-build-storage:
+build-erasure: getdeps
 	@godep go generate github.com/minio-io/minio/pkg/storage/erasure
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/storage/erasure
+	@godep go build github.com/minio-io/minio/pkg/storage/erasure
 
-build-minioapi:
-	@godep go test -race -coverprofile=cover.out github.com/minio-io/minio/pkg/webapi/minioapi
+build-all: getdeps build-erasure
+	@echo "Building Libraries"
+	@godep go build ./...
 
-minio: build-storage build-utils build-minioapi
+test-all: build-all
+	@echo "Running Test Suites:"
+	@godep go test -race ./...
+
+minio: build-all test-all
 
 install: minio
 	@godep go install github.com/minio-io/minio && echo "Installed minio"
