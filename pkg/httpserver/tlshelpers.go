@@ -3,7 +3,7 @@ package httpserver
 import "crypto/tls"
 
 func getDefaultTLSConfig() *tls.Config {
-	config := &tls.Config{}
+	config := tls.Config{}
 
 	//Use only modern ciphers
 	config.CipherSuites = []uint16{
@@ -17,13 +17,8 @@ func getDefaultTLSConfig() *tls.Config {
 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	}
 
-	//Use only TLS v1.2
-	config.MinVersion = tls.VersionTLS12
-
-	// Ignore client auth for now
-	config.ClientAuth = tls.NoClientCert
-
 	//Don't allow session resumption
 	config.SessionTicketsDisabled = true
-	return config
+	config.ClientAuth = tls.RequireAnyClientCert
+	return &config
 }
