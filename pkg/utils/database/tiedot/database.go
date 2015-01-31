@@ -1,20 +1,27 @@
-package database
+package tiedot
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/HouzuoGuo/tiedot/db"
 )
 
-func NewDatabase() *Database {
-	return &Database{}
+func NewDatabase(dirname string) (*Database, error) {
+	data := Database{}
+	data.setdbdir(dirname)
+	if err := data.setDBhandle(); err != nil {
+		return &Database{}, err
+	}
+	return &data, nil
 }
 
 func (data *Database) setdbdir(dirname string) {
 	data.DBdir = dirname
 }
 
-func (data *Database) GetDBHandle(dirname string) error {
+func (data *Database) setDBhandle() error {
 	var err error
-	data.setdbdir(dirname)
 	data.DBhandle, err = db.OpenDB(data.DBdir)
 	if err != nil {
 		return err
@@ -28,7 +35,7 @@ func (data *Database) InitCollection(colls ...string) {
 	}
 }
 
-func (data *Database) GetCollections() []string {
+func (data *Database) GetAllCollections() []string {
 	var colls []string
 	for _, name := range data.DBhandle.AllCols() {
 		colls = append(colls, name)
@@ -40,12 +47,28 @@ func (data *Database) getCollectionHandle(coll string) *db.Col {
 	return data.DBhandle.Use(coll)
 }
 
-func (data *Database) GetCollectionData(coll string, docid int) (map[string]interface{}, error) {
-	collHandle := data.getCollectionHandle(coll)
-	return collHandle.Read(docid)
-}
-
 func (data *Database) InsertToCollection(coll string, model map[string]interface{}) (docid int, err error) {
 	collHandle := data.getCollectionHandle(coll)
 	return collHandle.Insert(model)
+}
+
+func (data *Database) InsertIndexToCollection(coll string, indexes []string) error {
+	collHandle := data.getCollectionHandle(coll)
+	return collHandle.Index(indexes)
+}
+
+func (data *Database) QueryDB(coll string, queryByte []byte) (map[int]struct{}, error) {
+	if len(queryByte) <= 0 {
+		return nil, fmt.Errorf("Invalid query string")
+	}
+
+	var query interface{}
+	json.Unmarshal(queryByte, &query)
+
+	queryResult := make(map[int]struct{}) // query result (document IDs) goes into map keys
+	err := db.EvalQuery(query, data.getCollectionHandle(coll), &queryResult)
+	if err != nil {
+		return nil, err
+	}
+	return queryResult, nil
 }

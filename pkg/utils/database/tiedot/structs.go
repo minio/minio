@@ -1,4 +1,4 @@
-package database
+package tiedot
 
 import (
 	"github.com/HouzuoGuo/tiedot/db"
