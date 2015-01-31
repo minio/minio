@@ -33,10 +33,10 @@ package signers
 //	return true
 //}
 //
-//func GetAccessID() {
+//func getAccessID() {
 //}
 //
-//func GetSecretID() {
+//func getSecretID() {
 //}
 //
 //// This package implements verification side of Object API Signature request
