@@ -1,4 +1,4 @@
-package database
+package tiedot
 
 import (
 	"os"
@@ -14,9 +14,9 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) Testing(c *C) {
-	d := NewDatabase()
-	d.GetDBHandle("/tmp/testdata")
+	d, err := NewDatabase("/tmp/testdata")
 	defer os.RemoveAll("/tmp/testdata")
+	c.Assert(err, IsNil)
 
 	d.InitCollection("Matrix")
 
@@ -26,11 +26,11 @@ func (s *MySuite) Testing(c *C) {
 		"language": "Go",
 	}
 
-	docId, err1 := d.InsertToCollection("Matrix", data)
+	_, err1 := d.InsertToCollection("Matrix", data)
 	c.Assert(err1, IsNil)
 
-	retdata, err2 := d.GetCollectionData("Matrix", docId)
-
+	var indexes []string
+	indexes = []string{"version", "url", "language"}
+	err2 := d.InsertIndexToCollection("Matrix", indexes)
 	c.Assert(err2, IsNil)
-	c.Assert(data, DeepEquals, retdata)
 }
