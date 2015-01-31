@@ -18,6 +18,8 @@ package minioapi
 
 import (
 	"bytes"
+	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -284,7 +286,51 @@ func (s *MySuite) TestPutObject(c *C) {
 }
 
 func (s *MySuite) TestListBuckets(c *C) {
-	// TODO Implement
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	response, err := http.Get(testServer.URL + "/")
+	defer response.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	listResponse, err := readListBucket(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(len(listResponse.Buckets.Bucket), Equals, 0)
+
+	storage.StoreBucket("foo")
+
+	response, err = http.Get(testServer.URL + "/")
+	defer response.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	listResponse, err = readListBucket(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(len(listResponse.Buckets.Bucket), Equals, 1)
+	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "foo")
+
+	storage.StoreBucket("bar")
+
+	response, err = http.Get(testServer.URL + "/")
+	defer response.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	listResponse, err = readListBucket(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(len(listResponse.Buckets.Bucket), Equals, 2)
+	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "foo")
+	c.Assert(listResponse.Buckets.Bucket[1].Name, Equals, "bar")
+}
+
+func readListBucket(reader io.Reader) (BucketListResponse, error) {
+	var results BucketListResponse
+	decoder := xml.NewDecoder(reader)
+	err := decoder.Decode(&results)
+	return results, err
 }
 
 func (s *MySuite) TestListObjects(c *C) {
