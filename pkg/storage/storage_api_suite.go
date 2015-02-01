@@ -17,6 +17,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testBucketRecreateFails(c, create)
 	testPutObjectInSubdir(c, create)
 	testListBuckets(c, create)
+	testListBucketsOrder(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -192,4 +193,19 @@ func testListBuckets(c *C, create func() Storage) {
 	buckets, err = storage.ListBuckets("bucket2")
 	c.Assert(len(buckets), Equals, 2)
 	c.Assert(err, IsNil)
+}
+
+func testListBucketsOrder(c *C, create func() Storage) {
+	for i := 0; i < 10; i++ {
+		storage := create()
+		// add one and test exists
+		storage.StoreBucket("bucket1")
+		storage.StoreBucket("bucket2")
+
+		buckets, err := storage.ListBuckets("bucket")
+		c.Assert(len(buckets), Equals, 2)
+		c.Assert(err, IsNil)
+		c.Assert(buckets[0].Name, Equals, "bucket1")
+		c.Assert(buckets[1].Name, Equals, "bucket2")
+	}
 }

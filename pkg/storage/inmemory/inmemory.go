@@ -111,6 +111,12 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorag
 	return results, false, nil
 }
 
+type ByBucketName []mstorage.BucketMetadata
+
+func (b ByBucketName) Len() int           { return len(b) }
+func (b ByBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
+
 func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
 	var results []mstorage.BucketMetadata
 	for key, bucket := range storage.bucketdata {
@@ -118,6 +124,7 @@ func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, e
 			results = append(results, bucket.metadata)
 		}
 	}
+	sort.Sort(ByBucketName(results))
 	return results, nil
 }
 
