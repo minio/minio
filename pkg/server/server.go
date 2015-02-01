@@ -23,19 +23,28 @@ import (
 	"path"
 	"reflect"
 
+	"github.com/minio-io/minio/pkg/api/minioapi"
+	"github.com/minio-io/minio/pkg/api/webuiapi"
 	"github.com/minio-io/minio/pkg/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/fs"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
-	"github.com/minio-io/minio/pkg/webapi/minioapi"
 )
 
 type ServerConfig struct {
-	Address     string
-	Tls         bool
-	CertFile    string
-	KeyFile     string
+	Address  string
+	Tls      bool
+	CertFile string
+	KeyFile  string
+	ApiType  interface{}
+}
+
+type MinioApi struct {
 	StorageType StorageType
+}
+
+type WebUIApi struct {
+	Websocket bool
 }
 
 type StorageType int
@@ -45,27 +54,62 @@ const (
 	FileStorage
 )
 
-func Start(config ServerConfig) {
-	// maintain a list of input and output channels for communicating with services
-	var ctrlChans []chan<- string
-	var statusChans []<-chan error
-
+func getHttpChannels(configs []ServerConfig) (ctrlChans []chan<- string, statusChans []<-chan error) {
 	// a pair of control channels, we use these primarily to add to the lists above
 	var ctrlChan chan<- string
 	var statusChan <-chan error
 
-	// configure web server
-	var storage mstorage.Storage
-	var httpConfig = httpserver.HttpServerConfig{}
-	httpConfig.Address = config.Address
-	httpConfig.TLS = config.Tls
+	for _, config := range configs {
+		switch k := config.ApiType.(type) {
+		case MinioApi:
+			{
+				// configure web server
+				var storage mstorage.Storage
+				var httpConfig = httpserver.HttpServerConfig{}
+				httpConfig.Address = config.Address
+				httpConfig.Websocket = false
+				httpConfig.TLS = config.Tls
 
-	if config.CertFile != "" {
-		httpConfig.CertFile = config.CertFile
+				if config.CertFile != "" {
+					httpConfig.CertFile = config.CertFile
+				}
+				if config.KeyFile != "" {
+					httpConfig.KeyFile = config.KeyFile
+				}
+
+				ctrlChans, statusChans, storage = getStorageChannels(k.StorageType)
+				// start minio api in a web server, pass storage driver into it
+				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(storage), httpConfig)
+
+				ctrlChans = append(ctrlChans, ctrlChan)
+				statusChans = append(statusChans, statusChan)
+
+			}
+		case WebUIApi:
+			{
+				var httpConfig = httpserver.HttpServerConfig{}
+				httpConfig.Address = config.Address
+				httpConfig.TLS = config.Tls
+				httpConfig.CertFile = config.CertFile
+				httpConfig.KeyFile = config.KeyFile
+
+				httpConfig.Websocket = k.Websocket
+				ctrlChan, statusChan, _ = httpserver.Start(webuiapi.HttpHandler(), httpConfig)
+
+				ctrlChans = append(ctrlChans, ctrlChan)
+				statusChans = append(statusChans, statusChan)
+			}
+		default:
+			log.Fatal("Invalid api type")
+		}
 	}
-	if config.KeyFile != "" {
-		httpConfig.KeyFile = config.KeyFile
-	}
+	return
+}
+
+func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, statusChans []<-chan error, storage mstorage.Storage) {
+	// a pair of control channels, we use these primarily to add to the lists above
+	var ctrlChan chan<- string
+	var statusChan <-chan error
 
 	// instantiate storage
 	// preconditions:
@@ -76,13 +120,13 @@ func Start(config ServerConfig) {
 	//    - ctrlChans has channel to communicate to storage
 	//    - statusChans has channel for messages coming from storage
 	switch {
-	case config.StorageType == InMemoryStorage:
+	case storageType == InMemoryStorage:
 		{
 			ctrlChan, statusChan, storage = inmemory.Start()
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
-	case config.StorageType == FileStorage:
+	case storageType == FileStorage:
 		{
 			// TODO Replace this with a more configurable and robust version
 			currentUser, err := user.Current()
@@ -103,15 +147,14 @@ func Start(config ServerConfig) {
 	default: // should never happen
 		log.Fatal("No storage driver found")
 	}
+	return
+}
 
-	// start minio api in a web server, pass storage driver into it
-	ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(storage), httpConfig)
-	ctrlChans = append(ctrlChans, ctrlChan)
-	statusChans = append(statusChans, statusChan)
-
+func Start(configs []ServerConfig) {
 	// listen for critical errors
 	// TODO Handle critical errors appropriately when they arise
 	// reflected looping is necessary to remove dead channels from loop and not flood switch
+	_, statusChans := getHttpChannels(configs)
 	cases := createSelectCases(statusChans)
 	for len(cases) > 0 {
 		chosen, value, recvOk := reflect.Select(cases)

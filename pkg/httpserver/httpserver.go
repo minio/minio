@@ -23,10 +23,11 @@ import (
 )
 
 type HttpServerConfig struct {
-	Address  string
-	TLS      bool
-	CertFile string
-	KeyFile  string
+	Address   string
+	TLS       bool
+	CertFile  string
+	KeyFile   string
+	Websocket bool
 }
 
 type HttpServer struct{}
@@ -39,7 +40,8 @@ func Start(handler http.Handler, config HttpServerConfig) (chan<- string, <-chan
 	return ctrlChannel, errorChannel, &server
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, config HttpServerConfig, server *HttpServer) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error,
+	router http.Handler, config HttpServerConfig, server *HttpServer) {
 	var err error
 
 	// Minio server config
