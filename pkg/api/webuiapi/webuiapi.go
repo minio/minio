@@ -29,14 +29,9 @@ type webUiApi struct {
 func HttpHandler() http.Handler {
 	mux := mux.NewRouter()
 	var api = webUiApi{}
+
+	mux.StrictSlash(true)
 	mux.HandleFunc("/", api.homeHandler).Methods("GET")
-	/*
-		mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
-		mux.HandleFunc("/{bucket}/", api.putBucketHandler).Methods("PUT")
-		mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
-		mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
-		mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
-	*/
 	return mux
 }
 
