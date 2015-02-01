@@ -61,15 +61,20 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	return mux
+	return ignoreUnimplementedBucketResources(mux)
+}
+
+func ignoreUnimplementedBucketResources(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ignoreUnImplementedObjectResources(r) {
+			w.WriteHeader(http.StatusNotImplemented)
+		} else {
+			h.ServeHTTP(w, r)
+		}
+	})
 }
 
 func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
 	vars := mux.Vars(req)
 	prefix, ok := vars["prefix"]
 	if !ok {
@@ -88,11 +93,6 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	prefix, ok := vars["prefix"]
@@ -113,11 +113,6 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	err := server.storage.StoreBucket(bucket)
@@ -131,11 +126,6 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedObjectResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -182,11 +172,6 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 }
 
 func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
-	if server.ignoreUnImplementedBucketResources(req) {
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -251,7 +236,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 //// helpers
 
 // Checks requests for unimplemented resources
-func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bool {
+func ignoreUnImplementedBucketResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
 		if unimplementedBucketResourceNames[name] {
@@ -261,7 +246,7 @@ func (server *minioApi) ignoreUnImplementedBucketResources(req *http.Request) bo
 	return false
 }
 
-func (server *minioApi) ignoreUnImplementedObjectResources(req *http.Request) bool {
+func ignoreUnImplementedObjectResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
 		if unimplementedObjectResourceNames[name] {
