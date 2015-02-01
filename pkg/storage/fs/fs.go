@@ -153,6 +153,11 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorag
 
 	rootPrefix := path.Join(storage.root, bucket)
 
+	// check bucket exists
+	if _, err := os.Stat(rootPrefix); os.IsNotExist(err) {
+		return []mstorage.ObjectMetadata{}, false, mstorage.BucketNotFound{Bucket: bucket}
+	}
+
 	files, err := ioutil.ReadDir(rootPrefix)
 	if err != nil {
 		return []mstorage.ObjectMetadata{}, false, mstorage.EmbedError("bucket", "", err)
