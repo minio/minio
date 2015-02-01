@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -323,12 +322,9 @@ func (s *MySuite) TestListBuckets(c *C) {
 	listResponse, err = readListBucket(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 2)
-	var buckets []string
-	buckets = append(buckets, listResponse.Buckets.Bucket[0].Name)
-	buckets = append(buckets, listResponse.Buckets.Bucket[1].Name)
-	sort.Strings(buckets)
-	c.Assert(buckets[0], Equals, "bar")
-	c.Assert(buckets[1], Equals, "foo")
+
+	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "bar")
+	c.Assert(listResponse.Buckets.Bucket[1].Name, Equals, "foo")
 }
 
 func readListBucket(reader io.Reader) (BucketListResponse, error) {
