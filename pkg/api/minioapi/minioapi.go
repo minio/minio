@@ -54,6 +54,8 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	var api = minioApi{}
 	api.storage = storage
 
+	// Re-direct /path to /path/
+	mux.StrictSlash(true)
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/", api.putBucketHandler).Methods("PUT")
