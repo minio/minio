@@ -61,12 +61,12 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	return ignoreUnimplementedBucketResources(mux)
+	return ignoreUnimplementedResources(mux)
 }
 
-func ignoreUnimplementedBucketResources(h http.Handler) http.Handler {
+func ignoreUnimplementedResources(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ignoreUnImplementedObjectResources(r) {
+		if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
 			w.WriteHeader(http.StatusNotImplemented)
 		} else {
 			h.ServeHTTP(w, r)
