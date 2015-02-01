@@ -241,6 +241,9 @@ func (s *MySuite) TestPutObject(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+
 	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
 	c.Assert(len(objects), Equals, 0)
 	c.Assert(isTruncated, Equals, false)
