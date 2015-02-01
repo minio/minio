@@ -88,6 +88,9 @@ func (storage *storage) StoreBucket(bucketName string) error {
 }
 
 func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorage.ObjectMetadata, bool, error) {
+	if _, ok := storage.bucketdata[bucket]; ok == false {
+		return []mstorage.ObjectMetadata{}, false, mstorage.BucketNotFound{Bucket: bucket}
+	}
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	var keys []string
