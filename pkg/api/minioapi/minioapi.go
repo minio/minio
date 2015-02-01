@@ -105,13 +105,22 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	acceptsContentType := getContentType(req)
 
 	objects, isTruncated, err := server.storage.ListObjects(bucket, prefix, 1000)
-	if err != nil {
+	switch err := err.(type) {
+	case nil: // success
+		response := generateObjectsListResult(bucket, objects, isTruncated)
+		w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
+	case mstorage.BucketNotFound:
+		log.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(err.Error()))
+	case mstorage.ImplementationError:
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+		w.Write([]byte(err.Error()))
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
 	}
-	response := generateObjectsListResult(bucket, objects, isTruncated)
-	w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 }
 
 func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
@@ -146,11 +155,13 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			log.Println(err)
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(err.Error()))
 		}
 	default:
 		{
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 		}
 	}
 }
