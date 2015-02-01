@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"log"
 	"math/rand"
 	"strconv"
 
@@ -18,6 +19,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testPutObjectInSubdir(c, create)
 	testListBuckets(c, create)
 	testListBucketsOrder(c, create)
+	testListObjectsTestsForNonExistantBucket(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -196,6 +198,8 @@ func testListBuckets(c *C, create func() Storage) {
 }
 
 func testListBucketsOrder(c *C, create func() Storage) {
+	// if implementation contains a map, order of map keys will vary.
+	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
 		storage := create()
 		// add one and test exists
@@ -208,4 +212,13 @@ func testListBucketsOrder(c *C, create func() Storage) {
 		c.Assert(buckets[0].Name, Equals, "bucket1")
 		c.Assert(buckets[1].Name, Equals, "bucket2")
 	}
+}
+
+func testListObjectsTestsForNonExistantBucket(c *C, create func() Storage) {
+	storage := create()
+	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
+	log.Println("EH:", err)
+	c.Assert(err, Not(IsNil))
+	c.Assert(isTruncated, Equals, false)
+	c.Assert(len(objects), Equals, 0)
 }
