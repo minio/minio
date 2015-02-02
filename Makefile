@@ -1,22 +1,21 @@
 #GOPATH := $(CURDIR)/tmp/gopath
 MAKE_OPTIONS := -s
-ARCH := $(shell uname -s)
 
 all: getdeps install
 
 checkdeps:
 	@./checkdeps.sh
 
+createsymlink:
+	@if test ! -h $(GOPATH)/src/github.com/minio-io/minio; then echo "Creating symlink to $(GOPATH)/src/github.com/minio-io/minio" && ln -s $(PWD) $(GOPATH)/src/github.com/minio-io/minio; fi
+
 getdeps: checkdeps
 	@go get github.com/tools/godep && echo "Installed godep"
 	@go get golang.org/x/tools/cmd/cover && echo "Installed cover"
 
-build-erasure: getdeps
-	@godep go generate github.com/minio-io/minio/pkg/storage/erasure
-	@godep go build github.com/minio-io/minio/pkg/storage/erasure
-
-build-all: getdeps build-erasure
+build-all: getdeps createsymlink
 	@echo "Building Libraries"
+	@godep go generate ./...
 	@godep go build ./...
 
 test-all: build-all

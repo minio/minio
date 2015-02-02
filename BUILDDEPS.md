@@ -35,10 +35,12 @@ $ export PATH=$PATH:$GOPATH/bin
 
 .... Add paths to your bashrc ....
 
-$ echo "export PATH=$PATH:${HOME}/local/go/bin" >> ${HOME}/.bashrc
-$ echo "export GOROOT=${HOME}/local/go" >> ${HOME}/.bashrc
-$ echo "export GOPATH=$HOME/mygo" >> ${HOME}/.bashrc
-$ echo "export PATH=$PATH:$GOPATH/bin" >> ${HOME}/.bashrc
+$ cat << EOF > ${HOME}/.bashrc
+export PATH=$PATH:${HOME}/local/go/bin
+export GOROOT=${HOME}/local/go
+export GOPATH=$HOME/mygo
+export PATH=$PATH:$GOPATH/bin
+EOF
 ```
 
 ## Mac OSX (Yosemite) 10.10
@@ -77,9 +79,15 @@ $ mkdir -p $HOME/mygo
 
 $ export GOPATH=$HOME/mygo
 $ export PATH=$PATH:$GOPATH/bin
+$ GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
+$ export GOROOT=$(brew --prefix)/Cellar/go/$GOVERSION/libexec
 
 .... Add paths to your bashrc ....
 
-$ echo "export GOPATH=$HOME/mygo" >> ${HOME}/.bashrc
-$ echo "export PATH=$PATH:$GOPATH/bin" >> ${HOME}/.bashrc
+$ cat << EOF > ~/.bashrc
+GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
+export GOPATH=$HOME/mygo
+export PATH=$PATH:$GOPATH/bin
+export GOROOT=$(brew --prefix)/Cellar/go/$GOVERSION/libexec
+EOF
 ```

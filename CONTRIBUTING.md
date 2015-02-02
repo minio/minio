@@ -3,20 +3,22 @@ Fork [Minio upstream](https://github.com/Minio-io/minio/fork) source repository 
 ```sh
 $ git clone https://github.com/$USER_ID/minio
 $ cd minio
-$ mkdir -p ${GOPATH}/src/github.com/minio-io
-$ ln -s ${PWD} $GOPATH/src/github.com/minio-io/
 ```
 
 ### Compiling Minio from source
-Minio uses ``Makefile`` to wrap around some of the limitations of ``go build``. To compile Minio source, simply change to your workspace folder and type ``make``.
+Minio uses ``Makefile`` to wrap around some of the limitations of ``go`` build system. To compile Minio source, simply change to your workspace folder and type ``make``.
 ```sh
 $ make
 Checking if proper environment variables are set.. Done
 ...
 Checking dependencies for Minio.. Done
+Installed godep
+Installed cover
+Building Libraries
 ...
 ...
 ```
+
 ###  Developer Guidelines
 ``Minio`` community welcomes your contribution. To make the process as seamless as possible, we ask for the following:
 * Go ahead and fork the project and make your changes. We encourage pull requests to discuss code changes.
