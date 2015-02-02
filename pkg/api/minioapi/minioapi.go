@@ -127,13 +127,17 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	err := server.storage.StoreBucket(bucket)
-	if err != nil {
+	switch err := err.(type) {
+	case nil:
+		w.Header().Set("Server", "Minio")
+		w.Header().Set("Connection", "close")
+	case mstorage.BucketNameInvalid:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
-		return
+	case mstorage.BucketExists:
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte(err.Error()))
 	}
-	w.Header().Set("Server", "Minio")
-	w.Header().Set("Connection", "close")
 }
 
 func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
