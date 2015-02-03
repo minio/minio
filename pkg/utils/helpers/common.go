@@ -14,13 +14,26 @@
  * limitations under the License.
  */
 
-package utils
+package helpers
 
 import (
 	"io/ioutil"
 	"log"
+	"os"
+	"runtime"
 	"strings"
 )
+
+func HomeDir() string {
+	if runtime.GOOS == "windows" {
+		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
+		if home == "" {
+			home = os.Getenv("USERPROFILE")
+		}
+		return home
+	}
+	return os.Getenv("HOME")
+}
 
 func MakeTempTestDir() (string, error) {
 	return ioutil.TempDir("/tmp", "minio-test-")
