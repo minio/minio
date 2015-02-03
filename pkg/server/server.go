@@ -19,7 +19,6 @@ package server
 import (
 	"log"
 	"os"
-	"os/user"
 	"path"
 	"reflect"
 
@@ -29,6 +28,7 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/fs"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
+	"github.com/minio-io/minio/pkg/utils/helpers"
 )
 
 type ServerConfig struct {
@@ -128,13 +128,9 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 		}
 	case storageType == FileStorage:
 		{
-			// TODO Replace this with a more configurable and robust version
-			currentUser, err := user.Current()
-			if err != nil {
-				log.Fatal(err)
-			}
-			rootPath := path.Join(currentUser.HomeDir, "minio-storage")
-			_, err = os.Stat(rootPath)
+			homeDir := helpers.HomeDir()
+			rootPath := path.Join(homeDir, "minio-storage")
+			_, err := os.Stat(rootPath)
 			if os.IsNotExist(err) {
 				err = os.Mkdir(rootPath, 0700)
 			} else if err != nil {
