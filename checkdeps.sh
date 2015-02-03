@@ -45,6 +45,11 @@ if ! yasm -f elf64 pkg/storage/erasure/gf-vect-dot-prod-avx2.asm -o /dev/null 2>
     MISSING="${MISSING} yasm(1.2.0)"
 fi
 
+env mkdocs help >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    MISSING="${MISSING} mkdocs"
+fi
+
 ## If dependencies are missing, warn the user and abort
 if [ "x${MISSING}" != "x" ]; then
   echo "ERROR"
