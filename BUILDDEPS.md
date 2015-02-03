@@ -2,9 +2,10 @@
 ### Build Dependencies
 This installation document assumes Ubuntu 14.04 or later on x86-64 platform.
 
-##### Install Git and GCC
+##### Install Git, GCC and MkDocs
 ```sh
-$ sudo apt-get install git build-essential
+$ sudo apt-get install git build-essential python-pip
+$ sudo pip install mkdocs
 ```
 
 ##### Install YASM
