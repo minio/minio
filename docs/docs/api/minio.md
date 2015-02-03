@@ -15,7 +15,7 @@ http://minio.example.com/bucket/path/to/object
 http://minio.example.com/bucket2/path/to/object
 ```
 
-## /
+## GET /
 
 List buckets accessible by the user.
 
