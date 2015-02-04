@@ -5,6 +5,9 @@
 Minio stores and retrieves data in a logical format based upon REST
 based URLs.
 
+### Note about examples:
+
+XML and JSON results have been prettified for readability. As a result, the Content-Length may not match exactly.
 ```
 Form:
 http://minio.example.com/{bucket}/{path:.*}
@@ -18,6 +21,12 @@ http://minio.example.com/bucket2/path/to/object
 ## GET /
 
 List buckets accessible by the user.
+
+The default output is XML. JSON output may also be requested by adding the following header:
+
+```
+Accept: "application/json"
+```
 
 Example:
 ```
@@ -47,6 +56,39 @@ Content-Length: 306
     </Bucket>
   </Buckets>
 </ListAllMyBucketsResult>
+```
+
+```
+GET / HTTP/1.1
+Accept: application/json
+```
+
+```
+HTTP/1.1 200 OK
+Connection: close
+Content-Type: application/json
+Server: Minio
+Date: Wed, 04 Feb 2015 21:59:10 GMT
+Content-Length: 223
+
+{
+   "Owner" : {
+      "ID" : "minio"
+      "DisplayName" : "minio",
+   },
+   "Buckets" : {
+      "Bucket" : [
+         {
+            "Name" : "bucket",
+            "CreationDate" : "2015-01-30T15:20:09.013Z"
+         },
+         {
+            "Name" : "minio",
+            "CreationDate" : "2015-02-02T14:52:34.914Z"
+         }
+      ]
+   }
+}
 ```
 
 ## GET /{bucket}/
