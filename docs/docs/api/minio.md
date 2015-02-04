@@ -63,8 +63,8 @@ HTTP/1.1 200 OK
 Connection: close
 Content-Type: application/xml
 Server: Minio
-Date: Mon, 02 Feb 2015 22:07:20 GMT
-Content-Length: 352
+Date: Tue, 03 Feb 2015 00:57:59 GMT
+Content-Length: 579
 
 <?xml version="1.0"?>
 <ListBucketResult>
@@ -72,6 +72,17 @@ Content-Length: 352
   <Marker/>
   <MaxKeys>1000</MaxKeys>
   <IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>hello</Key>
+    <LastModified>2015-02-02T14:52:34.914Z</LastModified>
+    <ETag>minio#hello</ETag>
+    <Size>75</Size>
+    <StorageClass>STANDARD</StorageClass>
+    <Owner>
+      <ID>minio</ID>
+      <DisplayName>minio</DisplayName>
+    </Owner>
+  </Contents>
   <Contents>
     <Key>one</Key>
     <LastModified>2015-01-27T17:46:28.264Z</LastModified>
