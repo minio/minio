@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -362,4 +363,54 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 
 	// verify etag
 	c.Assert(header["Etag"][0], Equals, etag)
+}
+
+func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	err := storage.StoreBucket("foo")
+	c.Assert(err, IsNil)
+
+	request, err := http.NewRequest("GET", testServer.URL+"/", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+
+	request.Header.Add("Accept", "application/json")
+
+	client := http.Client{}
+	response, err := client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	byteResults, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
+}
+
+func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	err := storage.StoreBucket("foo")
+	c.Assert(err, IsNil)
+
+	request, err := http.NewRequest("GET", testServer.URL+"/foo/", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+
+	request.Header.Add("Accept", "application/json")
+
+	client := http.Client{}
+	response, err := client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	byteResults, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
 }
