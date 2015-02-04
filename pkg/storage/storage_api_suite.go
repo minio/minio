@@ -2,7 +2,6 @@ package storage
 
 import (
 	"bytes"
-	"log"
 	"math/rand"
 	"strconv"
 
@@ -20,6 +19,8 @@ func APITestSuite(c *C, create func() Storage) {
 	testListBuckets(c, create)
 	testListBucketsOrder(c, create)
 	testListObjectsTestsForNonExistantBucket(c, create)
+	testNonExistantObjectInBucket(c, create)
+	testGetDirectoryReturnsObjectNotFound(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -217,8 +218,72 @@ func testListBucketsOrder(c *C, create func() Storage) {
 func testListObjectsTestsForNonExistantBucket(c *C, create func() Storage) {
 	storage := create()
 	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
-	log.Println("EH:", err)
 	c.Assert(err, Not(IsNil))
 	c.Assert(isTruncated, Equals, false)
 	c.Assert(len(objects), Equals, 0)
+}
+
+func testNonExistantObjectInBucket(c *C, create func() Storage) {
+	storage := create()
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+
+	var byteBuffer bytes.Buffer
+	length, err := storage.CopyObjectToWriter(&byteBuffer, "bucket", "dir1")
+	c.Assert(length, Equals, int64(0))
+	c.Assert(err, Not(IsNil))
+	c.Assert(len(byteBuffer.Bytes()), Equals, 0)
+	switch err := err.(type) {
+	case ObjectNotFound:
+		{
+			c.Assert(err, ErrorMatches, "Object not Found: bucket#dir1")
+		}
+	default:
+		{
+			c.Assert(err, Equals, "fails")
+		}
+	}
+}
+
+func testGetDirectoryReturnsObjectNotFound(c *C, create func() Storage) {
+	storage := create()
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+
+	err = storage.StoreObject("bucket", "dir1/dir2/object", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+
+	var byteBuffer bytes.Buffer
+	length, err := storage.CopyObjectToWriter(&byteBuffer, "bucket", "dir1")
+	c.Assert(length, Equals, int64(0))
+	switch err := err.(type) {
+	case ObjectNotFound:
+		{
+			c.Assert(err.Bucket, Equals, "bucket")
+			c.Assert(err.Object, Equals, "dir1")
+		}
+	default:
+		{
+			// force a failure with a line number
+			c.Assert(err, Equals, "ObjectNotFound")
+		}
+	}
+	c.Assert(len(byteBuffer.Bytes()), Equals, 0)
+
+	var byteBuffer2 bytes.Buffer
+	length, err = storage.CopyObjectToWriter(&byteBuffer, "bucket", "dir1/")
+	c.Assert(length, Equals, int64(0))
+	switch err := err.(type) {
+	case ObjectNotFound:
+		{
+			c.Assert(err.Bucket, Equals, "bucket")
+			c.Assert(err.Object, Equals, "dir1/")
+		}
+	default:
+		{
+			// force a failure with a line number
+			c.Assert(err, Equals, "ObjectNotFound")
+		}
+	}
+	c.Assert(len(byteBuffer2.Bytes()), Equals, 0)
 }

@@ -105,10 +105,24 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 
 	objectPath := path.Join(storage.root, bucket, object)
 
-	file, err := os.Open(objectPath)
-	if err != nil {
-		return 0, mstorage.EmbedError(bucket, object, err)
+	filestat, err := os.Stat(objectPath)
+	switch err := err.(type) {
+	case nil:
+		{
+			if filestat.IsDir() {
+				return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+			}
+		}
+	default:
+		{
+			if os.IsNotExist(err) {
+				return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+			} else {
+				return 0, mstorage.EmbedError(bucket, object, err)
+			}
+		}
 	}
+	file, err := os.Open(objectPath)
 	count, err := io.Copy(w, file)
 	if err != nil {
 		return count, mstorage.EmbedError(bucket, object, err)
