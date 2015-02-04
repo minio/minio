@@ -25,7 +25,7 @@ const (
 )
 
 type ObjectListResponse struct {
-	XMLName     xml.Name `xml:"ListBucketResult"`
+	XMLName     xml.Name `xml:"ListBucketResult" json:"-"`
 	Name        string
 	Marker      string
 	MaxKeys     int
@@ -34,7 +34,7 @@ type ObjectListResponse struct {
 }
 
 type BucketListResponse struct {
-	XMLName xml.Name `xml:"ListAllMyBucketsResult"`
+	XMLName xml.Name `xml:"ListAllMyBucketsResult" json:"-"`
 	Owner   Owner
 	Buckets struct {
 		Bucket []*Bucket
