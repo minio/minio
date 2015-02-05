@@ -17,6 +17,8 @@
 package webuiapi
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
 	"path"
@@ -35,6 +37,11 @@ type webUiApi struct {
 	webPath string
 }
 
+// No encoder interface exists, so we create one.
+type encoder interface {
+	Encode(v interface{}) error
+}
+
 func HttpHandler() http.Handler {
 	mux := mux.NewRouter()
 	var api = webUiApi{}
@@ -49,12 +56,35 @@ func HttpHandler() http.Handler {
 	return mux
 }
 
+func writeResponse(w http.ResponseWriter, response interface{}) []byte {
+	var bytesBuffer bytes.Buffer
+	var encoder encoder
+	w.Header().Set("Content-Type", "application/json")
+	encoder = json.NewEncoder(&bytesBuffer)
+	w.Header().Set("Server", "Minio Management Console")
+	w.Header().Set("Connection", "close")
+	encoder.Encode(response)
+	return bytesBuffer.Bytes()
+}
+
 func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
 	var accesskey, secretkey []byte
 	username := req.FormValue("username")
 	if len(username) <= 0 {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err = web.conf.ReadConfig()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if web.conf.IsUserExists(username) {
+		w.WriteHeader(http.StatusConflict)
 		return
 	}
 
@@ -77,13 +107,6 @@ func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	user.SecretKey = string(secretkey)
 
-	err = web.conf.ReadConfig()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
 	web.conf.AddUser(user)
 	err = web.conf.WriteConfig()
 	if err != nil {
@@ -99,5 +122,7 @@ func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Println("Config:", web.conf.Users)
+	// Get user back for sending it over HTTP reply
+	user = web.conf.GetUser(username)
+	w.Write(writeResponse(w, user))
 }

@@ -45,6 +45,24 @@ func (c *Config) GetConfigPath() string {
 	return c.configPath
 }
 
+func (c *Config) IsUserExists(username string) bool {
+	for _, user := range c.Users {
+		if user.Name == username {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) GetUser(username string) User {
+	for _, user := range c.Users {
+		if user.Name == username {
+			return user
+		}
+	}
+	return User{}
+}
+
 func (c *Config) AddUser(user User) {
 	var currentUsers map[string]User
 	if len(c.Users) == 0 {
