@@ -77,6 +77,13 @@ func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	user.SecretKey = string(secretkey)
 
+	err = web.conf.ReadConfig()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
 	web.conf.AddUser(user)
 	err = web.conf.WriteConfig()
 	if err != nil {
