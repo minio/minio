@@ -41,7 +41,7 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 }
 
-func (storage *storage) StoreObject(bucket string, key string, data io.Reader) error {
+func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	objectKey := bucket + ":" + key
 
 	if _, ok := storage.bucketdata[bucket]; ok == false {
@@ -51,17 +51,26 @@ func (storage *storage) StoreObject(bucket string, key string, data io.Reader) e
 	if _, ok := storage.objectdata[objectKey]; ok == true {
 		return mstorage.ObjectExists{Bucket: bucket, Key: key}
 	}
+
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	contentType = strings.TrimSpace(contentType)
+
 	var bytesBuffer bytes.Buffer
 	var newObject = storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
 		size := bytesBuffer.Len()
 		etag := fmt.Sprintf("%x", sha256.Sum256(bytesBuffer.Bytes()))
 		newObject.metadata = mstorage.ObjectMetadata{
-			Bucket:  bucket,
-			Key:     key,
-			Created: time.Now(),
-			Size:    int64(size),
-			ETag:    etag,
+			Bucket: bucket,
+			Key:    key,
+
+			ContentType: contentType,
+			Created:     time.Now(),
+			ETag:        etag,
+			Size:        int64(size),
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}

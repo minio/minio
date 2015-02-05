@@ -192,7 +192,7 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	err := server.storage.StoreObject(bucket, object, req.Body)
+	err := server.storage.StoreObject(bucket, object, "", req.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))

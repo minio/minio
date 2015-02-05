@@ -31,7 +31,7 @@ type Storage interface {
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)
 	GetObjectMetadata(bucket string, object string) (ObjectMetadata, error)
 	ListObjects(bucket, prefix string, count int) ([]ObjectMetadata, bool, error)
-	StoreObject(bucket string, key string, data io.Reader) error
+	StoreObject(bucket string, key string, contentType string, data io.Reader) error
 }
 
 type BucketMetadata struct {
@@ -40,11 +40,13 @@ type BucketMetadata struct {
 }
 
 type ObjectMetadata struct {
-	Bucket  string
-	Key     string
-	Created time.Time
-	Size    int64
-	ETag    string
+	Bucket string
+	Key    string
+
+	ContentType string
+	Created     time.Time
+	ETag        string
+	Size        int64
 }
 
 func IsValidBucket(bucket string) bool {

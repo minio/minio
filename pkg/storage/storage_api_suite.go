@@ -21,6 +21,7 @@ func APITestSuite(c *C, create func() Storage) {
 	testListObjectsTestsForNonExistantBucket(c, create)
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
+	testDefaultContentType(c, create)
 }
 
 func testCreateBucket(c *C, create func() Storage) {
@@ -40,7 +41,7 @@ func testMultipleObjectCreation(c *C, create func() Storage) {
 		}
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		err := storage.StoreObject("bucket", key, bytes.NewBufferString(randomString))
+		err := storage.StoreObject("bucket", key, "", bytes.NewBufferString(randomString))
 		c.Assert(err, IsNil)
 	}
 
@@ -72,7 +73,7 @@ func testPaging(c *C, create func() Storage) {
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
+		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
 		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
 		c.Assert(len(objects), Equals, i+1)
 		c.Assert(isTruncated, Equals, false)
@@ -81,7 +82,7 @@ func testPaging(c *C, create func() Storage) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.StoreObject("bucket", key, bytes.NewBufferString(key))
+		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
 		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
 		c.Assert(len(objects), Equals, 5)
 		c.Assert(isTruncated, Equals, true)
@@ -89,8 +90,8 @@ func testPaging(c *C, create func() Storage) {
 	}
 	// check paging with prefix at end returns less objects
 	{
-		storage.StoreObject("bucket", "newPrefix", bytes.NewBufferString("prefix1"))
-		storage.StoreObject("bucket", "newPrefix2", bytes.NewBufferString("prefix2"))
+		storage.StoreObject("bucket", "newPrefix", "", bytes.NewBufferString("prefix1"))
+		storage.StoreObject("bucket", "newPrefix2", "", bytes.NewBufferString("prefix2"))
 		objects, isTruncated, err = storage.ListObjects("bucket", "new", 5)
 		c.Assert(len(objects), Equals, 2)
 	}
@@ -124,9 +125,9 @@ func testPaging(c *C, create func() Storage) {
 func testObjectOverwriteFails(c *C, create func() Storage) {
 	storage := create()
 	storage.StoreBucket("bucket")
-	err := storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	err := storage.StoreObject("bucket", "object", "", bytes.NewBufferString("one"))
 	c.Assert(err, IsNil)
-	err = storage.StoreObject("bucket", "object", bytes.NewBufferString("three"))
+	err = storage.StoreObject("bucket", "object", "", bytes.NewBufferString("three"))
 	c.Assert(err, Not(IsNil))
 	var bytesBuffer bytes.Buffer
 	length, err := storage.CopyObjectToWriter(&bytesBuffer, "bucket", "object")
@@ -137,7 +138,7 @@ func testObjectOverwriteFails(c *C, create func() Storage) {
 
 func testNonExistantBucketOperations(c *C, create func() Storage) {
 	storage := create()
-	err := storage.StoreObject("bucket", "object", bytes.NewBufferString("one"))
+	err := storage.StoreObject("bucket", "object", "", bytes.NewBufferString("one"))
 	c.Assert(err, Not(IsNil))
 }
 
@@ -153,7 +154,7 @@ func testPutObjectInSubdir(c *C, create func() Storage) {
 	storage := create()
 	err := storage.StoreBucket("bucket")
 	c.Assert(err, IsNil)
-	err = storage.StoreObject("bucket", "dir1/dir2/object", bytes.NewBufferString("hello world"))
+	err = storage.StoreObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
 	var bytesBuffer bytes.Buffer
 	length, err := storage.CopyObjectToWriter(&bytesBuffer, "bucket", "dir1/dir2/object")
@@ -250,7 +251,7 @@ func testGetDirectoryReturnsObjectNotFound(c *C, create func() Storage) {
 	err := storage.StoreBucket("bucket")
 	c.Assert(err, IsNil)
 
-	err = storage.StoreObject("bucket", "dir1/dir2/object", bytes.NewBufferString("hello world"))
+	err = storage.StoreObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -286,4 +287,28 @@ func testGetDirectoryReturnsObjectNotFound(c *C, create func() Storage) {
 		}
 	}
 	c.Assert(len(byteBuffer2.Bytes()), Equals, 0)
+}
+
+func testDefaultContentType(c *C, create func() Storage) {
+	storage := create()
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+
+	// test empty
+	err = storage.StoreObject("bucket", "one", "", bytes.NewBufferString("one"))
+	metadata, err := storage.GetObjectMetadata("bucket", "one")
+	c.Assert(err, IsNil)
+	c.Assert(metadata.ContentType, Equals, "application/octet-stream")
+
+	// test custom
+	storage.StoreObject("bucket", "two", "application/text", bytes.NewBufferString("two"))
+	metadata, err = storage.GetObjectMetadata("bucket", "two")
+	c.Assert(err, IsNil)
+	c.Assert(metadata.ContentType, Equals, "application/text")
+
+	// test trim space
+	storage.StoreObject("bucket", "three", "\tapplication/json    ", bytes.NewBufferString("three"))
+	metadata, err = storage.GetObjectMetadata("bucket", "three")
+	c.Assert(err, IsNil)
+	c.Assert(metadata.ContentType, Equals, "application/json")
 }

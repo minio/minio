@@ -1,6 +1,8 @@
 package fs
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,6 +16,10 @@ import (
 type storage struct {
 	root      string
 	writeLock sync.Mutex
+}
+
+type SerializedMetadata struct {
+	ContentType string
 }
 
 type MkdirFailedError struct{}
@@ -146,12 +152,41 @@ func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorag
 		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 	}
 
+	_, err = os.Stat(objectPath + "$metadata")
+	if os.IsNotExist(err) {
+		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+	}
+
+	file, err := os.Open(objectPath + "$metadata")
+	defer file.Close()
+	if err != nil {
+		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
+	}
+
+	metadataBuffer, err := ioutil.ReadAll(file)
+	if err != nil {
+		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
+	}
+
+	var deserializedMetadata SerializedMetadata
+	err = json.Unmarshal(metadataBuffer, &deserializedMetadata)
+	if err != nil {
+		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
+	}
+
+	contentType := "application/octet-stream"
+	if deserializedMetadata.ContentType != "" {
+		contentType = deserializedMetadata.ContentType
+	}
+	contentType = strings.TrimSpace(contentType)
+
 	metadata := mstorage.ObjectMetadata{
-		Bucket:  bucket,
-		Key:     object,
-		Created: stat.ModTime(),
-		Size:    stat.Size(),
-		ETag:    bucket + "#" + object,
+		Bucket:      bucket,
+		Key:         object,
+		Created:     stat.ModTime(),
+		Size:        stat.Size(),
+		ETag:        bucket + "#" + object,
+		ContentType: contentType,
 	}
 
 	return metadata, nil
@@ -179,24 +214,26 @@ func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorag
 
 	var metadataList []mstorage.ObjectMetadata
 	for _, file := range files {
-		if len(metadataList) >= count {
-			return metadataList, true, nil
-		}
-		if strings.HasPrefix(file.Name(), prefix) {
-			metadata := mstorage.ObjectMetadata{
-				Bucket:  bucket,
-				Key:     file.Name(),
-				Created: file.ModTime(),
-				Size:    file.Size(),
-				ETag:    bucket + "#" + file.Name(),
+		if !strings.HasSuffix(file.Name(), "$metadata") {
+			if len(metadataList) >= count {
+				return metadataList, true, nil
 			}
-			metadataList = append(metadataList, metadata)
+			if strings.HasPrefix(file.Name(), prefix) {
+				metadata := mstorage.ObjectMetadata{
+					Bucket:  bucket,
+					Key:     file.Name(),
+					Created: file.ModTime(),
+					Size:    file.Size(),
+					ETag:    bucket + "#" + file.Name(),
+				}
+				metadataList = append(metadataList, metadata)
+			}
 		}
 	}
 	return metadataList, false, nil
 }
 
-func (storage *storage) StoreObject(bucket string, key string, data io.Reader) error {
+func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	// TODO Commits should stage then move instead of writing directly
 	storage.writeLock.Lock()
 	defer storage.writeLock.Unlock()
@@ -215,6 +252,12 @@ func (storage *storage) StoreObject(bucket string, key string, data io.Reader) e
 	if mstorage.IsValidObject(key) == false {
 		return mstorage.ObjectNameInvalid{Bucket: bucket, Object: key}
 	}
+
+	// verify content type
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	contentType = strings.TrimSpace(contentType)
 
 	// get object path
 	objectPath := path.Join(storage.root, bucket, key)
@@ -242,6 +285,25 @@ func (storage *storage) StoreObject(bucket string, key string, data io.Reader) e
 	}
 
 	_, err = io.Copy(file, data)
+	if err != nil {
+		return mstorage.EmbedError(bucket, key, err)
+	}
+
+	// serialize metadata to json
+
+	metadataBuffer, err := json.Marshal(SerializedMetadata{ContentType: contentType})
+	if err != nil {
+		return mstorage.EmbedError(bucket, key, err)
+	}
+
+	//
+	file, err = os.OpenFile(objectPath+"$metadata", os.O_WRONLY|os.O_CREATE, 0600)
+	defer file.Close()
+	if err != nil {
+		return mstorage.EmbedError(bucket, key, err)
+	}
+
+	_, err = io.Copy(file, bytes.NewBuffer(metadataBuffer))
 	if err != nil {
 		return mstorage.EmbedError(bucket, key, err)
 	}
