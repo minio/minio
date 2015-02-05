@@ -225,7 +225,7 @@ func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata)
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", metadata.ContentType)
 	w.Header().Set("Connection", "close")
 }
 

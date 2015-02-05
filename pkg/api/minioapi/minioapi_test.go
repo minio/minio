@@ -69,7 +69,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, 0, "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", metadata.ETag)
 
 	// TODO Test Headers
 }
@@ -94,7 +94,7 @@ func (s *MySuite) TestObject(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.ETag)
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
@@ -130,7 +130,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello one"), "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello one"), "application/octet-stream", metadata.ETag)
 	c.Assert(err, IsNil)
 
 	// verify response data
@@ -149,7 +149,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello two"), "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello two"), "application/octet-stream", metadata.ETag)
 	c.Assert(err, IsNil)
 
 	// verify response data
@@ -168,7 +168,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello three"), "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello three"), "application/octet-stream", metadata.ETag)
 	c.Assert(err, IsNil)
 
 	// verify object
@@ -208,7 +208,7 @@ func (s *MySuite) TestHeader(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "text/plain", metadata.ETag)
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.ETag)
 }
 
 func (s *MySuite) TestPutBucket(c *C) {
@@ -413,4 +413,51 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	byteResults, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
+}
+
+func (s *MySuite) TestContentTypePersists(c *C) {
+	_, _, storage := inmemory.Start()
+	httpHandler := HttpHandler(storage)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	err := storage.StoreBucket("bucket")
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/one", bytes.NewBufferString("hello world"))
+	delete(request.Header, "Content-Type")
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// test head
+	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/one", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+
+	// test get object
+	response, err = http.Get(testServer.URL + "/bucket/one")
+	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+
+	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
+	delete(request.Header, "Content-Type")
+	request.Header.Add("Content-Type", "application/json")
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/two", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+
+	// test get object
+	response, err = http.Get(testServer.URL + "/bucket/two")
+	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
 }
