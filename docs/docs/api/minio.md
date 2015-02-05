@@ -108,7 +108,6 @@ Server: Minio
 Date: Tue, 03 Feb 2015 00:57:59 GMT
 Content-Length: 579
 
-<?xml version="1.0"?>
 <ListBucketResult>
   <Name>minio</Name>
   <Marker/>
