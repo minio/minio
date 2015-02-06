@@ -23,10 +23,13 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/config"
+	"github.com/minio-io/minio/pkg/utils/crypto/signers"
 )
 
 type contentType int
@@ -44,6 +47,11 @@ type minioApi struct {
 	storage mstorage.Storage
 }
 
+type vHandler struct {
+	conf    config.Config
+	handler http.Handler
+}
+
 // No encoder interface exists, so we create one.
 type encoder interface {
 	Encode(v interface{}) error
@@ -54,6 +62,11 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	var api = minioApi{}
 	api.storage = storage
 
+	var conf = config.Config{}
+	if err := conf.SetupConfig(); err != nil {
+		log.Fatal(err)
+	}
+
 	// Re-direct /path to /path/
 	mux.StrictSlash(true)
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
@@ -63,7 +76,50 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	return ignoreUnimplementedResources(mux)
+	return validateHandler(conf, ignoreUnimplementedResources(mux))
+}
+
+// grab AccessKey from authorization header
+func stripAccessKey(r *http.Request) string {
+	fields := strings.Fields(r.Header.Get("Authorization"))
+	if len(fields) < 2 {
+		return ""
+	}
+	splits := strings.Split(fields[1], ":")
+	if len(splits) < 2 {
+		return ""
+	}
+	return splits[0]
+}
+
+func validateHandler(conf config.Config, h http.Handler) http.Handler {
+	return vHandler{conf, h}
+}
+
+func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	accessKey := stripAccessKey(r)
+	if accessKey != "" {
+		if err := h.conf.ReadConfig(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			user := h.conf.GetKey(accessKey)
+			ok, err := signers.ValidateRequest(user, r)
+			if ok {
+				h.handler.ServeHTTP(w, r)
+			} else {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(err.Error()))
+			}
+		}
+	} else {
+		//No access key found, handle this more appropriately
+		//TODO: Remove this after adding tests to support signature
+		//request
+		h.handler.ServeHTTP(w, r)
+		//Add this line, to reply back for invalid requests
+		//w.WriteHeader(http.StatusUnauthorized)
+		//w.Write([]byte("Authorization header malformed")
+	}
 }
 
 func ignoreUnimplementedResources(h http.Handler) http.Handler {

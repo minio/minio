@@ -55,6 +55,14 @@ func (c *Config) IsUserExists(username string) bool {
 	return false
 }
 
+func (c *Config) GetKey(accessKey string) User {
+	value, ok := c.Users[accessKey]
+	if !ok {
+		return User{}
+	}
+	return value
+}
+
 func (c *Config) GetUser(username string) User {
 	for _, user := range c.Users {
 		if user.Name == username {
