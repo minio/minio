@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path"
 	"sync"
@@ -107,7 +108,13 @@ func (c *Config) ReadConfig() error {
 	users := make(map[string]User)
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&users)
-	if err != nil {
+	switch err {
+	case io.EOF:
+		return nil
+	case nil:
+		c.Users = users
+		return nil
+	default:
 		return err
 	}
 	c.Users = users
