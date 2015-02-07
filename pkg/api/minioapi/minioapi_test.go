@@ -221,7 +221,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	c.Assert(len(buckets), Equals, 0)
 	c.Assert(err, IsNil)
 
-	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/", bytes.NewBufferString(""))
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -250,7 +250,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	date1 := time.Now()
 
 	// Put Bucket before - Put Object into a bucket
-	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/", bytes.NewBufferString(""))
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -399,7 +399,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	err := storage.StoreBucket("foo")
 	c.Assert(err, IsNil)
 
-	request, err := http.NewRequest("GET", testServer.URL+"/foo/", bytes.NewBufferString(""))
+	request, err := http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 
 	request.Header.Add("Accept", "application/json")
