@@ -67,11 +67,9 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 		log.Fatal(err)
 	}
 
-	// Re-direct /path to /path/
-	mux.StrictSlash(true)
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}/", api.listObjectsHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}/", api.putBucketHandler).Methods("PUT")
+	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")

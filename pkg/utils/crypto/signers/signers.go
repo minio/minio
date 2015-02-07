@@ -47,6 +47,10 @@ func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	encoder.Write(hm.Sum(nil))
 	encoder.Close()
 
+	// DEBUG
+	// fmt.Println("Request header sent: ", req.Header.Get("Authorization"))
+	// fmt.Println("Header calculated: ", authHeader.String())
+	// fmt.Printf("%q : %x", ss, ss)
 	if req.Header.Get("Authorization") != authHeader.String() {
 		return false, fmt.Errorf("Authorization header mismatch")
 	}
