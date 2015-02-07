@@ -7,7 +7,7 @@ checkdeps:
 	@./checkdeps.sh
 
 createsymlink:
-	@if test ! -e $(GOPATH)/src/github.com/minio-io/minio; then echo "Creating symlink to $(GOPATH)/src/github.com/minio-io/minio" && ln -s $(PWD) $(GOPATH)/src/github.com/minio-io/minio; fi
+	@if test ! -e $(GOPATH)/src/github.com/minio-io/minio; then echo "Creating symlink to $(GOPATH)/src/github.com/minio-io/minio" && mkdir -p $(GOPATH)/src/github.com/minio-io && ln -s $(PWD) $(GOPATH)/src/github.com/minio-io/minio; fi
 
 getdeps: checkdeps
 	@go get github.com/tools/godep && echo "Installed godep"
