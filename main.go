@@ -81,12 +81,12 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "api-address,a",
-			Value: ":8080",
+			Value: ":9000",
 			Usage: "address for incoming API requests",
 		},
 		cli.StringFlag{
 			Name:  "web-address,w",
-			Value: ":8081",
+			Value: ":9001",
 			Usage: "address for incoming Management UI requests",
 		},
 		cli.StringFlag{
