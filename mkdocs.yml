@@ -1,7 +1,8 @@
 site_name: Minio Documentation
 pages:
 - ['index.md', Index]
-- ['api/minio.md', 'API', 'Minio'] 
-- ['api/manage.md', 'API', 'Management'] 
+- ['api/minio.md', 'API', 'Minio']
+- ['api/manage.md', 'API', 'Management']
 - ['architecture.md', 'Architecture', 'Overview']
+- ['contributing.md', 'Contributing', 'Overview']
 theme: readthedocs
