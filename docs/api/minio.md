@@ -2,8 +2,7 @@
 
 ## General Overview
 
-Minio stores and retrieves data in a logical format based upon REST
-based URLs.
+Minio stores and retrieves data in a logical format based upon REST based URLs.
 
 ### Note about examples:
 
@@ -91,10 +90,11 @@ Content-Length: 223
 }
 ```
 
+NOTE: ``Accept: application/json`` is Minio Object Server specific
+
 ## GET /{bucket}/
 
 Lists objects in a bucket.
-
 
 Example:
 ```
