@@ -46,6 +46,7 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
+	c.Log(response.StatusCode)
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
