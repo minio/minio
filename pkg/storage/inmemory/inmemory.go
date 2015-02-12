@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -52,7 +51,6 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	if val, ok := storage.objectdata[key]; ok {
 		objectBuffer := bytes.NewBuffer(val.data)
 		written, err := io.Copy(w, objectBuffer)
-		log.Println("I am here")
 		return written, err
 	} else {
 		return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
