@@ -32,17 +32,23 @@ func validateHandler(conf config.Config, h http.Handler) http.Handler {
 
 func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	accessKey := stripAccessKey(r)
+	acceptsContentType := getContentType(r)
 	if accessKey != "" {
 		if err := h.conf.ReadConfig(); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			error := errorCodeError(InternalError)
+			errorResponse := getErrorResponse(error, "")
+			w.WriteHeader(error.HttpStatusCode)
+			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		} else {
 			user := h.conf.GetKey(accessKey)
-			ok, err := signers.ValidateRequest(user, r)
+			ok, _ := signers.ValidateRequest(user, r)
 			if ok {
 				h.handler.ServeHTTP(w, r)
 			} else {
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(err.Error()))
+				error := errorCodeError(AccessDenied)
+				errorResponse := getErrorResponse(error, "")
+				w.WriteHeader(error.HttpStatusCode)
+				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 			}
 		}
 	} else {
@@ -58,8 +64,12 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func ignoreUnimplementedResources(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		acceptsContentType := getContentType(r)
 		if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
-			w.WriteHeader(http.StatusNotImplemented)
+			error := errorCodeError(NotImplemented)
+			errorResponse := getErrorResponse(error, "")
+			w.WriteHeader(error.HttpStatusCode)
+			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		} else {
 			h.ServeHTTP(w, r)
 		}

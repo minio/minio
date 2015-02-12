@@ -17,6 +17,7 @@ type ErrorResponse struct {
 	Message   string
 	Resource  string
 	RequestId string
+	HostId    string
 }
 
 /// Error codes, non exhaustive list
@@ -162,9 +163,12 @@ func getErrorResponse(err Error, resource string) ErrorResponse {
 	var data = ErrorResponse{}
 	data.Code = err.Code
 	data.Message = err.Description
-	data.Resource = resource
+	if resource != "" {
+		data.Resource = resource
+	}
 	// TODO implement this in future
-	data.RequestId = "3LI37"
+	data.RequestId = "3L137"
+	data.HostId = "3L137"
 
 	return data
 }
