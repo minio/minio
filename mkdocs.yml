@@ -1,7 +1,9 @@
 site_name: Minio Documentation
 pages:
-- ['index.md', Index]
-- ['api/minio.md', 'API', 'Minio']
+- ['index.md', Welcome to Minio]
+- ['introduction.md', Minio API Reference]
+- ['api/minio.md', 'API', 'REST API']
+- ['api/errors.md', 'API', 'Error Responses']
 - ['api/manage.md', 'API', 'Management']
 - ['architecture.md', 'Architecture', 'Overview']
 - ['contributing.md', 'Contributing', 'Overview']
