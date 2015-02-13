@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+check_version() {
+    local version=$1 check=$2
+    local highest=$(echo -e "$version\n$check" | sort -nrt. -k1,1 -k2,2 -k3,3 | head -1)
+    [[ "$highest" = "$version" ]] && return 0
+    return 1
+}
+
 echo -n "Checking if proper environment variables are set.. "
 
 echo ${GOROOT:?} 2>&1 >/dev/null
