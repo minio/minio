@@ -54,7 +54,7 @@ The following table explains the REST error response elements
 
 | Name | Description |
 |:---------- |:-----------|
-|*Code*| The error code is a string that uniquely identifies an error condition. It is meant to be read and understood by programs that detect and handle errors by type. <br />*Type: String*<br />*Ancestor: Error*|
+|*Code*| The error code is a string that uniquely identifies an error condition. <br />*Type: String*<br />*Ancestor: Error*|
 |*Error*| XML container for error. <br />*Type: Container*<br />*Ancestor: None*|
 |*Message*| The error message contains a generic description of the error condition. <br />*Type: String*<br />*Ancestor: Error*|
 |*RequestId*| ID of the request associated with the error. <br />*Type: String*<br />*Ancestor: Error*|
