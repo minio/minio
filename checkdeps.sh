@@ -33,6 +33,11 @@ echo -n "Checking dependencies for Minio.. "
 ## Check all dependencies are present
 MISSING=""
 
+check_version "$(env go version | sed 's/^.* go\([0-9.]*\).*$/\1/')" "1.4.0"
+if [ $? -ne 0 ]; then
+    MISSING="${MISSING} golang(1.4.0)"
+fi
+
 env git --version > /dev/null 2>&1
 if [ $? -ne 0 ]; then
   MISSING="${MISSING} git"
