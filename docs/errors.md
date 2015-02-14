@@ -1,8 +1,8 @@
-# List of Error Responses
+### List of Error Responses
 
 This section provides information about Minio API errors. XML and JSON results have been prettified for readability. As a result, the Content-Length may not match exactly for both styles
 
-### Error Codes Table
+#### Error Codes Table
 
 The following table lists Minio error codes.
 
@@ -31,7 +31,7 @@ The following table lists Minio error codes.
 | TooManyBuckets | You have attempted to create more buckets than allowed. | 400 Bad Request |
 <br />
 
-### REST Error Responses
+#### REST Error Responses
 
 When there is an error, the header information contains:
 

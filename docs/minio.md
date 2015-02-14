@@ -1,10 +1,10 @@
-# Minio API
+### Minio API
 
-## General Overview
+#### General Overview
 
 Minio stores and retrieves data in a logical format based upon REST based URLs.
 
-### Note about examples:
+**Note about examples:**
 
 XML and JSON results have been prettified for readability. As a result, the Content-Length may not match exactly.
 ```
@@ -17,7 +17,7 @@ http://minio.example.com/bucket/path/to/object
 http://minio.example.com/bucket2/path/to/object
 ```
 
-## GET /
+#### GET /
 
 List buckets accessible by the user.
 
@@ -92,7 +92,7 @@ Content-Length: 223
 
 NOTE: ``Accept: application/json`` is Minio Object Server specific
 
-## GET /{bucket}/
+#### GET /{bucket}/
 
 Lists objects in a bucket.
 
@@ -138,7 +138,7 @@ Content-Length: 579
 </ListBucketResult>
 ```
 
-## PUT /{bucket}/
+#### PUT /{bucket}/
 
 Example:
 ```
@@ -154,7 +154,7 @@ Content-Type: text/plain; charset=utf-8
 ```
 
 EXAMPLE
-## GET /{bucket}/{object}
+#### GET /{bucket}/{object}
 
 ```
 GET /minio/hello HTTP/1.1
@@ -178,7 +178,7 @@ Date: Mon, 02 Feb 2015 22:59:51 GMT
 
 Retrieves an object from a bucket
 
-## HEAD /{bucket}/{object}
+#### HEAD /{bucket}/{object}
 ```
 HEAD /minio/hello HTTP/1.1
 ```
@@ -195,7 +195,7 @@ Date: Mon, 02 Feb 2015 23:02:30 GMT
 
 Retrieves meta-data about an object
 
-## PUT /{bucket}/{object}
+#### PUT /{bucket}/{object}
 
 Stores an object
 
