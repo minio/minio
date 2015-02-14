@@ -1,10 +1,10 @@
 site_name: Minio Documentation
 pages:
 - ['index.md', Welcome to Minio]
-- ['introduction.md', Minio API Reference]
-- ['api/minio.md', 'API', 'REST API']
-- ['api/errors.md', 'API', 'Error Responses']
-- ['api/manage.md', 'API', 'Management']
-- ['architecture.md', 'Architecture', 'Overview']
-- ['contributing.md', 'Contributing', 'Overview']
+- ['architecture.md', 'Minio', Architecture]
+- ['contributing.md', 'Minio', Contribute]
+- ['introduction.md', 'API', Reference]
+- ['minio.md', 'API', REST API]
+- ['errors.md', 'API', Error Responses]
+- ['manage.md', 'API', Management API]
 theme: readthedocs
