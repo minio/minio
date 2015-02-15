@@ -22,6 +22,8 @@ _init() {
     GIT_VERSION="1.0"
     PIP_VERSION="1.4"
     GO_VERSION="1.4"
+    OSX_VERSION="10.8"
+    UNAME=$(uname -sm)
 
     ## Check all dependencies are present
     MISSING=""
@@ -92,6 +94,38 @@ check_golang_env() {
     fi
 }
 
+is_supported_os() {
+    case ${UNAME%% *} in
+        "Linux")
+            os="linux"
+            ;;
+	"Darwin")
+	    osx_host_version=$(env sw_vers -productVersion)
+	    check_version "${osx_host_version}" "${OSX_VERSION}"
+	    [[ $? -ge 2 ]] && die "Minimum OSX version supported is ${OSX_VERSION}"
+	    ;;
+	"*")
+	    echo "Exiting.. unsupported operating system found"
+	    exit 1;
+    esac
+}
+
+is_supported_arch() {
+    local supported
+    case ${UNAME##* } in
+        "x86_64")
+            supported=1
+            ;;
+        *)
+            supported=0
+            ;;
+    esac
+    if [ $supported -eq 0 ]; then
+        echo "Invalid arch: ${UNAME} not supported, please use x86_64/amd64"
+	exit 1;
+    fi
+}
+
 check_deps() {
     check_version "$(env pip --version 2>/dev/null| awk {'print $2'})" "${PIP_VERSION}"
     if [ $? -ge 2 ]; then
@@ -125,6 +159,12 @@ check_deps() {
 }
 
 main() {
+    echo -n "Check for supported arch.. "
+    is_supported_arch
+
+    echo -n "Check for supported os.. "
+    is_supported_os
+
     echo -n "Checking if proper environment variables are set.. "
     check_golang_env
 

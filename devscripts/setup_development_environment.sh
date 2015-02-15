@@ -6,6 +6,7 @@ _init() {
     PIP_VERSION="1.4"
     GCC_VERSION="4.0"
     YASM_VERSION="1.2.0"
+    OSX_VERSION="10.8"
     UNAME=$(uname -sm)
     MINIO_DEV=$HOME/minio-dev
 }
@@ -30,7 +31,7 @@ pop_dir() {
     popd >/dev/null
 }
 
-###
+####
 #
 # Takes two arguments
 # arg1: version number in `x.x.x` format
@@ -65,11 +66,9 @@ check_version () {
             ver2[i]=0
         fi
         if ((10#${ver1[i]} > 10#${ver2[i]})); then
-
             return 1
         fi
         if ((10#${ver1[i]} < 10#${ver2[i]})); then
-	    ## Installed version is lesser than required - Bad condition
             return 2
         fi
     done
@@ -81,9 +80,6 @@ is_supported_arch() {
     case ${UNAME##* } in
         "x86_64")
             supported=1
-            ;;
-        "i386")
-            supported=0
             ;;
         *)
             supported=0
@@ -100,15 +96,19 @@ install_go() {
     case ${UNAME%% *} in
         "Linux")
             os="linux"
+	    GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64.tar.gz"
             ;;
-    esac
-    case ${UNAME##* } in
-        "x86_64")
-            arch="amd64"
-            ;;
+	"Darwin")
+	    os="darwin"
+	    osx_host_version=$(env sw_vers -productVersion)
+	    check_version "${osx_host_version}" "${OSX_VERSION}"
+	    [[ $? -ge 2 ]] && die "Minimum OSX version supported is ${OSX_VERSION}"
+	    GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64-osx${OSX_VERSION}.tar.gz"
+	    ;;
+	"*")
+	    die "Exiting.. unsupported operating system found"
     esac
 
-    GOLANG_TARBALL_FNAME="go$GO_VERSION.$os-$arch.tar.gz"
     GOLANG_TARBALL_URL="https://storage.googleapis.com/golang/$GOLANG_TARBALL_FNAME"
 
     status_code=$(curl -w '%{http_code}' --progress-bar -L -C - $GOLANG_TARBALL_URL -o $MINIO_DEV/dls/$GOLANG_TARBALL_FNAME)
