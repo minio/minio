@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
-GO_VERSION="1.4.1"
-GOLANG_MD5SUM=""
-YASM_VERSION="1.2.0"
-UNAME=$(uname -sm)
-MINIO_DEV=$HOME/minio-dev
+_init() {
+    GO_VERSION="1.4"
+    GIT_VERSION="1.0"
+    PIP_VERSION="1.4"
+    GCC_VERSION="4.0"
+    YASM_VERSION="1.2.0"
+    UNAME=$(uname -sm)
+    MINIO_DEV=$HOME/minio-dev
+}
 
 die() {
     echo -e "\e[31m[!] $@\e[0m"; exit 1
@@ -12,7 +16,7 @@ die() {
 
 msg() {
     echo -e "\e[93m[*] $@\e[0m"
-} 
+}
 
 call() {
     $@ 2>&1 | sed 's/^\(.*\)$/ | \1/g'
@@ -33,22 +37,22 @@ check_version() {
     return 1
 }
 
-is_supported() {
+is_supported_arch() {
     local supported
     case ${UNAME##* } in
         "x86_64")
             supported=1
             ;;
-        "i386") 
+        "i386")
             supported=0
             ;;
-        *) 
+        *)
             supported=0
             ;;
     esac
     if [ $supported -eq 0 ]; then
-        die "Invalid arch: ${UNAME} not supported, please use x86_64/amd64"   
-    fi 
+        die "Invalid arch: ${UNAME} not supported, please use x86_64/amd64"
+    fi
 }
 
 install_go() {
@@ -94,11 +98,10 @@ setup_env() {
     cat <<EOF > env.sh
 #!/bin/sh
 
-PWD=\$(pwd)
-[[ -z \$GOROOT ]] && export GOROOT=\$PWD/deps/go
-export GOPATH=\$PWD/mygo
-export PATH=\$PWD/deps/go/bin:\$PWD/mygo/bin:\$PWD/deps/yasm-$YASM_VERSION:\$PWD/deps/mkdocs/bin:\$GOPATH/bin:\$PATH
-export PYTHONPATH=\$PYTHONPATH:\$PWD/deps/mkdocs/lib/python$python_version/site-packages/
+[[ -z \$GOROOT ]] && export GOROOT=\$MINIO_DEV/deps/go
+export GOPATH=\$MINIO_DEV/mygo
+export PATH=\$MINIO_DEV/deps/go/bin:\$MINIO_DEV/mygo/bin:\$MINIO_DEV/deps/yasm-\$YASM_VERSION:\$MINIO_DEV/deps/mkdocs/bin:\$GOPATH/bin:\$PATH
+export PYTHONPATH=\$PYTHONPATH:\$MINIO_DEV/deps/mkdocs/lib/python\$python_version/site-packages/
 EOF
 }
 
@@ -108,19 +111,24 @@ install_mkdocs() {
     call pip install --install-option="--prefix=$MINIO_DEV/deps/mkdocs" mkdocs
 }
 
+install_minio_deps() {
+    msg "Installing minio deps.."
+    env go get github.com/tools/godep && echo "Installed godep"
+    env go get golang.org/x/tools/cmd/cover && echo "Installed cover"
+}
+
 install_minio() {
     msg "Installing minio.."
-    push_dir src
-    call git clone "http://github.com/minio-io/minio"
+    push_dir ${MINIO_DEV}/src
+    call git clone "https://github.com/minio-io/minio"
     (cd minio; call make)
-    call git clone "http://github.com/minio-io/mc"
-    (cd mc; call make)
     pop_dir
 }
 
 main() {
 
-    is_supported
+    # Check supported arch
+    is_supported_arch
 
     [[ -d ${MINIO_DEV} ]] || \
        die "You should have an empty working directory before you start.."
@@ -128,28 +136,29 @@ main() {
     mkdir -p ${MINIO_DEV}/{src,deps,dls,mygo}
     push_dir ${MINIO_DEV}
 
-    env pip --version >/dev/null
+    check_version "$(env pip --version  | awk {'print $2'})" ${PIP_VERSION}
     [[ $? -ne 0 ]] && die "pip not installed"
 
-    env gcc --version >/dev/null
+    check_version "$(env gcc --version | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" ${GCC_VERSION}
     [[ $? -ne 0 ]] && die "gcc not installed"
 
-    check_version "$(env git --version)" "1.0"
+    check_version "$(env git --version | sed 's/^.* go\([0-9.]*\).*$/\1/')" ${GIT_VERSION}
     [[ $? -ne 1 ]] && die "Git not installed"
 
-    check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" "1.4.0"
+    check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" ${GOLANG_VERSION}
     [[ $? -eq 0 ]] && \
         [[ -z $GOROOT ]] && die "Please setup the goroot variable according to your current installation of golang." \
         || install_go
 
-    check_version "$(env yasm --version 2>/dev/null)" "1.2.0"
+    check_version "$(env yasm --version 2>/dev/null)" ${YASM_VERSION}
     [[ $? -eq 0 ]] || install_yasm
 
-    env mkdocs help 2>/dev/null
+    env mkdocs help >/dev/null 2>&1
     [[ $? -eq 0 ]] || install_mkdocs
 
     setup_env
     source env.sh
+    install_minio_deps
     install_minio
 
     msg "--"
@@ -158,4 +167,4 @@ main() {
 
 # Putting main function at the end of the script ensures that the execution
 # won't start until the script is entirely downloaded.
-main
+_init "$@" && main "$@"
