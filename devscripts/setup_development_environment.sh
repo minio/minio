@@ -30,11 +30,50 @@ pop_dir() {
     popd >/dev/null
 }
 
-check_version() {
-    local version=$1 check=$2
-    local highest=$(echo -e "$version\n$check" | sort -nrt. -k1,1 -k2,2 -k3,3 | head -1)
-    [[ "$highest" = "$version" ]] && return 0
-    return 1
+###
+#
+# Takes two arguments
+# arg1: version number in `x.x.x` format
+# arg2: version number in `x.x.x` format
+#
+# example: check_version "$version1" "$version2"
+#
+# returns:
+# 0 - Installed version is equal to required
+# 1 - Installed version is greater than required
+# 2 - Installed version is lesser than required
+# 3 - If args have length zero
+#
+####
+check_version () {
+    ## validate args
+    [[ -z $1 ]] && return 3
+    [[ -z $2 ]] && return 3
+
+    if [[ $1 == $2 ]]; then
+        return 0
+    fi
+    local IFS=.
+    local i ver1=($1) ver2=($2)
+    # fill empty fields in ver1 with zeros
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+        ver1[i]=0
+    done
+    for ((i=0; i<${#ver1[@]}; i++)); do
+        if [[ -z ${ver2[i]} ]]; then
+            # fill empty fields in ver2 with zeros
+            ver2[i]=0
+        fi
+        if ((10#${ver1[i]} > 10#${ver2[i]})); then
+
+            return 1
+        fi
+        if ((10#${ver1[i]} < 10#${ver2[i]})); then
+	    ## Installed version is lesser than required - Bad condition
+            return 2
+        fi
+    done
+    return 0
 }
 
 is_supported_arch() {
@@ -137,24 +176,24 @@ main() {
     push_dir ${MINIO_DEV}
 
     check_version "$(env pip --version  | awk {'print $2'})" ${PIP_VERSION}
-    [[ $? -ne 0 ]] && die "pip not installed"
+    [[ $? -ge 2 ]] && die "pip not installed"
 
     check_version "$(env gcc --version | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" ${GCC_VERSION}
-    [[ $? -ne 0 ]] && die "gcc not installed"
+    [[ $? -ge 2 ]] && die "gcc not installed"
 
-    check_version "$(env git --version | sed 's/^.* go\([0-9.]*\).*$/\1/')" ${GIT_VERSION}
-    [[ $? -ne 1 ]] && die "Git not installed"
+    check_version "$(env git --version | sed 's/^.* \([0-9.]*\).*$/\1/')" ${GIT_VERSION}
+    [[ $? -ge 2 ]] && die "Git not installed"
 
     check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" ${GOLANG_VERSION}
-    [[ $? -eq 0 ]] && \
+    [[ $? -le 1 ]] && \
         [[ -z $GOROOT ]] && die "Please setup the goroot variable according to your current installation of golang." \
         || install_go
 
-    check_version "$(env yasm --version 2>/dev/null)" ${YASM_VERSION}
-    [[ $? -eq 0 ]] || install_yasm
+    check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" ${YASM_VERSION}
+    [[ $? -ge 2 ]] || install_yasm
 
     env mkdocs help >/dev/null 2>&1
-    [[ $? -eq 0 ]] || install_mkdocs
+    [[ $? -ne 0 ]] || install_mkdocs
 
     setup_env
     source env.sh
@@ -167,4 +206,4 @@ main() {
 
 # Putting main function at the end of the script ensures that the execution
 # won't start until the script is entirely downloaded.
-_init "$@" && main "$@"
+_init && main "$@"
