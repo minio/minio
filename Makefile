@@ -1,10 +1,8 @@
-#GOPATH := $(CURDIR)/tmp/gopath
-MAKE_OPTIONS := -s
-
 all: getdeps install
 
 checkdeps:
-	@./checkdeps.sh
+	@echo "Checking deps.."
+	@(env bash $(PWD)/devscripts/checkdeps.sh)
 
 createsymlink:
 	@mkdir -p $(GOPATH)/src/github.com/minio-io/;
