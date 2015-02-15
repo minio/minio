@@ -111,7 +111,8 @@ install_go() {
     GOLANG_TARBALL_FNAME="go$GO_VERSION.$os-$arch.tar.gz"
     GOLANG_TARBALL_URL="https://storage.googleapis.com/golang/$GOLANG_TARBALL_FNAME"
 
-    call curl --progress-bar -C - $GOLANG_TARBALL_URL -o $MINIO_DEV/dls/$GOLANG_TARBALL_FNAME
+    status_code=$(curl -w '%{http_code}' --progress-bar -L -C - $GOLANG_TARBALL_URL -o $MINIO_DEV/dls/$GOLANG_TARBALL_FNAME)
+    [[ "200 416" =~ $status_code ]] || die "Download failed. Abort installation."
 
     call tar -xf $MINIO_DEV/dls/$GOLANG_TARBALL_FNAME -C $MINIO_DEV/deps
 }
@@ -123,7 +124,8 @@ install_yasm() {
     YASM_TARBALL_FNAME="yasm-$YASM_VERSION.tar.gz"
     YASM_TARBALL_URL="http://www.tortall.net/projects/yasm/releases/$YASM_TARBALL_FNAME"
 
-    curl --progress-bar -C - $YASM_TARBALL_URL -o $MINIO_DEV/dls/$YASM_TARBALL_FNAME
+    status_code=$(curl -w '%{http_code}' --progress-bar -L -C - $YASM_TARBALL_URL -o $MINIO_DEV/dls/$YASM_TARBALL_FNAME)
+    [[ "200 416" =~ $status_code ]] || die "Download failed. Abort installation."
 
     call tar -xf $MINIO_DEV/dls/$YASM_TARBALL_FNAME -C $MINIO_DEV/deps/
     push_dir $MINIO_DEV/deps/yasm-$YASM_VERSION
@@ -166,6 +168,8 @@ install_minio() {
 
 main() {
 
+    trap 'die "Ctrl-C pressed. Quitting.."' INT
+
     # Check supported arch
     is_supported_arch
 
@@ -176,13 +180,13 @@ main() {
     push_dir ${MINIO_DEV}
 
     check_version "$(env pip --version  | awk {'print $2'})" ${PIP_VERSION}
-    [[ $? -ge 2 ]] && die "pip not installed"
+    [[ $? -ge 2 ]] && die "pip(${PIP_VERSION}) not installed. Abort."
 
     check_version "$(env gcc --version | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" ${GCC_VERSION}
-    [[ $? -ge 2 ]] && die "gcc not installed"
+    [[ $? -ge 2 ]] && die "gcc(${GCC_VERSION}) not installed. Abort."
 
     check_version "$(env git --version | sed 's/^.* \([0-9.]*\).*$/\1/')" ${GIT_VERSION}
-    [[ $? -ge 2 ]] && die "Git not installed"
+    [[ $? -ge 2 ]] && die "git${GIT_VERSION} not installed. Abort."
 
     check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" ${GOLANG_VERSION}
     [[ $? -le 1 ]] && \
