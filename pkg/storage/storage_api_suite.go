@@ -183,7 +183,7 @@ func testListBuckets(c *C, create func() Storage) {
 	storage := create()
 
 	// test empty list
-	buckets, err := storage.ListBuckets("")
+	buckets, err := storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 0)
 	c.Assert(err, IsNil)
 
@@ -191,7 +191,7 @@ func testListBuckets(c *C, create func() Storage) {
 	err = storage.StoreBucket("bucket1")
 	c.Assert(err, IsNil)
 
-	buckets, err = storage.ListBuckets("")
+	buckets, err = storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 1)
 	c.Assert(err, IsNil)
 
@@ -199,19 +199,15 @@ func testListBuckets(c *C, create func() Storage) {
 	err = storage.StoreBucket("bucket2")
 	c.Assert(err, IsNil)
 
-	buckets, err = storage.ListBuckets("")
+	buckets, err = storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 2)
 	c.Assert(err, IsNil)
 
 	// add three and test exists + prefix
 	err = storage.StoreBucket("bucket22")
 
-	buckets, err = storage.ListBuckets("")
+	buckets, err = storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 3)
-	c.Assert(err, IsNil)
-
-	buckets, err = storage.ListBuckets("bucket2")
-	c.Assert(len(buckets), Equals, 2)
 	c.Assert(err, IsNil)
 }
 
@@ -224,7 +220,7 @@ func testListBucketsOrder(c *C, create func() Storage) {
 		storage.StoreBucket("bucket1")
 		storage.StoreBucket("bucket2")
 
-		buckets, err := storage.ListBuckets("bucket")
+		buckets, err := storage.ListBuckets()
 		c.Assert(len(buckets), Equals, 2)
 		c.Assert(err, IsNil)
 		c.Assert(buckets[0].Name, Equals, "bucket1")

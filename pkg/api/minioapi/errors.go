@@ -59,6 +59,8 @@ const (
 	RequestTimeTooSkewed
 	SignatureDoesNotMatch
 	TooManyBuckets
+	InvalidPolicyDocument
+	NoSuchBucketPolicy
 )
 
 var errorCodeResponse = map[int]Error{
@@ -166,6 +168,16 @@ var errorCodeResponse = map[int]Error{
 		Code:           "TooManyBuckets",
 		Description:    "You have attempted to create more buckets than allowed.",
 		HttpStatusCode: http.StatusBadRequest,
+	},
+	InvalidPolicyDocument: {
+		Code:           "InvalidPolicyDocument",
+		Description:    "The content of the form does not meet the conditions specified in the policy document.",
+		HttpStatusCode: http.StatusBadRequest,
+	},
+	NoSuchBucketPolicy: {
+		Code:           "NoSuchBucketPolicy",
+		Description:    "The specified bucket does not have a bucket policy.",
+		HttpStatusCode: http.StatusNotFound,
 	},
 }
 

@@ -24,8 +24,10 @@ import (
 
 type Storage interface {
 	// Bucket Operations
-	ListBuckets(prefix string) ([]BucketMetadata, error)
+	ListBuckets() ([]BucketMetadata, error)
 	StoreBucket(bucket string) error
+	StoreBucketPolicy(bucket string, policy interface{}) error
+	GetBucketPolicy(bucket string) (interface{}, error)
 
 	// Object Operations
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)

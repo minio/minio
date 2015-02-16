@@ -62,11 +62,12 @@ type Owner struct {
 
 var unimplementedBucketResourceNames = map[string]bool{
 	"acl":            true,
+	"cors":           true,
 	"lifecycle":      true,
-	"policy":         true,
 	"location":       true,
 	"logging":        true,
 	"notification":   true,
+	"tagging":        true,
 	"versions":       true,
 	"requestPayment": true,
 	"versioning":     true,
