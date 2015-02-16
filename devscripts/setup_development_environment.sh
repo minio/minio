@@ -21,6 +21,7 @@ msg() {
 
 call() {
     $@ 2>&1 | sed 's/^\(.*\)$/ | \1/g'
+    return ${PIPESTATUS[0]}
 }
 
 push_dir() {
@@ -96,17 +97,17 @@ install_go() {
     case ${UNAME%% *} in
         "Linux")
             os="linux"
-	    GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64.tar.gz"
+            GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64.tar.gz"
             ;;
-	"Darwin")
-	    os="darwin"
-	    osx_host_version=$(env sw_vers -productVersion)
-	    check_version "${osx_host_version}" "${OSX_VERSION}"
-	    [[ $? -ge 2 ]] && die "Minimum OSX version supported is ${OSX_VERSION}"
-	    GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64-osx${OSX_VERSION}.tar.gz"
-	    ;;
-	"*")
-	    die "Exiting.. unsupported operating system found"
+        "Darwin")
+            os="darwin"
+            osx_host_version=$(env sw_vers -productVersion)
+            check_version "${osx_host_version}" "${OSX_VERSION}"
+            [[ $? -ge 2 ]] && die "Minimum OSX version supported is ${OSX_VERSION}"
+            GOLANG_TARBALL_FNAME="go${GO_VERSION}.${os}-amd64-osx${OSX_VERSION}.tar.gz"
+            ;;
+        "*")
+            die "Exiting.. unsupported operating system found"
     esac
 
     GOLANG_TARBALL_URL="https://storage.googleapis.com/golang/$GOLANG_TARBALL_FNAME"
@@ -139,6 +140,8 @@ setup_env() {
     cat <<EOF > env.sh
 #!/bin/sh
 
+MINIO_DEV=\$(dirname \$(readlink -f \${BASH_SOURCE[0]}))
+
 [[ -z \$GOROOT ]] && export GOROOT=\$MINIO_DEV/deps/go
 export GOPATH=\$MINIO_DEV/mygo
 export PATH=\$MINIO_DEV/deps/go/bin:\$MINIO_DEV/mygo/bin:\$MINIO_DEV/deps/yasm-\$YASM_VERSION:\$MINIO_DEV/deps/mkdocs/bin:\$GOPATH/bin:\$PATH
@@ -150,18 +153,24 @@ install_mkdocs() {
     msg "Downloading mkdocs.."
     mkdir -p $MINIO_DEV/deps/mkdocs
     call pip install --install-option="--prefix=$MINIO_DEV/deps/mkdocs" mkdocs
+    [[ $? -ne 0 ]] && die "Cannot install mkdocs. Abort installation."
 }
 
 install_minio_deps() {
     msg "Installing minio deps.."
-    env go get github.com/tools/godep && echo "Installed godep"
-    env go get golang.org/x/tools/cmd/cover && echo "Installed cover"
+    env go get github.com/tools/godep && echo "Installed godep" || \
+        die "Cannot install godep. Abort installation."
+    env go get golang.org/x/tools/cmd/cover && echo "Installed cover" || \
+        die "Cannot install cover. Abort installation."
 }
 
 install_minio() {
     msg "Installing minio.."
     push_dir ${MINIO_DEV}/src
-    call git clone "https://github.com/minio-io/minio"
+    if [ ! -d minio ] ; then
+        call git clone "https://github.com/minio-io/minio" || \
+            die "Cannot download minio. Abort installation."
+    fi
     (cd minio; call make)
     pop_dir
 }
@@ -194,10 +203,10 @@ main() {
         || install_go
 
     check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" ${YASM_VERSION}
-    [[ $? -ge 2 ]] || install_yasm
+    [[ $? -ge 2 ]] && install_yasm
 
     env mkdocs help >/dev/null 2>&1
-    [[ $? -ne 0 ]] || install_mkdocs
+    [[ $? -ne 0 ]] && install_mkdocs
 
     setup_env
     source env.sh
