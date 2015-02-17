@@ -29,6 +29,8 @@ The following table lists Minio error codes.
 | RequestTimeTooSkewed | The difference between the request time and the server's time is too large. | 403 Forbidden |
 | SignatureDoesNotMatch | The request signature we calculated does not match the signature you provided. | 403 Forbidden |
 | TooManyBuckets | You have attempted to create more buckets than allowed. | 400 Bad Request |
+| InvalidPolicyDocument | The content of the form does not meet the conditions specified in the policy document. | 400 Bad Request |
+| NoSuchBucketPolicy | The specified bucket does not have a bucket policy. | 404 Not Found |
 <br />
 
 #### REST Error Responses
