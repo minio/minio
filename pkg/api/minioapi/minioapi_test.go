@@ -218,7 +218,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	buckets, err := storage.ListBuckets("bucket")
+	buckets, err := storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 0)
 	c.Assert(err, IsNil)
 
@@ -231,7 +231,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// check bucket exists
-	buckets, err = storage.ListBuckets("bucket")
+	buckets, err = storage.ListBuckets()
 	c.Assert(len(buckets), Equals, 1)
 	c.Assert(err, IsNil)
 	c.Assert(buckets[0].Name, Equals, "bucket")

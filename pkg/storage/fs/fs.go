@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
 type storage struct {
@@ -57,13 +58,7 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 
 // Bucket Operations
 
-func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
-	if prefix != "" {
-		if mstorage.IsValidBucket(prefix) == false {
-			return []mstorage.BucketMetadata{}, mstorage.BucketNameInvalid{Bucket: prefix}
-		}
-	}
-
+func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	files, err := ioutil.ReadDir(storage.root)
 	if err != nil {
 		return []mstorage.BucketMetadata{}, mstorage.EmbedError("bucket", "", err)
@@ -74,13 +69,11 @@ func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, e
 		if !file.IsDir() {
 			return []mstorage.BucketMetadata{}, mstorage.BackendCorrupted{Path: storage.root}
 		}
-		if strings.HasPrefix(file.Name(), prefix) {
-			metadata := mstorage.BucketMetadata{
-				Name:    file.Name(),
-				Created: file.ModTime(), // TODO - provide real created time
-			}
-			metadataList = append(metadataList, metadata)
+		metadata := mstorage.BucketMetadata{
+			Name:    file.Name(),
+			Created: file.ModTime(), // TODO - provide real created time
 		}
+		metadataList = append(metadataList, metadata)
 	}
 	return metadataList, nil
 }
@@ -106,6 +99,86 @@ func (storage *storage) StoreBucket(bucket string) error {
 
 	// make bucket
 	err := os.Mkdir(bucketDir, 0700)
+	if err != nil {
+		return mstorage.EmbedError(bucket, "", err)
+	}
+	return nil
+}
+
+func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
+	storage.writeLock.Lock()
+	defer storage.writeLock.Unlock()
+
+	var p policy.BucketPolicy
+	// verify bucket path legal
+	if mstorage.IsValidBucket(bucket) == false {
+		return policy.BucketPolicy{}, mstorage.BucketNameInvalid{Bucket: bucket}
+	}
+
+	// get bucket path
+	bucketDir := path.Join(storage.root, bucket)
+	// check if bucket exists
+	if _, err := os.Stat(bucketDir); err != nil {
+		return policy.BucketPolicy{}, mstorage.BucketNotFound{Bucket: bucket}
+	}
+
+	// get policy path
+	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
+	filestat, err := os.Stat(bucketPolicy)
+	if filestat.IsDir() {
+		return policy.BucketPolicy{}, mstorage.BackendCorrupted{Path: bucketPolicy}
+	}
+
+	if os.IsNotExist(err) {
+		return policy.BucketPolicy{}, mstorage.BucketPolicyNotFound{Bucket: bucket}
+	}
+
+	file, err := os.OpenFile(bucketPolicy, os.O_RDONLY, 0666)
+	defer file.Close()
+	if err != nil {
+		return policy.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
+	}
+	encoder := json.NewDecoder(file)
+	err = encoder.Decode(&p)
+	if err != nil {
+		return policy.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
+	}
+
+	return p, nil
+
+}
+
+func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+	storage.writeLock.Lock()
+	defer storage.writeLock.Unlock()
+
+	// verify bucket path legal
+	if mstorage.IsValidBucket(bucket) == false {
+		return mstorage.BucketNameInvalid{Bucket: bucket}
+	}
+
+	// get bucket path
+	bucketDir := path.Join(storage.root, bucket)
+	// check if bucket exists
+	if _, err := os.Stat(bucketDir); err != nil {
+		return mstorage.BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+
+	// get policy path
+	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
+	filestat, _ := os.Stat(bucketPolicy)
+	if filestat.IsDir() {
+		return mstorage.BackendCorrupted{Path: bucketPolicy}
+	}
+	file, err := os.OpenFile(bucketPolicy, os.O_WRONLY|os.O_CREATE, 0600)
+	defer file.Close()
+	if err != nil {
+		return mstorage.EmbedError(bucket, "", err)
+	}
+	encoder := json.NewEncoder(file)
+	err = encoder.Encode(policy)
 	if err != nil {
 		return mstorage.EmbedError(bucket, "", err)
 	}
@@ -145,6 +218,10 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 		}
 	}
 	file, err := os.Open(objectPath)
+	defer file.Close()
+	if err != nil {
+		return 0, mstorage.EmbedError(bucket, object, err)
+	}
 	count, err := io.Copy(w, file)
 	if err != nil {
 		return count, mstorage.EmbedError(bucket, object, err)

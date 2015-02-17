@@ -26,6 +26,7 @@ import (
 	"time"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
 type storage struct {
@@ -55,6 +56,14 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	} else {
 		return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 	}
+}
+
+func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+	return mstorage.ApiNotImplemented{Api: "PutBucketPolicy"}
+}
+
+func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
+	return policy.BucketPolicy{}, mstorage.ApiNotImplemented{Api: "GetBucketPolicy"}
 }
 
 func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
@@ -145,12 +154,10 @@ func (b ByBucketName) Len() int           { return len(b) }
 func (b ByBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
-func (storage *storage) ListBuckets(prefix string) ([]mstorage.BucketMetadata, error) {
+func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	var results []mstorage.BucketMetadata
-	for key, bucket := range storage.bucketdata {
-		if strings.HasPrefix(key, prefix) {
-			results = append(results, bucket.metadata)
-		}
+	for _, bucket := range storage.bucketdata {
+		results = append(results, bucket.metadata)
 	}
 	sort.Sort(ByBucketName(results))
 	return results, nil

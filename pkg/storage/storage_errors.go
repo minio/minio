@@ -30,6 +30,10 @@ type ObjectExists struct {
 	Key    string
 }
 
+type ApiNotImplemented struct {
+	Api string
+}
+
 type ObjectNotFound GenericObjectError
 
 type GenericBucketError struct {
@@ -68,13 +72,22 @@ func EmbedError(bucket, object string, err error) ImplementationError {
 }
 
 type BackendCorrupted BackendError
+type BucketPolicyNotFound GenericBucketError
 type BucketNameInvalid GenericBucketError
 type BucketExists GenericBucketError
 type BucketNotFound GenericBucketError
 type ObjectNameInvalid GenericObjectError
 
+func (self BucketPolicyNotFound) Error() string {
+	return "Bucket policy not found for: " + self.Bucket
+}
+
 func (self ObjectNotFound) Error() string {
 	return "Object not Found: " + self.Bucket + "#" + self.Object
+}
+
+func (self ApiNotImplemented) Error() string {
+	return "Api not implemented: " + self.Api
 }
 
 func (self ObjectExists) Error() string {
