@@ -66,6 +66,10 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 
 	var metadataList []mstorage.BucketMetadata
 	for _, file := range files {
+		// Skip policy files
+		if strings.HasSuffix(file.Name(), "_policy.json") {
+			continue
+		}
 		if !file.IsDir() {
 			return []mstorage.BucketMetadata{}, mstorage.BackendCorrupted{Path: storage.root}
 		}
