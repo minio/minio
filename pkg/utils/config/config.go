@@ -144,3 +144,17 @@ func (c *Config) ReadConfig() error {
 	c.Users = users
 	return nil
 }
+
+func Loadusers() map[string]User {
+	c := Config{}
+	c.SetupConfig()
+	c.ReadConfig()
+	return c.Users
+}
+
+func Loaduser(username string) User {
+	c := Config{}
+	c.SetupConfig()
+	c.ReadConfig()
+	return c.GetUser(username)
+}

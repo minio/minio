@@ -24,7 +24,7 @@ func (d Date) IsZero() bool {
 
 // Convert string date in format YYYY-MM-DD to Date.
 // Leading and trailing spaces are ignored. If format is invalid returns zero.
-func ParseDate(str string) (d Date, err error) {
+func parseDate(str string) (d Date, err error) {
 	str = strings.TrimSpace(str)
 	if str == "0000-00-00" {
 		return
