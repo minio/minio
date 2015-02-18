@@ -20,7 +20,6 @@ _init() {
     GCC_VERSION="4.0"
     YASM_VERSION="1.2.0"
     GIT_VERSION="1.0"
-    PIP_VERSION="1.4"
     GO_VERSION="1.4"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
@@ -127,11 +126,6 @@ is_supported_arch() {
 }
 
 check_deps() {
-    check_version "$(env pip --version 2>/dev/null| awk {'print $2'})" "${PIP_VERSION}"
-    if [ $? -ge 2 ]; then
-	MISSING="pip"
-    fi
-
     check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" "${GO_VERSION}"
     if [ $? -ge 2 ]; then
 	MISSING="${MISSING} golang(1.4)"
