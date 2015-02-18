@@ -1,18 +1,20 @@
+MINIOPATH=$(GOPATH)/src/github.com/minio-io/minio
+
 all: getdeps install
 
 checkdeps:
 	@echo "Checking deps.."
 	@(env bash $(PWD)/devscripts/checkdeps.sh)
 
-createsymlink:
-	@mkdir -p $(GOPATH)/src/github.com/minio-io/;
-	@if test ! -e $(GOPATH)/src/github.com/minio-io/minio; then echo "Creating symlink to $(GOPATH)/src/github.com/minio-io/minio" && ln -s $(PWD) $(GOPATH)/src/github.com/minio-io/minio; fi
+checkgopath:
+	@echo "Checking project in ${MINIOPATH}"
+	@if [ ! -d ${MINIOPATH} ]; then echo "Project not found in $GOPATH, please follow instructions provided at https://github.com/Minio-io/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi
 
-getdeps: checkdeps
+getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
 	@go get golang.org/x/tools/cmd/cover && echo "Installed cover"
 
-build-all: getdeps createsymlink
+build-all: getdeps
 	@echo "Building Libraries"
 	@godep go generate ./...
 	@godep go build ./...
