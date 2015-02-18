@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// +build amd64
-
 package crc32c
 
 // #include <stdint.h>

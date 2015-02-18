@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-// +build amd64
-
 package crc32c
 
 import (
 	"errors"
-        "hash/crc32"
+	"hash/crc32"
 )
 
 var castanagoliTable = crc32.MakeTable(crc32.Castagnoli)
 
 func Crc32c(buffer []byte) (uint32, error) {
-        crc := crc32.New(castanagoliTable)
-        if len(buffer) <= 0 {
-           return 0, errors.New("input buffer cannot be null")
-        }
-        crc.Write(buffer)
+	crc := crc32.New(castanagoliTable)
+	if len(buffer) <= 0 {
+		return 0, errors.New("input buffer cannot be null")
+	}
+	crc.Write(buffer)
 	return crc.Sum32(), nil
 }

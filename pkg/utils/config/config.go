@@ -141,8 +141,6 @@ func (c *Config) ReadConfig() error {
 	default:
 		return err
 	}
-	c.Users = users
-	return nil
 }
 
 func Loadusers() map[string]User {

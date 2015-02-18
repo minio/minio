@@ -23,6 +23,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
@@ -32,6 +33,7 @@ import (
 type storage struct {
 	bucketdata map[string]storedBucket
 	objectdata map[string]storedObject
+	lock       *sync.RWMutex
 }
 
 type storedBucket struct {
@@ -67,6 +69,9 @@ func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 }
 
 func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
+	storage.lock.Lock()
+	defer storage.lock.Unlock()
+
 	objectKey := bucket + ":" + key
 
 	if _, ok := storage.bucketdata[bucket]; ok == false {
@@ -104,6 +109,8 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 }
 
 func (storage *storage) StoreBucket(bucketName string) error {
+	storage.lock.Lock()
+	defer storage.lock.Unlock()
 	if !mstorage.IsValidBucket(bucketName) {
 		return mstorage.BucketNameInvalid{Bucket: bucketName}
 	}
@@ -170,6 +177,7 @@ func Start() (chan<- string, <-chan error, *storage) {
 	return ctrlChannel, errorChannel, &storage{
 		bucketdata: make(map[string]storedBucket),
 		objectdata: make(map[string]storedObject),
+		lock:       new(sync.RWMutex),
 	}
 }
 
