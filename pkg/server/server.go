@@ -18,7 +18,6 @@ package server
 
 import (
 	"log"
-	"os"
 	"path"
 	"reflect"
 
@@ -129,14 +128,8 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 	case storageType == FileStorage:
 		{
 			homeDir := helpers.HomeDir()
-			rootPath := path.Join(homeDir, "minio-storage")
-			_, err := os.Stat(rootPath)
-			if os.IsNotExist(err) {
-				err = os.Mkdir(rootPath, 0700)
-			} else if err != nil {
-				log.Fatal("Could not create $HOME/minio-storage", err)
-			}
-			ctrlChan, statusChan, storage = fs.Start(rootPath)
+			root := path.Join(homeDir, "minio-storage")
+			ctrlChan, statusChan, storage = fs.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
@@ -147,17 +140,23 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 }
 
 func Start(configs []ServerConfig) {
-	// listen for critical errors
-	// TODO Handle critical errors appropriately when they arise
 	// reflected looping is necessary to remove dead channels from loop and not flood switch
-	_, statusChans := getHttpChannels(configs)
+	ctrlChans, statusChans := getHttpChannels(configs)
 	cases := createSelectCases(statusChans)
 	for len(cases) > 0 {
 		chosen, value, recvOk := reflect.Select(cases)
-		if recvOk == true {
+		switch recvOk {
+		case true:
 			// Status Message Received
-			log.Println(chosen, value.Interface(), recvOk)
-		} else {
+			switch true {
+			case value.Interface() != nil:
+				// For any error received cleanup all existing channels and fail
+				for _, ch := range ctrlChans {
+					close(ch)
+				}
+				log.Fatal(value.Interface())
+			}
+		case false:
 			// Channel closed, remove from list
 			var aliveStatusChans []<-chan error
 			for i, ch := range statusChans {
