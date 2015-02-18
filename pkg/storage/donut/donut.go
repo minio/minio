@@ -39,16 +39,26 @@ func (donut Donut) Write(header Header, object io.Reader) error {
 		return err
 	}
 
-	// write header length
-	var headerLengthBuffer bytes.Buffer
-	headerLength := headerBuffer.Len()
-	err = binary.Write(&headerLengthBuffer, binary.LittleEndian, headerLength)
+	// prefix consists of a version number and a length
+	var headerPrefixBuffer bytes.Buffer
+	// write version
+	var version int
+	version = 1
+	err = binary.Write(&headerPrefixBuffer, binary.LittleEndian, version)
 	if err != nil {
 		return err
 	}
 
-	// write header length
-	io.Copy(&newObjectBuffer, &headerLengthBuffer)
+	// write length
+	var headerLength int
+	headerLength = headerBuffer.Len()
+	err = binary.Write(&headerPrefixBuffer, binary.LittleEndian, headerLength)
+	if err != nil {
+		return err
+	}
+
+	// write header prefix
+	io.Copy(&newObjectBuffer, &headerPrefixBuffer)
 
 	// write header
 	io.Copy(&newObjectBuffer, &headerBuffer)
