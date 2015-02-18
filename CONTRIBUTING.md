@@ -1,6 +1,8 @@
 ### Setup your Minio Github Repository
 Fork [Minio upstream](https://github.com/Minio-io/minio/fork) source repository to your own personal repository. Copy the URL and pass it to ``go get`` command. Go uses git to clone a copy into your project workspace folder.
 ```sh
+$ mkdir -p $GOPATH/src/github.com/minio-io
+$ cd $GOPATH/src/github.com/minio-io
 $ git clone https://github.com/$USER_ID/minio
 $ cd minio
 ```
@@ -16,6 +18,24 @@ Installed godep
 Installed cover
 Building Libraries
 ...
+...
+```
+
+### Setting up git remote as ``upstream``
+```sh
+$ cd $GOPATH/src/github.com/minio-io/minio
+$ git remote add upstream https://github.com/minio-io/minio
+$ git fetch upstream
+$ git merge upstream/master
+...
+...
+$ make
+Checking if proper environment variables are set.. Done
+...
+Checking dependencies for Minio.. Done
+Installed godep
+Installed cover
+Building Libraries
 ...
 ```
 
