@@ -30,7 +30,7 @@ type ObjectListResponse struct {
 	Marker      string
 	MaxKeys     int
 	IsTruncated bool
-	Contents    []*Item `xml:"Contents",innerxml`
+	Contents    []*Item `xml:,innerxml`
 }
 
 type BucketListResponse struct {
@@ -38,7 +38,7 @@ type BucketListResponse struct {
 	Owner   Owner
 	Buckets struct {
 		Bucket []*Bucket
-	} `xml:"Buckets",innerxml` // Buckets are nested
+	} `xml:,innerxml` // Buckets are nested
 }
 
 type Bucket struct {

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// +build amd64
-
 package erasure
 
 // #cgo CFLAGS: -O0
