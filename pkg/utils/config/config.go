@@ -152,6 +152,13 @@ func Loadusers() map[string]User {
 	return c.Users
 }
 
+func Loadkey(accessKeyId string) User {
+	c := Config{}
+	c.SetupConfig()
+	c.ReadConfig()
+	return c.GetKey(accessKeyId)
+}
+
 func Loaduser(username string) User {
 	c := Config{}
 	c.SetupConfig()

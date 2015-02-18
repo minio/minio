@@ -25,17 +25,17 @@ type BucketPolicy struct {
 }
 
 const (
-	awsResource   = "arn:aws:s3:::"
-	minioResource = "minio:::"
+	AwsResource   = "arn:aws:s3:::"
+	MinioResource = "minio:::"
 )
 
 // TODO support canonical user
 const (
-	awsPrincipal   = "arn:aws:iam::Account-ID:user/"
-	minioPrincipal = "minio::Account-ID:user/"
+	AwsPrincipal   = "arn:aws:iam::Account-ID:user/"
+	MinioPrincipal = "minio::Account-ID:user/"
 )
 
-var supportedActionMap = map[string]bool{
+var SupportedActionMap = map[string]bool{
 	"*":                     true,
 	"s3:GetObject":          true,
 	"s3:ListBucket":         true,
@@ -47,7 +47,7 @@ var supportedActionMap = map[string]bool{
 	"s3:PutBucketPolicy":    true,
 }
 
-var supportedEffectMap = map[string]bool{
+var SupportedEffectMap = map[string]bool{
 	"Allow": true,
 	"Deny":  true,
 }
@@ -55,7 +55,7 @@ var supportedEffectMap = map[string]bool{
 func isValidAction(action []string) bool {
 	var ok bool = false
 	for _, a := range action {
-		if supportedActionMap[a] {
+		if SupportedActionMap[a] {
 			ok = true
 		}
 	}
@@ -63,7 +63,7 @@ func isValidAction(action []string) bool {
 }
 
 func isValidEffect(effect string) bool {
-	if supportedEffectMap[effect] {
+	if SupportedEffectMap[effect] {
 		return true
 	}
 	return false
@@ -73,14 +73,14 @@ func isValidResource(resources []string) bool {
 	var ok bool = false
 	for _, resource := range resources {
 		switch true {
-		case strings.HasPrefix(resource, awsResource):
-			bucket := strings.SplitAfter(resource, awsResource)[1]
+		case strings.HasPrefix(resource, AwsResource):
+			bucket := strings.SplitAfter(resource, AwsResource)[1]
 			ok = true
 			if len(bucket) == 0 {
 				ok = false
 			}
-		case strings.HasPrefix(resource, minioResource):
-			bucket := strings.SplitAfter(resource, minioResource)[1]
+		case strings.HasPrefix(resource, MinioResource):
+			bucket := strings.SplitAfter(resource, MinioResource)[1]
 			ok = true
 			if len(bucket) == 0 {
 				ok = false
@@ -98,14 +98,14 @@ func isValidPrincipal(principal string) bool {
 		return true
 	}
 	switch true {
-	case strings.HasPrefix(principal, awsPrincipal):
-		username := strings.SplitAfter(principal, awsPrincipal)[1]
+	case strings.HasPrefix(principal, AwsPrincipal):
+		username := strings.SplitAfter(principal, AwsPrincipal)[1]
 		ok = true
 		if len(username) == 0 {
 			ok = false
 		}
-	case strings.HasPrefix(principal, minioPrincipal):
-		username := strings.SplitAfter(principal, minioPrincipal)[1]
+	case strings.HasPrefix(principal, MinioPrincipal):
+		username := strings.SplitAfter(principal, MinioPrincipal)[1]
 		ok = true
 		if len(username) == 0 {
 			ok = false
