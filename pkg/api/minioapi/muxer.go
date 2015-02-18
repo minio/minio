@@ -55,5 +55,5 @@ func HttpHandler(storage mstorage.Storage) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	return validateHandler(conf, ignoreUnimplementedResources(mux))
+	return validateHandler(conf, ignoreResourcesHandler(mux))
 }

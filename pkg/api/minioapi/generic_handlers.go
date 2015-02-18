@@ -29,6 +29,10 @@ type vHandler struct {
 	handler http.Handler
 }
 
+type rHandler struct {
+	handler http.Handler
+}
+
 // grab AccessKey from authorization header
 func stripAccessKey(r *http.Request) string {
 	fields := strings.Fields(r.Header.Get("Authorization"))
@@ -78,18 +82,20 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func ignoreUnimplementedResources(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		acceptsContentType := getContentType(r)
-		if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
-			error := errorCodeError(NotImplemented)
-			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HttpStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
-		} else {
-			h.ServeHTTP(w, r)
-		}
-	})
+func ignoreResourcesHandler(h http.Handler) http.Handler {
+	return rHandler{h}
+}
+
+func (h rHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	acceptsContentType := getContentType(r)
+	if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
+		error := errorCodeError(NotImplemented)
+		errorResponse := getErrorResponse(error, "")
+		w.WriteHeader(error.HttpStatusCode)
+		w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+	} else {
+		h.handler.ServeHTTP(w, r)
+	}
 }
 
 //// helpers
