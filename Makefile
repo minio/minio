@@ -12,12 +12,10 @@ checkgopath:
 
 getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
-	@go get golang.org/x/tools/cmd/vet && echo "Install govet"
 	@go get golang.org/x/tools/cmd/cover && echo "Installed gocover"
 
 build-all: getdeps
 	@echo "Building Libraries"
-	@godep go vet ./...
 	@godep go generate ./...
 	@godep go build ./...
 
