@@ -23,7 +23,43 @@ import (
 	"io"
 )
 
-type Header struct{}
+/*
+   ** DONUT v1 Spec **
+
+   BlockStart      uint32             // Magic="MINI"
+   VersionMajor    uint16
+   VersionMinor    uint16
+   VersionPatch    uint16
+   VersionReserved uint16
+   Reserved        uint64
+   GobHeaderLen    uint32
+   GobHeader       Sizeof(GobHeader)
+   BlockData       uint32             // Magic="DATA"
+   Data            []byte
+   BlockLen        uint64
+   BlockEnd        uint32             // Magic="INIM"
+
+*/
+
+type DonutHeader struct {
+	BlockStart      uint32 // Magic="MINI"
+	VersionMajor    uint16
+	VersionMinor    uint16
+	VersionPatch    uint16
+	VersionReserved uint16
+	Reserved        uint64
+	GobHeaderLen    uint32
+}
+
+type DonutGobHeader struct {
+	DataLen uint64
+}
+
+type DonutFooter struct {
+	BlockLen uint64
+	BlockEnd uint32 // Magic="INIM"
+}
+
 type Donut struct {
 	file io.Writer
 }
