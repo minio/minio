@@ -17,12 +17,14 @@
 package donut
 
 import (
+	"encoding/binary"
 	"io"
 )
 
 /*
-   ** DONUT v1 Spec **
 
+       DONUT v1 Spec
+   **********************
    BlockStart      [4]byte             // Magic="MINI"
    VersionMajor    uint16
    VersionMinor    uint16
@@ -35,6 +37,7 @@ import (
    Data            io.Reader           // matches length
    BlockLen        uint64              // length to block start
    BlockEnd        [4]byte             // Magic="INIM"
+
 */
 
 type DonutStructure struct {
@@ -81,10 +84,25 @@ func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 		BlockLen:        0,
 		BlockEnd:        [4]byte{'I', 'N', 'I', 'M'},
 	}
-	if err := WriteStructure(donut.file, donutStructure); err != nil {
+	if err := donut.WriteStructure(donut.file, donutStructure); err != nil {
 		return err
 	}
 	return nil
 }
 
-func WriteStructure(target io.Writer, donutStructure DonutStructure) error { return nil }
+func (donut *Donut) WriteStructure(target io.Writer, donutStructure DonutStructure) error {
+	err := binary.Write(target, binary.LittleEndian, donutStructure.BlockStart)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionMajor)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionMinor)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionPatch)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionReserved)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.Reserved)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.GobHeaderLen)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.GobHeader)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockData)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.Data)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockLen)
+	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockEnd)
+
+	return err
+}
