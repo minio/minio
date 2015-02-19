@@ -17,42 +17,39 @@
 package donut
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/gob"
 	"io"
 )
 
 /*
    ** DONUT v1 Spec **
 
-   BlockStart      uint32             // Magic="MINI"
+   BlockStart      [4]byte             // Magic="MINI"
    VersionMajor    uint16
    VersionMinor    uint16
    VersionPatch    uint16
    VersionReserved uint16
    Reserved        uint64
    GobHeaderLen    uint32
-   GobHeader       Sizeof(GobHeader)
-   BlockData       uint32             // Magic="DATA"
-   Data            []byte
-   BlockLen        uint64
-   BlockEnd        uint32             // Magic="INIM"
-
+   GobHeader       io.Reader           // matches length
+   BlockData       [4]byte             // Magic="DATA"
+   Data            io.Reader           // matches length
+   BlockLen        uint64              // length to block start
+   BlockEnd        [4]byte             // Magic="INIM"
 */
 
-type DonutHeader struct {
-	BlockStart      uint32 // Magic="MINI"
+type DonutStructure struct {
+	BlockStart      [4]byte // Magic="MINI"
 	VersionMajor    uint16
 	VersionMinor    uint16
 	VersionPatch    uint16
 	VersionReserved uint16
 	Reserved        uint64
 	GobHeaderLen    uint32
-}
-
-type DonutGobHeader struct {
-	DataLen uint64
+	GobHeader       GobHeader
+	BlockData       [4]byte
+	Data            io.Reader
+	BlockLen        uint64
+	BlockEnd        [4]byte
 }
 
 type DonutFooter struct {
@@ -62,63 +59,32 @@ type DonutFooter struct {
 
 type Donut struct {
 	file io.Writer
+	// mutex
 }
 
-func (donut Donut) Write(header Header, object io.Reader) error {
-	var newObjectBuffer bytes.Buffer
-	var headerBuffer bytes.Buffer
+type GobHeader struct{}
 
-	// create gob header
-	headerEncoder := gob.NewEncoder(&headerBuffer)
-	err := headerEncoder.Encode(header)
-	if err != nil {
-		return err
+func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
+	// TODO mutex
+	// Create bytes buffer representing the new object
+	donutStructure := DonutStructure{
+		BlockStart:      [4]byte{'M', 'I', 'N', 'I'},
+		VersionMajor:    1,
+		VersionMinor:    0,
+		VersionPatch:    0,
+		VersionReserved: 0,
+		Reserved:        0,
+		GobHeaderLen:    0,
+		GobHeader:       gobHeader,
+		BlockData:       [4]byte{'D', 'A', 'T', 'A'},
+		Data:            object,
+		BlockLen:        0,
+		BlockEnd:        [4]byte{'I', 'N', 'I', 'M'},
 	}
-
-	// prefix consists of a version number and a length
-	var headerPrefixBuffer bytes.Buffer
-	// write version
-	var version int
-	version = 1
-	err = binary.Write(&headerPrefixBuffer, binary.LittleEndian, version)
-	if err != nil {
-		return err
-	}
-
-	// write length
-	var headerLength int
-	headerLength = headerBuffer.Len()
-	err = binary.Write(&headerPrefixBuffer, binary.LittleEndian, headerLength)
-	if err != nil {
-		return err
-	}
-
-	// write header prefix
-	io.Copy(&newObjectBuffer, &headerPrefixBuffer)
-
-	// write header
-	io.Copy(&newObjectBuffer, &headerBuffer)
-
-	// write header marker
-
-	// TODO
-
-	// write data
-	_, err = io.Copy(&newObjectBuffer, object)
-	if err != nil {
-		return err
-	}
-
-	// write footer
-	// TODO
-
-	// write footer marker
-	// TODO
-
-	// write new object
-	_, err = io.Copy(donut.file, &newObjectBuffer)
-	if err != nil {
+	if err := WriteStructure(donut.file, donutStructure); err != nil {
 		return err
 	}
 	return nil
 }
+
+func WriteStructure(target io.Writer, donutStructure DonutStructure) error { return nil }
