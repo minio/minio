@@ -18,6 +18,7 @@
 _init() {
     ## Minimum required versions for build dependencies
     GCC_VERSION="4.0"
+    CLANG_VERSION="3.5"
     YASM_VERSION="1.2.0"
     GIT_VERSION="1.0"
     GO_VERSION="1.4"
@@ -131,15 +132,27 @@ check_deps() {
 	MISSING="${MISSING} golang(1.4)"
     fi
 
-    check_version "$(env git --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/')" "${GIT_VERSION}"
+    check_version "$(env git --version 2>/dev/null | sed -e 's/^.* \([0-9.\].*\).*$/\1/' -e 's/^\([0-9.\]*\).*/\1/g')" "${GIT_VERSION}"
     if [ $? -ge 2 ]; then
 	MISSING="${MISSING} git"
     fi
 
-    check_version "$(env gcc --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${GCC_VERSION}"
-    if [ $? -ge 2 ]; then
-	MISSING="${MISSING} build-essential"
-    fi
+    case ${UNAME%% *} in
+        "Linux")
+	    check_version "$(env gcc --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${GCC_VERSION}"
+	    if [ $? -ge 2 ]; then
+		MISSING="${MISSING} build-essential"
+	    fi
+            ;;
+	"Darwin")
+	    check_version "$(env gcc --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${CLANG_VERSION}"
+	    if [ $? -ge 2 ]; then
+		MISSING="${MISSING} xcode-cli"
+	    fi
+	    ;;
+	"*")
+	    ;;
+    esac
 
     check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${YASM_VERSION}"
     if [ $? -ge 2 ]; then
