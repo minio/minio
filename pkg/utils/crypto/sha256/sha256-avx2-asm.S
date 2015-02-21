@@ -47,6 +47,9 @@
 ########################################################################
 # This code schedules 2 blocks at a time, with 4 lanes per block
 ########################################################################
+# Using this part of Minio codebase under the license
+# Apache License Version 2.0 with modifications
+##
 
 #ifdef HAS_AVX2
 #ifndef ENTRY

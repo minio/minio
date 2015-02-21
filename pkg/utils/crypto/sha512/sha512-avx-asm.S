@@ -46,6 +46,9 @@
 # and search for that title.
 #
 ########################################################################
+# Using this part of Minio codebase under the license
+# Apache License Version 2.0 with modifications
+##
 
 #ifdef HAS_AVX
 #ifndef ENTRY

@@ -1,3 +1,12 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file of
+// Golang project:
+//    https://github.com/golang/go/blob/master/LICENSE
+
+// Using this part of Minio codebase under the license
+// Apache License Version 2.0 with modifications
+
 // SHA256 hash algorithm.  See FIPS 180-2.
 
 package sha256
