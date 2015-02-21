@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package donut
+package v1
 
 import (
 	"encoding/binary"
