@@ -59,11 +59,16 @@
  * SHA-1 implementation with Intel(R) AVX2 instruction set extensions.
  *
  *This implementation is based on the previous SSSE3 release:
- *Visit http://software.intel.com/en-us/articles/
- *and refer to improving-the-performance-of-the-secure-hash-algorithm-1/
+ * https://software.intel.com/en-us/articles/improving-the-performance-of-the-secure-hash-algorithm-1
  *
  *Updates 20-byte SHA-1 record in 'hash' for even number of
  *'num_blocks' consecutive 64-byte blocks
+ *
+ */
+
+/*
+ * Using this part of Minio codebase under the license
+ * Apache License Version 2.0 with modifications
  *
  */
 
