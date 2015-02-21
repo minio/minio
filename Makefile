@@ -12,7 +12,6 @@ checkgopath:
 
 getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
-	@go get golang.org/x/tools/cmd/cover && echo "Installed gocover"
 
 build-all: getdeps
 	@echo "Building Libraries"

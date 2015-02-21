@@ -176,8 +176,9 @@ install_minio_deps() {
     msg "Installing minio deps.."
     env go get github.com/tools/godep && echo "Installed godep" || \
         die "Cannot install godep. Abort installation."
-    env go get golang.org/x/tools/cmd/cover && echo "Installed cover" || \
-        die "Cannot install cover. Abort installation."
+# not needed anymore, keeping it here for future
+#    env go get golang.org/x/tools/cmd/cover && echo "Installed cover" || \
+#        die "Cannot install cover. Abort installation."
 }
 
 install_minio() {
