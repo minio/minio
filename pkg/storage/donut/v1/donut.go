@@ -18,6 +18,7 @@ package v1
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 )
 
@@ -97,18 +98,45 @@ func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 }
 
 func (donut *Donut) WriteFormat(target io.Writer, donutFormat DonutFormat) error {
-	err := binary.Write(target, binary.LittleEndian, donutFormat.BlockStart)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionMajor)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionMinor)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionPatch)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionReserved)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.Reserved)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.GobHeaderLen)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.GobHeader)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockData)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.Data)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockLen)
-	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd)
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockStart); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionMajor); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionMinor); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionPatch); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionReserved); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.Reserved); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.GobHeaderLen); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.GobHeader); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockData); err != nil {
+		return err
+	}
+	if count, err := io.Copy(target, donutFormat.Data); uint64(count) != donutFormat.BlockLen || err != nil {
+		if err == nil {
+			return err
+		}
+		return errors.New("Copy failed, count incorrect.")
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockLen); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
