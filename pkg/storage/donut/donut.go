@@ -25,7 +25,7 @@ import (
 
        DONUT v1 Spec
    **********************
-   BlockStart      [4]byte             // Magic="MINI"
+   BlockStart      [4]byte             // Magic="MINI"=1229867341
    VersionMajor    uint16
    VersionMinor    uint16
    VersionPatch    uint16
@@ -33,15 +33,21 @@ import (
    Reserved        uint64
    GobHeaderLen    uint32
    GobHeader       io.Reader           // matches length
-   BlockData       [4]byte             // Magic="DATA"
+   BlockData       [4]byte             // Magic="DATA"=1096040772
    Data            io.Reader           // matches length
    BlockLen        uint64              // length to block start
-   BlockEnd        [4]byte             // Magic="INIM"
+   BlockEnd        [4]byte             // Magic="INIM"=1229867341
 
 */
 
-type DonutStructure struct {
-	BlockStart      [4]byte // Magic="MINI"
+var (
+	MagicMINI = binary.LittleEndian.Uint32([]byte{'M', 'I', 'N', 'I'})
+	MagicDATA = binary.LittleEndian.Uint32([]byte{'D', 'A', 'T', 'A'})
+	MagicINIM = binary.LittleEndian.Uint32([]byte{'I', 'N', 'I', 'M'})
+)
+
+type DonutFormat struct {
+	BlockStart      uint32 // Magic="MINI"=1229867341
 	VersionMajor    uint16
 	VersionMinor    uint16
 	VersionPatch    uint16
@@ -49,15 +55,15 @@ type DonutStructure struct {
 	Reserved        uint64
 	GobHeaderLen    uint32
 	GobHeader       GobHeader
-	BlockData       [4]byte
+	BlockData       uint32 // Magic="DATA"=1096040772
 	Data            io.Reader
 	BlockLen        uint64
-	BlockEnd        [4]byte
+	BlockEnd        uint32
 }
 
 type DonutFooter struct {
 	BlockLen uint64
-	BlockEnd uint32 // Magic="INIM"
+	BlockEnd uint32 // Magic="INIM"=1229867341
 }
 
 type Donut struct {
@@ -70,8 +76,8 @@ type GobHeader struct{}
 func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 	// TODO mutex
 	// Create bytes buffer representing the new object
-	donutStructure := DonutStructure{
-		BlockStart:      [4]byte{'M', 'I', 'N', 'I'},
+	donutFormat := DonutFormat{
+		BlockStart:      MagicMINI,
 		VersionMajor:    1,
 		VersionMinor:    0,
 		VersionPatch:    0,
@@ -79,30 +85,30 @@ func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 		Reserved:        0,
 		GobHeaderLen:    0,
 		GobHeader:       gobHeader,
-		BlockData:       [4]byte{'D', 'A', 'T', 'A'},
+		BlockData:       MagicDATA,
 		Data:            object,
 		BlockLen:        0,
-		BlockEnd:        [4]byte{'I', 'N', 'I', 'M'},
+		BlockEnd:        MagicINIM,
 	}
-	if err := donut.WriteStructure(donut.file, donutStructure); err != nil {
+	if err := donut.WriteFormat(donut.file, donutFormat); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (donut *Donut) WriteStructure(target io.Writer, donutStructure DonutStructure) error {
-	err := binary.Write(target, binary.LittleEndian, donutStructure.BlockStart)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionMajor)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionMinor)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionPatch)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.VersionReserved)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.Reserved)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.GobHeaderLen)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.GobHeader)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockData)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.Data)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockLen)
-	err = binary.Write(target, binary.LittleEndian, donutStructure.BlockEnd)
+func (donut *Donut) WriteFormat(target io.Writer, donutFormat DonutFormat) error {
+	err := binary.Write(target, binary.LittleEndian, donutFormat.BlockStart)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionMajor)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionMinor)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionPatch)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.VersionReserved)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.Reserved)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.GobHeaderLen)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.GobHeader)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockData)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.Data)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockLen)
+	err = binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd)
 
 	return err
 }
