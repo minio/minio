@@ -36,7 +36,7 @@ import (
    BlockData       [4]byte             // Magic="DATA"=1096040772
    Data            io.Reader           // matches length
    BlockLen        uint64              // length to block start
-   BlockEnd        [4]byte             // Magic="INIM"=1229867341
+   BlockEnd        [4]byte             // Magic="INIM"=1296649801
 
 */
 
