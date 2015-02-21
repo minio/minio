@@ -451,6 +451,7 @@ a = TMP_
 	or      y2, y0                  # y0 = MAJ = (a|c)&b)|(a&c)
 	add     y0, h                   # h = h + S1 + CH + k + w + S0 + MAJ
 	ROTATE_ARGS
+	mov     e, y0                   # y0 = e 
 	mov     a, y1                   # y1 = a
 	MY_ROR  (25-11), y0             # y0 = e >> (25-11)
 	xor     e, y0                   # y0 = e ^ (e >> (25-11))
