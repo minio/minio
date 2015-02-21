@@ -32,11 +32,10 @@ func (s *MySuite) TestAPISuite(c *C) {
 	var b bytes.Buffer
 	var o bytes.Buffer
 
-	donut := Donut{&b}
+	donut := New(&b)
 	gobheader := GobHeader{}
 	err := donut.Write(gobheader, &o)
 	c.Assert(err, IsNil)
-	c.Log(b.Bytes())
 	blockStart := make([]byte, 4)
 	blockEnd := make([]byte, 4)
 

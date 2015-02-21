@@ -17,9 +17,14 @@
 package v1
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"io"
+	"sync"
+
+	"github.com/minio-io/minio/pkg/storage/erasure"
 )
 
 /*
@@ -55,7 +60,7 @@ type DonutFormat struct {
 	VersionReserved uint16
 	Reserved        uint64
 	GobHeaderLen    uint32
-	GobHeader       GobHeader
+	GobHeader       []byte
 	BlockData       uint32 // Magic="DATA"=1096040772
 	Data            io.Reader
 	BlockLen        uint64
@@ -68,36 +73,61 @@ type DonutFooter struct {
 }
 
 type Donut struct {
-	file io.Writer
-	// mutex
+	file  io.Writer
+	mutex *sync.RWMutex
 }
 
-type GobHeader struct{}
+type GobHeader struct {
+	Blocks        []EncodedChunk
+	Md5sum        []byte
+	EncoderParams erasure.EncoderParams
+}
 
-func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
-	// TODO mutex
-	// Create bytes buffer representing the new object
-	donutFormat := DonutFormat{
-		BlockStart:      MagicMINI,
-		VersionMajor:    1,
-		VersionMinor:    0,
-		VersionPatch:    0,
-		VersionReserved: 0,
-		Reserved:        0,
-		GobHeaderLen:    0,
-		GobHeader:       gobHeader,
-		BlockData:       MagicDATA,
-		Data:            object,
-		BlockLen:        0,
-		BlockEnd:        MagicINIM,
+type EncodedChunk struct {
+	Crc    uint32
+	Length int
+	Offset int
+}
+
+func New(file io.Writer) *Donut {
+	donut := Donut{}
+	donut.mutex = new(sync.RWMutex)
+	donut.file = file
+	return &donut
+}
+
+func (donut *Donut) WriteGob(gobHeader GobHeader) (bytes.Buffer, error) {
+	var gobBuffer bytes.Buffer
+	encoder := gob.NewEncoder(&gobBuffer)
+	err := encoder.Encode(gobHeader)
+	if err != nil {
+		return bytes.Buffer{}, err
 	}
-	if err := donut.WriteFormat(donut.file, donutFormat); err != nil {
+	return gobBuffer, nil
+}
+
+func (donut *Donut) WriteEnd(target io.Writer, donutFormat DonutFormat) error {
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockLen); err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (donut *Donut) WriteFormat(target io.Writer, donutFormat DonutFormat) error {
+func (donut *Donut) WriteData(target io.Writer, donutFormat DonutFormat) error {
+	var b bytes.Buffer
+	if count, err := io.Copy(&b, donutFormat.Data); uint64(count) != donutFormat.BlockLen || err != nil {
+		if err == nil {
+			return binary.Write(target, binary.LittleEndian, b.Bytes())
+		}
+		return errors.New("Copy failed, count incorrect.")
+	}
+	return nil
+}
+
+func (donut *Donut) WriteBegin(target io.Writer, donutFormat DonutFormat) error {
 	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockStart); err != nil {
 		return err
 	}
@@ -125,16 +155,43 @@ func (donut *Donut) WriteFormat(target io.Writer, donutFormat DonutFormat) error
 	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockData); err != nil {
 		return err
 	}
-	if count, err := io.Copy(target, donutFormat.Data); uint64(count) != donutFormat.BlockLen || err != nil {
-		if err == nil {
-			return err
-		}
-		return errors.New("Copy failed, count incorrect.")
-	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockLen); err != nil {
+	return nil
+}
+
+func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
+	donut.mutex.Lock()
+	defer donut.mutex.Unlock()
+
+	gobBytes, err := donut.WriteGob(gobHeader)
+	if err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
+
+	// Create bytes buffer representing the new object
+	donutFormat := DonutFormat{
+		BlockStart:      MagicMINI,
+		VersionMajor:    1,
+		VersionMinor:    0,
+		VersionPatch:    0,
+		VersionReserved: 0,
+		Reserved:        0,
+		GobHeaderLen:    uint32(gobBytes.Len()),
+		GobHeader:       gobBytes.Bytes(),
+		BlockData:       MagicDATA,
+		Data:            object,
+		BlockLen:        0,
+		BlockEnd:        MagicINIM,
+	}
+
+	if err := donut.WriteBegin(donut.file, donutFormat); err != nil {
+		return err
+	}
+
+	if err := donut.WriteData(donut.file, donutFormat); err != nil {
+		return err
+	}
+
+	if err := donut.WriteEnd(donut.file, donutFormat); err != nil {
 		return err
 	}
 
