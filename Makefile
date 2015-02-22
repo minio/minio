@@ -4,7 +4,7 @@ all: getdeps install
 
 checkdeps:
 	@echo "Checking deps.."
-	@(env bash $(PWD)/devscripts/checkdeps.sh)
+	@(env bash $(PWD)/buildscripts/checkdeps.sh)
 
 checkgopath:
 	@echo "Checking project in ${MINIOPATH}"

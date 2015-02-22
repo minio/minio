@@ -192,6 +192,7 @@ main() {
 	echo "Please install them "
 	echo "${MISSING}"
 	echo
+	echo "Follow https://github.com/Minio-io/minio/blob/master/BUILDDEPS.md for further instructions"
 	exit 1
     fi
     echo "Done"
