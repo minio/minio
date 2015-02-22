@@ -53,9 +53,10 @@ This installation document assumes Mac OSX Yosemite 10.10 or later on x86-64 pla
 $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
-##### Install Git
+##### Install Git, Python and MkDocs
 ```sh
-$ brew install git
+$ brew install git python
+$ pip install mkdocs
 ```
 
 ##### Install YASM
