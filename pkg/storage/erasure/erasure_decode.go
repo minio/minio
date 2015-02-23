@@ -27,6 +27,10 @@ import (
 	"unsafe"
 )
 
+// Decode decodes 2 tuple data containing (k + m) chunks back into its original form.
+// Additionally original block length should also be provided as input.
+//
+// Decoded data is exactly similar in length and content as the original data.
 func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	var decode_matrix *C.uint8_t
 	var decode_tbls *C.uint8_t
