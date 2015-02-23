@@ -85,7 +85,7 @@ func main() {
 		cli.StringFlag{
 			Name:  "domain,d",
 			Value: "",
-			Usage: "address for incoming API requests",
+			Usage: "domain used for routing incoming API requests",
 		},
 		cli.StringFlag{
 			Name:  "api-address,a",
