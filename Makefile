@@ -22,6 +22,8 @@ test-all: build-all
 	@echo "Running Test Suites:"
 	@godep go test -race ./...
 
+test: test-all
+
 minio: build-all test-all
 
 install: minio
