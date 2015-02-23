@@ -31,8 +31,8 @@ const (
 
 // TODO support canonical user
 const (
-	AwsPrincipal   = "arn:aws:iam::Account-ID:user/"
-	MinioPrincipal = "minio::Account-ID:user/"
+	AwsPrincipal   = "arn:aws:iam::"
+	MinioPrincipal = "minio::"
 )
 
 var SupportedActionMap = map[string]bool{
@@ -55,10 +55,13 @@ var SupportedEffectMap = map[string]bool{
 func isValidAction(action []string) bool {
 	var ok bool = false
 	for _, a := range action {
-		if SupportedActionMap[a] {
-			ok = true
+		if !SupportedActionMap[a] {
+			goto error
 		}
 	}
+	ok = true
+
+error:
 	return ok
 }
 
@@ -104,6 +107,7 @@ func isValidPrincipal(principal string) bool {
 		if len(username) == 0 {
 			ok = false
 		}
+
 	case strings.HasPrefix(principal, MinioPrincipal):
 		username := strings.SplitAfter(principal, MinioPrincipal)[1]
 		ok = true
@@ -160,6 +164,7 @@ func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 		if len(statement.Resource) == 0 {
 			goto error
 		}
+
 		if !isValidResource(statement.Resource) {
 			goto error
 		}

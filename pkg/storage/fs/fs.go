@@ -127,12 +127,13 @@ func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 	// get policy path
 	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
 	filestat, err := os.Stat(bucketPolicy)
-	if filestat.IsDir() {
-		return policy.BucketPolicy{}, mstorage.BackendCorrupted{Path: bucketPolicy}
-	}
 
 	if os.IsNotExist(err) {
 		return policy.BucketPolicy{}, mstorage.BucketPolicyNotFound{Bucket: bucket}
+	}
+
+	if filestat.IsDir() {
+		return policy.BucketPolicy{}, mstorage.BackendCorrupted{Path: bucketPolicy}
 	}
 
 	file, err := os.OpenFile(bucketPolicy, os.O_RDONLY, 0666)
@@ -170,10 +171,13 @@ func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) err
 
 	// get policy path
 	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
-	filestat, _ := os.Stat(bucketPolicy)
-	if filestat.IsDir() {
-		return mstorage.BackendCorrupted{Path: bucketPolicy}
+	filestat, ret := os.Stat(bucketPolicy)
+	if !os.IsNotExist(ret) {
+		if filestat.IsDir() {
+			return mstorage.BackendCorrupted{Path: bucketPolicy}
+		}
 	}
+
 	file, err := os.OpenFile(bucketPolicy, os.O_WRONLY|os.O_CREATE, 0600)
 	defer file.Close()
 	if err != nil {

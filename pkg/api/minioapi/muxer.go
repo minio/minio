@@ -20,7 +20,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	x "github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/utils/config"
 )
@@ -30,30 +30,60 @@ const (
 )
 
 type minioApi struct {
+	domain  string
 	storage mstorage.Storage
 }
 
-// No encoder interface exists, so we create one.
-type encoder interface {
-	Encode(v interface{}) error
-}
-
-func HttpHandler(storage mstorage.Storage) http.Handler {
-	mux := mux.NewRouter()
-	var api = minioApi{}
-	api.storage = storage
-
-	var conf = config.Config{}
-	if err := conf.SetupConfig(); err != nil {
-		log.Fatal(err)
-	}
-
+func pathMux(api minioApi, mux *x.Router) *x.Router {
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
+
+	return mux
+}
+
+func domainMux(api minioApi, mux *x.Router) *x.Router {
+	mux.HandleFunc("/",
+		api.listObjectsHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
+	mux.HandleFunc("/{object:.*}",
+		api.getObjectHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
+	mux.HandleFunc("/{object:.*}",
+		api.headObjectHandler).Host("{bucket}" + "." + api.domain).Methods("HEAD")
+	mux.HandleFunc("/{object:.*}",
+		api.putObjectHandler).Host("{bucket}" + "." + api.domain).Methods("PUT")
+	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
+
+	return mux
+}
+
+func getMux(api minioApi, mux *x.Router) *x.Router {
+	switch true {
+	case api.domain == "":
+		return pathMux(api, mux)
+	case api.domain != "":
+		s := mux.Host(api.domain).Subrouter()
+		return domainMux(api, s)
+	}
+	return nil
+}
+
+func HttpHandler(domain string, storage mstorage.Storage) http.Handler {
+	var mux *x.Router
+	var api = minioApi{}
+	api.storage = storage
+	api.domain = domain
+
+	r := x.NewRouter()
+	mux = getMux(api, r)
+
+	var conf = config.Config{}
+	if err := conf.SetupConfig(); err != nil {
+		log.Fatal(err)
+	}
 
 	return validateHandler(conf, ignoreResourcesHandler(mux))
 }

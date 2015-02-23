@@ -41,6 +41,7 @@ func getStorageType(input string) server.StorageType {
 
 func runCmd(c *cli.Context) {
 	storageTypeStr := c.String("storage-type")
+	domain := c.String("domain")
 	apiaddress := c.String("api-address")
 	webaddress := c.String("web-address")
 	certFile := c.String("cert")
@@ -52,6 +53,7 @@ func runCmd(c *cli.Context) {
 	storageType := getStorageType(storageTypeStr)
 	var serverConfigs []server.ServerConfig
 	apiServerConfig := server.ServerConfig{
+		Domain:   domain,
 		Address:  apiaddress,
 		Tls:      tls,
 		CertFile: certFile,
@@ -61,6 +63,7 @@ func runCmd(c *cli.Context) {
 		},
 	}
 	webUiServerConfig := server.ServerConfig{
+		Domain:   domain,
 		Address:  webaddress,
 		Tls:      false,
 		CertFile: "",
@@ -79,6 +82,11 @@ func main() {
 	app.Name = "minio"
 	app.Usage = ""
 	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "domain,d",
+			Value: "",
+			Usage: "address for incoming API requests",
+		},
 		cli.StringFlag{
 			Name:  "api-address,a",
 			Value: ":9000",

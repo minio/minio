@@ -27,7 +27,7 @@ type HttpServerConfig struct {
 	TLS       bool
 	CertFile  string
 	KeyFile   string
-	Websocket bool
+	Websocket bool // implement it - TODO
 }
 
 type HttpServer struct{}

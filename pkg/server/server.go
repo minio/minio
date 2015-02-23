@@ -31,6 +31,7 @@ import (
 )
 
 type ServerConfig struct {
+	Domain   string
 	Address  string
 	Tls      bool
 	CertFile string
@@ -78,7 +79,7 @@ func getHttpChannels(configs []ServerConfig) (ctrlChans []chan<- string, statusC
 
 				ctrlChans, statusChans, storage = getStorageChannels(k.StorageType)
 				// start minio api in a web server, pass storage driver into it
-				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(storage), httpConfig)
+				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(config.Domain, storage), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)

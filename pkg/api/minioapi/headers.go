@@ -27,6 +27,11 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
+// No encoder interface exists, so we create one.
+type encoder interface {
+	Encode(v interface{}) error
+}
+
 // Write Common Header helpers
 func writeCommonHeaders(w http.ResponseWriter, acceptsType string) {
 	w.Header().Set("Server", "Minio")
