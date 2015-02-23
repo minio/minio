@@ -1,35 +1,7 @@
 {
 	"ImportPath": "github.com/minio-io/minio",
-	"GoVersion": "go1.4.1",
-	"Packages": [
-		"./..."
-	],
+	"GoVersion": "go1.4",
 	"Deps": [
-		{
-			"ImportPath": "github.com/HouzuoGuo/tiedot/data",
-			"Comment": "3.1.3-33-g9cd340d",
-			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
-		},
-		{
-			"ImportPath": "github.com/HouzuoGuo/tiedot/db",
-			"Comment": "3.1.3-33-g9cd340d",
-			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
-		},
-		{
-			"ImportPath": "github.com/HouzuoGuo/tiedot/dberr",
-			"Comment": "3.1.3-33-g9cd340d",
-			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
-		},
-		{
-			"ImportPath": "github.com/HouzuoGuo/tiedot/gommap",
-			"Comment": "3.1.3-33-g9cd340d",
-			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
-		},
-		{
-			"ImportPath": "github.com/HouzuoGuo/tiedot/tdlog",
-			"Comment": "3.1.3-33-g9cd340d",
-			"Rev": "9cd340d7fda74e630319c58254b04787f3ffe43a"
-		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-42-gfbda1ce",
