@@ -67,9 +67,9 @@ func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	encoder.Close()
 
 	// DEBUG
-	//fmt.Println("Request header sent: ", req.Header.Get("Authorization"))
-	//fmt.Println("Header calculated: ", authHeader.String())
-	//fmt.Printf("%q : %x", ss, ss)
+	// fmt.Println("Request header sent: ", req.Header.Get("Authorization"))
+	// fmt.Println("Header calculated: ", authHeader.String())
+	// fmt.Printf("%q : %x", ss, ss)
 	if req.Header.Get("Authorization") != authHeader.String() {
 		return false, fmt.Errorf("Authorization header mismatch")
 	}
@@ -155,6 +155,11 @@ var subResList = []string{"acl", "lifecycle", "location", "logging", "notificati
 // 	  <HTTP-Request-URI, from the protocol name up to the query string> +
 // 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
 func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
+	bucket := bucketFromHostname(req)
+	if bucket != "" {
+		buf.WriteByte('/')
+		buf.WriteString(bucket)
+	}
 	buf.WriteString(req.URL.Path)
 	if req.URL.RawQuery != "" {
 		n := 0
@@ -175,4 +180,18 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 			}
 		}
 	}
+}
+
+func bucketFromHostname(req *http.Request) string {
+	host := req.Host
+	if host == "" {
+		host = req.URL.Host
+	}
+
+	host = strings.TrimSpace(host)
+	hostParts := strings.Split(host, ".")
+	if len(hostParts) > 1 {
+		return hostParts[0]
+	}
+	return ""
 }

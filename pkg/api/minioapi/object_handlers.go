@@ -103,6 +103,12 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	resources := getBucketResources(req.URL.Query())
+	if resources.policy == true && object == "" {
+		server.putBucketPolicyHandler(w, req)
+		return
+	}
+
 	err := server.storage.StoreObject(bucket, object, "", req.Body)
 	switch err := err.(type) {
 	case nil:
