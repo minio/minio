@@ -23,7 +23,7 @@ import (
 
 	"github.com/minio-io/minio/pkg/api/minioapi"
 	"github.com/minio-io/minio/pkg/api/webuiapi"
-	"github.com/minio-io/minio/pkg/httpserver"
+	"github.com/minio-io/minio/pkg/server/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/fs"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
