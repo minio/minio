@@ -32,12 +32,15 @@ type encoder interface {
 	Encode(v interface{}) error
 }
 
-// Write Common Header helpers
+//// helpers
+
+// Write http common headers
 func writeCommonHeaders(w http.ResponseWriter, acceptsType string) {
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Content-Type", acceptsType)
 }
 
+// Write error response headers
 func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType contentType) []byte {
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
@@ -53,10 +56,10 @@ func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType
 	return bytesBuffer.Bytes()
 }
 
-// Write Object Header helper
+// Write object header
 func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
-	// write common headers
+	// common headers
 	writeCommonHeaders(w, metadata.ContentType)
 	w.Header().Set("ETag", metadata.ETag)
 	w.Header().Set("Last-Modified", lastModified)
@@ -64,10 +67,11 @@ func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata)
 	w.Header().Set("Connection", "close")
 }
 
+// Write object header and response
 func writeObjectHeadersAndResponse(w http.ResponseWriter, response interface{}, acceptsType contentType) []byte {
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
-	// write common headers
+	// common headers
 	writeCommonHeaders(w, getContentString(acceptsType))
 	switch acceptsType {
 	case xmlType:
