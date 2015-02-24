@@ -39,6 +39,7 @@ type User struct {
 	SecretKey string
 }
 
+// Initialize config directory and template config
 func (c *Config) SetupConfig() error {
 	confPath := path.Join(helpers.HomeDir(), ".minio")
 	if err := os.MkdirAll(confPath, os.ModeDir); err != nil {
@@ -58,10 +59,12 @@ func (c *Config) SetupConfig() error {
 	return nil
 }
 
+// Get config file location
 func (c *Config) GetConfigPath() string {
 	return c.configPath
 }
 
+// Verify if user exists
 func (c *Config) IsUserExists(username string) bool {
 	for _, user := range c.Users {
 		if user.Name == username {
@@ -71,6 +74,7 @@ func (c *Config) IsUserExists(username string) bool {
 	return false
 }
 
+// Get user based on accesskey
 func (c *Config) GetKey(accessKey string) User {
 	value, ok := c.Users[accessKey]
 	if !ok {
@@ -79,6 +83,7 @@ func (c *Config) GetKey(accessKey string) User {
 	return value
 }
 
+// Get user based on username
 func (c *Config) GetUser(username string) User {
 	for _, user := range c.Users {
 		if user.Name == username {
@@ -88,6 +93,7 @@ func (c *Config) GetUser(username string) User {
 	return User{}
 }
 
+// Add a new user into existing User list
 func (c *Config) AddUser(user User) {
 	var currentUsers map[string]User
 	if len(c.Users) == 0 {
@@ -99,12 +105,14 @@ func (c *Config) AddUser(user User) {
 	c.Users = currentUsers
 }
 
+// Write encoded json in config file
 func (c *Config) WriteConfig() error {
+	c.configLock.Lock()
+	defer c.configLock.Unlock()
+
 	var file *os.File
 	var err error
 
-	c.configLock.Lock()
-	defer c.configLock.Unlock()
 	file, err = os.OpenFile(c.configFile, os.O_WRONLY, 0666)
 	defer file.Close()
 	if err != nil {
@@ -116,12 +124,13 @@ func (c *Config) WriteConfig() error {
 	return nil
 }
 
+// Read json config file and decode
 func (c *Config) ReadConfig() error {
-	var file *os.File
-	var err error
-
 	c.configLock.RLock()
 	defer c.configLock.RUnlock()
+
+	var file *os.File
+	var err error
 
 	file, err = os.OpenFile(c.configFile, os.O_RDONLY, 0666)
 	defer file.Close()
@@ -143,6 +152,9 @@ func (c *Config) ReadConfig() error {
 	}
 }
 
+/// helpers
+
+// Load all users into memory
 func Loadusers() map[string]User {
 	c := Config{}
 	c.SetupConfig()
@@ -150,6 +162,7 @@ func Loadusers() map[string]User {
 	return c.Users
 }
 
+// Load a given user based on accessKey
 func Loadkey(accessKeyId string) User {
 	c := Config{}
 	c.SetupConfig()
@@ -157,6 +170,7 @@ func Loadkey(accessKeyId string) User {
 	return c.GetKey(accessKeyId)
 }
 
+// Load a given user based on username
 func Loaduser(username string) User {
 	c := Config{}
 	c.SetupConfig()

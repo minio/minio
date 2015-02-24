@@ -24,6 +24,7 @@ import (
 	"strings"
 )
 
+// Units of various bytes in ascending order
 const (
 	UNIT_BYTE = 1 << (10 * iota)
 	UNIT_KILOBYTE
@@ -33,6 +34,7 @@ const (
 	UNIT_PETABYTE
 )
 
+// Convert bytes length in integer to human readable string
 func BytesToString(bytes uint64) string {
 	var unit string = "B"
 	var value uint64 = 0
@@ -58,6 +60,7 @@ func BytesToString(bytes uint64) string {
 	return fmt.Sprintf("%d%s", value, unit)
 }
 
+// Convert human readable string to bytes length in integer
 func StringToBytes(s string) (uint64, error) {
 	var bytes uint64
 	var err error

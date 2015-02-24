@@ -32,6 +32,7 @@ import (
 	"github.com/minio-io/minio/pkg/utils/config"
 )
 
+// Sign a given http request using HMAC style signatures
 func SignRequest(user config.User, req *http.Request) {
 	if date := req.Header.Get("Date"); date == "" {
 		req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
@@ -48,7 +49,7 @@ func SignRequest(user config.User, req *http.Request) {
 	req.Header.Set("Authorization", authHeader.String())
 }
 
-// This package implements verification side of Object API Signature request
+// Validate an API request by validating its signature using HMAC signatures
 func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	// Verify if date headers are set, if not reject the request
 	if req.Header.Get("x-amz-date") == "" {
@@ -101,6 +102,7 @@ func getStringToSign(req *http.Request) string {
 	return buf.String()
 }
 
+// Lower all upper case letters
 func hasPrefixCaseInsensitive(s, pfx string) bool {
 	if len(pfx) > len(s) {
 		return false
@@ -113,6 +115,7 @@ func hasPrefixCaseInsensitive(s, pfx string) bool {
 	return shead == pfx || shead == strings.ToLower(pfx)
 }
 
+// Canonicalize amazon special headers, headers starting with 'x-amz-'
 func writeCanonicalizedAmzHeaders(buf *bytes.Buffer, req *http.Request) {
 	amzHeaders := make([]string, 0)
 	vals := make(map[string][]string)
@@ -146,7 +149,7 @@ func writeCanonicalizedAmzHeaders(buf *bytes.Buffer, req *http.Request) {
 	}
 }
 
-// Must be sorted:
+// Resource list must be sorted:
 var subResList = []string{"acl", "lifecycle", "location", "logging", "notification", "partNumber", "policy", "requestPayment", "torrent", "uploadId", "uploads", "versionId", "versioning", "versions", "website"}
 
 // From the Amazon docs:
@@ -155,6 +158,7 @@ var subResList = []string{"acl", "lifecycle", "location", "logging", "notificati
 // 	  <HTTP-Request-URI, from the protocol name up to the query string> +
 // 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
 func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
+	// Grab bucket name from hostname
 	bucket := bucketFromHostname(req)
 	if bucket != "" {
 		buf.WriteByte('/')
@@ -182,6 +186,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 	}
 }
 
+// Convert subdomain http request into bucketname if possible
 func bucketFromHostname(req *http.Request) string {
 	host := req.Host
 	if host == "" {

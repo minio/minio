@@ -21,10 +21,14 @@ const (
 	MINIO_SECRET_ID = 40
 )
 
+/// helpers
+
+// Is alphanumeric?
 func isalnum(c byte) bool {
 	return '0' <= c && c <= '9' || 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
 }
 
+// validate access key for only alphanumeric characters
 func ValidateAccessKey(key []byte) bool {
 	for _, char := range key {
 		if isalnum(char) {

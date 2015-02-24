@@ -21,9 +21,14 @@ import (
 	"encoding/base64"
 )
 
+// Static alphaNumeric table used for generating unique keys
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 var alphaNumericTableFull = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 
+/// helpers
+
+// Generate random alpha numeric value using only uppercase characters
+// takes input as size in integer
 func GetRandomAlphaNumeric(size int) ([]byte, error) {
 	alpha := make([]byte, size)
 	_, err := rand.Read(alpha)
@@ -37,6 +42,8 @@ func GetRandomAlphaNumeric(size int) ([]byte, error) {
 	return alpha, nil
 }
 
+// Generate random alpha numeric value using all alphanumeric characters
+// takes input as size in integer
 func GetRandomAlphaNumericFull(size int) ([]byte, error) {
 	alphaFull := make([]byte, size)
 	_, err := rand.Read(alphaFull)
@@ -49,6 +56,7 @@ func GetRandomAlphaNumericFull(size int) ([]byte, error) {
 	return alphaFull, nil
 }
 
+// Generate random base64 numeric value from a random seed.
 func GetRandomBase64(size int) ([]byte, error) {
 	rb := make([]byte, size)
 	_, err := rand.Read(rb)
