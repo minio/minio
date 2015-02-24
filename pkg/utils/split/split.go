@@ -33,12 +33,6 @@ type SplitMessage struct {
 	Err  error
 }
 
-type JoinMessage struct {
-	Reader io.Reader
-	Length int64
-	Err    error
-}
-
 // SplitStream reads from io.Reader, splits the data into chunks, and sends
 // each chunk to the channel. This method runs until an EOF or error occurs. If
 // an error occurs, the method sends the error over the channel and returns.
@@ -98,6 +92,17 @@ func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan SplitMessa
 	close(ch)
 }
 
+// JoinFiles reads from a given directory, joins data in chunks with prefix and sends
+// an io.Reader.
+//
+//  var err error
+//  for err == nil {
+//     buf := make([]byte, 1024*1024)
+//     reader := JoinFiles("mydirectory", "mypreferred-prefix")
+//     _, err = reader.Read(buf)
+//     fmt.Println(buf)
+// }
+//
 func JoinFiles(dirname string, inputPrefix string) io.Reader {
 	reader, writer := io.Pipe()
 	fileInfos, readError := ioutil.ReadDir(dirname)

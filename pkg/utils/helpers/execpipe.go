@@ -26,7 +26,8 @@ import (
 // A simple ExecPipe() pipes exec.Cmd together - somewhat similar to how bash pipes "|" behave.
 // Each command's standard output is connected to the standard input of the next command
 // and the output of the final command is returned
-
+//
+// TODO: handle errors properly
 func ExecPipe(cmds ...*exec.Cmd) (pipeLineOutput io.Reader, pipeLineError error) {
 	// Require at least one command
 	if len(cmds) < 1 {

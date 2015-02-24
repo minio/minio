@@ -24,6 +24,7 @@ import (
 	"strings"
 )
 
+// Get current user home directory
 func HomeDir() string {
 	if runtime.GOOS == "windows" {
 		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
@@ -35,16 +36,19 @@ func HomeDir() string {
 	return os.Getenv("HOME")
 }
 
+// Create a new temp directory
 func MakeTempTestDir() (string, error) {
 	return ioutil.TempDir("/tmp", "minio-test-")
 }
 
+// Assert wrapper for error not being null
 func Assert(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
+// Camelcase input string
 func FirstUpper(str string) string {
 	return strings.ToUpper(str[0:1]) + str[1:]
 }
