@@ -25,15 +25,13 @@ import (
 	"github.com/minio-io/minio/pkg/utils/config"
 )
 
-const (
-	dateFormat = "2006-01-02T15:04:05.000Z"
-)
-
+// private use
 type minioApi struct {
 	domain  string
 	storage mstorage.Storage
 }
 
+// Path based routing
 func pathMux(api minioApi, mux *x.Router) *x.Router {
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
@@ -45,6 +43,7 @@ func pathMux(api minioApi, mux *x.Router) *x.Router {
 	return mux
 }
 
+// Domain based routing
 func domainMux(api minioApi, mux *x.Router) *x.Router {
 	mux.HandleFunc("/",
 		api.listObjectsHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
@@ -60,6 +59,7 @@ func domainMux(api minioApi, mux *x.Router) *x.Router {
 	return mux
 }
 
+// Get proper router based on domain availability
 func getMux(api minioApi, mux *x.Router) *x.Router {
 	switch true {
 	case api.domain == "":
@@ -71,6 +71,7 @@ func getMux(api minioApi, mux *x.Router) *x.Router {
 	return nil
 }
 
+// Http wrapper handler
 func HttpHandler(domain string, storage mstorage.Storage) http.Handler {
 	var mux *x.Router
 	var api = minioApi{}

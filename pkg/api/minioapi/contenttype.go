@@ -27,15 +27,19 @@ const (
 	jsonType
 )
 
+// content-type to human readable map
 var typeToString = map[contentType]string{
 	xmlType:  "application/xml",
 	jsonType: "application/json",
 }
+
+// human readbale to content-type map
 var acceptToType = map[string]contentType{
 	"application/xml":  xmlType,
 	"application/json": jsonType,
 }
 
+// Get content type requested from 'Accept' header
 func getContentType(req *http.Request) contentType {
 	if accept := req.Header.Get("Accept"); accept != "" {
 		return acceptToType[accept]
@@ -43,6 +47,7 @@ func getContentType(req *http.Request) contentType {
 	return xmlType
 }
 
+// Content type to human readable string
 func getContentString(content contentType) string {
 	return typeToString[content]
 }

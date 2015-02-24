@@ -21,12 +21,14 @@ import (
 	"net/http"
 )
 
+// Error structure
 type Error struct {
 	Code           string
 	Description    string
 	HttpStatusCode int
 }
 
+// Error response format
 type ErrorResponse struct {
 	XMLName   xml.Name `xml:"Error" json:"-"`
 	Code      string
@@ -36,7 +38,7 @@ type ErrorResponse struct {
 	HostId    string
 }
 
-/// Error codes, non exhaustive list
+// Error codes, non exhaustive list
 const (
 	AccessDenied = iota
 	BadDigest
@@ -63,6 +65,7 @@ const (
 	NoSuchBucketPolicy
 )
 
+// Error code to Error structure map
 var errorCodeResponse = map[int]Error{
 	AccessDenied: {
 		Code:           "AccessDenied",
@@ -181,12 +184,13 @@ var errorCodeResponse = map[int]Error{
 	},
 }
 
-// errorCodeError provides errorCode to Error. It returns empty if
-// the code provided is unknown
+// errorCodeError provides errorCode to Error. It returns empty if the code provided is unknown
 func errorCodeError(code int) Error {
 	return errorCodeResponse[code]
 }
 
+// getErrorResponse gets in standard error and resource value and
+// provides a encodable populated response values
 func getErrorResponse(err Error, resource string) ErrorResponse {
 	var data = ErrorResponse{}
 	data.Code = err.Code

@@ -33,7 +33,7 @@ type rHandler struct {
 	handler http.Handler
 }
 
-// grab AccessKey from authorization header
+// strip AccessKey from authorization header
 func stripAccessKey(r *http.Request) string {
 	fields := strings.Fields(r.Header.Get("Authorization"))
 	if len(fields) < 2 {
@@ -46,6 +46,8 @@ func stripAccessKey(r *http.Request) string {
 	return splits[0]
 }
 
+// Validate handler is wrapper handler used for API request validation with authorization header.
+// Current authorization layer supports S3's standard HMAC based signature request.
 func validateHandler(conf config.Config, h http.Handler) http.Handler {
 	return vHandler{conf, h}
 }
@@ -72,16 +74,23 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		//No access key found, handle this more appropriately
-		//TODO: Remove this after adding tests to support signature
-		//request
+		// Control reaches when no access key is found, ideally we would
+		// like to throw back `403`. But for now with our tests lacking
+		// this functionality it is better for us to be serving anonymous
+		// requests as well.
+		// We should remove this after adding tests to support signature request
 		h.handler.ServeHTTP(w, r)
-		//Add this line, to reply back for invalid requests
-		//w.WriteHeader(http.StatusUnauthorized)
-		//w.Write([]byte("Authorization header malformed")
+		// ## Uncommented below links of code after disabling anonymous requests
+		// error := errorCodeError(AccessDenied)
+		// errorResponse := getErrorResponse(error, "")
+		// w.WriteHeader(error.HttpStatusCode)
+		// w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 	}
 }
 
+// Ignore resources handler is wrapper handler used for API request resource validation
+// Since we do not support all the S3 queries, it is necessary for us to throw back a
+// valid error message indicating such a feature to have been not implemented.
 func ignoreResourcesHandler(h http.Handler) http.Handler {
 	return rHandler{h}
 }

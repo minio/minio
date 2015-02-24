@@ -20,10 +20,12 @@ import (
 	"encoding/xml"
 )
 
+// Limit number of objects in a given response
 const (
 	MAX_OBJECT_LIST = 1000
 )
 
+// Object list response format
 type ObjectListResponse struct {
 	XMLName     xml.Name `xml:"ListBucketResult" json:"-"`
 	Name        string
@@ -33,6 +35,7 @@ type ObjectListResponse struct {
 	Contents    []*Item `xml:,innerxml`
 }
 
+// Bucket list response format
 type BucketListResponse struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult" json:"-"`
 	Owner   Owner
@@ -41,11 +44,13 @@ type BucketListResponse struct {
 	} `xml:,innerxml` // Buckets are nested
 }
 
+// Bucket struct
 type Bucket struct {
 	Name         string
 	CreationDate string
 }
 
+// Object struct
 type Item struct {
 	Key          string
 	LastModified string
@@ -60,6 +65,7 @@ type Owner struct {
 	DisplayName string
 }
 
+// List of not implemented bucket queries
 var unimplementedBucketResourceNames = map[string]bool{
 	"acl":            true,
 	"cors":           true,
@@ -75,6 +81,7 @@ var unimplementedBucketResourceNames = map[string]bool{
 	"uploads":        true,
 }
 
+// List of not implemented object queries
 var unimplementedObjectResourceNames = map[string]bool{
 	"uploadId": true,
 	"acl":      true,
