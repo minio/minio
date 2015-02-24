@@ -36,4 +36,5 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 | arm64 | Not yet|
 | i386 | Never |
 
-[![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme)](https://github.com/igrigorik/ga-beacon)
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/Minio-io/minio/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
