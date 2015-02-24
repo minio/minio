@@ -73,7 +73,7 @@ type DonutFooter struct {
 }
 
 type Donut struct {
-	file  io.Writer
+	file  io.ReadWriteSeeker
 	mutex *sync.RWMutex
 }
 
@@ -89,7 +89,7 @@ type EncodedChunk struct {
 	Offset int
 }
 
-func New(file io.Writer) *Donut {
+func New(file io.ReadWriteSeeker) *Donut {
 	donut := Donut{}
 	donut.mutex = new(sync.RWMutex)
 	donut.file = file
