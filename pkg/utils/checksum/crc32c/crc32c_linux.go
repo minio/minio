@@ -1,38 +1,75 @@
-/*
- * Mini Object Storage, (C) 2014 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
+// Package crc32 implements the 32-bit cyclic redundancy check, or CRC-32,
+// checksum. See http://en.wikipedia.org/wiki/Cyclic_redundancy_check for
+// information.
 package crc32c
 
-// #include <stdint.h>
-// uint32_t crc32c_pcl(uint8_t *buf, int32_t len, uint32_t prev_crc);
-import "C"
 import (
-	"errors"
-	"unsafe"
+	"hash"
+	"io"
 )
 
-func Crc32c(buffer []byte) (uint32, error) {
-	var length = len(buffer)
-	if length == 0 {
-		return 0, errors.New("Invalid input")
+// The size of a CRC-32 checksum in bytes.
+const Size = 4
+
+// digest represents the partial evaluation of a checksum.
+type digest struct {
+	crc uint32
+}
+
+// New creates a new hash.Hash32 computing the CRC-32 checksum
+// using the polynomial represented by the Table.
+func New() hash.Hash32 {
+	return &digest{crc: 0}
+}
+
+func (d *digest) Size() int { return Size }
+
+func (d *digest) BlockSize() int { return 1 }
+
+func (d *digest) Sum(in []byte) []byte {
+	s := d.crc
+	return append(in, byte(s>>24), byte(s>>16), byte(s>>8), byte(s))
+}
+
+func (d *digest) Sum32() uint32 { return d.crc }
+
+func (d *digest) Reset() { d.crc = 0 }
+
+// Update returns the result of adding the bytes in p to the crc.
+func (d *digest) update(crc uint32, p []byte) uint32 {
+	return updateCastanagoliPCL(crc, p)
+}
+
+func (d *digest) Write(p []byte) (n int, err error) {
+	d.crc = d.update(d.crc, p)
+	return len(p), nil
+}
+
+// Convenience functions
+
+func Sum32(data []byte) uint32 {
+	crc32 := New()
+	crc32.Reset()
+	crc32.Write(data)
+	return crc32.Sum32()
+}
+
+func Sum(reader io.Reader) (uint32, error) {
+	h := New()
+	var err error
+	for err == nil {
+		length := 0
+		byteBuffer := make([]byte, 1024*1024)
+		length, err = reader.Read(byteBuffer)
+		byteBuffer = byteBuffer[0:length]
+		h.Write(byteBuffer)
 	}
-
-	var cbuf *C.uint8_t
-	cbuf = (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
-	crc := C.crc32c_pcl(cbuf, C.int32_t(length), C.uint32_t(0))
-
-	return uint32(crc), nil
+	if err != io.EOF {
+		return 0, err
+	}
+	return h.Sum32(), nil
 }
