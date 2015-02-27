@@ -30,7 +30,7 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) TestAPISuite(c *C) {
+func (s *MySuite) TestSingleWrite(c *C) {
 	//var b io.ReadWriteSeeker
 	var o bytes.Buffer
 
@@ -56,9 +56,9 @@ func (s *MySuite) TestAPISuite(c *C) {
 	// read block
 
 	// read end
-	// blockEnd := make([]byte, 4)
-	// b.Seek(int64(len(blockEnd)), 2) // jump ahead
-	// b.Read(blockEnd)
-	// blockEndCheck := []byte{'I', 'N', 'I', 'M'}
-	// c.Assert(blockEnd, DeepEquals, blockEndCheck)
+	blockEnd := make([]byte, 4)
+	b.Seek(-int64(len(blockEnd)), 2) // jump ahead
+	b.Read(blockEnd)
+	blockEndCheck := []byte{'I', 'N', 'I', 'M'}
+	c.Assert(blockEnd, DeepEquals, blockEndCheck)
 }
