@@ -16,32 +16,16 @@
 
 package crc32c
 
+// #include <stdint.h>
+// uint32_t crc32c_pcl(uint8_t *buf, int32_t len, uint32_t prev_crc);
+import "C"
 import (
-	"errors"
-	"hash/crc32"
+	"unsafe"
 )
 
-var castanagoliTable = crc32.MakeTable(crc32.Castagnoli)
-
-func Sum32(buffer []byte) uint32 {
-	crc := crc32.New(castanagoliTable)
-	crc.Reset()
-	crc.Write(buffer)
-	return crc.Sum32()
-}
-
-func Sum(reader io.Reader) (uint32, error) {
-	h := New()
-	var err error
-	for err == nil {
-		length := 0
-		byteBuffer := make([]byte, 1024*1024)
-		length, err = reader.Read(byteBuffer)
-		byteBuffer = byteBuffer[0:length]
-		h.Write(byteBuffer)
+func updateCastanagoliPCL(crc uint32, p []byte) uint32 {
+	if len(p) == 0 {
+		return 0
 	}
-	if err != io.EOF {
-		return nil, err
-	}
-	return h.Sum32(), nil
+	return uint32(C.crc32c_pcl((*C.uint8_t)(unsafe.Pointer(&p[0])), C.int32_t(len(p)), C.uint32_t(crc)))
 }
