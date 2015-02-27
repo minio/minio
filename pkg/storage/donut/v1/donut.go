@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio-io/minio/pkg/storage/erasure"
+	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
 )
 
 /*
@@ -61,8 +62,10 @@ type DonutFormat struct {
 	Reserved        uint64
 	GobHeaderLen    uint32
 	GobHeader       []byte
+	HeaderCrc32c    uint32
 	BlockData       uint32 // Magic="DATA"=1096040772
 	Data            io.Reader
+	FooterCrc       uint32
 	BlockLen        uint64
 	BlockEnd        uint32
 }
@@ -107,10 +110,21 @@ func (donut *Donut) WriteGob(gobHeader GobHeader) (bytes.Buffer, error) {
 }
 
 func (donut *Donut) WriteEnd(target io.Writer, donutFormat DonutFormat) error {
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockLen); err != nil {
+	var tempBuffer bytes.Buffer
+	if err := binary.Write(&tempBuffer, binary.LittleEndian, donutFormat.BlockLen); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
+	if err := binary.Write(&tempBuffer, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
+		return err
+	}
+	crc, err := crc32c.Crc32c(tempBuffer.Bytes())
+	if err != nil {
+		return err
+	}
+	if err := binary.Write(target, binary.LittleEndian, crc); err != nil {
+		return err
+	}
+	if _, err := io.Copy(target, &tempBuffer); err != nil {
 		return err
 	}
 	return nil
@@ -128,33 +142,42 @@ func (donut *Donut) WriteData(target io.Writer, donutFormat DonutFormat) error {
 }
 
 func (donut *Donut) WriteBegin(target io.Writer, donutFormat DonutFormat) error {
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockStart); err != nil {
+	var headerBytes bytes.Buffer
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.BlockStart); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionMajor); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionMajor); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionMinor); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionMinor); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionPatch); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionPatch); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.VersionReserved); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionReserved); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.Reserved); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.Reserved); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.GobHeaderLen); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.GobHeaderLen); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.GobHeader); err != nil {
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.GobHeader); err != nil {
 		return err
 	}
-	if err := binary.Write(target, binary.LittleEndian, donutFormat.BlockData); err != nil {
+	crc, err := crc32c.Crc32c(headerBytes.Bytes())
+	if err != nil {
 		return err
 	}
+	if err := binary.Write(&headerBytes, binary.LittleEndian, crc); err != nil {
+		return err
+	}
+	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.BlockData); err != nil {
+		return err
+	}
+	io.Copy(target, &headerBytes)
 	return nil
 }
 
@@ -183,17 +206,26 @@ func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 		BlockEnd:        MagicINIM,
 	}
 
-	if err := donut.WriteBegin(donut.file, donutFormat); err != nil {
+	var tempBuffer bytes.Buffer
+
+	// write header
+	if err := donut.WriteBegin(&tempBuffer, donutFormat); err != nil {
 		return err
 	}
 
-	if err := donut.WriteData(donut.file, donutFormat); err != nil {
+	// write data
+	if err := donut.WriteData(&tempBuffer, donutFormat); err != nil {
 		return err
 	}
 
-	if err := donut.WriteEnd(donut.file, donutFormat); err != nil {
+	// write footer crc
+	if err := donut.WriteEnd(&tempBuffer, donutFormat); err != nil {
 		return err
 	}
+
+	// write footer
+	donut.file.Seek(0, 2)
+	io.Copy(donut.file, &tempBuffer)
 
 	return nil
 }
