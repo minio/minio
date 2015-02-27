@@ -12,7 +12,7 @@ import (
 func main() {
 	fmt.Println("--start")
 
-	file, err := os.OpenFile("newfile", os.O_WRONLY|os.O_CREATE, 0666)
+	file, err := os.OpenFile("hello", os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -30,10 +30,10 @@ func main() {
 	fmt.Println("--closed")
 
 	fmt.Println("--verify")
-	stat, _ := os.Stat("newfile")
+	stat, _ := os.Stat("hello")
 	fileSize := stat.Size()
 
-	rfile, _ := os.OpenFile("newfile", os.O_RDONLY, 0666)
+	rfile, _ := os.OpenFile("hello", os.O_RDONLY, 0666)
 	blockStart := make([]byte, 4)
 	blockStartCheck := []byte{'M', 'I', 'N', 'I'}
 

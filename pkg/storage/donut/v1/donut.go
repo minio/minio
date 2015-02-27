@@ -119,10 +119,8 @@ func (donut *Donut) WriteEnd(target io.Writer, donutFormat DonutFormat) error {
 	if err := binary.Write(&tempBuffer, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
 		return err
 	}
-	crc, err := crc32c.Crc32c(tempBuffer.Bytes())
-	if err != nil {
-		return err
-	}
+
+	crc := crc32c.Sum32(tempBuffer.Bytes())
 	if err := binary.Write(target, binary.LittleEndian, crc); err != nil {
 		return err
 	}
@@ -169,10 +167,7 @@ func (donut *Donut) WriteBegin(target io.Writer, donutFormat DonutFormat) error 
 	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.GobHeader); err != nil {
 		return err
 	}
-	crc, err := crc32c.Crc32c(headerBytes.Bytes())
-	if err != nil {
-		return err
-	}
+	crc := crc32c.Sum32(headerBytes.Bytes())
 	if err := binary.Write(&headerBytes, binary.LittleEndian, crc); err != nil {
 		return err
 	}
