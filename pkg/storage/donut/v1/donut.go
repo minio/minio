@@ -22,6 +22,8 @@ import (
 	"encoding/gob"
 	"errors"
 	"io"
+	"io/ioutil"
+	"os"
 	"sync"
 
 	"github.com/minio-io/minio/pkg/storage/erasure"
@@ -206,26 +208,30 @@ func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
 		BlockEnd:        MagicINIM,
 	}
 
-	var tempBuffer bytes.Buffer
-
+	tempBuffer, err := ioutil.TempFile(os.TempDir(), "minio-staging")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tempBuffer.Name())
 	// write header
-	if err := donut.WriteBegin(&tempBuffer, donutFormat); err != nil {
+	if err := donut.WriteBegin(tempBuffer, donutFormat); err != nil {
 		return err
 	}
 
 	// write data
-	if err := donut.WriteData(&tempBuffer, donutFormat); err != nil {
+	if err := donut.WriteData(tempBuffer, donutFormat); err != nil {
 		return err
 	}
 
 	// write footer crc
-	if err := donut.WriteEnd(&tempBuffer, donutFormat); err != nil {
+	if err := donut.WriteEnd(tempBuffer, donutFormat); err != nil {
 		return err
 	}
 
 	// write footer
 	donut.file.Seek(0, 2)
-	io.Copy(donut.file, &tempBuffer)
+	tempBuffer.Seek(0, 0)
+	io.Copy(donut.file, tempBuffer)
 
 	return nil
 }

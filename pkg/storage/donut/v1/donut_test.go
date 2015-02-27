@@ -19,7 +19,6 @@ package v1
 import (
 	"bytes"
 	. "gopkg.in/check.v1"
-	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -32,10 +31,11 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	var b io.ReadWriteSeeker
+	//var b io.ReadWriteSeeker
 	var o bytes.Buffer
 
 	b, err := ioutil.TempFile(os.TempDir(), "minio-donut-test")
+	defer os.RemoveAll(b.Name())
 	c.Assert(err, IsNil)
 
 	donut := New(b)
