@@ -81,40 +81,46 @@ func testMultipleObjectCreation(c *C, create func() Storage) {
 func testPaging(c *C, create func() Storage) {
 	storage := create()
 	storage.StoreBucket("bucket")
-	storage.ListObjects("bucket", "", 5)
-	objects, isTruncated, err := storage.ListObjects("bucket", "", 5)
+	resources := BucketResourcesMetadata{}
+	objects, resources, err := storage.ListObjects("bucket", resources)
 	c.Assert(len(objects), Equals, 0)
-	c.Assert(isTruncated, Equals, false)
+	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, IsNil)
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
-		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
+		resources.Maxkeys = 5
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(len(objects), Equals, i+1)
-		c.Assert(isTruncated, Equals, false)
+		c.Assert(resources.IsTruncated, Equals, false)
 		c.Assert(err, IsNil)
 	}
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
-		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
+		resources.Maxkeys = 5
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(len(objects), Equals, 5)
-		c.Assert(isTruncated, Equals, true)
+		c.Assert(resources.IsTruncated, Equals, true)
 		c.Assert(err, IsNil)
 	}
 	// check paging with prefix at end returns less objects
 	{
 		storage.StoreObject("bucket", "newPrefix", "", bytes.NewBufferString("prefix1"))
 		storage.StoreObject("bucket", "newPrefix2", "", bytes.NewBufferString("prefix2"))
-		objects, isTruncated, err = storage.ListObjects("bucket", "new", 5)
+		resources.Prefix = "new"
+		resources.Maxkeys = 5
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(len(objects), Equals, 2)
 	}
 
 	// check ordering of pages
 	{
-		objects, isTruncated, err = storage.ListObjects("bucket", "", 5)
+		resources.Prefix = ""
+		resources.Maxkeys = 1000
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, Equals, "newPrefix")
 		c.Assert(objects[1].Key, Equals, "newPrefix2")
 		c.Assert(objects[2].Key, Equals, "obj0")
@@ -123,7 +129,9 @@ func testPaging(c *C, create func() Storage) {
 	}
 	// check ordering of results with prefix
 	{
-		objects, isTruncated, err = storage.ListObjects("bucket", "obj", 5)
+		resources.Prefix = "obj"
+		resources.Maxkeys = 1000
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, Equals, "obj0")
 		c.Assert(objects[1].Key, Equals, "obj1")
 		c.Assert(objects[2].Key, Equals, "obj10")
@@ -132,7 +140,9 @@ func testPaging(c *C, create func() Storage) {
 	}
 	// check ordering of results with prefix and no paging
 	{
-		objects, isTruncated, err = storage.ListObjects("bucket", "new", 5)
+		resources.Prefix = "new"
+		resources.Maxkeys = 5
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, Equals, "newPrefix")
 		c.Assert(objects[1].Key, Equals, "newPrefix2")
 	}
@@ -230,9 +240,10 @@ func testListBucketsOrder(c *C, create func() Storage) {
 
 func testListObjectsTestsForNonExistantBucket(c *C, create func() Storage) {
 	storage := create()
-	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
+	resources := BucketResourcesMetadata{Prefix: "", Maxkeys: 1000}
+	objects, resources, err := storage.ListObjects("bucket", resources)
 	c.Assert(err, Not(IsNil))
-	c.Assert(isTruncated, Equals, false)
+	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(len(objects), Equals, 0)
 }
 

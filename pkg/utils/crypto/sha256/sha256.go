@@ -7,7 +7,7 @@
 // Using this part of Minio codebase under the license
 // Apache License Version 2.0 with modifications
 
-// Package sha256 SHA256SSE3, SHA256AVX, SHA256AVX2
+// Package sha256 provides SHA256SSE3, SHA256AVX, SHA256AVX2
 package sha256
 
 import (

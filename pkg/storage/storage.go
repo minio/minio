@@ -32,7 +32,7 @@ type Storage interface {
 	// Object Operations
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)
 	GetObjectMetadata(bucket string, object string) (ObjectMetadata, error)
-	ListObjects(bucket, prefix string, count int) ([]ObjectMetadata, bool, error)
+	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
 	StoreObject(bucket string, key string, contentType string, data io.Reader) error
 }
 
@@ -42,13 +42,32 @@ type BucketMetadata struct {
 }
 
 type ObjectMetadata struct {
-	Bucket string
-	Key    string
+	Bucket    string
+	Key       string
+	Maxkeys   int
+	Prefix    string
+	Marker    string
+	Delimiter string
 
 	ContentType string
 	Created     time.Time
 	ETag        string
 	Size        int64
+}
+
+// Various types of bucket resources
+type BucketResourcesMetadata struct {
+	Prefix         string
+	Marker         string
+	Maxkeys        int
+	Delimiter      string
+	IsTruncated    bool
+	CommonPrefixes []string
+
+	Policy bool
+	// TODO
+	Logging      string
+	Notification string
 }
 
 func IsValidBucket(bucket string) bool {

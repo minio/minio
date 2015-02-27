@@ -27,12 +27,17 @@ const (
 
 // Object list response format
 type ObjectListResponse struct {
-	XMLName     xml.Name `xml:"ListBucketResult" json:"-"`
-	Name        string
-	Marker      string
-	MaxKeys     int
-	IsTruncated bool
-	Contents    []*Item `xml:,innerxml`
+	XMLName        xml.Name `xml:"ListBucketResult" json:"-"`
+	Name           string
+	Prefix         string
+	Marker         string
+	MaxKeys        int
+	Delimiter      string
+	IsTruncated    bool
+	Contents       []*Item `xml:,innerxml`
+	CommonPrefixes struct {
+		Prefix string
+	} `xml:,innerxml`
 }
 
 // Bucket list response format

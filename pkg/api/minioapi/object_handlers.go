@@ -130,7 +130,7 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	object = vars["object"]
 
 	resources := getBucketResources(req.URL.Query())
-	if resources.policy == true && object == "" {
+	if resources.Policy == true && object == "" {
 		server.putBucketPolicyHandler(w, req)
 		return
 	}
