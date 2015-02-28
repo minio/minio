@@ -17,6 +17,8 @@
 package minioapi
 
 import (
+	"sort"
+
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
@@ -52,6 +54,12 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	return data
 }
 
+type ItemKey []*Item
+
+func (b ItemKey) Len() int           { return len(b) }
+func (b ItemKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ItemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
+
 // takes a set of objects and prepares the objects for serialization
 // input:
 // bucket name
@@ -78,6 +86,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 		content.Owner = owner
 		contents = append(contents, content)
 	}
+	sort.Sort(ItemKey(contents))
 	data.Name = bucket
 	data.Contents = contents
 	data.MaxKeys = MAX_OBJECT_LIST
