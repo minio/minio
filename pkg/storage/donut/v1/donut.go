@@ -35,11 +35,13 @@ import (
    VersionPatch    uint16
    VersionReserved uint16
    Reserved        uint64
-   GobHeaderLen    uint32
-   GobHeader       io.Reader           // matches length
+   DataLen         uint64
+   HeaderCrc32c    uint32
    BlockData       [4]byte             // Magic="DATA"=1096040772
    Data            io.Reader           // matches length
-   BlockLen        uint64              // length to block start
+   HeaderCrc32c    uint32
+   DataSha512      [64]byte
+   BlockLen        uint64              // length of entire frame, inclusive of MINI and INIM
    BlockEnd        [4]byte             // Magic="INIM"=1296649801
 
 */
