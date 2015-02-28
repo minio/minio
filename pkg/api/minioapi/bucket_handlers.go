@@ -45,7 +45,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	switch err := err.(type) {
 	case nil: // success
 		{
-			response := generateObjectsListResult(bucket, objects, resources.IsTruncated)
+			response := generateObjectsListResult(bucket, objects, resources)
 			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 		}
 	case mstorage.BucketNotFound:
