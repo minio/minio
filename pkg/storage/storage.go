@@ -20,6 +20,7 @@ import (
 	"io"
 	"regexp"
 	"time"
+	"unicode/utf8"
 )
 
 type Storage interface {
@@ -86,5 +87,11 @@ func IsValidBucket(bucket string) bool {
 }
 
 func IsValidObject(object string) bool {
+	if len(object) > 1024 || len(object) == 0 {
+		return false
+	}
+	if !utf8.Valid(object) {
+		return false
+	}
 	return true
 }
