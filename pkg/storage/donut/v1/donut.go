@@ -19,15 +19,10 @@ package v1
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
-	"errors"
 	"io"
-	"io/ioutil"
-	"os"
-	"sync"
 
-	"github.com/minio-io/minio/pkg/storage/erasure"
 	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
+	"github.com/minio-io/minio/pkg/utils/crypto/sha512"
 )
 
 /*
@@ -55,178 +50,95 @@ var (
 	MagicINIM = binary.LittleEndian.Uint32([]byte{'I', 'N', 'I', 'M'})
 )
 
-type DonutFormat struct {
-	BlockStart      uint32 // Magic="MINI"=1229867341
+type DonutFrameHeader struct {
+	MagicMINI       uint32
 	VersionMajor    uint16
 	VersionMinor    uint16
 	VersionPatch    uint16
 	VersionReserved uint16
 	Reserved        uint64
-	GobHeaderLen    uint32
-	GobHeader       []byte
-	HeaderCrc32c    uint32
-	BlockData       uint32 // Magic="DATA"=1096040772
-	Data            io.Reader
-	FooterCrc       uint32
-	BlockLen        uint64
-	BlockEnd        uint32
+	DataLength      uint64
+}
+type Crc32c uint32
+type Sha512 [sha512.Size]byte
+
+type DonutFrameFooter struct {
+	DataSha512   Sha512
+	OffsetToMINI uint64
+	MagicINIM    uint32
 }
 
-type DonutFooter struct {
-	BlockLen uint64
-	BlockEnd uint32 // Magic="INIM"=1229867341
-}
+type Data bytes.Buffer
 
-type Donut struct {
-	file  io.ReadWriteSeeker
-	mutex *sync.RWMutex
-}
-
-type GobHeader struct {
-	Blocks        []EncodedChunk
-	Md5sum        []byte
-	EncoderParams erasure.EncoderParams
-}
-
-type EncodedChunk struct {
-	Crc    uint32
-	Length int
-	Offset int
-}
-
-func New(file io.ReadWriteSeeker) *Donut {
-	donut := Donut{}
-	donut.mutex = new(sync.RWMutex)
-	donut.file = file
-	return &donut
-}
-
-func (donut *Donut) WriteGob(gobHeader GobHeader) (bytes.Buffer, error) {
-	var gobBuffer bytes.Buffer
-	encoder := gob.NewEncoder(&gobBuffer)
-	err := encoder.Encode(gobHeader)
-	if err != nil {
-		return bytes.Buffer{}, err
-	}
-	return gobBuffer, nil
-}
-
-func (donut *Donut) WriteEnd(target io.Writer, donutFormat DonutFormat) error {
-	var tempBuffer bytes.Buffer
-	if err := binary.Write(&tempBuffer, binary.LittleEndian, donutFormat.BlockLen); err != nil {
-		return err
-	}
-	if err := binary.Write(&tempBuffer, binary.LittleEndian, donutFormat.BlockEnd); err != nil {
-		return err
-	}
-
-	crc := crc32c.Sum32(tempBuffer.Bytes())
-	if err := binary.Write(target, binary.LittleEndian, crc); err != nil {
-		return err
-	}
-	if _, err := io.Copy(target, &tempBuffer); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (donut *Donut) WriteData(target io.Writer, donutFormat DonutFormat) error {
-	var b bytes.Buffer
-	if count, err := io.Copy(&b, donutFormat.Data); uint64(count) != donutFormat.BlockLen || err != nil {
-		if err == nil {
-			return binary.Write(target, binary.LittleEndian, b.Bytes())
-		}
-		return errors.New("Copy failed, count incorrect.")
-	}
-	return nil
-}
-
-func (donut *Donut) WriteBegin(target io.Writer, donutFormat DonutFormat) error {
-	var headerBytes bytes.Buffer
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.BlockStart); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionMajor); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionMinor); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionPatch); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.VersionReserved); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.Reserved); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.GobHeaderLen); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.GobHeader); err != nil {
-		return err
-	}
-	crc := crc32c.Sum32(headerBytes.Bytes())
-	if err := binary.Write(&headerBytes, binary.LittleEndian, crc); err != nil {
-		return err
-	}
-	if err := binary.Write(&headerBytes, binary.LittleEndian, donutFormat.BlockData); err != nil {
-		return err
-	}
-	io.Copy(target, &headerBytes)
-	return nil
-}
-
-func (donut *Donut) Write(gobHeader GobHeader, object io.Reader) error {
-	donut.mutex.Lock()
-	defer donut.mutex.Unlock()
-
-	gobBytes, err := donut.WriteGob(gobHeader)
-	if err != nil {
-		return err
-	}
-
-	// Create bytes buffer representing the new object
-	donutFormat := DonutFormat{
-		BlockStart:      MagicMINI,
+func Write(target io.Writer, reader io.Reader, length uint64) error {
+	// write header
+	header := DonutFrameHeader{
+		MagicMINI:       MagicMINI,
 		VersionMajor:    1,
 		VersionMinor:    0,
 		VersionPatch:    0,
 		VersionReserved: 0,
 		Reserved:        0,
-		GobHeaderLen:    uint32(gobBytes.Len()),
-		GobHeader:       gobBytes.Bytes(),
-		BlockData:       MagicDATA,
-		Data:            object,
-		BlockLen:        0,
-		BlockEnd:        MagicINIM,
+		DataLength:      length,
 	}
+	var headerBytes bytes.Buffer
+	binary.Write(&headerBytes, binary.LittleEndian, header)
+	headerCrc := crc32c.Sum32(headerBytes.Bytes())
 
-	tempBuffer, err := ioutil.TempFile(os.TempDir(), "minio-staging")
+	binary.Write(&headerBytes, binary.LittleEndian, headerCrc)
+	binary.Write(&headerBytes, binary.LittleEndian, MagicDATA)
+	// write header
+	headerLen, err := io.Copy(target, &headerBytes)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tempBuffer.Name())
-	// write header
-	if err := donut.WriteBegin(tempBuffer, donutFormat); err != nil {
+	// write DATA
+	// create sha512 tee
+	sumReader, sumWriter := io.Pipe()
+	defer sumWriter.Close()
+	checksumChannel := make(chan checksumValue)
+	go generateChecksum(sumReader, checksumChannel)
+	teeReader := io.TeeReader(reader, sumWriter)
+	_, err = io.Copy(target, teeReader)
+	if err != nil {
 		return err
 	}
-
-	// write data
-	if err := donut.WriteData(tempBuffer, donutFormat); err != nil {
-		return err
+	sumWriter.Close()
+	dataChecksum := <-checksumChannel
+	if dataChecksum.err != nil {
+		return dataChecksum.err
 	}
-
+	// generate footer
+	frameFooter := DonutFrameFooter{
+		DataSha512:   dataChecksum.checksum,
+		OffsetToMINI: length + uint64(headerLen) + uint64(80), /*footer size*/
+		MagicINIM:    MagicINIM,
+	}
+	var frameFooterBytes bytes.Buffer
+	binary.Write(&frameFooterBytes, binary.LittleEndian, frameFooter)
 	// write footer crc
-	if err := donut.WriteEnd(tempBuffer, donutFormat); err != nil {
+	footerChecksum := crc32c.Sum32(frameFooterBytes.Bytes())
+	if err := binary.Write(target, binary.LittleEndian, footerChecksum); err != nil {
 		return err
 	}
-
-	// write footer
-	donut.file.Seek(0, 2)
-	tempBuffer.Seek(0, 0)
-	io.Copy(donut.file, tempBuffer)
-
+	// write write footer
+	_, err = io.Copy(target, &frameFooterBytes)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+type checksumValue struct {
+	checksum Sha512
+	err      error
+}
+
+func generateChecksum(reader io.Reader, c chan<- checksumValue) {
+	checksum, err := sha512.SumStream(reader)
+	result := checksumValue{
+		checksum: checksum,
+		err:      err,
+	}
+	c <- result
 }
