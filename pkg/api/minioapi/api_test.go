@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
 	. "gopkg.in/check.v1"
 )
@@ -243,9 +244,13 @@ func (s *MySuite) TestPutObject(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	objects, isTruncated, err := storage.ListObjects("bucket", "", 1000)
+	resources := mstorage.BucketResourcesMetadata{}
+
+	resources.Maxkeys = 1000
+	resources.Prefix = ""
+	objects, resources, err := storage.ListObjects("bucket", resources)
 	c.Assert(len(objects), Equals, 0)
-	c.Assert(isTruncated, Equals, false)
+	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, Not(IsNil))
 
 	date1 := time.Now()
@@ -268,9 +273,12 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	date2 := time.Now()
 
-	objects, isTruncated, err = storage.ListObjects("bucket", "", 1000)
+	resources.Maxkeys = 1000
+	resources.Prefix = ""
+
+	objects, resources, err = storage.ListObjects("bucket", resources)
 	c.Assert(len(objects), Equals, 1)
-	c.Assert(isTruncated, Equals, false)
+	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, IsNil)
 
 	var writer bytes.Buffer

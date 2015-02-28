@@ -19,32 +19,24 @@ package minioapi
 import (
 	"net/url"
 	"strconv"
+
+	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
-// support bucket resources go here
-type bucketResources struct {
-	prefix    string
-	marker    string
-	maxkeys   int
-	policy    bool
-	delimiter string
-	//	uploads   bool - TODO implemented with multipart support
-}
-
 // parse bucket url queries
-func getBucketResources(values url.Values) (v bucketResources) {
+func getBucketResources(values url.Values) (v mstorage.BucketResourcesMetadata) {
 	for key, value := range values {
 		switch true {
 		case key == "prefix":
-			v.prefix = value[0]
+			v.Prefix = value[0]
 		case key == "marker":
-			v.marker = value[0]
-		case key == "maxkeys":
-			v.maxkeys, _ = strconv.Atoi(value[0])
+			v.Marker = value[0]
+		case key == "max-keys":
+			v.Maxkeys, _ = strconv.Atoi(value[0])
 		case key == "policy":
-			v.policy = true
+			v.Policy = true
 		case key == "delimiter":
-			v.delimiter = value[0]
+			v.Delimiter = value[0]
 		}
 	}
 	return

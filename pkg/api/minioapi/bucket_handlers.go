@@ -35,17 +35,17 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	bucket := vars["bucket"]
 
 	resources := getBucketResources(req.URL.Query())
-	if resources.policy == true {
+	if resources.Policy == true {
 		server.getBucketPolicyHandler(w, req)
 		return
 	}
 
 	acceptsContentType := getContentType(req)
-	objects, isTruncated, err := server.storage.ListObjects(bucket, resources.prefix, 1000)
+	objects, resources, err := server.storage.ListObjects(bucket, resources)
 	switch err := err.(type) {
 	case nil: // success
 		{
-			response := generateObjectsListResult(bucket, objects, isTruncated)
+			response := generateObjectsListResult(bucket, objects, resources.IsTruncated)
 			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 		}
 	case mstorage.BucketNotFound:
@@ -74,7 +74,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	case mstorage.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
-			errorResponse := getErrorResponse(error, resources.prefix)
+			errorResponse := getErrorResponse(error, resources.Prefix)
 			w.WriteHeader(error.HttpStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
@@ -122,7 +122,7 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	err := server.storage.StoreBucket(bucket)
 
 	resources := getBucketResources(req.URL.Query())
-	if resources.policy == true {
+	if resources.Policy == true {
 		server.putBucketPolicyHandler(w, req)
 		return
 	}

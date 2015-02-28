@@ -128,31 +128,31 @@ func (storage *storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
-func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorage.ObjectMetadata, bool, error) {
+func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	if _, ok := storage.bucketdata[bucket]; ok == false {
-		return []mstorage.ObjectMetadata{}, false, mstorage.BucketNotFound{Bucket: bucket}
+		return []mstorage.ObjectMetadata{}, mstorage.BucketResourcesMetadata{IsTruncated: false}, mstorage.BucketNotFound{Bucket: bucket}
 	}
 	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	var keys []string
 	for key := range storage.objectdata {
-		if strings.HasPrefix(key, bucket+":"+prefix) {
+		if strings.HasPrefix(key, bucket+":"+resources.Prefix) {
 			keys = append(keys, key)
 		}
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if len(results) == count {
-			return results, true, nil
+		if len(results) == resources.Maxkeys {
+			return results, mstorage.BucketResourcesMetadata{IsTruncated: true}, nil
 		}
 		object := storage.objectdata[key]
 		if bucket == object.metadata.Bucket {
-			if strings.HasPrefix(key, bucket+":") {
+			if strings.HasPrefix(key, bucket+":"+resources.Prefix) {
 				results = append(results, object.metadata)
 			}
 		}
 	}
-	return results, false, nil
+	return results, resources, nil
 }
 
 type ByBucketName []mstorage.BucketMetadata

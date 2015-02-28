@@ -23,6 +23,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -291,45 +293,96 @@ func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorag
 	return metadata, nil
 }
 
-func (storage *storage) ListObjects(bucket, prefix string, count int) ([]mstorage.ObjectMetadata, bool, error) {
-	if mstorage.IsValidBucket(bucket) == false {
-		return []mstorage.ObjectMetadata{}, false, mstorage.BucketNameInvalid{Bucket: bucket}
+type Path struct {
+	files map[string]os.FileInfo
+	root  string
+}
+
+func (p *Path) getAllFiles(path string, fl os.FileInfo, err error) error {
+	if err != nil {
+		return err
 	}
-	if mstorage.IsValidObject(prefix) == false {
-		return []mstorage.ObjectMetadata{}, false, mstorage.ObjectNameInvalid{Bucket: bucket, Object: prefix}
+	if fl.Mode().IsRegular() {
+		if strings.HasSuffix(path, "$metadata") {
+			return nil
+		}
+		_p := strings.Split(path, p.root+"/")
+		if len(_p) > 1 {
+			p.files[_p[1]] = fl
+		}
+	}
+	return nil
+}
+
+type ByObjectKey []mstorage.ObjectMetadata
+
+func (b ByObjectKey) Len() int           { return len(b) }
+func (b ByObjectKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ByObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
+
+func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
+	p := Path{}
+	p.files = make(map[string]os.FileInfo)
+
+	if mstorage.IsValidBucket(bucket) == false {
+		return []mstorage.ObjectMetadata{}, resources, mstorage.BucketNameInvalid{Bucket: bucket}
+	}
+	if mstorage.IsValidObject(resources.Prefix) == false {
+		return []mstorage.ObjectMetadata{}, resources, mstorage.ObjectNameInvalid{Bucket: bucket, Object: resources.Prefix}
 	}
 
 	rootPrefix := path.Join(storage.root, bucket)
-
 	// check bucket exists
 	if _, err := os.Stat(rootPrefix); os.IsNotExist(err) {
-		return []mstorage.ObjectMetadata{}, false, mstorage.BucketNotFound{Bucket: bucket}
+		return []mstorage.ObjectMetadata{}, resources, mstorage.BucketNotFound{Bucket: bucket}
 	}
 
-	files, err := ioutil.ReadDir(rootPrefix)
+	p.root = rootPrefix
+	err := filepath.Walk(rootPrefix, p.getAllFiles)
 	if err != nil {
-		return []mstorage.ObjectMetadata{}, false, mstorage.EmbedError("bucket", "", err)
+		return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 	}
 
 	var metadataList []mstorage.ObjectMetadata
-	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), "$metadata") {
-			if len(metadataList) >= count {
-				return metadataList, true, nil
+	for name, file := range p.files {
+		if len(metadataList) >= resources.Maxkeys {
+			resources.IsTruncated = true
+			goto ret
+		}
+		// TODO handle resources.Marker
+		if resources.Delimiter != "" {
+			metadata := mstorage.ObjectMetadata{
+				Bucket:    bucket,
+				Maxkeys:   resources.Maxkeys,
+				Prefix:    resources.Prefix,
+				Marker:    resources.Marker,
+				Delimiter: resources.Delimiter,
 			}
-			if strings.HasPrefix(file.Name(), prefix) {
-				metadata := mstorage.ObjectMetadata{
-					Bucket:  bucket,
-					Key:     file.Name(),
-					Created: file.ModTime(),
-					Size:    file.Size(),
-					ETag:    bucket + "#" + file.Name(),
-				}
-				metadataList = append(metadataList, metadata)
+			metadataList = append(metadataList, metadata)
+		}
+		if resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix) {
+			metadata := mstorage.ObjectMetadata{}
+			metadataList = append(metadataList, metadata)
+		}
+		if strings.HasPrefix(name, resources.Prefix) {
+			metadata := mstorage.ObjectMetadata{
+				Bucket:    bucket,
+				Maxkeys:   resources.Maxkeys,
+				Prefix:    resources.Prefix,
+				Marker:    resources.Marker,
+				Delimiter: resources.Delimiter,
+				Key:       name,
+				Created:   file.ModTime(),
+				Size:      file.Size(),
+				ETag:      bucket + "#" + name,
 			}
+			metadataList = append(metadataList, metadata)
 		}
 	}
-	return metadataList, false, nil
+
+ret:
+	sort.Sort(ByObjectKey(metadataList))
+	return metadataList, resources, nil
 }
 
 func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
