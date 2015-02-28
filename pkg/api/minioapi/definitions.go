@@ -34,10 +34,8 @@ type ObjectListResponse struct {
 	MaxKeys        int
 	Delimiter      string
 	IsTruncated    bool
-	Contents       []*Item `xml:,innerxml`
-	CommonPrefixes struct {
-		Prefix string
-	} `xml:,innerxml`
+	Contents       []*Item   `xml:,innerxml`
+	CommonPrefixes []*Prefix `xml:,innerxml`
 }
 
 // Bucket list response format
@@ -47,6 +45,10 @@ type BucketListResponse struct {
 	Buckets struct {
 		Bucket []*Bucket
 	} `xml:,innerxml` // Buckets are nested
+}
+
+type Prefix struct {
+	Prefix string
 }
 
 // Bucket struct

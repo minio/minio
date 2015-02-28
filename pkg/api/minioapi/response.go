@@ -68,8 +68,9 @@ func (b ItemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata, isTruncated bool) ObjectListResponse {
+func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata, bucketResources mstorage.BucketResourcesMetadata) ObjectListResponse {
 	var contents []*Item
+	var prefixes []*Prefix
 	var owner = Owner{}
 	var data = ObjectListResponse{}
 
@@ -78,6 +79,9 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 
 	for _, object := range objects {
 		var content = &Item{}
+		if object.Key == "" {
+			continue
+		}
 		content.Key = object.Key
 		content.LastModified = object.Created.Format(dateFormat)
 		content.ETag = object.ETag
@@ -89,7 +93,16 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 	sort.Sort(ItemKey(contents))
 	data.Name = bucket
 	data.Contents = contents
-	data.MaxKeys = MAX_OBJECT_LIST
-	data.IsTruncated = isTruncated
+	data.MaxKeys = bucketResources.Maxkeys
+	data.Prefix = bucketResources.Prefix
+	data.Delimiter = bucketResources.Delimiter
+	data.Marker = bucketResources.Marker
+	data.IsTruncated = bucketResources.IsTruncated
+	for _, prefix := range bucketResources.CommonPrefixes {
+		var prefixItem = &Prefix{}
+		prefixItem.Prefix = prefix
+		prefixes = append(prefixes, prefixItem)
+	}
+	data.CommonPrefixes = prefixes
 	return data
 }

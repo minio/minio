@@ -43,12 +43,8 @@ type BucketMetadata struct {
 }
 
 type ObjectMetadata struct {
-	Bucket    string
-	Key       string
-	Maxkeys   int
-	Prefix    string
-	Marker    string
-	Delimiter string
+	Bucket string
+	Key    string
 
 	ContentType string
 	Created     time.Time

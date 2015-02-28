@@ -314,6 +314,29 @@ func (p *Path) getAllFiles(path string, fl os.FileInfo, err error) error {
 	return nil
 }
 
+func delimiter(path, delimiter string) string {
+	delimited := ""
+	if !strings.Contains(path, delimiter) {
+		return delimited
+	}
+	index := strings.Index(path, delimiter)
+	if index == -1 {
+		return delimited
+	}
+	delimitedIndex := index + len(delimiter)
+	delimited = path[:delimitedIndex]
+	return delimited
+}
+
+func appendU(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 type ByObjectKey []mstorage.ObjectMetadata
 
 func (b ByObjectKey) Len() int           { return len(b) }
@@ -350,31 +373,44 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 			goto ret
 		}
 		// TODO handle resources.Marker
-		if resources.Delimiter != "" {
-			metadata := mstorage.ObjectMetadata{
-				Bucket:    bucket,
-				Maxkeys:   resources.Maxkeys,
-				Prefix:    resources.Prefix,
-				Marker:    resources.Marker,
-				Delimiter: resources.Delimiter,
+		switch true {
+		case resources.Delimiter != "" && resources.Prefix == "":
+			delimited := delimiter(name, resources.Delimiter)
+			switch true {
+			case delimited == "":
+				metadata := mstorage.ObjectMetadata{
+					Bucket:  bucket,
+					Key:     name,
+					Created: file.ModTime(),
+					Size:    file.Size(),
+					ETag:    bucket + "#" + name,
+				}
+				metadataList = append(metadataList, metadata)
+			case delimited != "":
+				resources.CommonPrefixes = appendU(resources.CommonPrefixes, delimited)
 			}
-			metadataList = append(metadataList, metadata)
-		}
-		if resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix) {
-			metadata := mstorage.ObjectMetadata{}
-			metadataList = append(metadataList, metadata)
-		}
-		if strings.HasPrefix(name, resources.Prefix) {
+		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
+			delimited := delimiter(name, resources.Delimiter)
+			switch true {
+			case delimited == "":
+				metadata := mstorage.ObjectMetadata{
+					Bucket:  bucket,
+					Key:     name,
+					Created: file.ModTime(),
+					Size:    file.Size(),
+					ETag:    bucket + "#" + name,
+				}
+				metadataList = append(metadataList, metadata)
+			case delimited != "":
+				resources.CommonPrefixes = appendU(resources.CommonPrefixes, delimited)
+			}
+		case strings.HasPrefix(name, resources.Prefix):
 			metadata := mstorage.ObjectMetadata{
-				Bucket:    bucket,
-				Maxkeys:   resources.Maxkeys,
-				Prefix:    resources.Prefix,
-				Marker:    resources.Marker,
-				Delimiter: resources.Delimiter,
-				Key:       name,
-				Created:   file.ModTime(),
-				Size:      file.Size(),
-				ETag:      bucket + "#" + name,
+				Bucket:  bucket,
+				Key:     name,
+				Created: file.ModTime(),
+				Size:    file.Size(),
+				ETag:    bucket + "#" + name,
 			}
 			metadataList = append(metadataList, metadata)
 		}
