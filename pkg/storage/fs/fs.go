@@ -242,7 +242,7 @@ func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorag
 		return mstorage.ObjectMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
 
-	if mstorage.IsValidObject(bucket) == false {
+	if mstorage.IsValidObject(object) == false {
 		return mstorage.ObjectMetadata{}, mstorage.ObjectNameInvalid{Bucket: bucket, Object: bucket}
 	}
 
@@ -327,7 +327,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 	if mstorage.IsValidBucket(bucket) == false {
 		return []mstorage.ObjectMetadata{}, resources, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
-	if mstorage.IsValidObject(resources.Prefix) == false {
+	if resources.Prefix != "" && mstorage.IsValidObject(resources.Prefix) == false {
 		return []mstorage.ObjectMetadata{}, resources, mstorage.ObjectNameInvalid{Bucket: bucket, Object: resources.Prefix}
 	}
 

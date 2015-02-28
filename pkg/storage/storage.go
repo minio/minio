@@ -90,7 +90,7 @@ func IsValidObject(object string) bool {
 	if len(object) > 1024 || len(object) == 0 {
 		return false
 	}
-	if !utf8.Valid(object) {
+	if !utf8.ValidString(object) {
 		return false
 	}
 	return true
