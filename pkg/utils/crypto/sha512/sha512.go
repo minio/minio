@@ -175,3 +175,12 @@ func Sum(reader io.Reader) ([]byte, error) {
 	}
 	return h.Sum(nil), nil
 }
+func SumStream(reader io.Reader) ([Size]byte, error) {
+	var returnValue [Size]byte
+	sumSlice, err := Sum(reader)
+	if err != nil {
+		return returnValue, err
+	}
+	copy(returnValue[:], sumSlice)
+	return returnValue, err
+}
