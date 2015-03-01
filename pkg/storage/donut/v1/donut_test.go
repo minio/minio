@@ -124,3 +124,9 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	// ensure no extra data is in the file
 	c.Assert(testBuffer.Len(), Equals, 0)
 }
+
+func (s *MySuite) TestLengthMismatchInWrite(c *C) {
+	var testData bytes.Buffer
+	err := Write(&testData, bytes.NewBufferString("hello, world"), 5)
+	c.Assert(err, Not(IsNil))
+}

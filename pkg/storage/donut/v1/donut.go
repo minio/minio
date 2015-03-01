@@ -19,6 +19,7 @@ package v1
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 
 	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
@@ -101,9 +102,12 @@ func Write(target io.Writer, reader io.Reader, length uint64) error {
 	checksumChannel := make(chan checksumValue)
 	go generateChecksum(sumReader, checksumChannel)
 	teeReader := io.TeeReader(reader, sumWriter)
-	_, err = io.Copy(target, teeReader)
+	dataLength, err := io.Copy(target, teeReader)
 	if err != nil {
 		return err
+	}
+	if uint64(dataLength) != length {
+		return errors.New("Specified data length and amount written mismatched")
 	}
 	sumWriter.Close()
 	dataChecksum := <-checksumChannel
