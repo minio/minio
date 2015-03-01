@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/helpers"
 	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
@@ -328,15 +329,6 @@ func delimiter(path, delimiter string) string {
 	return delimited
 }
 
-func appendU(slice []string, i string) []string {
-	for _, ele := range slice {
-		if ele == i {
-			return slice
-		}
-	}
-	return append(slice, i)
-}
-
 type ByObjectKey []mstorage.ObjectMetadata
 
 func (b ByObjectKey) Len() int           { return len(b) }
@@ -387,7 +379,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = appendU(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = helpers.AppendUstr(resources.CommonPrefixes, delimited)
 			}
 		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
 			delimited := delimiter(name, resources.Delimiter)
@@ -402,7 +394,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = appendU(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = helpers.AppendUstr(resources.CommonPrefixes, delimited)
 			}
 		case strings.HasPrefix(name, resources.Prefix):
 			metadata := mstorage.ObjectMetadata{
