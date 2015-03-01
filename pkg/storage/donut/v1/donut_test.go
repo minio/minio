@@ -130,3 +130,29 @@ func (s *MySuite) TestLengthMismatchInWrite(c *C) {
 	err := Write(&testData, bytes.NewBufferString("hello, world"), 5)
 	c.Assert(err, Not(IsNil))
 }
+
+var buf = make([]byte, 1024*1024*1024)
+
+func benchmarkSize(b *testing.B, size int) {
+	b.SetBytes(int64(size))
+	target := new(bytes.Buffer)
+	for i := 0; i < b.N; i++ {
+		Write(target, bytes.NewReader(buf[:size]), uint64(size))
+	}
+}
+
+func BenchmarkDonut64M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*64)
+}
+
+func BenchmarkDonut128M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*128)
+}
+
+func BenchmarkDonut256M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*256)
+}
+
+func BenchmarkDonut512M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*512)
+}
