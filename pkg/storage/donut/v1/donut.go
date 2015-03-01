@@ -73,7 +73,7 @@ type DonutFrameFooter struct {
 
 type Data bytes.Buffer
 
-func Write(target io.Writer, reader io.Reader, length uint64) error {
+func WriteFrame(target io.Writer, reader io.Reader, length uint64) error {
 	// write header
 	header := DonutFrameHeader{
 		MagicMINI:       MagicMINI,
