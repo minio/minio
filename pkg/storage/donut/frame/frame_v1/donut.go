@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package v1
+package frame_v1
 
 import (
 	"bytes"
