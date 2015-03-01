@@ -18,8 +18,8 @@ const (
 
 type EncoderParams struct {
 	Length    int
-	K         int
-	M         int
+	K         uint8
+	M         uint8
 	Technique EncoderTechnique
 }
 
