@@ -1,16 +1,35 @@
+/*
+ * Mini Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package data_v1
 
 import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 	"io"
 )
+
+type Metadata map[string]string
 
 type DataHeader struct {
 	Key           string
 	Part          int
-	Metadata      map[string]string
+	Metadata      Metadata
 	EncoderParams EncoderParams
 }
 
@@ -28,15 +47,46 @@ type EncoderParams struct {
 	Technique EncoderTechnique
 }
 
-func Write(target io.Writer, header DataHeader, data io.Reader) error {
+func NewHeader(key string, part int, metadata Metadata, encoderParams EncoderParams) DataHeader {
+	header := DataHeader{}
+	header.Key = key
+	header.Part = part
+	header.Metadata = metadata
+	header.EncoderParams = EncoderParams{
+		Length:    encoderParams.Length,
+		K:         encoderParams.K,
+		M:         encoderParams.M,
+		Technique: encoderParams.Technique,
+	}
+	return header
+}
+
+func ValidateHeader(header DataHeader) bool {
+	if header.Key == "" || header.Part < 0 || len(header.Metadata) < 2 {
+		return false
+	}
+
+	if header.EncoderParams.Length < 0 || header.EncoderParams.Technique > 1 {
+		return false
+	}
+
+	return true
+}
+
+func WriteData(target io.Writer, header DataHeader, data io.Reader) error {
+	if !ValidateHeader(header) {
+		return fmt.Errorf("Invalid header")
+	}
+
 	var headerBuffer bytes.Buffer
 	// encode header
 	encoder := gob.NewEncoder(&headerBuffer)
 	encoder.Encode(header)
 	// write length of header
-	if err := binary.Write(target, binary.LittleEndian, headerBuffer.Len()); err != nil {
+	if err := binary.Write(target, binary.LittleEndian, int64(headerBuffer.Len())); err != nil {
 		return err
 	}
+
 	// write encoded header
 	if _, err := io.Copy(target, &headerBuffer); err != nil {
 		return err
