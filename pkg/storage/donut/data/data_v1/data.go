@@ -28,7 +28,7 @@ type Metadata map[string]string
 
 type DataHeader struct {
 	Key           string
-	Part          int
+	Part          uint8
 	Metadata      Metadata
 	EncoderParams EncoderParams
 }
@@ -41,13 +41,13 @@ const (
 )
 
 type EncoderParams struct {
-	Length    int
+	Length    uint32
 	K         uint8
 	M         uint8
 	Technique EncoderTechnique
 }
 
-func NewHeader(key string, part int, metadata Metadata, encoderParams EncoderParams) DataHeader {
+func NewHeader(key string, part uint8, metadata Metadata, encoderParams EncoderParams) DataHeader {
 	header := DataHeader{}
 	header.Key = key
 	header.Part = part

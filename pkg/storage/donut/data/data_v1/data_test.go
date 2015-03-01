@@ -32,9 +32,8 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestSingleWrite(c *C) {
 	var testBuffer bytes.Buffer
 	testData := "Hello, World"
-	testLength := len(testData)
 	encoderParams := EncoderParams{
-		Length:    testLength,
+		Length:    uint32(len(testData)),
 		K:         8,
 		M:         8,
 		Technique: CAUCHY,
@@ -43,7 +42,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	metadata["Content-Type"] = "application/octet-stream"
 	metadata["Content-MD5"] = "testing"
 
-	header := NewHeader("testobj", 0, metadata, encoderParams)
+	header := NewHeader("testobj", 1, metadata, encoderParams)
 
 	err := WriteData(&testBuffer, header, bytes.NewBufferString(testData))
 	c.Assert(err, IsNil)
