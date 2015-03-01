@@ -131,7 +131,7 @@ func (s *MySuite) TestLengthMismatchInWrite(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-var buf = make([]byte, 1024*1024*1024)
+var buf = make([]byte, 1024*1024*8)
 
 func benchmarkSize(b *testing.B, size int) {
 	b.SetBytes(int64(size))
@@ -141,18 +141,18 @@ func benchmarkSize(b *testing.B, size int) {
 	}
 }
 
-func BenchmarkDonut64M(b *testing.B) {
-	benchmarkSize(b, 1024*1024*64)
+func BenchmarkDonut1M(b *testing.B) {
+	benchmarkSize(b, 1024*1024)
 }
 
-func BenchmarkDonut128M(b *testing.B) {
-	benchmarkSize(b, 1024*1024*128)
+func BenchmarkDonut2M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*2)
 }
 
-func BenchmarkDonut256M(b *testing.B) {
-	benchmarkSize(b, 1024*1024*256)
+func BenchmarkDonut4M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*4)
 }
 
-func BenchmarkDonut512M(b *testing.B) {
-	benchmarkSize(b, 1024*1024*512)
+func BenchmarkDonut8M(b *testing.B) {
+	benchmarkSize(b, 1024*1024*8)
 }
