@@ -18,6 +18,9 @@ package data_v1
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/gob"
+	"io"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -45,5 +48,24 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	header := NewHeader("testobj", 1, metadata, encoderParams)
 
 	err := WriteData(&testBuffer, header, bytes.NewBufferString(testData))
+	c.Assert(err, IsNil)
+
+	actualVersion := make([]byte, 4)
+	_, err = testBuffer.Read(actualVersion)
+	c.Assert(err, IsNil)
+	c.Assert(binary.LittleEndian.Uint32(actualVersion), DeepEquals, uint32(1))
+
+	actualHeader := DataHeader{}
+
+	decoder := gob.NewDecoder(&testBuffer)
+	decoder.Decode(&actualHeader)
+
+	c.Assert(actualHeader, DeepEquals, header)
+
+	var actualData bytes.Buffer
+
+	dataLength, err := io.Copy(&actualData, &testBuffer)
+	c.Assert(dataLength, Equals, int64(len(testData)))
+	c.Assert(actualData.Bytes(), DeepEquals, []byte(testData))
 	c.Assert(err, IsNil)
 }
