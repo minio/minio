@@ -39,7 +39,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 
 	testData := "Hello, World"
 	testLength := uint64(len(testData))
-	err := Write(&testBuffer, bytes.NewBufferString(testData), testLength)
+	err := WriteFrame(&testBuffer, bytes.NewBufferString(testData), testLength)
 	c.Assert(err, IsNil)
 
 	testBufferLength := uint64(testBuffer.Len())
@@ -127,7 +127,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 
 func (s *MySuite) TestLengthMismatchInWrite(c *C) {
 	var testData bytes.Buffer
-	err := Write(&testData, bytes.NewBufferString("hello, world"), 5)
+	err := WriteFrame(&testData, bytes.NewBufferString("hello, world"), 5)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -137,7 +137,7 @@ func benchmarkSize(b *testing.B, size int) {
 	b.SetBytes(int64(size))
 	target := new(bytes.Buffer)
 	for i := 0; i < b.N; i++ {
-		Write(target, bytes.NewReader(buf[:size]), uint64(size))
+		WriteFrame(target, bytes.NewReader(buf[:size]), uint64(size))
 	}
 }
 
