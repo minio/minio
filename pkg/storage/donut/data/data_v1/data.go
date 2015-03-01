@@ -82,10 +82,9 @@ func WriteData(target io.Writer, header DataHeader, data io.Reader) error {
 	// encode header
 	encoder := gob.NewEncoder(&headerBuffer)
 	encoder.Encode(header)
-	// write length of header
-	if err := binary.Write(target, binary.LittleEndian, int64(headerBuffer.Len())); err != nil {
-		return err
-	}
+
+	// write version
+	binary.Write(target, binary.LittleEndian, uint32(1))
 
 	// write encoded header
 	if _, err := io.Copy(target, &headerBuffer); err != nil {
