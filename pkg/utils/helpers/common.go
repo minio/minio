@@ -18,20 +18,12 @@ package helpers
 
 import (
 	"io/ioutil"
-	"log"
 	"strings"
 )
 
 // Create a new temp directory
 func MakeTempTestDir() (string, error) {
 	return ioutil.TempDir("/tmp", "minio-test-")
-}
-
-// Assert wrapper for error not being null
-func Assert(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 // Camelcase input string
