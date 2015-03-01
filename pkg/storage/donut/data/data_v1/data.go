@@ -5,17 +5,22 @@ import "errors"
 type DataHeader struct {
 	Key           string
 	Part          int
-	ContentType   string
-	Length        uint64
-	Md5sum        []byte
+	Metadata      map[string]string
 	EncoderParams EncoderParams
 }
+
+type EncoderTechnique int
+
+const (
+	VANDERMONDE EncoderTechnique = iota
+	CAUCHY
+)
 
 type EncoderParams struct {
 	Length    int
 	K         int
 	M         int
-	Technique int
+	Technique EncoderTechnique
 }
 
 func Write() error {
