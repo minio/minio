@@ -20,10 +20,9 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/user"
 	"path"
 	"sync"
-
-	"github.com/minio-io/minio/pkg/utils/helpers"
 )
 
 type Config struct {
@@ -41,7 +40,12 @@ type User struct {
 
 // Initialize config directory and template config
 func (c *Config) SetupConfig() error {
-	confPath := path.Join(helpers.HomeDir(), ".minio")
+	u, err := user.Current()
+	if err != nil {
+		return err
+	}
+
+	confPath := path.Join(u.HomeDir, ".minio")
 	if err := os.MkdirAll(confPath, os.ModeDir); err != nil {
 		return err
 	}
