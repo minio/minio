@@ -40,7 +40,7 @@ func AppendUniqInt(slice []int, i int) []int {
 	return append(slice, i)
 }
 
-func AppendUstr(slice []string, i string) []string {
+func AppendUniqStr(slice []string, i string) []string {
 	for _, ele := range slice {
 		if ele == i {
 			return slice
