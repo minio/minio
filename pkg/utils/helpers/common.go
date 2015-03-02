@@ -53,7 +53,7 @@ func FirstUpper(str string) string {
 	return strings.ToUpper(str[0:1]) + str[1:]
 }
 
-func AppendUint(slice []int, i int) []int {
+func AppendUniqInt(slice []int, i int) []int {
 	for _, ele := range slice {
 		if ele == i {
 			return slice
