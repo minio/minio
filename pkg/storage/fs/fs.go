@@ -379,7 +379,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = helpers.AppendUstr(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = helpers.AppendUniqStr(resources.CommonPrefixes, delimited)
 			}
 		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
 			delimited := delimiter(name, resources.Delimiter)
@@ -394,7 +394,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = helpers.AppendUstr(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = helpers.AppendUniqStr(resources.CommonPrefixes, delimited)
 			}
 		case strings.HasPrefix(name, resources.Prefix):
 			metadata := mstorage.ObjectMetadata{
