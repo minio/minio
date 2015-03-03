@@ -32,6 +32,7 @@ type HttpServerConfig struct {
 
 type HttpServer struct{}
 
+// Start http server
 func Start(handler http.Handler, config HttpServerConfig) (chan<- string, <-chan error, *HttpServer) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)

@@ -17,6 +17,7 @@
 package config
 
 import (
+	"io/ioutil"
 	"os"
 	"path"
 	"sync"

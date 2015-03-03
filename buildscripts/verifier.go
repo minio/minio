@@ -24,44 +24,89 @@ func appendUniq(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func getAllFiles(path string, fl os.FileInfo, err error) error {
+// error formats the error to standard error, adding program
+// identification and a newline
+func errorf(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "verifier: "+format+"\n", args...)
+	exitCode = 2
+}
+
+type Package struct {
+	p               *ast.Package
+	fs              *token.FileSet
+	decl            map[string]ast.Node
+	missingcomments map[string]ast.Node
+	used            map[string]bool
+}
+
+type usedWalker Package
+
+// Walks through the AST marking used identifiers.
+func (p *usedWalker) Visit(node ast.Node) ast.Visitor {
+	// just be stupid and mark all *ast.Ident
+	switch n := node.(type) {
+	case *ast.Ident:
+		p.used[n.Name] = true
+	}
+	return p
+}
+
+type Report struct {
+	pos  token.Pos
+	name string
+}
+type Reports []Report
+
+// Len
+func (l Reports) Len() int { return len(l) }
+
+// Less
+func (l Reports) Less(i, j int) bool { return l[i].pos < l[j].pos }
+
+// Swap
+func (l Reports) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+
+// Visits files for used nodes.
+func (p *Package) Visit(node ast.Node) ast.Visitor {
+	u := usedWalker(*p) // hopefully p fields are references.
+	switch n := node.(type) {
+	// don't walk whole file, but only:
+	case *ast.ValueSpec:
+		// - variable initializers
+		for _, value := range n.Values {
+			ast.Walk(&u, value)
+		}
+		// variable types.
+		if n.Type != nil {
+			ast.Walk(&u, n.Type)
+		}
+	case *ast.BlockStmt:
+		// - function bodies
+		for _, stmt := range n.List {
+			ast.Walk(&u, stmt)
+		}
+	case *ast.FuncDecl:
+		// - function signatures
+		ast.Walk(&u, n.Type)
+	case *ast.TypeSpec:
+		// - type declarations
+		ast.Walk(&u, n.Type)
+	}
+	return p
+}
+
+func getAllMinioPkgs(path string, fl os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
 	if fl.IsDir() {
+		// Skip godeps
+		if strings.Contains(path, "Godeps") {
+			return nil
+		}
 		dirs = appendUniq(dirs, path)
 	}
 	return nil
-}
-
-func main() {
-	flag.Parse()
-	if flag.NArg() == 0 {
-		doDir(".")
-	} else {
-		for _, name := range flag.Args() {
-			// Is it a directory?
-			if fi, err := os.Stat(name); err == nil && fi.IsDir() {
-				err := filepath.Walk(name, getAllFiles)
-				if err != nil {
-					errorf(err.Error())
-				}
-				for _, dir := range dirs {
-					doDir(dir)
-				}
-			} else {
-				errorf("not a directory: %s", name)
-			}
-		}
-	}
-	os.Exit(exitCode)
-}
-
-// error formats the error to standard error, adding program
-// identification and a newline
-func errorf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "deadcode: "+format+"\n", args...)
-	exitCode = 2
 }
 
 func doDir(name string) {
@@ -81,14 +126,6 @@ func doDir(name string) {
 	for _, pkg := range pkgs {
 		doPackage(fs, pkg)
 	}
-}
-
-type Package struct {
-	p               *ast.Package
-	fs              *token.FileSet
-	decl            map[string]ast.Node
-	missingcomments map[string]ast.Node
-	used            map[string]bool
 }
 
 func doPackage(fs *token.FileSet, pkg *ast.Package) {
@@ -179,53 +216,25 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	}
 }
 
-type Report struct {
-	pos  token.Pos
-	name string
-}
-type Reports []Report
-
-func (l Reports) Len() int           { return len(l) }
-func (l Reports) Less(i, j int) bool { return l[i].pos < l[j].pos }
-func (l Reports) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
-
-// Visits files for used nodes.
-func (p *Package) Visit(node ast.Node) ast.Visitor {
-	u := usedWalker(*p) // hopefully p fields are references.
-	switch n := node.(type) {
-	// don't walk whole file, but only:
-	case *ast.ValueSpec:
-		// - variable initializers
-		for _, value := range n.Values {
-			ast.Walk(&u, value)
+func main() {
+	flag.Parse()
+	if flag.NArg() == 0 {
+		doDir(".")
+	} else {
+		for _, name := range flag.Args() {
+			// Is it a directory?
+			if fi, err := os.Stat(name); err == nil && fi.IsDir() {
+				err := filepath.Walk(name, getAllMinioPkgs)
+				if err != nil {
+					errorf(err.Error())
+				}
+				for _, dir := range dirs {
+					doDir(dir)
+				}
+			} else {
+				errorf("not a directory: %s", name)
+			}
 		}
-		// variable types.
-		if n.Type != nil {
-			ast.Walk(&u, n.Type)
-		}
-	case *ast.BlockStmt:
-		// - function bodies
-		for _, stmt := range n.List {
-			ast.Walk(&u, stmt)
-		}
-	case *ast.FuncDecl:
-		// - function signatures
-		ast.Walk(&u, n.Type)
-	case *ast.TypeSpec:
-		// - type declarations
-		ast.Walk(&u, n.Type)
 	}
-	return p
-}
-
-type usedWalker Package
-
-// Walks through the AST marking used identifiers.
-func (p *usedWalker) Visit(node ast.Node) ast.Visitor {
-	// just be stupid and mark all *ast.Ident
-	switch n := node.(type) {
-	case *ast.Ident:
-		p.used[n.Name] = true
-	}
-	return p
+	os.Exit(exitCode)
 }

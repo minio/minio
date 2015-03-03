@@ -155,9 +155,9 @@ func (d *digest) checkSum() [Size]byte {
 	return digest
 }
 
-// Convenience functions
+/// Convenience functions
 
-// Single caller function returns [Size]byte
+// Single caller sha512 helper
 func Sum512(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -165,7 +165,7 @@ func Sum512(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
-// Takes in io.Reader, low memory footprint checksum
+// io.Reader based streaming sha512 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error

@@ -51,6 +51,14 @@ type ImplementationError struct {
 	Err    error
 }
 
+type BackendCorrupted BackendError
+type BucketPolicyNotFound GenericBucketError
+type BucketNameInvalid GenericBucketError
+type BucketExists GenericBucketError
+type BucketNotFound GenericBucketError
+type ObjectNameInvalid GenericObjectError
+
+// Return string an error formatted as the given text
 func (self ImplementationError) Error() string {
 	error := ""
 	if self.Bucket != "" {
@@ -63,6 +71,7 @@ func (self ImplementationError) Error() string {
 	return error
 }
 
+// Wrapper function for error object
 func EmbedError(bucket, object string, err error) ImplementationError {
 	return ImplementationError{
 		Bucket: bucket,
@@ -71,45 +80,47 @@ func EmbedError(bucket, object string, err error) ImplementationError {
 	}
 }
 
-type BackendCorrupted BackendError
-type BucketPolicyNotFound GenericBucketError
-type BucketNameInvalid GenericBucketError
-type BucketExists GenericBucketError
-type BucketNotFound GenericBucketError
-type ObjectNameInvalid GenericObjectError
-
+// Return string an error formatted as the given text
 func (self BucketPolicyNotFound) Error() string {
 	return "Bucket policy not found for: " + self.Bucket
 }
 
+// Return string an error formatted as the given text
 func (self ObjectNotFound) Error() string {
 	return "Object not Found: " + self.Bucket + "#" + self.Object
 }
 
+// Return string an error formatted as the given text
 func (self ApiNotImplemented) Error() string {
 	return "Api not implemented: " + self.Api
 }
 
+// Return string an error formatted as the given text
 func (self ObjectExists) Error() string {
 	return "Object exists: " + self.Bucket + "#" + self.Key
 }
 
+// Return string an error formatted as the given text
 func (self BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + self.Bucket
 }
 
+// Return string an error formatted as the given text
 func (self BucketExists) Error() string {
 	return "Bucket exists: " + self.Bucket
 }
 
+// Return string an error formatted as the given text
 func (self BucketNotFound) Error() string {
 	return "Bucket not Found: " + self.Bucket
 }
 
+// Return string an error formatted as the given text
 func (self ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + self.Bucket + "#" + self.Object
 }
 
+// Return string an error formatted as the given text
 func (self BackendCorrupted) Error() string {
 	return "Backend corrupted: " + self.Path
 }

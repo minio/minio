@@ -67,6 +67,7 @@ type BucketResourcesMetadata struct {
 	Notification string
 }
 
+// Verify Bucket name in accordance with http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
 func IsValidBucket(bucket string) bool {
 	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
@@ -82,6 +83,7 @@ func IsValidBucket(bucket string) bool {
 	return match
 }
 
+// Verify Object name in accordance with http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func IsValidObject(object string) bool {
 	if len(object) > 1024 || len(object) == 0 {
 		return false
