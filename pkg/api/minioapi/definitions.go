@@ -25,7 +25,7 @@ const (
 	maxObjectList = 1000
 )
 
-// Object list response format
+// ObjectListResponse format
 type ObjectListResponse struct {
 	XMLName        xml.Name `xml:"ListBucketResult" json:"-"`
 	Name           string

@@ -31,7 +31,7 @@ func errorf(format string, args ...interface{}) {
 	exitCode = 2
 }
 
-type Package struct {
+type goPackage struct {
 	p               *ast.Package
 	fs              *token.FileSet
 	decl            map[string]ast.Node
@@ -39,7 +39,7 @@ type Package struct {
 	used            map[string]bool
 }
 
-type usedWalker Package
+type usedWalker goPackage
 
 // Walks through the AST marking used identifiers.
 func (p *usedWalker) Visit(node ast.Node) ast.Visitor {
@@ -51,23 +51,23 @@ func (p *usedWalker) Visit(node ast.Node) ast.Visitor {
 	return p
 }
 
-type Report struct {
+type report struct {
 	pos  token.Pos
 	name string
 }
-type Reports []Report
+type reports []report
 
 // Len
-func (l Reports) Len() int { return len(l) }
+func (l reports) Len() int { return len(l) }
 
 // Less
-func (l Reports) Less(i, j int) bool { return l[i].pos < l[j].pos }
+func (l reports) Less(i, j int) bool { return l[i].pos < l[j].pos }
 
 // Swap
-func (l Reports) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+func (l reports) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
 
 // Visits files for used nodes.
-func (p *Package) Visit(node ast.Node) ast.Visitor {
+func (p *goPackage) Visit(node ast.Node) ast.Visitor {
 	u := usedWalker(*p) // hopefully p fields are references.
 	switch n := node.(type) {
 	// don't walk whole file, but only:
@@ -129,7 +129,7 @@ func doDir(name string) {
 }
 
 func doPackage(fs *token.FileSet, pkg *ast.Package) {
-	p := &Package{
+	p := &goPackage{
 		p:               pkg,
 		fs:              fs,
 		decl:            make(map[string]ast.Node),
@@ -200,10 +200,10 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	}
 
 	// reports.
-	reports := Reports(nil)
+	reports := reports(nil)
 	for name, node := range p.decl {
 		if !p.used[name] {
-			reports = append(reports, Report{node.Pos(), name})
+			reports = append(reports, report{node.Pos(), name})
 		}
 	}
 	sort.Sort(reports)
