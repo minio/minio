@@ -62,7 +62,7 @@ func runCmd(c *cli.Context) {
 			StorageType: storageType,
 		},
 	}
-	webUiServerConfig := server.ServerConfig{
+	webUIServerConfig := server.ServerConfig{
 		Domain:   domain,
 		Address:  webaddress,
 		Tls:      false,
@@ -73,7 +73,7 @@ func runCmd(c *cli.Context) {
 		},
 	}
 	serverConfigs = append(serverConfigs, apiServerConfig)
-	serverConfigs = append(serverConfigs, webUiServerConfig)
+	serverConfigs = append(serverConfigs, webUIServerConfig)
 	server.Start(serverConfigs)
 }
 
