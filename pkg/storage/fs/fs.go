@@ -58,6 +58,15 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, s *storage) {
 	close(errorChannel)
 }
 
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 // Bucket Operations
 func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	files, err := ioutil.ReadDir(storage.root)
@@ -379,7 +388,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = helpers.AppendUniqStr(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = helpers.appendUniq(resources.CommonPrefixes, delimited)
 			}
 		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
 			delimited := delimiter(name, resources.Delimiter)

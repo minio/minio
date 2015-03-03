@@ -72,6 +72,7 @@ func pemBlockForKey(priv interface{}) *pem.Block {
 	}
 }
 
+// Generate certificates using custom parameters
 func (tls *Certificates) GenerateCertificates(params X509Params) error {
 	var rsaBits int = 2048
 	var priv interface{}

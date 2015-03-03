@@ -29,6 +29,7 @@ import (
 	sha512intel "github.com/minio-io/minio/pkg/utils/crypto/sha512"
 )
 
+// Intels processor accelerated sha512 implementation
 func SumIntel(reader io.Reader) ([]byte, error) {
 	h := sha512intel.New()
 	var err error
@@ -45,6 +46,7 @@ func SumIntel(reader io.Reader) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// Golang default implementation
 func Sum(reader io.Reader) ([]byte, error) {
 	k := sha512.New()
 	var err error

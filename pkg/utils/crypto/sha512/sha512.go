@@ -55,6 +55,7 @@ func block(dig *digest, p []byte) {
 	}
 }
 
+// Reset digest to its default value
 func (d *digest) Reset() {
 	d.h[0] = init0
 	d.h[1] = init1
@@ -75,12 +76,13 @@ func New() hash.Hash {
 	return d
 }
 
-func (d *digest) Size() int {
-	return Size
-}
+// Return output array byte size
+func (d *digest) Size() int { return Size }
 
+// Return blockSize
 func (d *digest) BlockSize() int { return BlockSize }
 
+// Write blocks
 func (d *digest) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	d.len += uint64(nn)
@@ -104,6 +106,7 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 	return
 }
 
+// Calculate sha512
 func (d0 *digest) Sum(in []byte) []byte {
 	// Make a copy of d0 so that caller can keep writing and summing.
 	d := new(digest)
@@ -112,6 +115,7 @@ func (d0 *digest) Sum(in []byte) []byte {
 	return append(in, hash[:]...)
 }
 
+// internal checksum calculation, returns [Size]byte
 func (d *digest) checkSum() [Size]byte {
 	// Padding.  Add a 1 bit and 0 bits until 112 bytes mod 128.
 	len := d.len
@@ -153,6 +157,7 @@ func (d *digest) checkSum() [Size]byte {
 
 // Convenience functions
 
+// Single caller function returns [Size]byte
 func Sum512(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -160,6 +165,7 @@ func Sum512(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
+// Takes in io.Reader, low memory footprint checksum
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error
@@ -176,6 +182,7 @@ func Sum(reader io.Reader) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// Similar to 'Sum()' but returns a [Size]byte
 func SumStream(reader io.Reader) ([Size]byte, error) {
 	var returnValue [Size]byte
 	sumSlice, err := Sum(reader)

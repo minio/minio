@@ -118,15 +118,19 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 					}
 				}
 			case *ast.FuncDecl:
-				// Skip if function is 'main'
+				// if function is 'main', never check
 				if n.Name.Name == "main" {
 					continue
 				}
-				// Skip non-exported functions
+				// Do not be strict on non-exported functions
 				if !ast.IsExported(n.Name.Name) {
 					continue
 				}
-				// Check if comments are missing from exported functions
+				// Do not be strict for field list functions
+				// if n.Recv != nil {
+				// continue
+				//}
+				// Be strict for global functions
 				_, ok := cmap[n]
 				if ok == false {
 					p.missingcomments[n.Name.Name] = n

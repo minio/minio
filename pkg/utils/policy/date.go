@@ -13,6 +13,7 @@ type Date struct {
 	Day   byte
 }
 
+// Date to string output in yyyy-mm-dd format
 func (d Date) String() string {
 	return fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day)
 }

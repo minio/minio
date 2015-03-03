@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/minio-io/minio/pkg/utils/crypto/keys"
-	"github.com/minio-io/minio/pkg/utils/helpers"
 	. "gopkg.in/check.v1"
 )
 
@@ -35,7 +34,7 @@ func Test(t *testing.T) { TestingT(t) }
 
 func (s *MySuite) TestConfig(c *C) {
 	conf := Config{}
-	conf.configPath, _ = helpers.MakeTempTestDir()
+	conf.configPath, _ = ioutil.TempDir("/tmp", "minio-test-")
 	defer os.RemoveAll(conf.configPath)
 	conf.configFile = path.Join(conf.configPath, "config.json")
 	if _, err := os.Stat(conf.configFile); os.IsNotExist(err) {
