@@ -26,17 +26,22 @@ func New() hash.Hash32 {
 	return &digest{crc: 0}
 }
 
+// Return size of crc
 func (d *digest) Size() int { return Size }
 
+// Stub
 func (d *digest) BlockSize() int { return 1 }
 
+// Get crc in bytes
 func (d *digest) Sum(in []byte) []byte {
 	s := d.crc
 	return append(in, byte(s>>24), byte(s>>16), byte(s>>8), byte(s))
 }
 
+// Return current crc in digest object
 func (d *digest) Sum32() uint32 { return d.crc }
 
+// Reset default crc
 func (d *digest) Reset() { d.crc = 0 }
 
 // Update returns the result of adding the bytes in p to the crc.
@@ -44,13 +49,15 @@ func (d *digest) update(crc uint32, p []byte) uint32 {
 	return updateCastanagoliPCL(crc, p)
 }
 
+// Write data
 func (d *digest) Write(p []byte) (n int, err error) {
 	d.crc = d.update(d.crc, p)
 	return len(p), nil
 }
 
-// Convenience functions
+/// Convenience functions
 
+// Single caller crc helper
 func Sum32(data []byte) uint32 {
 	crc32 := New()
 	crc32.Reset()
@@ -58,6 +65,7 @@ func Sum32(data []byte) uint32 {
 	return crc32.Sum32()
 }
 
+// Low memory footprint io.Reader based crc helper
 func Sum(reader io.Reader) (uint32, error) {
 	h := New()
 	var err error

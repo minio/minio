@@ -47,6 +47,7 @@ type EncoderParams struct {
 	Technique EncoderTechnique
 }
 
+// populate new header
 func NewHeader(key string, part uint8, metadata Metadata, encoderParams EncoderParams) DataHeader {
 	header := DataHeader{}
 	header.Key = key
@@ -61,6 +62,7 @@ func NewHeader(key string, part uint8, metadata Metadata, encoderParams EncoderP
 	return header
 }
 
+// validate populated header
 func ValidateHeader(header DataHeader) bool {
 	if header.Key == "" || header.Part < 0 || len(header.Metadata) < 2 {
 		return false
@@ -73,6 +75,7 @@ func ValidateHeader(header DataHeader) bool {
 	return true
 }
 
+// Write data, returns error upon any failure
 func WriteData(target io.Writer, header DataHeader, data io.Reader) error {
 	if !ValidateHeader(header) {
 		return fmt.Errorf("Invalid header")

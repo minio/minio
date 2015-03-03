@@ -73,6 +73,7 @@ type DonutFrameFooter struct {
 
 type Data bytes.Buffer
 
+// Write Donut format to input io.Writer, returns error upon any failure
 func WriteFrame(target io.Writer, reader io.Reader, length uint64) error {
 	// write header
 	header := DonutFrameHeader{

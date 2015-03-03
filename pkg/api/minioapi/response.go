@@ -56,8 +56,13 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 
 type ItemKey []*Item
 
-func (b ItemKey) Len() int           { return len(b) }
-func (b ItemKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+// Len
+func (b ItemKey) Len() int { return len(b) }
+
+// Swap
+func (b ItemKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+
+// Less
 func (b ItemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
 // takes a set of objects and prepares the objects for serialization

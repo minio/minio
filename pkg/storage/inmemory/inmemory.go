@@ -47,6 +47,23 @@ type storedObject struct {
 	data     []byte
 }
 
+// Start inmemory object server
+func Start() (chan<- string, <-chan error, *storage) {
+	ctrlChannel := make(chan string)
+	errorChannel := make(chan error)
+	go start(ctrlChannel, errorChannel)
+	return ctrlChannel, errorChannel, &storage{
+		bucketdata: make(map[string]storedBucket),
+		objectdata: make(map[string]storedObject),
+		lock:       new(sync.RWMutex),
+	}
+}
+
+func start(ctrlChannel <-chan string, errorChannel chan<- error) {
+	close(errorChannel)
+}
+
+// GET object from memory buffer
 func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// TODO synchronize access
 	// get object
@@ -60,14 +77,17 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 }
 
+// Not implemented
 func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
 	return mstorage.ApiNotImplemented{Api: "PutBucketPolicy"}
 }
 
+// Not implemented
 func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 	return policy.BucketPolicy{}, mstorage.ApiNotImplemented{Api: "GetBucketPolicy"}
 }
 
+// PUT object to memory buffer
 func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -108,6 +128,7 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	return nil
 }
 
+// Create Bucket in memory
 func (storage *storage) StoreBucket(bucketName string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -128,11 +149,11 @@ func (storage *storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
+// List objects in memory
 func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	if _, ok := storage.bucketdata[bucket]; ok == false {
 		return []mstorage.ObjectMetadata{}, mstorage.BucketResourcesMetadata{IsTruncated: false}, mstorage.BucketNotFound{Bucket: bucket}
 	}
-	// TODO prefix and count handling
 	var results []mstorage.ObjectMetadata
 	var keys []string
 	for key := range storage.objectdata {
@@ -157,10 +178,16 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 
 type ByBucketName []mstorage.BucketMetadata
 
-func (b ByBucketName) Len() int           { return len(b) }
-func (b ByBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+// Len of bucket name
+func (b ByBucketName) Len() int { return len(b) }
+
+// Swap bucket i, j
+func (b ByBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+
+// Less
 func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
+// List buckets
 func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	var results []mstorage.BucketMetadata
 	for _, bucket := range storage.bucketdata {
@@ -170,21 +197,7 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	return results, nil
 }
 
-func Start() (chan<- string, <-chan error, *storage) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
-	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, &storage{
-		bucketdata: make(map[string]storedBucket),
-		objectdata: make(map[string]storedObject),
-		lock:       new(sync.RWMutex),
-	}
-}
-
-func start(ctrlChannel <-chan string, errorChannel chan<- error) {
-	close(errorChannel)
-}
-
+// HEAD object
 func (storage *storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMetadata, error) {
 	objectKey := bucket + ":" + key
 

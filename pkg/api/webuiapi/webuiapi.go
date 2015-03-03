@@ -42,6 +42,7 @@ type encoder interface {
 	Encode(v interface{}) error
 }
 
+// Http wrapper handler
 func HttpHandler() http.Handler {
 	mux := mux.NewRouter()
 	var api = webUiApi{}

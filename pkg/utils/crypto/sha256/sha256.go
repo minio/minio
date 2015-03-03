@@ -43,6 +43,7 @@ type digest struct {
 	len uint64
 }
 
+// Reset digest back to default
 func (d *digest) Reset() {
 	d.h[0] = init0
 	d.h[1] = init1
@@ -74,12 +75,13 @@ func New() hash.Hash {
 	return d
 }
 
-func (d *digest) Size() int {
-	return Size
-}
+// Return size of checksum
+func (d *digest) Size() int { return Size }
 
+// Return blocksize of checksum
 func (d *digest) BlockSize() int { return BlockSize }
 
+// Write to digest
 func (d *digest) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	d.len += uint64(nn)
@@ -103,6 +105,7 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 	return
 }
 
+// Return sha256 sum in bytes
 func (d0 *digest) Sum(in []byte) []byte {
 	// Make a copy of d0 so that caller can keep writing and summing.
 	d := *d0
@@ -110,6 +113,7 @@ func (d0 *digest) Sum(in []byte) []byte {
 	return append(in, hash[:]...)
 }
 
+// Intermediate checksum function
 func (d *digest) checkSum() [Size]byte {
 	len := d.len
 	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
@@ -145,8 +149,9 @@ func (d *digest) checkSum() [Size]byte {
 	return digest
 }
 
-// Convenience functions
+/// Convenience functions
 
+// Single caller sha256 helper
 func Sum256(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -154,6 +159,7 @@ func Sum256(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
+// io.Reader based streaming sha256 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error

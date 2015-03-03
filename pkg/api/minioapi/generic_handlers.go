@@ -52,6 +52,7 @@ func validateHandler(conf config.Config, h http.Handler) http.Handler {
 	return vHandler{conf, h}
 }
 
+// Validate handler ServeHTTP() wrapper
 func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	accessKey := stripAccessKey(r)
 	acceptsContentType := getContentType(r)
@@ -95,6 +96,7 @@ func ignoreResourcesHandler(h http.Handler) http.Handler {
 	return rHandler{h}
 }
 
+// Resource handler ServeHTTP() wrapper
 func (h rHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
@@ -109,7 +111,7 @@ func (h rHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 //// helpers
 
-// Checks requests for unimplemented resources
+// Checks requests for unimplemented Bucket resources
 func ignoreUnImplementedBucketResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
@@ -120,6 +122,7 @@ func ignoreUnImplementedBucketResources(req *http.Request) bool {
 	return false
 }
 
+// Checks requests for unimplemented Object resources
 func ignoreUnImplementedObjectResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {

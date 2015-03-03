@@ -29,7 +29,6 @@ import (
 	"sync"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/utils/helpers"
 	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
@@ -42,6 +41,7 @@ type SerializedMetadata struct {
 	ContentType string
 }
 
+// Start filesystem channel
 func Start(root string) (chan<- string, <-chan error, *storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
@@ -58,7 +58,18 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, s *storage) {
 	close(errorChannel)
 }
 
-// Bucket Operations
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
+/// Bucket Operations
+
+// GET - Service
 func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	files, err := ioutil.ReadDir(storage.root)
 	if err != nil {
@@ -83,6 +94,7 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	return metadataList, nil
 }
 
+// PUT - Bucket
 func (storage *storage) StoreBucket(bucket string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -110,6 +122,7 @@ func (storage *storage) StoreBucket(bucket string) error {
 	return nil
 }
 
+// GET - Bucket policy
 func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -154,6 +167,7 @@ func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 
 }
 
+// PUT - Bucket policy
 func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -194,8 +208,9 @@ func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) err
 	return nil
 }
 
-// Object Operations
+/// Object Operations
 
+// GET Object
 func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// validate bucket
 	if mstorage.IsValidBucket(bucket) == false {
@@ -238,6 +253,7 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	return count, nil
 }
 
+// HEAD Object
 func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorage.ObjectMetadata, error) {
 	if mstorage.IsValidBucket(bucket) == false {
 		return mstorage.ObjectMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
@@ -331,10 +347,16 @@ func delimiter(path, delimiter string) string {
 
 type ByObjectKey []mstorage.ObjectMetadata
 
-func (b ByObjectKey) Len() int           { return len(b) }
-func (b ByObjectKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+// Len
+func (b ByObjectKey) Len() int { return len(b) }
+
+// Swap
+func (b ByObjectKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+
+// Less
 func (b ByObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
+// GET bucket (list objects)
 func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	p := Path{}
 	p.files = make(map[string]os.FileInfo)
@@ -379,7 +401,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = helpers.AppendUniqStr(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
 			}
 		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
 			delimited := delimiter(name, resources.Delimiter)
@@ -394,7 +416,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = helpers.AppendUniqStr(resources.CommonPrefixes, delimited)
+				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
 			}
 		case strings.HasPrefix(name, resources.Prefix):
 			metadata := mstorage.ObjectMetadata{
@@ -413,6 +435,7 @@ ret:
 	return metadataList, resources, nil
 }
 
+// PUT object
 func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	// TODO Commits should stage then move instead of writing directly
 	storage.lock.Lock()

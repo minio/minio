@@ -143,6 +143,7 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 	return
 }
 
+// Create channels
 func Start(configs []ServerConfig) {
 	// reflected looping is necessary to remove dead channels from loop and not flood switch
 	ctrlChans, statusChans := getHttpChannels(configs)

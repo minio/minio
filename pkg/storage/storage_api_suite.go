@@ -24,6 +24,7 @@ import (
 	. "gopkg.in/check.v1"
 )
 
+// API test suite
 func APITestSuite(c *C, create func() Storage) {
 	testCreateBucket(c, create)
 	testMultipleObjectCreation(c, create)

@@ -21,14 +21,17 @@ package cpu
 // int has_avx2 (void);
 import "C"
 
+// CPUID instruction verification wrapper for SSE41 extensions
 func HasSSE41() bool {
 	return int(C.has_sse41()) == 1
 }
 
+// CPUID instruction verification wrapper for AVX extensions
 func HasAVX() bool {
 	return int(C.has_avx()) == 1
 }
 
+// CPUID instruction verification wrapper for AVX2 extensions
 func HasAVX2() bool {
 	return int(C.has_avx2()) == 1
 }

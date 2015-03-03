@@ -23,6 +23,9 @@ import (
 
 var castanagoliTable = crc32.MakeTable(crc32.Castagnoli)
 
+/// Convenience functions
+
+// Single caller crc helper
 func Sum32(buffer []byte) uint32 {
 	crc := crc32.New(castanagoliTable)
 	crc.Reset()
@@ -30,6 +33,7 @@ func Sum32(buffer []byte) uint32 {
 	return crc.Sum32()
 }
 
+// Low memory footprint io.Reader based crc helper
 func Sum(reader io.Reader) (uint32, error) {
 	h := New()
 	var err error

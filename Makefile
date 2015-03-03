@@ -7,16 +7,17 @@ checkdeps:
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
 
 checkgopath:
-	@echo "Checking project in ${MINIOPATH}"
+	@echo "Checking if project is at ${MINIOPATH}"
 	@if [ ! -d ${MINIOPATH} ]; then echo "Project not found in $GOPATH, please follow instructions provided at https://github.com/Minio-io/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi
 
 getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
 
-deadcode: getdeps
-	@go run buildscripts/deadcode.go .
+verifier: getdeps
+	@echo "Checking for offending code"
+	@go run buildscripts/verifier.go ${PWD}
 
-build-all: getdeps deadcode
+build-all: verifier
 	@echo "Building Libraries"
 	@godep go generate ./...
 	@godep go build ./...
