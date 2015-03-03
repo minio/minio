@@ -73,7 +73,7 @@ func doDir(name string) {
 		return false
 	}
 	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, name, notests, parser.Mode(0))
+	pkgs, err := parser.ParseDir(fs, name, notests, parser.ParseComments|parser.Mode(0))
 	if err != nil {
 		errorf("%s", err)
 		return
@@ -84,20 +84,23 @@ func doDir(name string) {
 }
 
 type Package struct {
-	p    *ast.Package
-	fs   *token.FileSet
-	decl map[string]ast.Node
-	used map[string]bool
+	p               *ast.Package
+	fs              *token.FileSet
+	decl            map[string]ast.Node
+	missingcomments map[string]ast.Node
+	used            map[string]bool
 }
 
 func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	p := &Package{
-		p:    pkg,
-		fs:   fs,
-		decl: make(map[string]ast.Node),
-		used: make(map[string]bool),
+		p:               pkg,
+		fs:              fs,
+		decl:            make(map[string]ast.Node),
+		missingcomments: make(map[string]ast.Node),
+		used:            make(map[string]bool),
 	}
 	for _, file := range pkg.Files {
+		cmap := ast.NewCommentMap(fs, file, file.Comments)
 		for _, decl := range file.Decls {
 			switch n := decl.(type) {
 			case *ast.GenDecl:
@@ -115,6 +118,20 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 					}
 				}
 			case *ast.FuncDecl:
+				// Skip if function is 'main'
+				if n.Name.Name == "main" {
+					continue
+				}
+				// Skip non-exported functions
+				if !ast.IsExported(n.Name.Name) {
+					continue
+				}
+				// Check if comments are missing from exported functions
+				_, ok := cmap[n]
+				if ok == false {
+					p.missingcomments[n.Name.Name] = n
+				}
+
 				// function declarations
 				// TODO(remy): do methods
 				if n.Recv == nil {
@@ -140,6 +157,7 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 		// walk file looking for used nodes.
 		ast.Walk(p, file)
 	}
+
 	// reports.
 	reports := Reports(nil)
 	for name, node := range p.decl {
@@ -150,6 +168,10 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	sort.Sort(reports)
 	for _, report := range reports {
 		errorf("%s: %s is unused", fs.Position(report.pos), report.name)
+	}
+
+	for name, node := range p.missingcomments {
+		errorf("%s: comment is missing for 'func %s'", fs.Position(node.Pos()), name)
 	}
 }
 
