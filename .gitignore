@@ -5,3 +5,4 @@ cover.out
 minio
 **/*.test
 **/*.sublime-workspace
+deadcode

@@ -26,16 +26,6 @@ import "unsafe"
 
 var (
 	// See http://golang.org/ref/spec#Numeric_types
-
-	// SizeUint8 is the byte size of a uint8.
-	sizeUint8 = int(unsafe.Sizeof(uint8(0)))
-	// SizeUint16 is the byte size of a uint16.
-	sizeUint16 = int(unsafe.Sizeof(uint16(0)))
-	// SizeUint32 is the byte size of a uint32.
-	sizeUint32 = int(unsafe.Sizeof(uint32(0)))
-	// SizeUint64 is the byte size of a uint64.
-	sizeUint64 = int(unsafe.Sizeof(uint64(0)))
-
 	sizeInt = int(C.sizeInt())
 	// SizeInt8  is the byte size of a int8.
 	sizeInt8 = int(unsafe.Sizeof(int8(0)))

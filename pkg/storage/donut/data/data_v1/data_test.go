@@ -39,7 +39,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 		Length:    uint32(len(testData)),
 		K:         8,
 		M:         8,
-		Technique: CAUCHY,
+		Technique: Cauchy,
 	}
 	metadata := make(Metadata)
 	metadata["Content-Type"] = "application/octet-stream"
