@@ -22,7 +22,7 @@ import (
 
 // Limit number of objects in a given response
 const (
-	MAX_OBJECT_LIST = 1000
+	maxObjectList = 1000
 )
 
 // Object list response format

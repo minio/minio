@@ -40,6 +40,10 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	if resources.Maxkeys == 0 {
+		resources.Maxkeys = maxObjectList
+	}
+
 	acceptsContentType := getContentType(req)
 	objects, resources, err := server.storage.ListObjects(bucket, resources)
 	switch err := err.(type) {

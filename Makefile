@@ -13,7 +13,10 @@ checkgopath:
 getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
 
-build-all: getdeps
+deadcode: getdeps
+	@go run buildscripts/deadcode.go .
+
+build-all: getdeps deadcode
 	@echo "Building Libraries"
 	@godep go generate ./...
 	@godep go build ./...

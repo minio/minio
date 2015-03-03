@@ -36,8 +36,8 @@ type DataHeader struct {
 type EncoderTechnique int
 
 const (
-	VANDERMONDE EncoderTechnique = iota
-	CAUCHY
+	Vandermonde EncoderTechnique = iota
+	Cauchy
 )
 
 type EncoderParams struct {

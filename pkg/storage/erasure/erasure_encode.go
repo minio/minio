@@ -29,8 +29,8 @@ import (
 type Technique int
 
 const (
-	VANDERMONDE Technique = iota
-	CAUCHY
+	Vandermonde Technique = iota
+	Cauchy
 )
 
 const (
@@ -59,7 +59,7 @@ type Encoder struct {
 // ParseEncoderParams creates an EncoderParams object.
 //
 // k and m represent the matrix size, which corresponds to the protection level
-// technique is the matrix type. Valid inputs are CAUCHY (recommended) or VANDERMONDE.
+// technique is the matrix type. Valid inputs are Cauchy (recommended) or Vandermonde.
 //
 func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error) {
 	if k < 1 {
@@ -75,9 +75,9 @@ func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error)
 	}
 
 	switch technique {
-	case VANDERMONDE:
+	case Vandermonde:
 		break
-	case CAUCHY:
+	case Cauchy:
 		break
 	default:
 		return nil, errors.New("Technique can be either vandermonde or cauchy")
