@@ -17,6 +17,7 @@
 package fs
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -332,17 +333,12 @@ func (p *Path) getAllFiles(path string, fl os.FileInfo, err error) error {
 }
 
 func delimiter(path, delimiter string) string {
-	delimited := ""
-	if !strings.Contains(path, delimiter) {
-		return delimited
-	}
-	index := strings.Index(path, delimiter)
-	if index == -1 {
-		return delimited
-	}
-	delimitedIndex := index + len(delimiter)
-	delimited = path[:delimitedIndex]
-	return delimited
+	readBuffer := bytes.NewBufferString(path)
+	reader := bufio.NewReader(readBuffer)
+	stringReader := strings.NewReader(delimiter)
+	delimited, _ := stringReader.ReadByte()
+	delimitedStr, _ := reader.ReadString(delimited)
+	return delimitedStr
 }
 
 type ByObjectKey []mstorage.ObjectMetadata
@@ -391,7 +387,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 		case resources.Delimiter != "" && resources.Prefix == "":
 			delimited := delimiter(name, resources.Delimiter)
 			switch true {
-			case delimited == "":
+			case delimited == file.Name():
 				metadata := mstorage.ObjectMetadata{
 					Bucket:  bucket,
 					Key:     name,
@@ -407,7 +403,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 			_internal := strings.TrimPrefix(name, resources.Prefix)
 			delimited := delimiter(_internal, resources.Delimiter)
 			switch true {
-			case delimited == "":
+			case delimited == file.Name():
 				metadata := mstorage.ObjectMetadata{
 					Bucket:  bucket,
 					Key:     _internal,
@@ -417,7 +413,11 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 				metadataList = append(metadataList, metadata)
 			case delimited != "":
-				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
+				if delimited == resources.Delimiter {
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimited)
+				} else {
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
+				}
 			}
 		case strings.HasPrefix(name, resources.Prefix):
 			metadata := mstorage.ObjectMetadata{
