@@ -404,12 +404,13 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
 			}
 		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
-			delimited := delimiter(name, resources.Delimiter)
+			_internal := strings.TrimPrefix(name, resources.Prefix)
+			delimited := delimiter(_internal, resources.Delimiter)
 			switch true {
 			case delimited == "":
 				metadata := mstorage.ObjectMetadata{
 					Bucket:  bucket,
-					Key:     name,
+					Key:     _internal,
 					Created: file.ModTime(),
 					Size:    file.Size(),
 					ETag:    bucket + "#" + name,
