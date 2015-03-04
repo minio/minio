@@ -385,38 +385,56 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 		// TODO handle resources.Marker
 		switch true {
 		case resources.Delimiter != "" && resources.Prefix == "":
-			delimited := delimiter(name, resources.Delimiter)
+			delimitedName := delimiter(name, resources.Delimiter)
 			switch true {
-			case delimited == file.Name():
+			case delimitedName == "":
 				metadata := mstorage.ObjectMetadata{
 					Bucket:  bucket,
 					Key:     name,
 					Created: file.ModTime(),
 					Size:    file.Size(),
-					ETag:    bucket + "#" + name,
+					ETag:    bucket + "#" + file.Name(),
 				}
 				metadataList = append(metadataList, metadata)
-			case delimited != "":
-				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
-			}
-		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
-			_internal := strings.TrimPrefix(name, resources.Prefix)
-			delimited := delimiter(_internal, resources.Delimiter)
-			switch true {
-			case delimited == file.Name():
+			case delimitedName == file.Name():
 				metadata := mstorage.ObjectMetadata{
 					Bucket:  bucket,
-					Key:     _internal,
+					Key:     name,
 					Created: file.ModTime(),
 					Size:    file.Size(),
-					ETag:    bucket + "#" + name,
+					ETag:    bucket + "#" + file.Name(),
 				}
 				metadataList = append(metadataList, metadata)
-			case delimited != "":
-				if delimited == resources.Delimiter {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimited)
+			case delimitedName != "":
+				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+			}
+		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
+			trimmedName := strings.TrimPrefix(name, resources.Prefix)
+			delimitedName := delimiter(trimmedName, resources.Delimiter)
+			switch true {
+			case name == resources.Prefix:
+				metadata := mstorage.ObjectMetadata{
+					Bucket:  bucket,
+					Key:     file.Name(),
+					Created: file.ModTime(),
+					Size:    file.Size(),
+					ETag:    bucket + "#" + file.Name(),
+				}
+				metadataList = append(metadataList, metadata)
+			case delimitedName == file.Name():
+				metadata := mstorage.ObjectMetadata{
+					Bucket:  bucket,
+					Key:     trimmedName,
+					Created: file.ModTime(),
+					Size:    file.Size(),
+					ETag:    bucket + "#" + file.Name(),
+				}
+				metadataList = append(metadataList, metadata)
+			case delimitedName != "":
+				if delimitedName == resources.Delimiter {
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
 				} else {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimited)
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
 				}
 			}
 		case strings.HasPrefix(name, resources.Prefix):
