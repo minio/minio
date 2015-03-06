@@ -27,13 +27,13 @@ import (
 	"strings"
 )
 
-// Message structure for results from the SplitStream goroutine
-type SplitMessage struct {
+// Message - message structure for results from the Stream goroutine
+type Message struct {
 	Data []byte
 	Err  error
 }
 
-// SplitStream reads from io.Reader, splits the data into chunks, and sends
+// Stream reads from io.Reader, splits the data into chunks, and sends
 // each chunk to the channel. This method runs until an EOF or error occurs. If
 // an error occurs, the method sends the error over the channel and returns.
 // Before returning, the channel is always closed.
@@ -41,18 +41,18 @@ type SplitMessage struct {
 // The user should run this as a gorountine and retrieve the data over the
 // channel.
 //
-//  channel := make(chan SplitMessage)
-//  go SplitStream(reader, chunkSize, channel)
+//  channel := make(chan Message)
+//  go Stream(reader, chunkSize, channel)
 //  for chunk := range channel {
 //    log.Println(chunk.Data)
 //  }
-func SplitStream(reader io.Reader, chunkSize uint64) <-chan SplitMessage {
-	ch := make(chan SplitMessage)
+func Stream(reader io.Reader, chunkSize uint64) <-chan Message {
+	ch := make(chan Message)
 	go splitStreamGoRoutine(reader, chunkSize, ch)
 	return ch
 }
 
-func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan SplitMessage) {
+func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan Message) {
 	// we read until EOF or another error
 	var readError error
 
@@ -81,12 +81,12 @@ func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan SplitMessa
 		bytesWriter.Flush()
 		// if we have data available, send it over the channel
 		if bytesBuffer.Len() != 0 {
-			ch <- SplitMessage{bytesBuffer.Bytes(), nil}
+			ch <- Message{bytesBuffer.Bytes(), nil}
 		}
 	}
 	// if we have an error other than an EOF, send it over the channel
 	if readError != io.EOF {
-		ch <- SplitMessage{nil, readError}
+		ch <- Message{nil, readError}
 	}
 	// close the channel, signaling the channel reader that the stream is complete
 	close(ch)
@@ -142,9 +142,9 @@ func joinFilesGoRoutine(fileInfos []os.FileInfo, writer *io.PipeWriter) {
 	writer.Close()
 }
 
-// Takes a file and splits it into chunks with size chunkSize. The output
+// FileWithPrefix - Takes a file and splits it into chunks with size chunkSize. The output
 // filename is given with outputPrefix.
-func SplitFileWithPrefix(filename string, chunkSize uint64, outputPrefix string) error {
+func FileWithPrefix(filename string, chunkSize uint64, outputPrefix string) error {
 	// open file
 	file, err := os.Open(filename)
 	defer file.Close()
@@ -157,7 +157,7 @@ func SplitFileWithPrefix(filename string, chunkSize uint64, outputPrefix string)
 	}
 
 	// start stream splitting goroutine
-	ch := SplitStream(file, chunkSize)
+	ch := Stream(file, chunkSize)
 
 	// used to write each chunk out as a separate file. {{outputPrefix}}.{{i}}
 	i := 0
