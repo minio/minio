@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package data_v1
+package erasure_v1
 
 import (
 	"bytes"
