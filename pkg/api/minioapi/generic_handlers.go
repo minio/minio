@@ -63,15 +63,22 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(error.HttpStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		} else {
-			user := h.conf.GetKey(accessKey)
-			ok, _ := signers.ValidateRequest(user, r)
-			if ok {
-				h.handler.ServeHTTP(w, r)
-			} else {
+			user, ok := h.conf.Users[accessKey]
+			if ok == false {
 				error := errorCodeError(AccessDenied)
 				errorResponse := getErrorResponse(error, "")
 				w.WriteHeader(error.HttpStatusCode)
 				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			} else {
+				ok, _ = signers.ValidateRequest(user, r)
+				if ok {
+					h.handler.ServeHTTP(w, r)
+				} else {
+					error := errorCodeError(AccessDenied)
+					errorResponse := getErrorResponse(error, "")
+					w.WriteHeader(error.HttpStatusCode)
+					w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+				}
 			}
 		}
 	} else {

@@ -25,6 +25,7 @@ import (
 	"sync"
 )
 
+// Config context
 type Config struct {
 	configPath string
 	configFile string
@@ -32,13 +33,14 @@ type Config struct {
 	Users      map[string]User
 }
 
+// User context
 type User struct {
 	Name      string
 	AccessKey string
 	SecretKey string
 }
 
-// Initialize config directory and template config
+// SetupConfig initialize config directory and template config
 func (c *Config) SetupConfig() error {
 	u, err := user.Current()
 	if err != nil {
@@ -63,12 +65,12 @@ func (c *Config) SetupConfig() error {
 	return nil
 }
 
-// Get config file location
+// GetConfigPath config file location
 func (c *Config) GetConfigPath() string {
 	return c.configPath
 }
 
-// Verify if user exists
+// IsUserExists verify if user exists
 func (c *Config) IsUserExists(username string) bool {
 	for _, user := range c.Users {
 		if user.Name == username {
@@ -78,16 +80,7 @@ func (c *Config) IsUserExists(username string) bool {
 	return false
 }
 
-// Get user based on accesskey
-func (c *Config) GetKey(accessKey string) User {
-	value, ok := c.Users[accessKey]
-	if !ok {
-		return User{}
-	}
-	return value
-}
-
-// Get user based on username
+// GetUser - get user from username
 func (c *Config) GetUser(username string) User {
 	for _, user := range c.Users {
 		if user.Name == username {
@@ -97,7 +90,7 @@ func (c *Config) GetUser(username string) User {
 	return User{}
 }
 
-// Add a new user into existing User list
+// AddUser - add a user into existing User list
 func (c *Config) AddUser(user User) {
 	var currentUsers map[string]User
 	if len(c.Users) == 0 {
@@ -109,7 +102,7 @@ func (c *Config) AddUser(user User) {
 	c.Users = currentUsers
 }
 
-// Write encoded json in config file
+// WriteConfig - write encoded json in config file
 func (c *Config) WriteConfig() error {
 	c.configLock.Lock()
 	defer c.configLock.Unlock()
@@ -128,7 +121,7 @@ func (c *Config) WriteConfig() error {
 	return nil
 }
 
-// Read json config file and decode
+// ReadConfig - read json config file and decode
 func (c *Config) ReadConfig() error {
 	c.configLock.RLock()
 	defer c.configLock.RUnlock()
@@ -154,30 +147,4 @@ func (c *Config) ReadConfig() error {
 	default:
 		return err
 	}
-}
-
-/// helpers
-
-// Load all users into memory
-func Loadusers() map[string]User {
-	c := Config{}
-	c.SetupConfig()
-	c.ReadConfig()
-	return c.Users
-}
-
-// Load a given user based on accessKey
-func Loadkey(accessKeyId string) User {
-	c := Config{}
-	c.SetupConfig()
-	c.ReadConfig()
-	return c.GetKey(accessKeyId)
-}
-
-// Load a given user based on username
-func Loaduser(username string) User {
-	c := Config{}
-	c.SetupConfig()
-	c.ReadConfig()
-	return c.GetUser(username)
 }
