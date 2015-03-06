@@ -43,10 +43,8 @@ func hasCPUFeatureFromOS(feature string) (bool, error) {
 			return true, nil
 		}
 		return false, nil
-	} else {
-		// TODO find new way to test cpu flags on windows
-		return false, errors.New("Not Implemented on this platform")
 	}
+	return false, errors.New("Not Implemented on this platform")
 }
 
 func (s *MySuite) TestHasSSE41(c *C) {

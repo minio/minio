@@ -31,13 +31,14 @@ import (
 	"time"
 )
 
-// Based on http://golang.org/src/crypto/tls/generate_cert.go
+// Certificates - based on http://golang.org/src/crypto/tls/generate_cert.go
 type Certificates struct {
 	CertPemBlock []byte
 	CertKeyBlock []byte
 }
 
-type X509Params struct {
+// Params - various x.509 parameters
+type Params struct {
 	Hostname   string
 	IsCA       bool
 	EcdsaCurve string
@@ -72,9 +73,9 @@ func pemBlockForKey(priv interface{}) *pem.Block {
 	}
 }
 
-// Generate certificates using custom parameters
-func (tls *Certificates) GenerateCertificates(params X509Params) error {
-	var rsaBits int = 2048
+// GenerateCertificates - generate certificates using custom x.509 parameters
+func (tls *Certificates) GenerateCertificates(params Params) error {
+	var rsaBits = 2048
 	var priv interface{}
 	var err error
 

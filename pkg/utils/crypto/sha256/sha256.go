@@ -151,7 +151,7 @@ func (d *digest) checkSum() [Size]byte {
 
 /// Convenience functions
 
-// Single caller sha256 helper
+// Sum256 - single caller sha256 helper
 func Sum256(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -159,7 +159,7 @@ func Sum256(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
-// io.Reader based streaming sha256 helper
+// Sum - io.Reader based streaming sha256 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error
