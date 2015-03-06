@@ -45,7 +45,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	testBufferLength := uint64(testBuffer.Len())
 
 	// we test our crc here too
-	headerBytes := testBuffer.Bytes()[0:28]
+	headerBytes := testBuffer.Bytes()[:24]
 	expectedCrc := crc32c.Sum32(headerBytes)
 
 	// magic mini
@@ -54,24 +54,9 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	c.Assert(magicMini, DeepEquals, []byte{'M', 'I', 'N', 'I'})
 
 	// major version
-	majorVersion := make([]byte, 2)
-	testBuffer.Read(majorVersion)
-	c.Assert(binary.LittleEndian.Uint16(majorVersion), DeepEquals, uint16(1))
-
-	// minor version
-	minorVersion := make([]byte, 2)
-	testBuffer.Read(minorVersion)
-	c.Assert(binary.LittleEndian.Uint16(minorVersion), DeepEquals, uint16(0))
-
-	// patch version
-	patchVersion := make([]byte, 2)
-	testBuffer.Read(patchVersion)
-	c.Assert(binary.LittleEndian.Uint16(patchVersion), DeepEquals, uint16(0))
-
-	// reserved version
-	reservedVersion := make([]byte, 2)
-	testBuffer.Read(reservedVersion)
-	c.Assert(binary.LittleEndian.Uint16(reservedVersion), DeepEquals, uint16(0))
+	version := make([]byte, 4)
+	testBuffer.Read(version)
+	c.Assert(binary.LittleEndian.Uint32(version), DeepEquals, uint32(1))
 
 	// reserved
 	reserved := make([]byte, 8)

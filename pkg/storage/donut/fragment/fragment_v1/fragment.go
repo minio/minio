@@ -30,20 +30,17 @@ import (
 
        DONUT v1 Spec
    **********************
-   BlockStart      [4]byte             // Magic="MINI"=1229867341
-   VersionMajor    uint16
-   VersionMinor    uint16
-   VersionPatch    uint16
-   VersionReserved uint16
+   BlockStart      uint32              // Magic="MINI"=1229867341
+   VersionMajor    uint32
    Reserved        uint64
    DataLen         uint64
    HeaderCrc32c    uint32
-   BlockData       [4]byte             // Magic="DATA"=1096040772
+   BlockData       uint32              // Magic="DATA"=1096040772
    Data            io.Reader           // matches length
    HeaderCrc32c    uint32
    DataSha512      [64]byte
    BlockLen        uint64              // length of entire frame, inclusive of MINI and INIM
-   BlockEnd        [4]byte             // Magic="INIM"=1296649801
+   BlockEnd        uint32              // Magic="INIM"=1296649801
 
 */
 
@@ -54,13 +51,10 @@ var (
 )
 
 type DonutFrameHeader struct {
-	MagicMINI       uint32
-	VersionMajor    uint16
-	VersionMinor    uint16
-	VersionPatch    uint16
-	VersionReserved uint16
-	Reserved        uint64
-	DataLength      uint64
+	MagicMINI  uint32
+	Version    uint32
+	Reserved   uint64
+	DataLength uint64
 }
 type Crc32c uint32
 type Sha512 [sha512.Size]byte
@@ -77,13 +71,10 @@ type Data bytes.Buffer
 func WriteFrame(target io.Writer, reader io.Reader, length uint64) error {
 	// write header
 	header := DonutFrameHeader{
-		MagicMINI:       MagicMINI,
-		VersionMajor:    1,
-		VersionMinor:    0,
-		VersionPatch:    0,
-		VersionReserved: 0,
-		Reserved:        0,
-		DataLength:      length,
+		MagicMINI:  MagicMINI,
+		Version:    1,
+		Reserved:   0,
+		DataLength: length,
 	}
 	var headerBytes bytes.Buffer
 	binary.Write(&headerBytes, binary.LittleEndian, header)
