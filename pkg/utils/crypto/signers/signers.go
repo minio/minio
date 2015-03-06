@@ -32,7 +32,7 @@ import (
 	"github.com/minio-io/minio/pkg/utils/config"
 )
 
-// Sign a given http request using HMAC style signatures
+// SignRequest - a given http request using HMAC style signatures
 func SignRequest(user config.User, req *http.Request) {
 	if date := req.Header.Get("Date"); date == "" {
 		req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
@@ -49,7 +49,7 @@ func SignRequest(user config.User, req *http.Request) {
 	req.Header.Set("Authorization", authHeader.String())
 }
 
-// Validate an API request by validating its signature using HMAC signatures
+// ValidateRequest - an API request by validating its signature using HMAC signatures
 func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	// Verify if date headers are set, if not reject the request
 	if req.Header.Get("x-amz-date") == "" {
@@ -117,7 +117,7 @@ func hasPrefixCaseInsensitive(s, pfx string) bool {
 
 // Canonicalize amazon special headers, headers starting with 'x-amz-'
 func writeCanonicalizedAmzHeaders(buf *bytes.Buffer, req *http.Request) {
-	amzHeaders := make([]string, 0)
+	var amzHeaders []string
 	vals := make(map[string][]string)
 	for k, vv := range req.Header {
 		if hasPrefixCaseInsensitive(k, "x-amz-") {

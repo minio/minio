@@ -92,7 +92,7 @@ func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 	var user = config.User{}
 	user.Name = username
 
-	accesskey, err = keys.GetRandomAlphaNumeric(keys.MINIO_ACCESS_ID)
+	accesskey, err = keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -100,7 +100,7 @@ func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	user.AccessKey = string(accesskey)
 
-	secretkey, err = keys.GetRandomBase64(keys.MINIO_SECRET_ID)
+	secretkey, err = keys.GenerateRandomBase64(keys.MinioSecretID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))

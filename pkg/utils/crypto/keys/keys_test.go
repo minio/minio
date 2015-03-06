@@ -29,10 +29,10 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) Testing(c *C) {
-	value, err := GetRandomBase64(MINIO_SECRET_ID)
+	value, err := GenerateRandomBase64(MinioSecretID)
 	c.Assert(err, IsNil)
 
-	alphanum, err := GetRandomAlphaNumeric(MINIO_ACCESS_ID)
+	alphanum, err := GenerateRandomAlphaNumeric(MinioAccessID)
 	c.Assert(err, IsNil)
 
 	c.Log(string(value))
