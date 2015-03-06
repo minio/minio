@@ -41,7 +41,7 @@ func (s *MySuite) TestSplitStream(c *C) {
 	}
 	bytesWriter.Flush()
 	reader := bytes.NewReader(bytesBuffer.Bytes())
-	ch := SplitStream(reader, 25)
+	ch := Stream(reader, 25)
 	var resultsBuffer bytes.Buffer
 	resultsWriter := bufio.NewWriter(&resultsBuffer)
 	for chunk := range ch {
@@ -52,9 +52,9 @@ func (s *MySuite) TestSplitStream(c *C) {
 }
 
 func (s *MySuite) TestFileSplitJoin(c *C) {
-	err := SplitFileWithPrefix("test-data/TESTFILE", 1024, "TESTPREFIX")
+	err := FileWithPrefix("test-data/TESTFILE", 1024, "TESTPREFIX")
 	c.Assert(err, IsNil)
-	err = SplitFileWithPrefix("test-data/TESTFILE", 1024, "")
+	err = FileWithPrefix("test-data/TESTFILE", 1024, "")
 	c.Assert(err, Not(IsNil))
 
 	devnull, err := os.OpenFile(os.DevNull, 2, os.ModeAppend)

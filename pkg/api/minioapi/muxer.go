@@ -26,13 +26,13 @@ import (
 )
 
 // private use
-type minioApi struct {
+type minioAPI struct {
 	domain  string
 	storage mstorage.Storage
 }
 
 // Path based routing
-func pathMux(api minioApi, mux *x.Router) *x.Router {
+func pathMux(api minioAPI, mux *x.Router) *x.Router {
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
@@ -44,7 +44,7 @@ func pathMux(api minioApi, mux *x.Router) *x.Router {
 }
 
 // Domain based routing
-func domainMux(api minioApi, mux *x.Router) *x.Router {
+func domainMux(api minioAPI, mux *x.Router) *x.Router {
 	mux.HandleFunc("/",
 		api.listObjectsHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
 	mux.HandleFunc("/{object:.*}",
@@ -60,7 +60,7 @@ func domainMux(api minioApi, mux *x.Router) *x.Router {
 }
 
 // Get proper router based on domain availability
-func getMux(api minioApi, mux *x.Router) *x.Router {
+func getMux(api minioAPI, mux *x.Router) *x.Router {
 	switch true {
 	case api.domain == "":
 		return pathMux(api, mux)
@@ -71,10 +71,10 @@ func getMux(api minioApi, mux *x.Router) *x.Router {
 	return nil
 }
 
-// Http wrapper handler
-func HttpHandler(domain string, storage mstorage.Storage) http.Handler {
+// HTTPHandler - http wrapper handler
+func HTTPHandler(domain string, storage mstorage.Storage) http.Handler {
 	var mux *x.Router
-	var api = minioApi{}
+	var api = minioAPI{}
 	api.storage = storage
 	api.domain = domain
 

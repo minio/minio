@@ -38,10 +38,10 @@ func (s *MySuite) TestVanderMondeDecode(c *C) {
 	chunks[9] = nil
 	chunks[13] = nil
 
-	recovered_data, err := e.Decode(chunks, length)
+	recoveredData, err := e.Decode(chunks, length)
 	c.Assert(err, IsNil)
 
-	if !bytes.Equal(recovered_data, data) {
+	if !bytes.Equal(recoveredData, data) {
 		c.Fatalf("Recovered data mismatches with original data")
 	}
 }

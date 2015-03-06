@@ -31,7 +31,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) Testing(c *C) {
 	certObj := Certificates{}
-	params := X509Params{
+	params := Params{
 		Hostname:   "example.com",
 		IsCA:       false,
 		EcdsaCurve: "P224",

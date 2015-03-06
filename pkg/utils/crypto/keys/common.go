@@ -16,9 +16,10 @@
 
 package keys
 
+// AccessID and SecretID length in bytes
 const (
-	MINIO_ACCESS_ID = 20
-	MINIO_SECRET_ID = 40
+	MinioAccessID = 20
+	MinioSecretID = 40
 )
 
 /// helpers
@@ -28,8 +29,8 @@ func isalnum(c byte) bool {
 	return '0' <= c && c <= '9' || 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
 }
 
-// validate access key for only alphanumeric characters
-func ValidateAccessKey(key []byte) bool {
+// IsValidAccessKey - validate access key for only alphanumeric characters
+func IsValidAccessKey(key []byte) bool {
 	for _, char := range key {
 		if isalnum(char) {
 			continue

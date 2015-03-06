@@ -6,35 +6,41 @@ import (
 	"strings"
 )
 
-type UserCred struct {
+// User - AWS canonical
+type User struct {
 	AWS string
 }
 
-type Stmt struct {
+// Statement - AWS policy statement
+type Statement struct {
 	Sid       string
 	Effect    string
-	Principal UserCred
+	Principal User
 	Action    []string
 	Resource  []string
 	// TODO fix it in future if necessary - Condition {}
 }
 
+// BucketPolicy - AWS policy collection
 type BucketPolicy struct {
 	Version   string // date in 0000-00-00 format
-	Statement []Stmt
+	Statement []Statement
 }
 
+// Resource delimiter
 const (
 	AwsResource   = "arn:aws:s3:::"
 	MinioResource = "minio:::"
 )
 
 // TODO support canonical user
+// Principal delimiter
 const (
 	AwsPrincipal   = "arn:aws:iam::"
 	MinioPrincipal = "minio::"
 )
 
+// Action map
 var SupportedActionMap = map[string]bool{
 	"*":                     true,
 	"s3:GetObject":          true,
@@ -47,22 +53,19 @@ var SupportedActionMap = map[string]bool{
 	"s3:PutBucketPolicy":    true,
 }
 
+// Effect map
 var SupportedEffectMap = map[string]bool{
 	"Allow": true,
 	"Deny":  true,
 }
 
 func isValidAction(action []string) bool {
-	var ok bool = false
 	for _, a := range action {
 		if !SupportedActionMap[a] {
-			goto error
+			return false
 		}
 	}
-	ok = true
-
-error:
-	return ok
+	return true
 }
 
 func isValidEffect(effect string) bool {
@@ -73,7 +76,7 @@ func isValidEffect(effect string) bool {
 }
 
 func isValidResource(resources []string) bool {
-	var ok bool = false
+	var ok bool
 	for _, resource := range resources {
 		switch true {
 		case strings.HasPrefix(resource, AwsResource):
@@ -96,7 +99,7 @@ func isValidResource(resources []string) bool {
 }
 
 func isValidPrincipal(principal string) bool {
-	var ok bool = false
+	var ok bool
 	if principal == "*" {
 		return true
 	}
@@ -120,7 +123,7 @@ func isValidPrincipal(principal string) bool {
 	return ok
 }
 
-// validate request body is proper JSON
+// Parsepolicy - validate request body is proper JSON and in accordance with policy standards
 func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 	var policy BucketPolicy
 	decoder := json.NewDecoder(data)

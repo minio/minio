@@ -38,7 +38,7 @@ type ObjectListResponse struct {
 	CommonPrefixes []*Prefix
 }
 
-// Bucket list response format
+// BucketListResponse - bucket list response format
 type BucketListResponse struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult" json:"-"`
 	Owner   Owner
@@ -47,17 +47,18 @@ type BucketListResponse struct {
 	} // Buckets are nested
 }
 
+// Prefix - common prefix
 type Prefix struct {
 	Prefix string
 }
 
-// Bucket struct
+// Bucket - bucket item
 type Bucket struct {
 	Name         string
 	CreationDate string
 }
 
-// Object struct
+// Item - object item
 type Item struct {
 	Key          string
 	LastModified string
@@ -67,6 +68,7 @@ type Item struct {
 	Owner        Owner
 }
 
+// Owner - bucket owner/principal
 type Owner struct {
 	ID          string
 	DisplayName string

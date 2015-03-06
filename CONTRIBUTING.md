@@ -54,7 +54,8 @@ Building Libraries
     - Run `make save` from top-level directory (or `godep restore && godep save ./...`).
 * When you're ready to create a pull request, be sure to:
     - Have test cases for the new code. If you have questions about how to do it, please ask in your pull request.
-    - Run `go fmt`
+    - Run `go fmt
+    - Run `golint` (`go get github.com/golang/lint/golint`)
     - Squash your commits into a single commit. `git rebase -i`. It's okay to force update your pull request.
     - Make sure `go test -race ./...` and `go build` completes.
 * Read [Effective Go](https://github.com/golang/go/wiki/CodeReviewComments) article from Golang project

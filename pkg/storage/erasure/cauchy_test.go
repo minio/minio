@@ -43,10 +43,10 @@ func (s *MySuite) TestCauchyDecode(c *C) {
 	chunks[9] = nil
 	chunks[13] = nil
 
-	recovered_data, err := e.Decode(chunks, length)
+	recoveredData, err := e.Decode(chunks, length)
 	c.Assert(err, IsNil)
 
-	if !bytes.Equal(data, recovered_data) {
+	if !bytes.Equal(data, recoveredData) {
 		c.Fatalf("Recovered data mismatches with original data")
 	}
 }

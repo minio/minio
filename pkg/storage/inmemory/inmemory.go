@@ -1,5 +1,5 @@
 /*
- * Mini Object Storage, (C) 2015 Minio, Inc.
+ * Minio Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,19 +72,18 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 		objectBuffer := bytes.NewBuffer(val.data)
 		written, err := io.Copy(w, objectBuffer)
 		return written, err
-	} else {
-		return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 	}
+	return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 // Not implemented
 func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
-	return mstorage.ApiNotImplemented{Api: "PutBucketPolicy"}
+	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
 }
 
 // Not implemented
 func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
-	return policy.BucketPolicy{}, mstorage.ApiNotImplemented{Api: "GetBucketPolicy"}
+	return policy.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
 }
 
 // PUT object to memory buffer
@@ -99,7 +98,7 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	}
 
 	if _, ok := storage.objectdata[objectKey]; ok == true {
-		return mstorage.ObjectExists{Bucket: bucket, Key: key}
+		return mstorage.ObjectExists{Bucket: bucket, Object: key}
 	}
 
 	if contentType == "" {
@@ -176,16 +175,16 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 	return results, resources, nil
 }
 
-type ByBucketName []mstorage.BucketMetadata
+type byBucketName []mstorage.BucketMetadata
 
 // Len of bucket name
-func (b ByBucketName) Len() int { return len(b) }
+func (b byBucketName) Len() int { return len(b) }
 
 // Swap bucket i, j
-func (b ByBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b byBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
 // Less
-func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
+func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // List buckets
 func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
@@ -193,7 +192,7 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	for _, bucket := range storage.bucketdata {
 		results = append(results, bucket.metadata)
 	}
-	sort.Sort(ByBucketName(results))
+	sort.Sort(byBucketName(results))
 	return results, nil
 }
 
@@ -203,7 +202,6 @@ func (storage *storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMe
 
 	if object, ok := storage.objectdata[objectKey]; ok == true {
 		return object.metadata, nil
-	} else {
-		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: key}
 	}
+	return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: key}
 }

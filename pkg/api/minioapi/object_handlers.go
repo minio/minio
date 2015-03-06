@@ -28,7 +28,7 @@ import (
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 
 	acceptsContentType := getContentType(req)
@@ -50,21 +50,21 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ImplementationError:
@@ -73,7 +73,7 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}
@@ -82,7 +82,7 @@ func (server *minioApi) getObjectHandler(w http.ResponseWriter, req *http.Reques
 // HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	acceptsContentType := getContentType(req)
 	vars := mux.Vars(req)
@@ -97,14 +97,14 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ImplementationError:
@@ -113,7 +113,7 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}
@@ -122,7 +122,7 @@ func (server *minioApi) headObjectHandler(w http.ResponseWriter, req *http.Reque
 // PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(req)
 	acceptsContentType := getContentType(req)
@@ -146,28 +146,28 @@ func (server *minioApi) putObjectHandler(w http.ResponseWriter, req *http.Reques
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ObjectExists:
 		{
 			error := errorCodeError(NotImplemented)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}

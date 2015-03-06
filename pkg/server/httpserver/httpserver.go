@@ -19,30 +19,31 @@ package httpserver
 import (
 	"log"
 	"net/http"
-	//	"time"
 )
 
-type HttpServerConfig struct {
+// Config - http server config
+type Config struct {
 	Address   string
 	TLS       bool
 	CertFile  string
 	KeyFile   string
-	Websocket bool // implement it - TODO
+	Websocket bool // TODO
 }
 
-type HttpServer struct{}
+// Server - http server related
+type Server struct{}
 
 // Start http server
-func Start(handler http.Handler, config HttpServerConfig) (chan<- string, <-chan error, *HttpServer) {
+func Start(handler http.Handler, config Config) (chan<- string, <-chan error, *Server) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	server := HttpServer{}
+	server := Server{}
 	go start(ctrlChannel, errorChannel, handler, config, &server)
 	return ctrlChannel, errorChannel, &server
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error,
-	router http.Handler, config HttpServerConfig, server *HttpServer) {
+	router http.Handler, config Config, server *Server) {
 	var err error
 
 	// Minio server config

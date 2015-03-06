@@ -38,6 +38,7 @@ type storage struct {
 	lock *sync.Mutex
 }
 
+// SerializedMetadata - carries content type
 type SerializedMetadata struct {
 	ContentType string
 }
@@ -237,9 +238,8 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 		{
 			if os.IsNotExist(err) {
 				return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
-			} else {
-				return 0, mstorage.EmbedError(bucket, object, err)
 			}
+			return 0, mstorage.EmbedError(bucket, object, err)
 		}
 	}
 	file, err := os.Open(objectPath)
@@ -311,20 +311,20 @@ func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorag
 	return metadata, nil
 }
 
-type Path struct {
+type bucketDir struct {
 	files map[string]os.FileInfo
 	root  string
 }
 
-func (p *Path) getAllFiles(path string, fl os.FileInfo, err error) error {
+func (p *bucketDir) getAllFiles(object string, fl os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
 	if fl.Mode().IsRegular() {
-		if strings.HasSuffix(path, "$metadata") {
+		if strings.HasSuffix(object, "$metadata") {
 			return nil
 		}
-		_p := strings.Split(path, p.root+"/")
+		_p := strings.Split(object, p.root+"/")
 		if len(_p) > 1 {
 			p.files[_p[1]] = fl
 		}
@@ -332,8 +332,8 @@ func (p *Path) getAllFiles(path string, fl os.FileInfo, err error) error {
 	return nil
 }
 
-func delimiter(path, delimiter string) string {
-	readBuffer := bytes.NewBufferString(path)
+func delimiter(object, delimiter string) string {
+	readBuffer := bytes.NewBufferString(object)
 	reader := bufio.NewReader(readBuffer)
 	stringReader := strings.NewReader(delimiter)
 	delimited, _ := stringReader.ReadByte()
@@ -341,20 +341,20 @@ func delimiter(path, delimiter string) string {
 	return delimitedStr
 }
 
-type ByObjectKey []mstorage.ObjectMetadata
+type byObjectKey []mstorage.ObjectMetadata
 
 // Len
-func (b ByObjectKey) Len() int { return len(b) }
+func (b byObjectKey) Len() int { return len(b) }
 
 // Swap
-func (b ByObjectKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b byObjectKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
 // Less
-func (b ByObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
+func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
 // GET bucket (list objects)
 func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
-	p := Path{}
+	p := bucketDir{}
 	p.files = make(map[string]os.FileInfo)
 
 	if mstorage.IsValidBucket(bucket) == false {
@@ -450,7 +450,7 @@ func (storage *storage) ListObjects(bucket string, resources mstorage.BucketReso
 	}
 
 ret:
-	sort.Sort(ByObjectKey(metadataList))
+	sort.Sort(byObjectKey(metadataList))
 	return metadataList, resources, nil
 }
 
@@ -495,7 +495,7 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	if _, err := os.Stat(objectPath); !os.IsNotExist(err) {
 		return mstorage.ObjectExists{
 			Bucket: bucket,
-			Key:    key,
+			Object: key,
 		}
 	}
 

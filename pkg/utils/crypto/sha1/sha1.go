@@ -143,7 +143,7 @@ func (d *digest) checkSum() [Size]byte {
 
 /// Convenience functions
 
-// Single caller sha1 helper
+// Sum1 - single caller sha1 helper
 func Sum1(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -151,7 +151,7 @@ func Sum1(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
-// io.Reader based streaming sha1 helper
+// Sum - io.Reader based streaming sha1 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error

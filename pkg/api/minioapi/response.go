@@ -54,16 +54,16 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	return data
 }
 
-type ItemKey []*Item
+type itemKey []*Item
 
 // Len
-func (b ItemKey) Len() int { return len(b) }
+func (b itemKey) Len() int { return len(b) }
 
 // Swap
-func (b ItemKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b itemKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
 // Less
-func (b ItemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
+func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
 // takes a set of objects and prepares the objects for serialization
 // input:
@@ -95,7 +95,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 		content.Owner = owner
 		contents = append(contents, content)
 	}
-	sort.Sort(ItemKey(contents))
+	sort.Sort(itemKey(contents))
 	data.Name = bucket
 	data.Contents = contents
 	data.MaxKeys = bucketResources.Maxkeys

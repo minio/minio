@@ -5,6 +5,7 @@
 // Package crc32 implements the 32-bit cyclic redundancy check, or CRC-32,
 // checksum. See http://en.wikipedia.org/wiki/Cyclic_redundancy_check for
 // information.
+
 package crc32c
 
 import (
@@ -38,7 +39,7 @@ func (d *digest) Sum(in []byte) []byte {
 	return append(in, byte(s>>24), byte(s>>16), byte(s>>8), byte(s))
 }
 
-// Return current crc in digest object
+// Sum32 - return current crc in digest object
 func (d *digest) Sum32() uint32 { return d.crc }
 
 // Reset default crc
@@ -57,7 +58,7 @@ func (d *digest) Write(p []byte) (n int, err error) {
 
 /// Convenience functions
 
-// Single caller crc helper
+// Sum32 - single caller crc helper
 func Sum32(data []byte) uint32 {
 	crc32 := New()
 	crc32.Reset()
@@ -65,7 +66,7 @@ func Sum32(data []byte) uint32 {
 	return crc32.Sum32()
 }
 
-// Low memory footprint io.Reader based crc helper
+// Sum - low memory footprint io.Reader based crc helper
 func Sum(reader io.Reader) (uint32, error) {
 	h := New()
 	var err error

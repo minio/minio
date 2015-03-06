@@ -157,7 +157,7 @@ func (d *digest) checkSum() [Size]byte {
 
 /// Convenience functions
 
-// Single caller sha512 helper
+// Sum512 - single caller sha512 helper
 func Sum512(data []byte) [Size]byte {
 	var d digest
 	d.Reset()
@@ -165,7 +165,7 @@ func Sum512(data []byte) [Size]byte {
 	return d.checkSum()
 }
 
-// io.Reader based streaming sha512 helper
+// Sum - io.Reader based streaming sha512 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error
@@ -182,7 +182,7 @@ func Sum(reader io.Reader) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
-// Similar to 'Sum()' but returns a [Size]byte
+// SumStream - similar to 'Sum()' but returns a [Size]byte
 func SumStream(reader io.Reader) ([Size]byte, error) {
 	var returnValue [Size]byte
 	sumSlice, err := Sum(reader)

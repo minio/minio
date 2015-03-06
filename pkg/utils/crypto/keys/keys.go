@@ -23,13 +23,10 @@ import (
 
 // Static alphaNumeric table used for generating unique keys
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-var alphaNumericTableFull = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 
-/// helpers
-
-// Generate random alpha numeric value using only uppercase characters
+// GenerateRandomAlphaNumeric - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func GetRandomAlphaNumeric(size int) ([]byte, error) {
+func GenerateRandomAlphaNumeric(size int) ([]byte, error) {
 	alpha := make([]byte, size)
 	_, err := rand.Read(alpha)
 	if err != nil {
@@ -42,22 +39,8 @@ func GetRandomAlphaNumeric(size int) ([]byte, error) {
 	return alpha, nil
 }
 
-// Generate random alpha numeric value using all alphanumeric characters
-// takes input as size in integer
-func GetRandomAlphaNumericFull(size int) ([]byte, error) {
-	alphaFull := make([]byte, size)
-	_, err := rand.Read(alphaFull)
-	if err != nil {
-		return nil, err
-	}
-	for i := 0; i < size; i++ {
-		alphaFull[i] = alphaNumericTableFull[alphaFull[i]%byte(len(alphaNumericTableFull))]
-	}
-	return alphaFull, nil
-}
-
-// Generate random base64 numeric value from a random seed.
-func GetRandomBase64(size int) ([]byte, error) {
+// GenerateRandomBase64 - generate random base64 numeric value from a random seed.
+func GenerateRandomBase64(size int) ([]byte, error) {
 	rb := make([]byte, size)
 	_, err := rand.Read(rb)
 	if err != nil {

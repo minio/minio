@@ -21,7 +21,7 @@ import (
 	"io"
 )
 
-// Low memory footprint io.Reader based md5sum helper
+// Sum - low memory footprint io.Reader based md5sum helper
 func Sum(reader io.Reader) ([]byte, error) {
 	hash := md5.New()
 	var err error
