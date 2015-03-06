@@ -17,7 +17,7 @@
 package crc32c
 
 import (
-	"errors"
+	"io"
 	"hash/crc32"
 )
 
@@ -35,7 +35,7 @@ func Sum32(buffer []byte) uint32 {
 
 // Sum - io.Reader based crc helper
 func Sum(reader io.Reader) (uint32, error) {
-	h := New()
+	h := crc32.New(castanagoliTable)
 	var err error
 	for err == nil {
 		length := 0
@@ -45,7 +45,7 @@ func Sum(reader io.Reader) (uint32, error) {
 		h.Write(byteBuffer)
 	}
 	if err != io.EOF {
-		return nil, err
+		return 0, err
 	}
 	return h.Sum32(), nil
 }

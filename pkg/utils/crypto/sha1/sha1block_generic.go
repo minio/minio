@@ -2,28 +2,12 @@
 
 package sha1
 
-// #cgo CFLAGS: -DHAS_AVX2
-// #include <stdint.h>
-// #include <stdlib.h>
-// void sha1_transform(int32_t *hash, const char* input, size_t num_blocks);
-// void sha1_update_intel(int32_t *hash, const char* input, size_t num_blocks );
-import "C"
-import "unsafe"
-
 const (
 	_K0 = 0x5A827999
 	_K1 = 0x6ED9EBA1
 	_K2 = 0x8F1BBCDC
 	_K3 = 0xCA62C1D6
 )
-
-func blockAVX2(dig *digest, p []byte) {
-	C.sha1_transform((*C.int32_t)(unsafe.Pointer(&dig.h[0])), (*C.char)(unsafe.Pointer(&p[0])), (C.size_t)(len(p)/chunk))
-}
-
-func blockSSE3(dig *digest, p []byte) {
-	C.sha1_update_intel((*C.int32_t)(unsafe.Pointer(&dig.h[0])), (*C.char)(unsafe.Pointer(&p[0])), (C.size_t)(len(p)/chunk))
-}
 
 // blockGeneric is a portable, pure Go version of the SHA1 block step.
 // It's used by sha1block_generic.go and tests.
