@@ -6,7 +6,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/minio-io/minio/pkg/storage/donut/frame/frame_v1"
+	"github.com/minio-io/minio/pkg/storage/donut/fragment/fragment_v1"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 
 	dataBuffer := bytes.NewBuffer(data)
 
-	err = frame_v1.WriteFrame(file, dataBuffer, uint64(dataBuffer.Len()))
+	err = fragment_v1.WriteFrame(file, dataBuffer, uint64(dataBuffer.Len()))
 	if err != nil {
 		panic(err)
 	}
