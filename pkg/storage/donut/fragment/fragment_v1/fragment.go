@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fragment_v1
+package fragment
 
 import (
 	"bytes"

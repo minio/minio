@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package erasure
+package erasure_test
 
 import (
 	"bytes"
-	. "gopkg.in/check.v1"
 	"testing"
+
+	"github.com/minio-io/minio/pkg/storage/erasure"
+	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}
@@ -29,11 +31,11 @@ var _ = Suite(&MySuite{})
 func Test(t *testing.T) { TestingT(t) }
 
 func (s *MySuite) TestCauchyDecode(c *C) {
-	ep, _ := ParseEncoderParams(10, 5, Cauchy)
+	ep, _ := erasure.ParseEncoderParams(10, 5, erasure.Cauchy)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
-	e := NewEncoder(ep)
+	e := erasure.NewEncoder(ep)
 	chunks, length := e.Encode(data)
 	c.Assert(length, Equals, len(data))
 

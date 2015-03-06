@@ -16,6 +16,7 @@ getdeps: checkdeps checkgopath
 verifier: getdeps
 	@echo "Checking for offending code"
 	@go run buildscripts/verifier.go ${PWD}
+	@go vet ./...
 
 build-all: verifier
 	@echo "Building Libraries"

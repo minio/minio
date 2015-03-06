@@ -27,9 +27,9 @@ import (
 
 // Config context
 type Config struct {
-	configPath string
-	configFile string
-	configLock *sync.RWMutex
+	ConfigPath string
+	ConfigFile string
+	ConfigLock *sync.RWMutex
 	Users      map[string]User
 }
 
@@ -52,22 +52,22 @@ func (c *Config) SetupConfig() error {
 		return err
 	}
 
-	c.configPath = confPath
-	c.configFile = path.Join(c.configPath, "config.json")
-	if _, err := os.Stat(c.configFile); os.IsNotExist(err) {
-		_, err = os.Create(c.configFile)
+	c.ConfigPath = confPath
+	c.ConfigFile = path.Join(c.ConfigPath, "config.json")
+	if _, err := os.Stat(c.ConfigFile); os.IsNotExist(err) {
+		_, err = os.Create(c.ConfigFile)
 		if err != nil {
 			return err
 		}
 	}
 
-	c.configLock = new(sync.RWMutex)
+	c.ConfigLock = new(sync.RWMutex)
 	return nil
 }
 
 // GetConfigPath config file location
 func (c *Config) GetConfigPath() string {
-	return c.configPath
+	return c.ConfigPath
 }
 
 // IsUserExists verify if user exists
@@ -104,13 +104,13 @@ func (c *Config) AddUser(user User) {
 
 // WriteConfig - write encoded json in config file
 func (c *Config) WriteConfig() error {
-	c.configLock.Lock()
-	defer c.configLock.Unlock()
+	c.ConfigLock.Lock()
+	defer c.ConfigLock.Unlock()
 
 	var file *os.File
 	var err error
 
-	file, err = os.OpenFile(c.configFile, os.O_WRONLY, 0666)
+	file, err = os.OpenFile(c.ConfigFile, os.O_WRONLY, 0666)
 	defer file.Close()
 	if err != nil {
 		return err
@@ -123,13 +123,13 @@ func (c *Config) WriteConfig() error {
 
 // ReadConfig - read json config file and decode
 func (c *Config) ReadConfig() error {
-	c.configLock.RLock()
-	defer c.configLock.RUnlock()
+	c.ConfigLock.RLock()
+	defer c.ConfigLock.RUnlock()
 
 	var file *os.File
 	var err error
 
-	file, err = os.OpenFile(c.configFile, os.O_RDONLY, 0666)
+	file, err = os.OpenFile(c.ConfigFile, os.O_RDONLY, 0666)
 	defer file.Close()
 	if err != nil {
 		return err

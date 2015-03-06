@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package split
+package split_test
 
 import (
 	"bufio"
@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/minio-io/minio/pkg/utils/split"
 	. "gopkg.in/check.v1"
 )
 
@@ -41,7 +42,7 @@ func (s *MySuite) TestSplitStream(c *C) {
 	}
 	bytesWriter.Flush()
 	reader := bytes.NewReader(bytesBuffer.Bytes())
-	ch := Stream(reader, 25)
+	ch := split.Stream(reader, 25)
 	var resultsBuffer bytes.Buffer
 	resultsWriter := bufio.NewWriter(&resultsBuffer)
 	for chunk := range ch {
@@ -52,17 +53,17 @@ func (s *MySuite) TestSplitStream(c *C) {
 }
 
 func (s *MySuite) TestFileSplitJoin(c *C) {
-	err := FileWithPrefix("test-data/TESTFILE", 1024, "TESTPREFIX")
+	err := split.FileWithPrefix("test-data/TESTFILE", 1024, "TESTPREFIX")
 	c.Assert(err, IsNil)
-	err = FileWithPrefix("test-data/TESTFILE", 1024, "")
+	err = split.FileWithPrefix("test-data/TESTFILE", 1024, "")
 	c.Assert(err, Not(IsNil))
 
 	devnull, err := os.OpenFile(os.DevNull, 2, os.ModeAppend)
 	defer devnull.Close()
-	reader := JoinFiles(".", "ERROR")
+	reader := split.JoinFiles(".", "ERROR")
 	_, err = io.Copy(devnull, reader)
 	c.Assert(err, Not(IsNil))
-	reader = JoinFiles(".", "TESTPREFIX")
+	reader = split.JoinFiles(".", "TESTPREFIX")
 	_, err = io.Copy(devnull, reader)
 	c.Assert(err, IsNil)
 }

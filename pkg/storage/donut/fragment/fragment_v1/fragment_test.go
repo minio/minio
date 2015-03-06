@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fragment_v1
+package fragment_test
 
 import (
 	"bytes"
@@ -22,8 +22,8 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/minio-io/minio/pkg/storage/donut/fragment/fragment_v1"
 	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
-
 	. "gopkg.in/check.v1"
 )
 
@@ -39,7 +39,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 
 	testData := "Hello, World"
 	testLength := uint64(len(testData))
-	err := WriteFrame(&testBuffer, bytes.NewBufferString(testData), testLength)
+	err := fragment.WriteFrame(&testBuffer, bytes.NewBufferString(testData), testLength)
 	c.Assert(err, IsNil)
 
 	testBufferLength := uint64(testBuffer.Len())
@@ -112,7 +112,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 
 func (s *MySuite) TestLengthMismatchInWrite(c *C) {
 	var testData bytes.Buffer
-	err := WriteFrame(&testData, bytes.NewBufferString("hello, world"), 5)
+	err := fragment.WriteFrame(&testData, bytes.NewBufferString("hello, world"), 5)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -122,7 +122,7 @@ func benchmarkSize(b *testing.B, size int) {
 	b.SetBytes(int64(size))
 	target := new(bytes.Buffer)
 	for i := 0; i < b.N; i++ {
-		WriteFrame(target, bytes.NewReader(buf[:size]), uint64(size))
+		fragment.WriteFrame(target, bytes.NewReader(buf[:size]), uint64(size))
 	}
 }
 

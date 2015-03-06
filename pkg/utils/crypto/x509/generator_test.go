@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package x509
+package x509_test
 
 import (
 	"testing"
 	"time"
 
+	"github.com/minio-io/minio/pkg/utils/crypto/x509"
 	. "gopkg.in/check.v1"
 )
 
@@ -30,8 +31,8 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) Testing(c *C) {
-	certObj := Certificates{}
-	params := Params{
+	certObj := x509.Certificates{}
+	params := x509.Params{
 		Hostname:   "example.com",
 		IsCA:       false,
 		EcdsaCurve: "P224",
