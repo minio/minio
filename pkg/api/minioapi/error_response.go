@@ -25,17 +25,17 @@ import (
 type Error struct {
 	Code           string
 	Description    string
-	HttpStatusCode int
+	HTTPStatusCode int
 }
 
-// Error response format
+// ErrorResponse - error response format
 type ErrorResponse struct {
 	XMLName   xml.Name `xml:"Error" json:"-"`
 	Code      string
 	Message   string
 	Resource  string
-	RequestId string
-	HostId    string
+	RequestID string
+	HostID    string
 }
 
 // Error codes, non exhaustive list
@@ -47,7 +47,7 @@ const (
 	EntityTooLarge
 	IncompleteBody
 	InternalError
-	InvalidAccessKeyId
+	InvalidAccessKeyID
 	InvalidBucketName
 	InvalidDigest
 	InvalidRange
@@ -70,117 +70,117 @@ var errorCodeResponse = map[int]Error{
 	AccessDenied: {
 		Code:           "AccessDenied",
 		Description:    "Access Denied",
-		HttpStatusCode: http.StatusForbidden,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	BadDigest: {
 		Code:           "BadDigest",
 		Description:    "The Content-MD5 you specified did not match what we received.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	BucketAlreadyExists: {
 		Code:           "BucketAlreadyExists",
 		Description:    "The requested bucket name is not available.",
-		HttpStatusCode: http.StatusConflict,
+		HTTPStatusCode: http.StatusConflict,
 	},
 	EntityTooSmall: {
 		Code:           "EntityTooSmall",
 		Description:    "Your proposed upload is smaller than the minimum allowed object size.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	EntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	IncompleteBody: {
 		Code:           "IncompleteBody",
 		Description:    "You did not provide the number of bytes specified by the Content-Length HTTP header",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InternalError: {
 		Code:           "InternalError",
 		Description:    "We encountered an internal error, please try again.",
-		HttpStatusCode: http.StatusInternalServerError,
+		HTTPStatusCode: http.StatusInternalServerError,
 	},
-	InvalidAccessKeyId: {
-		Code:           "InvalidAccessKeyId",
-		Description:    "The access key Id you provided does not exist in our records.",
-		HttpStatusCode: http.StatusForbidden,
+	InvalidAccessKeyID: {
+		Code:           "InvalidAccessKeyID",
+		Description:    "The access key ID you provided does not exist in our records.",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	InvalidBucketName: {
 		Code:           "InvalidBucketName",
 		Description:    "The specified bucket is not valid.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidDigest: {
 		Code:           "InvalidDigest",
 		Description:    "The Content-MD5 you specified is not valid.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidRange: {
 		Code:           "InvalidRange",
 		Description:    "The requested range cannot be satisfied.",
-		HttpStatusCode: http.StatusRequestedRangeNotSatisfiable,
+		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	},
 	MalformedXML: {
 		Code:           "MalformedXML",
 		Description:    "The XML you provided was not well-formed or did not validate against our published schema.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	MissingContentLength: {
 		Code:           "MissingContentLength",
 		Description:    "You must provide the Content-Length HTTP header.",
-		HttpStatusCode: http.StatusLengthRequired,
+		HTTPStatusCode: http.StatusLengthRequired,
 	},
 	MissingRequestBodyError: {
 		Code:           "MissingRequestBodyError",
 		Description:    "Request body is empty.",
-		HttpStatusCode: http.StatusLengthRequired,
+		HTTPStatusCode: http.StatusLengthRequired,
 	},
 	NoSuchBucket: {
 		Code:           "NoSuchBucket",
 		Description:    "The specified bucket does not exist.",
-		HttpStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	NoSuchKey: {
 		Code:           "NoSuchKey",
 		Description:    "The specified key does not exist.",
-		HttpStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	NoSuchUpload: {
 		Code:           "NoSuchUpload",
 		Description:    "The specified multipart upload does not exist.",
-		HttpStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	NotImplemented: {
 		Code:           "NotImplemented",
 		Description:    "A header you provided implies functionality that is not implemented.",
-		HttpStatusCode: http.StatusNotImplemented,
+		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	RequestTimeTooSkewed: {
 		Code:           "RequestTimeTooSkewed",
 		Description:    "The difference between the request time and the server's time is too large.",
-		HttpStatusCode: http.StatusForbidden,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	SignatureDoesNotMatch: {
 		Code:           "SignatureDoesNotMatch",
 		Description:    "The request signature we calculated does not match the signature you provided.",
-		HttpStatusCode: http.StatusForbidden,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	TooManyBuckets: {
 		Code:           "TooManyBuckets",
 		Description:    "You have attempted to create more buckets than allowed.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidPolicyDocument: {
 		Code:           "InvalidPolicyDocument",
 		Description:    "The content of the form does not meet the conditions specified in the policy document.",
-		HttpStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	NoSuchBucketPolicy: {
 		Code:           "NoSuchBucketPolicy",
 		Description:    "The specified bucket does not have a bucket policy.",
-		HttpStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusNotFound,
 	},
 }
 
@@ -199,8 +199,8 @@ func getErrorResponse(err Error, resource string) ErrorResponse {
 		data.Resource = resource
 	}
 	// TODO implement this in future
-	data.RequestId = "3L137"
-	data.HostId = "3L137"
+	data.RequestID = "3L137"
+	data.HostID = "3L137"
 
 	return data
 }

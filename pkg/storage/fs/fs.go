@@ -495,7 +495,7 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	if _, err := os.Stat(objectPath); !os.IsNotExist(err) {
 		return mstorage.ObjectExists{
 			Bucket: bucket,
-			Key:    key,
+			Object: key,
 		}
 	}
 

@@ -78,12 +78,12 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 
 // Not implemented
 func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
-	return mstorage.ApiNotImplemented{Api: "PutBucketPolicy"}
+	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
 }
 
 // Not implemented
 func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
-	return policy.BucketPolicy{}, mstorage.ApiNotImplemented{Api: "GetBucketPolicy"}
+	return policy.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
 }
 
 // PUT object to memory buffer
@@ -98,7 +98,7 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	}
 
 	if _, ok := storage.objectdata[objectKey]; ok == true {
-		return mstorage.ObjectExists{Bucket: bucket, Key: key}
+		return mstorage.ObjectExists{Bucket: bucket, Object: key}
 	}
 
 	if contentType == "" {

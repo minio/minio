@@ -29,10 +29,10 @@ import (
 )
 
 const (
-	DEFAULT_WEB = "polygon"
+	defaultWeb = "polygon"
 )
 
-type webUiApi struct {
+type webAPI struct {
 	conf    config.Config
 	webPath string
 }
@@ -42,16 +42,16 @@ type encoder interface {
 	Encode(v interface{}) error
 }
 
-// Http wrapper handler
-func HttpHandler() http.Handler {
+// HTTPHandler - http wrapper handler
+func HTTPHandler() http.Handler {
 	mux := mux.NewRouter()
-	var api = webUiApi{}
+	var api = webAPI{}
 
 	if err := api.conf.SetupConfig(); err != nil {
 		log.Fatal(err)
 	}
 
-	api.webPath = path.Join(api.conf.GetConfigPath(), DEFAULT_WEB)
+	api.webPath = path.Join(api.conf.GetConfigPath(), defaultWeb)
 	mux.Handle("/{polygon:.*}", http.FileServer(http.Dir(api.webPath))).Methods("GET")
 	mux.HandleFunc("/access", api.accessHandler).Methods("POST")
 	return mux
@@ -68,7 +68,7 @@ func writeResponse(w http.ResponseWriter, response interface{}) []byte {
 	return bytesBuffer.Bytes()
 }
 
-func (web *webUiApi) accessHandler(w http.ResponseWriter, req *http.Request) {
+func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
 	var accesskey, secretkey []byte
 	username := req.FormValue("username")

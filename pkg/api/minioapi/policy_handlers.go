@@ -30,7 +30,7 @@ import (
 // -----------------
 // This implementation of the PUT operation uses the policy subresource
 // to add to or replace a policy on a bucket
-func (server *minioApi) putBucketPolicyHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)
@@ -39,7 +39,7 @@ func (server *minioApi) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 	if ok == false {
 		error := errorCodeError(InvalidPolicyDocument)
 		errorResponse := getErrorResponse(error, bucket)
-		w.WriteHeader(error.HttpStatusCode)
+		w.WriteHeader(error.HTTPStatusCode)
 		w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		return
 	}
@@ -56,14 +56,14 @@ func (server *minioApi) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BackendCorrupted:
@@ -72,7 +72,7 @@ func (server *minioApi) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}
@@ -82,7 +82,7 @@ func (server *minioApi) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 // -----------------
 // This implementation of the GET operation uses the policy subresource
 // to return the policy of a specified bucket.
-func (server *minioApi) getBucketPolicyHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)
@@ -95,7 +95,7 @@ func (server *minioApi) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 			if ret != nil {
 				error := errorCodeError(InternalError)
 				errorResponse := getErrorResponse(error, bucket)
-				w.WriteHeader(error.HttpStatusCode)
+				w.WriteHeader(error.HTTPStatusCode)
 				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 			}
 			writeCommonHeaders(w, getContentString(acceptsContentType))
@@ -106,21 +106,21 @@ func (server *minioApi) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketPolicyNotFound:
 		{
 			error := errorCodeError(NoSuchBucketPolicy)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BackendCorrupted:
@@ -129,7 +129,7 @@ func (server *minioApi) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}

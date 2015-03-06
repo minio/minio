@@ -30,7 +30,7 @@ import (
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
-func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -56,7 +56,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ImplementationError:
@@ -65,21 +65,21 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, resources.Prefix)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}
@@ -89,7 +89,7 @@ func (server *minioApi) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
-func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	buckets, err := server.storage.ListBuckets()
 	switch err := err.(type) {
@@ -103,7 +103,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BackendCorrupted:
@@ -111,7 +111,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}
@@ -120,7 +120,7 @@ func (server *minioApi) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 // PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
-func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	err := server.storage.StoreBucket(bucket)
@@ -142,14 +142,14 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.BucketExists:
 		{
 			error := errorCodeError(BucketAlreadyExists)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	case mstorage.ImplementationError:
@@ -158,7 +158,7 @@ func (server *minioApi) putBucketHandler(w http.ResponseWriter, req *http.Reques
 			log.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
 	}

@@ -30,31 +30,37 @@ import (
 	"github.com/minio-io/minio/pkg/storage/inmemory"
 )
 
-type ServerConfig struct {
+// Config - http server parameters
+type Config struct {
 	Domain   string
 	Address  string
-	Tls      bool
+	TLS      bool
 	CertFile string
 	KeyFile  string
-	ApiType  interface{}
+	APIType  interface{}
 }
 
-type MinioApi struct {
+// MinioAPI - storage type donut, fs, inmemory
+type MinioAPI struct {
 	StorageType StorageType
 }
 
+// WebUIApi - webui related
 type WebUIApi struct {
-	Websocket bool
+	Websocket bool // TODO
 }
 
+// StorageType - different storage types supported by minio
 type StorageType int
 
+// Storage types
 const (
-	InMemoryStorage = iota
-	FileStorage
+	InMemory = iota
+	File
+	Donut
 )
 
-func getHttpChannels(configs []ServerConfig) (ctrlChans []chan<- string, statusChans []<-chan error) {
+func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans []<-chan error) {
 	// a pair of control channels, we use these primarily to add to the lists above
 	var ctrlChan chan<- string
 	var statusChan <-chan error
@@ -65,7 +71,7 @@ func getHttpChannels(configs []ServerConfig) (ctrlChans []chan<- string, statusC
 			{
 				// configure web server
 				var storage mstorage.Storage
-				var httpConfig = httpserver.HttpServerConfig{}
+				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
 				httpConfig.Websocket = false
 				httpConfig.TLS = config.Tls
@@ -87,7 +93,7 @@ func getHttpChannels(configs []ServerConfig) (ctrlChans []chan<- string, statusC
 			}
 		case WebUIApi:
 			{
-				var httpConfig = httpserver.HttpServerConfig{}
+				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
 				httpConfig.TLS = config.Tls
 				httpConfig.CertFile = config.CertFile
@@ -120,13 +126,13 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 	//    - ctrlChans has channel to communicate to storage
 	//    - statusChans has channel for messages coming from storage
 	switch {
-	case storageType == InMemoryStorage:
+	case storageType == InMemory:
 		{
 			ctrlChan, statusChan, storage = inmemory.Start()
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
-	case storageType == FileStorage:
+	case storageType == File:
 		{
 			u, err := user.Current()
 			if err != nil {
@@ -143,10 +149,10 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 	return
 }
 
-// Create channels
-func Start(configs []ServerConfig) {
+// Start - create channels
+func Start(configs []Config) {
 	// reflected looping is necessary to remove dead channels from loop and not flood switch
-	ctrlChans, statusChans := getHttpChannels(configs)
+	ctrlChans, statusChans := getHTTPChannels(configs)
 	cases := createSelectCases(statusChans)
 	for len(cases) > 0 {
 		chosen, value, recvOk := reflect.Select(cases)

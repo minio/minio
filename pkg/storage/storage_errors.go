@@ -106,7 +106,7 @@ func (e ObjectNotFound) Error() string {
 
 // Return string an error formatted as the given text
 func (e APINotImplemented) Error() string {
-	return "Api not implemented: " + e.Api
+	return "Api not implemented: " + e.API
 }
 
 // Return string an error formatted as the given text

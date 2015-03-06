@@ -60,14 +60,14 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := h.conf.ReadConfig(); err != nil {
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HttpStatusCode)
+			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		} else {
 			user, ok := h.conf.Users[accessKey]
 			if ok == false {
 				error := errorCodeError(AccessDenied)
 				errorResponse := getErrorResponse(error, "")
-				w.WriteHeader(error.HttpStatusCode)
+				w.WriteHeader(error.HTTPStatusCode)
 				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 			} else {
 				ok, _ = signers.ValidateRequest(user, r)
@@ -76,7 +76,7 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				} else {
 					error := errorCodeError(AccessDenied)
 					errorResponse := getErrorResponse(error, "")
-					w.WriteHeader(error.HttpStatusCode)
+					w.WriteHeader(error.HTTPStatusCode)
 					w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 				}
 			}
@@ -91,7 +91,7 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// ## Uncommented below links of code after disabling anonymous requests
 		// error := errorCodeError(AccessDenied)
 		// errorResponse := getErrorResponse(error, "")
-		// w.WriteHeader(error.HttpStatusCode)
+		// w.WriteHeader(error.HTTPStatusCode)
 		// w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 	}
 }
@@ -109,7 +109,7 @@ func (h rHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
 		error := errorCodeError(NotImplemented)
 		errorResponse := getErrorResponse(error, "")
-		w.WriteHeader(error.HttpStatusCode)
+		w.WriteHeader(error.HTTPStatusCode)
 		w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 	} else {
 		h.handler.ServeHTTP(w, r)
