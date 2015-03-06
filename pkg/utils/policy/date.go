@@ -6,19 +6,19 @@ import (
 	"strings"
 )
 
-// For 0000-00-00 Date type
+// Date - [0000-00-00]
 type Date struct {
 	Year  int16
 	Month byte
 	Day   byte
 }
 
-// Date to string output in yyyy-mm-dd format
+// String output in yyyy-mm-dd format
 func (d Date) String() string {
 	return fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day)
 }
 
-// True if date is 0000-00-00
+// IsZero true if date is 0000-00-00
 func (d Date) IsZero() bool {
 	return d.Day == 0 && d.Month == 0 && d.Year == 0
 }
