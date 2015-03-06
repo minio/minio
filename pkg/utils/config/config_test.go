@@ -46,8 +46,8 @@ func (s *MySuite) TestConfig(c *C) {
 	}
 	conf.configLock = new(sync.RWMutex)
 
-	accesskey, _ := keys.GenerateRandomAlphaNumeric(keys.MINIO_ACCESS_ID)
-	secretkey, _ := keys.GenerateRandomBase64(keys.MINIO_SECRET_ID)
+	accesskey, _ := keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
+	secretkey, _ := keys.GenerateRandomBase64(keys.MinioSecretID)
 
 	user := User{
 		Name:      "gnubot",
@@ -62,8 +62,8 @@ func (s *MySuite) TestConfig(c *C) {
 	err = conf.ReadConfig()
 	c.Assert(err, IsNil)
 
-	accesskey, _ = keys.GenerateRandomAlphaNumeric(keys.MINIO_ACCESS_ID)
-	secretkey, _ = keys.GenerateRandomBase64(keys.MINIO_SECRET_ID)
+	accesskey, _ = keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
+	secretkey, _ = keys.GenerateRandomBase64(keys.MinioSecretID)
 	user = User{
 		Name:      "minio",
 		AccessKey: string(accesskey),

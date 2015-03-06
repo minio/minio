@@ -45,8 +45,8 @@ type MinioAPI struct {
 	StorageType StorageType
 }
 
-// WebUIApi - webui related
-type WebUIApi struct {
+// WebAPI - webui related
+type WebAPI struct {
 	Websocket bool // TODO
 }
 
@@ -66,15 +66,15 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 	var statusChan <-chan error
 
 	for _, config := range configs {
-		switch k := config.ApiType.(type) {
-		case MinioApi:
+		switch k := config.APIType.(type) {
+		case MinioAPI:
 			{
 				// configure web server
 				var storage mstorage.Storage
 				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
 				httpConfig.Websocket = false
-				httpConfig.TLS = config.Tls
+				httpConfig.TLS = config.TLS
 
 				if config.CertFile != "" {
 					httpConfig.CertFile = config.CertFile
@@ -85,22 +85,22 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 
 				ctrlChans, statusChans, storage = getStorageChannels(k.StorageType)
 				// start minio api in a web server, pass storage driver into it
-				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HttpHandler(config.Domain, storage), httpConfig)
+				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HTTPHandler(config.Domain, storage), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)
 
 			}
-		case WebUIApi:
+		case WebAPI:
 			{
 				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
-				httpConfig.TLS = config.Tls
+				httpConfig.TLS = config.TLS
 				httpConfig.CertFile = config.CertFile
 				httpConfig.KeyFile = config.KeyFile
 
 				httpConfig.Websocket = k.Websocket
-				ctrlChan, statusChan, _ = httpserver.Start(webuiapi.HttpHandler(), httpConfig)
+				ctrlChan, statusChan, _ = httpserver.Start(webuiapi.HTTPHandler(), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)

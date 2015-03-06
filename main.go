@@ -27,14 +27,14 @@ import (
 func getStorageType(input string) server.StorageType {
 	switch {
 	case input == "file":
-		return server.FileStorage
+		return server.File
 	case input == "inmemory":
-		return server.InMemoryStorage
+		return server.InMemory
 	default:
 		{
 			log.Println("Unknown storage type:", input)
 			log.Println("Choosing default storage type as 'file'..")
-			return server.FileStorage
+			return server.File
 		}
 	}
 }
@@ -51,24 +51,24 @@ func runCmd(c *cli.Context) {
 	}
 	tls := (certFile != "" && keyFile != "")
 	storageType := getStorageType(storageTypeStr)
-	var serverConfigs []server.ServerConfig
-	apiServerConfig := server.ServerConfig{
+	var serverConfigs []server.Config
+	apiServerConfig := server.Config{
 		Domain:   domain,
 		Address:  apiaddress,
-		Tls:      tls,
+		TLS:      tls,
 		CertFile: certFile,
 		KeyFile:  keyFile,
-		ApiType: server.MinioApi{
+		APIType: server.MinioAPI{
 			StorageType: storageType,
 		},
 	}
-	webUIServerConfig := server.ServerConfig{
+	webUIServerConfig := server.Config{
 		Domain:   domain,
 		Address:  webaddress,
-		Tls:      false,
+		TLS:      false,
 		CertFile: "",
 		KeyFile:  "",
-		ApiType: server.WebUIApi{
+		APIType: server.WebAPI{
 			Websocket: false,
 		},
 	}

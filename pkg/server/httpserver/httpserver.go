@@ -34,10 +34,10 @@ type Config struct {
 type Server struct{}
 
 // Start http server
-func Start(handler http.Handler, config HttpServerConfig) (chan<- string, <-chan error, *Server) {
+func Start(handler http.Handler, config Config) (chan<- string, <-chan error, *Server) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	server := HttpServer{}
+	server := Server{}
 	go start(ctrlChannel, errorChannel, handler, config, &server)
 	return ctrlChannel, errorChannel, &server
 }

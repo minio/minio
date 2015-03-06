@@ -44,30 +44,49 @@ import (
 
 */
 
+// Magic list
 var (
 	MagicMINI = binary.LittleEndian.Uint32([]byte{'M', 'I', 'N', 'I'})
 	MagicDATA = binary.LittleEndian.Uint32([]byte{'D', 'A', 'T', 'A'})
 	MagicINIM = binary.LittleEndian.Uint32([]byte{'I', 'N', 'I', 'M'})
 )
 
+// DonutFrameHeader -
+// --------------
+//   BlockStart      uint32
+//   VersionMajor    uint32
+//   Reserved        uint64
+//   DataLen         uint64
+// --------------
 type DonutFrameHeader struct {
 	MagicMINI  uint32
 	Version    uint32
 	Reserved   uint64
 	DataLength uint64
 }
+
+// Crc32c checksum
 type Crc32c uint32
+
+// Sha512 checksum
 type Sha512 [sha512.Size]byte
 
+// DonutFrameFooter -
+// --------------
+//   DataSha512      [64]byte
+//   BlockLen        uint64
+//   BlockEnd        uint32
+// --------------
 type DonutFrameFooter struct {
 	DataSha512   Sha512
 	OffsetToMINI uint64
 	MagicINIM    uint32
 }
 
+// Data buffer
 type Data bytes.Buffer
 
-// Write Donut format to input io.Writer, returns error upon any failure
+// WriteFrame - write donut format to input io.Writer, returns error upon any failure
 func WriteFrame(target io.Writer, reader io.Reader, length uint64) error {
 	// write header
 	header := DonutFrameHeader{

@@ -24,8 +24,10 @@ import (
 	"io"
 )
 
+// Metadata map
 type Metadata map[string]string
 
+// DataHeader struct
 type DataHeader struct {
 	Key           string
 	Part          uint8
@@ -33,13 +35,16 @@ type DataHeader struct {
 	EncoderParams EncoderParams
 }
 
+// EncoderTechnique type
 type EncoderTechnique int
 
+// EncoderTechniques
 const (
 	Vandermonde EncoderTechnique = iota
 	Cauchy
 )
 
+// EncoderParams struct
 type EncoderParams struct {
 	Length    uint32
 	K         uint8
@@ -47,7 +52,7 @@ type EncoderParams struct {
 	Technique EncoderTechnique
 }
 
-// populate new header
+// NewHeader populate new header
 func NewHeader(key string, part uint8, metadata Metadata, encoderParams EncoderParams) DataHeader {
 	header := DataHeader{}
 	header.Key = key
@@ -62,7 +67,7 @@ func NewHeader(key string, part uint8, metadata Metadata, encoderParams EncoderP
 	return header
 }
 
-// validate populated header
+// ValidateHeader validate populated header
 func ValidateHeader(header DataHeader) bool {
 	if header.Key == "" || header.Part < 0 || len(header.Metadata) < 2 {
 		return false
@@ -75,7 +80,7 @@ func ValidateHeader(header DataHeader) bool {
 	return true
 }
 
-// Write data, returns error upon any failure
+// WriteData write data, returns error upon any failure
 func WriteData(target io.Writer, header DataHeader, data io.Reader) error {
 	if !ValidateHeader(header) {
 		return fmt.Errorf("Invalid header")
