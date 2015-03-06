@@ -30,7 +30,8 @@ import (
 	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
-type storage struct {
+// Storage - local variables
+type Storage struct {
 	bucketdata map[string]storedBucket
 	objectdata map[string]storedObject
 	lock       *sync.RWMutex
@@ -48,11 +49,11 @@ type storedObject struct {
 }
 
 // Start inmemory object server
-func Start() (chan<- string, <-chan error, *storage) {
+func Start() (chan<- string, <-chan error, *Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, &storage{
+	return ctrlChannel, errorChannel, &Storage{
 		bucketdata: make(map[string]storedBucket),
 		objectdata: make(map[string]storedObject),
 		lock:       new(sync.RWMutex),
@@ -63,8 +64,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
 }
 
-// GET object from memory buffer
-func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+// CopyObjectToWriter - GET object from memory buffer
+func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// TODO synchronize access
 	// get object
 	key := bucket + ":" + object
@@ -76,18 +77,18 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-// Not implemented
-func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+// StoreBucketPolicy - Not implemented
+func (storage *Storage) StoreBucketPolicy(bucket string, policy interface{}) error {
 	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
 }
 
-// Not implemented
-func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
+// GetBucketPolicy - Not implemented
+func (storage *Storage) GetBucketPolicy(bucket string) (interface{}, error) {
 	return policy.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
 }
 
-// PUT object to memory buffer
-func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
+// StoreObject - PUT object to memory buffer
+func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
@@ -127,8 +128,8 @@ func (storage *storage) StoreObject(bucket, key, contentType string, data io.Rea
 	return nil
 }
 
-// Create Bucket in memory
-func (storage *storage) StoreBucket(bucketName string) error {
+// StoreBucket - create bucket in memory
+func (storage *Storage) StoreBucket(bucketName string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 	if !mstorage.IsValidBucket(bucketName) {
@@ -148,8 +149,8 @@ func (storage *storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
-// List objects in memory
-func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
+// ListObjects - list objects from memory
+func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	if _, ok := storage.bucketdata[bucket]; ok == false {
 		return []mstorage.ObjectMetadata{}, mstorage.BucketResourcesMetadata{IsTruncated: false}, mstorage.BucketNotFound{Bucket: bucket}
 	}
@@ -186,8 +187,8 @@ func (b byBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 // Less
 func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
-// List buckets
-func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
+// ListBuckets - List buckets from memory
+func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	var results []mstorage.BucketMetadata
 	for _, bucket := range storage.bucketdata {
 		results = append(results, bucket.metadata)
@@ -196,8 +197,8 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	return results, nil
 }
 
-// HEAD object
-func (storage *storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMetadata, error) {
+// GetObjectMetadata - get object metadata from memory
+func (storage *Storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMetadata, error) {
 	objectKey := bucket + ":" + key
 
 	if object, ok := storage.objectdata[objectKey]; ok == true {

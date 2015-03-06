@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package minioapi
+package minioapi_test
 
 import (
 	"bytes"
@@ -28,8 +28,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/minio-io/minio/pkg/api/minioapi"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/inmemory"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -41,7 +43,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestNonExistantObject(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -53,7 +55,7 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 
 func (s *MySuite) TestEmptyObject(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -78,7 +80,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 func (s *MySuite) TestObject(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -101,7 +103,7 @@ func (s *MySuite) TestObject(c *C) {
 
 func (s *MySuite) TestMultipleObjects(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -181,7 +183,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 func (s *MySuite) TestNotImplemented(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -192,7 +194,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 
 func (s *MySuite) TestHeader(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -215,7 +217,7 @@ func (s *MySuite) TestHeader(c *C) {
 
 func (s *MySuite) TestPutBucket(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -240,7 +242,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 
 func (s *MySuite) TestPutObject(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -297,7 +299,7 @@ func (s *MySuite) TestPutObject(c *C) {
 
 func (s *MySuite) TestListBuckets(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -337,8 +339,8 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(listResponse.Buckets.Bucket[1].Name, Equals, "foo")
 }
 
-func readListBucket(reader io.Reader) (BucketListResponse, error) {
-	var results BucketListResponse
+func readListBucket(reader io.Reader) (minioapi.BucketListResponse, error) {
+	var results minioapi.BucketListResponse
 	decoder := xml.NewDecoder(reader)
 	err := decoder.Decode(&results)
 	return results, err
@@ -376,7 +378,7 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -401,7 +403,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 
 func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -426,7 +428,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 
 func (s *MySuite) TestContentTypePersists(c *C) {
 	_, _, storage := inmemory.Start()
-	httpHandler := HTTPHandler("", storage)
+	httpHandler := minioapi.HTTPHandler("", storage)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 

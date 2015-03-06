@@ -33,7 +33,8 @@ import (
 	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
-type storage struct {
+// Storage - fs local variables
+type Storage struct {
 	root string
 	lock *sync.Mutex
 }
@@ -44,17 +45,17 @@ type SerializedMetadata struct {
 }
 
 // Start filesystem channel
-func Start(root string) (chan<- string, <-chan error, *storage) {
+func Start(root string) (chan<- string, <-chan error, *Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	s := storage{}
+	s := Storage{}
 	s.root = root
 	s.lock = new(sync.Mutex)
 	go start(ctrlChannel, errorChannel, &s)
 	return ctrlChannel, errorChannel, &s
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, s *storage) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error, s *Storage) {
 	err := os.MkdirAll(s.root, 0700)
 	errorChannel <- err
 	close(errorChannel)
@@ -71,8 +72,8 @@ func appendUniq(slice []string, i string) []string {
 
 /// Bucket Operations
 
-// GET - Service
-func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
+// ListBuckets - Get service
+func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	files, err := ioutil.ReadDir(storage.root)
 	if err != nil {
 		return []mstorage.BucketMetadata{}, mstorage.EmbedError("bucket", "", err)
@@ -96,8 +97,8 @@ func (storage *storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	return metadataList, nil
 }
 
-// PUT - Bucket
-func (storage *storage) StoreBucket(bucket string) error {
+// StoreBucket - PUT Bucket
+func (storage *Storage) StoreBucket(bucket string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
@@ -124,8 +125,8 @@ func (storage *storage) StoreBucket(bucket string) error {
 	return nil
 }
 
-// GET - Bucket policy
-func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
+// GetBucketPolicy - GET bucket policy
+func (storage *Storage) GetBucketPolicy(bucket string) (interface{}, error) {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
@@ -169,8 +170,8 @@ func (storage *storage) GetBucketPolicy(bucket string) (interface{}, error) {
 
 }
 
-// PUT - Bucket policy
-func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+// StoreBucketPolicy - PUT bucket policy
+func (storage *Storage) StoreBucketPolicy(bucket string, policy interface{}) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
@@ -212,8 +213,8 @@ func (storage *storage) StoreBucketPolicy(bucket string, policy interface{}) err
 
 /// Object Operations
 
-// GET Object
-func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+// CopyObjectToWriter - GET object
+func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// validate bucket
 	if mstorage.IsValidBucket(bucket) == false {
 		return 0, mstorage.BucketNameInvalid{Bucket: bucket}
@@ -254,8 +255,8 @@ func (storage *storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	return count, nil
 }
 
-// HEAD Object
-func (storage *storage) GetObjectMetadata(bucket string, object string) (mstorage.ObjectMetadata, error) {
+// GetObjectMetadata - HEAD object
+func (storage *Storage) GetObjectMetadata(bucket string, object string) (mstorage.ObjectMetadata, error) {
 	if mstorage.IsValidBucket(bucket) == false {
 		return mstorage.ObjectMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
@@ -352,8 +353,8 @@ func (b byObjectKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 // Less
 func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
-// GET bucket (list objects)
-func (storage *storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
+// ListObjects - GET bucket (list objects)
+func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	p := bucketDir{}
 	p.files = make(map[string]os.FileInfo)
 
@@ -454,8 +455,8 @@ ret:
 	return metadataList, resources, nil
 }
 
-// PUT object
-func (storage *storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
+// StoreObject - PUT object
+func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
 	// TODO Commits should stage then move instead of writing directly
 	storage.lock.Lock()
 	defer storage.lock.Unlock()

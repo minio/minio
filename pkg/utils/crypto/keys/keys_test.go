@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package keys
+package keys_test
 
 import (
 	"testing"
 
+	"github.com/minio-io/minio/pkg/utils/crypto/keys"
 	. "gopkg.in/check.v1"
 )
 
@@ -28,11 +29,11 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) Testing(c *C) {
-	value, err := GenerateRandomBase64(MinioSecretID)
+func (s *MySuite) TestingKeys(c *C) {
+	value, err := keys.GenerateRandomBase64(keys.MinioSecretID)
 	c.Assert(err, IsNil)
 
-	alphanum, err := GenerateRandomAlphaNumeric(MinioAccessID)
+	alphanum, err := keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
 	c.Assert(err, IsNil)
 
 	c.Log(string(value))

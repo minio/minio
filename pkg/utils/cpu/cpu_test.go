@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cpu
+package cpu_test
 
 import (
 	"errors"
@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/minio-io/minio/pkg/utils/cpu"
 	. "gopkg.in/check.v1"
 )
 
@@ -49,7 +50,7 @@ func hasCPUFeatureFromOS(feature string) (bool, error) {
 
 func (s *MySuite) TestHasSSE41(c *C) {
 	if runtime.GOOS == "linux" {
-		var flag = HasSSE41()
+		var flag = cpu.HasSSE41()
 		osCheck, err := hasCPUFeatureFromOS("sse4_1")
 		c.Assert(err, IsNil)
 		c.Check(flag, Equals, osCheck)
@@ -58,7 +59,7 @@ func (s *MySuite) TestHasSSE41(c *C) {
 
 func (s *MySuite) TestHasAVX(c *C) {
 	if runtime.GOOS == "linux" {
-		var flag = HasAVX()
+		var flag = cpu.HasAVX()
 		osFlag, err := hasCPUFeatureFromOS("avx")
 		c.Assert(err, IsNil)
 		c.Check(osFlag, Equals, flag)
@@ -67,7 +68,7 @@ func (s *MySuite) TestHasAVX(c *C) {
 
 func (s *MySuite) TestHasAVX2(c *C) {
 	if runtime.GOOS == "linux" {
-		var flag = HasAVX2()
+		var flag = cpu.HasAVX2()
 		osFlag, err := hasCPUFeatureFromOS("avx2")
 		c.Assert(err, IsNil)
 		c.Check(osFlag, Equals, flag)
