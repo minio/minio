@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs_test
+package fs
 
 import (
 	"io/ioutil"
@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/fs"
 
 	. "gopkg.in/check.v1"
 )
@@ -39,7 +38,7 @@ func (s *MySuite) TestAPISuite(c *C) {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
-		_, _, store := fs.Start(path)
+		_, _, store := Start(path)
 		return store
 	}
 	mstorage.APITestSuite(c, create)

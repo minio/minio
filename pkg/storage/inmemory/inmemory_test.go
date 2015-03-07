@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package inmemory_test
+package inmemory
 
 import (
 	"testing"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/inmemory"
 
 	. "gopkg.in/check.v1"
 )
@@ -33,7 +32,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	create := func() mstorage.Storage {
-		_, _, store := inmemory.Start()
+		_, _, store := Start()
 		return store
 	}
 

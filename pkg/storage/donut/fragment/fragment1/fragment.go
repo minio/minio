@@ -86,8 +86,8 @@ type DonutFrameFooter struct {
 // Data buffer
 type Data bytes.Buffer
 
-// WriteFrame - write donut format to input io.Writer, returns error upon any failure
-func WriteFrame(target io.Writer, reader io.Reader, length uint64) error {
+// Write - write donut format to input io.Writer, returns error upon any failure
+func Write(target io.Writer, reader io.Reader, length uint64) error {
 	// write header
 	header := DonutFrameHeader{
 		MagicMINI:  MagicMINI,

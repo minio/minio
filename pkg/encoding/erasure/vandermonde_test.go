@@ -14,29 +14,23 @@
  * limitations under the License.
  */
 
-package erasure_test
+package erasure
 
 import (
 	"bytes"
-	"testing"
 
-	"github.com/minio-io/minio/pkg/storage/erasure"
 	. "gopkg.in/check.v1"
 )
 
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func Test(t *testing.T) { TestingT(t) }
-
-func (s *MySuite) TestCauchyDecode(c *C) {
-	ep, _ := erasure.ParseEncoderParams(10, 5, erasure.Cauchy)
+func (s *MySuite) TestVanderMondeDecode(c *C) {
+	ep, _ := ParseEncoderParams(10, 5, Vandermonde)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
-	e := erasure.NewEncoder(ep)
+	e := NewEncoder(ep)
 	chunks, length := e.Encode(data)
+	c.Logf("chunks length: %d", len(chunks))
+	c.Logf("length: %d", length)
 	c.Assert(length, Equals, len(data))
 
 	chunks[0] = nil
@@ -48,7 +42,7 @@ func (s *MySuite) TestCauchyDecode(c *C) {
 	recoveredData, err := e.Decode(chunks, length)
 	c.Assert(err, IsNil)
 
-	if !bytes.Equal(data, recoveredData) {
+	if !bytes.Equal(recoveredData, data) {
 		c.Fatalf("Recovered data mismatches with original data")
 	}
 }

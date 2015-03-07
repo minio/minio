@@ -63,7 +63,7 @@ func validateHeader(header DataHeader) error {
 	return nil
 }
 
-// WriteData returns error upon any failure
+// Write returns error upon any failure
 func Write(target io.Writer, key string, part uint8, length uint32, k, m uint8, technique EncoderTechnique, data io.Reader) error {
 	header := DataHeader{
 		Key:              key,
