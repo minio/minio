@@ -66,3 +66,25 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	c.Assert(actualData.Bytes(), DeepEquals, []byte(testData))
 	c.Assert(err, IsNil)
 }
+
+func (s *MySuite) TestReadWrite(c *C) {
+	var testBuffer bytes.Buffer
+	testData := "Hello, World"
+	testHeader := DataHeader{
+		Key:              "testobj",
+		ChunkIndex:       1,
+		OriginalLength:   uint32(len(testData)),
+		EncoderK:         8,
+		EncoderM:         8,
+		EncoderTechnique: Cauchy,
+	}
+
+	err := Write(&testBuffer, testHeader.Key, testHeader.ChunkIndex, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
+	c.Assert(err, IsNil)
+
+	header, err := ReadHeader(&testBuffer)
+	c.Assert(err, IsNil)
+	c.Assert(header, DeepEquals, testHeader)
+	c.Assert(testBuffer.Len(), Equals, len(testData))
+	c.Assert(testBuffer.Bytes(), DeepEquals, []byte(testData))
+}
