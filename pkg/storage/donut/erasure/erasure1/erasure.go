@@ -22,6 +22,11 @@ import (
 	"encoding/gob"
 	"errors"
 	"io"
+	"strconv"
+)
+
+const (
+	Version = uint32(1)
 )
 
 // DataHeader represents the structure serialized to gob.
@@ -84,7 +89,7 @@ func Write(target io.Writer, key string, part uint8, length uint32, k, m uint8, 
 	encoder.Encode(header)
 
 	// write version
-	binary.Write(target, binary.LittleEndian, uint32(1))
+	binary.Write(target, binary.LittleEndian, uint32(Version))
 
 	// write encoded header
 	if _, err := io.Copy(target, &headerBuffer); err != nil {
@@ -95,4 +100,19 @@ func Write(target io.Writer, key string, part uint8, length uint32, k, m uint8, 
 		return err
 	}
 	return nil
+}
+
+// Read an erasure block
+func ReadHeader(reader io.Reader) (dataHeader DataHeader, err error) {
+	versionArray := make([]byte, 4)
+	if err := binary.Read(reader, binary.LittleEndian, versionArray); err != nil {
+		return dataHeader, err
+	}
+	version := binary.LittleEndian.Uint32(versionArray)
+	if version > Version || version == 0 {
+		return dataHeader, errors.New("Unknown version: " + strconv.FormatUint(uint64(version), 10))
+	}
+	decoder := gob.NewDecoder(reader)
+	err = decoder.Decode(&dataHeader)
+	return dataHeader, err
 }
