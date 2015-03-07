@@ -7,9 +7,8 @@
 // Using this part of Minio codebase under the license
 // Apache License Version 2.0 with modifications
 
-// Package sha512 implements the SHA512 hash algorithms as defined
-// in FIPS 180-2.
-package sha512
+// Package sha256 provides SHA256SSE3, SHA256AVX, SHA256AVX2
+package sha256
 
 import (
 	"hash"
@@ -18,44 +17,33 @@ import (
 	"github.com/minio-io/minio/pkg/utils/cpu"
 )
 
-// The size of a SHA512 checksum in bytes.
-const Size = 64
+// The size of a SHA256 checksum in bytes.
+const Size = 32
 
-// The blocksize of SHA512 in bytes.
-const BlockSize = 128
+// The blocksize of SHA256 in bytes.
+const BlockSize = 64
 
 const (
-	chunk = 128
-	init0 = 0x6a09e667f3bcc908
-	init1 = 0xbb67ae8584caa73b
-	init2 = 0x3c6ef372fe94f82b
-	init3 = 0xa54ff53a5f1d36f1
-	init4 = 0x510e527fade682d1
-	init5 = 0x9b05688c2b3e6c1f
-	init6 = 0x1f83d9abfb41bd6b
-	init7 = 0x5be0cd19137e2179
+	chunk = 64
+	init0 = 0x6A09E667
+	init1 = 0xBB67AE85
+	init2 = 0x3C6EF372
+	init3 = 0xA54FF53A
+	init4 = 0x510E527F
+	init5 = 0x9B05688C
+	init6 = 0x1F83D9AB
+	init7 = 0x5BE0CD19
 )
 
 // digest represents the partial evaluation of a checksum.
 type digest struct {
-	h   [8]uint64
+	h   [8]uint32
 	x   [chunk]byte
 	nx  int
 	len uint64
 }
 
-func block(dig *digest, p []byte) {
-	switch true {
-	case cpu.HasAVX2() == true:
-		blockAVX2(dig, p)
-	case cpu.HasAVX() == true:
-		blockAVX(dig, p)
-	case cpu.HasSSE41() == true:
-		blockSSE(dig, p)
-	}
-}
-
-// Reset digest to its default value
+// Reset digest back to default
 func (d *digest) Reset() {
 	d.h[0] = init0
 	d.h[1] = init1
@@ -69,20 +57,31 @@ func (d *digest) Reset() {
 	d.len = 0
 }
 
-// New returns a new hash.Hash computing the SHA512 checksum.
+func block(dig *digest, p []byte) {
+	switch true {
+	case cpu.HasAVX2() == true:
+		blockAVX2(dig, p)
+	case cpu.HasAVX() == true:
+		blockAVX(dig, p)
+	case cpu.HasSSE41() == true:
+		blockSSE(dig, p)
+	}
+}
+
+// New returns a new hash.Hash computing the SHA256 checksum.
 func New() hash.Hash {
 	d := new(digest)
 	d.Reset()
 	return d
 }
 
-// Return output array byte size
+// Return size of checksum
 func (d *digest) Size() int { return Size }
 
-// Return blockSize
+// Return blocksize of checksum
 func (d *digest) BlockSize() int { return BlockSize }
 
-// Write blocks
+// Write to digest
 func (d *digest) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	d.len += uint64(nn)
@@ -106,33 +105,32 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 	return
 }
 
-// Calculate sha512
+// Return sha256 sum in bytes
 func (d0 *digest) Sum(in []byte) []byte {
 	// Make a copy of d0 so that caller can keep writing and summing.
-	d := new(digest)
-	*d = *d0
+	d := *d0
 	hash := d.checkSum()
 	return append(in, hash[:]...)
 }
 
-// internal checksum calculation, returns [Size]byte
+// Intermediate checksum function
 func (d *digest) checkSum() [Size]byte {
-	// Padding.  Add a 1 bit and 0 bits until 112 bytes mod 128.
 	len := d.len
-	var tmp [128]byte
+	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
+	var tmp [64]byte
 	tmp[0] = 0x80
-	if len%128 < 112 {
-		d.Write(tmp[0 : 112-len%128])
+	if len%64 < 56 {
+		d.Write(tmp[0 : 56-len%64])
 	} else {
-		d.Write(tmp[0 : 128+112-len%128])
+		d.Write(tmp[0 : 64+56-len%64])
 	}
 
 	// Length in bits.
 	len <<= 3
-	for i := uint(0); i < 16; i++ {
-		tmp[i] = byte(len >> (120 - 8*i))
+	for i := uint(0); i < 8; i++ {
+		tmp[i] = byte(len >> (56 - 8*i))
 	}
-	d.Write(tmp[0:16])
+	d.Write(tmp[0:8])
 
 	if d.nx != 0 {
 		panic("d.nx != 0")
@@ -142,14 +140,10 @@ func (d *digest) checkSum() [Size]byte {
 
 	var digest [Size]byte
 	for i, s := range h {
-		digest[i*8] = byte(s >> 56)
-		digest[i*8+1] = byte(s >> 48)
-		digest[i*8+2] = byte(s >> 40)
-		digest[i*8+3] = byte(s >> 32)
-		digest[i*8+4] = byte(s >> 24)
-		digest[i*8+5] = byte(s >> 16)
-		digest[i*8+6] = byte(s >> 8)
-		digest[i*8+7] = byte(s)
+		digest[i*4] = byte(s >> 24)
+		digest[i*4+1] = byte(s >> 16)
+		digest[i*4+2] = byte(s >> 8)
+		digest[i*4+3] = byte(s)
 	}
 
 	return digest
@@ -157,15 +151,15 @@ func (d *digest) checkSum() [Size]byte {
 
 /// Convenience functions
 
-// Sum512 - single caller sha512 helper
-func Sum512(data []byte) [Size]byte {
+// Sum256 - single caller sha256 helper
+func Sum256(data []byte) []byte {
 	var d digest
 	d.Reset()
 	d.Write(data)
-	return d.checkSum()
+	return d.Sum(nil)
 }
 
-// Sum - io.Reader based streaming sha512 helper
+// Sum - io.Reader based streaming sha256 helper
 func Sum(reader io.Reader) ([]byte, error) {
 	h := New()
 	var err error
@@ -180,15 +174,4 @@ func Sum(reader io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	return h.Sum(nil), nil
-}
-
-// SumStream - similar to 'Sum()' but returns a [Size]byte
-func SumStream(reader io.Reader) ([Size]byte, error) {
-	var returnValue [Size]byte
-	sumSlice, err := Sum(reader)
-	if err != nil {
-		return returnValue, err
-	}
-	copy(returnValue[:], sumSlice)
-	return returnValue, err
 }
