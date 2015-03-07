@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -99,6 +100,7 @@ func getStringToSign(req *http.Request) string {
 	buf.WriteByte('\n')
 	writeCanonicalizedAmzHeaders(buf, req)
 	writeCanonicalizedResource(buf, req)
+
 	return buf.String()
 }
 
@@ -188,14 +190,19 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 
 // Convert subdomain http request into bucketname if possible
 func bucketFromHostname(req *http.Request) string {
-	host := req.Host
+	host, _, _ := net.SplitHostPort(req.Host)
+	// Verify incoming request if only IP with no bucket subdomain
+	if net.ParseIP(host) != nil {
+		return ""
+	}
 	if host == "" {
 		host = req.URL.Host
 	}
 
+	// Grab the bucket from the incoming hostname
 	host = strings.TrimSpace(host)
 	hostParts := strings.Split(host, ".")
-	if len(hostParts) > 1 {
+	if len(hostParts) > 2 {
 		return hostParts[0]
 	}
 	return ""
