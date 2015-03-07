@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package erasure
+package erasure1
 
 import (
 	"bytes"
@@ -35,19 +35,16 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestSingleWrite(c *C) {
 	var testBuffer bytes.Buffer
 	testData := "Hello, World"
-	encoderParams := EncoderParams{
-		Length:    uint32(len(testData)),
-		K:         8,
-		M:         8,
-		Technique: Cauchy,
+	testHeader := DataHeader{
+		Key:              "testobj",
+		ChunkIndex:       1,
+		OriginalLength:   uint32(len(testData)),
+		EncoderK:         8,
+		EncoderM:         8,
+		EncoderTechnique: Cauchy,
 	}
-	metadata := make(Metadata)
-	metadata["Content-Type"] = "application/octet-stream"
-	metadata["Content-MD5"] = "testing"
 
-	header := NewHeader("testobj", 1, metadata, encoderParams)
-
-	err := WriteData(&testBuffer, header, bytes.NewBufferString(testData))
+	err := Write(&testBuffer, testHeader.Key, testHeader.ChunkIndex, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
 	c.Assert(err, IsNil)
 
 	actualVersion := make([]byte, 4)
@@ -60,7 +57,7 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	decoder := gob.NewDecoder(&testBuffer)
 	decoder.Decode(&actualHeader)
 
-	c.Assert(actualHeader, DeepEquals, header)
+	c.Assert(actualHeader, DeepEquals, testHeader)
 
 	var actualData bytes.Buffer
 
