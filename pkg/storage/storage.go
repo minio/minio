@@ -33,7 +33,7 @@ type Storage interface {
 
 	// Object Operations
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)
-	GetObjectMetadata(bucket string, object string) (ObjectMetadata, error)
+	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
 	StoreObject(bucket string, key string, contentType string, data io.Reader) error
 }

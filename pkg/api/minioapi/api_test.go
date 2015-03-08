@@ -71,7 +71,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", metadata.ETag)
 
@@ -96,7 +96,7 @@ func (s *MySuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello world")))
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.ETag)
 }
@@ -129,7 +129,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err := storage.GetObjectMetadata("bucket", "object1")
+	metadata, err := storage.GetObjectMetadata("bucket", "object1", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -148,7 +148,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err = storage.GetObjectMetadata("bucket", "object2")
+	metadata, err = storage.GetObjectMetadata("bucket", "object2", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -167,7 +167,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err = storage.GetObjectMetadata("bucket", "object3")
+	metadata, err = storage.GetObjectMetadata("bucket", "object3", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -210,7 +210,7 @@ func (s *MySuite) TestHeader(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object")
+	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.ETag)
 }
@@ -289,7 +289,7 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	c.Assert(bytes.Equal(writer.Bytes(), []byte("hello world")), Equals, true)
 
-	metadata, err := storage.GetObjectMetadata("bucket", "two")
+	metadata, err := storage.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, IsNil)
 	lastModified := metadata.Created
 

@@ -36,7 +36,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.storage.GetObjectMetadata(bucket, object)
+	metadata, err := server.storage.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil: // success
 		{
@@ -89,7 +89,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.storage.GetObjectMetadata(bucket, object)
+	metadata, err := server.storage.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
 		writeObjectHeaders(w, metadata)
