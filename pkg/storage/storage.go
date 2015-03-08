@@ -28,8 +28,8 @@ type Storage interface {
 	// Bucket Operations
 	ListBuckets() ([]BucketMetadata, error)
 	StoreBucket(bucket string) error
-	StoreBucketPolicy(bucket string, policy interface{}) error
-	GetBucketPolicy(bucket string) (interface{}, error)
+	StoreBucketPolicy(bucket string, p BucketPolicy) error
+	GetBucketPolicy(bucket string) (BucketPolicy, error)
 
 	// Object Operations
 	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)

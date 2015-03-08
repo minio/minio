@@ -33,7 +33,6 @@ import (
 	"sync"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
 // Storage - fs local variables
@@ -130,44 +129,44 @@ func (storage *Storage) StoreBucket(bucket string) error {
 }
 
 // GetBucketPolicy - GET bucket policy
-func (storage *Storage) GetBucketPolicy(bucket string) (interface{}, error) {
+func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, error) {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
-	var p policy.BucketPolicy
+	var p mstorage.BucketPolicy
 	// verify bucket path legal
 	if mstorage.IsValidBucket(bucket) == false {
-		return policy.BucketPolicy{}, mstorage.BucketNameInvalid{Bucket: bucket}
+		return mstorage.BucketPolicy{}, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
 
 	// get bucket path
 	bucketDir := path.Join(storage.root, bucket)
 	// check if bucket exists
 	if _, err := os.Stat(bucketDir); err != nil {
-		return policy.BucketPolicy{}, mstorage.BucketNotFound{Bucket: bucket}
+		return mstorage.BucketPolicy{}, mstorage.BucketNotFound{Bucket: bucket}
 	}
 
 	// get policy path
-	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
+	bucketPolicy := path.Join(storage.root, bucket+"_mstoragejson")
 	filestat, err := os.Stat(bucketPolicy)
 
 	if os.IsNotExist(err) {
-		return policy.BucketPolicy{}, mstorage.BucketPolicyNotFound{Bucket: bucket}
+		return mstorage.BucketPolicy{}, mstorage.BucketPolicyNotFound{Bucket: bucket}
 	}
 
 	if filestat.IsDir() {
-		return policy.BucketPolicy{}, mstorage.BackendCorrupted{Path: bucketPolicy}
+		return mstorage.BucketPolicy{}, mstorage.BackendCorrupted{Path: bucketPolicy}
 	}
 
 	file, err := os.OpenFile(bucketPolicy, os.O_RDONLY, 0666)
 	defer file.Close()
 	if err != nil {
-		return policy.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
+		return mstorage.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
 	}
 	encoder := json.NewDecoder(file)
 	err = encoder.Decode(&p)
 	if err != nil {
-		return policy.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
+		return mstorage.BucketPolicy{}, mstorage.EmbedError(bucket, "", err)
 	}
 
 	return p, nil
@@ -175,7 +174,7 @@ func (storage *Storage) GetBucketPolicy(bucket string) (interface{}, error) {
 }
 
 // StoreBucketPolicy - PUT bucket policy
-func (storage *Storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+func (storage *Storage) StoreBucketPolicy(bucket string, p mstorage.BucketPolicy) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
@@ -208,7 +207,7 @@ func (storage *Storage) StoreBucketPolicy(bucket string, policy interface{}) err
 		return mstorage.EmbedError(bucket, "", err)
 	}
 	encoder := json.NewEncoder(file)
-	err = encoder.Encode(policy)
+	err = encoder.Encode(p)
 	if err != nil {
 		return mstorage.EmbedError(bucket, "", err)
 	}

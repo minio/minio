@@ -28,7 +28,6 @@ import (
 	"time"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
 // Storage - local variables
@@ -78,13 +77,13 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 }
 
 // StoreBucketPolicy - Not implemented
-func (storage *Storage) StoreBucketPolicy(bucket string, policy interface{}) error {
+func (storage *Storage) StoreBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
 	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
 }
 
 // GetBucketPolicy - Not implemented
-func (storage *Storage) GetBucketPolicy(bucket string) (interface{}, error) {
-	return policy.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
+func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, error) {
+	return mstorage.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
 }
 
 // StoreObject - PUT object to memory buffer
