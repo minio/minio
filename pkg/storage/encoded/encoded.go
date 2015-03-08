@@ -51,8 +51,8 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 }
 
 // Get object metadata
-func (storage *Storage) GetObjectMetadata(bucket string, object string) (mstorage.ObjectMetadata, error) {
-	return storage.Seeker.GetObjectMetadata(bucket, object)
+func (storage *Storage) GetObjectMetadata(bucket string, object string, prefix string) (mstorage.ObjectMetadata, error) {
+	return storage.Seeker.GetObjectMetadata(bucket, object, prefix)
 
 }
 

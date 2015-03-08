@@ -64,8 +64,8 @@ func (seeker Seeker) Write(bucket, object string, chunk int, part uint8, length 
 }
 
 // Get's object metadata
-func (seeker Seeker) GetObjectMetadata(bucket string, object string) (storage.ObjectMetadata, error) {
-	return storage.ObjectMetadata{}, errors.New("Not Implemented")
+func (seeker Seeker) GetObjectMetadata(bucket, object, prefix string) (objectMetadata storage.ObjectMetadata, err error) {
+	return objectMetadata, errors.New("Not Implemented")
 }
 
 // Lists objects
