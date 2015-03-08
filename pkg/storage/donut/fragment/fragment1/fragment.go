@@ -146,7 +146,7 @@ func Write(target io.Writer, reader io.Reader, length uint64) error {
 	return nil
 }
 
-// Reads a donut fragment
+// Read - reads a donut fragment
 func Read(reader io.Reader) (io.Reader, error) {
 	header, err := ReadHeader(reader)
 	if err != nil {
@@ -185,7 +185,7 @@ func Read(reader io.Reader) (io.Reader, error) {
 	return bytes.NewBuffer(data), nil
 }
 
-// Reads the header of a donut
+// ReadHeader - reads the header of a donut
 func ReadHeader(reader io.Reader) (header DonutFrameHeader, err error) {
 	headerSlice := make([]byte, 32)
 	headerLength, err := reader.Read(headerSlice)

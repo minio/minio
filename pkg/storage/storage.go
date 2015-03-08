@@ -55,6 +55,17 @@ type ObjectMetadata struct {
 	Size        int64
 }
 
+// FilterMode type
+type FilterMode int
+
+// FilterMode list
+const (
+	DelimiterPrefixMode FilterMode = iota
+	DelimiterMode
+	PrefixMode
+	DefaultMode
+)
+
 // BucketResourcesMetadata - various types of bucket resources
 type BucketResourcesMetadata struct {
 	Prefix         string
@@ -63,11 +74,49 @@ type BucketResourcesMetadata struct {
 	Delimiter      string
 	IsTruncated    bool
 	CommonPrefixes []string
+	Mode           FilterMode
 
 	Policy bool
 	// TODO
 	Logging      string
 	Notification string
+}
+
+// GetMode - Populate filter mode
+func GetMode(resources BucketResourcesMetadata) FilterMode {
+	var f FilterMode
+	switch true {
+	case resources.Delimiter != "" && resources.Prefix != "":
+		f = DelimiterPrefixMode
+	case resources.Delimiter != "" && resources.Prefix == "":
+		f = DelimiterMode
+	case resources.Delimiter == "" && resources.Prefix != "":
+		f = PrefixMode
+	case resources.Delimiter == "" && resources.Prefix == "":
+		f = DefaultMode
+	}
+
+	return f
+}
+
+// IsDelimiterPrefixSet Delimiter and Prefix set
+func (b BucketResourcesMetadata) IsDelimiterPrefixSet() bool {
+	return b.Mode == DelimiterPrefixMode
+}
+
+// IsDelimiterSet Delimiter set
+func (b BucketResourcesMetadata) IsDelimiterSet() bool {
+	return b.Mode == DelimiterMode
+}
+
+// IsPrefixSet Prefix set
+func (b BucketResourcesMetadata) IsPrefixSet() bool {
+	return b.Mode == PrefixMode
+}
+
+// IsDefault No query values
+func (b BucketResourcesMetadata) IsDefault() bool {
+	return b.Mode == DefaultMode
 }
 
 // IsValidBucket - verify bucket name in accordance with
