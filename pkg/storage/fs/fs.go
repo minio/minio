@@ -19,6 +19,9 @@ package fs
 import (
 	"bufio"
 	"bytes"
+	"crypto/md5"
+	"encoding/gob"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -39,8 +42,9 @@ type Storage struct {
 	lock *sync.Mutex
 }
 
-// SerializedMetadata - carries content type
-type SerializedMetadata struct {
+// Metadata - carries metadata about object
+type Metadata struct {
+	Md5sum      []byte
 	ContentType string
 }
 
@@ -248,6 +252,7 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	if err != nil {
 		return 0, mstorage.EmbedError(bucket, object, err)
 	}
+
 	count, err := io.Copy(w, file)
 	if err != nil {
 		return count, mstorage.EmbedError(bucket, object, err)
@@ -256,7 +261,7 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 }
 
 // GetObjectMetadata - HEAD object
-func (storage *Storage) GetObjectMetadata(bucket string, object string) (mstorage.ObjectMetadata, error) {
+func (storage *Storage) GetObjectMetadata(bucket, object string) (mstorage.ObjectMetadata, error) {
 	if mstorage.IsValidBucket(bucket) == false {
 		return mstorage.ObjectMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
@@ -283,13 +288,10 @@ func (storage *Storage) GetObjectMetadata(bucket string, object string) (mstorag
 		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
 	}
 
-	metadataBuffer, err := ioutil.ReadAll(file)
-	if err != nil {
-		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
-	}
+	var deserializedMetadata Metadata
+	decoder := gob.NewDecoder(file)
+	err = decoder.Decode(&deserializedMetadata)
 
-	var deserializedMetadata SerializedMetadata
-	err = json.Unmarshal(metadataBuffer, &deserializedMetadata)
 	if err != nil {
 		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
 	}
@@ -300,12 +302,16 @@ func (storage *Storage) GetObjectMetadata(bucket string, object string) (mstorag
 	}
 	contentType = strings.TrimSpace(contentType)
 
+	etag := bucket + "#" + path.Base(object)
+	if len(deserializedMetadata.Md5sum) != 0 {
+		etag = hex.EncodeToString(deserializedMetadata.Md5sum)
+	}
 	metadata := mstorage.ObjectMetadata{
 		Bucket:      bucket,
-		Key:         object,
+		Key:         path.Base(object),
 		Created:     stat.ModTime(),
 		Size:        stat.Size(),
-		ETag:        bucket + "#" + object,
+		ETag:        etag,
 		ContentType: contentType,
 	}
 
@@ -389,21 +395,15 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			delimitedName := delimiter(name, resources.Delimiter)
 			switch true {
 			case delimitedName == "":
-				metadata := mstorage.ObjectMetadata{
-					Bucket:  bucket,
-					Key:     name,
-					Created: file.ModTime(),
-					Size:    file.Size(),
-					ETag:    bucket + "#" + file.Name(),
+				metadata, err := storage.GetObjectMetadata(bucket, name)
+				if err != nil {
+					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName == file.Name():
-				metadata := mstorage.ObjectMetadata{
-					Bucket:  bucket,
-					Key:     name,
-					Created: file.ModTime(),
-					Size:    file.Size(),
-					ETag:    bucket + "#" + file.Name(),
+				metadata, err := storage.GetObjectMetadata(bucket, name)
+				if err != nil {
+					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName != "":
@@ -414,21 +414,15 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			delimitedName := delimiter(trimmedName, resources.Delimiter)
 			switch true {
 			case name == resources.Prefix:
-				metadata := mstorage.ObjectMetadata{
-					Bucket:  bucket,
-					Key:     file.Name(),
-					Created: file.ModTime(),
-					Size:    file.Size(),
-					ETag:    bucket + "#" + file.Name(),
+				metadata, err := storage.GetObjectMetadata(bucket, name)
+				if err != nil {
+					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName == file.Name():
-				metadata := mstorage.ObjectMetadata{
-					Bucket:  bucket,
-					Key:     trimmedName,
-					Created: file.ModTime(),
-					Size:    file.Size(),
-					ETag:    bucket + "#" + file.Name(),
+				metadata, err := storage.GetObjectMetadata(bucket, name)
+				if err != nil {
+					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName != "":
@@ -439,12 +433,9 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 			}
 		case strings.HasPrefix(name, resources.Prefix):
-			metadata := mstorage.ObjectMetadata{
-				Bucket:  bucket,
-				Key:     name,
-				Created: file.ModTime(),
-				Size:    file.Size(),
-				ETag:    bucket + "#" + name,
+			metadata, err := storage.GetObjectMetadata(bucket, name)
+			if err != nil {
+				return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 			}
 			metadataList = append(metadataList, metadata)
 		}
@@ -507,14 +498,10 @@ func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Rea
 		return mstorage.EmbedError(bucket, key, err)
 	}
 
-	_, err = io.Copy(file, data)
-	if err != nil {
-		return mstorage.EmbedError(bucket, key, err)
-	}
+	h := md5.New()
+	mw := io.MultiWriter(file, h)
 
-	// serialize metadata to json
-
-	metadataBuffer, err := json.Marshal(SerializedMetadata{ContentType: contentType})
+	_, err = io.Copy(mw, data)
 	if err != nil {
 		return mstorage.EmbedError(bucket, key, err)
 	}
@@ -526,7 +513,12 @@ func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Rea
 		return mstorage.EmbedError(bucket, key, err)
 	}
 
-	_, err = io.Copy(file, bytes.NewBuffer(metadataBuffer))
+	// serialize metadata to gob
+	encoder := gob.NewEncoder(file)
+	err = encoder.Encode(&Metadata{
+		ContentType: contentType,
+		Md5sum:      h.Sum(nil),
+	})
 	if err != nil {
 		return mstorage.EmbedError(bucket, key, err)
 	}
