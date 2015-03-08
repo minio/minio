@@ -89,7 +89,7 @@ func Write(target io.Writer, key string, part uint8, length uint32, k, m uint8, 
 	encoder.Encode(header)
 
 	// write version
-	binary.Write(target, binary.LittleEndian, uint32(Version))
+	binary.Write(target, binary.LittleEndian, Version)
 
 	// write encoded header
 	if _, err := io.Copy(target, &headerBuffer); err != nil {
