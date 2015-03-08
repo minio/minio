@@ -17,6 +17,7 @@
 package inmemory
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"fmt"
@@ -66,9 +67,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 
 // CopyObjectToWriter - GET object from memory buffer
 func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
-	// TODO synchronize access
 	// get object
-	key := bucket + ":" + object
+	key := object
 	if val, ok := storage.objectdata[key]; ok {
 		objectBuffer := bytes.NewBuffer(val.data)
 		written, err := io.Copy(w, objectBuffer)
@@ -92,13 +92,11 @@ func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Rea
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
-	objectKey := bucket + ":" + key
-
 	if _, ok := storage.bucketdata[bucket]; ok == false {
 		return mstorage.BucketNotFound{Bucket: bucket}
 	}
 
-	if _, ok := storage.objectdata[objectKey]; ok == true {
+	if _, ok := storage.objectdata[key]; ok == true {
 		return mstorage.ObjectExists{Bucket: bucket, Object: key}
 	}
 
@@ -124,7 +122,7 @@ func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Rea
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}
-	storage.objectdata[objectKey] = newObject
+	storage.objectdata[key] = newObject
 	return nil
 }
 
@@ -149,6 +147,24 @@ func (storage *Storage) StoreBucket(bucketName string) error {
 	return nil
 }
 
+func delimiter(object, delimiter string) string {
+	readBuffer := bytes.NewBufferString(object)
+	reader := bufio.NewReader(readBuffer)
+	stringReader := strings.NewReader(delimiter)
+	delimited, _ := stringReader.ReadByte()
+	delimitedStr, _ := reader.ReadString(delimited)
+	return delimitedStr
+}
+
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 // ListObjects - list objects from memory
 func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
 	if _, ok := storage.bucketdata[bucket]; ok == false {
@@ -157,10 +173,43 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 	var results []mstorage.ObjectMetadata
 	var keys []string
 	for key := range storage.objectdata {
-		if strings.HasPrefix(key, bucket+":"+resources.Prefix) {
-			keys = append(keys, key)
+		switch true {
+		// Prefix absent, delimit object key based on delimiter
+		case resources.Delimiter != "" && resources.Prefix == "":
+			delimitedName := delimiter(key, resources.Delimiter)
+			switch true {
+			case delimitedName == "" || delimitedName == key:
+				keys = appendUniq(keys, key)
+			case delimitedName != "":
+				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+			}
+		// Prefix present, delimit object key with prefix key based on delimiter
+		case resources.Delimiter != "" && resources.Prefix != "" && strings.HasPrefix(key, resources.Prefix):
+			trimmedName := strings.TrimPrefix(key, resources.Prefix)
+			delimitedName := delimiter(trimmedName, resources.Delimiter)
+			fmt.Println(trimmedName, delimitedName, key, resources.Prefix)
+			switch true {
+			case key == resources.Prefix:
+				keys = appendUniq(keys, key)
+			// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
+			case key == resources.Prefix+delimitedName:
+				keys = appendUniq(keys, key)
+			case delimitedName != "":
+				if delimitedName == resources.Delimiter {
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
+				} else {
+					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+				}
+			}
+		// Prefix present, nothing to delimit
+		case resources.Delimiter == "" && resources.Prefix != "" && strings.HasPrefix(key, resources.Prefix):
+			keys = appendUniq(keys, key)
+		// Prefix and delimiter absent
+		case resources.Prefix == "" && resources.Delimiter == "":
+			keys = appendUniq(keys, key)
 		}
 	}
+
 	sort.Strings(keys)
 	for _, key := range keys {
 		if len(results) == resources.Maxkeys {
@@ -168,9 +217,7 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 		}
 		object := storage.objectdata[key]
 		if bucket == object.metadata.Bucket {
-			if strings.HasPrefix(key, bucket+":"+resources.Prefix) {
-				results = append(results, object.metadata)
-			}
+			results = append(results, object.metadata)
 		}
 	}
 	return results, resources, nil
@@ -199,9 +246,7 @@ func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 
 // GetObjectMetadata - get object metadata from memory
 func (storage *Storage) GetObjectMetadata(bucket, key, prefix string) (mstorage.ObjectMetadata, error) {
-	objectKey := bucket + ":" + key
-
-	if object, ok := storage.objectdata[objectKey]; ok == true {
+	if object, ok := storage.objectdata[key]; ok == true {
 		return object.metadata, nil
 	}
 	return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: key}

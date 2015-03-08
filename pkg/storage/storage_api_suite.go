@@ -87,7 +87,7 @@ func testPaging(c *check.C, create func() Storage) {
 	c.Assert(len(objects), check.Equals, 0)
 	c.Assert(resources.IsTruncated, check.Equals, false)
 	c.Assert(err, check.IsNil)
-	// checheck before paging occurs
+	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
@@ -97,7 +97,7 @@ func testPaging(c *check.C, create func() Storage) {
 		c.Assert(resources.IsTruncated, check.Equals, false)
 		c.Assert(err, check.IsNil)
 	}
-	// checheck after paging occurs pages work
+	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		storage.StoreObject("bucket", key, "", bytes.NewBufferString(key))
@@ -107,7 +107,7 @@ func testPaging(c *check.C, create func() Storage) {
 		c.Assert(resources.IsTruncated, check.Equals, true)
 		c.Assert(err, check.IsNil)
 	}
-	// checheck paging with prefix at end returns less objects
+	// check paging with prefix at end returns less objects
 	{
 		storage.StoreObject("bucket", "newPrefix", "", bytes.NewBufferString("prefix1"))
 		storage.StoreObject("bucket", "newPrefix2", "", bytes.NewBufferString("prefix2"))
@@ -117,7 +117,7 @@ func testPaging(c *check.C, create func() Storage) {
 		c.Assert(len(objects), check.Equals, 2)
 	}
 
-	// checheck ordering of pages
+	// check ordering of pages
 	{
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
@@ -128,19 +128,50 @@ func testPaging(c *check.C, create func() Storage) {
 		c.Assert(objects[3].Key, check.Equals, "obj1")
 		c.Assert(objects[4].Key, check.Equals, "obj10")
 	}
-	// checheck ordering of results with prefix
+
+	// check delimited results with delimiter and prefix
 	{
-		resources.Prefix = "obj"
+		storage.StoreObject("bucket", "this/is/delimited", "", bytes.NewBufferString("prefix1"))
+		storage.StoreObject("bucket", "this/is/also/delimited", "", bytes.NewBufferString("prefix2"))
+		var prefixes []string
+		resources.CommonPrefixes = prefixes // allocate new everytime
+		resources.Delimiter = "/"
+		resources.Prefix = "this/is/"
+		resources.Maxkeys = 10
+		objects, resources, err = storage.ListObjects("bucket", resources)
+		c.Assert(len(objects), check.Equals, 1)
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "also/")
+	}
+
+	// check delimited results with delimiter without prefix
+	{
+		var prefixes []string
+		resources.CommonPrefixes = prefixes // allocate new everytime
+		resources.Delimiter = "/"
+		resources.Prefix = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = storage.ListObjects("bucket", resources)
-		c.Log(objects)
+		c.Assert(objects[0].Key, check.Equals, "newPrefix")
+		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
+		c.Assert(objects[2].Key, check.Equals, "obj0")
+		c.Assert(objects[3].Key, check.Equals, "obj1")
+		c.Assert(objects[4].Key, check.Equals, "obj10")
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
+	}
+
+	// check ordering of results with prefix
+	{
+		resources.Prefix = "obj"
+		resources.Delimiter = ""
+		resources.Maxkeys = 1000
+		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "obj0")
 		c.Assert(objects[1].Key, check.Equals, "obj1")
 		c.Assert(objects[2].Key, check.Equals, "obj10")
 		c.Assert(objects[3].Key, check.Equals, "obj2")
 		c.Assert(objects[4].Key, check.Equals, "obj3")
 	}
-	// checheck ordering of results with prefix and no paging
+	// check ordering of results with prefix and no paging
 	{
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
