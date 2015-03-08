@@ -198,7 +198,7 @@ func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 }
 
 // GetObjectMetadata - get object metadata from memory
-func (storage *Storage) GetObjectMetadata(bucket, key string) (mstorage.ObjectMetadata, error) {
+func (storage *Storage) GetObjectMetadata(bucket, key, prefix string) (mstorage.ObjectMetadata, error) {
 	objectKey := bucket + ":" + key
 
 	if object, ok := storage.objectdata[objectKey]; ok == true {

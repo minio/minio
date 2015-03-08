@@ -69,7 +69,7 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 		storage.CopyObjectToWriter(&byteBuffer, "bucket", key)
 		c.Assert(bytes.Equal(value, byteBuffer.Bytes()), check.Equals, true)
 
-		metadata, err := storage.GetObjectMetadata("bucket", key)
+		metadata, err := storage.GetObjectMetadata("bucket", key, "")
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
 
@@ -133,6 +133,7 @@ func testPaging(c *check.C, create func() Storage) {
 		resources.Prefix = "obj"
 		resources.Maxkeys = 1000
 		objects, resources, err = storage.ListObjects("bucket", resources)
+		c.Log(objects)
 		c.Assert(objects[0].Key, check.Equals, "obj0")
 		c.Assert(objects[1].Key, check.Equals, "obj1")
 		c.Assert(objects[2].Key, check.Equals, "obj10")
@@ -320,19 +321,19 @@ func testDefaultContentType(c *check.C, create func() Storage) {
 
 	// test empty
 	err = storage.StoreObject("bucket", "one", "", bytes.NewBufferString("one"))
-	metadata, err := storage.GetObjectMetadata("bucket", "one")
+	metadata, err := storage.GetObjectMetadata("bucket", "one", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 
 	// test custom
 	storage.StoreObject("bucket", "two", "application/text", bytes.NewBufferString("two"))
-	metadata, err = storage.GetObjectMetadata("bucket", "two")
+	metadata, err = storage.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/text")
 
 	// test trim space
 	storage.StoreObject("bucket", "three", "\tapplication/json    ", bytes.NewBufferString("three"))
-	metadata, err = storage.GetObjectMetadata("bucket", "three")
+	metadata, err = storage.GetObjectMetadata("bucket", "three", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/json")
 }

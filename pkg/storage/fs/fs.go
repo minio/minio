@@ -261,7 +261,7 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 }
 
 // GetObjectMetadata - HEAD object
-func (storage *Storage) GetObjectMetadata(bucket, object string) (mstorage.ObjectMetadata, error) {
+func (storage *Storage) GetObjectMetadata(bucket, object, prefix string) (mstorage.ObjectMetadata, error) {
 	if mstorage.IsValidBucket(bucket) == false {
 		return mstorage.ObjectMetadata{}, mstorage.BucketNameInvalid{Bucket: bucket}
 	}
@@ -291,7 +291,6 @@ func (storage *Storage) GetObjectMetadata(bucket, object string) (mstorage.Objec
 	var deserializedMetadata Metadata
 	decoder := gob.NewDecoder(file)
 	err = decoder.Decode(&deserializedMetadata)
-
 	if err != nil {
 		return mstorage.ObjectMetadata{}, mstorage.EmbedError(bucket, object, err)
 	}
@@ -306,9 +305,10 @@ func (storage *Storage) GetObjectMetadata(bucket, object string) (mstorage.Objec
 	if len(deserializedMetadata.Md5sum) != 0 {
 		etag = hex.EncodeToString(deserializedMetadata.Md5sum)
 	}
+	trimmedObject := strings.TrimPrefix(object, prefix)
 	metadata := mstorage.ObjectMetadata{
 		Bucket:      bucket,
-		Key:         path.Base(object),
+		Key:         trimmedObject,
 		Created:     stat.ModTime(),
 		Size:        stat.Size(),
 		ETag:        etag,
@@ -395,13 +395,15 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			delimitedName := delimiter(name, resources.Delimiter)
 			switch true {
 			case delimitedName == "":
-				metadata, err := storage.GetObjectMetadata(bucket, name)
+				// Do not strip prefix object output
+				metadata, err := storage.GetObjectMetadata(bucket, name, "")
 				if err != nil {
 					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName == file.Name():
-				metadata, err := storage.GetObjectMetadata(bucket, name)
+				// Do not strip prefix object output
+				metadata, err := storage.GetObjectMetadata(bucket, name, "")
 				if err != nil {
 					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
@@ -414,13 +416,15 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			delimitedName := delimiter(trimmedName, resources.Delimiter)
 			switch true {
 			case name == resources.Prefix:
-				metadata, err := storage.GetObjectMetadata(bucket, name)
+				// Use resources.Prefix to filter out delimited files
+				metadata, err := storage.GetObjectMetadata(bucket, name, resources.Prefix)
 				if err != nil {
 					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
 				metadataList = append(metadataList, metadata)
 			case delimitedName == file.Name():
-				metadata, err := storage.GetObjectMetadata(bucket, name)
+				// Use resources.Prefix to filter out delimited files
+				metadata, err := storage.GetObjectMetadata(bucket, name, resources.Prefix)
 				if err != nil {
 					return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 				}
@@ -433,7 +437,8 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 				}
 			}
 		case strings.HasPrefix(name, resources.Prefix):
-			metadata, err := storage.GetObjectMetadata(bucket, name)
+			// Do not strip prefix object output
+			metadata, err := storage.GetObjectMetadata(bucket, name, "")
 			if err != nil {
 				return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
 			}
