@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"encoding/binary"
+	"io"
 	"testing"
 
 	"github.com/minio-io/minio/pkg/utils/checksum/crc32c"
@@ -113,6 +114,23 @@ func (s *MySuite) TestLengthMismatchInWrite(c *C) {
 	var testData bytes.Buffer
 	err := Write(&testData, bytes.NewBufferString("hello, world"), 5)
 	c.Assert(err, Not(IsNil))
+}
+
+func (s *MySuite) TestWriteAndRead(c *C) {
+	testData := "Hello, World"
+	testLength := uint64(len(testData))
+	var testBuffer bytes.Buffer
+	err := Write(&testBuffer, bytes.NewBufferString(testData), testLength)
+	c.Assert(err, IsNil)
+
+	testReader, err := Read(&testBuffer)
+	c.Assert(err, IsNil)
+
+	var actualData bytes.Buffer
+	length, err := io.Copy(&actualData, testReader)
+	c.Assert(int64(len(testData)), Equals, length)
+
+	c.Assert([]byte(testData), DeepEquals, actualData.Bytes())
 }
 
 var buf = make([]byte, 1024*1024*8)
