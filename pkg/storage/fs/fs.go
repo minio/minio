@@ -270,8 +270,9 @@ func (storage *Storage) GetObjectMetadata(bucket, object, prefix string) (mstora
 		return mstorage.ObjectMetadata{}, mstorage.ObjectNameInvalid{Bucket: bucket, Object: bucket}
 	}
 
-	objectPath := path.Join(storage.root, bucket, object)
-
+	// Do not use path.Join() since path.Join strips off any object names with '/', use them as is
+	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
+	objectPath := storage.root + "/" + bucket + "/" + object
 	stat, err := os.Stat(objectPath)
 	if os.IsNotExist(err) {
 		return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
@@ -391,6 +392,7 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 		}
 		// TODO handle resources.Marker
 		switch true {
+		// Delimiter present and Prefix is absent
 		case resources.Delimiter != "" && resources.Prefix == "":
 			delimitedName := delimiter(name, resources.Delimiter)
 			switch true {
@@ -411,7 +413,8 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			case delimitedName != "":
 				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
 			}
-		case resources.Delimiter != "" && strings.HasPrefix(name, resources.Prefix):
+		// Both delimiter and Prefix is present
+		case resources.Delimiter != "" && resources.Prefix != "" && strings.HasPrefix(name, resources.Prefix):
 			trimmedName := strings.TrimPrefix(name, resources.Prefix)
 			delimitedName := delimiter(trimmedName, resources.Delimiter)
 			switch true {
@@ -436,8 +439,15 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
 				}
 			}
-		case strings.HasPrefix(name, resources.Prefix):
+		// Delimiter is absent and only Prefix is present
+		case resources.Delimiter == "" && resources.Prefix != "" && strings.HasPrefix(name, resources.Prefix):
 			// Do not strip prefix object output
+			metadata, err := storage.GetObjectMetadata(bucket, name, "")
+			if err != nil {
+				return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+			}
+			metadataList = append(metadataList, metadata)
+		case resources.Prefix == "" && resources.Delimiter == "":
 			metadata, err := storage.GetObjectMetadata(bucket, name, "")
 			if err != nil {
 				return []mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
@@ -445,7 +455,6 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 			metadataList = append(metadataList, metadata)
 		}
 	}
-
 ret:
 	sort.Sort(byObjectKey(metadataList))
 	return metadataList, resources, nil
