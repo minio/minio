@@ -23,7 +23,6 @@ import (
 
 	"github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/utils/policy"
 )
 
 // PUT Bucket policy
@@ -35,7 +34,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)
 
-	policy, ok := policy.Parsepolicy(req.Body)
+	policy, ok := mstorage.Parsepolicy(req.Body)
 	if ok == false {
 		error := errorCodeError(InvalidPolicyDocument)
 		errorResponse := getErrorResponse(error, bucket)
