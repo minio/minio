@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strconv"
-	"time"
 
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
@@ -56,9 +55,13 @@ func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType
 	return bytesBuffer.Bytes()
 }
 
+const (
+	sendFormat = "2006-01-02T15:04:05.000Z"
+)
+
 // Write object header
 func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
-	lastModified := metadata.Created.Format(time.RFC1123)
+	lastModified := metadata.Created.Format(sendFormat)
 	// common headers
 	writeCommonHeaders(w, metadata.ContentType)
 	w.Header().Set("ETag", metadata.ETag)
