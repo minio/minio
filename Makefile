@@ -12,12 +12,23 @@ checkgopath:
 
 getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
+	@go get github.com/golang/lint/golint && echo "Installed golint"
+	@go get golang.org/x/tools/cmd/vet && echo "Installed vet"
 
-verifier: getdeps
-	@echo "Checking for offending code"
-	@go run buildscripts/verifier.go ${PWD}
+verifiers: getdeps vet fmt lint
 
-build-all: verifier
+vet:
+	@echo "Running $@"
+	@go vet ./...
+fmt:
+	@echo "Running $@"
+	@test -z "$$(gofmt -s -l . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)" || \
+		echo "+ please format Go code with 'gofmt -s'"
+lint:
+	@echo "Running $@"
+	@test -z "$$(golint ./... | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
+
+build-all: verifiers
 	@echo "Building Libraries"
 	@godep go generate ./...
 	@godep go build ./...

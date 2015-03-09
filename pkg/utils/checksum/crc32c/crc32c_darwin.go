@@ -17,8 +17,8 @@
 package crc32c
 
 import (
-	"io"
 	"hash/crc32"
+	"io"
 )
 
 var castanagoliTable = crc32.MakeTable(crc32.Castagnoli)
