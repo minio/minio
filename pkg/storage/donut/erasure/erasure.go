@@ -7,6 +7,7 @@ import (
 	"github.com/minio-io/minio/pkg/storage/donut/erasure/erasure1"
 )
 
+// EncoderTechnique - encoder matrix type
 type EncoderTechnique int
 
 const (
