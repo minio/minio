@@ -17,5 +17,3 @@ func blockAVX2(dig *digest, p []byte) {
 func blockSSE3(dig *digest, p []byte) {
 	C.sha1_update_intel((*C.int32_t)(unsafe.Pointer(&dig.h[0])), (*C.char)(unsafe.Pointer(&p[0])), (C.size_t)(len(p)/chunk))
 }
-
-

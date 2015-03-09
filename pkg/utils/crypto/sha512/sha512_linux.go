@@ -107,11 +107,10 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 }
 
 // Calculate sha512
-func (d0 *digest) Sum(in []byte) []byte {
+func (d *digest) Sum(in []byte) []byte {
 	// Make a copy of d0 so that caller can keep writing and summing.
-	d := new(digest)
-	*d = *d0
-	hash := d.checkSum()
+	d0 := *d
+	hash := d0.checkSum()
 	return append(in, hash[:]...)
 }
 
