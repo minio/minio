@@ -24,7 +24,7 @@ import (
 
 // Reply date format
 const (
-	dateFormat = "2006-01-02T15:04:05.000Z"
+	iso8601Format = "2006-01-02T15:04:05.000Z"
 )
 
 // takes an array of Bucketmetadata information for serialization
@@ -44,7 +44,7 @@ func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResp
 	for _, bucket := range buckets {
 		var listbucket = &Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.Format(dateFormat)
+		listbucket.CreationDate = bucket.Created.Format(iso8601Format)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -88,7 +88,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 			continue
 		}
 		content.Key = object.Key
-		content.LastModified = object.Created.Format(dateFormat)
+		content.LastModified = object.Created.Format(iso8601Format)
 		content.ETag = object.ETag
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
