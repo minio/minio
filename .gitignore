@@ -6,3 +6,5 @@ minio
 **/*.test
 **/*.sublime-workspace
 verifier
+/.idea/
+/Minio.iml
