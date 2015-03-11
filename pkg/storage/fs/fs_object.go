@@ -31,6 +31,54 @@ import (
 
 /// Object Operations
 
+// CopyObjectToWriterRange - GET object from range
+func (storage *Storage) CopyObjectToWriterRange(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+	// validate bucket
+	if mstorage.IsValidBucket(bucket) == false {
+		return 0, mstorage.BucketNameInvalid{Bucket: bucket}
+	}
+
+	// validate object
+	if mstorage.IsValidObject(object) == false {
+		return 0, mstorage.ObjectNameInvalid{Bucket: bucket, Object: object}
+	}
+
+	objectPath := path.Join(storage.root, bucket, object)
+	filestat, err := os.Stat(objectPath)
+	switch err := err.(type) {
+	case nil:
+		{
+			if filestat.IsDir() {
+				return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+			}
+		}
+	default:
+		{
+			if os.IsNotExist(err) {
+				return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+			}
+			return 0, mstorage.EmbedError(bucket, object, err)
+		}
+	}
+	file, err := os.Open(objectPath)
+	defer file.Close()
+	if err != nil {
+		return 0, mstorage.EmbedError(bucket, object, err)
+	}
+
+	_, err = file.Seek(start, os.SEEK_SET)
+	if err != nil {
+		return 0, mstorage.EmbedError(bucket, object, err)
+	}
+
+	count, err := io.CopyN(w, file, length)
+	if err != nil {
+		return count, mstorage.EmbedError(bucket, object, err)
+	}
+
+	return count, nil
+}
+
 // CopyObjectToWriter - GET object
 func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
 	// validate bucket
