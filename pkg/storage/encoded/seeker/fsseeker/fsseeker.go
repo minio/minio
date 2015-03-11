@@ -81,9 +81,9 @@ func (seeker Seeker) Write(bucket, object string, chunk int, part uint8, length 
 }
 
 // Get's object metadata
-func (seeker Seeker) GetObjectMetadata(bucket, object, prefix string) (objectMetadata storage.ObjectMetadata, err error) {
-	return objectMetadata, errors.New("Not Implemented")
-}
+//func (seeker Seeker) GetObjectMetadata(bucket, object, prefix string) (objectMetadata storage.ObjectMetadata, err error) {
+//	return objectMetadata, errors.New("Not Implemented")
+//}
 
 // Lists objects
 func (seeker Seeker) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
@@ -91,14 +91,14 @@ func (seeker Seeker) ListObjects(bucket string, resources storage.BucketResource
 }
 
 // Sets bucket policy
-func (seeker Seeker) SetPolicy(bucket string, policy storage.BucketPolicy) error {
-	return errors.New("Not Implemented")
-}
+//func (seeker Seeker) SetPolicy(bucket string, policy storage.BucketPolicy) error {
+//	return errors.New("Not Implemented")
+//}
 
 // Gets a bucket policy
-func (seeker Seeker) GetPolicy(bucket string) (storage.BucketPolicy, error) {
-	return storage.BucketPolicy{}, errors.New("Not Implemented")
-}
+//func (seeker Seeker) GetPolicy(bucket string) (storage.BucketPolicy, error) {
+//	return storage.BucketPolicy{}, errors.New("Not Implemented")
+//}
 
 // Creates a bucket
 func (seeker Seeker) CreateBucket(bucket string) error {

@@ -7,9 +7,10 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 
 	"github.com/minio-io/minio/pkg/encoding/erasure"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/encoded/seeker"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
@@ -18,7 +19,6 @@ import (
 type Storage struct {
 	Seeker seeker.Seeker
 }
-
 type ObjectHeader struct {
 	Bucket     string
 	Key        string
@@ -28,7 +28,7 @@ type ObjectHeader struct {
 }
 
 // Start inmemory object server
-func Start(seeker seeker.Seeker) (chan<- string, <-chan error, mstorage.Storage) {
+func Start(seeker seeker.Seeker) (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	go start(ctrlChannel, errorChannel)
@@ -39,7 +39,7 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 }
 
 // Bucket Operations
-func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
+func (storage *Storage) ListBuckets() ([]storage.BucketMetadata, error) {
 	return storage.Seeker.ListBuckets()
 }
 
@@ -50,13 +50,14 @@ func (storage *Storage) StoreBucket(bucket string) error {
 }
 
 // Store a bucket policy
-func (storage *Storage) StoreBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
-	return storage.Seeker.SetPolicy(bucket, policy)
+func (_ *Storage) StoreBucketPolicy(bucket string, policy storage.BucketPolicy) error {
+	return nil
 }
 
 // Get a bucket policy
-func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, error) {
-	return storage.Seeker.GetPolicy(bucket)
+func (_ *Storage) GetBucketPolicy(bucket string) (storage.BucketPolicy, error) {
+	//return storage.Seeker.GetPolicy(bucket)
+	return storage.BucketPolicy{}, nil
 }
 
 // Object Operations
@@ -97,27 +98,43 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	}
 
 	// extract number of parts from object 0
-	for chunkId := 0; chunkId < objectHeader.ChunkCount; chunkId++ {
-
+	totalLength := int64(0)
+	for chunkId := uint(1); chunkId <= uint(objectHeader.ChunkCount); chunkId++ {
+		chunkBytes := make([][]byte, 0)
+		objectLength := 0
+		for partId := uint(0); partId < 16; partId++ {
+			log.Println("Object:", object)
+			log.Println("Chunk:", chunkId)
+			log.Println("Part:", partId)
+			header, reader, err := storage.Seeker.GetReader(bucket, object, chunkId, uint8(partId))
+			objectLength = int(header.OriginalLength)
+			if err != nil {
+				return totalLength, err
+			}
+			part, err := ioutil.ReadAll(reader)
+			if err != nil {
+				return totalLength, err
+			}
+			chunkBytes = append(chunkBytes, part)
+		}
+		original, err := encoder.Decode(chunkBytes, objectLength)
+		chunkLength, err := io.Copy(w, bytes.NewBuffer(original))
+		if err != nil {
+			return totalLength, err
+		}
+		totalLength = totalLength + chunkLength
 	}
-
-	// read all parts
-
-	// reconstruct object
-
-	// stream back to w
-	return 0, errors.New("Not Implemented")
+	return totalLength, nil
 }
 
 // Get object metadata
-func (storage *Storage) GetObjectMetadata(bucket string, object string, prefix string) (mstorage.ObjectMetadata, error) {
-	return storage.Seeker.GetObjectMetadata(bucket, object, prefix)
-
+func (minioStorage *Storage) GetObjectMetadata(bucket string, object string, prefix string) (storage.ObjectMetadata, error) {
+	return storage.ObjectMetadata{}, errors.New("Not Implemented")
 }
 
 // Lists objects
-func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
-	return nil, mstorage.BucketResourcesMetadata{}, errors.New("Not Implemented")
+func (minioStorage *Storage) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
+	return nil, storage.BucketResourcesMetadata{}, errors.New("Not Implemented")
 }
 
 // Stores an object
@@ -131,7 +148,7 @@ func (storage *Storage) StoreObject(bucket string, key string, contentType strin
 		return err
 	}
 	encoder := erasure.NewEncoder(params)
-	chunkId := 1
+	chunkId := 0
 
 	hash := md5.New()
 	for chunk := range splits {
@@ -144,7 +161,7 @@ func (storage *Storage) StoreObject(bucket string, key string, contentType strin
 		encodedData, length := encoder.Encode(chunk.Data)
 		// write erasure layer
 		for index, data := range encodedData {
-			err := storage.Seeker.Write(bucket, key, chunkId, uint8(index), length, *params, bytes.NewBuffer(data))
+			err := storage.Seeker.Write(bucket, key, chunkId+1, uint8(index), length, *params, bytes.NewBuffer(data))
 			if err != nil {
 				return err
 			}
@@ -161,6 +178,7 @@ func (storage *Storage) StoreObject(bucket string, key string, contentType strin
 		Md5:        hash.Sum(nil),
 		ChunkCount: chunkId,
 	}
+
 	var headerBuffer bytes.Buffer
 	headerEncoder := gob.NewEncoder(&headerBuffer)
 	err = headerEncoder.Encode(header)

@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"gopkg.in/check.v1"
+    "log"
 )
 
 // APITestSuite - collection of API tests
@@ -68,6 +69,8 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 		var byteBuffer bytes.Buffer
 		_, err := storage.CopyObjectToWriter(&byteBuffer, "bucket", key)
 		c.Assert(err, check.IsNil)
+        log.Println("Received: ", byteBuffer.Bytes())
+        log.Println("Expected: ", value)
 		c.Assert(bytes.Equal(value, byteBuffer.Bytes()), check.Equals, true)
 
 		metadata, err := storage.GetObjectMetadata("bucket", key, "")
