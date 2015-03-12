@@ -32,11 +32,6 @@ const (
 
 // DataHeader represents the structure serialized to gob.
 type DataHeader struct {
-	// object + block stored
-	Key string
-	// chunk index of encoded block
-	ChunkIndex uint8
-	// Original Length of the block output
 	OriginalLength uint32
 	// Data Blocks
 	EncoderK uint8
@@ -58,10 +53,6 @@ const (
 
 // validate populated header
 func validateHeader(header DataHeader) error {
-	if header.Key == "" {
-		return errors.New("Empty Key")
-	}
-
 	if header.EncoderTechnique > 1 {
 		return errors.New("Invalid encoder technique")
 	}
@@ -70,10 +61,8 @@ func validateHeader(header DataHeader) error {
 }
 
 // Write returns error upon any failure
-func Write(target io.Writer, key string, part uint8, length uint32, k, m uint8, technique EncoderTechnique, data io.Reader) error {
+func Write(target io.Writer, length uint32, k, m uint8, technique EncoderTechnique, data io.Reader) error {
 	header := DataHeader{
-		Key:              key,
-		ChunkIndex:       part,
 		OriginalLength:   length,
 		EncoderK:         k,
 		EncoderM:         m,
