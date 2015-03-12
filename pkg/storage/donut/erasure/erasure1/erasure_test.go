@@ -36,15 +36,13 @@ func (s *MySuite) TestSingleWrite(c *C) {
 	var testBuffer bytes.Buffer
 	testData := "Hello, World"
 	testHeader := DataHeader{
-		Key:              "testobj",
-		ChunkIndex:       1,
 		OriginalLength:   uint32(len(testData)),
 		EncoderK:         8,
 		EncoderM:         8,
 		EncoderTechnique: Cauchy,
 	}
 
-	err := Write(&testBuffer, testHeader.Key, testHeader.ChunkIndex, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
+	err := Write(&testBuffer, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
 	c.Assert(err, IsNil)
 
 	actualVersion := make([]byte, 4)
@@ -71,15 +69,13 @@ func (s *MySuite) TestReadWrite(c *C) {
 	var testBuffer bytes.Buffer
 	testData := "Hello, World"
 	testHeader := DataHeader{
-		Key:              "testobj",
-		ChunkIndex:       1,
 		OriginalLength:   uint32(len(testData)),
 		EncoderK:         8,
 		EncoderM:         8,
 		EncoderTechnique: Cauchy,
 	}
 
-	err := Write(&testBuffer, testHeader.Key, testHeader.ChunkIndex, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
+	err := Write(&testBuffer, testHeader.OriginalLength, testHeader.EncoderK, testHeader.EncoderM, testHeader.EncoderTechnique, bytes.NewBufferString(testData))
 	c.Assert(err, IsNil)
 
 	header, err := ReadHeader(&testBuffer)
