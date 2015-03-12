@@ -37,11 +37,10 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestObjectV1ReadWrite(c *C) {
 	var buffer bytes.Buffer
 
-	data := "Hello, World"
+	data := []byte("Hello, World")
 
 	hash := md5.New()
-	hash.Sum([]byte(data))
-	sum := hash.Sum(nil)
+	sum := hash.Sum(data)
 
 	objectMetadata := ObjectMetadata{
 		Bucket:      "bucket",
@@ -56,7 +55,7 @@ func (s *MySuite) TestObjectV1ReadWrite(c *C) {
 		Length:      uint64(len(sum)),
 	}
 
-	err := Write(&buffer, objectMetadata, bytes.NewBufferString(data))
+	err := Write(&buffer, objectMetadata, bytes.NewBuffer(data))
 	c.Assert(err, IsNil)
 
 	versionBuffer := make([]byte, 4)
@@ -73,5 +72,5 @@ func (s *MySuite) TestObjectV1ReadWrite(c *C) {
 
 	_, err = io.Copy(&actualData, &buffer)
 	c.Assert(err, IsNil)
-	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
+	c.Assert(actualData.Bytes(), DeepEquals, data)
 }

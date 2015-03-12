@@ -169,8 +169,8 @@ func Read(reader io.Reader) (io.Reader, error) {
 	footerBuffer := make([]byte, 80)
 	reader.Read(footerBuffer)
 	expectedCrc := binary.LittleEndian.Uint32(footerBuffer[:4])
-
 	actualCrc := crc32c.Sum32(footerBuffer[4:])
+
 	if expectedCrc != actualCrc {
 		// TODO perhaps we should return data and still report error?
 		return nil, errors.New("Expected CRC doesn't match for footer")
@@ -195,16 +195,14 @@ func ReadHeader(reader io.Reader) (header DonutFrameHeader, err error) {
 	if headerLength != 32 {
 		return header, errors.New("EOF found while reading donut header")
 	}
+
 	actualCrc := crc32c.Sum32(headerSlice[:24])
-
 	expectedCrc := binary.LittleEndian.Uint32(headerSlice[24:28])
-
 	if actualCrc != expectedCrc {
 		return header, errors.New("CRC for donut did not match")
 	}
 
 	err = binary.Read(bytes.NewBuffer(headerSlice[0:24]), binary.LittleEndian, &header)
-
 	return header, nil
 }
 
@@ -213,6 +211,7 @@ type checksumValue struct {
 	err      error
 }
 
+// calculate sha512 over channel
 func generateChecksum(reader io.Reader, c chan<- checksumValue) {
 	checksum, err := sha512.SumStream(reader)
 	result := checksumValue{
