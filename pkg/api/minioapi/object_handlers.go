@@ -30,7 +30,6 @@ import (
 // you must have READ access to the object.
 func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
-
 	acceptsContentType := getContentType(req)
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -41,9 +40,40 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	case nil: // success
 		{
 			log.Println("Found: " + bucket + "#" + object)
-			writeObjectHeaders(w, metadata)
-			if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
+			httpRange, err := newRange(req, metadata.Size)
+			if err != nil {
 				log.Println(err)
+				error := errorCodeError(InvalidRange)
+				errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+				w.WriteHeader(error.HTTPStatusCode)
+				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+				return
+			}
+			switch httpRange.start == 0 && httpRange.length == 0 {
+			case true:
+				writeObjectHeaders(w, metadata)
+				if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
+					log.Println(err)
+					error := errorCodeError(InternalError)
+					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+					w.WriteHeader(error.HTTPStatusCode)
+					w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+					return
+				}
+			case false:
+				metadata.Size = httpRange.length
+				writeRangeObjectHeaders(w, metadata, httpRange.getContentRange())
+				w.WriteHeader(http.StatusPartialContent)
+				_, err := server.storage.CopyObjectToWriterRange(w, bucket, object, httpRange.start, httpRange.length)
+				if err != nil {
+					log.Println(err)
+					error := errorCodeError(InternalError)
+					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+					w.WriteHeader(error.HTTPStatusCode)
+					w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+					return
+				}
+
 			}
 		}
 	case mstorage.ObjectNotFound:

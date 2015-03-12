@@ -364,16 +364,17 @@ func (s *MySuite) TestDateFormat(c *C) {
 
 func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
 	// Verify date
-	c.Assert(header["Last-Modified"][0], Equals, date.Format(time.RFC1123))
+	c.Log(header)
+	c.Assert(header.Get("Last-Modified"), Equals, date.Format(time.RFC1123))
 
 	// verify size
-	c.Assert(header["Content-Length"][0], Equals, strconv.Itoa(size))
+	c.Assert(header.Get("Content-Length"), Equals, strconv.Itoa(size))
 
 	// verify content type
-	c.Assert(header["Content-Type"][0], Equals, contentType)
+	c.Assert(header.Get("Content-Type"), Equals, contentType)
 
 	// verify etag
-	c.Assert(header["Etag"][0], Equals, etag)
+	c.Assert(header.Get("Etag"), Equals, etag)
 }
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
@@ -448,11 +449,11 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
 	// test get object
 	response, err = http.Get(testServer.URL + "/bucket/one")
-	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
 	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
 	delete(request.Header, "Content-Type")
@@ -466,9 +467,9 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
 	// test get object
 	response, err = http.Get(testServer.URL + "/bucket/two")
-	c.Assert(response.Header["Content-Type"][0], Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 }
