@@ -35,6 +35,7 @@ int32_t _minio_src_index_in_error (int r, int32_t *error_index)
         return 0;
 }
 
+// Separate out source data and target buffers
 int32_t minio_get_source_target (int errs, int k, int m,
                                  int32_t *error_index,
                                  uint32_t *decode_index,
@@ -95,7 +96,7 @@ int minio_init_decoder (int32_t *error_index,
                 tmp_decode_index[i] = r;
         }
 
-        // Not all Vandermonde matrix can be inverted
+        // Not all vandermonde matrix can be inverted
         if (gf_invert_matrix(input_matrix, inverse_matrix, k) < 0) {
                 return -1;
         }

@@ -20,6 +20,10 @@
 #include "ec-code.h"
 #include "ec-common.h"
 
+/*
+  Generate encode matrix during the encoding phase
+*/
+
 int32_t minio_init_encoder (int technique, int k, int m,
                             uint8_t **encode_matrix,
                             uint8_t **encode_tbls)
@@ -52,20 +56,4 @@ int32_t minio_init_encoder (int technique, int k, int m,
         *encode_tbls = tmp_tbls;
 
         return 0;
-}
-
-uint32_t minio_calc_chunk_size (int k, uint32_t split_len)
-{
-        int alignment;
-        int remainder;
-        int padded_len;
-
-        alignment = k * SIMD_ALIGN;
-        remainder = split_len % alignment;
-
-        padded_len = split_len;
-        if (remainder) {
-                padded_len = split_len + (alignment - remainder);
-        }
-        return padded_len / k;
 }

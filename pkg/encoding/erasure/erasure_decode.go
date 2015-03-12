@@ -39,12 +39,10 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 
 	k := int(e.k)
 	n := int(e.k + e.m)
-
 	if len(chunks) != n {
 		return nil, errors.New(fmt.Sprintf("chunks length must be %d", n))
 	}
-
-	chunk_size := int(C.minio_calc_chunk_size(e.k, C.uint32_t(length)))
+	chunk_size := getChunkSize(k, length)
 
 	error_index := make([]int, n+1)
 	var err_count int = 0
@@ -97,6 +95,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		recovered_output = append(recovered_output, chunks[i]...)
 	}
 
+	// TODO cache this if necessary
 	e.decode_matrix = decode_matrix
 	e.decode_tbls = decode_tbls
 
