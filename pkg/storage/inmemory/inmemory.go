@@ -76,6 +76,11 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 }
 
+// CopyObjectToWriterRange - GET object from memory buffer range
+func (storage *Storage) CopyObjectToWriterRange(w io.Writer, bucket, object string, start, end int64) (int64, error) {
+	return 0, mstorage.APINotImplemented{API: "GetObjectRange"}
+}
+
 // StoreBucketPolicy - Not implemented
 func (storage *Storage) StoreBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
 	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
