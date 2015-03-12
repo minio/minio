@@ -55,8 +55,8 @@ func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	return metadataList, nil
 }
 
-// StoreBucket - PUT Bucket
-func (storage *Storage) StoreBucket(bucket string) error {
+// CreateBucket - PUT Bucket
+func (storage *Storage) CreateBucket(bucket string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 

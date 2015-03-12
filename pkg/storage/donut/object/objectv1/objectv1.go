@@ -39,7 +39,7 @@ const (
 	MultipartObject
 )
 
-// Object Metadata
+// ObjectMetadata contains information necessary to reconstruct the object and basic object metadata.
 type ObjectMetadata struct {
 	Bucket      string
 	Key         string
@@ -53,6 +53,7 @@ type ObjectMetadata struct {
 	ObjectType  ObjectType
 }
 
+// Write an encoded part to a writer
 func Write(target io.Writer, metadata ObjectMetadata, reader io.Reader) error {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.LittleEndian, uint32(Version))
@@ -65,6 +66,7 @@ func Write(target io.Writer, metadata ObjectMetadata, reader io.Reader) error {
 	return err
 }
 
+// ReadMetadata reads the first elements from the stream and returns the object metadata
 func ReadMetadata(reader io.Reader) (metadata ObjectMetadata, err error) {
 	versionBytes := make([]byte, 4)
 	if err := binary.Read(reader, binary.LittleEndian, versionBytes); err != nil {

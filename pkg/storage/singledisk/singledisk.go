@@ -48,8 +48,8 @@ func (diskStorage StorageDriver) ListBuckets() ([]storage.BucketMetadata, error)
 	return nil, errors.New("Not Implemented")
 }
 
-// StoreBucket creates a new bucket
-func (diskStorage StorageDriver) StoreBucket(bucket string) error {
+// CreateBucket creates a new bucket
+func (diskStorage StorageDriver) CreateBucket(bucket string) error {
 	return errors.New("Not Implemented")
 }
 

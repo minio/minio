@@ -48,7 +48,7 @@ func testCreateBucket(c *check.C, create func() Storage) {
 func testMultipleObjectCreation(c *check.C, create func() Storage) {
 	objects := make(map[string][]byte)
 	storage := create()
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 	for i := 0; i < 10; i++ {
 		randomPerm := rand.Perm(10)
@@ -81,7 +81,7 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 
 func testPaging(c *check.C, create func() Storage) {
 	storage := create()
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	resources := BucketResourcesMetadata{}
 	objects, resources, err := storage.ListObjects("bucket", resources)
 	c.Assert(len(objects), check.Equals, 0)
@@ -183,7 +183,7 @@ func testPaging(c *check.C, create func() Storage) {
 
 func testObjectOverwriteFails(c *check.C, create func() Storage) {
 	storage := create()
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	err := storage.StoreObject("bucket", "object", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
 	err = storage.StoreObject("bucket", "object", "", bytes.NewBufferString("three"))
@@ -203,15 +203,15 @@ func testNonExistantBucketOperations(c *check.C, create func() Storage) {
 
 func testBucketRecreateFails(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.StoreBucket("string")
+	err := storage.CreateBucket("string")
 	c.Assert(err, check.IsNil)
-	err = storage.StoreBucket("string")
+	err = storage.CreateBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
 }
 
 func testPutObjectInSubdir(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 	err = storage.StoreObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
@@ -231,7 +231,7 @@ func testListBuckets(c *check.C, create func() Storage) {
 	c.Assert(err, check.IsNil)
 
 	// add one and test exists
-	err = storage.StoreBucket("bucket1")
+	err = storage.CreateBucket("bucket1")
 	c.Assert(err, check.IsNil)
 
 	buckets, err = storage.ListBuckets()
@@ -239,7 +239,7 @@ func testListBuckets(c *check.C, create func() Storage) {
 	c.Assert(err, check.IsNil)
 
 	// add two and test exists
-	err = storage.StoreBucket("bucket2")
+	err = storage.CreateBucket("bucket2")
 	c.Assert(err, check.IsNil)
 
 	buckets, err = storage.ListBuckets()
@@ -247,7 +247,7 @@ func testListBuckets(c *check.C, create func() Storage) {
 	c.Assert(err, check.IsNil)
 
 	// add three and test exists + prefix
-	err = storage.StoreBucket("bucket22")
+	err = storage.CreateBucket("bucket22")
 
 	buckets, err = storage.ListBuckets()
 	c.Assert(len(buckets), check.Equals, 3)
@@ -260,8 +260,8 @@ func testListBucketsOrder(c *check.C, create func() Storage) {
 	for i := 0; i < 10; i++ {
 		storage := create()
 		// add one and test exists
-		storage.StoreBucket("bucket1")
-		storage.StoreBucket("bucket2")
+		storage.CreateBucket("bucket1")
+		storage.CreateBucket("bucket2")
 
 		buckets, err := storage.ListBuckets()
 		c.Assert(len(buckets), check.Equals, 2)
@@ -282,7 +282,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Storage)
 
 func testNonExistantObjectInBucket(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -304,7 +304,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() Storage) {
 
 func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	err = storage.StoreObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
@@ -347,7 +347,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
 
 func testDefaultContentType(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// test empty

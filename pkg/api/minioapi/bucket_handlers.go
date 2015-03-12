@@ -123,7 +123,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	err := server.storage.StoreBucket(bucket)
+	err := server.storage.CreateBucket(bucket)
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Policy == true {
