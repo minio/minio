@@ -43,7 +43,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		return
 	}
 
-	err := server.storage.StoreBucketPolicy(bucket, policy)
+	err := server.storage.CreateBucketPolicy(bucket, policy)
 	switch err := err.(type) {
 	case nil:
 		{

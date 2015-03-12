@@ -61,7 +61,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	buffer := bytes.NewBufferString("")
 	storage.CreateBucket("bucket")
-	storage.StoreObject("bucket", "object", "", buffer)
+	storage.CreateObject("bucket", "object", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
@@ -86,7 +86,7 @@ func (s *MySuite) TestObject(c *C) {
 
 	buffer := bytes.NewBufferString("hello world")
 	storage.CreateBucket("bucket")
-	storage.StoreObject("bucket", "object", "", buffer)
+	storage.CreateObject("bucket", "object", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
@@ -112,9 +112,9 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	buffer3 := bytes.NewBufferString("hello three")
 
 	storage.CreateBucket("bucket")
-	storage.StoreObject("bucket", "object1", "", buffer1)
-	storage.StoreObject("bucket", "object2", "", buffer2)
-	storage.StoreObject("bucket", "object3", "", buffer3)
+	storage.CreateObject("bucket", "object1", "", buffer1)
+	storage.CreateObject("bucket", "object2", "", buffer2)
+	storage.CreateObject("bucket", "object3", "", buffer3)
 
 	// test non-existant object
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -204,7 +204,7 @@ func (s *MySuite) TestHeader(c *C) {
 
 	buffer := bytes.NewBufferString("hello world")
 	storage.CreateBucket("bucket")
-	storage.StoreObject("bucket", "object", "", buffer)
+	storage.CreateObject("bucket", "object", "", buffer)
 
 	response, err = http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
@@ -285,7 +285,7 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	var writer bytes.Buffer
 
-	storage.CopyObjectToWriter(&writer, "bucket", "two")
+	storage.GetObject(&writer, "bucket", "two")
 
 	c.Assert(bytes.Equal(writer.Bytes(), []byte("hello world")), Equals, true)
 

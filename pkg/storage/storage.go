@@ -28,15 +28,15 @@ type Storage interface {
 	// Bucket Operations
 	ListBuckets() ([]BucketMetadata, error)
 	CreateBucket(bucket string) error
-	StoreBucketPolicy(bucket string, p BucketPolicy) error
+	CreateBucketPolicy(bucket string, p BucketPolicy) error
 	GetBucketPolicy(bucket string) (BucketPolicy, error)
 
 	// Object Operations
-	CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error)
-	CopyObjectToWriterRange(w io.Writer, bucket string, object string, start, length int64) (int64, error)
+	GetObject(w io.Writer, bucket, object string) (int64, error)
+	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
 	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
-	StoreObject(bucket string, key string, contentType string, data io.Reader) error
+	CreateObject(bucket string, key string, contentType string, data io.Reader) error
 }
 
 // BucketMetadata - name and create date
