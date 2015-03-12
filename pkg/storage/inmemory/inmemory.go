@@ -125,8 +125,8 @@ func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Rea
 	return nil
 }
 
-// StoreBucket - create bucket in memory
-func (storage *Storage) StoreBucket(bucketName string) error {
+// CreateBucket - create bucket in memory
+func (storage *Storage) CreateBucket(bucketName string) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 	if !mstorage.IsValidBucket(bucketName) {

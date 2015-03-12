@@ -60,7 +60,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("")
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	storage.StoreObject("bucket", "object", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -85,7 +85,7 @@ func (s *MySuite) TestObject(c *C) {
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("hello world")
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	storage.StoreObject("bucket", "object", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -111,7 +111,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	buffer2 := bytes.NewBufferString("hello two")
 	buffer3 := bytes.NewBufferString("hello three")
 
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	storage.StoreObject("bucket", "object1", "", buffer1)
 	storage.StoreObject("bucket", "object2", "", buffer2)
 	storage.StoreObject("bucket", "object3", "", buffer3)
@@ -203,7 +203,7 @@ func (s *MySuite) TestHeader(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 
 	buffer := bytes.NewBufferString("hello world")
-	storage.StoreBucket("bucket")
+	storage.CreateBucket("bucket")
 	storage.StoreObject("bucket", "object", "", buffer)
 
 	response, err = http.Get(testServer.URL + "/bucket/object")
@@ -312,7 +312,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 0)
 
-	storage.StoreBucket("foo")
+	storage.CreateBucket("foo")
 
 	response, err = http.Get(testServer.URL + "/")
 	defer response.Body.Close()
@@ -324,7 +324,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 1)
 	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "foo")
 
-	storage.StoreBucket("bar")
+	storage.CreateBucket("bar")
 
 	response, err = http.Get(testServer.URL + "/")
 	defer response.Body.Close()
@@ -382,7 +382,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.StoreBucket("foo")
+	err := storage.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/", bytes.NewBufferString(""))
@@ -407,7 +407,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.StoreBucket("foo")
+	err := storage.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
@@ -432,7 +432,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.StoreBucket("bucket")
+	err := storage.CreateBucket("bucket")
 	c.Assert(err, IsNil)
 
 	client := http.Client{}

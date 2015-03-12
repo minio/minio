@@ -27,7 +27,7 @@ import (
 type Storage interface {
 	// Bucket Operations
 	ListBuckets() ([]BucketMetadata, error)
-	StoreBucket(bucket string) error
+	CreateBucket(bucket string) error
 	StoreBucketPolicy(bucket string, p BucketPolicy) error
 	GetBucketPolicy(bucket string) (BucketPolicy, error)
 
