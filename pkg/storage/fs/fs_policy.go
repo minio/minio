@@ -69,8 +69,8 @@ func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, e
 
 }
 
-// StoreBucketPolicy - PUT bucket policy
-func (storage *Storage) StoreBucketPolicy(bucket string, p mstorage.BucketPolicy) error {
+// CreateBucketPolicy - PUT bucket policy
+func (storage *Storage) CreateBucketPolicy(bucket string, p mstorage.BucketPolicy) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 

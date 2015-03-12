@@ -53,8 +53,8 @@ func (diskStorage StorageDriver) CreateBucket(bucket string) error {
 	return errors.New("Not Implemented")
 }
 
-// StoreBucketPolicy sets a bucket's access policy
-func (diskStorage StorageDriver) StoreBucketPolicy(bucket string, p storage.BucketPolicy) error {
+// CreateBucketPolicy sets a bucket's access policy
+func (diskStorage StorageDriver) CreateBucketPolicy(bucket string, p storage.BucketPolicy) error {
 	return errors.New("Not Implemented")
 }
 
@@ -63,13 +63,18 @@ func (diskStorage StorageDriver) GetBucketPolicy(bucket string) (storage.BucketP
 	return storage.BucketPolicy{}, errors.New("Not Implemented")
 }
 
-// CopyObjectToWriter retrieves an object and writes it to a writer
-func (diskStorage StorageDriver) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+// GetObject retrieves an object and writes it to a writer
+func (diskStorage StorageDriver) GetObject(w io.Writer, bucket, object string) (int64, error) {
+	return 0, errors.New("Not Implemented")
+}
+
+// GetPartialObject retrieves an object and writes it to a writer
+func (diskStorage StorageDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	return 0, errors.New("Not Implemented")
 }
 
 // GetObjectMetadata retrieves an object's metadata
-func (diskStorage StorageDriver) GetObjectMetadata(bucket string, object string, prefix string) (storage.ObjectMetadata, error) {
+func (diskStorage StorageDriver) GetObjectMetadata(bucket, object string, prefix string) (storage.ObjectMetadata, error) {
 	return storage.ObjectMetadata{}, errors.New("Not Implemented")
 }
 
@@ -78,7 +83,7 @@ func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.Bu
 	return nil, storage.BucketResourcesMetadata{}, errors.New("Not Implemented")
 }
 
-// StoreObject creates a new object
-func (diskStorage StorageDriver) StoreObject(bucket string, key string, contentType string, data io.Reader) error {
+// CreateObject creates a new object
+func (diskStorage StorageDriver) CreateObject(bucket string, key string, contentType string, data io.Reader) error {
 	return errors.New("Not Implemented")
 }

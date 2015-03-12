@@ -52,7 +52,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			switch httpRange.start == 0 && httpRange.length == 0 {
 			case true:
 				writeObjectHeaders(w, metadata)
-				if _, err := server.storage.CopyObjectToWriter(w, bucket, object); err != nil {
+				if _, err := server.storage.GetObject(w, bucket, object); err != nil {
 					log.Println(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
@@ -64,7 +64,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				metadata.Size = httpRange.length
 				writeRangeObjectHeaders(w, metadata, httpRange.getContentRange())
 				w.WriteHeader(http.StatusPartialContent)
-				_, err := server.storage.CopyObjectToWriterRange(w, bucket, object, httpRange.start, httpRange.length)
+				_, err := server.storage.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
 					log.Println(err)
 					error := errorCodeError(InternalError)
@@ -165,7 +165,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	err := server.storage.StoreObject(bucket, object, "", req.Body)
+	err := server.storage.CreateObject(bucket, object, "", req.Body)
 	switch err := err.(type) {
 	case nil:
 		w.Header().Set("Server", "Minio")

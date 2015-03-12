@@ -64,8 +64,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 	close(errorChannel)
 }
 
-// CopyObjectToWriter - GET object from memory buffer
-func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+// GetObject - GET object from memory buffer
+func (storage *Storage) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	// get object
 	key := object
 	if val, ok := storage.objectdata[key]; ok {
@@ -76,13 +76,13 @@ func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object st
 	return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-// CopyObjectToWriterRange - GET object from memory buffer range
-func (storage *Storage) CopyObjectToWriterRange(w io.Writer, bucket, object string, start, end int64) (int64, error) {
-	return 0, mstorage.APINotImplemented{API: "GetObjectRange"}
+// GetPartialObject - GET object from memory buffer range
+func (storage *Storage) GetPartialObject(w io.Writer, bucket, object string, start, end int64) (int64, error) {
+	return 0, mstorage.APINotImplemented{API: "GetPartialObject"}
 }
 
-// StoreBucketPolicy - Not implemented
-func (storage *Storage) StoreBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
+// CreateBucketPolicy - Not implemented
+func (storage *Storage) CreateBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
 	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
 }
 
@@ -91,8 +91,8 @@ func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, e
 	return mstorage.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
 }
 
-// StoreObject - PUT object to memory buffer
-func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
+// CreateObject - PUT object to memory buffer
+func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Reader) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 

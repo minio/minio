@@ -31,8 +31,8 @@ import (
 
 /// Object Operations
 
-// CopyObjectToWriterRange - GET object from range
-func (storage *Storage) CopyObjectToWriterRange(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+// GetPartialObject - GET object from range
+func (storage *Storage) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	// validate bucket
 	if mstorage.IsValidBucket(bucket) == false {
 		return 0, mstorage.BucketNameInvalid{Bucket: bucket}
@@ -79,8 +79,8 @@ func (storage *Storage) CopyObjectToWriterRange(w io.Writer, bucket, object stri
 	return count, nil
 }
 
-// CopyObjectToWriter - GET object
-func (storage *Storage) CopyObjectToWriter(w io.Writer, bucket string, object string) (int64, error) {
+// GetObject - GET object from key
+func (storage *Storage) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	// validate bucket
 	if mstorage.IsValidBucket(bucket) == false {
 		return 0, mstorage.BucketNameInvalid{Bucket: bucket}
@@ -181,8 +181,8 @@ func (storage *Storage) GetObjectMetadata(bucket, object, prefix string) (mstora
 	return metadata, nil
 }
 
-// StoreObject - PUT object
-func (storage *Storage) StoreObject(bucket, key, contentType string, data io.Reader) error {
+// CreateObject - PUT object
+func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Reader) error {
 	// TODO Commits should stage then move instead of writing directly
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
