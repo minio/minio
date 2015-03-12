@@ -19,13 +19,9 @@
 
 #include <stdint.h>
 
-#define SIMD_ALIGN 32
-
 int32_t minio_init_encoder (int technique, int k, int m,
                             uint8_t **encode_matrix,
                             uint8_t **encode_tbls);
-
-uint32_t minio_calc_chunk_size (int k, uint32_t split_len);
 
 int32_t minio_init_decoder (int32_t *error_index,
                             int k, int n, int errs,

@@ -38,6 +38,10 @@ const (
 	M = 3
 )
 
+const (
+	SimdAlign = 32
+)
+
 // EncoderParams is a configuration set for building an encoder. It is created using ValidateParams.
 type EncoderParams struct {
 	K         uint8
@@ -112,15 +116,28 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
+func getChunkSize(k, split_len int) int {
+	var alignment, remainder, padded_len int
+
+	alignment = k * SimdAlign
+	remainder = split_len % alignment
+
+	padded_len = split_len
+	if remainder != 0 {
+		padded_len = split_len + (alignment - remainder)
+	}
+	return padded_len / k
+}
+
 // Encode encodes a block of data. The input is the original data. The output
 // is a 2 tuple containing (k + m) chunks of erasure encoded data and the
 // length of the original object.
 func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var block_len = len(block)
 
-	chunk_size := int(C.minio_calc_chunk_size(e.k, C.uint32_t(block_len)))
-	chunk_len := chunk_size * int(e.p.K)
-	pad_len := chunk_len - block_len
+	chunk_size := getChunkSize(int(e.k), block_len)
+	chunk_len := chunk_size * int(e.k)
+	pad_len := int(chunk_len) - block_len
 
 	if pad_len > 0 {
 		s := make([]byte, pad_len)
