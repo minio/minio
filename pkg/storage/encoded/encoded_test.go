@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package singledisk
+package encoded
 
 import (
 	"io/ioutil"
@@ -39,7 +39,7 @@ func (s *MySuite) TestAPISuite(c *C) {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
-		_, _, store := Start(path, nil) // TODO Make InMemory driver
+		_, _, store := Start() // TODO Make InMemory driver
 		return store
 	}
 	mstorage.APITestSuite(c, create)

@@ -227,16 +227,17 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 	return results, resources, nil
 }
 
-type byBucketName []mstorage.BucketMetadata
+// ByBucketName is a type for sorting bucket metadata by bucket name
+type ByBucketName []mstorage.BucketMetadata
 
 // Len of bucket name
-func (b byBucketName) Len() int { return len(b) }
+func (b ByBucketName) Len() int { return len(b) }
 
 // Swap bucket i, j
-func (b byBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b ByBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
 // Less
-func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
+func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from memory
 func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
@@ -244,7 +245,7 @@ func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 	for _, bucket := range storage.bucketdata {
 		results = append(results, bucket.metadata)
 	}
-	sort.Sort(byBucketName(results))
+	sort.Sort(ByBucketName(results))
 	return results, nil
 }
 
