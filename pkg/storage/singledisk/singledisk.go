@@ -17,19 +17,9 @@
 package singledisk
 
 import (
-	"bytes"
-	"crypto/md5"
-	"encoding/gob"
 	"errors"
-	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/donut/erasure/erasure1"
-	"github.com/minio-io/minio/pkg/storage/donut/object/objectv1"
-	"github.com/minio-io/minio/pkg/utils/split"
 	"io"
-	"os"
-	"path"
-	"time"
 )
 
 // StorageDriver creates a new single disk storage driver using donut without encoding.
@@ -39,25 +29,22 @@ type StorageDriver struct {
 
 // DonutBox is an interface specifying how the storage driver should interact with its underlying system.
 type DonutBox interface {
-	Store(objectv1.ObjectMetadata, erasure1.DataHeader, io.Reader) error
-	Get(bucket, key string, erasurePart uint16, encodedPart uint8) (objectv1.ObjectMetadata, erasure1.DataHeader, io.Reader, error)
+	Store() error
+	Get() (io.Reader, error)
 	ListObjects(bucket string) ([]string, error)
-	ListBuckets() ([]storage.BucketMetadata, error)
+	ListBuckets() ([]string, error)
 }
 
 // Start a single disk subsystem
-func Start(root string, donutBox DonutBox) (chan<- string, <-chan error, storage.Storage) {
+func Start() (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	s := new(StorageDriver)
-	s.donutBox = donutBox
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error, s *StorageDriver) {
-	err := os.MkdirAll(s.root, 0700)
-	errorChannel <- err
 	close(errorChannel)
 }
 
@@ -94,10 +81,6 @@ func (diskStorage StorageDriver) GetPartialObject(w io.Writer, bucket, object st
 // GetObjectMetadata retrieves an object's metadata
 func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix string) (metadata storage.ObjectMetadata, err error) {
 	return metadata, errors.New("Not Implemented")
-}
-
-func readHeaderGob(reader io.Reader) (header ObjectHeader, err error) {
-	return header, errors.New("Not Implemented")
 }
 
 // ListObjects lists objects
