@@ -227,6 +227,7 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 	return results, resources, nil
 }
 
+// ByBucketName is a type for sorting bucket metadata by bucket name
 type ByBucketName []mstorage.BucketMetadata
 
 // Len of bucket name
