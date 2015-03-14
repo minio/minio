@@ -66,8 +66,9 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 	etags := make(map[string]string)
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		storage.GetObject(&byteBuffer, "bucket", key)
-		c.Assert(bytes.Equal(value, byteBuffer.Bytes()), check.Equals, true)
+		_, err := storage.GetObject(&byteBuffer, "bucket", key)
+		c.Assert(err, check.IsNil)
+		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
 		metadata, err := storage.GetObjectMetadata("bucket", key, "")
 		c.Assert(err, check.IsNil)

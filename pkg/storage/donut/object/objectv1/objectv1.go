@@ -23,21 +23,10 @@ import (
 	"errors"
 	"io"
 	"strconv"
-	"time"
 )
 
 // Package Version
 const Version = uint32(1)
-
-// ObjectType is the type of object stored. It is either an Object or Multipart Object.
-type ObjectType uint8
-
-const (
-	// Object is a full object
-	Object ObjectType = iota
-	// MultipartObject is a collection of Objects uploaded separately that represent a large object.
-	MultipartObject
-)
 
 // ObjectMetadata contains information necessary to reconstruct the object and basic object metadata.
 type ObjectMetadata struct {
@@ -45,12 +34,6 @@ type ObjectMetadata struct {
 	Key         string
 	ErasurePart uint16
 	EncodedPart uint8
-
-	ContentType string
-	Created     time.Time
-	Length      uint64
-	Md5         []byte
-	ObjectType  ObjectType
 }
 
 // Write an encoded part to a writer
