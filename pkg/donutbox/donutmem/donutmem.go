@@ -41,8 +41,8 @@ func NewDonutMem() donutbox.DonutBox {
 func (donutMem donutMem) ListBuckets() ([]string, error) {
 	donutMem.lock.RLock()
 	defer donutMem.lock.RUnlock()
-	buckets := make([]string, 0)
-	for k, _ := range donutMem.buckets {
+	var buckets []string
+	for k := range donutMem.buckets {
 		buckets = append(buckets, k)
 	}
 	return buckets, nil
@@ -74,8 +74,8 @@ func (donutMem donutMem) ListObjectsInBucket(bucketKey, prefixKey string) ([]str
 	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
 		curBucket.lock.RLock()
 		defer curBucket.lock.RUnlock()
-		objects := make([]string, 0)
-		for objectKey, _ := range curBucket.objects {
+		var objects []string
+		for objectKey := range curBucket.objects {
 			if strings.HasPrefix(objectKey, prefixKey) {
 				objects = append(objects, objectKey)
 			}

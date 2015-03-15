@@ -62,7 +62,7 @@ func (s *MySuite) TestBucketList(c *C) {
 	results, err := donut.ListBuckets()
 	c.Assert(len(results), Equals, 0)
 
-	buckets := make([]string, 0)
+	var buckets []string
 	for i := 0; i < 10; i++ {
 		bucket := "foo" + strconv.Itoa(i)
 		buckets = append(buckets, bucket)
@@ -83,7 +83,7 @@ func (s *MySuite) TestObjectList(c *C) {
 	results, err := donut.ListObjectsInBucket("foo", "")
 	c.Assert(len(results), Equals, 0)
 
-	objects := make([]string, 0)
+	var objects []string
 	for i := 0; i < 10; i++ {
 		object := "foo" + strconv.Itoa(i)
 		objects = append(objects, object)
