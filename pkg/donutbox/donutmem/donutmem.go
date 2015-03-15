@@ -59,12 +59,15 @@ func (donutMem donutMem) CreateBucket(b string) error {
 	donutMem.buckets[b] = &newBucket
 	return nil
 }
+
 func (donutMem donutMem) ListObjects(bucket, prefix string) ([]string, error) {
 	return nil, errors.New("Not Implemented")
 }
+
 func (donutMem donutMem) GetBucketMetadata(bucket, name string) (io.Reader, error) {
 	return nil, errors.New("Not Implemented")
 }
+
 func (donutMem donutMem) SetBucketMetadata(bucket, name string, metadata io.Reader) error {
 	return errors.New("Not Implemented")
 }
@@ -117,6 +120,7 @@ func (donutMem donutMem) GetObjectWriter(bucket, key string, column uint, blockS
 	writer.CloseWithError(errors.New("Bucket does not exist"))
 	return writer
 }
+
 func (donutMem donutMem) GetObjectReader(bucket, key string, column int) (io.Reader, error) {
 	donutMem.lock.RLock()
 	defer donutMem.lock.RUnlock()
@@ -132,9 +136,11 @@ func (donutMem donutMem) GetObjectReader(bucket, key string, column int) (io.Rea
 	}
 	return nil, errors.New("Bucket not found")
 }
+
 func (donutMem donutMem) StoreObjectMetadata(bucket, object, name string, reader io.Reader) error {
 	return errors.New("Not Implemented")
 }
+
 func (donutMem donutMem) GetObjectMetadata(bucket, object, name string) (io.Reader, error) {
 	return nil, errors.New("Not Implemented")
 }
