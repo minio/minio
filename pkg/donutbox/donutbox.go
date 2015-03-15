@@ -14,7 +14,7 @@ type DonutBox interface {
 	SetBucketMetadata(bucket, name string, metadata io.Reader) error
 
 	// object operations
-	GetObjectWriter(bucket, object string, column, blockSize uint) (io.WriteCloser, <-chan Result, error)
+	GetObjectWriter(bucket, object string, column, blockSize uint) *io.PipeWriter
 	GetObjectReader(bucket, object string, column int) (io.Reader, error)
 	StoreObjectMetadata(bucket, object, name string, reader io.Reader) error
 	GetObjectMetadata(bucket, object, name string) (io.Reader, error)
