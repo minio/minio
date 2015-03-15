@@ -49,7 +49,7 @@ func (diskStorage StorageDriver) ListBuckets() ([]storage.BucketMetadata, error)
 
 // CreateBucket creates a new bucket
 func (diskStorage StorageDriver) CreateBucket(bucket string) error {
-	return errors.New("Not Implemented")
+	return diskStorage.donutBox.CreateBucket(bucket)
 }
 
 // CreateBucketPolicy sets a bucket's access policy
