@@ -29,10 +29,11 @@ type StorageDriver struct {
 }
 
 // Start a single disk subsystem
-func Start() (chan<- string, <-chan error, storage.Storage) {
+func Start(donutBox donutbox.DonutBox) (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 	s := new(StorageDriver)
+	s.donutBox = donutBox
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
 }

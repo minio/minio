@@ -39,11 +39,19 @@ func NewDonutMem() donutbox.DonutBox {
 
 // system operations
 func (donutMem donutMem) ListBuckets() ([]string, error) {
-	return nil, errors.New("Not Implemented")
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+	buckets := make([]string, 0)
+	for k, _ := range donutMem.buckets {
+		buckets = append(buckets, k)
+	}
+	return buckets, nil
 }
 
 // bucket operations
 func (donutMem donutMem) CreateBucket(b string) error {
+	donutMem.lock.Lock()
+	defer donutMem.lock.Unlock()
 	b = strings.ToLower(b)
 	if _, ok := donutMem.buckets[b]; ok {
 		return errors.New("Bucket Exists")
@@ -60,16 +68,53 @@ func (donutMem donutMem) CreateBucket(b string) error {
 	return nil
 }
 
-func (donutMem donutMem) ListObjects(bucket, prefix string) ([]string, error) {
-	return nil, errors.New("Not Implemented")
+func (donutMem donutMem) ListObjectsInBucket(bucketKey, prefixKey string) ([]string, error) {
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+		curBucket.lock.RLock()
+		defer curBucket.lock.RUnlock()
+		objects := make([]string, 0)
+		for objectKey, _ := range curBucket.objects {
+			if strings.HasPrefix(objectKey, prefixKey) {
+				objects = append(objects, objectKey)
+			}
+		}
+		return objects, nil
+	}
+	return nil, errors.New("Bucket does not exist")
 }
 
-func (donutMem donutMem) GetBucketMetadata(bucket, name string) (io.Reader, error) {
-	return nil, errors.New("Not Implemented")
+func (donutMem donutMem) GetBucketMetadata(bucketKey string) (map[string]string, error) {
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+		curBucket.lock.RLock()
+		defer curBucket.lock.RUnlock()
+		result := make(map[string]string)
+		for k, v := range curBucket.metadata {
+			result[k] = v
+		}
+		return result, nil
+	}
+	return nil, errors.New("Bucket not found")
 }
 
-func (donutMem donutMem) SetBucketMetadata(bucket, name string, metadata io.Reader) error {
-	return errors.New("Not Implemented")
+func (donutMem donutMem) SetBucketMetadata(bucketKey string, metadata map[string]string) error {
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+		curBucket.lock.Lock()
+		defer curBucket.lock.Unlock()
+		newMetadata := make(map[string]string)
+		for k, v := range metadata {
+			newMetadata[k] = v
+		}
+		curBucket.metadata = newMetadata
+		return nil
+	}
+	return errors.New("Bucket not found")
 }
 
 // object operations
@@ -137,10 +182,44 @@ func (donutMem donutMem) GetObjectReader(bucket, key string, column int) (io.Rea
 	return nil, errors.New("Bucket not found")
 }
 
-func (donutMem donutMem) StoreObjectMetadata(bucket, object, name string, reader io.Reader) error {
-	return errors.New("Not Implemented")
+func (donutMem donutMem) SetObjectMetadata(bucketKey, objectKey string, metadata map[string]string) error {
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+		curBucket.lock.RLock()
+		defer curBucket.lock.RUnlock()
+		if curObject, ok := curBucket.objects[objectKey]; ok {
+			curObject.lock.Lock()
+			defer curObject.lock.Unlock()
+			newMetadata := make(map[string]string)
+			for k, v := range metadata {
+				newMetadata[k] = v
+			}
+			curObject.metadata = newMetadata
+			return nil
+		}
+		return errors.New("Object not found")
+	}
+	return errors.New("Bucket not found")
 }
 
-func (donutMem donutMem) GetObjectMetadata(bucket, object, name string) (io.Reader, error) {
-	return nil, errors.New("Not Implemented")
+func (donutMem donutMem) GetObjectMetadata(bucketKey, objectKey string) (map[string]string, error) {
+	donutMem.lock.RLock()
+	defer donutMem.lock.RUnlock()
+
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+		curBucket.lock.RLock()
+		defer curBucket.lock.RUnlock()
+		if curObject, ok := curBucket.objects[objectKey]; ok {
+			curObject.lock.RLock()
+			defer curObject.lock.RUnlock()
+			result := make(map[string]string)
+			for k, v := range curObject.metadata {
+				result[k] = v
+			}
+			return result, nil
+		}
+		return nil, errors.New("Object not found")
+	}
+	return nil, errors.New("Bucket not found")
 }

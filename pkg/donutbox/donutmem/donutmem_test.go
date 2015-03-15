@@ -5,6 +5,8 @@ import (
 
 	. "gopkg.in/check.v1"
 	"io/ioutil"
+	"sort"
+	"strconv"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -13,7 +15,7 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) TestAPISuite(c *C) {
+func (s *MySuite) TestCreateAndReadObject(c *C) {
 	data := "Hello World"
 	donut := NewDonutMem()
 
@@ -52,5 +54,95 @@ func (s *MySuite) TestAPISuite(c *C) {
 	c.Assert(err, IsNil)
 	result, err = ioutil.ReadAll(reader)
 	c.Assert(result, DeepEquals, []byte(data))
+}
+
+func (s *MySuite) TestBucketList(c *C) {
+	donut := NewDonutMem()
+
+	results, err := donut.ListBuckets()
+	c.Assert(len(results), Equals, 0)
+
+	buckets := make([]string, 0)
+	for i := 0; i < 10; i++ {
+		bucket := "foo" + strconv.Itoa(i)
+		buckets = append(buckets, bucket)
+		err := donut.CreateBucket(bucket)
+		c.Assert(err, IsNil)
+	}
+	sort.Strings(buckets)
+	results, err = donut.ListBuckets()
+	c.Assert(err, IsNil)
+	sort.Strings(results)
+	c.Assert(results, DeepEquals, buckets)
+}
+
+func (s *MySuite) TestObjectList(c *C) {
+	donut := NewDonutMem()
+	donut.CreateBucket("foo")
+
+	results, err := donut.ListObjectsInBucket("foo", "")
+	c.Assert(len(results), Equals, 0)
+
+	objects := make([]string, 0)
+	for i := 0; i < 10; i++ {
+		object := "foo" + strconv.Itoa(i)
+		objects = append(objects, object)
+		writer := donut.GetObjectWriter("foo", object, 0, 2)
+		writer.Write([]byte(object))
+		writer.Close()
+		c.Assert(err, IsNil)
+	}
+	sort.Strings(objects)
+	results, err = donut.ListObjectsInBucket("foo", "")
+	c.Assert(err, IsNil)
+	c.Assert(len(results), Equals, 10)
+	sort.Strings(results)
+	c.Assert(results, DeepEquals, objects)
+}
+
+func (s *MySuite) TestBucketMetadata(c *C) {
+	donut := NewDonutMem()
+	donut.CreateBucket("foo")
+
+	metadata := make(map[string]string)
+
+	metadata["hello"] = "world"
+	metadata["foo"] = "bar"
+
+	err := donut.SetBucketMetadata("foo", metadata)
+	c.Assert(err, IsNil)
+
+	result, err := donut.GetBucketMetadata("foo")
+	c.Assert(result, DeepEquals, metadata)
+}
+
+func (s *MySuite) TestObjectMetadata(c *C) {
+	donut := NewDonutMem()
+	donut.CreateBucket("foo")
+
+	metadata := make(map[string]string)
+
+	metadata["hello"] = "world"
+	metadata["foo"] = "bar"
+
+	err := donut.SetObjectMetadata("foo", "bar", metadata)
+	c.Assert(err, Not(IsNil))
+
+	result, err := donut.GetObjectMetadata("foo", "bar")
+	c.Assert(result, IsNil)
+	c.Assert(err, Not(IsNil))
+
+	writer := donut.GetObjectWriter("foo", "bar", 0, 2)
+	_, err = writer.Write([]byte("Hello World"))
+	c.Assert(err, IsNil)
+	err = writer.Close()
+	c.Assert(err, IsNil)
+
+	err = donut.SetObjectMetadata("foo", "bar", metadata)
+	c.Assert(err, IsNil)
+
+	result, err = donut.GetObjectMetadata("foo", "bar")
+	c.Assert(err, IsNil)
+	c.Assert(result, DeepEquals, metadata)
 
 }
