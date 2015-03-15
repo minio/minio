@@ -9,15 +9,15 @@ type DonutBox interface {
 
 	// bucket operations
 	CreateBucket(bucket string) error
-	ListObjects(bucket, prefix string) ([]string, error)
-	GetBucketMetadata(bucket, name string) (io.Reader, error)
-	SetBucketMetadata(bucket, name string, metadata io.Reader) error
+	ListObjectsInBucket(bucket, prefix string) ([]string, error)
+	GetBucketMetadata(bucket string) (map[string]string, error)
+	SetBucketMetadata(bucket string, metadata map[string]string) error
 
 	// object operations
 	GetObjectWriter(bucket, object string, column, blockSize uint) *io.PipeWriter
 	GetObjectReader(bucket, object string, column int) (io.Reader, error)
-	StoreObjectMetadata(bucket, object, name string, reader io.Reader) error
-	GetObjectMetadata(bucket, object, name string) (io.Reader, error)
+	SetObjectMetadata(bucket, object string, metadata map[string]string) error
+	GetObjectMetadata(bucket, object string) (map[string]string, error)
 }
 
 // Result is a result for async tasks
