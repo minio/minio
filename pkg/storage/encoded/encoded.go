@@ -18,21 +18,14 @@ package encoded
 
 import (
 	"errors"
+	"github.com/minio-io/minio/pkg/donutbox"
 	"github.com/minio-io/minio/pkg/storage"
 	"io"
 )
 
 // StorageDriver creates a new single disk storage driver using donut without encoding.
 type StorageDriver struct {
-	donutBox DonutBox
-}
-
-// DonutBox is an interface specifying how the storage driver should interact with its underlying system.
-type DonutBox interface {
-	Store() error
-	Get() (io.Reader, error)
-	ListObjects(bucket string) ([]string, error)
-	ListBuckets() ([]string, error)
+	donutBox donutbox.DonutBox
 }
 
 // Start a single disk subsystem
