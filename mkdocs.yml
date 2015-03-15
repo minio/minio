@@ -1,4 +1,6 @@
 site_name: Minio Documentation
+copyright: Minio, Inc.
+include_search: true
 pages:
 - ['index.md', Welcome to Minio]
 - ['architecture.md', 'Minio', Architecture]
