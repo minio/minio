@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package file
 
 import (
 	"io"

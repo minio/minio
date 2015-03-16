@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package file
 
 import (
 	"bufio"
@@ -26,7 +26,7 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
-// Storage - fs local variables
+// Storage - file local variables
 type Storage struct {
 	root string
 	lock *sync.Mutex

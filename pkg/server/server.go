@@ -26,8 +26,8 @@ import (
 	"github.com/minio-io/minio/pkg/api/webuiapi"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/fs"
-	"github.com/minio-io/minio/pkg/storage/inmemory"
+	"github.com/minio-io/minio/pkg/storage/file"
+	"github.com/minio-io/minio/pkg/storage/memory"
 )
 
 // Config - http server parameters
@@ -40,7 +40,7 @@ type Config struct {
 	APIType  interface{}
 }
 
-// MinioAPI - storage type donut, fs, inmemory
+// MinioAPI - storage type donut, file, memory
 type MinioAPI struct {
 	StorageType StorageType
 }
@@ -55,7 +55,7 @@ type StorageType int
 
 // Storage types
 const (
-	InMemory = iota
+	Memory = iota
 	File
 	Donut
 )
@@ -126,9 +126,9 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 	//    - ctrlChans has channel to communicate to storage
 	//    - statusChans has channel for messages coming from storage
 	switch {
-	case storageType == InMemory:
+	case storageType == Memory:
 		{
-			ctrlChan, statusChan, storage = inmemory.Start()
+			ctrlChan, statusChan, storage = memory.Start()
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
@@ -139,7 +139,7 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage")
-			ctrlChan, statusChan, storage = fs.Start(root)
+			ctrlChan, statusChan, storage = file.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
