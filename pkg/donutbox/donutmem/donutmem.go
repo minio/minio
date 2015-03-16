@@ -74,11 +74,16 @@ func (donutMem donutMem) ListObjectsInBucket(bucketKey, prefixKey string) ([]str
 	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
 		curBucket.lock.RLock()
 		defer curBucket.lock.RUnlock()
-		var objects []string
+		objectMap := make(map[string]string)
 		for objectKey := range curBucket.objects {
-			if strings.HasPrefix(objectKey, prefixKey) {
-				objects = append(objects, objectKey)
+			objectName := strings.Split(objectKey, "#")[0]
+			if strings.HasPrefix(objectName, prefixKey) {
+				objectMap[objectName] = objectName
 			}
+		}
+		var objects []string
+		for k, _ := range objectMap {
+			objects = append(objects, k)
 		}
 		return objects, nil
 	}
@@ -118,24 +123,20 @@ func (donutMem donutMem) SetBucketMetadata(bucketKey string, metadata map[string
 }
 
 // object operations
-func (donutMem donutMem) GetObjectWriter(bucket, key string, column uint, blockSize uint) *io.PipeWriter {
+func (donutMem donutMem) GetObjectWriter(bucketKey, objectKey string, column uint, blockSize uint) (*donutbox.NewObject, error) {
+	key := getKey(bucketKey, objectKey, column)
 	reader, writer := io.Pipe()
+	returnObject := donutbox.CreateNewObject(writer)
 	donutMem.lock.RLock()
 	defer donutMem.lock.RUnlock()
-	if curBucket, ok := donutMem.buckets[bucket]; ok {
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
 		curBucket.lock.Lock()
 		defer curBucket.lock.Unlock()
 		if _, ok := curBucket.objects[key]; !ok {
-			// create object
-			metadata := make(map[string]string)
-			metadata["key"] = key
-			metadata["blockSize"] = strconv.FormatInt(int64(blockSize), 10)
-
 			newObject := object{
-				name:     key,
-				data:     make([]byte, 0),
-				metadata: metadata,
-				lock:     new(sync.RWMutex),
+				name: key,
+				data: make([]byte, 0),
+				lock: new(sync.RWMutex),
 			}
 
 			newObject.lock.Lock()
@@ -143,33 +144,45 @@ func (donutMem donutMem) GetObjectWriter(bucket, key string, column uint, blockS
 			go func() {
 				defer newObject.lock.Unlock()
 				var objBuffer bytes.Buffer
+
 				_, err := io.Copy(&objBuffer, reader)
 				if err == nil {
 					newObject.data = objBuffer.Bytes()
 					writer.Close()
-				} else {
-					donutMem.lock.RLock()
-					defer donutMem.lock.RUnlock()
-					bucket, _ := donutMem.buckets[bucket]
-					bucket.lock.Lock()
-					defer bucket.lock.Unlock()
-					delete(bucket.objects, key)
-					writer.CloseWithError(err)
+
+					metadata := returnObject.GetMetadata()
+					for k, v := range metadata {
+						metadata[k] = v
+					}
+					metadata["key"] = objectKey
+					metadata["column"] = strconv.FormatUint(uint64(column), 10)
+					newObject.metadata = metadata
+
+					return
 				}
+
+				donutMem.lock.RLock()
+				defer donutMem.lock.RUnlock()
+				bucket, _ := donutMem.buckets[bucketKey]
+				bucket.lock.Lock()
+				defer bucket.lock.Unlock()
+				delete(bucket.objects, key)
+				writer.CloseWithError(err)
 			}()
-			return writer
+			return returnObject, nil
 		}
 		writer.CloseWithError(errors.New("Object exists"))
-		return writer
+		return nil, errors.New("Object exists")
 	}
 	writer.CloseWithError(errors.New("Bucket does not exist"))
-	return writer
+	return nil, errors.New("Bucket does not exist")
 }
 
-func (donutMem donutMem) GetObjectReader(bucket, key string, column int) (io.Reader, error) {
+func (donutMem donutMem) GetObjectReader(bucketKey, objectKey string, column uint) (io.Reader, error) {
+	key := getKey(bucketKey, objectKey, column)
 	donutMem.lock.RLock()
 	defer donutMem.lock.RUnlock()
-	if curBucket, ok := donutMem.buckets[bucket]; ok {
+	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
 		curBucket.lock.RLock()
 		defer curBucket.lock.RUnlock()
 		if curObject, ok := curBucket.objects[key]; ok {
@@ -182,35 +195,37 @@ func (donutMem donutMem) GetObjectReader(bucket, key string, column int) (io.Rea
 	return nil, errors.New("Bucket not found")
 }
 
-func (donutMem donutMem) SetObjectMetadata(bucketKey, objectKey string, metadata map[string]string) error {
+//func (donutMem donutMem) SetObjectMetadata(bucketKey, objectKey string, column uint, metadata map[string]string) error {
+//	key := getKey(bucketKey, objectKey, column)
+//	donutMem.lock.RLock()
+//	defer donutMem.lock.RUnlock()
+//	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
+//		curBucket.lock.RLock()
+//		defer curBucket.lock.RUnlock()
+//		if curObject, ok := curBucket.objects[key]; ok {
+//			curObject.lock.Lock()
+//			defer curObject.lock.Unlock()
+//			newMetadata := make(map[string]string)
+//			for k, v := range metadata {
+//				newMetadata[k] = v
+//			}
+//			curObject.metadata = newMetadata
+//			return nil
+//		}
+//		return errors.New("Object not found")
+//	}
+//	return errors.New("Bucket not found")
+//}
+
+func (donutMem donutMem) GetObjectMetadata(bucketKey, objectKey string, column uint) (map[string]string, error) {
+	key := getKey(bucketKey, objectKey, column)
 	donutMem.lock.RLock()
 	defer donutMem.lock.RUnlock()
+
 	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
 		curBucket.lock.RLock()
 		defer curBucket.lock.RUnlock()
-		if curObject, ok := curBucket.objects[objectKey]; ok {
-			curObject.lock.Lock()
-			defer curObject.lock.Unlock()
-			newMetadata := make(map[string]string)
-			for k, v := range metadata {
-				newMetadata[k] = v
-			}
-			curObject.metadata = newMetadata
-			return nil
-		}
-		return errors.New("Object not found")
-	}
-	return errors.New("Bucket not found")
-}
-
-func (donutMem donutMem) GetObjectMetadata(bucketKey, objectKey string) (map[string]string, error) {
-	donutMem.lock.RLock()
-	defer donutMem.lock.RUnlock()
-
-	if curBucket, ok := donutMem.buckets[bucketKey]; ok {
-		curBucket.lock.RLock()
-		defer curBucket.lock.RUnlock()
-		if curObject, ok := curBucket.objects[objectKey]; ok {
+		if curObject, ok := curBucket.objects[key]; ok {
 			curObject.lock.RLock()
 			defer curObject.lock.RUnlock()
 			result := make(map[string]string)
@@ -222,4 +237,8 @@ func (donutMem donutMem) GetObjectMetadata(bucketKey, objectKey string) (map[str
 		return nil, errors.New("Object not found")
 	}
 	return nil, errors.New("Bucket not found")
+}
+
+func getKey(bucketKey, objectKey string, column uint) string {
+	return objectKey + "#" + strconv.FormatUint(uint64(column), 10)
 }

@@ -19,15 +19,16 @@ func (s *MySuite) TestCreateAndReadObject(c *C) {
 	data := "Hello World"
 	donut := NewDonutMem()
 
-	writer := donut.GetObjectWriter("foo", "bar", 0, 2)
-	count, err := writer.Write([]byte("hello"))
+	writer, err := donut.GetObjectWriter("foo", "bar", 0, 2)
+	c.Assert(writer, IsNil)
 	c.Assert(err, Not(IsNil))
 
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
-	writer = donut.GetObjectWriter("foo", "bar", 0, 2)
-	count, err = writer.Write([]byte(data))
+	writer, err = donut.GetObjectWriter("foo", "bar", 0, 2)
+	c.Assert(err, IsNil)
+	count, err := writer.Write([]byte(data))
 	c.Assert(count, Equals, len(data))
 	c.Assert(err, IsNil)
 	err = writer.Close()
@@ -40,13 +41,8 @@ func (s *MySuite) TestCreateAndReadObject(c *C) {
 	c.Assert(result, DeepEquals, []byte(data))
 
 	// try writing, should see error
-	writer = donut.GetObjectWriter("foo", "bar", 0, 2)
-	count, err = writer.Write([]byte("different data"))
-	c.Assert(count, Equals, 0)
-	c.Assert(err, Not(IsNil))
-	// try again, should see error
-	count, err = writer.Write([]byte("different data"))
-	c.Assert(count, Equals, 0)
+	writer, err = donut.GetObjectWriter("foo", "bar", 0, 2)
+	c.Assert(writer, IsNil)
 	c.Assert(err, Not(IsNil))
 
 	// data should not change
@@ -87,7 +83,8 @@ func (s *MySuite) TestObjectList(c *C) {
 	for i := 0; i < 10; i++ {
 		object := "foo" + strconv.Itoa(i)
 		objects = append(objects, object)
-		writer := donut.GetObjectWriter("foo", object, 0, 2)
+		writer, err := donut.GetObjectWriter("foo", object, 0, 2)
+		c.Assert(err, IsNil)
 		writer.Write([]byte(object))
 		writer.Close()
 		c.Assert(err, IsNil)
@@ -125,24 +122,31 @@ func (s *MySuite) TestObjectMetadata(c *C) {
 	metadata["hello"] = "world"
 	metadata["foo"] = "bar"
 
-	err := donut.SetObjectMetadata("foo", "bar", metadata)
-	c.Assert(err, Not(IsNil))
-
-	result, err := donut.GetObjectMetadata("foo", "bar")
+	result, err := donut.GetObjectMetadata("foo", "bar", 1)
 	c.Assert(result, IsNil)
 	c.Assert(err, Not(IsNil))
 
-	writer := donut.GetObjectWriter("foo", "bar", 0, 2)
+	writer, err := donut.GetObjectWriter("foo", "bar", 1, 2)
+	c.Assert(err, IsNil)
 	_, err = writer.Write([]byte("Hello World"))
 	c.Assert(err, IsNil)
+	writer.SetMetadata(metadata)
 	err = writer.Close()
 	c.Assert(err, IsNil)
 
-	err = donut.SetObjectMetadata("foo", "bar", metadata)
-	c.Assert(err, IsNil)
+	expectedMetadata := make(map[string]string)
+	for k, v := range metadata {
+		expectedMetadata[k] = v
+	}
+	expectedMetadata["key"] = "bar"
+	expectedMetadata["column"] = "1"
 
-	result, err = donut.GetObjectMetadata("foo", "bar")
+	result, err = donut.GetObjectMetadata("foo", "bar", 1)
 	c.Assert(err, IsNil)
-	c.Assert(result, DeepEquals, metadata)
+	c.Assert(result, DeepEquals, expectedMetadata)
+
+	result, err = donut.GetObjectMetadata("foo", "bar", 0)
+	c.Assert(err, Not(IsNil))
+	c.Assert(result, IsNil)
 
 }
