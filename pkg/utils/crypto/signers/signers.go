@@ -21,6 +21,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -55,7 +56,7 @@ func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	// Verify if date headers are set, if not reject the request
 	if req.Header.Get("x-amz-date") == "" {
 		if req.Header.Get("Date") == "" {
-			return false, fmt.Errorf("Date should be set")
+			return false, errors.New("Date should be set")
 		}
 	}
 	hm := hmac.New(sha1.New, []byte(user.SecretKey))
@@ -73,7 +74,7 @@ func ValidateRequest(user config.User, req *http.Request) (bool, error) {
 	// fmt.Println("Header calculated: ", authHeader.String())
 	// fmt.Printf("%q : %x", ss, ss)
 	if req.Header.Get("Authorization") != authHeader.String() {
-		return false, fmt.Errorf("Authorization header mismatch")
+		return false, errors.New("Authorization header mismatch")
 	}
 	return true, nil
 }

@@ -17,6 +17,13 @@
 package x509
 
 import (
+	"errors"
+	"fmt"
+	"math/big"
+	"net"
+	"os"
+	"time"
+
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -24,11 +31,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"fmt"
-	"math/big"
-	"net"
-	"os"
-	"time"
 )
 
 // Certificates - based on http://golang.org/src/crypto/tls/generate_cert.go
@@ -91,11 +93,11 @@ func (tls *Certificates) GenerateCertificates(params Params) error {
 	case "P521":
 		priv, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	default:
-		return fmt.Errorf("Unrecognized elliptic curve: %q", params.EcdsaCurve)
+		return errors.New("Unrecognized elliptic curve: %q", params.EcdsaCurve)
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to generate private key: %s", err)
+		return errors.New("failed to generate private key: %s", err)
 	}
 
 	var notBefore time.Time
@@ -104,7 +106,7 @@ func (tls *Certificates) GenerateCertificates(params Params) error {
 	} else {
 		notBefore, err = time.Parse("Jan 2 15:04:05 2006", params.ValidFrom)
 		if err != nil {
-			return fmt.Errorf("Failed to parse creation date: %s", err)
+			return errors.New("Failed to parse creation date: %s", err)
 		}
 	}
 	notAfter := notBefore.Add(time.Duration(params.ValidFor))
@@ -112,7 +114,7 @@ func (tls *Certificates) GenerateCertificates(params Params) error {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return fmt.Errorf("failed to generate serial number: %s", err)
+		return errors.New("failed to generate serial number: %s", err)
 	}
 	orgName := pkix.Name{
 		Organization: []string{"Minio"},
@@ -140,7 +142,7 @@ func (tls *Certificates) GenerateCertificates(params Params) error {
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, publicKey(priv), priv)
 	if err != nil {
-		return fmt.Errorf("Failed to create certificate: %s", err)
+		return errors.New("Failed to create certificate: %s", err)
 	}
 
 	tls.CertPemBlock = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})

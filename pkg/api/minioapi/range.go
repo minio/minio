@@ -17,6 +17,7 @@
 package minioapi
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -58,28 +59,28 @@ func newRange(req *http.Request, size int64) (*httpRange, error) {
 // parseRange parses a Range header string as per RFC 2616.
 func (r *httpRange) parseRange(s string) error {
 	if s == "" {
-		return fmt.Errorf("header not present")
+		return errors.New("header not present")
 	}
 	if !strings.HasPrefix(s, b) {
-		return fmt.Errorf("invalid range")
+		return errors.New("invalid range")
 	}
 
 	ras := strings.Split(s[len(b):], ",")
 	if len(ras) == 0 {
-		return fmt.Errorf("invalid request")
+		return errors.New("invalid request")
 	}
 	// Just pick the first one and ignore the rest, we only support one range per object
 	if len(ras) > 1 {
-		return fmt.Errorf("multiple ranges specified")
+		return errors.New("multiple ranges specified")
 	}
 
 	ra := strings.TrimSpace(ras[0])
 	if ra == "" {
-		return fmt.Errorf("invalid range")
+		return errors.New("invalid range")
 	}
 	i := strings.Index(ra, "-")
 	if i < 0 {
-		return fmt.Errorf("invalid range")
+		return errors.New("invalid range")
 	}
 	start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
 	if start == "" {
@@ -87,7 +88,7 @@ func (r *httpRange) parseRange(s string) error {
 		// range start relative to the end of the file.
 		i, err := strconv.ParseInt(end, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid range")
+			return errors.New("invalid range")
 		}
 		if i > r.size {
 			i = r.size
@@ -97,7 +98,7 @@ func (r *httpRange) parseRange(s string) error {
 	} else {
 		i, err := strconv.ParseInt(start, 10, 64)
 		if err != nil || i > r.size || i < 0 {
-			return fmt.Errorf("invalid range")
+			return errors.New("invalid range")
 		}
 		r.start = i
 		if end == "" {
@@ -106,7 +107,7 @@ func (r *httpRange) parseRange(s string) error {
 		} else {
 			i, err := strconv.ParseInt(end, 10, 64)
 			if err != nil || r.start > i {
-				return fmt.Errorf("invalid range")
+				return errors.New("invalid range")
 			}
 			if i >= r.size {
 				i = r.size - 1
