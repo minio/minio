@@ -19,8 +19,11 @@ package encoded
 import (
 	"errors"
 	"github.com/minio-io/minio/pkg/donutbox"
+	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/split"
 	"io"
+	"strconv"
 )
 
 // StorageDriver creates a new single disk storage driver using donut without encoding.
@@ -83,6 +86,68 @@ func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.Bu
 }
 
 // CreateObject creates a new object
-func (diskStorage StorageDriver) CreateObject(bucket string, key string, contentType string, data io.Reader) error {
-	return errors.New("Not Implemented")
+func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string, contentType string, reader io.Reader) error {
+	blockSize := 10 * 1024 * 1024
+	// split stream
+	splitStream := split.Stream(reader, uint64(blockSize))
+	writers := make([]*donutbox.NewObject, 16)
+	for i := 0; i < 16; i++ {
+		newWriter, err := diskStorage.donutBox.GetObjectWriter(bucketKey, objectKey, uint(i), uint(blockSize))
+		if err != nil {
+			closeAllWritersWithError(writers, err)
+			return err
+		}
+		writers[i] = newWriter
+	}
+	totalLength := uint64(0)
+	for chunk := range splitStream {
+		params, err := erasure.ParseEncoderParams(8, 8, erasure.Cauchy)
+		if err != nil {
+			return err
+		}
+		totalLength = totalLength + uint64(len(chunk.Data))
+		encoder := erasure.NewEncoder(params)
+		if chunk.Err == nil {
+			parts, _ := encoder.Encode(chunk.Data)
+			for index, part := range parts {
+				if _, err := writers[index].Write(part); err != nil {
+					closeAllWritersWithError(writers, err)
+					return err
+				}
+			}
+		} else {
+			closeAllWritersWithError(writers, chunk.Err)
+			return chunk.Err
+		}
+		// encode data
+		// write
+	}
+	// close connections
+	closeAllWriters(writers)
+
+	metadata := make(map[string]string)
+	metadata["length"] = strconv.FormatUint(totalLength, 10)
+	metadata["blockSize"] = strconv.FormatUint(uint64(blockSize), 10)
+	//    metadata["md5"] := md5sum
+	for column := uint(0); column < 16; column++ {
+		writers[column].SetMetadata(metadata)
+	}
+
+	return nil
+}
+
+func closeAllWriters(writers []*donutbox.NewObject) {
+	for _, writer := range writers {
+		if writer != nil {
+			writer.Close()
+		}
+	}
+}
+
+func closeAllWritersWithError(writers []*donutbox.NewObject, err error) {
+	for _, writer := range writers {
+		if writer != nil {
+			writer.CloseWithError(err)
+		}
+	}
 }
