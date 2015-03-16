@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package file
 
 import (
 	"io/ioutil"
@@ -35,7 +35,7 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
 	create := func() mstorage.Storage {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
+		path, err := ioutil.TempDir(os.TempDir(), "minio-file-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
 		_, _, store := Start(path)

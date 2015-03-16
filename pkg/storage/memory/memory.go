@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package inmemory
+package memory
 
 import (
 	"bufio"
@@ -48,7 +48,7 @@ type storedObject struct {
 	data     []byte
 }
 
-// Start inmemory object server
+// Start memory object server
 func Start() (chan<- string, <-chan error, *Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)

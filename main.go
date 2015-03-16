@@ -28,8 +28,8 @@ func getStorageType(input string) server.StorageType {
 	switch {
 	case input == "file":
 		return server.File
-	case input == "inmemory":
-		return server.InMemory
+	case input == "memory":
+		return server.Memory
 	default:
 		{
 			log.Println("Unknown storage type:", input)
