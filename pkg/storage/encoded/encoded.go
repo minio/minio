@@ -42,11 +42,6 @@ const (
 	blockSize = 10 * 1024 * 1024
 )
 
-// Use iso8601Format, rfc3339Nano is incompatible with aws
-const (
-	iso8601Format = "2006-01-02T15:04:05.000Z"
-)
-
 // Start a single disk subsystem
 func Start(donutBox donutbox.DonutBox) (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
@@ -111,7 +106,7 @@ func (diskStorage StorageDriver) GetBucketMetadata(bucket string) (storage.Bucke
 	if err != nil {
 		return storage.BucketMetadata{}, err
 	}
-	created, err := time.Parse(metadata["created"], iso8601Format)
+	created, err := time.Parse(time.RFC3339, metadata["created"])
 	bucketMetadata := storage.BucketMetadata{
 		Name:    bucket,
 		Created: created,
@@ -384,7 +379,7 @@ func closeAllWritersWithError(writers []*donutbox.NewObject, err error) {
 func createBucketMetadata(metadataBucket storage.BucketMetadata) map[string]string {
 	metadata := make(map[string]string)
 	metadata["bucket"] = metadataBucket.Name
-	metadata["created"] = metadataBucket.Created.Format(iso8601Format)
+	metadata["created"] = metadataBucket.Created.Format(time.RFC3339)
 	return metadata
 }
 
@@ -393,7 +388,7 @@ func createObjectMetadata(metadataObject storage.ObjectMetadata, blockSize int, 
 	metadata["bucket"] = metadataObject.Bucket
 	metadata["key"] = metadataObject.Key
 	metadata["contentType"] = metadataObject.ContentType
-	metadata["created"] = metadataObject.Created.Format(iso8601Format)
+	metadata["created"] = metadataObject.Created.Format(time.RFC3339)
 	metadata["md5"] = metadataObject.Md5
 	metadata["size"] = strconv.FormatInt(metadataObject.Size, 10)
 	metadata["blockSize"] = strconv.FormatUint(uint64(blockSize), 10)
