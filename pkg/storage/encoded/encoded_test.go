@@ -34,7 +34,6 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	c.Skip("Not implemented yet.")
 	var storageList []string
 	create := func() mstorage.Storage {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
