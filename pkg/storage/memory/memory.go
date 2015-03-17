@@ -19,7 +19,6 @@ package memory
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"sort"
@@ -27,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"crypto/md5"
+	"encoding/hex"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
@@ -114,14 +115,15 @@ func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Re
 	var newObject = storedObject{}
 	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
 		size := bytesBuffer.Len()
-		etag := fmt.Sprintf("%x", sha256.Sum256(bytesBuffer.Bytes()))
+		md5SumBytes := md5.Sum(bytesBuffer.Bytes())
+		md5Sum := hex.EncodeToString(md5SumBytes[:])
 		newObject.metadata = mstorage.ObjectMetadata{
 			Bucket: bucket,
 			Key:    key,
 
 			ContentType: contentType,
 			Created:     time.Now(),
-			ETag:        etag,
+			Md5:         md5Sum,
 			Size:        int64(size),
 		}
 		newObject.data = bytesBuffer.Bytes()
