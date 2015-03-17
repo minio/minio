@@ -18,9 +18,13 @@ package encoded
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"io"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio-io/minio/pkg/donutbox"
@@ -164,7 +168,71 @@ func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix st
 
 // ListObjects lists objects
 func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
-	return nil, storage.BucketResourcesMetadata{}, errors.New("Not Implemented")
+	objects, err := diskStorage.donutBox.ListObjectsInBucket(bucket, resources.Prefix)
+	if err != nil {
+		return nil, storage.BucketResourcesMetadata{}, err
+	}
+	var results []storage.ObjectMetadata
+	sort.Strings(objects)
+	for _, object := range withoutDelimiter(objects, resources.Prefix, resources.Delimiter) {
+		if len(results) < resources.Maxkeys {
+			objectMetadata, err := diskStorage.GetObjectMetadata(bucket, object, "")
+			if err != nil {
+				return nil, storage.BucketResourcesMetadata{}, err
+			}
+			results = append(results, objectMetadata)
+		} else {
+			resources.IsTruncated = true
+		}
+	}
+	if resources.Delimiter != "" {
+		objects = trimPrefixWithDelimiter(objects, resources.Prefix, resources.Delimiter)
+		objects = beforeDelimiter(objects, resources.Delimiter)
+		objects = removeDuplicates(objects)
+		resources.CommonPrefixes = objects
+	}
+	return results, resources, nil
+}
+
+func withoutDelimiter(inputs []string, prefix, delim string) (results []string) {
+	if delim == "" {
+		return inputs
+	}
+	for _, input := range inputs {
+		input = strings.TrimPrefix(input, prefix)
+		if !strings.Contains(input, delim) {
+			results = append(results, prefix+input)
+		}
+	}
+	return results
+}
+
+func trimPrefixWithDelimiter(inputs []string, prefix, delim string) (results []string) {
+	for _, input := range inputs {
+		input = strings.TrimPrefix(input, prefix)
+		if strings.Contains(input, delim) {
+			results = append(results, input)
+		}
+	}
+	return results
+}
+
+func beforeDelimiter(inputs []string, delim string) (results []string) {
+	for _, input := range inputs {
+		results = append(results, strings.Split(input, delim)[0]+delim)
+	}
+	return results
+}
+
+func removeDuplicates(inputs []string) (results []string) {
+	keys := make(map[string]string)
+	for _, input := range inputs {
+		keys[input] = input
+	}
+	for result := range keys {
+		results = append(results, result)
+	}
+	return results
 }
 
 // CreateObject creates a new object
@@ -182,11 +250,13 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 	}
 	totalLength := uint64(0)
 	chunkCount := 0
+	hasher := md5.New()
 	for chunk := range splitStream {
 		params, err := erasure.ParseEncoderParams(8, 8, erasure.Cauchy)
 		if err != nil {
 			return err
 		}
+		hasher.Write(chunk.Data)
 		totalLength = totalLength + uint64(len(chunk.Data))
 		chunkCount = chunkCount + 1
 		encoder := erasure.NewEncoder(params)
@@ -213,7 +283,7 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 
 		ContentType: contentType,
 		Created:     time.Now(),
-		Md5:         "md5",
+		Md5:         hex.EncodeToString(hasher.Sum(nil)),
 		Size:        int64(totalLength),
 	}
 
