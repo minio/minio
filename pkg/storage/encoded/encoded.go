@@ -295,7 +295,7 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 	splitStream := split.Stream(reader, uint64(blockSize))
 	writers := make([]*donutbox.NewObject, 16)
 	for i := 0; i < 16; i++ {
-		newWriter, err := diskStorage.donutBox.GetObjectWriter(bucketKey, objectKey, uint(i), uint(blockSize))
+		newWriter, err := diskStorage.donutBox.GetObjectWriter(bucketKey, objectKey, uint(i))
 		if err != nil {
 			closeAllWritersWithError(writers, err)
 			return err
