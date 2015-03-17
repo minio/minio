@@ -39,10 +39,13 @@ func APITestSuite(c *check.C, create func() Storage) {
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
 	testDefaultContentType(c, create)
+	//testContentMd5Set(c, create) TODO
 }
 
 func testCreateBucket(c *check.C, create func() Storage) {
-	// TODO
+	storage := create()
+	err := storage.CreateBucket("bucket")
+	c.Assert(err, check.IsNil)
 }
 
 func testMultipleObjectCreation(c *check.C, create func() Storage) {
@@ -58,7 +61,7 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 		}
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		err := storage.CreateObject("bucket", key, "", bytes.NewBufferString(randomString))
+		err := storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(randomString))
 		c.Assert(err, check.IsNil)
 	}
 
@@ -91,7 +94,7 @@ func testPaging(c *check.C, create func() Storage) {
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.CreateObject("bucket", key, "", bytes.NewBufferString(key))
+		storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
 		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, i+1)
@@ -101,7 +104,7 @@ func testPaging(c *check.C, create func() Storage) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.CreateObject("bucket", key, "", bytes.NewBufferString(key))
+		storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
 		objects, resources, err = storage.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, 5)
@@ -110,8 +113,8 @@ func testPaging(c *check.C, create func() Storage) {
 	}
 	// check paging with prefix at end returns less objects
 	{
-		storage.CreateObject("bucket", "newPrefix", "", bytes.NewBufferString("prefix1"))
-		storage.CreateObject("bucket", "newPrefix2", "", bytes.NewBufferString("prefix2"))
+		storage.CreateObject("bucket", "newPrefix", "", "", bytes.NewBufferString("prefix1"))
+		storage.CreateObject("bucket", "newPrefix2", "", "", bytes.NewBufferString("prefix2"))
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
 		objects, resources, err = storage.ListObjects("bucket", resources)
@@ -132,8 +135,8 @@ func testPaging(c *check.C, create func() Storage) {
 
 	// check delimited results with delimiter and prefix
 	{
-		storage.CreateObject("bucket", "this/is/delimited", "", bytes.NewBufferString("prefix1"))
-		storage.CreateObject("bucket", "this/is/also/delimited", "", bytes.NewBufferString("prefix2"))
+		storage.CreateObject("bucket", "this/is/delimited", "", "", bytes.NewBufferString("prefix1"))
+		storage.CreateObject("bucket", "this/is/also/delimited", "", "", bytes.NewBufferString("prefix2"))
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
 		resources.Delimiter = "/"
@@ -186,9 +189,9 @@ func testPaging(c *check.C, create func() Storage) {
 func testObjectOverwriteFails(c *check.C, create func() Storage) {
 	storage := create()
 	storage.CreateBucket("bucket")
-	err := storage.CreateObject("bucket", "object", "", bytes.NewBufferString("one"))
+	err := storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
-	err = storage.CreateObject("bucket", "object", "", bytes.NewBufferString("three"))
+	err = storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("three"))
 	c.Assert(err, check.Not(check.IsNil))
 	var bytesBuffer bytes.Buffer
 	length, err := storage.GetObject(&bytesBuffer, "bucket", "object")
@@ -199,7 +202,7 @@ func testObjectOverwriteFails(c *check.C, create func() Storage) {
 
 func testNonExistantBucketOperations(c *check.C, create func() Storage) {
 	storage := create()
-	err := storage.CreateObject("bucket", "object", "", bytes.NewBufferString("one"))
+	err := storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
 }
 
@@ -215,7 +218,7 @@ func testPutObjectInSubdir(c *check.C, create func() Storage) {
 	storage := create()
 	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
-	err = storage.CreateObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
+	err = storage.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 	var bytesBuffer bytes.Buffer
 	length, err := storage.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
@@ -309,7 +312,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
 	err := storage.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	err = storage.CreateObject("bucket", "dir1/dir2/object", "", bytes.NewBufferString("hello world"))
+	err = storage.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -353,20 +356,34 @@ func testDefaultContentType(c *check.C, create func() Storage) {
 	c.Assert(err, check.IsNil)
 
 	// test empty
-	err = storage.CreateObject("bucket", "one", "", bytes.NewBufferString("one"))
+	err = storage.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
 	metadata, err := storage.GetObjectMetadata("bucket", "one", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 
 	// test custom
-	storage.CreateObject("bucket", "two", "application/text", bytes.NewBufferString("two"))
+	storage.CreateObject("bucket", "two", "application/text", "", bytes.NewBufferString("two"))
 	metadata, err = storage.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/text")
 
 	// test trim space
-	storage.CreateObject("bucket", "three", "\tapplication/json    ", bytes.NewBufferString("three"))
+	storage.CreateObject("bucket", "three", "\tapplication/json    ", "", bytes.NewBufferString("three"))
 	metadata, err = storage.GetObjectMetadata("bucket", "three", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/json")
 }
+
+/*
+func testContentMd5Set(c *check.C, create func() Storage) {
+	storage := create()
+	err := storage.CreateBucket("bucket")
+	c.Assert(err, check.IsNil)
+
+	// test md5 invalid
+	err = storage.CreateObject("bucket", "one", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA", bytes.NewBufferString("one"))
+	c.Assert(err, check.Not(check.IsNil))
+	err = storage.CreateObject("bucket", "two", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA=", bytes.NewBufferString("one"))
+	c.Assert(err, check.IsNil)
+}
+*/

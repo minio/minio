@@ -93,7 +93,7 @@ func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, e
 }
 
 // CreateObject - PUT object to memory buffer
-func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Reader) error {
+func (storage *Storage) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 

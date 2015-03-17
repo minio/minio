@@ -17,12 +17,14 @@
 package file
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path"
 	"strings"
 
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/gob"
 	"encoding/hex"
 
@@ -182,7 +184,7 @@ func (storage *Storage) GetObjectMetadata(bucket, object, prefix string) (mstora
 }
 
 // CreateObject - PUT object
-func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Reader) error {
+func (storage *Storage) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
 	// TODO Commits should stage then move instead of writing directly
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -248,15 +250,27 @@ func (storage *Storage) CreateObject(bucket, key, contentType string, data io.Re
 		return mstorage.EmbedError(bucket, key, err)
 	}
 
-	// serialize metadata to gob
-	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(&Metadata{
+	metadata := &Metadata{
 		ContentType: contentType,
 		Md5sum:      h.Sum(nil),
-	})
+	}
+	// serialize metadata to gob
+	encoder := gob.NewEncoder(file)
+	err = encoder.Encode(metadata)
 	if err != nil {
 		return mstorage.EmbedError(bucket, key, err)
 	}
 
+	// Verify data received to be correct, Content-MD5 received
+	if md5sum != "" {
+		var data []byte
+		data, err = base64.StdEncoding.DecodeString(md5sum)
+		if err != nil {
+			return mstorage.InvalidDigest{Bucket: bucket, Key: key, Md5: md5sum}
+		}
+		if !bytes.Equal(metadata.Md5sum, data) {
+			return mstorage.BadDigest{Bucket: bucket, Key: key, Md5: md5sum}
+		}
+	}
 	return nil
 }

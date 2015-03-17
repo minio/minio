@@ -18,14 +18,15 @@ package encoded
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"crypto/md5"
+	"encoding/hex"
 
 	"github.com/minio-io/minio/pkg/donutbox"
 	"github.com/minio-io/minio/pkg/encoding/erasure"
@@ -285,7 +286,7 @@ func beforeDelimiter(inputs []string, delim string) (results []string) {
 }
 
 // CreateObject creates a new object
-func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string, contentType string, reader io.Reader) error {
+func (diskStorage StorageDriver) CreateObject(bucketKey, objectKey, contentType, md5sum string, reader io.Reader) error {
 	// set defaults
 	if contentType == "" {
 		contentType = "application/octet-stream"

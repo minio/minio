@@ -47,6 +47,13 @@ type ImplementationError struct {
 	Err    error
 }
 
+// DigestError - Generic Md5 error
+type DigestError struct {
+	Bucket string
+	Key    string
+	Md5    string
+}
+
 /// Bucket related errors
 
 // BucketPolicyNotFound - missing bucket policy
@@ -71,6 +78,12 @@ type ObjectExists GenericObjectError
 
 // ObjectNameInvalid - object name provided is invalid
 type ObjectNameInvalid GenericObjectError
+
+// BadDigest - md5 mismatch from data received
+type BadDigest DigestError
+
+// InvalidDigest - md5 in request header invalid
+type InvalidDigest DigestError
 
 // Return string an error formatted as the given text
 func (e ImplementationError) Error() string {
@@ -137,4 +150,14 @@ func (e ObjectNameInvalid) Error() string {
 // Return string an error formatted as the given text
 func (e BackendCorrupted) Error() string {
 	return "Backend corrupted: " + e.Path
+}
+
+// Return string an error formatted as the given text
+func (e BadDigest) Error() string {
+	return "Md5 provided " + e.Md5 + " mismatches for: " + e.Bucket + "#" + e.Key
+}
+
+// Return string an error formatted as the given text
+func (e InvalidDigest) Error() string {
+	return "Md5 provided " + e.Md5 + " is invalid"
 }

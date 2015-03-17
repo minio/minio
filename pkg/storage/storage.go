@@ -36,7 +36,7 @@ type Storage interface {
 	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
 	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
-	CreateObject(bucket string, key string, contentType string, data io.Reader) error
+	CreateObject(bucket string, key string, contentType string, md5sum string, data io.Reader) error
 }
 
 // BucketMetadata - name and create date
