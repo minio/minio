@@ -33,6 +33,7 @@ import (
 	"github.com/minio-io/minio/pkg/storage/memory"
 
 	"encoding/base64"
+	"encoding/hex"
 	. "gopkg.in/check.v1"
 )
 
@@ -74,7 +75,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", metadata.Md5)
 
 	// TODO Test Headers
 }
@@ -99,7 +100,7 @@ func (s *MySuite) TestObject(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
@@ -135,7 +136,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello one"), "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, len("hello one"), "application/octet-stream", metadata.Md5)
 	c.Assert(err, IsNil)
 
 	// verify response data
@@ -154,7 +155,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello two"), "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, len("hello two"), "application/octet-stream", metadata.Md5)
 	c.Assert(err, IsNil)
 
 	// verify response data
@@ -173,7 +174,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify headers
-	verifyHeaders(c, response.Header, metadata.Created, len("hello three"), "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, len("hello three"), "application/octet-stream", metadata.Md5)
 	c.Assert(err, IsNil)
 
 	// verify object
@@ -213,7 +214,7 @@ func (s *MySuite) TestHeader(c *C) {
 
 	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
+	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
 
 func (s *MySuite) TestPutBucket(c *C) {
@@ -363,9 +364,11 @@ func (s *MySuite) TestDateFormat(c *C) {
 	// TODO
 }
 
-func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
+func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, md5String string) {
+	md5Sum, err := hex.DecodeString(md5String)
+	etag := base64.StdEncoding.EncodeToString(md5Sum)
+	c.Assert(err, IsNil)
 	// Verify date
-	c.Log(header)
 	c.Assert(header.Get("Last-Modified"), Equals, date.Format(time.RFC1123))
 
 	// verify size
