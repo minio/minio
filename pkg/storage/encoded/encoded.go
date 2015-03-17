@@ -205,7 +205,7 @@ func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix st
 	if err != nil {
 		return storage.ObjectMetadata{}, err
 	}
-	created, err := time.Parse(metadata["created"], time.RFC3339Nano)
+	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
 	size, err := strconv.ParseInt(metadata["size"], 10, 64)
 	objectMetadata := storage.ObjectMetadata{
 		Bucket:      bucket,
