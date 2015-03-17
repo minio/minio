@@ -42,6 +42,11 @@ const (
 	blockSize = 10 * 1024 * 1024
 )
 
+// Use iso8601Format, rfc3339Nano is incompatible with aws
+const (
+	iso8601Format = "2006-01-02T15:04:05.000Z"
+)
+
 // Start a single disk subsystem
 func Start(donutBox donutbox.DonutBox) (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
@@ -58,12 +63,52 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, s *StorageDrive
 
 // ListBuckets returns a list of buckets
 func (diskStorage StorageDriver) ListBuckets() ([]storage.BucketMetadata, error) {
-	return nil, errors.New("Not Implemented")
+	buckets, err := diskStorage.donutBox.ListBuckets()
+	if err != nil {
+		return nil, err
+	}
+	var results []storage.BucketMetadata
+	sort.Strings(buckets)
+	for _, bucket := range buckets {
+		bucketMetadata, err := diskStorage.GetBucketMetadata(bucket)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, bucketMetadata)
+	}
+	return results, nil
 }
 
 // CreateBucket creates a new bucket
 func (diskStorage StorageDriver) CreateBucket(bucket string) error {
-	return diskStorage.donutBox.CreateBucket(bucket)
+	err := diskStorage.donutBox.CreateBucket(bucket)
+	if err != nil {
+		return err
+	}
+	metadataBucket := storage.BucketMetadata{
+		Name:    bucket,
+		Created: time.Now(),
+	}
+	metadata := createBucketMetadata(metadataBucket)
+	err = diskStorage.donutBox.SetBucketMetadata(bucket, metadata)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetBucketMetadata retrieves an bucket's metadata
+func (diskStorage StorageDriver) GetBucketMetadata(bucket string) (storage.BucketMetadata, error) {
+	metadata, err := diskStorage.donutBox.GetBucketMetadata(bucket)
+	if err != nil {
+		return storage.BucketMetadata{}, err
+	}
+	created, err := time.Parse(metadata["created"], iso8601Format)
+	bucketMetadata := storage.BucketMetadata{
+		Name:    bucket,
+		Created: created,
+	}
+	return bucketMetadata, nil
 }
 
 // CreateBucketPolicy sets a bucket's access policy
@@ -79,6 +124,9 @@ func (diskStorage StorageDriver) GetBucketPolicy(bucket string) (storage.BucketP
 // GetObject retrieves an object and writes it to a writer
 func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
 	metadata, err := diskStorage.donutBox.GetObjectMetadata(bucket, key, 0)
+	if len(metadata) == 0 {
+		return 0, storage.ObjectNotFound{Bucket: bucket, Object: key}
+	}
 	k, err := strconv.Atoi(metadata["erasureK"])
 	if err != nil {
 		return 0, errors.New("Cannot parse erasureK")
@@ -188,10 +236,18 @@ func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.Bu
 	if resources.Delimiter != "" {
 		objects = trimPrefixWithDelimiter(objects, resources.Prefix, resources.Delimiter)
 		objects = beforeDelimiter(objects, resources.Delimiter)
-		objects = removeDuplicates(objects)
 		resources.CommonPrefixes = objects
 	}
 	return results, resources, nil
+}
+
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
 }
 
 func withoutDelimiter(inputs []string, prefix, delim string) (results []string) {
@@ -201,7 +257,7 @@ func withoutDelimiter(inputs []string, prefix, delim string) (results []string) 
 	for _, input := range inputs {
 		input = strings.TrimPrefix(input, prefix)
 		if !strings.Contains(input, delim) {
-			results = append(results, prefix+input)
+			results = appendUniq(results, prefix+input)
 		}
 	}
 	return results
@@ -211,7 +267,7 @@ func trimPrefixWithDelimiter(inputs []string, prefix, delim string) (results []s
 	for _, input := range inputs {
 		input = strings.TrimPrefix(input, prefix)
 		if strings.Contains(input, delim) {
-			results = append(results, input)
+			results = appendUniq(results, input)
 		}
 	}
 	return results
@@ -219,18 +275,7 @@ func trimPrefixWithDelimiter(inputs []string, prefix, delim string) (results []s
 
 func beforeDelimiter(inputs []string, delim string) (results []string) {
 	for _, input := range inputs {
-		results = append(results, strings.Split(input, delim)[0]+delim)
-	}
-	return results
-}
-
-func removeDuplicates(inputs []string) (results []string) {
-	keys := make(map[string]string)
-	for _, input := range inputs {
-		keys[input] = input
-	}
-	for result := range keys {
-		results = append(results, result)
+		results = appendUniq(results, strings.Split(input, delim)[0]+delim)
 	}
 	return results
 }
@@ -277,17 +322,24 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 	}
 	// close connections
 
+	contenttype := func(contenttype string) string {
+		if len(contenttype) == 0 {
+			return "application/octet-stream"
+		}
+		return strings.TrimSpace(contenttype)
+	}
+
 	metadataObj := storage.ObjectMetadata{
 		Bucket: bucketKey,
 		Key:    objectKey,
 
-		ContentType: contentType,
+		ContentType: contenttype(contentType),
 		Created:     time.Now(),
 		Md5:         hex.EncodeToString(hasher.Sum(nil)),
 		Size:        int64(totalLength),
 	}
 
-	metadata := createMetadata(metadataObj, blockSize, 8, 8, "Cauchy")
+	metadata := createObjectMetadata(metadataObj, blockSize, 8, 8, "Cauchy")
 
 	for column := uint(0); column < 16; column++ {
 		writers[column].SetMetadata(metadata)
@@ -315,15 +367,21 @@ func closeAllWritersWithError(writers []*donutbox.NewObject, err error) {
 	}
 }
 
-func createMetadata(metadataObject storage.ObjectMetadata, blockSize int, k, m uint8, technique string) map[string]string {
+func createBucketMetadata(metadataBucket storage.BucketMetadata) map[string]string {
+	metadata := make(map[string]string)
+	metadata["bucket"] = metadataBucket.Name
+	metadata["created"] = metadataBucket.Created.Format(iso8601Format)
+	return metadata
+}
+
+func createObjectMetadata(metadataObject storage.ObjectMetadata, blockSize int, k, m uint8, technique string) map[string]string {
 	metadata := make(map[string]string)
 	metadata["bucket"] = metadataObject.Bucket
 	metadata["key"] = metadataObject.Key
 	metadata["contentType"] = metadataObject.ContentType
-	metadata["created"] = metadataObject.Created.Format(time.RFC3339Nano)
+	metadata["created"] = metadataObject.Created.Format(iso8601Format)
 	metadata["md5"] = metadataObject.Md5
 	metadata["size"] = strconv.FormatInt(metadataObject.Size, 10)
-
 	metadata["blockSize"] = strconv.FormatUint(uint64(blockSize), 10)
 	metadata["erasureK"] = strconv.FormatUint(uint64(k), 10)
 	metadata["erasureM"] = strconv.FormatUint(uint64(m), 10)
