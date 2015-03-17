@@ -106,7 +106,7 @@ func (diskStorage StorageDriver) GetBucketMetadata(bucket string) (storage.Bucke
 	if err != nil {
 		return storage.BucketMetadata{}, err
 	}
-	created, err := time.Parse(time.RFC3339, metadata["created"])
+	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
 	bucketMetadata := storage.BucketMetadata{
 		Name:    bucket,
 		Created: created,
@@ -379,7 +379,7 @@ func closeAllWritersWithError(writers []*donutbox.NewObject, err error) {
 func createBucketMetadata(metadataBucket storage.BucketMetadata) map[string]string {
 	metadata := make(map[string]string)
 	metadata["bucket"] = metadataBucket.Name
-	metadata["created"] = metadataBucket.Created.Format(time.RFC3339)
+	metadata["created"] = metadataBucket.Created.Format(time.RFC3339Nano)
 	return metadata
 }
 
@@ -388,7 +388,7 @@ func createObjectMetadata(metadataObject storage.ObjectMetadata, blockSize int, 
 	metadata["bucket"] = metadataObject.Bucket
 	metadata["key"] = metadataObject.Key
 	metadata["contentType"] = metadataObject.ContentType
-	metadata["created"] = metadataObject.Created.Format(time.RFC3339)
+	metadata["created"] = metadataObject.Created.Format(time.RFC3339Nano)
 	metadata["md5"] = metadataObject.Md5
 	metadata["size"] = strconv.FormatInt(metadataObject.Size, 10)
 	metadata["blockSize"] = strconv.FormatUint(uint64(blockSize), 10)
