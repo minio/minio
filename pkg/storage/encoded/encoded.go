@@ -331,18 +331,11 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 	}
 	// close connections
 
-	contenttype := func(contenttype string) string {
-		if len(contenttype) == 0 {
-			return "application/octet-stream"
-		}
-		return strings.TrimSpace(contenttype)
-	}
-
 	metadataObj := storage.ObjectMetadata{
 		Bucket: bucketKey,
 		Key:    objectKey,
 
-		ContentType: contenttype(contentType),
+		ContentType: contentType,
 		Created:     time.Now(),
 		Md5:         hex.EncodeToString(hasher.Sum(nil)),
 		Size:        int64(totalLength),
