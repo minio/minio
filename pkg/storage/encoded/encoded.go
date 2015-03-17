@@ -19,19 +19,24 @@ package encoded
 import (
 	"bytes"
 	"errors"
+	"io"
+	"strconv"
+	"time"
+
 	"github.com/minio-io/minio/pkg/donutbox"
 	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/utils/split"
-	"io"
-	"strconv"
-	"time"
 )
 
 // StorageDriver creates a new single disk storage driver using donut without encoding.
 type StorageDriver struct {
 	donutBox donutbox.DonutBox
 }
+
+const (
+	blockSize = 10 * 1024 * 1024
+)
 
 // Start a single disk subsystem
 func Start(donutBox donutbox.DonutBox) (chan<- string, <-chan error, storage.Storage) {
@@ -79,7 +84,7 @@ func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string)
 		return 0, errors.New("Cannot parse erasureM")
 	}
 	columnCount := k + m
-	blockSize, err := strconv.Atoi(metadata["blockSize"])
+	bs, err := strconv.Atoi(metadata["blockSize"])
 	if err != nil {
 		return 0, errors.New("Cannot parse blockSize")
 	}
@@ -87,7 +92,7 @@ func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string)
 	if err != nil {
 		return 0, errors.New("Cannot parse length")
 	}
-	chunkCount := size/blockSize + 1
+	chunkCount := size/bs + 1
 	var readers []io.Reader
 	for column := 0; column < columnCount; column++ {
 		reader, err := diskStorage.donutBox.GetObjectReader(bucket, key, uint(column))
@@ -164,7 +169,6 @@ func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.Bu
 
 // CreateObject creates a new object
 func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string, contentType string, reader io.Reader) error {
-	blockSize := 10 * 1024 * 1024
 	// split stream
 	splitStream := split.Stream(reader, uint64(blockSize))
 	writers := make([]*donutbox.NewObject, 16)
