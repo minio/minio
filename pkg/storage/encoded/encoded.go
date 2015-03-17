@@ -62,21 +62,29 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, s *StorageDrive
 }
 
 // ListBuckets returns a list of buckets
-func (diskStorage StorageDriver) ListBuckets() ([]storage.BucketMetadata, error) {
+func (diskStorage StorageDriver) ListBuckets() (results []storage.BucketMetadata, err error) {
 	buckets, err := diskStorage.donutBox.ListBuckets()
 	if err != nil {
 		return nil, err
 	}
-	var results []storage.BucketMetadata
 	sort.Strings(buckets)
 	for _, bucket := range buckets {
-		bucketMetadata, err := diskStorage.GetBucketMetadata(bucket)
+		metadata, err := diskStorage.donutBox.GetBucketMetadata(bucket)
 		if err != nil {
 			return nil, err
 		}
+
+		created, err := time.Parse(time.RFC3339Nano, metadata["created"])
+		if err != nil {
+			return nil, err
+		}
+		bucketMetadata := storage.BucketMetadata{
+			Name:    bucket,
+			Created: created,
+		}
 		results = append(results, bucketMetadata)
 	}
-	return results, nil
+	return results, err
 }
 
 // CreateBucket creates a new bucket
@@ -124,7 +132,8 @@ func (diskStorage StorageDriver) GetBucketPolicy(bucket string) (storage.BucketP
 // GetObject retrieves an object and writes it to a writer
 func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
 	metadata, err := diskStorage.donutBox.GetObjectMetadata(bucket, key, 0)
-	if len(metadata) == 0 {
+	if err != nil {
+		// TODO strongly type and properly handle error cases
 		return 0, storage.ObjectNotFound{Bucket: bucket, Object: key}
 	}
 	k, err := strconv.Atoi(metadata["erasureK"])
@@ -282,6 +291,11 @@ func beforeDelimiter(inputs []string, delim string) (results []string) {
 
 // CreateObject creates a new object
 func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string, contentType string, reader io.Reader) error {
+	// set defaults
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	contentType = strings.TrimSpace(contentType)
 	// split stream
 	splitStream := split.Stream(reader, uint64(blockSize))
 	writers := make([]*donutbox.NewObject, 16)

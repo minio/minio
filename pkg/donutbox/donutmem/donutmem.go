@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type bucket struct {
@@ -58,6 +59,7 @@ func (donutMem donutMem) CreateBucket(b string) error {
 	}
 	metadata := make(map[string]string)
 	metadata["name"] = b
+	metadata["created"] = time.Now().Format(time.RFC3339Nano)
 	newBucket := bucket{
 		name:     b,
 		metadata: metadata,
@@ -234,7 +236,7 @@ func (donutMem donutMem) GetObjectMetadata(bucketKey, objectKey string, column u
 			}
 			return result, nil
 		}
-		return nil, errors.New("Object not found")
+		return nil, errors.New("Object not Found: " + bucketKey + "#" + objectKey)
 	}
 	return nil, errors.New("Bucket not found")
 }
