@@ -18,7 +18,6 @@ package encoded
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"github.com/minio-io/minio/pkg/donutbox"
 	"github.com/minio-io/minio/pkg/encoding/erasure"
@@ -152,7 +151,7 @@ func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix st
 		Key:         key,
 		ContentType: metadata["contentType"],
 		Created:     created,
-		ETag:        hex.EncodeToString([]byte(metadata["md5"])),
+		Md5:         metadata["md5"],
 		Size:        size,
 	}
 	return objectMetadata, nil
@@ -210,7 +209,7 @@ func (diskStorage StorageDriver) CreateObject(bucketKey string, objectKey string
 
 		ContentType: contentType,
 		Created:     time.Now(),
-		ETag:        "md5",
+		Md5:         "md5",
 		Size:        int64(totalLength),
 	}
 
@@ -248,7 +247,7 @@ func createMetadata(metadataObject storage.ObjectMetadata, blockSize int, k, m u
 	metadata["key"] = metadataObject.Key
 	metadata["contentType"] = metadataObject.ContentType
 	metadata["created"] = metadataObject.Created.Format(time.RFC3339Nano)
-	metadata["md5"] = metadataObject.ETag
+	metadata["md5"] = metadataObject.Md5
 	metadata["size"] = strconv.FormatInt(metadataObject.Size, 10)
 
 	metadata["blockSize"] = strconv.FormatUint(uint64(blockSize), 10)

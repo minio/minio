@@ -74,9 +74,9 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
 
-		_, ok := etags[metadata.ETag]
+		_, ok := etags[metadata.Md5]
 		c.Assert(ok, check.Equals, false)
-		etags[metadata.ETag] = metadata.ETag
+		etags[metadata.Md5] = metadata.Md5
 	}
 }
 

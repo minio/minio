@@ -52,7 +52,7 @@ type ObjectMetadata struct {
 
 	ContentType string
 	Created     time.Time
-	ETag        string
+	Md5         string
 	Size        int64
 }
 

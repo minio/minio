@@ -19,6 +19,7 @@ package minioapi
 import (
 	"sort"
 
+	"encoding/hex"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
@@ -89,7 +90,7 @@ func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata,
 		}
 		content.Key = object.Key
 		content.LastModified = object.Created.Format(iso8601Format)
-		content.ETag = object.ETag
+		content.ETag = hex.EncodeToString([]byte(object.Md5))
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
 		content.Owner = owner

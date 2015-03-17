@@ -174,7 +174,7 @@ func (storage *Storage) GetObjectMetadata(bucket, object, prefix string) (mstora
 		Key:         trimmedObject,
 		Created:     stat.ModTime(),
 		Size:        stat.Size(),
-		ETag:        etag,
+		Md5:         etag,
 		ContentType: contentType,
 	}
 

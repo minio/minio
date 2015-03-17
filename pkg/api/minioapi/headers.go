@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"encoding/base64"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 )
 
@@ -62,7 +63,7 @@ func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata)
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
 	writeCommonHeaders(w, metadata.ContentType)
-	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("ETag", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
 	w.Header().Set("Connection", "close")
@@ -73,7 +74,7 @@ func writeRangeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMeta
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
 	writeCommonHeaders(w, metadata.ContentType)
-	w.Header().Set("ETag", metadata.ETag)
+	w.Header().Set("ETag", base64.StdEncoding.EncodeToString([]byte(metadata.Md5)))
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Range", ra)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
