@@ -165,7 +165,9 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	err := server.storage.CreateObject(bucket, object, "", req.Body)
+	// get Content-MD5 sent by client
+	md5 := req.Header.Get("Content-MD5")
+	err := server.storage.CreateObject(bucket, object, "", md5, req.Body)
 	switch err := err.(type) {
 	case nil:
 		w.Header().Set("Server", "Minio")
@@ -196,6 +198,20 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	case mstorage.ObjectExists:
 		{
 			error := errorCodeError(NotImplemented)
+			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			w.WriteHeader(error.HTTPStatusCode)
+			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+		}
+	case mstorage.BadDigest:
+		{
+			error := errorCodeError(BadDigest)
+			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			w.WriteHeader(error.HTTPStatusCode)
+			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+		}
+	case mstorage.InvalidDigest:
+		{
+			error := errorCodeError(InvalidDigest)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
