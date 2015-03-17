@@ -32,8 +32,6 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/memory"
 
-	"encoding/base64"
-	"encoding/hex"
 	. "gopkg.in/check.v1"
 )
 
@@ -364,10 +362,7 @@ func (s *MySuite) TestDateFormat(c *C) {
 	// TODO
 }
 
-func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, md5String string) {
-	md5Sum, err := hex.DecodeString(md5String)
-	etag := base64.StdEncoding.EncodeToString(md5Sum)
-	c.Assert(err, IsNil)
+func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
 	// Verify date
 	c.Assert(header.Get("Last-Modified"), Equals, date.Format(time.RFC1123))
 
