@@ -85,9 +85,9 @@ func testPaging(c *check.C, create func() Storage) {
 	storage.CreateBucket("bucket")
 	resources := BucketResourcesMetadata{}
 	objects, resources, err := storage.ListObjects("bucket", resources)
+	c.Assert(err, check.IsNil)
 	c.Assert(len(objects), check.Equals, 0)
 	c.Assert(resources.IsTruncated, check.Equals, false)
-	c.Assert(err, check.IsNil)
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
@@ -140,6 +140,7 @@ func testPaging(c *check.C, create func() Storage) {
 		resources.Prefix = "this/is/"
 		resources.Maxkeys = 10
 		objects, resources, err = storage.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 1)
 		c.Assert(resources.CommonPrefixes[0], check.Equals, "also/")
 	}
