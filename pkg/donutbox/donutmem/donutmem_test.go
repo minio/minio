@@ -19,14 +19,14 @@ func (s *MySuite) TestCreateAndReadObject(c *C) {
 	data := "Hello World"
 	donut := NewDonutMem()
 
-	writer, err := donut.GetObjectWriter("foo", "bar", 0, 2)
+	writer, err := donut.GetObjectWriter("foo", "bar", 0)
 	c.Assert(writer, IsNil)
 	c.Assert(err, Not(IsNil))
 
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
-	writer, err = donut.GetObjectWriter("foo", "bar", 0, 2)
+	writer, err = donut.GetObjectWriter("foo", "bar", 0)
 	c.Assert(err, IsNil)
 	count, err := writer.Write([]byte(data))
 	c.Assert(count, Equals, len(data))
@@ -41,7 +41,7 @@ func (s *MySuite) TestCreateAndReadObject(c *C) {
 	c.Assert(result, DeepEquals, []byte(data))
 
 	// try writing, should see error
-	writer, err = donut.GetObjectWriter("foo", "bar", 0, 2)
+	writer, err = donut.GetObjectWriter("foo", "bar", 0)
 	c.Assert(writer, IsNil)
 	c.Assert(err, Not(IsNil))
 
@@ -83,7 +83,7 @@ func (s *MySuite) TestObjectList(c *C) {
 	for i := 0; i < 10; i++ {
 		object := "foo" + strconv.Itoa(i)
 		objects = append(objects, object)
-		writer, err := donut.GetObjectWriter("foo", object, 0, 2)
+		writer, err := donut.GetObjectWriter("foo", object, 0)
 		c.Assert(err, IsNil)
 		writer.Write([]byte(object))
 		writer.Close()
@@ -126,7 +126,7 @@ func (s *MySuite) TestObjectMetadata(c *C) {
 	c.Assert(result, IsNil)
 	c.Assert(err, Not(IsNil))
 
-	writer, err := donut.GetObjectWriter("foo", "bar", 1, 2)
+	writer, err := donut.GetObjectWriter("foo", "bar", 1)
 	c.Assert(err, IsNil)
 	_, err = writer.Write([]byte("Hello World"))
 	c.Assert(err, IsNil)
@@ -148,5 +148,4 @@ func (s *MySuite) TestObjectMetadata(c *C) {
 	result, err = donut.GetObjectMetadata("foo", "bar", 0)
 	c.Assert(err, Not(IsNil))
 	c.Assert(result, IsNil)
-
 }

@@ -125,7 +125,7 @@ func (donutMem donutMem) SetBucketMetadata(bucketKey string, metadata map[string
 }
 
 // object operations
-func (donutMem donutMem) GetObjectWriter(bucketKey, objectKey string, column uint, blockSize uint) (*donutbox.NewObject, error) {
+func (donutMem donutMem) GetObjectWriter(bucketKey, objectKey string, column uint) (*donutbox.NewObject, error) {
 	key := getKey(bucketKey, objectKey, column)
 	reader, writer := io.Pipe()
 	returnObject := donutbox.CreateNewObject(writer)
