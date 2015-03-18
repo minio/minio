@@ -19,6 +19,24 @@ type DonutBox interface {
 	GetObjectMetadata(bucket, object string, column uint) (map[string]string, error)
 }
 
+// Bucket contains major operations on a bucket
+type Bucket interface {
+	AddDisk(Disk) error
+	RemoveDisk(Disk)
+	GetDisk(i uint) (Disk, error)
+	GetDisks() ([]Disk, error)
+	GetMetadata() (map[string]string, error)
+	ListObjects(prefix string) ([]string, error)
+	SetMetadata(metadata map[string]string) error
+}
+
+// Disk represents major operations on a bucket's disk
+type Disk interface {
+	GetObjectMetadata(object string) (map[string]string, error)
+	GetObjectReader(object string) (io.Reader, error)
+	GetObjectWriter(object string) (*NewObject, error)
+}
+
 // Result is a result for async tasks
 type Result struct {
 	Err error
