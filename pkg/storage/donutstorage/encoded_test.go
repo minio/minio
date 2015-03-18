@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package encoded
+package donutstorage
 
 import (
 	"io/ioutil"

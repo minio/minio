@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package encoded
+package donutstorage
 
 import (
 	"bytes"
@@ -34,8 +34,8 @@ import (
 	"github.com/minio-io/minio/pkg/utils/split"
 )
 
-// StorageDriver creates a new single disk storage driver using donut without encoding.
-type StorageDriver struct {
+// DonutDriver creates a new single disk storage driver using donut without encoding.
+type DonutDriver struct {
 	donutBox donutbox.DonutBox
 }
 
@@ -47,25 +47,25 @@ const (
 func Start(donutBox donutbox.DonutBox) (chan<- string, <-chan error, storage.Storage) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	s := new(StorageDriver)
+	s := new(DonutDriver)
 	s.donutBox = donutBox
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, s *StorageDriver) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error, s *DonutDriver) {
 	close(errorChannel)
 }
 
 // ListBuckets returns a list of buckets
-func (diskStorage StorageDriver) ListBuckets() (results []storage.BucketMetadata, err error) {
-	buckets, err := diskStorage.donutBox.ListBuckets()
+func (donutStorage DonutDriver) ListBuckets() (results []storage.BucketMetadata, err error) {
+	buckets, err := donutStorage.donutBox.ListBuckets()
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(buckets)
 	for _, bucket := range buckets {
-		metadata, err := diskStorage.donutBox.GetBucketMetadata(bucket)
+		metadata, err := donutStorage.donutBox.GetBucketMetadata(bucket)
 		if err != nil {
 			return nil, err
 		}
@@ -84,8 +84,8 @@ func (diskStorage StorageDriver) ListBuckets() (results []storage.BucketMetadata
 }
 
 // CreateBucket creates a new bucket
-func (diskStorage StorageDriver) CreateBucket(bucket string) error {
-	err := diskStorage.donutBox.CreateBucket(bucket)
+func (donutStorage DonutDriver) CreateBucket(bucket string) error {
+	err := donutStorage.donutBox.CreateBucket(bucket)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (diskStorage StorageDriver) CreateBucket(bucket string) error {
 		Created: time.Now(),
 	}
 	metadata := createBucketMetadata(metadataBucket)
-	err = diskStorage.donutBox.SetBucketMetadata(bucket, metadata)
+	err = donutStorage.donutBox.SetBucketMetadata(bucket, metadata)
 	if err != nil {
 		return err
 	}
@@ -102,8 +102,8 @@ func (diskStorage StorageDriver) CreateBucket(bucket string) error {
 }
 
 // GetBucketMetadata retrieves an bucket's metadata
-func (diskStorage StorageDriver) GetBucketMetadata(bucket string) (storage.BucketMetadata, error) {
-	metadata, err := diskStorage.donutBox.GetBucketMetadata(bucket)
+func (donutStorage DonutDriver) GetBucketMetadata(bucket string) (storage.BucketMetadata, error) {
+	metadata, err := donutStorage.donutBox.GetBucketMetadata(bucket)
 	if err != nil {
 		return storage.BucketMetadata{}, err
 	}
@@ -116,18 +116,18 @@ func (diskStorage StorageDriver) GetBucketMetadata(bucket string) (storage.Bucke
 }
 
 // CreateBucketPolicy sets a bucket's access policy
-func (diskStorage StorageDriver) CreateBucketPolicy(bucket string, p storage.BucketPolicy) error {
+func (donutStorage DonutDriver) CreateBucketPolicy(bucket string, p storage.BucketPolicy) error {
 	return errors.New("Not Implemented")
 }
 
 // GetBucketPolicy returns a bucket's access policy
-func (diskStorage StorageDriver) GetBucketPolicy(bucket string) (storage.BucketPolicy, error) {
+func (donutStorage DonutDriver) GetBucketPolicy(bucket string) (storage.BucketPolicy, error) {
 	return storage.BucketPolicy{}, errors.New("Not Implemented")
 }
 
 // GetObject retrieves an object and writes it to a writer
-func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
-	metadata, err := diskStorage.donutBox.GetObjectMetadata(bucket, key, 0)
+func (donutStorage DonutDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
+	metadata, err := donutStorage.donutBox.GetObjectMetadata(bucket, key, 0)
 	if err != nil {
 		// TODO strongly type and properly handle error cases
 		return 0, storage.ObjectNotFound{Bucket: bucket, Object: key}
@@ -152,7 +152,7 @@ func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string)
 	chunkCount := size/bs + 1
 	var readers []io.Reader
 	for column := 0; column < columnCount; column++ {
-		reader, err := diskStorage.donutBox.GetObjectReader(bucket, key, uint(column))
+		reader, err := donutStorage.donutBox.GetObjectReader(bucket, key, uint(column))
 		if err != nil {
 			return 0, err
 		}
@@ -196,13 +196,13 @@ func (diskStorage StorageDriver) GetObject(target io.Writer, bucket, key string)
 }
 
 // GetPartialObject retrieves an object and writes it to a writer
-func (diskStorage StorageDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+func (donutStorage DonutDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	return 0, errors.New("Not Implemented")
 }
 
 // GetObjectMetadata retrieves an object's metadata
-func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix string) (storage.ObjectMetadata, error) {
-	metadata, err := diskStorage.donutBox.GetObjectMetadata(bucket, key, 0)
+func (donutStorage DonutDriver) GetObjectMetadata(bucket, key string, prefix string) (storage.ObjectMetadata, error) {
+	metadata, err := donutStorage.donutBox.GetObjectMetadata(bucket, key, 0)
 	if err != nil {
 		return storage.ObjectMetadata{}, err
 	}
@@ -220,8 +220,8 @@ func (diskStorage StorageDriver) GetObjectMetadata(bucket, key string, prefix st
 }
 
 // ListObjects lists objects
-func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
-	objects, err := diskStorage.donutBox.ListObjectsInBucket(bucket, resources.Prefix)
+func (donutStorage DonutDriver) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
+	objects, err := donutStorage.donutBox.ListObjectsInBucket(bucket, resources.Prefix)
 	if err != nil {
 		return nil, storage.BucketResourcesMetadata{}, err
 	}
@@ -229,7 +229,7 @@ func (diskStorage StorageDriver) ListObjects(bucket string, resources storage.Bu
 	sort.Strings(objects)
 	for _, object := range withoutDelimiter(objects, resources.Prefix, resources.Delimiter) {
 		if len(results) < resources.Maxkeys {
-			objectMetadata, err := diskStorage.GetObjectMetadata(bucket, object, "")
+			objectMetadata, err := donutStorage.GetObjectMetadata(bucket, object, "")
 			if err != nil {
 				return nil, storage.BucketResourcesMetadata{}, err
 			}
@@ -286,7 +286,7 @@ func beforeDelimiter(inputs []string, delim string) (results []string) {
 }
 
 // CreateObject creates a new object
-func (diskStorage StorageDriver) CreateObject(bucketKey, objectKey, contentType, md5sum string, reader io.Reader) error {
+func (donutStorage DonutDriver) CreateObject(bucketKey, objectKey, contentType, md5sum string, reader io.Reader) error {
 	// set defaults
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -296,7 +296,7 @@ func (diskStorage StorageDriver) CreateObject(bucketKey, objectKey, contentType,
 	splitStream := split.Stream(reader, uint64(blockSize))
 	writers := make([]*donutbox.NewObject, 16)
 	for i := 0; i < 16; i++ {
-		newWriter, err := diskStorage.donutBox.GetObjectWriter(bucketKey, objectKey, uint(i))
+		newWriter, err := donutStorage.donutBox.GetObjectWriter(bucketKey, objectKey, uint(i))
 		if err != nil {
 			closeAllWritersWithError(writers, err)
 			return err
