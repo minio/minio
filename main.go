@@ -68,7 +68,7 @@ func runCmd(c *cli.Context) {
 		TLS:      false,
 		CertFile: "",
 		KeyFile:  "",
-		APIType: server.WebAPI{
+		APIType: server.Web{
 			Websocket: false,
 		},
 	}

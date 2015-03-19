@@ -22,8 +22,8 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/minio-io/minio/pkg/api/minioapi"
-	"github.com/minio-io/minio/pkg/api/webuiapi"
+	"github.com/minio-io/minio/pkg/api"
+	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
 	"github.com/minio-io/minio/pkg/storage/file"
@@ -45,8 +45,8 @@ type MinioAPI struct {
 	StorageType StorageType
 }
 
-// WebAPI - webui related
-type WebAPI struct {
+// Web - web related
+type Web struct {
 	Websocket bool // TODO
 }
 
@@ -85,13 +85,13 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 
 				ctrlChans, statusChans, storage = getStorageChannels(k.StorageType)
 				// start minio api in a web server, pass storage driver into it
-				ctrlChan, statusChan, _ = httpserver.Start(minioapi.HTTPHandler(config.Domain, storage), httpConfig)
+				ctrlChan, statusChan, _ = httpserver.Start(api.HTTPHandler(config.Domain, storage), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)
 
 			}
-		case WebAPI:
+		case Web:
 			{
 				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
@@ -100,7 +100,7 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 				httpConfig.KeyFile = config.KeyFile
 
 				httpConfig.Websocket = k.Websocket
-				ctrlChan, statusChan, _ = httpserver.Start(webuiapi.HTTPHandler(), httpConfig)
+				ctrlChan, statusChan, _ = httpserver.Start(web.HTTPHandler(), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)

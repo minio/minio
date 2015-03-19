@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signers
+package api
 
 import (
 	"bytes"
