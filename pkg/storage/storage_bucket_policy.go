@@ -1,3 +1,19 @@
+/*
+ * Mini Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package storage
 
 import (
@@ -6,22 +22,22 @@ import (
 	"strings"
 )
 
-// User - AWS canonical
+// User - canonical
 type User struct {
 	AWS string
 }
 
-// Statement - AWS policy statement
+// Statement - minio policy statement
 type Statement struct {
 	Sid       string
 	Effect    string
 	Principal User
 	Action    []string
 	Resource  []string
-	// TODO fix it in future if necessary - Condition {}
+	// add Condition struct/var TODO - fix it in future if necessary
 }
 
-// BucketPolicy - AWS policy collection
+// BucketPolicy - minio policy collection
 type BucketPolicy struct {
 	Version   string // date in 0000-00-00 format
 	Statement []Statement
@@ -29,28 +45,26 @@ type BucketPolicy struct {
 
 // Resource delimiter
 const (
-	AwsResource   = "arn:aws:s3:::"
 	MinioResource = "minio:::"
 )
 
 // TODO support canonical user
 // Principal delimiter
 const (
-	AwsPrincipal   = "arn:aws:iam::"
 	MinioPrincipal = "minio::"
 )
 
 // Action map
 var SupportedActionMap = map[string]bool{
-	"*":                     true,
-	"s3:GetObject":          true,
-	"s3:ListBucket":         true,
-	"s3:PutObject":          true,
-	"s3:CreateBucket":       true,
-	"s3:GetBucketPolicy":    true,
-	"s3:DeleteBucketPolicy": true,
-	"s3:ListAllMyBuckets":   true,
-	"s3:PutBucketPolicy":    true,
+	"*":                        true,
+	"minio:GetObject":          true,
+	"minio:ListBucket":         true,
+	"minio:PutObject":          true,
+	"minio:CreateBucket":       true,
+	"minio:GetBucketPolicy":    true,
+	"minio:DeleteBucketPolicy": true,
+	"minio:ListAllMyBuckets":   true,
+	"minio:PutBucketPolicy":    true,
 }
 
 // Effect map
@@ -152,6 +166,7 @@ func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 		if !isValidEffect(statement.Effect) {
 			goto error
 		}
+
 		if len(statement.Principal.AWS) == 0 {
 			goto error
 		}
@@ -161,7 +176,7 @@ func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 		if len(statement.Action) == 0 {
 			goto error
 		}
-		if !isValidAction(statement.Action) {
+		if !isValidAction(statement.Action) && !isValidActionS3(statement.Action) {
 			goto error
 		}
 		if len(statement.Resource) == 0 {
