@@ -1,10 +1,10 @@
 **/*.swp
-site/
 cover.out
 *~
 minio
+!*/
+site/
 **/*.test
 **/*.sublime-workspace
-verifier
 /.idea/
 /Minio.iml

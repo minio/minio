@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package webuiapi
+package web
 
 import (
 	"bytes"

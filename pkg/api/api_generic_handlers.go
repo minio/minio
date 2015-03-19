@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package minioapi
+package api
 
 import (
 	"net/http"
 	"strings"
 
 	"github.com/minio-io/minio/pkg/utils/config"
-	"github.com/minio-io/minio/pkg/utils/crypto/signers"
 )
 
 type vHandler struct {
@@ -70,7 +69,7 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(error.HTTPStatusCode)
 				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 			} else {
-				ok, _ = signers.ValidateRequest(user, r)
+				ok, _ = ValidateRequest(user, r)
 				if ok {
 					h.handler.ServeHTTP(w, r)
 				} else {
