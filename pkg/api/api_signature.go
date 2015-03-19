@@ -18,20 +18,21 @@ package api
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/minio-io/minio/pkg/utils/config"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
+	"net/http"
+	"net/url"
+
+	"github.com/minio-io/minio/pkg/api/config"
 )
 
 // SignRequest - a given http request using HMAC style signatures

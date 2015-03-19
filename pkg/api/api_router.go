@@ -20,9 +20,9 @@ import (
 	"log"
 	"net/http"
 
-	x "github.com/gorilla/mux"
+	router "github.com/gorilla/mux"
+	"github.com/minio-io/minio/pkg/api/config"
 	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/utils/config"
 )
 
 // private use
@@ -32,7 +32,7 @@ type minioAPI struct {
 }
 
 // Path based routing
-func pathMux(api minioAPI, mux *x.Router) *x.Router {
+func pathMux(api minioAPI, mux *router.Router) *router.Router {
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
@@ -44,7 +44,7 @@ func pathMux(api minioAPI, mux *x.Router) *x.Router {
 }
 
 // Domain based routing
-func domainMux(api minioAPI, mux *x.Router) *x.Router {
+func domainMux(api minioAPI, mux *router.Router) *router.Router {
 	mux.HandleFunc("/",
 		api.listObjectsHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
 	mux.HandleFunc("/{object:.*}",
@@ -60,7 +60,7 @@ func domainMux(api minioAPI, mux *x.Router) *x.Router {
 }
 
 // Get proper router based on domain availability
-func getMux(api minioAPI, mux *x.Router) *x.Router {
+func getMux(api minioAPI, mux *router.Router) *router.Router {
 	switch true {
 	case api.domain == "":
 		return pathMux(api, mux)
@@ -73,12 +73,12 @@ func getMux(api minioAPI, mux *x.Router) *x.Router {
 
 // HTTPHandler - http wrapper handler
 func HTTPHandler(domain string, storage mstorage.Storage) http.Handler {
-	var mux *x.Router
+	var mux *router.Router
 	var api = minioAPI{}
 	api.storage = storage
 	api.domain = domain
 
-	r := x.NewRouter()
+	r := router.NewRouter()
 	mux = getMux(api, r)
 
 	var conf = config.Config{}
