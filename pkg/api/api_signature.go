@@ -154,7 +154,21 @@ func writeCanonicalizedAmzHeaders(buf *bytes.Buffer, req *http.Request) {
 }
 
 // Resource list must be sorted:
-var subResList = []string{"acl", "lifecycle", "location", "logging", "notification", "partNumber", "policy", "requestPayment", "torrent", "uploadId", "uploads", "versionId", "versioning", "versions", "website"}
+var subResList = []string{
+	"acl",
+	"location",
+	"logging",
+	"notification",
+	"partNumber",
+	"policy",
+	"uploadId",
+	"uploads",
+	"response-content-type",
+	"response-content-language",
+	"response-content-disposition",
+	"response-content-encoding",
+	"website",
+}
 
 // From the Amazon docs:
 //
@@ -169,6 +183,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 		buf.WriteString(bucket)
 	}
 	buf.WriteString(req.URL.Path)
+	sort.Strings(subResList)
 	if req.URL.RawQuery != "" {
 		n := 0
 		vals, _ := url.ParseQuery(req.URL.RawQuery)
