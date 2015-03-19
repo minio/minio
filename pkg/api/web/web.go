@@ -24,7 +24,7 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkg/utils/config"
+	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/utils/crypto/keys"
 )
 

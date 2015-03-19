@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/utils/config"
+	"github.com/minio-io/minio/pkg/api/config"
 )
 
 type vHandler struct {

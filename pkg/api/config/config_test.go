@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package config_test
+package config
 
 import (
 	"io/ioutil"
@@ -23,7 +23,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/minio-io/minio/pkg/utils/config"
 	"github.com/minio-io/minio/pkg/utils/crypto/keys"
 	. "gopkg.in/check.v1"
 )
@@ -35,7 +34,8 @@ var _ = Suite(&MySuite{})
 func Test(t *testing.T) { TestingT(t) }
 
 func (s *MySuite) TestConfig(c *C) {
-	conf := config.Config{}
+	conf := Config{}
+	conf.ConfigLock = new(sync.RWMutex)
 	conf.ConfigPath, _ = ioutil.TempDir("/tmp", "minio-test-")
 	defer os.RemoveAll(conf.ConfigPath)
 	conf.ConfigFile = path.Join(conf.ConfigPath, "config.json")
@@ -45,12 +45,11 @@ func (s *MySuite) TestConfig(c *C) {
 			c.Fatal(err)
 		}
 	}
-	conf.ConfigLock = new(sync.RWMutex)
 
 	accesskey, _ := keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
 	secretkey, _ := keys.GenerateRandomBase64(keys.MinioSecretID)
 
-	user := config.User{
+	user := User{
 		Name:      "gnubot",
 		AccessKey: string(accesskey),
 		SecretKey: string(secretkey),
@@ -65,7 +64,7 @@ func (s *MySuite) TestConfig(c *C) {
 
 	accesskey, _ = keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
 	secretkey, _ = keys.GenerateRandomBase64(keys.MinioSecretID)
-	user = config.User{
+	user = User{
 		Name:      "minio",
 		AccessKey: string(accesskey),
 		SecretKey: string(secretkey),
