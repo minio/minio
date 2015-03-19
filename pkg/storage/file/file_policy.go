@@ -43,7 +43,7 @@ func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, e
 	}
 
 	// get policy path
-	bucketPolicy := path.Join(storage.root, bucket+"_mstoragejson")
+	bucketPolicy := path.Join(storage.root, bucket+"_policy.json")
 	filestat, err := os.Stat(bucketPolicy)
 
 	if os.IsNotExist(err) {
