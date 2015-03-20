@@ -60,10 +60,13 @@ func (s *MySuite) TestFileSplitJoin(c *C) {
 
 	devnull, err := os.OpenFile(os.DevNull, 2, os.ModeAppend)
 	defer devnull.Close()
-	reader := split.JoinFiles(".", "ERROR")
-	_, err = io.Copy(devnull, reader)
+
+	var reader io.Reader
+	reader, err = split.JoinFiles(".", "ERROR")
 	c.Assert(err, Not(IsNil))
-	reader = split.JoinFiles(".", "TESTPREFIX")
+
+	reader, err = split.JoinFiles(".", "TESTPREFIX")
+	c.Assert(err, IsNil)
 	_, err = io.Copy(devnull, reader)
 	c.Assert(err, IsNil)
 }
