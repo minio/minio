@@ -103,11 +103,12 @@ func splitStreamGoRoutine(reader io.Reader, chunkSize uint64, ch chan Message) {
 //     fmt.Println(buf)
 // }
 //
-func JoinFiles(dirname string, inputPrefix string) io.Reader {
+func JoinFiles(dirname string, inputPrefix string) (io.Reader, error) {
 	reader, writer := io.Pipe()
 	fileInfos, readError := ioutil.ReadDir(dirname)
 	if readError != nil {
 		writer.CloseWithError(readError)
+		return nil, readError
 	}
 
 	var newfileInfos []os.FileInfo
@@ -118,11 +119,13 @@ func JoinFiles(dirname string, inputPrefix string) io.Reader {
 	}
 
 	if len(newfileInfos) == 0 {
-		writer.CloseWithError(errors.New("no files found for given prefix"))
+		nofilesError := errors.New("no files found for given prefix " + inputPrefix)
+		writer.CloseWithError(nofilesError)
+		return nil, nofilesError
 	}
 
 	go joinFilesGoRoutine(newfileInfos, writer)
-	return reader
+	return reader, nil
 }
 
 func joinFilesGoRoutine(fileInfos []os.FileInfo, writer *io.PipeWriter) {
