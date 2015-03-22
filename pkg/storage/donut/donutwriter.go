@@ -8,7 +8,7 @@ import (
 )
 
 func newDonutFileWriter(objectDir string) (Writer, error) {
-	dataFile, err := os.OpenFile(path.Join(objectDir, "data"), os.O_WRONLY|os.O_CREATE, 0600)
+	dataFile, err := os.OpenFile(path.Join(objectDir, "data"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0600)
 	if err != nil {
 		return nil, err
 	}
