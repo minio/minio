@@ -113,6 +113,21 @@ func (driver donutDriver) GetObject(bucketName, objectName string) (io.ReadClose
 	return nil, errors.New("Bucket not found")
 }
 
+// GetObjectMetadata returns metadata for a given object in a bucket
+func (driver donutDriver) GetObjectMetadata(bucketName, object string) (map[string]string, error) {
+	if bucket, ok := driver.buckets[bucketName]; ok {
+		nodes, err := bucket.GetNodes()
+		if err != nil {
+			return nil, err
+		}
+		if node, ok := driver.nodes[nodes[0]]; ok {
+			return node.GetMetadata(bucketName+":0:0", object)
+		}
+		return nil, errors.New("Cannot connect to node: " + nodes[0])
+	}
+	return nil, errors.New("Bucket not found")
+}
+
 func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, writer *io.PipeWriter) {
 	totalChunks, _ := strconv.Atoi(donutMetadata["chunkCount"])
 	totalLeft, _ := strconv.Atoi(donutMetadata["totalLength"])
