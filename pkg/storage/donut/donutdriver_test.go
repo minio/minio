@@ -25,7 +25,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	// check buckets are empty
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(buckets, DeepEquals, make([]string, 0))
+	c.Assert(buckets, IsNil)
 }
 
 func (s *MySuite) TestBucketWithoutNameFails(c *C) {

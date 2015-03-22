@@ -20,9 +20,10 @@ type Bucket interface {
 	GetNodes() ([]string, error)
 }
 
+// Node interface
 type Node interface {
 	GetBuckets() ([]string, error)
-	GetWriter(bucket, object string) (DonutWriter, error)
+	GetWriter(bucket, object string) (Writer, error)
 	GetReader(bucket, object string) (io.ReadCloser, error)
 	GetMetadata(bucket, object string) (map[string]string, error)
 	GetDonutMetadata(bucket, object string) (map[string]string, error)
@@ -37,7 +38,8 @@ type ObjectWriter interface {
 	GetMetadata() (map[string]string, error)
 }
 
-type DonutWriter interface {
+// Writer interface
+type Writer interface {
 	ObjectWriter
 
 	GetDonutMetadata() (map[string]string, error)
