@@ -11,7 +11,6 @@ type Donut interface {
 	GetObjectWriter(bucket, object string) (ObjectWriter, error)
 	GetObject(bucket, object string) (io.ReadCloser, error)
 	GetObjectMetadata(bucket, object string) (map[string]string, error)
-	//	GetObjectWriter(bucket, object string) (ObjectWriter, error)
 	//	ListObjects(bucket string) ([]string, error)
 }
 
