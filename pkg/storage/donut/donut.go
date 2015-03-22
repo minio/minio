@@ -7,11 +7,11 @@ import "io"
 // Donut interface
 type Donut interface {
 	CreateBucket(bucket string) error
-	ListBuckets() ([]string, error)
-	GetObjectWriter(bucket, object string) (ObjectWriter, error)
 	GetObject(bucket, object string) (io.ReadCloser, error)
 	GetObjectMetadata(bucket, object string) (map[string]string, error)
-	//	ListObjects(bucket string) ([]string, error)
+	GetObjectWriter(bucket, object string) (ObjectWriter, error)
+	ListBuckets() ([]string, error)
+	ListObjects(bucket string) ([]string, error)
 }
 
 // Bucket interface
@@ -22,19 +22,20 @@ type Bucket interface {
 // Node interface
 type Node interface {
 	GetBuckets() ([]string, error)
-	GetWriter(bucket, object string) (Writer, error)
-	GetReader(bucket, object string) (io.ReadCloser, error)
-	GetMetadata(bucket, object string) (map[string]string, error)
 	GetDonutMetadata(bucket, object string) (map[string]string, error)
+	GetMetadata(bucket, object string) (map[string]string, error)
+	GetReader(bucket, object string) (io.ReadCloser, error)
+	GetWriter(bucket, object string) (Writer, error)
+	ListObjects(bucket string) ([]string, error)
 }
 
 // ObjectWriter interface
 type ObjectWriter interface {
-	Write([]byte) (int, error)
 	Close() error
 	CloseWithError(error) error
-	SetMetadata(map[string]string) error
 	GetMetadata() (map[string]string, error)
+	SetMetadata(map[string]string) error
+	Write([]byte) (int, error)
 }
 
 // Writer interface

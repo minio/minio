@@ -16,6 +16,7 @@ import (
 
 	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
+	"path/filepath"
 )
 
 type donutDriver struct {
@@ -124,6 +125,19 @@ func (driver donutDriver) GetObjectMetadata(bucketName, object string) (map[stri
 			return node.GetMetadata(bucketName+":0:0", object)
 		}
 		return nil, errors.New("Cannot connect to node: " + nodes[0])
+	}
+	return nil, errors.New("Bucket not found")
+}
+
+func (driver donutDriver) ListObjects(bucketName string) ([]string, error) {
+	if bucket, ok := driver.buckets[bucketName]; ok {
+		nodes, err := bucket.GetNodes()
+		if err != nil {
+			return nil, err
+		}
+		if node, ok := driver.nodes[nodes[0]]; ok {
+			return node.ListObjects(bucketName + ":0:0")
+		}
 	}
 	return nil, errors.New("Bucket not found")
 }
@@ -259,12 +273,12 @@ type localDirectoryNode struct {
 	root string
 }
 
-func (d localDirectoryNode) GetBuckets() ([]string, error) {
+func (node localDirectoryNode) GetBuckets() ([]string, error) {
 	return nil, errors.New("Not Implemented")
 }
 
-func (d localDirectoryNode) GetWriter(bucket, object string) (Writer, error) {
-	objectPath := path.Join(d.root, bucket, object)
+func (node localDirectoryNode) GetWriter(bucket, object string) (Writer, error) {
+	objectPath := path.Join(node.root, bucket, object)
 	err := os.MkdirAll(objectPath, 0700)
 	if err != nil {
 		return nil, err
@@ -272,19 +286,19 @@ func (d localDirectoryNode) GetWriter(bucket, object string) (Writer, error) {
 	return newDonutFileWriter(objectPath)
 }
 
-func (d localDirectoryNode) GetReader(bucket, object string) (io.ReadCloser, error) {
-	return os.Open(path.Join(d.root, bucket, object, "data"))
+func (node localDirectoryNode) GetReader(bucket, object string) (io.ReadCloser, error) {
+	return os.Open(path.Join(node.root, bucket, object, "data"))
 }
 
-func (d localDirectoryNode) GetMetadata(bucket, object string) (map[string]string, error) {
-	return d.getMetadata(bucket, object, "metadata.json")
+func (node localDirectoryNode) GetMetadata(bucket, object string) (map[string]string, error) {
+	return node.getMetadata(bucket, object, "metadata.json")
 }
-func (d localDirectoryNode) GetDonutMetadata(bucket, object string) (map[string]string, error) {
-	return d.getMetadata(bucket, object, "donutMetadata.json")
+func (node localDirectoryNode) GetDonutMetadata(bucket, object string) (map[string]string, error) {
+	return node.getMetadata(bucket, object, "donutMetadata.json")
 }
 
-func (d localDirectoryNode) getMetadata(bucket, object, fileName string) (map[string]string, error) {
-	file, err := os.Open(path.Join(d.root, bucket, object, fileName))
+func (node localDirectoryNode) getMetadata(bucket, object, fileName string) (map[string]string, error) {
+	file, err := os.Open(path.Join(node.root, bucket, object, fileName))
 	defer file.Close()
 	if err != nil {
 		return nil, err
@@ -295,7 +309,26 @@ func (d localDirectoryNode) getMetadata(bucket, object, fileName string) (map[st
 		return nil, err
 	}
 	return metadata, nil
+}
 
+func (node localDirectoryNode) ListObjects(bucketName string) ([]string, error) {
+	prefix := path.Join(node.root, bucketName)
+	var objects []string
+	if err := filepath.Walk(prefix, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, "data") {
+			object := strings.TrimPrefix(path, prefix+"/")
+			object = strings.TrimSuffix(object, "/data")
+			objects = append(objects, object)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Strings(objects)
+	return objects, nil
 }
 
 func newDonutFileWriter(objectDir string) (Writer, error) {
