@@ -200,4 +200,9 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	_, err = io.Copy(&readerBuffer2, reader)
 	c.Assert(err, IsNil)
 	c.Assert(readerBuffer2.Bytes(), DeepEquals, []byte("two"))
+
+	// test list objects
+	listObjects, err := donut.ListObjects("foo")
+	c.Assert(err, IsNil)
+	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
 }
