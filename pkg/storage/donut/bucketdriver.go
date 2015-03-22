@@ -5,9 +5,9 @@ type bucketDriver struct {
 	objects map[string][]byte
 }
 
-func (self bucketDriver) GetNodes() ([]string, error) {
+func (b bucketDriver) GetNodes() ([]string, error) {
 	var nodes []string
-	for _, node := range self.nodes {
+	for _, node := range b.nodes {
 		nodes = append(nodes, node)
 	}
 	return nodes, nil
