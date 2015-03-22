@@ -7,6 +7,7 @@ import (
 	. "gopkg.in/check.v1"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 )
 
@@ -159,6 +160,11 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	_, err = io.Copy(&actualData, reader)
 	c.Assert(err, IsNil)
 	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
+
+	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
+	c.Assert(err, IsNil)
+	log.Println(actualMetadata)
+	c.Assert(actualMetadata, DeepEquals, expectedMetadata)
 }
 
 func (s *MySuite) TestMultipleNewObjects(c *C) {
