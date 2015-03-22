@@ -7,7 +7,6 @@ import (
 	. "gopkg.in/check.v1"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 )
 
@@ -163,7 +162,6 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 
 	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
-	log.Println(actualMetadata)
 	c.Assert(actualMetadata, DeepEquals, expectedMetadata)
 }
 

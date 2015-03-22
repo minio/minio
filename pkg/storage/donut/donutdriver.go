@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"sort"
@@ -162,7 +161,6 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 		if blockSize < totalLeft {
 			curBlockSize = blockSize
 		}
-		log.Println("decoding block size", curBlockSize)
 		decodedData, err := encoder.Decode(encodedBytes, curBlockSize)
 		if err != nil {
 			writer.CloseWithError(err)
