@@ -2,6 +2,7 @@ package donut
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -12,9 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"encoding/gob"
-	"encoding/json"
 
 	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
@@ -127,13 +125,9 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	for i := 0; i < totalChunks; i++ {
 		encodedBytes := make([][]byte, 16)
 		for i, reader := range readers {
-			var bytesArray []byte
-			decoder := gob.NewDecoder(reader)
-			err := decoder.Decode(&bytesArray)
-			if err != nil {
-				log.Println(err)
-			}
-			encodedBytes[i] = bytesArray
+			var bytesBuffer bytes.Buffer
+			io.Copy(&bytesBuffer, reader)
+			encodedBytes[i] = bytesBuffer.Bytes()
 		}
 		curBlockSize := totalLeft
 		if blockSize < totalLeft {
@@ -185,10 +179,7 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 			totalLength = totalLength + len(chunk.Data)
 			encodedBlocks, _ := encoder.Encode(chunk.Data)
 			for blockIndex, block := range encodedBlocks {
-				var byteBuffer bytes.Buffer
-				gobEncoder := gob.NewEncoder(&byteBuffer)
-				gobEncoder.Encode(block)
-				io.Copy(eWriter.writers[blockIndex], &byteBuffer)
+				io.Copy(eWriter.writers[blockIndex], bytes.NewBuffer(block))
 			}
 		}
 		chunkCount = chunkCount + 1
