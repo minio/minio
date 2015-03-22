@@ -327,23 +327,19 @@ func (d donutFileWriter) Close() error {
 	if d.err != nil {
 		return d.err
 	}
-
-	d.file.Close()
-
 	metadata, _ := json.Marshal(d.metadata)
 	ioutil.WriteFile(path.Join(d.root, "metadata.json"), metadata, 0600)
 	donutMetadata, _ := json.Marshal(d.donutMetadata)
 	ioutil.WriteFile(path.Join(d.root, "donutMetadata.json"), donutMetadata, 0600)
 
-	return nil
+	return d.file.Close()
 }
 
 func (d donutFileWriter) CloseWithError(err error) error {
 	if d.err != nil {
 		d.err = err
 	}
-	d.file.Close()
-	return nil
+	return d.Close()
 }
 
 func (d donutFileWriter) SetMetadata(metadata map[string]string) error {
