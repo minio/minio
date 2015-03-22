@@ -7,39 +7,39 @@ import "io"
 // Donut interface
 type Donut interface {
 	CreateBucket(bucket string) error
-	GetBuckets() ([]string, error)
-	GetObject(bucket, object string) (io.ReadCloser, error)
-	GetObjectMetadata(bucket, object string) (map[string]string, error)
+	ListBuckets() ([]string, error)
 	GetObjectWriter(bucket, object string) (ObjectWriter, error)
+	GetObject(bucket, object string) (io.ReadCloser, error)
+	//	GetObjectMetadata(bucket, object string) (map[string]string, error)
+	//	GetObjectWriter(bucket, object string) (ObjectWriter, error)
+	//	ListObjects(bucket string) ([]string, error)
 }
 
-// Bucket is an interface for managing buckets
+// Bucket interface
 type Bucket interface {
-	GetObject(object string) (io.Reader, error)
-	GetObjectMetadata(object string) (map[string]string, error)
-	GetObjectWriter(object string) (ObjectWriter, error)
-	GetObjects() ([]string, error)
+	GetNodes() ([]string, error)
 }
 
-// Disk is an interface for managing disks
-type Disk interface {
-	GetBuckets(object string) ([]string, error)
+type Node interface {
+	GetBuckets() ([]string, error)
+	GetWriter(bucket, object string) (DonutWriter, error)
+	GetReader(bucket, object string) (io.ReadCloser, error)
+	GetMetadata(bucket, object string) (map[string]string, error)
+	GetDonutMetadata(bucket, object string) (map[string]string, error)
 }
 
-// ObjectWriter is an interface for writing new objects
+// ObjectWriter interface
 type ObjectWriter interface {
-	Write([]byte) error
+	Write([]byte) (int, error)
 	Close() error
 	CloseWithError(error) error
-
-	SetMetadata(map[string]string)
-	GetMetadata() map[string]string
+	SetMetadata(map[string]string) error
+	GetMetadata() (map[string]string, error)
 }
 
-// InternalObjectWriter is an interface for use internally to donut
-type InternalObjectWriter interface {
+type DonutWriter interface {
 	ObjectWriter
 
-	SetDonutMetadata(map[string]string)
-	GetDonutMetadata() map[string]string
+	GetDonutMetadata() (map[string]string, error)
+	SetDonutMetadata(map[string]string) error
 }
