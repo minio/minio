@@ -116,38 +116,44 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
-func getChunkSize(k, split_len int) int {
-	var alignment, remainder, padded_len int
+func GetEncodedLen(inputLen, k, m int) (outputLen int) {
+	outputLen = GetEncodedChunkLen(inputLen, k) * (k + m)
+	return outputLen
+}
 
-	alignment = k * SimdAlign
-	remainder = split_len % alignment
+func GetEncodedChunkLen(inputLen, k int) (outputChunkLen int) {
+	alignment := k * SimdAlign
+	remainder := inputLen % alignment
 
-	padded_len = split_len
+	paddedInputLen := inputLen
 	if remainder != 0 {
-		padded_len = split_len + (alignment - remainder)
+		paddedInputLen = inputLen + (alignment - remainder)
 	}
-	return padded_len / k
+	outputChunkLen = paddedInputLen / k
+	return outputChunkLen
 }
 
 // Encode encodes a block of data. The input is the original data. The output
 // is a 2 tuple containing (k + m) chunks of erasure encoded data and the
 // length of the original object.
-func (e *Encoder) Encode(block []byte) ([][]byte, int) {
-	var block_len = len(block)
+func (e *Encoder) Encode(input []byte) ([][]byte, error) {
+	var inputLen = len(input)
 
-	chunk_size := getChunkSize(int(e.k), block_len)
-	chunk_len := chunk_size * int(e.k)
-	pad_len := int(chunk_len) - block_len
+	chunkLen := GetEncodedChunkLen(inputLen, int(e.k))
+	encodedDataLen := chunkLen * int(e.k)
+	paddedDataLen := int(encodedDataLen) - inputLen
 
-	if pad_len > 0 {
-		s := make([]byte, pad_len)
+	if paddedDataLen > 0 {
+		s := make([]byte, paddedDataLen)
 		// Expand with new padded blocks to the byte array
-		block = append(block, s...)
+		input = append(input, s...)
 	}
 
-	coded_len := chunk_size * int(e.p.M)
-	c := make([]byte, coded_len)
-	block = append(block, c...)
+	encodedParityLen := chunkLen * int(e.p.M)
+	c := make([]byte, encodedParityLen)
+	input = append(input, c...)
+
+	// encodedOutLen := encodedDataLen + encodedParityLen
 
 	// Allocate chunks
 	chunks := make([][]byte, e.p.K+e.p.M)
@@ -156,19 +162,19 @@ func (e *Encoder) Encode(block []byte) ([][]byte, int) {
 	var i int
 	// Add data blocks to chunks
 	for i = 0; i < int(e.p.K); i++ {
-		chunks[i] = block[i*chunk_size : (i+1)*chunk_size]
+		chunks[i] = input[i*chunkLen : (i+1)*chunkLen]
 		pointers[i] = &chunks[i][0]
 	}
 
 	for i = int(e.p.K); i < int(e.p.K+e.p.M); i++ {
-		chunks[i] = make([]byte, chunk_size)
+		chunks[i] = make([]byte, chunkLen)
 		pointers[i] = &chunks[i][0]
 	}
 
 	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:e.p.K][0]))
 	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[e.p.K:][0]))
 
-	C.ec_encode_data(C.int(chunk_size), e.k, e.m, e.encode_tbls, data,
+	C.ec_encode_data(C.int(chunkLen), e.k, e.m, e.encode_tbls, data,
 		coding)
-	return chunks, block_len
+	return chunks, nil
 }
