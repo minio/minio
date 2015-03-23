@@ -37,8 +37,8 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	var decode_index *C.uint32_t
 	var source, target **C.uint8_t
 
-	k := e.parms.K
-	m := e.parms.M
+	k := e.params.K
+	m := e.params.M
 	n := k + m
 	if len(chunks) != int(n) {
 		return nil, errors.New(fmt.Sprintf("chunks length must be %d", n))
