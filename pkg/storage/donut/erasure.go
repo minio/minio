@@ -142,7 +142,7 @@ func (eWriter erasureWriter) CloseWithError(err error) error {
 }
 
 func (eWriter erasureWriter) SetMetadata(metadata map[string]string) error {
-	for k, _ := range metadata {
+	for k := range metadata {
 		if strings.HasPrefix(k, "sys.") {
 			return errors.New("Invalid key '" + k + "', cannot start with sys.'")
 		}
