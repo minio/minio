@@ -121,19 +121,19 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 	isClosed <- true
 }
 
-func (d erasureWriter) Write(data []byte) (int, error) {
-	io.Copy(d.erasureWriter, bytes.NewBuffer(data))
+func (eWriter erasureWriter) Write(data []byte) (int, error) {
+	io.Copy(eWriter.erasureWriter, bytes.NewBuffer(data))
 	return len(data), nil
 }
 
-func (d erasureWriter) Close() error {
-	d.erasureWriter.Close()
-	<-d.isClosed
+func (eWriter erasureWriter) Close() error {
+	eWriter.erasureWriter.Close()
+	<-eWriter.isClosed
 	return nil
 }
 
-func (d erasureWriter) CloseWithError(err error) error {
-	for _, writer := range d.writers {
+func (eWriter erasureWriter) CloseWithError(err error) error {
+	for _, writer := range eWriter.writers {
 		if writer != nil {
 			writer.CloseWithError(err)
 		}
@@ -141,24 +141,24 @@ func (d erasureWriter) CloseWithError(err error) error {
 	return nil
 }
 
-func (d erasureWriter) SetMetadata(metadata map[string]string) error {
-	for k, _ := range metadata {
+func (eWriter erasureWriter) SetMetadata(metadata map[string]string) error {
+	for k := range metadata {
 		if strings.HasPrefix(k, "sys.") {
 			return errors.New("Invalid key '" + k + "', cannot start with sys.'")
 		}
 	}
-	for k := range d.metadata {
-		delete(d.metadata, k)
+	for k := range eWriter.metadata {
+		delete(eWriter.metadata, k)
 	}
 	for k, v := range metadata {
-		d.metadata[k] = v
+		eWriter.metadata[k] = v
 	}
 	return nil
 }
 
-func (d erasureWriter) GetMetadata() (map[string]string, error) {
+func (eWriter erasureWriter) GetMetadata() (map[string]string, error) {
 	metadata := make(map[string]string)
-	for k, v := range d.metadata {
+	for k, v := range eWriter.metadata {
 		metadata[k] = v
 	}
 	return metadata, nil
