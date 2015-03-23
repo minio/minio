@@ -14,21 +14,26 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	totalChunks, _ := strconv.Atoi(donutMetadata["chunkCount"])
 	totalLeft, _ := strconv.Atoi(donutMetadata["totalLength"])
 	blockSize, _ := strconv.Atoi(donutMetadata["blockSize"])
-	params, _ := erasure.ParseEncoderParams(8, 8, erasure.Cauchy)
+	k, _ := strconv.Atoi(donutMetadata["erasureK"])
+	m, _ := strconv.Atoi(donutMetadata["erasureM"])
+	// TODO select technique properly
+	params, _ := erasure.ParseEncoderParams(uint8(k), uint8(m), erasure.Cauchy)
 	encoder := erasure.NewEncoder(params)
 	for _, reader := range readers {
 		defer reader.Close()
 	}
 	for i := 0; i < totalChunks; i++ {
-		encodedBytes := make([][]byte, 16)
-		for i, reader := range readers {
-			var bytesBuffer bytes.Buffer
-			io.Copy(&bytesBuffer, reader)
-			encodedBytes[i] = bytesBuffer.Bytes()
-		}
 		curBlockSize := totalLeft
 		if blockSize < totalLeft {
 			curBlockSize = blockSize
+		}
+		curChunkSize := erasure.GetEncodedChunkLen(curBlockSize, uint8(k))
+
+		encodedBytes := make([][]byte, 16)
+		for i, reader := range readers {
+			var bytesBuffer bytes.Buffer
+			io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
+			encodedBytes[i] = bytesBuffer.Bytes()
 		}
 		decodedData, err := encoder.Decode(encodedBytes, curBlockSize)
 		if err != nil {
