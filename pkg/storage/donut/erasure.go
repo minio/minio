@@ -11,6 +11,7 @@ import (
 	"errors"
 	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
+	"strings"
 )
 
 func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, writer *io.PipeWriter) {
@@ -108,8 +109,8 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 	metadata["erasureK"] = "8"
 	metadata["erasureM"] = "8"
 	metadata["erasureTechnique"] = "Cauchy"
-	metadata["totalLength"] = strconv.Itoa(totalLength)
 	metadata["md5"] = hex.EncodeToString(dataMd5sum)
+	metadata["totalLength"] = strconv.Itoa(totalLength)
 	for _, nodeWriter := range eWriter.writers {
 		if nodeWriter != nil {
 			nodeWriter.SetMetadata(eWriter.metadata)
@@ -141,6 +142,11 @@ func (d erasureWriter) CloseWithError(err error) error {
 }
 
 func (d erasureWriter) SetMetadata(metadata map[string]string) error {
+	for k, _ := range metadata {
+		if strings.HasPrefix(k, "sys.") {
+			return errors.New("Invalid key '" + k + "', cannot start with sys.'")
+		}
+	}
 	for k := range d.metadata {
 		delete(d.metadata, k)
 	}
