@@ -51,7 +51,7 @@ type EncoderParams struct {
 
 // Encoder is an object used to encode and decode data.
 type Encoder struct {
-	parms *EncoderParams
+	params *EncoderParams
 	encode_matrix,
 	encode_tbls,
 	decode_matrix,
@@ -104,7 +104,7 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 		&encode_tbls)
 
 	return &Encoder{
-		parms:         ep,
+		params:        ep,
 		encode_matrix: encode_matrix,
 		encode_tbls:   encode_tbls,
 		decode_matrix: nil,
@@ -134,11 +134,11 @@ func GetEncodedChunkLen(inputLen int, k uint8) (outputChunkLen int) {
 // length of the original object.
 func (e *Encoder) Encode(input []byte) ([][]byte, error) {
 	inputLen := len(input)
-	k := C.int(e.parms.K)
-	m := C.int(e.parms.M)
+	k := C.int(e.params.K)
+	m := C.int(e.params.M)
 	n := k + m
 
-	chunkLen := GetEncodedChunkLen(inputLen, e.parms.K)
+	chunkLen := GetEncodedChunkLen(inputLen, e.params.K)
 	encodedDataLen := chunkLen * int(k)
 	paddedDataLen := int(encodedDataLen) - inputLen
 
@@ -148,7 +148,7 @@ func (e *Encoder) Encode(input []byte) ([][]byte, error) {
 		input = append(input, s...)
 	}
 
-	encodedParityLen := chunkLen * int(e.parms.M)
+	encodedParityLen := chunkLen * int(e.params.M)
 	c := make([]byte, encodedParityLen)
 	input = append(input, c...)
 
