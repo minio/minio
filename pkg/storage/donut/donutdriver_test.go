@@ -204,3 +204,21 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
 }
+
+func (s *MySuite) TestSysPrefixShouldFail(c *C) {
+	root, err := ioutil.TempDir(os.TempDir(), "donut-")
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(root)
+	donut := NewDonutDriver(root)
+
+	c.Assert(donut.CreateBucket("foo"), IsNil)
+	writer, err := donut.GetObjectWriter("foo", "obj1")
+	c.Assert(err, IsNil)
+	writer.Write([]byte("one"))
+	metadata := make(map[string]string)
+	metadata["foo"] = "bar"
+	metadata["sys.hello"] = "world"
+	err = writer.SetMetadata(metadata)
+	c.Assert(err, Not(IsNil))
+	writer.Close()
+}
