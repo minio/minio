@@ -37,12 +37,13 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	var decode_index *C.uint32_t
 	var source, target **C.uint8_t
 
-	k := int(e.k)
-	n := int(e.k + e.m)
+	k := e.parms.K
+	m := e.parms.M
+	n := k + m
 	if len(chunks) != int(n) {
 		return nil, errors.New(fmt.Sprintf("chunks length must be %d", n))
 	}
-	chunk_size := GetEncodedChunkLen(length, k)
+	chunk_size := GetEncodedChunkLen(length, uint8(k))
 
 	error_index := make([]int, n+1)
 	var err_count int = 0
@@ -70,7 +71,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		}
 	}
 
-	C.minio_init_decoder(error_index_ptr, e.k, e.k+e.m, C.int(err_count-1),
+	C.minio_init_decoder(error_index_ptr, C.int(k), C.int(n), C.int(err_count-1),
 		e.encode_matrix, &decode_matrix, &decode_tbls, &decode_index)
 
 	pointers := make([]*byte, n)
@@ -80,14 +81,14 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 
 	data := (**C.uint8_t)(unsafe.Pointer(&pointers[0]))
 
-	ret := C.minio_get_source_target(C.int(err_count-1), e.k, e.m, error_index_ptr,
+	ret := C.minio_get_source_target(C.int(err_count-1), C.int(k), C.int(m), error_index_ptr,
 		decode_index, data, &source, &target)
 
 	if int(ret) == -1 {
 		return nil, errors.New("Decoding source target failed")
 	}
 
-	C.ec_encode_data(C.int(chunk_size), e.k, C.int(err_count-1), decode_tbls,
+	C.ec_encode_data(C.int(chunk_size), C.int(k), C.int(err_count-1), decode_tbls,
 		source, target)
 
 	recovered_output := make([]byte, 0, chunk_size*int(k))

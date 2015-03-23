@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	SimdAlign = 32
+	SIMDAlign = 32
 )
 
 // EncoderParams is a configuration set for building an encoder. It is created using ValidateParams.
@@ -51,9 +51,7 @@ type EncoderParams struct {
 
 // Encoder is an object used to encode and decode data.
 type Encoder struct {
-	p *EncoderParams
-	k,
-	m C.int
+	parms *EncoderParams
 	encode_matrix,
 	encode_tbls,
 	decode_matrix,
@@ -96,19 +94,17 @@ func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error)
 
 // NewEncoder creates an encoder object with a given set of parameters.
 func NewEncoder(ep *EncoderParams) *Encoder {
-	var k = C.int(ep.K)
-	var m = C.int(ep.M)
-
 	var encode_matrix *C.uint8_t
 	var encode_tbls *C.uint8_t
+
+	k := C.int(ep.K)
+	m := C.int(ep.M)
 
 	C.minio_init_encoder(C.int(ep.Technique), k, m, &encode_matrix,
 		&encode_tbls)
 
 	return &Encoder{
-		p:             ep,
-		k:             k,
-		m:             m,
+		parms:         ep,
 		encode_matrix: encode_matrix,
 		encode_tbls:   encode_tbls,
 		decode_matrix: nil,
@@ -116,20 +112,20 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
-func GetEncodedLen(inputLen, k, m int) (outputLen int) {
-	outputLen = GetEncodedChunkLen(inputLen, k) * (k + m)
+func GetEncodedLen(inputLen int, k, m uint8) (outputLen int) {
+	outputLen = GetEncodedChunkLen(inputLen, k) * int(k+m)
 	return outputLen
 }
 
-func GetEncodedChunkLen(inputLen, k int) (outputChunkLen int) {
-	alignment := k * SimdAlign
+func GetEncodedChunkLen(inputLen int, k uint8) (outputChunkLen int) {
+	alignment := int(k) * SIMDAlign
 	remainder := inputLen % alignment
 
 	paddedInputLen := inputLen
 	if remainder != 0 {
 		paddedInputLen = inputLen + (alignment - remainder)
 	}
-	outputChunkLen = paddedInputLen / k
+	outputChunkLen = paddedInputLen / int(k)
 	return outputChunkLen
 }
 
@@ -137,10 +133,13 @@ func GetEncodedChunkLen(inputLen, k int) (outputChunkLen int) {
 // is a 2 tuple containing (k + m) chunks of erasure encoded data and the
 // length of the original object.
 func (e *Encoder) Encode(input []byte) ([][]byte, error) {
-	var inputLen = len(input)
+	inputLen := len(input)
+	k := C.int(e.parms.K)
+	m := C.int(e.parms.M)
+	n := k + m
 
-	chunkLen := GetEncodedChunkLen(inputLen, int(e.k))
-	encodedDataLen := chunkLen * int(e.k)
+	chunkLen := GetEncodedChunkLen(inputLen, e.parms.K)
+	encodedDataLen := chunkLen * int(k)
 	paddedDataLen := int(encodedDataLen) - inputLen
 
 	if paddedDataLen > 0 {
@@ -149,32 +148,32 @@ func (e *Encoder) Encode(input []byte) ([][]byte, error) {
 		input = append(input, s...)
 	}
 
-	encodedParityLen := chunkLen * int(e.p.M)
+	encodedParityLen := chunkLen * int(e.parms.M)
 	c := make([]byte, encodedParityLen)
 	input = append(input, c...)
 
 	// encodedOutLen := encodedDataLen + encodedParityLen
 
 	// Allocate chunks
-	chunks := make([][]byte, e.p.K+e.p.M)
-	pointers := make([]*byte, e.p.K+e.p.M)
+	chunks := make([][]byte, k+m)
+	pointers := make([]*byte, k+m)
 
 	var i int
 	// Add data blocks to chunks
-	for i = 0; i < int(e.p.K); i++ {
+	for i = 0; i < int(k); i++ {
 		chunks[i] = input[i*chunkLen : (i+1)*chunkLen]
 		pointers[i] = &chunks[i][0]
 	}
 
-	for i = int(e.p.K); i < int(e.p.K+e.p.M); i++ {
+	for i = int(k); i < int(n); i++ {
 		chunks[i] = make([]byte, chunkLen)
 		pointers[i] = &chunks[i][0]
 	}
 
-	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:e.p.K][0]))
-	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[e.p.K:][0]))
+	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:k][0]))
+	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[k:][0]))
 
-	C.ec_encode_data(C.int(chunkLen), e.k, e.m, e.encode_tbls, data,
+	C.ec_encode_data(C.int(chunkLen), k, m, e.encode_tbls, data,
 		coding)
 	return chunks, nil
 }
