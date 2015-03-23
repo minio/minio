@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"github.com/minio-io/minio/pkg/encoding/erasure"
-	"github.com/minio-io/minio/pkg/utils/crypto/sha512"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
 
@@ -20,8 +20,8 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	blockSize, _ := strconv.Atoi(donutMetadata["blockSize"])
 	k, _ := strconv.Atoi(donutMetadata["erasureK"])
 	m, _ := strconv.Atoi(donutMetadata["erasureM"])
-	expectedSha512, _ := hex.DecodeString(donutMetadata["sha512"])
-	summer := sha512.New()
+	expectedMd5sum, _ := hex.DecodeString(donutMetadata["md5"])
+	summer := md5.New()
 	// TODO select technique properly
 	params, _ := erasure.ParseEncoderParams(uint8(k), uint8(m), erasure.Cauchy)
 	encoder := erasure.NewEncoder(params)
@@ -51,9 +51,10 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 		io.Copy(writer, bytes.NewBuffer(decodedData))
 		totalLeft = totalLeft - blockSize
 	}
-	actualSha512 := summer.Sum(nil)
-	if bytes.Compare(expectedSha512, actualSha512) != 0 {
-		writer.CloseWithError(errors.New("decoded sha512 did not match"))
+	actualMd5sum := summer.Sum(nil)
+	if bytes.Compare(expectedMd5sum, actualMd5sum) != 0 {
+		writer.CloseWithError(errors.New("decoded md5sum did not match"))
+		return
 	}
 	writer.Close()
 }
@@ -87,7 +88,7 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 	encoder := erasure.NewEncoder(params)
 	chunkCount := 0
 	totalLength := 0
-	summer := sha512.New()
+	summer := md5.New()
 	for chunk := range chunks {
 		if chunk.Err == nil {
 			totalLength = totalLength + len(chunk.Data)
@@ -99,7 +100,7 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 		}
 		chunkCount = chunkCount + 1
 	}
-	dataSha512 := summer.Sum(nil)
+	dataMd5sum := summer.Sum(nil)
 	metadata := make(map[string]string)
 	metadata["blockSize"] = strconv.Itoa(10 * 1024 * 1024)
 	metadata["chunkCount"] = strconv.Itoa(chunkCount)
@@ -108,7 +109,7 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 	metadata["erasureM"] = "8"
 	metadata["erasureTechnique"] = "Cauchy"
 	metadata["totalLength"] = strconv.Itoa(totalLength)
-	metadata["sha512"] = hex.EncodeToString(dataSha512)
+	metadata["md5"] = hex.EncodeToString(dataMd5sum)
 	for _, nodeWriter := range eWriter.writers {
 		if nodeWriter != nil {
 			nodeWriter.SetMetadata(eWriter.metadata)
