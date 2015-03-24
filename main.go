@@ -17,11 +17,11 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	"github.com/codegangsta/cli"
 	"github.com/minio-io/minio/pkg/server"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 func getStorageType(input string) server.StorageType {

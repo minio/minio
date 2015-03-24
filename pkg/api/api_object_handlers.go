@@ -17,11 +17,11 @@
 package api
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // GET Object
@@ -42,7 +42,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			log.Println("Found: " + bucket + "#" + object)
 			httpRange, err := newRange(req, metadata.Size)
 			if err != nil {
-				log.Println(err)
+				log.Errorln(err)
 				error := errorCodeError(InvalidRange)
 				errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 				w.WriteHeader(error.HTTPStatusCode)
@@ -53,7 +53,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			case true:
 				writeObjectHeaders(w, metadata)
 				if _, err := server.storage.GetObject(w, bucket, object); err != nil {
-					log.Println(err)
+					log.Errorln(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 					w.WriteHeader(error.HTTPStatusCode)
@@ -66,7 +66,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				w.WriteHeader(http.StatusPartialContent)
 				_, err := server.storage.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
-					log.Println(err)
+					log.Errorln(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 					w.WriteHeader(error.HTTPStatusCode)
@@ -100,7 +100,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	case mstorage.ImplementationError:
 		{
 			// Embed errors log on serve side
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -140,7 +140,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	case mstorage.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -175,7 +175,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	case mstorage.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)

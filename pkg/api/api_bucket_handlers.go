@@ -17,11 +17,11 @@
 package api
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // GET Bucket (List Objects)
@@ -62,7 +62,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	case mstorage.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -100,7 +100,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case mstorage.ImplementationError:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
 			w.WriteHeader(error.HTTPStatusCode)
@@ -108,7 +108,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case mstorage.BackendCorrupted:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
 			w.WriteHeader(error.HTTPStatusCode)
@@ -155,7 +155,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	case mstorage.ImplementationError:
 		{
 			// Embed errors log on server side
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
