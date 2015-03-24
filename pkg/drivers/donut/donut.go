@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-package donutstorage
+package donut
 
 import (
 	"errors"
-	"github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/donut"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/minio/pkg/storage/donut"
 )
 
-// Storage creates a new single disk storage driver using donut without encoding.
-type Storage struct {
+// donutDriver - creates a new single disk drivers driver using donut
+type donutDriver struct {
 	donut donut.Donut
 }
 
@@ -37,26 +38,25 @@ const (
 )
 
 // Start a single disk subsystem
-func Start(path string) (chan<- string, <-chan error, storage.Storage) {
-
+func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	s := new(Storage)
+	s := new(donutDriver)
 
 	// TODO donut driver should be passed in as Start param and driven by config
-	s.donut = donut.NewDonutDriver(path)
+	s.donut = donut.NewDonut(path)
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, s *Storage) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error, s *donutDriver) {
 	close(errorChannel)
 }
 
 // ListBuckets returns a list of buckets
-func (donutStorage Storage) ListBuckets() (results []storage.BucketMetadata, err error) {
-	buckets, err := donutStorage.donut.ListBuckets()
+func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error) {
+	buckets, err := d.donut.ListBuckets()
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (donutStorage Storage) ListBuckets() (results []storage.BucketMetadata, err
 		if err != nil {
 			return nil, err
 		}
-		result := storage.BucketMetadata{
+		result := drivers.BucketMetadata{
 			Name: bucket,
 			// TODO Add real created date
 			Created: time.Now(),
@@ -75,30 +75,30 @@ func (donutStorage Storage) ListBuckets() (results []storage.BucketMetadata, err
 }
 
 // CreateBucket creates a new bucket
-func (donutStorage Storage) CreateBucket(bucket string) error {
-	return donutStorage.donut.CreateBucket(bucket)
+func (d donutDriver) CreateBucket(bucket string) error {
+	return d.donut.CreateBucket(bucket)
 }
 
 // GetBucketMetadata retrieves an bucket's metadata
-func (donutStorage Storage) GetBucketMetadata(bucket string) (storage.BucketMetadata, error) {
-	return storage.BucketMetadata{}, errors.New("Not Implemented")
+func (d donutDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	return drivers.BucketMetadata{}, errors.New("Not Implemented")
 }
 
 // CreateBucketPolicy sets a bucket's access policy
-func (donutStorage Storage) CreateBucketPolicy(bucket string, p storage.BucketPolicy) error {
+func (d donutDriver) CreateBucketPolicy(bucket string, p drivers.BucketPolicy) error {
 	return errors.New("Not Implemented")
 }
 
 // GetBucketPolicy returns a bucket's access policy
-func (donutStorage Storage) GetBucketPolicy(bucket string) (storage.BucketPolicy, error) {
-	return storage.BucketPolicy{}, errors.New("Not Implemented")
+func (d donutDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
+	return drivers.BucketPolicy{}, errors.New("Not Implemented")
 }
 
 // GetObject retrieves an object and writes it to a writer
-func (donutStorage Storage) GetObject(target io.Writer, bucket, key string) (int64, error) {
-	reader, err := donutStorage.donut.GetObject(bucket, key)
+func (d donutDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
+	reader, err := d.donut.GetObjectReader(bucket, key)
 	if err != nil {
-		return 0, storage.ObjectNotFound{
+		return 0, drivers.ObjectNotFound{
 			Bucket: bucket,
 			Object: key,
 		}
@@ -106,23 +106,23 @@ func (donutStorage Storage) GetObject(target io.Writer, bucket, key string) (int
 	return io.Copy(target, reader)
 }
 
-// GetPartialObject retrieves an object and writes it to a writer
-func (donutStorage Storage) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+// GetPartialObject retrieves an object range and writes it to a writer
+func (d donutDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	return 0, errors.New("Not Implemented")
 }
 
 // GetObjectMetadata retrieves an object's metadata
-func (donutStorage Storage) GetObjectMetadata(bucket, key string, prefix string) (storage.ObjectMetadata, error) {
-	metadata, err := donutStorage.donut.GetObjectMetadata(bucket, key)
+func (d donutDriver) GetObjectMetadata(bucket, key string, prefix string) (drivers.ObjectMetadata, error) {
+	metadata, err := d.donut.GetObjectMetadata(bucket, key)
 	created, err := time.Parse(time.RFC3339Nano, metadata["sys.created"])
 	if err != nil {
-		return storage.ObjectMetadata{}, err
+		return drivers.ObjectMetadata{}, err
 	}
 	size, err := strconv.ParseInt(metadata["sys.size"], 10, 64)
 	if err != nil {
-		return storage.ObjectMetadata{}, err
+		return drivers.ObjectMetadata{}, err
 	}
-	objectMetadata := storage.ObjectMetadata{
+	objectMetadata := drivers.ObjectMetadata{
 		Bucket: bucket,
 		Key:    key,
 
@@ -134,12 +134,12 @@ func (donutStorage Storage) GetObjectMetadata(bucket, key string, prefix string)
 	return objectMetadata, nil
 }
 
-// ListObjects lists objects
-func (donutStorage Storage) ListObjects(bucket string, resources storage.BucketResourcesMetadata) ([]storage.ObjectMetadata, storage.BucketResourcesMetadata, error) {
+// ListObjects - returns list of objects
+func (d donutDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	// TODO Fix IsPrefixSet && IsDelimiterSet and use them
-	objects, err := donutStorage.donut.ListObjects(bucket)
+	objects, err := d.donut.ListObjects(bucket)
 	if err != nil {
-		return nil, storage.BucketResourcesMetadata{}, err
+		return nil, drivers.BucketResourcesMetadata{}, err
 	}
 	sort.Strings(objects)
 	if resources.Prefix != "" {
@@ -162,15 +162,15 @@ func (donutStorage Storage) ListObjects(bucket string, resources storage.BucketR
 		actualObjects = objects
 	}
 
-	var results []storage.ObjectMetadata
+	var results []drivers.ObjectMetadata
 	for _, object := range actualObjects {
 		if len(results) >= resources.Maxkeys {
 			resources.IsTruncated = true
 			break
 		}
-		metadata, err := donutStorage.GetObjectMetadata(bucket, resources.Prefix+object, "")
+		metadata, err := d.GetObjectMetadata(bucket, resources.Prefix+object, "")
 		if err != nil {
-			return nil, storage.BucketResourcesMetadata{}, err
+			return nil, drivers.BucketResourcesMetadata{}, err
 		}
 		results = append(results, metadata)
 	}
@@ -237,8 +237,8 @@ func uniqueObjects(objects []string) []string {
 }
 
 // CreateObject creates a new object
-func (donutStorage Storage) CreateObject(bucketKey, objectKey, contentType, expectedMd5sum string, reader io.Reader) error {
-	writer, err := donutStorage.donut.GetObjectWriter(bucketKey, objectKey)
+func (d donutDriver) CreateObject(bucketKey, objectKey, contentType, expectedMd5sum string, reader io.Reader) error {
+	writer, err := d.donut.GetObjectWriter(bucketKey, objectKey)
 	if err != nil {
 		return err
 	}

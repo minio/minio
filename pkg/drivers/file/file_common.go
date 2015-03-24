@@ -23,17 +23,17 @@ import (
 	"strings"
 	"sync"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
-// Storage - file local variables
-type Storage struct {
+// fileDriver - file local variables
+type fileDriver struct {
 	root string
 	lock *sync.Mutex
 }
 
-// Metadata - carries metadata about object
-type Metadata struct {
+// fileMetadata - carries metadata about object
+type fileMetadata struct {
 	Md5sum      []byte
 	ContentType string
 }
@@ -77,7 +77,7 @@ func delimiter(object, delimiter string) string {
 	return delimitedStr
 }
 
-type byObjectKey []mstorage.ObjectMetadata
+type byObjectKey []drivers.ObjectMetadata
 
 // Len
 func (b byObjectKey) Len() int { return len(b) }

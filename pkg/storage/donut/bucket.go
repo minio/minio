@@ -1,11 +1,12 @@
 package donut
 
-type bucketDriver struct {
+type donutBucket struct {
 	nodes   []string
 	objects map[string][]byte
 }
 
-func (b bucketDriver) GetNodes() ([]string, error) {
+// GetNodes - get list of associated nodes for a given bucket
+func (b donutBucket) GetNodes() ([]string, error) {
 	var nodes []string
 	for _, node := range b.nodes {
 		nodes = append(nodes, node)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package storage
+package drivers
 
 // This file implements compatability layer for AWS clients
 

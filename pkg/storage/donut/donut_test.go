@@ -1,14 +1,14 @@
 package donut
 
 import (
-	"testing"
-
 	"bytes"
-	. "gopkg.in/check.v1"
 	"io"
 	"io/ioutil"
 	"os"
+	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -21,7 +21,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	// check buckets are empty
 	buckets, err := donut.ListBuckets()
@@ -33,7 +33,7 @@ func (s *MySuite) TestBucketWithoutNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 	// fail to create new bucket without a name
 	err = donut.CreateBucket("")
 	c.Assert(err, Not(IsNil))
@@ -46,7 +46,7 @@ func (s *MySuite) TestCreateBucketAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 	// create bucket
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -61,7 +61,7 @@ func (s *MySuite) TestCreateBucketWithSameNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
@@ -73,7 +73,7 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 	// add a second bucket
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -97,7 +97,7 @@ func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	writer, err := donut.GetObjectWriter("foo", "obj")
 	c.Assert(err, Not(IsNil))
@@ -108,7 +108,7 @@ func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	writer, err := donut.GetObjectWriter("foo", "")
 	c.Assert(err, Not(IsNil))
@@ -123,7 +123,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -153,7 +153,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 
 	c.Assert(err, IsNil)
 
-	reader, err := donut.GetObject("foo", "obj")
+	reader, err := donut.GetObjectReader("foo", "obj")
 	c.Assert(err, IsNil)
 
 	var actualData bytes.Buffer
@@ -175,7 +175,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	c.Assert(donut.CreateBucket("foo"), IsNil)
 	writer, err := donut.GetObjectWriter("foo", "obj1")
@@ -190,7 +190,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 
 	//	c.Skip("not complete")
 
-	reader, err := donut.GetObject("foo", "obj1")
+	reader, err := donut.GetObjectReader("foo", "obj1")
 	c.Assert(err, IsNil)
 	var readerBuffer1 bytes.Buffer
 	_, err = io.Copy(&readerBuffer1, reader)
@@ -198,7 +198,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	//	c.Skip("Not Implemented")
 	c.Assert(readerBuffer1.Bytes(), DeepEquals, []byte("one"))
 
-	reader, err = donut.GetObject("foo", "obj2")
+	reader, err = donut.GetObjectReader("foo", "obj2")
 	c.Assert(err, IsNil)
 	var readerBuffer2 bytes.Buffer
 	_, err = io.Copy(&readerBuffer2, reader)
@@ -215,7 +215,7 @@ func (s *MySuite) TestSysPrefixShouldFail(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonutDriver(root)
+	donut := NewDonut(root)
 
 	c.Assert(donut.CreateBucket("foo"), IsNil)
 	writer, err := donut.GetObjectWriter("foo", "obj1")

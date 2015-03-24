@@ -20,13 +20,13 @@ import (
 	"os"
 	"strings"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // TODO handle resources.Marker
-func (storage *Storage) filter(bucket, name string, file os.FileInfo, resources mstorage.BucketResourcesMetadata) (mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
+func (file *fileDriver) filter(bucket, name string, f os.FileInfo, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	var err error
-	var metadata mstorage.ObjectMetadata
+	var metadata drivers.ObjectMetadata
 
 	switch true {
 	// Both delimiter and Prefix is present
@@ -37,15 +37,15 @@ func (storage *Storage) filter(bucket, name string, file os.FileInfo, resources 
 			switch true {
 			case name == resources.Prefix:
 				// Use resources.Prefix to filter out delimited files
-				metadata, err = storage.GetObjectMetadata(bucket, name, resources.Prefix)
+				metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
 				if err != nil {
-					return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+					return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 				}
-			case delimitedName == file.Name():
+			case delimitedName == f.Name():
 				// Use resources.Prefix to filter out delimited files
-				metadata, err = storage.GetObjectMetadata(bucket, name, resources.Prefix)
+				metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
 				if err != nil {
-					return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+					return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 				}
 			case delimitedName != "":
 				if delimitedName == resources.Delimiter {
@@ -61,15 +61,15 @@ func (storage *Storage) filter(bucket, name string, file os.FileInfo, resources 
 		switch true {
 		case delimitedName == "":
 			// Do not strip prefix object output
-			metadata, err = storage.GetObjectMetadata(bucket, name, "")
+			metadata, err = file.GetObjectMetadata(bucket, name, "")
 			if err != nil {
-				return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+				return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 			}
-		case delimitedName == file.Name():
+		case delimitedName == f.Name():
 			// Do not strip prefix object output
-			metadata, err = storage.GetObjectMetadata(bucket, name, "")
+			metadata, err = file.GetObjectMetadata(bucket, name, "")
 			if err != nil {
-				return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+				return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 			}
 		case delimitedName != "":
 			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
@@ -78,15 +78,15 @@ func (storage *Storage) filter(bucket, name string, file os.FileInfo, resources 
 	case resources.IsPrefixSet():
 		if strings.HasPrefix(name, resources.Prefix) {
 			// Do not strip prefix object output
-			metadata, err = storage.GetObjectMetadata(bucket, name, "")
+			metadata, err = file.GetObjectMetadata(bucket, name, "")
 			if err != nil {
-				return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+				return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 			}
 		}
 	case resources.IsDefault():
-		metadata, err = storage.GetObjectMetadata(bucket, name, "")
+		metadata, err = file.GetObjectMetadata(bucket, name, "")
 		if err != nil {
-			return mstorage.ObjectMetadata{}, resources, mstorage.EmbedError(bucket, "", err)
+			return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 		}
 	}
 

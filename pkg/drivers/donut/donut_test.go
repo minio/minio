@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package donutstorage
+package donut
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 
 	. "gopkg.in/check.v1"
 )
@@ -35,14 +35,14 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestAPISuite(c *C) {
 	//	c.Skip("Not Implemented")
 	var storageList []string
-	create := func() mstorage.Storage {
+	create := func() drivers.Driver {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
 		_, _, store := Start(path) // TODO Make InMemory driver
 		return store
 	}
-	mstorage.APITestSuite(c, create)
+	drivers.APITestSuite(c, create)
 	removeRoots(c, storageList)
 }
 

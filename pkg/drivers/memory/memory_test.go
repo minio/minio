@@ -19,7 +19,7 @@ package memory
 import (
 	"testing"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 
 	. "gopkg.in/check.v1"
 )
@@ -31,10 +31,9 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	create := func() mstorage.Storage {
+	create := func() drivers.Driver {
 		_, _, store := Start()
 		return store
 	}
-
-	mstorage.APITestSuite(c, create)
+	drivers.APITestSuite(c, create)
 }

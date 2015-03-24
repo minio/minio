@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/minio-io/minio/pkg/api"
-	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/memory"
+	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/minio/pkg/drivers/memory"
 
 	. "gopkg.in/check.v1"
 )
@@ -42,8 +42,8 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestNonExistantObject(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -54,14 +54,14 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 }
 
 func (s *MySuite) TestEmptyObject(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("")
-	storage.CreateBucket("bucket")
-	storage.CreateObject("bucket", "object", "", "", buffer)
+	driver.CreateBucket("bucket")
+	driver.CreateObject("bucket", "object", "", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
@@ -71,7 +71,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", metadata.Md5)
 
@@ -79,14 +79,14 @@ func (s *MySuite) TestEmptyObject(c *C) {
 }
 
 func (s *MySuite) TestObject(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("hello world")
-	storage.CreateBucket("bucket")
-	storage.CreateObject("bucket", "object", "", "", buffer)
+	driver.CreateBucket("bucket")
+	driver.CreateObject("bucket", "object", "", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
@@ -96,14 +96,14 @@ func (s *MySuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello world")))
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -111,10 +111,10 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	buffer2 := bytes.NewBufferString("hello two")
 	buffer3 := bytes.NewBufferString("hello three")
 
-	storage.CreateBucket("bucket")
-	storage.CreateObject("bucket", "object1", "", "", buffer1)
-	storage.CreateObject("bucket", "object2", "", "", buffer2)
-	storage.CreateObject("bucket", "object3", "", "", buffer3)
+	driver.CreateBucket("bucket")
+	driver.CreateObject("bucket", "object1", "", "", buffer1)
+	driver.CreateObject("bucket", "object2", "", "", buffer2)
+	driver.CreateObject("bucket", "object3", "", "", buffer3)
 
 	// test non-existant object
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -129,7 +129,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err := storage.GetObjectMetadata("bucket", "object1", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "object1", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -148,7 +148,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err = storage.GetObjectMetadata("bucket", "object2", "")
+	metadata, err = driver.GetObjectMetadata("bucket", "object2", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -167,7 +167,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	// get metadata
-	metadata, err = storage.GetObjectMetadata("bucket", "object3", "")
+	metadata, err = driver.GetObjectMetadata("bucket", "object3", "")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -182,8 +182,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 }
 
 func (s *MySuite) TestNotImplemented(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -193,8 +193,8 @@ func (s *MySuite) TestNotImplemented(c *C) {
 }
 
 func (s *MySuite) TestHeader(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -203,25 +203,25 @@ func (s *MySuite) TestHeader(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 
 	buffer := bytes.NewBufferString("hello world")
-	storage.CreateBucket("bucket")
-	storage.CreateObject("bucket", "object", "", "", buffer)
+	driver.CreateBucket("bucket")
+	driver.CreateObject("bucket", "object", "", "", buffer)
 
 	response, err = http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	metadata, err := storage.GetObjectMetadata("bucket", "object", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
 
 func (s *MySuite) TestPutBucket(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	buckets, err := storage.ListBuckets()
+	buckets, err := driver.ListBuckets()
 	c.Assert(len(buckets), Equals, 0)
 	c.Assert(err, IsNil)
 
@@ -234,23 +234,23 @@ func (s *MySuite) TestPutBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// check bucket exists
-	buckets, err = storage.ListBuckets()
+	buckets, err = driver.ListBuckets()
 	c.Assert(len(buckets), Equals, 1)
 	c.Assert(err, IsNil)
 	c.Assert(buckets[0].Name, Equals, "bucket")
 }
 
 func (s *MySuite) TestPutObject(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	resources := mstorage.BucketResourcesMetadata{}
+	resources := drivers.BucketResourcesMetadata{}
 
 	resources.Maxkeys = 1000
 	resources.Prefix = ""
-	objects, resources, err := storage.ListObjects("bucket", resources)
+	objects, resources, err := driver.ListObjects("bucket", resources)
 	c.Assert(len(objects), Equals, 0)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, Not(IsNil))
@@ -278,18 +278,18 @@ func (s *MySuite) TestPutObject(c *C) {
 	resources.Maxkeys = 1000
 	resources.Prefix = ""
 
-	objects, resources, err = storage.ListObjects("bucket", resources)
+	objects, resources, err = driver.ListObjects("bucket", resources)
 	c.Assert(len(objects), Equals, 1)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, IsNil)
 
 	var writer bytes.Buffer
 
-	storage.GetObject(&writer, "bucket", "two")
+	driver.GetObject(&writer, "bucket", "two")
 
 	c.Assert(bytes.Equal(writer.Bytes(), []byte("hello world")), Equals, true)
 
-	metadata, err := storage.GetObjectMetadata("bucket", "two", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, IsNil)
 	lastModified := metadata.Created
 
@@ -298,8 +298,8 @@ func (s *MySuite) TestPutObject(c *C) {
 }
 
 func (s *MySuite) TestListBuckets(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -312,7 +312,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 0)
 
-	storage.CreateBucket("foo")
+	driver.CreateBucket("foo")
 
 	response, err = http.Get(testServer.URL + "/")
 	defer response.Body.Close()
@@ -324,7 +324,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 1)
 	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "foo")
 
-	storage.CreateBucket("bar")
+	driver.CreateBucket("bar")
 
 	response, err = http.Get(testServer.URL + "/")
 	defer response.Body.Close()
@@ -377,12 +377,12 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 }
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.CreateBucket("foo")
+	err := driver.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/", bytes.NewBufferString(""))
@@ -402,12 +402,12 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.CreateBucket("foo")
+	err := driver.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
@@ -427,12 +427,12 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 }
 
 func (s *MySuite) TestContentTypePersists(c *C) {
-	_, _, storage := memory.Start()
-	httpHandler := api.HTTPHandler("", storage)
+	_, _, driver := memory.Start()
+	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	err := storage.CreateBucket("bucket")
+	err := driver.CreateBucket("bucket")
 	c.Assert(err, IsNil)
 
 	client := http.Client{}

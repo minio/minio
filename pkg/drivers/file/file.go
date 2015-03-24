@@ -19,20 +19,22 @@ package file
 import (
 	"os"
 	"sync"
+
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // Start filesystem channel
-func Start(root string) (chan<- string, <-chan error, *Storage) {
+func Start(root string) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	s := Storage{}
+	s := new(fileDriver)
 	s.root = root
 	s.lock = new(sync.Mutex)
-	go start(ctrlChannel, errorChannel, &s)
-	return ctrlChannel, errorChannel, &s
+	go start(ctrlChannel, errorChannel, s)
+	return ctrlChannel, errorChannel, s
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, s *Storage) {
+func start(ctrlChannel <-chan string, errorChannel chan<- error, s *fileDriver) {
 	err := os.MkdirAll(s.root, 0700)
 	errorChannel <- err
 	close(errorChannel)

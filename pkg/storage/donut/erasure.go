@@ -14,6 +14,7 @@ import (
 	"strings"
 )
 
+// erasureReader - returns aligned streaming reads over a PipeWriter
 func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, writer *io.PipeWriter) {
 	// TODO handle errors
 	totalChunks, _ := strconv.Atoi(donutMetadata["chunkCount"])
@@ -70,6 +71,7 @@ type erasureWriter struct {
 	isClosed      <-chan bool
 }
 
+// newErasureWriter - get a new writer
 func newErasureWriter(writers []Writer) ObjectWriter {
 	r, w := io.Pipe()
 	isClosed := make(chan bool)

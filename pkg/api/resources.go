@@ -20,11 +20,11 @@ import (
 	"net/url"
 	"strconv"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // parse bucket url queries
-func getBucketResources(values url.Values) (v mstorage.BucketResourcesMetadata) {
+func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
 	for key, value := range values {
 		switch true {
 		case key == "prefix":

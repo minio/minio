@@ -1,5 +1,5 @@
 /*
- * Minio Object Storage, (C) 2015 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package memory
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"sort"
 	"strings"
@@ -28,37 +27,40 @@ import (
 
 	"crypto/md5"
 	"encoding/hex"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
-// Storage - local variables
-type Storage struct {
+// memoryDriver - local variables
+type memoryDriver struct {
 	bucketdata map[string]storedBucket
 	objectdata map[string]storedObject
 	lock       *sync.RWMutex
 }
 
 type storedBucket struct {
-	metadata mstorage.BucketMetadata
+	metadata drivers.BucketMetadata
 	//	owner    string // TODO
 	//	id       string // TODO
 }
 
 type storedObject struct {
-	metadata mstorage.ObjectMetadata
+	metadata drivers.ObjectMetadata
 	data     []byte
 }
 
 // Start memory object server
-func Start() (chan<- string, <-chan error, *Storage) {
+func Start() (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
+
+	memory := new(memoryDriver)
+	memory.bucketdata = make(map[string]storedBucket)
+	memory.objectdata = make(map[string]storedObject)
+	memory.lock = new(sync.RWMutex)
+
 	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, &Storage{
-		bucketdata: make(map[string]storedBucket),
-		objectdata: make(map[string]storedObject),
-		lock:       new(sync.RWMutex),
-	}
+	return ctrlChannel, errorChannel, memory
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error) {
@@ -66,43 +68,43 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 }
 
 // GetObject - GET object from memory buffer
-func (storage *Storage) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+func (memory memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	// get object
 	key := object
-	if val, ok := storage.objectdata[key]; ok {
+	if val, ok := memory.objectdata[key]; ok {
 		objectBuffer := bytes.NewBuffer(val.data)
 		written, err := io.Copy(w, objectBuffer)
 		return written, err
 	}
-	return 0, mstorage.ObjectNotFound{Bucket: bucket, Object: object}
+	return 0, drivers.ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 // GetPartialObject - GET object from memory buffer range
-func (storage *Storage) GetPartialObject(w io.Writer, bucket, object string, start, end int64) (int64, error) {
-	return 0, mstorage.APINotImplemented{API: "GetPartialObject"}
+func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, end int64) (int64, error) {
+	return 0, drivers.APINotImplemented{API: "GetPartialObject"}
 }
 
 // CreateBucketPolicy - Not implemented
-func (storage *Storage) CreateBucketPolicy(bucket string, policy mstorage.BucketPolicy) error {
-	return mstorage.APINotImplemented{API: "PutBucketPolicy"}
+func (memory memoryDriver) CreateBucketPolicy(bucket string, policy drivers.BucketPolicy) error {
+	return drivers.APINotImplemented{API: "PutBucketPolicy"}
 }
 
 // GetBucketPolicy - Not implemented
-func (storage *Storage) GetBucketPolicy(bucket string) (mstorage.BucketPolicy, error) {
-	return mstorage.BucketPolicy{}, mstorage.APINotImplemented{API: "GetBucketPolicy"}
+func (memory memoryDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
+	return drivers.BucketPolicy{}, drivers.APINotImplemented{API: "GetBucketPolicy"}
 }
 
 // CreateObject - PUT object to memory buffer
-func (storage *Storage) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
-	storage.lock.Lock()
-	defer storage.lock.Unlock()
+func (memory memoryDriver) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
+	memory.lock.Lock()
+	defer memory.lock.Unlock()
 
-	if _, ok := storage.bucketdata[bucket]; ok == false {
-		return mstorage.BucketNotFound{Bucket: bucket}
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		return drivers.BucketNotFound{Bucket: bucket}
 	}
 
-	if _, ok := storage.objectdata[key]; ok == true {
-		return mstorage.ObjectExists{Bucket: bucket, Object: key}
+	if _, ok := memory.objectdata[key]; ok == true {
+		return drivers.ObjectExists{Bucket: bucket, Object: key}
 	}
 
 	if contentType == "" {
@@ -117,7 +119,7 @@ func (storage *Storage) CreateObject(bucket, key, contentType, md5sum string, da
 		size := bytesBuffer.Len()
 		md5SumBytes := md5.Sum(bytesBuffer.Bytes())
 		md5Sum := hex.EncodeToString(md5SumBytes[:])
-		newObject.metadata = mstorage.ObjectMetadata{
+		newObject.metadata = drivers.ObjectMetadata{
 			Bucket: bucket,
 			Key:    key,
 
@@ -128,27 +130,27 @@ func (storage *Storage) CreateObject(bucket, key, contentType, md5sum string, da
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}
-	storage.objectdata[key] = newObject
+	memory.objectdata[key] = newObject
 	return nil
 }
 
 // CreateBucket - create bucket in memory
-func (storage *Storage) CreateBucket(bucketName string) error {
-	storage.lock.Lock()
-	defer storage.lock.Unlock()
-	if !mstorage.IsValidBucket(bucketName) {
-		return mstorage.BucketNameInvalid{Bucket: bucketName}
+func (memory memoryDriver) CreateBucket(bucketName string) error {
+	memory.lock.Lock()
+	defer memory.lock.Unlock()
+	if !drivers.IsValidBucket(bucketName) {
+		return drivers.BucketNameInvalid{Bucket: bucketName}
 	}
 
-	if _, ok := storage.bucketdata[bucketName]; ok == true {
-		return mstorage.BucketExists{Bucket: bucketName}
+	if _, ok := memory.bucketdata[bucketName]; ok == true {
+		return drivers.BucketExists{Bucket: bucketName}
 	}
 
 	var newBucket = storedBucket{}
-	newBucket.metadata = mstorage.BucketMetadata{}
+	newBucket.metadata = drivers.BucketMetadata{}
 	newBucket.metadata.Name = bucketName
 	newBucket.metadata.Created = time.Now()
-	storage.bucketdata[bucketName] = newBucket
+	memory.bucketdata[bucketName] = newBucket
 
 	return nil
 }
@@ -172,13 +174,13 @@ func appendUniq(slice []string, i string) []string {
 }
 
 // ListObjects - list objects from memory
-func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketResourcesMetadata) ([]mstorage.ObjectMetadata, mstorage.BucketResourcesMetadata, error) {
-	if _, ok := storage.bucketdata[bucket]; ok == false {
-		return []mstorage.ObjectMetadata{}, mstorage.BucketResourcesMetadata{IsTruncated: false}, mstorage.BucketNotFound{Bucket: bucket}
+func (memory memoryDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		return []drivers.ObjectMetadata{}, drivers.BucketResourcesMetadata{IsTruncated: false}, drivers.BucketNotFound{Bucket: bucket}
 	}
-	var results []mstorage.ObjectMetadata
+	var results []drivers.ObjectMetadata
 	var keys []string
-	for key := range storage.objectdata {
+	for key := range memory.objectdata {
 		switch true {
 		// Prefix absent, delimit object key based on delimiter
 		case resources.Delimiter != "" && resources.Prefix == "":
@@ -193,7 +195,6 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 		case resources.Delimiter != "" && resources.Prefix != "" && strings.HasPrefix(key, resources.Prefix):
 			trimmedName := strings.TrimPrefix(key, resources.Prefix)
 			delimitedName := delimiter(trimmedName, resources.Delimiter)
-			fmt.Println(trimmedName, delimitedName, key, resources.Prefix)
 			switch true {
 			case key == resources.Prefix:
 				keys = appendUniq(keys, key)
@@ -219,9 +220,9 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 	sort.Strings(keys)
 	for _, key := range keys {
 		if len(results) == resources.Maxkeys {
-			return results, mstorage.BucketResourcesMetadata{IsTruncated: true}, nil
+			return results, drivers.BucketResourcesMetadata{IsTruncated: true}, nil
 		}
-		object := storage.objectdata[key]
+		object := memory.objectdata[key]
 		if bucket == object.metadata.Bucket {
 			results = append(results, object.metadata)
 		}
@@ -230,7 +231,7 @@ func (storage *Storage) ListObjects(bucket string, resources mstorage.BucketReso
 }
 
 // ByBucketName is a type for sorting bucket metadata by bucket name
-type ByBucketName []mstorage.BucketMetadata
+type ByBucketName []drivers.BucketMetadata
 
 // Len of bucket name
 func (b ByBucketName) Len() int { return len(b) }
@@ -242,9 +243,9 @@ func (b ByBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from memory
-func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
-	var results []mstorage.BucketMetadata
-	for _, bucket := range storage.bucketdata {
+func (memory memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
+	var results []drivers.BucketMetadata
+	for _, bucket := range memory.bucketdata {
 		results = append(results, bucket.metadata)
 	}
 	sort.Sort(ByBucketName(results))
@@ -252,9 +253,9 @@ func (storage *Storage) ListBuckets() ([]mstorage.BucketMetadata, error) {
 }
 
 // GetObjectMetadata - get object metadata from memory
-func (storage *Storage) GetObjectMetadata(bucket, key, prefix string) (mstorage.ObjectMetadata, error) {
-	if object, ok := storage.objectdata[key]; ok == true {
+func (memory memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drivers.ObjectMetadata, error) {
+	if object, ok := memory.objectdata[key]; ok == true {
 		return object.metadata, nil
 	}
-	return mstorage.ObjectMetadata{}, mstorage.ObjectNotFound{Bucket: bucket, Object: key}
+	return drivers.ObjectMetadata{}, drivers.ObjectNotFound{Bucket: bucket, Object: key}
 }
