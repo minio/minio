@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // No encoder interface exists, so we create one.
@@ -58,7 +58,7 @@ func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType
 }
 
 // Write object header
-func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata) {
+func writeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
 	writeCommonHeaders(w, metadata.ContentType)
@@ -69,7 +69,7 @@ func writeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata)
 }
 
 // Write range object header
-func writeRangeObjectHeaders(w http.ResponseWriter, metadata mstorage.ObjectMetadata, ra string) {
+func writeRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, ra string) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
 	writeCommonHeaders(w, metadata.ContentType)

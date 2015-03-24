@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package storage
+package drivers
 
 import (
 	"encoding/json"

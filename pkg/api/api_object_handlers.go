@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -35,7 +35,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.storage.GetObjectMetadata(bucket, object, "")
+	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil: // success
 		{
@@ -52,7 +52,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			switch httpRange.start == 0 && httpRange.length == 0 {
 			case true:
 				writeObjectHeaders(w, metadata)
-				if _, err := server.storage.GetObject(w, bucket, object); err != nil {
+				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
 					log.Errorln(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
@@ -64,7 +64,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				metadata.Size = httpRange.length
 				writeRangeObjectHeaders(w, metadata, httpRange.getContentRange())
 				w.WriteHeader(http.StatusPartialContent)
-				_, err := server.storage.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
+				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
 					log.Errorln(err)
 					error := errorCodeError(InternalError)
@@ -76,28 +76,28 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 
 			}
 		}
-	case mstorage.ObjectNotFound:
+	case drivers.ObjectNotFound:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ObjectNameInvalid:
+	case drivers.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			// Embed errors log on serve side
 			log.Errorln(err)
@@ -119,25 +119,25 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.storage.GetObjectMetadata(bucket, object, "")
+	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
 		writeObjectHeaders(w, metadata)
-	case mstorage.ObjectNotFound:
+	case drivers.ObjectNotFound:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ObjectNameInvalid:
+	case drivers.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
 			log.Errorln(err)
@@ -167,12 +167,12 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 
 	// get Content-MD5 sent by client
 	md5 := req.Header.Get("Content-MD5")
-	err := server.storage.CreateObject(bucket, object, "", md5, req.Body)
+	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
 	switch err := err.(type) {
 	case nil:
 		w.Header().Set("Server", "Minio")
 		w.Header().Set("Connection", "close")
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
 			log.Errorln(err)
@@ -181,35 +181,35 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNotFound:
+	case drivers.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ObjectExists:
+	case drivers.ObjectExists:
 		{
 			error := errorCodeError(NotImplemented)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BadDigest:
+	case drivers.BadDigest:
 		{
 			error := errorCodeError(BadDigest)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.InvalidDigest:
+	case drivers.InvalidDigest:
 		{
 			error := errorCodeError(InvalidDigest)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)

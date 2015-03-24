@@ -24,11 +24,11 @@ import (
 
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
+	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/minio/pkg/drivers/donut"
+	"github.com/minio-io/minio/pkg/drivers/file"
+	"github.com/minio-io/minio/pkg/drivers/memory"
 	"github.com/minio-io/minio/pkg/server/httpserver"
-	mstorage "github.com/minio-io/minio/pkg/storage"
-	"github.com/minio-io/minio/pkg/storage/donutstorage"
-	"github.com/minio-io/minio/pkg/storage/file"
-	"github.com/minio-io/minio/pkg/storage/memory"
 )
 
 // Config - http server parameters
@@ -41,9 +41,9 @@ type Config struct {
 	APIType  interface{}
 }
 
-// MinioAPI - storage type donut, file, memory
+// MinioAPI - driver type donut, file, memory
 type MinioAPI struct {
-	StorageType StorageType
+	DriverType DriverType
 }
 
 // Web - web related
@@ -51,12 +51,12 @@ type Web struct {
 	Websocket bool // TODO
 }
 
-// StorageType - different storage types supported by minio
-type StorageType int
+// DriverType - different driver types supported by minio
+type DriverType int
 
-// Storage types
+// Driver types
 const (
-	Memory = iota
+	Memory DriverType = iota
 	File
 	Donut
 )
@@ -71,7 +71,7 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 		case MinioAPI:
 			{
 				// configure web server
-				var storage mstorage.Storage
+				var driver drivers.Driver
 				var httpConfig = httpserver.Config{}
 				httpConfig.Address = config.Address
 				httpConfig.Websocket = false
@@ -84,9 +84,9 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 					httpConfig.KeyFile = config.KeyFile
 				}
 
-				ctrlChans, statusChans, storage = getStorageChannels(k.StorageType)
-				// start minio api in a web server, pass storage driver into it
-				ctrlChan, statusChan, _ = httpserver.Start(api.HTTPHandler(config.Domain, storage), httpConfig)
+				ctrlChans, statusChans, driver = getDriverChannels(k.DriverType)
+				// start minio api in a web server, pass driver driver into it
+				ctrlChan, statusChan, _ = httpserver.Start(api.HTTPHandler(config.Domain, driver), httpConfig)
 
 				ctrlChans = append(ctrlChans, ctrlChan)
 				statusChans = append(statusChans, statusChan)
@@ -113,50 +113,50 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 	return
 }
 
-func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, statusChans []<-chan error, storage mstorage.Storage) {
+func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, statusChans []<-chan error, driver drivers.Driver) {
 	// a pair of control channels, we use these primarily to add to the lists above
 	var ctrlChan chan<- string
 	var statusChan <-chan error
 
-	// instantiate storage
+	// instantiate driver
 	// preconditions:
-	//    - storage type specified
-	//    - any configuration for storage is populated
+	//    - driver type specified
+	//    - any configuration for driver is populated
 	// postconditions:
-	//    - storage driver is initialized
-	//    - ctrlChans has channel to communicate to storage
-	//    - statusChans has channel for messages coming from storage
+	//    - driver driver is initialized
+	//    - ctrlChans has channel to communicate to driver
+	//    - statusChans has channel for messages coming from driver
 	switch {
-	case storageType == Memory:
+	case driverType == Memory:
 		{
-			ctrlChan, statusChan, storage = memory.Start()
+			ctrlChan, statusChan, driver = memory.Start()
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
-	case storageType == File:
+	case driverType == File:
 		{
 			u, err := user.Current()
 			if err != nil {
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage", "file")
-			ctrlChan, statusChan, storage = file.Start(root)
+			ctrlChan, statusChan, driver = file.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
-	case storageType == Donut:
+	case driverType == Donut:
 		{
 			u, err := user.Current()
 			if err != nil {
 				return nil, nil, nil
 			}
-			root := path.Join(u.HomeDir, "minio-storage", "donut")
-			ctrlChan, statusChan, storage = donutstorage.Start(root)
+			root := path.Join(u.HomeDir, "minio-driver", "donut")
+			ctrlChan, statusChan, driver = donut.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
 	default: // should never happen
-		log.Fatal("No storage driver found")
+		log.Fatal("No driver found")
 	}
 	return
 }

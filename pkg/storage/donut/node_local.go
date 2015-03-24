@@ -31,7 +31,7 @@ func (d localDirectoryNode) GetWriter(bucket, object string) (Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newDonutFileWriter(objectPath)
+	return newDonutObjectWriter(objectPath)
 }
 
 func (d localDirectoryNode) GetReader(bucket, object string) (io.ReadCloser, error) {

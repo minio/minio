@@ -24,7 +24,7 @@ import (
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
-func getStorageType(input string) server.StorageType {
+func getDriverType(input string) server.DriverType {
 	switch {
 	case input == "file":
 		return server.File
@@ -34,15 +34,15 @@ func getStorageType(input string) server.StorageType {
 		return server.Donut
 	default:
 		{
-			log.Println("Unknown storage type:", input)
-			log.Println("Choosing default storage type as 'file'..")
+			log.Println("Unknown driver type:", input)
+			log.Println("Choosing default driver type as 'file'..")
 			return server.File
 		}
 	}
 }
 
 func runCmd(c *cli.Context) {
-	storageTypeStr := c.String("storage-type")
+	driverTypeStr := c.String("driver-type")
 	domain := c.String("domain")
 	apiaddress := c.String("api-address")
 	webaddress := c.String("web-address")
@@ -52,7 +52,7 @@ func runCmd(c *cli.Context) {
 		log.Fatal("Both certificate and key must be provided to enable https")
 	}
 	tls := (certFile != "" && keyFile != "")
-	storageType := getStorageType(storageTypeStr)
+	driverType := getDriverType(driverTypeStr)
 	var serverConfigs []server.Config
 	apiServerConfig := server.Config{
 		Domain:   domain,
@@ -61,7 +61,7 @@ func runCmd(c *cli.Context) {
 		CertFile: certFile,
 		KeyFile:  keyFile,
 		APIType: server.MinioAPI{
-			StorageType: storageType,
+			DriverType: driverType,
 		},
 	}
 	webUIServerConfig := server.Config{
@@ -110,7 +110,7 @@ func main() {
 			Usage: "key.pem",
 		},
 		cli.StringFlag{
-			Name:  "storage-type,s",
+			Name:  "driver-type,t",
 			Value: "donut",
 			Usage: "valid entries: file,inmemory,donut",
 		},

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package storage
+package drivers
 
 import (
 	"io"
@@ -23,8 +23,8 @@ import (
 	"unicode/utf8"
 )
 
-// Storage - generic API interface
-type Storage interface {
+// Driver - generic API interface for various drivers - donut, file, memory
+type Driver interface {
 	// Bucket Operations
 	ListBuckets() ([]BucketMetadata, error)
 	CreateBucket(bucket string) error

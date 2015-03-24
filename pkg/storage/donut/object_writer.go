@@ -7,12 +7,12 @@ import (
 	"path"
 )
 
-func newDonutFileWriter(objectDir string) (Writer, error) {
+func newDonutObjectWriter(objectDir string) (Writer, error) {
 	dataFile, err := os.OpenFile(path.Join(objectDir, "data"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return nil, err
 	}
-	return donutFileWriter{
+	return donutObjectWriter{
 		root:          objectDir,
 		file:          dataFile,
 		metadata:      make(map[string]string),
@@ -20,7 +20,7 @@ func newDonutFileWriter(objectDir string) (Writer, error) {
 	}, nil
 }
 
-type donutFileWriter struct {
+type donutObjectWriter struct {
 	root          string
 	file          *os.File
 	metadata      map[string]string
@@ -28,11 +28,11 @@ type donutFileWriter struct {
 	err           error
 }
 
-func (d donutFileWriter) Write(data []byte) (int, error) {
+func (d donutObjectWriter) Write(data []byte) (int, error) {
 	return d.file.Write(data)
 }
 
-func (d donutFileWriter) Close() error {
+func (d donutObjectWriter) Close() error {
 	if d.err != nil {
 		return d.err
 	}
@@ -44,14 +44,14 @@ func (d donutFileWriter) Close() error {
 	return d.file.Close()
 }
 
-func (d donutFileWriter) CloseWithError(err error) error {
+func (d donutObjectWriter) CloseWithError(err error) error {
 	if d.err != nil {
 		d.err = err
 	}
 	return d.Close()
 }
 
-func (d donutFileWriter) SetMetadata(metadata map[string]string) error {
+func (d donutObjectWriter) SetMetadata(metadata map[string]string) error {
 	for k := range d.metadata {
 		delete(d.metadata, k)
 	}
@@ -61,7 +61,7 @@ func (d donutFileWriter) SetMetadata(metadata map[string]string) error {
 	return nil
 }
 
-func (d donutFileWriter) GetMetadata() (map[string]string, error) {
+func (d donutObjectWriter) GetMetadata() (map[string]string, error) {
 	metadata := make(map[string]string)
 	for k, v := range d.metadata {
 		metadata[k] = v
@@ -69,7 +69,7 @@ func (d donutFileWriter) GetMetadata() (map[string]string, error) {
 	return metadata, nil
 }
 
-func (d donutFileWriter) SetDonutMetadata(metadata map[string]string) error {
+func (d donutObjectWriter) SetDonutMetadata(metadata map[string]string) error {
 	for k := range d.donutMetadata {
 		delete(d.donutMetadata, k)
 	}
@@ -79,7 +79,7 @@ func (d donutFileWriter) SetDonutMetadata(metadata map[string]string) error {
 	return nil
 }
 
-func (d donutFileWriter) GetDonutMetadata() (map[string]string, error) {
+func (d donutObjectWriter) GetDonutMetadata() (map[string]string, error) {
 	donutMetadata := make(map[string]string)
 	for k, v := range d.donutMetadata {
 		donutMetadata[k] = v

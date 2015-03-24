@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -34,7 +34,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)
 
-	policy, ok := mstorage.Parsepolicy(req.Body)
+	policy, ok := drivers.Parsepolicy(req.Body)
 	if ok == false {
 		error := errorCodeError(InvalidPolicyDocument)
 		errorResponse := getErrorResponse(error, bucket)
@@ -43,7 +43,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		return
 	}
 
-	err := server.storage.CreateBucketPolicy(bucket, policy)
+	err := server.driver.CreateBucketPolicy(bucket, policy)
 	switch err := err.(type) {
 	case nil:
 		{
@@ -51,21 +51,21 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 			writeCommonHeaders(w, getContentString(acceptsContentType))
 			w.Header().Set("Connection", "keep-alive")
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNotFound:
+	case drivers.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BackendCorrupted:
+	case drivers.BackendCorrupted:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)
@@ -73,7 +73,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)
@@ -93,7 +93,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)
 
-	p, err := server.storage.GetBucketPolicy(bucket)
+	p, err := server.driver.GetBucketPolicy(bucket)
 	switch err := err.(type) {
 	case nil:
 		{
@@ -108,28 +108,28 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 			w.Header().Set("Connection", "keep-alive")
 			w.Write(responsePolicy)
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNotFound:
+	case drivers.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketPolicyNotFound:
+	case drivers.BucketPolicyNotFound:
 		{
 			error := errorCodeError(NoSuchBucketPolicy)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BackendCorrupted:
+	case drivers.BackendCorrupted:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)
@@ -137,7 +137,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)

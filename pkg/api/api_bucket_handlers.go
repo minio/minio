@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -45,21 +45,21 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	acceptsContentType := getContentType(req)
-	objects, resources, err := server.storage.ListObjects(bucket, resources)
+	objects, resources, err := server.driver.ListObjects(bucket, resources)
 	switch err := err.(type) {
 	case nil: // success
 		{
 			response := generateObjectsListResult(bucket, objects, resources)
 			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 		}
-	case mstorage.BucketNotFound:
+	case drivers.BucketNotFound:
 		{
 			error := errorCodeError(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
 			log.Errorln(err)
@@ -68,14 +68,14 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ObjectNameInvalid:
+	case drivers.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
 			errorResponse := getErrorResponse(error, resources.Prefix)
@@ -91,14 +91,14 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 // owned by the authenticated sender of the request.
 func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	buckets, err := server.storage.ListBuckets()
+	buckets, err := server.driver.ListBuckets()
 	switch err := err.(type) {
 	case nil:
 		{
 			response := generateBucketsListResult(buckets)
 			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)
@@ -106,7 +106,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BackendCorrupted:
+	case drivers.BackendCorrupted:
 		{
 			log.Errorln(err)
 			error := errorCodeError(InternalError)
@@ -123,7 +123,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	err := server.storage.CreateBucket(bucket)
+	err := server.driver.CreateBucket(bucket)
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Policy == true {
@@ -138,21 +138,21 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 			w.Header().Set("Server", "Minio")
 			w.Header().Set("Connection", "close")
 		}
-	case mstorage.BucketNameInvalid:
+	case drivers.BucketNameInvalid:
 		{
 			error := errorCodeError(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.BucketExists:
+	case drivers.BucketExists:
 		{
 			error := errorCodeError(BucketAlreadyExists)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case mstorage.ImplementationError:
+	case drivers.ImplementationError:
 		{
 			// Embed errors log on server side
 			log.Errorln(err)

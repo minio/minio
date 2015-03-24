@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package storage
+package drivers
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ import (
 )
 
 // APITestSuite - collection of API tests
-func APITestSuite(c *check.C, create func() Storage) {
+func APITestSuite(c *check.C, create func() Driver) {
 	testCreateBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -43,16 +43,16 @@ func APITestSuite(c *check.C, create func() Storage) {
 	//testContentMd5Set(c, create) TODO
 }
 
-func testCreateBucket(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testCreateBucket(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipleObjectCreation(c *check.C, create func() Storage) {
+func testMultipleObjectCreation(c *check.C, create func() Driver) {
 	objects := make(map[string][]byte)
-	storage := create()
-	err := storage.CreateBucket("bucket")
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 	for i := 0; i < 10; i++ {
 		randomPerm := rand.Perm(10)
@@ -62,7 +62,7 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 		}
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		err := storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(randomString))
+		err := drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(randomString))
 		c.Assert(err, check.IsNil)
 	}
 
@@ -70,11 +70,11 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 	etags := make(map[string]string)
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		_, err := storage.GetObject(&byteBuffer, "bucket", key)
+		_, err := drivers.GetObject(&byteBuffer, "bucket", key)
 		c.Assert(err, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
-		metadata, err := storage.GetObjectMetadata("bucket", key, "")
+		metadata, err := drivers.GetObjectMetadata("bucket", key, "")
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
 
@@ -84,20 +84,20 @@ func testMultipleObjectCreation(c *check.C, create func() Storage) {
 	}
 }
 
-func testPaging(c *check.C, create func() Storage) {
-	storage := create()
-	storage.CreateBucket("bucket")
+func testPaging(c *check.C, create func() Driver) {
+	drivers := create()
+	drivers.CreateBucket("bucket")
 	resources := BucketResourcesMetadata{}
-	objects, resources, err := storage.ListObjects("bucket", resources)
+	objects, resources, err := drivers.ListObjects("bucket", resources)
 	c.Assert(err, check.IsNil)
 	c.Assert(len(objects), check.Equals, 0)
 	c.Assert(resources.IsTruncated, check.Equals, false)
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
+		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, i+1)
 		c.Assert(resources.IsTruncated, check.Equals, false)
 		c.Assert(err, check.IsNil)
@@ -105,20 +105,20 @@ func testPaging(c *check.C, create func() Storage) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		storage.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
+		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, 5)
 		c.Assert(resources.IsTruncated, check.Equals, true)
 		c.Assert(err, check.IsNil)
 	}
 	// check paging with prefix at end returns less objects
 	{
-		storage.CreateObject("bucket", "newPrefix", "", "", bytes.NewBufferString("prefix1"))
-		storage.CreateObject("bucket", "newPrefix2", "", "", bytes.NewBufferString("prefix2"))
+		drivers.CreateObject("bucket", "newPrefix", "", "", bytes.NewBufferString("prefix1"))
+		drivers.CreateObject("bucket", "newPrefix2", "", "", bytes.NewBufferString("prefix2"))
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, 2)
 	}
 
@@ -126,7 +126,7 @@ func testPaging(c *check.C, create func() Storage) {
 	{
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[2].Key, check.Equals, "obj0")
@@ -136,14 +136,14 @@ func testPaging(c *check.C, create func() Storage) {
 
 	// check delimited results with delimiter and prefix
 	{
-		storage.CreateObject("bucket", "this/is/delimited", "", "", bytes.NewBufferString("prefix1"))
-		storage.CreateObject("bucket", "this/is/also/a/delimited/file", "", "", bytes.NewBufferString("prefix2"))
+		drivers.CreateObject("bucket", "this/is/delimited", "", "", bytes.NewBufferString("prefix1"))
+		drivers.CreateObject("bucket", "this/is/also/a/delimited/file", "", "", bytes.NewBufferString("prefix2"))
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
 		resources.Delimiter = "/"
 		resources.Prefix = "this/is/"
 		resources.Maxkeys = 10
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 1)
 		c.Assert(resources.CommonPrefixes[0], check.Equals, "also/")
@@ -157,7 +157,7 @@ func testPaging(c *check.C, create func() Storage) {
 		resources.Delimiter = "/"
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[2].Key, check.Equals, "obj0")
@@ -171,7 +171,7 @@ func testPaging(c *check.C, create func() Storage) {
 		resources.Prefix = "obj"
 		resources.Delimiter = ""
 		resources.Maxkeys = 1000
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "obj0")
 		c.Assert(objects[1].Key, check.Equals, "obj1")
 		c.Assert(objects[2].Key, check.Equals, "obj10")
@@ -182,95 +182,95 @@ func testPaging(c *check.C, create func() Storage) {
 	{
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
-		objects, resources, err = storage.ListObjects("bucket", resources)
+		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 	}
 }
 
-func testObjectOverwriteFails(c *check.C, create func() Storage) {
-	storage := create()
-	storage.CreateBucket("bucket")
-	err := storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
+func testObjectOverwriteFails(c *check.C, create func() Driver) {
+	drivers := create()
+	drivers.CreateBucket("bucket")
+	err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
-	err = storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("three"))
+	err = drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("three"))
 	c.Assert(err, check.Not(check.IsNil))
 	var bytesBuffer bytes.Buffer
-	length, err := storage.GetObject(&bytesBuffer, "bucket", "object")
+	length, err := drivers.GetObject(&bytesBuffer, "bucket", "object")
 	c.Assert(length, check.Equals, int64(len("one")))
 	c.Assert(err, check.IsNil)
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "one")
 }
 
-func testNonExistantBucketOperations(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
+func testNonExistantBucketOperations(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketRecreateFails(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("string")
+func testBucketRecreateFails(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("string")
 	c.Assert(err, check.IsNil)
-	err = storage.CreateBucket("string")
+	err = drivers.CreateBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testPutObjectInSubdir(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testPutObjectInSubdir(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
-	err = storage.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
+	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 	var bytesBuffer bytes.Buffer
-	length, err := storage.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
+	length, err := drivers.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("hello world"))
 	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, length)
 	c.Assert(err, check.IsNil)
 }
 
-func testListBuckets(c *check.C, create func() Storage) {
-	storage := create()
+func testListBuckets(c *check.C, create func() Driver) {
+	drivers := create()
 
 	// test empty list
-	buckets, err := storage.ListBuckets()
+	buckets, err := drivers.ListBuckets()
 	c.Assert(err, check.IsNil)
 	c.Assert(len(buckets), check.Equals, 0)
 
 	// add one and test exists
-	err = storage.CreateBucket("bucket1")
+	err = drivers.CreateBucket("bucket1")
 	c.Assert(err, check.IsNil)
 
-	buckets, err = storage.ListBuckets()
+	buckets, err = drivers.ListBuckets()
 	c.Assert(len(buckets), check.Equals, 1)
 	c.Assert(err, check.IsNil)
 
 	// add two and test exists
-	err = storage.CreateBucket("bucket2")
+	err = drivers.CreateBucket("bucket2")
 	c.Assert(err, check.IsNil)
 
-	buckets, err = storage.ListBuckets()
+	buckets, err = drivers.ListBuckets()
 	c.Assert(len(buckets), check.Equals, 2)
 	c.Assert(err, check.IsNil)
 
 	// add three and test exists + prefix
-	err = storage.CreateBucket("bucket22")
+	err = drivers.CreateBucket("bucket22")
 
-	buckets, err = storage.ListBuckets()
+	buckets, err = drivers.ListBuckets()
 	c.Assert(len(buckets), check.Equals, 3)
 	c.Assert(err, check.IsNil)
 }
 
-func testListBucketsOrder(c *check.C, create func() Storage) {
+func testListBucketsOrder(c *check.C, create func() Driver) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
-		storage := create()
+		drivers := create()
 		// add one and test exists
-		storage.CreateBucket("bucket1")
-		storage.CreateBucket("bucket2")
+		drivers.CreateBucket("bucket1")
+		drivers.CreateBucket("bucket2")
 
-		buckets, err := storage.ListBuckets()
+		buckets, err := drivers.ListBuckets()
 		c.Assert(len(buckets), check.Equals, 2)
 		c.Assert(err, check.IsNil)
 		c.Assert(buckets[0].Name, check.Equals, "bucket1")
@@ -278,22 +278,22 @@ func testListBucketsOrder(c *check.C, create func() Storage) {
 	}
 }
 
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Storage) {
-	storage := create()
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Driver) {
+	drivers := create()
 	resources := BucketResourcesMetadata{Prefix: "", Maxkeys: 1000}
-	objects, resources, err := storage.ListObjects("bucket", resources)
+	objects, resources, err := drivers.ListObjects("bucket", resources)
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(resources.IsTruncated, check.Equals, false)
 	c.Assert(len(objects), check.Equals, 0)
 }
 
-func testNonExistantObjectInBucket(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testNonExistantObjectInBucket(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
-	length, err := storage.GetObject(&byteBuffer, "bucket", "dir1")
+	length, err := drivers.GetObject(&byteBuffer, "bucket", "dir1")
 	c.Assert(length, check.Equals, int64(0))
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(len(byteBuffer.Bytes()), check.Equals, 0)
@@ -309,16 +309,16 @@ func testNonExistantObjectInBucket(c *check.C, create func() Storage) {
 	}
 }
 
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	err = storage.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
+	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
-	length, err := storage.GetObject(&byteBuffer, "bucket", "dir1")
+	length, err := drivers.GetObject(&byteBuffer, "bucket", "dir1")
 	c.Assert(length, check.Equals, int64(0))
 	switch err := err.(type) {
 	case ObjectNotFound:
@@ -335,7 +335,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
 	c.Assert(len(byteBuffer.Bytes()), check.Equals, 0)
 
 	var byteBuffer2 bytes.Buffer
-	length, err = storage.GetObject(&byteBuffer, "bucket", "dir1/")
+	length, err = drivers.GetObject(&byteBuffer, "bucket", "dir1/")
 	c.Assert(length, check.Equals, int64(0))
 	switch err := err.(type) {
 	case ObjectNotFound:
@@ -352,40 +352,40 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Storage) {
 	c.Assert(len(byteBuffer2.Bytes()), check.Equals, 0)
 }
 
-func testDefaultContentType(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testDefaultContentType(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// test empty
-	err = storage.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
-	metadata, err := storage.GetObjectMetadata("bucket", "one", "")
+	err = drivers.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
+	metadata, err := drivers.GetObjectMetadata("bucket", "one", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 
 	// test custom
-	storage.CreateObject("bucket", "two", "application/text", "", bytes.NewBufferString("two"))
-	metadata, err = storage.GetObjectMetadata("bucket", "two", "")
+	drivers.CreateObject("bucket", "two", "application/text", "", bytes.NewBufferString("two"))
+	metadata, err = drivers.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/text")
 
 	// test trim space
-	storage.CreateObject("bucket", "three", "\tapplication/json    ", "", bytes.NewBufferString("three"))
-	metadata, err = storage.GetObjectMetadata("bucket", "three", "")
+	drivers.CreateObject("bucket", "three", "\tapplication/json    ", "", bytes.NewBufferString("three"))
+	metadata, err = drivers.GetObjectMetadata("bucket", "three", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/json")
 }
 
 /*
-func testContentMd5Set(c *check.C, create func() Storage) {
-	storage := create()
-	err := storage.CreateBucket("bucket")
+func testContentMd5Set(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// test md5 invalid
-	err = storage.CreateObject("bucket", "one", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA", bytes.NewBufferString("one"))
+	err = drivers.CreateObject("bucket", "one", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA", bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
-	err = storage.CreateObject("bucket", "two", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA=", bytes.NewBufferString("one"))
+	err = drivers.CreateObject("bucket", "two", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA=", bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
 }
 */
