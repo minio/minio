@@ -24,7 +24,6 @@ import (
 	mstorage "github.com/minio-io/minio/pkg/storage"
 
 	. "gopkg.in/check.v1"
-	"log"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -47,7 +46,6 @@ func (s *MySuite) TestAPISuite(c *C) {
 }
 
 func removeRoots(c *C, roots []string) {
-	log.Println(roots)
 	for _, root := range roots {
 		err := os.RemoveAll(root)
 		c.Check(err, IsNil)

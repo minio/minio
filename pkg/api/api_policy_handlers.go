@@ -18,11 +18,11 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // PUT Bucket policy
@@ -67,7 +67,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case mstorage.BackendCorrupted:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -75,7 +75,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case mstorage.ImplementationError:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -131,7 +131,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case mstorage.BackendCorrupted:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -139,7 +139,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case mstorage.ImplementationError:
 		{
-			log.Println(err)
+			log.Errorln(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
