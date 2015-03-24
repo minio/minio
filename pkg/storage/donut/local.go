@@ -16,6 +16,11 @@ type localDirectoryNode struct {
 	root string
 }
 
+func (d localDirectoryNode) CreateBucket(bucket string) error {
+	objectPath := path.Join(d.root, bucket)
+	return os.MkdirAll(objectPath, 0700)
+}
+
 func (d localDirectoryNode) GetBuckets() ([]string, error) {
 	return nil, errors.New("Not Implemented")
 }

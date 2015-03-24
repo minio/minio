@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"gopkg.in/check.v1"
+	"time"
 )
 
 // APITestSuite - collection of API tests
@@ -136,7 +137,7 @@ func testPaging(c *check.C, create func() Storage) {
 	// check delimited results with delimiter and prefix
 	{
 		storage.CreateObject("bucket", "this/is/delimited", "", "", bytes.NewBufferString("prefix1"))
-		storage.CreateObject("bucket", "this/is/also/delimited", "", "", bytes.NewBufferString("prefix2"))
+		storage.CreateObject("bucket", "this/is/also/a/delimited/file", "", "", bytes.NewBufferString("prefix2"))
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
 		resources.Delimiter = "/"
@@ -147,6 +148,7 @@ func testPaging(c *check.C, create func() Storage) {
 		c.Assert(len(objects), check.Equals, 1)
 		c.Assert(resources.CommonPrefixes[0], check.Equals, "also/")
 	}
+	time.Sleep(time.Second)
 
 	// check delimited results with delimiter without prefix
 	{
@@ -232,8 +234,8 @@ func testListBuckets(c *check.C, create func() Storage) {
 
 	// test empty list
 	buckets, err := storage.ListBuckets()
-	c.Assert(len(buckets), check.Equals, 0)
 	c.Assert(err, check.IsNil)
+	c.Assert(len(buckets), check.Equals, 0)
 
 	// add one and test exists
 	err = storage.CreateBucket("bucket1")
