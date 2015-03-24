@@ -26,6 +26,7 @@ import (
 	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/storage/donutstorage"
 	"github.com/minio-io/minio/pkg/storage/file"
 	"github.com/minio-io/minio/pkg/storage/memory"
 )
@@ -138,8 +139,19 @@ func getStorageChannels(storageType StorageType) (ctrlChans []chan<- string, sta
 			if err != nil {
 				return nil, nil, nil
 			}
-			root := path.Join(u.HomeDir, "minio-storage")
+			root := path.Join(u.HomeDir, "minio-storage", "file")
 			ctrlChan, statusChan, storage = file.Start(root)
+			ctrlChans = append(ctrlChans, ctrlChan)
+			statusChans = append(statusChans, statusChan)
+		}
+	case storageType == Donut:
+		{
+			u, err := user.Current()
+			if err != nil {
+				return nil, nil, nil
+			}
+			root := path.Join(u.HomeDir, "minio-storage", "donut")
+			ctrlChan, statusChan, storage = donutstorage.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}

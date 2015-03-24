@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -162,6 +163,11 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 
 	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
+	expectedMetadata["sys.md5"] = "b10a8db164e0754105b7a99be72e3fe5"
+	expectedMetadata["sys.size"] = "11"
+	_, err = time.Parse(time.RFC3339Nano, actualMetadata["sys.created"])
+	c.Assert(err, IsNil)
+	expectedMetadata["sys.created"] = actualMetadata["sys.created"]
 	c.Assert(actualMetadata, DeepEquals, expectedMetadata)
 }
 

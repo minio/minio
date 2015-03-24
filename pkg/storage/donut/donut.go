@@ -1,6 +1,8 @@
 package donut
 
-import "io"
+import (
+	"io"
+)
 
 // INTERFACES
 
@@ -21,6 +23,7 @@ type Bucket interface {
 
 // Node interface
 type Node interface {
+	CreateBucket(bucket string) error
 	GetBuckets() ([]string, error)
 	GetDonutMetadata(bucket, object string) (map[string]string, error)
 	GetMetadata(bucket, object string) (map[string]string, error)

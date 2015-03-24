@@ -17,7 +17,7 @@ import (
 func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, writer *io.PipeWriter) {
 	// TODO handle errors
 	totalChunks, _ := strconv.Atoi(donutMetadata["chunkCount"])
-	totalLeft, _ := strconv.Atoi(donutMetadata["totalLength"])
+	totalLeft, _ := strconv.Atoi(donutMetadata["size"])
 	blockSize, _ := strconv.Atoi(donutMetadata["blockSize"])
 	k, _ := strconv.Atoi(donutMetadata["erasureK"])
 	m, _ := strconv.Atoi(donutMetadata["erasureM"])
@@ -110,7 +110,7 @@ func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- b
 	metadata["erasureM"] = "8"
 	metadata["erasureTechnique"] = "Cauchy"
 	metadata["md5"] = hex.EncodeToString(dataMd5sum)
-	metadata["totalLength"] = strconv.Itoa(totalLength)
+	metadata["size"] = strconv.Itoa(totalLength)
 	for _, nodeWriter := range eWriter.writers {
 		if nodeWriter != nil {
 			nodeWriter.SetMetadata(eWriter.metadata)

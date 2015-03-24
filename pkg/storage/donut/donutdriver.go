@@ -35,6 +35,9 @@ func (driver donutDriver) CreateBucket(bucketName string) error {
 		nodes := make([]string, 16)
 		for i := 0; i < 16; i++ {
 			nodes[i] = "localhost"
+			if node, ok := driver.nodes["localhost"]; ok {
+				node.CreateBucket(bucketName + ":0:" + strconv.Itoa(i))
+			}
 		}
 		bucket := bucketDriver{
 			nodes: nodes,
@@ -63,7 +66,15 @@ func (driver donutDriver) GetObjectWriter(bucketName, objectName string) (Object
 		}
 		for i, nodeID := range nodes {
 			if node, ok := driver.nodes[nodeID]; ok == true {
-				writer, _ := node.GetWriter(bucketName+":0:"+strconv.Itoa(i), objectName)
+				writer, err := node.GetWriter(bucketName+":0:"+strconv.Itoa(i), objectName)
+				if err != nil {
+					for _, writerToClose := range writers {
+						if writerToClose != nil {
+							writerToClose.CloseWithError(err)
+						}
+					}
+					return nil, err
+				}
 				writers[i] = writer
 			}
 		}
@@ -111,7 +122,19 @@ func (driver donutDriver) GetObjectMetadata(bucketName, object string) (map[stri
 			return nil, err
 		}
 		if node, ok := driver.nodes[nodes[0]]; ok {
-			return node.GetMetadata(bucketName+":0:0", object)
+			bucketID := bucketName + ":0:0"
+			metadata, err := node.GetMetadata(bucketID, object)
+			if err != nil {
+				return nil, err
+			}
+			donutMetadata, err := node.GetDonutMetadata(bucketID, object)
+			if err != nil {
+				return nil, err
+			}
+			metadata["sys.created"] = donutMetadata["created"]
+			metadata["sys.md5"] = donutMetadata["md5"]
+			metadata["sys.size"] = donutMetadata["size"]
+			return metadata, nil
 		}
 		return nil, errors.New("Cannot connect to node: " + nodes[0])
 	}

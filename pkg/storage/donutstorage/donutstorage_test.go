@@ -33,13 +33,13 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	c.Skip("Not Implemented")
+	//	c.Skip("Not Implemented")
 	var storageList []string
 	create := func() mstorage.Storage {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
-		_, _, store := Start() // TODO Make InMemory driver
+		_, _, store := Start(path) // TODO Make InMemory driver
 		return store
 	}
 	mstorage.APITestSuite(c, create)

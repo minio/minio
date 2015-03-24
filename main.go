@@ -30,6 +30,8 @@ func getStorageType(input string) server.StorageType {
 		return server.File
 	case input == "memory":
 		return server.Memory
+	case input == "donut":
+		return server.Donut
 	default:
 		{
 			log.Println("Unknown storage type:", input)
@@ -109,8 +111,8 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "storage-type,s",
-			Value: "file",
-			Usage: "valid entries: file,inmemory",
+			Value: "donut",
+			Usage: "valid entries: file,inmemory,donut",
 		},
 	}
 	app.Action = runCmd
