@@ -48,6 +48,7 @@ func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 	// TODO donut driver should be passed in as Start param and driven by config
 	var err *iodine.Error
 	s.donut, err = donut.NewDonut(path)
+	err = err.Annotate(map[string]string{"path": path})
 	if err != nil {
 		log.Println(err.EmitHumanReadable())
 	}
