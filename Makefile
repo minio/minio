@@ -14,8 +14,9 @@ getdeps: checkdeps checkgopath
 	@go get github.com/tools/godep && echo "Installed godep"
 	@go get github.com/golang/lint/golint && echo "Installed golint"
 	@go get golang.org/x/tools/cmd/vet && echo "Installed vet"
+	@go get github.com/fzipp/gocyclo && echo "Installed gocyclo"
 
-verifiers: getdeps vet fmt lint
+verifiers: getdeps vet fmt lint cyclo
 
 vet:
 	@echo "Running $@"
@@ -27,6 +28,10 @@ fmt:
 lint:
 	@echo "Running $@"
 	@test -z "$$(golint ./... | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
+
+cyclo:
+	@echo "Running $@"
+	@test -z "$$(gocyclo -over 15 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
 build-all: verifiers
 	@echo "Building Libraries"

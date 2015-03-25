@@ -128,6 +128,50 @@ func doDir(name string) {
 	}
 }
 
+func doDecl(p *goPackage, decl interface{}, cmap ast.CommentMap) bool {
+	switch n := decl.(type) {
+	case *ast.GenDecl:
+		// var, const, types
+		for _, spec := range n.Specs {
+			switch s := spec.(type) {
+			case *ast.ValueSpec:
+				// constants and variables.
+				for _, name := range s.Names {
+					p.decl[name.Name] = n
+				}
+			case *ast.TypeSpec:
+				// type definitions.
+				p.decl[s.Name.Name] = n
+			}
+		}
+	case *ast.FuncDecl:
+		// if function is 'main', never check
+		if n.Name.Name == "main" {
+			return true
+		}
+		// Do not be strict on non-exported functions
+		if !ast.IsExported(n.Name.Name) {
+			return true
+		}
+		// Do not be strict for field list functions
+		// if n.Recv != nil {
+		// continue
+		//}
+		// Be strict for global functions
+		_, ok := cmap[n]
+		if ok == false {
+			p.missingcomments[n.Name.Name] = n
+		}
+
+		// function declarations
+		// TODO(remy): do methods
+		if n.Recv == nil {
+			p.decl[n.Name.Name] = n
+		}
+	}
+	return false
+}
+
 func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	p := &goPackage{
 		p:               pkg,
@@ -139,45 +183,8 @@ func doPackage(fs *token.FileSet, pkg *ast.Package) {
 	for _, file := range pkg.Files {
 		cmap := ast.NewCommentMap(fs, file, file.Comments)
 		for _, decl := range file.Decls {
-			switch n := decl.(type) {
-			case *ast.GenDecl:
-				// var, const, types
-				for _, spec := range n.Specs {
-					switch s := spec.(type) {
-					case *ast.ValueSpec:
-						// constants and variables.
-						for _, name := range s.Names {
-							p.decl[name.Name] = n
-						}
-					case *ast.TypeSpec:
-						// type definitions.
-						p.decl[s.Name.Name] = n
-					}
-				}
-			case *ast.FuncDecl:
-				// if function is 'main', never check
-				if n.Name.Name == "main" {
-					continue
-				}
-				// Do not be strict on non-exported functions
-				if !ast.IsExported(n.Name.Name) {
-					continue
-				}
-				// Do not be strict for field list functions
-				// if n.Recv != nil {
-				// continue
-				//}
-				// Be strict for global functions
-				_, ok := cmap[n]
-				if ok == false {
-					p.missingcomments[n.Name.Name] = n
-				}
-
-				// function declarations
-				// TODO(remy): do methods
-				if n.Recv == nil {
-					p.decl[n.Name.Name] = n
-				}
+			if doDecl(p, decl, cmap) {
+				continue
 			}
 		}
 	}

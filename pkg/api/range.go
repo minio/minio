@@ -56,28 +56,7 @@ func newRange(req *http.Request, size int64) (*httpRange, error) {
 	return r, nil
 }
 
-// parseRange parses a Range header string as per RFC 2616.
-func (r *httpRange) parseRange(s string) error {
-	if s == "" {
-		return errors.New("header not present")
-	}
-	if !strings.HasPrefix(s, b) {
-		return errors.New("invalid range")
-	}
-
-	ras := strings.Split(s[len(b):], ",")
-	if len(ras) == 0 {
-		return errors.New("invalid request")
-	}
-	// Just pick the first one and ignore the rest, we only support one range per object
-	if len(ras) > 1 {
-		return errors.New("multiple ranges specified")
-	}
-
-	ra := strings.TrimSpace(ras[0])
-	if ra == "" {
-		return errors.New("invalid range")
-	}
+func (r *httpRange) parse(ra string) error {
 	i := strings.Index(ra, "-")
 	if i < 0 {
 		return errors.New("invalid range")
@@ -116,4 +95,29 @@ func (r *httpRange) parseRange(s string) error {
 		}
 	}
 	return nil
+}
+
+// parseRange parses a Range header string as per RFC 2616.
+func (r *httpRange) parseRange(s string) error {
+	if s == "" {
+		return errors.New("header not present")
+	}
+	if !strings.HasPrefix(s, b) {
+		return errors.New("invalid range")
+	}
+
+	ras := strings.Split(s[len(b):], ",")
+	if len(ras) == 0 {
+		return errors.New("invalid request")
+	}
+	// Just pick the first one and ignore the rest, we only support one range per object
+	if len(ras) > 1 {
+		return errors.New("multiple ranges specified")
+	}
+
+	ra := strings.TrimSpace(ras[0])
+	if ra == "" {
+		return errors.New("invalid range")
+	}
+	return r.parse(ra)
 }

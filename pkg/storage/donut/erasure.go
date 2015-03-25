@@ -67,9 +67,6 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	summer := md5.New()
 	params, _ := erasure.ParseEncoderParams(uint8(k), uint8(m), technique)
 	encoder := erasure.NewEncoder(params)
-	for _, reader := range readers {
-		defer reader.Close()
-	}
 	for i := 0; i < totalChunks; i++ {
 		curBlockSize := totalLeft
 		if blockSize < totalLeft {
@@ -77,9 +74,9 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 		}
 
 		curChunkSize := erasure.GetEncodedBlockLen(curBlockSize, uint8(k))
-
 		encodedBytes := make([][]byte, 16)
 		for i, reader := range readers {
+			defer reader.Close()
 			var bytesBuffer bytes.Buffer
 			_, err := io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
 			if err != nil {
