@@ -70,9 +70,6 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 		return nil, err
 	}
 	for _, bucket := range buckets {
-		if err != nil {
-			return nil, err
-		}
 		result := drivers.BucketMetadata{
 			Name: bucket,
 			// TODO Add real created date
