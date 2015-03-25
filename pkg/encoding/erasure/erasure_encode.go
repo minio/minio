@@ -117,11 +117,13 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	}
 }
 
+// GetEncodedBlocksLen - total length of all encoded blocks
 func GetEncodedBlocksLen(inputLen int, k, m uint8) (outputLen int) {
 	outputLen = GetEncodedBlockLen(inputLen, k) * int(k+m)
 	return outputLen
 }
 
+// GetEncodedBlockLen - length per block of encoded blocks
 func GetEncodedBlockLen(inputLen int, k uint8) (encodedOutputLen int) {
 	alignment := int(k) * SIMDAlign
 	remainder := inputLen % alignment
