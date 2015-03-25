@@ -26,7 +26,7 @@ func NewDonut(root string) (Donut, *iodine.Error) {
 	for nodeID, node := range nodes {
 		bucketIDs, err := node.GetBuckets()
 		if err != nil {
-			return nil, iodine.Wrap(err, map[string]string{"root": root})
+			return nil, iodine.New(err, map[string]string{"root": root})
 		}
 		for _, bucketID := range bucketIDs {
 			tokens := strings.Split(bucketID, ":")
@@ -38,7 +38,7 @@ func NewDonut(root string) (Donut, *iodine.Error) {
 				driver.buckets[tokens[0]] = bucket
 			}
 			if err = driver.buckets[tokens[0]].AddNode(nodeID, bucketID); err != nil {
-				return nil, iodine.Wrap(err, map[string]string{"root": root})
+				return nil, iodine.New(err, map[string]string{"root": root})
 			}
 		}
 	}
