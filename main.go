@@ -121,7 +121,7 @@ func runCmd(c *cli.Context) {
 func main() {
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = "0.1.0"
+	app.Version = commitID
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.EnableBashCompletion = true
