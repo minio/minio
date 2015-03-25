@@ -38,6 +38,54 @@ func TestIodine(t *testing.T) {
 	}
 	var prettyBuffer bytes.Buffer
 	json.Indent(&prettyBuffer, jsonResult, "", "  ")
-	log.Println(string(prettyBuffer.Bytes()))
-	log.Println(iodineError.EmitHumanReadable())
+}
+
+func TestState(t *testing.T) {
+	SetGlobalState("hello", "world")
+	state := GetGlobalState()
+	if res, ok := state["hello"]; ok {
+		if res != "world" {
+			t.Error("global state not set: hello->world")
+		}
+	} else {
+		t.Fail()
+	}
+	ClearGlobalState()
+	if len(GetGlobalState()) != 0 {
+		t.Fail()
+	}
+	SetGlobalState("foo", "bar")
+	err := New(errors.New("a simple error"), nil)
+	if res, ok := err.Stack[0].Data["foo"]; ok {
+		if res != "bar" {
+			t.Error("global state not set: foo->bar")
+		}
+	} else {
+		t.Fail()
+	}
+	err.Annotate(map[string]string{"foo2": "bar2"})
+	if res, ok := err.Stack[0].Data["foo"]; ok {
+		if res != "bar" {
+			t.Error("annotate should not modify previous data entries")
+		}
+	} else {
+		t.Error("annotate should not remove previous data entries")
+	}
+	if res, ok := err.Stack[1].Data["foo"]; ok {
+		if res != "bar" {
+			t.Error("global state should set value properly in annotate")
+		}
+	} else {
+		t.Error("global state should set key properly in annotate")
+	}
+	if res, ok := err.Stack[1].Data["foo2"]; ok {
+		if res != "bar2" {
+			err.Annotate(nil)
+			t.Error("foo2 -> bar should be set")
+		}
+	} else {
+		err.Annotate(nil)
+		log.Println(err.EmitHumanReadable())
+		t.Error("foo2 should be set")
+	}
 }

@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 )
 
 // Error is the iodine error which contains a pointer to the original error
@@ -40,6 +41,35 @@ type StackEntry struct {
 	File string
 	Line int
 	Data map[string]string
+}
+
+var globalState = struct {
+	sync.RWMutex
+	m map[string]string
+}{m: make(map[string]string)}
+
+func SetGlobalState(key, value string) {
+	globalState.Lock()
+	globalState.m[key] = value
+	globalState.Unlock()
+}
+
+func ClearGlobalState() {
+	globalState.Lock()
+	for k, _ := range globalState.m {
+		delete(globalState.m, k)
+	}
+	globalState.Unlock()
+}
+
+func GetGlobalState() map[string]string {
+	result := make(map[string]string)
+	globalState.RLock()
+	for k, v := range globalState.m {
+		result[k] = v
+	}
+	globalState.RUnlock()
+	return result
 }
 
 // Wrap an error, turning it into an iodine error.
@@ -63,18 +93,17 @@ func createStackEntry() StackEntry {
 		Host: host,
 		File: file,
 		Line: line,
-		Data: make(map[string]string),
+		Data: GetGlobalState(),
 	}
 	return entry
 }
 
 // Annotate an error with a stack entry and returns itself
 func (err *Error) Annotate(info map[string]string) *Error {
-	data := make(map[string]string)
-	for k, v := range info {
-		data[k] = v
-	}
 	entry := createStackEntry()
+	for k, v := range info {
+		entry.Data[k] = v
+	}
 	err.Stack = append(err.Stack, entry)
 	return err
 }
