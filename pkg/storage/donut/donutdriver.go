@@ -14,14 +14,35 @@ type donutDriver struct {
 }
 
 // NewDonutDriver - instantiate new donut driver
-func NewDonutDriver(root string) Donut {
+func NewDonutDriver(root string) (Donut, error) {
 	nodes := make(map[string]Node)
-	nodes["localhost"] = localDirectoryNode{root: root}
-	driver := donutDriver{
+	nodes["localhost"] = &localDirectoryNode{root: root}
+	driver := &donutDriver{
 		buckets: make(map[string]Bucket),
 		nodes:   nodes,
 	}
-	return driver
+	for nodeID, node := range nodes {
+		bucketIDs, err := node.GetBuckets()
+		if err != nil {
+			return nil, err
+		}
+		for _, bucketID := range bucketIDs {
+			tokens := strings.Split(bucketID, ":")
+			if _, ok := driver.buckets[tokens[0]]; ok {
+				// found bucket, skip creating
+			} else {
+				bucket := bucketDriver{
+					nodes: make([]string, 16),
+				}
+				// TODO catch errors
+				driver.buckets[tokens[0]] = bucket
+			}
+			if err = driver.buckets[tokens[0]].AddNode(nodeID, bucketID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return driver, nil
 }
 
 func (driver donutDriver) CreateBucket(bucketName string) error {

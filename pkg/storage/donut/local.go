@@ -1,7 +1,6 @@
 package donut
 
 import (
-	"errors"
 	"io"
 	"os"
 	"path"
@@ -9,6 +8,7 @@ import (
 	"strings"
 
 	"encoding/json"
+	"io/ioutil"
 	"path/filepath"
 )
 
@@ -22,7 +22,17 @@ func (d localDirectoryNode) CreateBucket(bucket string) error {
 }
 
 func (d localDirectoryNode) GetBuckets() ([]string, error) {
-	return nil, errors.New("Not Implemented")
+	files, err := ioutil.ReadDir(d.root)
+	if err != nil {
+		return nil, err
+	}
+	var results []string
+	for _, file := range files {
+		if file.IsDir() {
+			results = append(results, file.Name())
+		}
+	}
+	return results, nil
 }
 
 func (d localDirectoryNode) GetWriter(bucket, object string) (Writer, error) {

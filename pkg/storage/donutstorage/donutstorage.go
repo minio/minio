@@ -44,7 +44,11 @@ func Start(path string) (chan<- string, <-chan error, storage.Storage) {
 	s := new(Storage)
 
 	// TODO donut driver should be passed in as Start param and driven by config
-	s.donut = donut.NewDonutDriver(path)
+	var err error
+	s.donut, err = donut.NewDonutDriver(path)
+	if err != nil {
+		errorChannel <- err
+	}
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
