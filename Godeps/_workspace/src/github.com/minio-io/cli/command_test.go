@@ -17,7 +17,7 @@ func TestCommandDoNotIgnoreFlags(t *testing.T) {
 
 	command := cli.Command{
 		Name:        "test-cmd",
-		ShortName:   "tc",
+		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
 		Action:      func(_ *cli.Context) {},
@@ -37,7 +37,7 @@ func TestCommandIgnoreFlags(t *testing.T) {
 
 	command := cli.Command{
 		Name:            "test-cmd",
-		ShortName:       "tc",
+		Aliases:         []string{"tc"},
 		Usage:           "this is for testing",
 		Description:     "testing",
 		Action:          func(_ *cli.Context) {},

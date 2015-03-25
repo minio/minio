@@ -38,7 +38,7 @@ var stringFlagTests = []struct {
 	{"help", "", "--help \t"},
 	{"h", "", "-h \t"},
 	{"h", "", "-h \t"},
-	{"test", "Something", "--test 'Something'\t"},
+	{"test", "Something", "--test \"Something\"\t"},
 }
 
 func TestStringFlagHelpOutput(t *testing.T) {
@@ -75,22 +75,22 @@ var stringSliceFlagTests = []struct {
 		s := &cli.StringSlice{}
 		s.Set("")
 		return s
-	}(), "--help '--help option --help option'\t"},
+	}(), "--help [--help option --help option]\t"},
 	{"h", func() *cli.StringSlice {
 		s := &cli.StringSlice{}
 		s.Set("")
 		return s
-	}(), "-h '-h option -h option'\t"},
+	}(), "-h [-h option -h option]\t"},
 	{"h", func() *cli.StringSlice {
 		s := &cli.StringSlice{}
 		s.Set("")
 		return s
-	}(), "-h '-h option -h option'\t"},
+	}(), "-h [-h option -h option]\t"},
 	{"test", func() *cli.StringSlice {
 		s := &cli.StringSlice{}
 		s.Set("Something")
 		return s
-	}(), "--test '--test option --test option'\t"},
+	}(), "--test [--test option --test option]\t"},
 }
 
 func TestStringSliceFlagHelpOutput(t *testing.T) {
@@ -122,8 +122,8 @@ var intFlagTests = []struct {
 	name     string
 	expected string
 }{
-	{"help", "--help '0'\t"},
-	{"h", "-h '0'\t"},
+	{"help", "--help \"0\"\t"},
+	{"h", "-h \"0\"\t"},
 }
 
 func TestIntFlagHelpOutput(t *testing.T) {
@@ -155,8 +155,8 @@ var durationFlagTests = []struct {
 	name     string
 	expected string
 }{
-	{"help", "--help '0'\t"},
-	{"h", "-h '0'\t"},
+	{"help", "--help \"0\"\t"},
+	{"h", "-h \"0\"\t"},
 }
 
 func TestDurationFlagHelpOutput(t *testing.T) {
@@ -189,14 +189,14 @@ var intSliceFlagTests = []struct {
 	value    *cli.IntSlice
 	expected string
 }{
-	{"help", &cli.IntSlice{}, "--help '--help option --help option'\t"},
-	{"h", &cli.IntSlice{}, "-h '-h option -h option'\t"},
-	{"h", &cli.IntSlice{}, "-h '-h option -h option'\t"},
+	{"help", &cli.IntSlice{}, "--help [--help option --help option]\t"},
+	{"h", &cli.IntSlice{}, "-h [-h option -h option]\t"},
+	{"h", &cli.IntSlice{}, "-h [-h option -h option]\t"},
 	{"test", func() *cli.IntSlice {
 		i := &cli.IntSlice{}
 		i.Set("9")
 		return i
-	}(), "--test '--test option --test option'\t"},
+	}(), "--test [--test option --test option]\t"},
 }
 
 func TestIntSliceFlagHelpOutput(t *testing.T) {
@@ -228,8 +228,8 @@ var float64FlagTests = []struct {
 	name     string
 	expected string
 }{
-	{"help", "--help '0'\t"},
-	{"h", "-h '0'\t"},
+	{"help", "--help \"0\"\t"},
+	{"h", "-h \"0\"\t"},
 }
 
 func TestFloat64FlagHelpOutput(t *testing.T) {
@@ -262,15 +262,14 @@ var genericFlagTests = []struct {
 	value    cli.Generic
 	expected string
 }{
-	{"help", &Parser{}, "--help <nil>\t`-help option -help option` "},
-	{"h", &Parser{}, "-h <nil>\t`-h option -h option` "},
-	{"test", &Parser{}, "--test <nil>\t`-test option -test option` "},
+	{"test", &Parser{"abc", "def"}, "--test \"abc,def\"\ttest flag"},
+	{"t", &Parser{"abc", "def"}, "-t \"abc,def\"\ttest flag"},
 }
 
 func TestGenericFlagHelpOutput(t *testing.T) {
 
 	for _, test := range genericFlagTests {
-		flag := cli.GenericFlag{Name: test.name}
+		flag := cli.GenericFlag{Name: test.name, Value: test.value, Usage: "test flag"}
 		output := flag.String()
 
 		if output != test.expected {

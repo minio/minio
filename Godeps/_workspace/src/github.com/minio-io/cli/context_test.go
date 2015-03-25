@@ -97,3 +97,15 @@ func TestContext_GlobalIsSet(t *testing.T) {
 	expect(t, c.GlobalIsSet("myflagGlobalUnset"), false)
 	expect(t, c.GlobalIsSet("bogusGlobal"), false)
 }
+
+func TestContext_NumFlags(t *testing.T) {
+	set := flag.NewFlagSet("test", 0)
+	set.Bool("myflag", false, "doc")
+	set.String("otherflag", "hello world", "doc")
+	globalSet := flag.NewFlagSet("test", 0)
+	globalSet.Bool("myflagGlobal", true, "doc")
+	c := cli.NewContext(nil, set, globalSet)
+	set.Parse([]string{"--myflag", "--otherflag=foo"})
+	globalSet.Parse([]string{"--myflagGlobal"})
+	expect(t, c.NumFlags(), 2)
+}

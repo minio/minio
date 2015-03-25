@@ -19,10 +19,45 @@ package main
 import (
 	"os"
 
-	"github.com/codegangsta/cli"
+	"github.com/minio-io/cli"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
+
+var flags = []cli.Flag{
+	cli.StringFlag{
+		Name:  "domain,d",
+		Value: "",
+		Usage: "domain used for routing incoming API requests",
+	},
+	cli.StringFlag{
+		Name:  "api-address,a",
+		Value: ":9000",
+		Usage: "address for incoming API requests",
+	},
+	cli.StringFlag{
+		Name:  "web-address,w",
+		Value: ":9001",
+		Usage: "address for incoming Management UI requests",
+	},
+	cli.StringFlag{
+		Name:  "cert,c",
+		Hide:  true,
+		Value: "",
+		Usage: "cert.pem",
+	},
+	cli.StringFlag{
+		Name:  "key,k",
+		Hide:  true,
+		Value: "",
+		Usage: "key.pem",
+	},
+	cli.StringFlag{
+		Name:  "driver-type,t",
+		Value: "donut",
+		Usage: "valid entries: file,inmemory,donut",
+	},
+}
 
 func getDriverType(input string) server.DriverType {
 	switch {
@@ -82,39 +117,11 @@ func runCmd(c *cli.Context) {
 func main() {
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Usage = ""
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:  "domain,d",
-			Value: "",
-			Usage: "domain used for routing incoming API requests",
-		},
-		cli.StringFlag{
-			Name:  "api-address,a",
-			Value: ":9000",
-			Usage: "address for incoming API requests",
-		},
-		cli.StringFlag{
-			Name:  "web-address,w",
-			Value: ":9001",
-			Usage: "address for incoming Management UI requests",
-		},
-		cli.StringFlag{
-			Name:  "cert,c",
-			Value: "",
-			Usage: "cert.pem",
-		},
-		cli.StringFlag{
-			Name:  "key,k",
-			Value: "",
-			Usage: "key.pem",
-		},
-		cli.StringFlag{
-			Name:  "driver-type,t",
-			Value: "donut",
-			Usage: "valid entries: file,inmemory,donut",
-		},
-	}
+	app.Version = "0.1.0"
+	app.Author = "Minio.io"
+	app.Usage = "Minimalist Object Storage"
+	app.EnableBashCompletion = true
+	app.Flags = flags
 	app.Action = runCmd
 	app.Run(os.Args)
 }
