@@ -44,7 +44,7 @@ type StackEntry struct {
 
 // Wrap an error, turning it into an iodine error.
 // Adds an initial stack trace.
-func Wrap(err error, data map[string]string) *Error {
+func New(err error, data map[string]string) *Error {
 	entry := createStackEntry()
 	for k, v := range data {
 		entry.Data[k] = v

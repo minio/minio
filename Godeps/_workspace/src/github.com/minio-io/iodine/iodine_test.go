@@ -25,7 +25,7 @@ import (
 )
 
 func TestIodine(t *testing.T) {
-	iodineError := Wrap(errors.New("Hello"), nil)
+	iodineError := New(errors.New("Hello"), nil)
 	iodineError.Annotate(nil)
 	iodineError.Annotate(nil)
 	iodineError.Annotate(nil)
