@@ -19,9 +19,12 @@ package main
 import (
 	"os"
 
+	"errors"
 	"github.com/minio-io/cli"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"time"
 )
 
 // commitID is automatically set by git. Settings are controlled
@@ -119,6 +122,11 @@ func runCmd(c *cli.Context) {
 }
 
 func main() {
+	// set up iodine
+	iodine.SetGlobalState("minio.git", commitID)
+	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
+
+	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
 	app.Version = commitID
