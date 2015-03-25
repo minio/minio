@@ -106,6 +106,11 @@ func (c *Context) GlobalGeneric(name string) interface{} {
 	return lookupGeneric(name, c.globalSet)
 }
 
+// Returns the number of flags set
+func (c *Context) NumFlags() int {
+	return c.flagSet.NFlag()
+}
+
 // Determines if the flag was actually set
 func (c *Context) IsSet(name string) bool {
 	if c.setFlags == nil {

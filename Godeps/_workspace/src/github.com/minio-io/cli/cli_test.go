@@ -12,17 +12,17 @@ func Example() {
 	app.Usage = "task list on the command line"
 	app.Commands = []cli.Command{
 		{
-			Name:      "add",
-			ShortName: "a",
-			Usage:     "add a task to the list",
+			Name:    "add",
+			Aliases: []string{"a"},
+			Usage:   "add a task to the list",
 			Action: func(c *cli.Context) {
 				println("added task: ", c.Args().First())
 			},
 		},
 		{
-			Name:      "complete",
-			ShortName: "c",
-			Usage:     "complete a task on the list",
+			Name:    "complete",
+			Aliases: []string{"c"},
+			Usage:   "complete a task on the list",
 			Action: func(c *cli.Context) {
 				println("completed task: ", c.Args().First())
 			},
@@ -38,13 +38,13 @@ func ExampleSubcommand() {
 	app.Commands = []cli.Command{
 		{
 			Name:        "hello",
-			ShortName:   "hi",
+			Aliases:     []string{"hi"},
 			Usage:       "use it to see a description",
 			Description: "This is how we describe hello the function",
 			Subcommands: []cli.Command{
 				{
 					Name:        "english",
-					ShortName:   "en",
+					Aliases:     []string{"en"},
 					Usage:       "sends a greeting in english",
 					Description: "greets someone in english",
 					Flags: []cli.Flag{
@@ -58,9 +58,9 @@ func ExampleSubcommand() {
 						println("Hello, ", c.String("name"))
 					},
 				}, {
-					Name:      "spanish",
-					ShortName: "sp",
-					Usage:     "sends a greeting in spanish",
+					Name:    "spanish",
+					Aliases: []string{"sp"},
+					Usage:   "sends a greeting in spanish",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "surname",
@@ -72,9 +72,9 @@ func ExampleSubcommand() {
 						println("Hola, ", c.String("surname"))
 					},
 				}, {
-					Name:      "french",
-					ShortName: "fr",
-					Usage:     "sends a greeting in french",
+					Name:    "french",
+					Aliases: []string{"fr"},
+					Usage:   "sends a greeting in french",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "nickname",
