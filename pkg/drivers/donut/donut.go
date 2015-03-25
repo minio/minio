@@ -24,8 +24,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/storage/donut"
+	"log"
 )
 
 // donutDriver - creates a new single disk drivers driver using donut
@@ -44,7 +46,11 @@ func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 	s := new(donutDriver)
 
 	// TODO donut driver should be passed in as Start param and driven by config
-	s.donut, _ = donut.NewDonut(path)
+	var err *iodine.Error
+	s.donut, err = donut.NewDonut(path)
+	if err != nil {
+		log.Println(err.EmitHumanReadable())
+	}
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
