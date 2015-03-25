@@ -21,7 +21,8 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	// check buckets are empty
 	buckets, err := donut.ListBuckets()
@@ -33,7 +34,8 @@ func (s *MySuite) TestBucketWithoutNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 	// fail to create new bucket without a name
 	err = donut.CreateBucket("")
 	c.Assert(err, Not(IsNil))
@@ -46,7 +48,8 @@ func (s *MySuite) TestCreateBucketAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 	// create bucket
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -61,7 +64,8 @@ func (s *MySuite) TestCreateBucketWithSameNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
 
@@ -73,7 +77,8 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 	// add a second bucket
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -97,7 +102,8 @@ func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	writer, err := donut.GetObjectWriter("foo", "obj")
 	c.Assert(err, Not(IsNil))
@@ -108,7 +114,8 @@ func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	writer, err := donut.GetObjectWriter("foo", "")
 	c.Assert(err, Not(IsNil))
@@ -123,7 +130,8 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	err = donut.CreateBucket("foo")
 	c.Assert(err, IsNil)
@@ -175,7 +183,8 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	c.Assert(donut.CreateBucket("foo"), IsNil)
 	writer, err := donut.GetObjectWriter("foo", "obj1")
@@ -215,7 +224,8 @@ func (s *MySuite) TestSysPrefixShouldFail(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
-	donut := NewDonut(root)
+	donut, err := NewDonut(root)
+	c.Assert(err, IsNil)
 
 	c.Assert(donut.CreateBucket("foo"), IsNil)
 	writer, err := donut.GetObjectWriter("foo", "obj1")

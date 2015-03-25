@@ -19,6 +19,7 @@ type Donut interface {
 // Bucket interface
 type Bucket interface {
 	GetNodes() ([]string, error)
+	AddNode(nodeID, bucketID string) error
 }
 
 // Node interface
