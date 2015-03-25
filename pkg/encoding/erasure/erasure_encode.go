@@ -31,6 +31,7 @@ type Technique uint8
 const (
 	Vandermonde Technique = iota
 	Cauchy
+	None
 )
 
 const (

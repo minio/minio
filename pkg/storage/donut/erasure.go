@@ -23,7 +23,7 @@ func getErasureTechnique(technique string) (erasure.Technique, error) {
 	case technique == "Vandermonde":
 		return erasure.Cauchy, nil
 	default:
-		return -1, errors.New("Invalid erasure technique")
+		return erasure.None, errors.New("Invalid erasure technique")
 	}
 }
 
