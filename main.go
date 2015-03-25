@@ -18,13 +18,12 @@ package main
 
 import (
 	"os"
+	"time"
 
-	"errors"
 	"github.com/minio-io/cli"
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/utils/log"
-	"time"
 )
 
 // commitID is automatically set by git. Settings are controlled
