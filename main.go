@@ -19,7 +19,6 @@ package main
 import (
 	"os"
 
-	"errors"
 	"github.com/minio-io/cli"
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/server"
