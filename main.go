@@ -24,6 +24,10 @@ import (
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
+// commitID is automatically set by git. Settings are controlled
+// through .gitattributes
+const commitID = "$Id$"
+
 var flags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "domain,d",
