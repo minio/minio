@@ -25,6 +25,8 @@ import (
 	"strconv"
 )
 
+// Error is the iodine error which contains a pointer to the original error
+// and stack traces.
 type Error struct {
 	EmbeddedError error `json:"-"`
 	ErrorMessage  string
@@ -32,6 +34,7 @@ type Error struct {
 	Stack []StackEntry
 }
 
+// StackEntry contains the entry in the stack trace
 type StackEntry struct {
 	Host string
 	File string
@@ -39,6 +42,8 @@ type StackEntry struct {
 	Data map[string]string
 }
 
+// Wrap an error, turning it into an iodine error.
+// Adds an initial stack trace.
 func Wrap(err error, data map[string]string) *Error {
 	entry := createStackEntry()
 	for k, v := range data {
@@ -63,22 +68,23 @@ func createStackEntry() StackEntry {
 	return entry
 }
 
+// Annotate an error with a stack entry and returns itself
 func (err *Error) Annotate(info map[string]string) *Error {
 	data := make(map[string]string)
-	if info != nil {
-		for k, v := range info {
-			data[k] = v
-		}
+	for k, v := range info {
+		data[k] = v
 	}
 	entry := createStackEntry()
 	err.Stack = append(err.Stack, entry)
 	return err
 }
 
-func (err Error) EmitJson() ([]byte, error) {
+// EmitJSON writes JSON output for the error
+func (err Error) EmitJSON() ([]byte, error) {
 	return json.Marshal(err)
 }
 
+// EmitHumanReadable returns a human readable error message
 func (err Error) EmitHumanReadable() string {
 	var errorBuffer bytes.Buffer
 	fmt.Fprintln(&errorBuffer, err.Error())
@@ -88,6 +94,7 @@ func (err Error) EmitHumanReadable() string {
 	return string(errorBuffer.Bytes())
 }
 
+// Emits the original error message
 func (err Error) Error() string {
 	return err.EmbeddedError.Error()
 }
