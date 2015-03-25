@@ -23,6 +23,32 @@ import (
 	"github.com/minio-io/minio/pkg/drivers"
 )
 
+func (file *fileDriver) filterDelimiterPrefix(bucket, name, fname, delimitedName string, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	var err error
+	var metadata drivers.ObjectMetadata
+	switch true {
+	case name == resources.Prefix:
+		// Use resources.Prefix to filter out delimited files
+		metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
+		if err != nil {
+			return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
+		}
+	case delimitedName == fname:
+		// Use resources.Prefix to filter out delimited files
+		metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
+		if err != nil {
+			return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
+		}
+	case delimitedName != "":
+		if delimitedName == resources.Delimiter {
+			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
+		} else {
+			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+		}
+	}
+	return metadata, resources, nil
+}
+
 // TODO handle resources.Marker
 func (file *fileDriver) filter(bucket, name string, f os.FileInfo, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	var err error
@@ -34,25 +60,9 @@ func (file *fileDriver) filter(bucket, name string, f os.FileInfo, resources dri
 		if strings.HasPrefix(name, resources.Prefix) {
 			trimmedName := strings.TrimPrefix(name, resources.Prefix)
 			delimitedName := delimiter(trimmedName, resources.Delimiter)
-			switch true {
-			case name == resources.Prefix:
-				// Use resources.Prefix to filter out delimited files
-				metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
-				if err != nil {
-					return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
-				}
-			case delimitedName == f.Name():
-				// Use resources.Prefix to filter out delimited files
-				metadata, err = file.GetObjectMetadata(bucket, name, resources.Prefix)
-				if err != nil {
-					return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
-				}
-			case delimitedName != "":
-				if delimitedName == resources.Delimiter {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
-				} else {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
-				}
+			metadata, resources, err = file.filterDelimiterPrefix(bucket, name, f.Name(), delimitedName, resources)
+			if err != nil {
+				return drivers.ObjectMetadata{}, resources, err
 			}
 		}
 	// Delimiter present and Prefix is absent

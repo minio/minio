@@ -74,7 +74,6 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 		}
 
 		curChunkSize := erasure.GetEncodedBlockLen(curBlockSize, uint8(k))
-
 		encodedBytes := make([][]byte, 16)
 		for i, reader := range readers {
 			defer reader.Close()

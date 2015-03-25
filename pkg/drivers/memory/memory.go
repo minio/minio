@@ -173,6 +173,23 @@ func appendUniq(slice []string, i string) []string {
 	return append(slice, i)
 }
 
+func (memory memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedName string, resources drivers.BucketResourcesMetadata) (drivers.BucketResourcesMetadata, []string) {
+	switch true {
+	case key == resources.Prefix:
+		keys = appendUniq(keys, key)
+		// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
+	case key == resources.Prefix+delimitedName:
+		keys = appendUniq(keys, key)
+	case delimitedName != "":
+		if delimitedName == resources.Delimiter {
+			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
+		} else {
+			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+		}
+	}
+	return resources, keys
+}
+
 // ListObjects - list objects from memory
 func (memory memoryDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	if _, ok := memory.bucketdata[bucket]; ok == false {
@@ -183,7 +200,7 @@ func (memory memoryDriver) ListObjects(bucket string, resources drivers.BucketRe
 	for key := range memory.objectdata {
 		switch true {
 		// Prefix absent, delimit object key based on delimiter
-		case resources.Delimiter != "" && resources.Prefix == "":
+		case resources.IsDelimiterSet():
 			delimitedName := delimiter(key, resources.Delimiter)
 			switch true {
 			case delimitedName == "" || delimitedName == key:
@@ -192,31 +209,20 @@ func (memory memoryDriver) ListObjects(bucket string, resources drivers.BucketRe
 				resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
 			}
 		// Prefix present, delimit object key with prefix key based on delimiter
-		case resources.Delimiter != "" && resources.Prefix != "" && strings.HasPrefix(key, resources.Prefix):
-			trimmedName := strings.TrimPrefix(key, resources.Prefix)
-			delimitedName := delimiter(trimmedName, resources.Delimiter)
-			switch true {
-			case key == resources.Prefix:
-				keys = appendUniq(keys, key)
-			// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
-			case key == resources.Prefix+delimitedName:
-				keys = appendUniq(keys, key)
-			case delimitedName != "":
-				if delimitedName == resources.Delimiter {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
-				} else {
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
-				}
+		case resources.IsDelimiterPrefixSet():
+			if strings.HasPrefix(key, resources.Prefix) {
+				trimmedName := strings.TrimPrefix(key, resources.Prefix)
+				delimitedName := delimiter(trimmedName, resources.Delimiter)
+				resources, keys = memory.filterDelimiterPrefix(keys, key, delimitedName, resources)
 			}
 		// Prefix present, nothing to delimit
-		case resources.Delimiter == "" && resources.Prefix != "" && strings.HasPrefix(key, resources.Prefix):
+		case resources.IsPrefixSet():
 			keys = appendUniq(keys, key)
 		// Prefix and delimiter absent
-		case resources.Prefix == "" && resources.Delimiter == "":
+		case resources.IsDefault():
 			keys = appendUniq(keys, key)
 		}
 	}
-
 	sort.Strings(keys)
 	for _, key := range keys {
 		if len(results) == resources.Maxkeys {

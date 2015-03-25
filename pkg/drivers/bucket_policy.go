@@ -137,6 +137,37 @@ func isValidPrincipal(principal string) bool {
 	return ok
 }
 
+func parseStatement(statement Statement) bool {
+	if len(statement.Sid) == 0 {
+		return false
+	}
+	if len(statement.Effect) == 0 {
+		return false
+	}
+	if !isValidEffect(statement.Effect) {
+		return false
+	}
+	if len(statement.Principal.AWS) == 0 {
+		return false
+	}
+	if !isValidPrincipal(statement.Principal.AWS) {
+		return false
+	}
+	if len(statement.Action) == 0 {
+		return false
+	}
+	if !isValidAction(statement.Action) && !isValidActionS3(statement.Action) {
+		return false
+	}
+	if len(statement.Resource) == 0 {
+		return false
+	}
+	if !isValidResource(statement.Resource) {
+		return false
+	}
+	return true
+}
+
 // Parsepolicy - validate request body is proper JSON and in accordance with policy standards
 func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 	var policy BucketPolicy
@@ -157,33 +188,7 @@ func Parsepolicy(data io.Reader) (BucketPolicy, bool) {
 	}
 
 	for _, statement := range policy.Statement {
-		if len(statement.Sid) == 0 {
-			goto error
-		}
-		if len(statement.Effect) == 0 {
-			goto error
-		}
-		if !isValidEffect(statement.Effect) {
-			goto error
-		}
-
-		if len(statement.Principal.AWS) == 0 {
-			goto error
-		}
-		if !isValidPrincipal(statement.Principal.AWS) {
-			goto error
-		}
-		if len(statement.Action) == 0 {
-			goto error
-		}
-		if !isValidAction(statement.Action) && !isValidActionS3(statement.Action) {
-			goto error
-		}
-		if len(statement.Resource) == 0 {
-			goto error
-		}
-
-		if !isValidResource(statement.Resource) {
+		if !parseStatement(statement) {
 			goto error
 		}
 	}
