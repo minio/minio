@@ -6,17 +6,17 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-42-gfbda1ce",
-			"Rev": "fbda1ce02d5dabcee952040e5f4025753b6c9ce0"
-		},
-		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
+		},
+		{
+			"ImportPath": "github.com/minio-io/cli",
+			"Comment": "1.2.0-96-gfcc23e2",
+			"Rev": "fcc23e23a705c0d95fce2a446c364ac31a1c73a5"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",

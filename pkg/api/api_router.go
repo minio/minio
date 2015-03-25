@@ -22,13 +22,13 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // private use
 type minioAPI struct {
-	domain  string
-	storage mstorage.Storage
+	domain string
+	driver drivers.Driver
 }
 
 // Path based routing
@@ -72,10 +72,10 @@ func getMux(api minioAPI, mux *router.Router) *router.Router {
 }
 
 // HTTPHandler - http wrapper handler
-func HTTPHandler(domain string, storage mstorage.Storage) http.Handler {
+func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 	var mux *router.Router
 	var api = minioAPI{}
-	api.storage = storage
+	api.driver = driver
 	api.domain = domain
 
 	r := router.NewRouter()

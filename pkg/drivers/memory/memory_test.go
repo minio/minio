@@ -14,30 +14,26 @@
  * limitations under the License.
  */
 
-package api
+package memory
 
 import (
-	"net/url"
-	"strconv"
+	"testing"
 
 	"github.com/minio-io/minio/pkg/drivers"
+
+	. "gopkg.in/check.v1"
 )
 
-// parse bucket url queries
-func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
-	for key, value := range values {
-		switch true {
-		case key == "prefix":
-			v.Prefix = value[0]
-		case key == "marker":
-			v.Marker = value[0]
-		case key == "max-keys":
-			v.Maxkeys, _ = strconv.Atoi(value[0])
-		case key == "policy":
-			v.Policy = true
-		case key == "delimiter":
-			v.Delimiter = value[0]
-		}
+func Test(t *testing.T) { TestingT(t) }
+
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
+
+func (s *MySuite) TestAPISuite(c *C) {
+	create := func() drivers.Driver {
+		_, _, store := Start()
+		return store
 	}
-	return
+	drivers.APITestSuite(c, create)
 }

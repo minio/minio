@@ -19,7 +19,7 @@ package api
 import (
 	"sort"
 
-	mstorage "github.com/minio-io/minio/pkg/storage"
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // Reply date format
@@ -33,7 +33,7 @@ const (
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateBucketsListResult(buckets []mstorage.BucketMetadata) BucketListResponse {
+func generateBucketsListResult(buckets []drivers.BucketMetadata) BucketListResponse {
 	var listbuckets []*Bucket
 	var data = BucketListResponse{}
 	var owner = Owner{}
@@ -73,7 +73,7 @@ func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateObjectsListResult(bucket string, objects []mstorage.ObjectMetadata, bucketResources mstorage.BucketResourcesMetadata) ObjectListResponse {
+func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, bucketResources drivers.BucketResourcesMetadata) ObjectListResponse {
 	var contents []*Item
 	var prefixes []*Prefix
 	var owner = Owner{}

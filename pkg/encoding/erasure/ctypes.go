@@ -24,7 +24,7 @@ import (
 )
 
 // Integer to Int conversion
-func int2cInt(src_err_list []int) *C.int32_t {
+func int2CInt(src_err_list []int) *C.int32_t {
 	var sizeErrInt = int(unsafe.Sizeof(src_err_list[0]))
 	switch sizeInt {
 	case sizeErrInt:

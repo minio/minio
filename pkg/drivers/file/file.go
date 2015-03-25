@@ -14,30 +14,28 @@
  * limitations under the License.
  */
 
-package api
+package file
 
 import (
-	"net/url"
-	"strconv"
+	"os"
+	"sync"
 
 	"github.com/minio-io/minio/pkg/drivers"
 )
 
-// parse bucket url queries
-func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
-	for key, value := range values {
-		switch true {
-		case key == "prefix":
-			v.Prefix = value[0]
-		case key == "marker":
-			v.Marker = value[0]
-		case key == "max-keys":
-			v.Maxkeys, _ = strconv.Atoi(value[0])
-		case key == "policy":
-			v.Policy = true
-		case key == "delimiter":
-			v.Delimiter = value[0]
-		}
-	}
-	return
+// Start filesystem channel
+func Start(root string) (chan<- string, <-chan error, drivers.Driver) {
+	ctrlChannel := make(chan string)
+	errorChannel := make(chan error)
+	s := new(fileDriver)
+	s.root = root
+	s.lock = new(sync.Mutex)
+	go start(ctrlChannel, errorChannel, s)
+	return ctrlChannel, errorChannel, s
+}
+
+func start(ctrlChannel <-chan string, errorChannel chan<- error, s *fileDriver) {
+	err := os.MkdirAll(s.root, 0700)
+	errorChannel <- err
+	close(errorChannel)
 }
