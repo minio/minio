@@ -41,12 +41,13 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	m := int(e.params.M)
 	n := k + m
 	if len(chunks) != n {
-		return nil, errors.New(fmt.Sprintf("chunks length must be %d", n))
+		msg := fmt.Sprintf("chunks length must be %d", n)
+		return nil, errors.New(msg)
 	}
 	chunkLen := GetEncodedBlockLen(length, uint8(k))
 
 	errorIndex := make([]int, n+1)
-	var errCount int = 0
+	var errCount int
 
 	for i := range chunks {
 		// Check of chunks are really null
@@ -63,7 +64,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		return nil, errors.New("too many erasures requested, can't decode")
 	}
 
-	errorIndex_ptr := int2CInt(errorIndex[:errCount])
+	errorIndexPtr := int2CInt(errorIndex[:errCount])
 
 	for i := range chunks {
 		if chunks[i] == nil || len(chunks[i]) == 0 {
@@ -71,7 +72,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		}
 	}
 
-	C.minio_init_decoder(errorIndex_ptr, C.int(k), C.int(n), C.int(errCount-1),
+	C.minio_init_decoder(errorIndexPtr, C.int(k), C.int(n), C.int(errCount-1),
 		e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
 
 	pointers := make([]*byte, n)
@@ -81,7 +82,7 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 
 	data := (**C.uint8_t)(unsafe.Pointer(&pointers[0]))
 
-	ret := C.minio_get_source_target(C.int(errCount-1), C.int(k), C.int(m), errorIndex_ptr,
+	ret := C.minio_get_source_target(C.int(errCount-1), C.int(k), C.int(m), errorIndexPtr,
 		decodeIndex, data, &source, &target)
 
 	if int(ret) == -1 {

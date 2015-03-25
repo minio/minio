@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 )
 
+// The size of a SHA512 checksum in bytes.
 const (
 	Size = sha512.Size
 )

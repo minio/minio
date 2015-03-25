@@ -26,19 +26,23 @@ import (
 	"unsafe"
 )
 
+// Technique - type of matrix type used in encoding
 type Technique uint8
 
+// Different types of supported matrix types
 const (
 	Vandermonde Technique = iota
 	Cauchy
 	None
 )
 
+// Default Data and Parity blocks
 const (
 	K = 10
 	M = 3
 )
 
+// Block alignment
 const (
 	SIMDAlign = 32
 )
