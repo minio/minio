@@ -30,9 +30,7 @@ func NewDonut(root string) (Donut, *iodine.Error) {
 		}
 		for _, bucketID := range bucketIDs {
 			tokens := strings.Split(bucketID, ":")
-			if _, ok := driver.buckets[tokens[0]]; ok {
-				// found bucket, skip creating
-			} else {
+			if _, ok := driver.buckets[tokens[0]]; !ok {
 				bucket := donutBucket{
 					nodes: make([]string, 16),
 				}
