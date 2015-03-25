@@ -26,7 +26,7 @@ import (
 	"unsafe"
 )
 
-type Technique int
+type Technique uint8
 
 const (
 	Vandermonde Technique = iota
@@ -52,10 +52,10 @@ type EncoderParams struct {
 // Encoder is an object used to encode and decode data.
 type Encoder struct {
 	params *EncoderParams
-	encode_matrix,
-	encode_tbls,
-	decode_matrix,
-	decode_tbls *C.uint8_t
+	encodeMatrix,
+	encodeTbls,
+	decodeMatrix,
+	decodeTbls *C.uint8_t
 }
 
 // ParseEncoderParams creates an EncoderParams object.
@@ -94,30 +94,30 @@ func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error)
 
 // NewEncoder creates an encoder object with a given set of parameters.
 func NewEncoder(ep *EncoderParams) *Encoder {
-	var encode_matrix *C.uint8_t
-	var encode_tbls *C.uint8_t
+	var k = C.int(ep.K)
+	var m = C.int(ep.M)
 
-	k := C.int(ep.K)
-	m := C.int(ep.M)
+	var encodeMatrix *C.uint8_t
+	var encodeTbls *C.uint8_t
 
-	C.minio_init_encoder(C.int(ep.Technique), k, m, &encode_matrix,
-		&encode_tbls)
+	C.minio_init_encoder(C.int(ep.Technique), k, m, &encodeMatrix,
+		&encodeTbls)
 
 	return &Encoder{
-		params:        ep,
-		encode_matrix: encode_matrix,
-		encode_tbls:   encode_tbls,
-		decode_matrix: nil,
-		decode_tbls:   nil,
+		params:       ep,
+		encodeMatrix: encodeMatrix,
+		encodeTbls:   encodeTbls,
+		decodeMatrix: nil,
+		decodeTbls:   nil,
 	}
 }
 
-func GetEncodedLen(inputLen int, k, m uint8) (outputLen int) {
-	outputLen = GetEncodedChunkLen(inputLen, k) * int(k+m)
+func GetEncodedBlocksLen(inputLen int, k, m uint8) (outputLen int) {
+	outputLen = GetEncodedBlockLen(inputLen, k) * int(k+m)
 	return outputLen
 }
 
-func GetEncodedChunkLen(inputLen int, k uint8) (outputChunkLen int) {
+func GetEncodedBlockLen(inputLen int, k uint8) (encodedOutputLen int) {
 	alignment := int(k) * SIMDAlign
 	remainder := inputLen % alignment
 
@@ -125,55 +125,66 @@ func GetEncodedChunkLen(inputLen int, k uint8) (outputChunkLen int) {
 	if remainder != 0 {
 		paddedInputLen = inputLen + (alignment - remainder)
 	}
-	outputChunkLen = paddedInputLen / int(k)
-	return outputChunkLen
+	encodedOutputLen = paddedInputLen / int(k)
+	return encodedOutputLen
 }
 
-// Encode encodes a block of data. The input is the original data. The output
-// is a 2 tuple containing (k + m) chunks of erasure encoded data and the
-// length of the original object.
-func (e *Encoder) Encode(input []byte) ([][]byte, error) {
-	inputLen := len(input)
-	k := C.int(e.params.K)
-	m := C.int(e.params.M)
-	n := k + m
+// Encode erasure codes a block of data in "k" data blocks and "m" parity blocks.
+// Output is [k+m][]blocks of data and parity slices.
+func (e *Encoder) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
+	k := int(e.params.K) // "k" data blocks
+	m := int(e.params.M) // "m" parity blocks
+	n := k + m           // "n" total encoded blocks
 
-	chunkLen := GetEncodedChunkLen(inputLen, e.params.K)
-	encodedDataLen := chunkLen * int(k)
-	paddedDataLen := int(encodedDataLen) - inputLen
+	// Length of a single encoded chunk.
+	// Total number of encoded chunks = "k" data  + "m" parity blocks
+	encodedBlockLen := GetEncodedBlockLen(len(inputData), uint8(k))
 
-	if paddedDataLen > 0 {
-		s := make([]byte, paddedDataLen)
+	// Length of total number of "k" data chunks
+	encodedDataBlocksLen := encodedBlockLen * k
+
+	// Length of extra padding required for the data blocks.
+	encodedDataBlocksPadLen := encodedDataBlocksLen - len(inputData)
+
+	// Extend inputData buffer to accommodate coded data blocks if necesssary
+	if encodedDataBlocksPadLen > 0 {
+		padding := make([]byte, encodedDataBlocksPadLen)
 		// Expand with new padded blocks to the byte array
-		input = append(input, s...)
+		inputData = append(inputData, padding...)
 	}
 
-	encodedParityLen := chunkLen * int(e.params.M)
-	c := make([]byte, encodedParityLen)
-	input = append(input, c...)
-
-	// encodedOutLen := encodedDataLen + encodedParityLen
-
-	// Allocate chunks
-	chunks := make([][]byte, k+m)
-	pointers := make([]*byte, k+m)
-
-	var i int
-	// Add data blocks to chunks
-	for i = 0; i < int(k); i++ {
-		chunks[i] = input[i*chunkLen : (i+1)*chunkLen]
-		pointers[i] = &chunks[i][0]
+	// Extend inputData buffer to accommodate coded parity blocks
+	if true { // create a temporary scope to trigger garbage collect
+		encodedParityBlocksLen := encodedBlockLen * m
+		parityBlocks := make([]byte, encodedParityBlocksLen)
+		inputData = append(inputData, parityBlocks...)
 	}
 
-	for i = int(k); i < int(n); i++ {
-		chunks[i] = make([]byte, chunkLen)
-		pointers[i] = &chunks[i][0]
+	// Allocate memory to the "encoded blocks" return buffer
+	encodedBlocks = make([][]byte, n) // Return buffer
+
+	// Nessary to bridge Go to the C world. C requires 2D arry of pointers to
+	// byte array. "encodedBlocks" is a 2D slice.
+	pointersToEncodedBlock := make([]*byte, n) // Pointers to encoded blocks.
+
+	// Copy data block slices to encoded block buffer
+	for i := 0; i < k; i++ {
+		encodedBlocks[i] = inputData[i*encodedBlockLen : (i+1)*encodedBlockLen]
+		pointersToEncodedBlock[i] = &encodedBlocks[i][0]
 	}
 
-	data := (**C.uint8_t)(unsafe.Pointer(&pointers[:k][0]))
-	coding := (**C.uint8_t)(unsafe.Pointer(&pointers[k:][0]))
+	// Copy erasure block slices to encoded block buffer
+	for i := k; i < n; i++ {
+		encodedBlocks[i] = make([]byte, encodedBlockLen)
+		pointersToEncodedBlock[i] = &encodedBlocks[i][0]
+	}
 
-	C.ec_encode_data(C.int(chunkLen), k, m, e.encode_tbls, data,
-		coding)
-	return chunks, nil
+	// Erasure code the data into K data blocks and M parity
+	// blocks. Only the parity blocks are filled. Data blocks remain
+	// intact.
+	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(m), e.encodeTbls,
+		(**C.uint8_t)(unsafe.Pointer(&pointersToEncodedBlock[:k][0])), // Pointers to data blocks
+		(**C.uint8_t)(unsafe.Pointer(&pointersToEncodedBlock[k:][0]))) // Pointers to parity blocks
+
+	return encodedBlocks, nil
 }
