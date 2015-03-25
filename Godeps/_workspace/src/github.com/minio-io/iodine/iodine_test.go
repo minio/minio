@@ -32,7 +32,7 @@ func TestIodine(t *testing.T) {
 	if len(iodineError.Stack) != 4 {
 		t.Fail()
 	}
-	jsonResult, err := iodineError.EmitJson()
+	jsonResult, err := iodineError.EmitJSON()
 	if err != nil {
 		t.Fail()
 	}
