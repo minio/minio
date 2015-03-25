@@ -1,5 +1,5 @@
 /*
- * Iodine, (C) 2014 Minio, Inc.
+ * Iodine, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -43,25 +45,30 @@ type StackEntry struct {
 	Data map[string]string
 }
 
+var gopath string
+
 var globalState = struct {
 	sync.RWMutex
 	m map[string]string
 }{m: make(map[string]string)}
 
+// SetGlobalState - set global state
 func SetGlobalState(key, value string) {
 	globalState.Lock()
 	globalState.m[key] = value
 	globalState.Unlock()
 }
 
+// ClearGlobalState - clear info in globalState struct
 func ClearGlobalState() {
 	globalState.Lock()
-	for k, _ := range globalState.m {
+	for k := range globalState.m {
 		delete(globalState.m, k)
 	}
 	globalState.Unlock()
 }
 
+// GetGlobalState - get map from globalState struct
 func GetGlobalState() map[string]string {
 	result := make(map[string]string)
 	globalState.RLock()
@@ -72,7 +79,16 @@ func GetGlobalState() map[string]string {
 	return result
 }
 
-// Wrap an error, turning it into an iodine error.
+// GetGlobalStateKey - get value for key from globalState struct
+func GetGlobalStateKey(k string) string {
+	result, ok := globalState.m[k]
+	if !ok {
+		return ""
+	}
+	return result
+}
+
+// New - instantiate an error, turning it into an iodine error.
 // Adds an initial stack trace.
 func New(err error, data map[string]string) *Error {
 	entry := createStackEntry()
@@ -86,16 +102,44 @@ func New(err error, data map[string]string) *Error {
 	}
 }
 
+// createStackEntry - create stack entries
 func createStackEntry() StackEntry {
 	host, _ := os.Hostname()
 	_, file, line, _ := runtime.Caller(2)
+	file = strings.TrimPrefix(file, gopath) // trim gopath from file
+
+	data := GetGlobalState()
+	for k, v := range getSystemData() {
+		data[k] = v
+	}
+
 	entry := StackEntry{
 		Host: host,
 		File: file,
 		Line: line,
-		Data: GetGlobalState(),
+		Data: data,
 	}
 	return entry
+}
+
+func getSystemData() map[string]string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	memstats := &runtime.MemStats{}
+	runtime.ReadMemStats(memstats)
+	return map[string]string{
+		"sys.host":               host,
+		"sys.os":                 runtime.GOOS,
+		"sys.arch":               runtime.GOARCH,
+		"sys.go":                 runtime.Version(),
+		"sys.cpus":               strconv.Itoa(runtime.NumCPU()),
+		"sys.mem.used":           strconv.FormatUint(memstats.Alloc, 10),
+		"sys.mem.allocated":      strconv.FormatUint(memstats.TotalAlloc, 10),
+		"sys.mem.heap.used":      strconv.FormatUint(memstats.HeapAlloc, 10),
+		"sys.mem.heap.allocated": strconv.FormatUint(memstats.HeapSys, 10),
+	}
 }
 
 // Annotate an error with a stack entry and returns itself
@@ -126,4 +170,12 @@ func (err Error) EmitHumanReadable() string {
 // Emits the original error message
 func (err Error) Error() string {
 	return err.EmbeddedError.Error()
+}
+
+func init() {
+	_, iodineFile, _, _ := runtime.Caller(0)
+	iodineFile = path.Dir(iodineFile)   // trim iodine.go
+	iodineFile = path.Dir(iodineFile)   // trim iodine
+	iodineFile = path.Dir(iodineFile)   // trim minio-io
+	gopath = path.Dir(iodineFile) + "/" // trim github.com
 }

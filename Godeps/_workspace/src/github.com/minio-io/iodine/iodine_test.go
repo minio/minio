@@ -1,5 +1,5 @@
 /*
- * Iodine, (C) 2014 Minio, Inc.
+ * Iodine, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"log"
 	"testing"
 )
 
@@ -38,16 +37,16 @@ func TestIodine(t *testing.T) {
 	}
 	var prettyBuffer bytes.Buffer
 	json.Indent(&prettyBuffer, jsonResult, "", "  ")
+	if prettyBuffer.String() == "" {
+		t.Fail()
+	}
 }
 
 func TestState(t *testing.T) {
 	SetGlobalState("hello", "world")
-	state := GetGlobalState()
-	if res, ok := state["hello"]; ok {
-		if res != "world" {
-			t.Error("global state not set: hello->world")
-		}
-	} else {
+	result := GetGlobalStateKey("hello")
+	if result != "world" {
+		t.Error("global state not set: hello->world")
 		t.Fail()
 	}
 	ClearGlobalState()
@@ -85,7 +84,6 @@ func TestState(t *testing.T) {
 		}
 	} else {
 		err.Annotate(nil)
-		log.Println(err.EmitHumanReadable())
 		t.Error("foo2 should be set")
 	}
 }
