@@ -24,21 +24,30 @@ import (
 )
 
 func TestIodine(t *testing.T) {
-	iodineError := New(errors.New("Hello"), nil)
-	iodineError.Annotate(nil)
-	iodineError.Annotate(nil)
-	iodineError.Annotate(nil)
-	if len(iodineError.Stack) != 4 {
-		t.Fail()
-	}
-	jsonResult, err := iodineError.EmitJSON()
-	if err != nil {
-		t.Fail()
-	}
-	var prettyBuffer bytes.Buffer
-	json.Indent(&prettyBuffer, jsonResult, "", "  ")
-	if prettyBuffer.String() == "" {
-		t.Fail()
+	iodineError := Error(errors.New("Hello"), nil)
+	iodineError = Error(iodineError, nil)
+	iodineError = Error(iodineError, nil)
+	iodineError = Error(iodineError, nil)
+	switch typedError := iodineError.(type) {
+	case WrappedError:
+		{
+			if len(typedError.Stack) != 4 {
+				t.Fail()
+			}
+			jsonResult, err := typedError.EmitJSON()
+			if err != nil {
+				t.Fail()
+			}
+			var prettyBuffer bytes.Buffer
+			json.Indent(&prettyBuffer, jsonResult, "", "  ")
+			if prettyBuffer.String() == "" {
+				t.Fail()
+			}
+		}
+	default:
+		{
+			t.Fail()
+		}
 	}
 }
 
@@ -54,36 +63,41 @@ func TestState(t *testing.T) {
 		t.Fail()
 	}
 	SetGlobalState("foo", "bar")
-	err := New(errors.New("a simple error"), nil)
-	if res, ok := err.Stack[0].Data["foo"]; ok {
-		if res != "bar" {
-			t.Error("global state not set: foo->bar")
+	err := Error(errors.New("a simple error"), nil)
+	switch typedError := err.(type) {
+	case WrappedError:
+		{
+			if res, ok := typedError.Stack[0].Data["foo"]; ok {
+				if res != "bar" {
+					t.Error("global state not set: foo->bar")
+				}
+			} else {
+				t.Fail()
+			}
+			typedError = Error(typedError, map[string]string{"foo2": "bar2"}).(WrappedError)
+			if res, ok := typedError.Stack[0].Data["foo"]; ok {
+				if res != "bar" {
+					t.Error("annotate should not modify previous data entries")
+				}
+			} else {
+				t.Error("annotate should not remove previous data entries")
+			}
+			if res, ok := typedError.Stack[1].Data["foo"]; ok {
+				if res != "bar" {
+					t.Error("global state should set value properly in annotate")
+				}
+			} else {
+				t.Error("global state should set key properly in annotate")
+			}
+			if res, ok := typedError.Stack[1].Data["foo2"]; ok {
+				if res != "bar2" {
+					//					typedError = Error(typedError, nil).(WrappedError)
+					t.Error("foo2 -> bar should be set")
+				}
+			} else {
+				//				typedError = Error(typedError, nil).(WrappedError)
+				t.Error("foo2 should be set")
+			}
 		}
-	} else {
-		t.Fail()
-	}
-	err.Annotate(map[string]string{"foo2": "bar2"})
-	if res, ok := err.Stack[0].Data["foo"]; ok {
-		if res != "bar" {
-			t.Error("annotate should not modify previous data entries")
-		}
-	} else {
-		t.Error("annotate should not remove previous data entries")
-	}
-	if res, ok := err.Stack[1].Data["foo"]; ok {
-		if res != "bar" {
-			t.Error("global state should set value properly in annotate")
-		}
-	} else {
-		t.Error("global state should set key properly in annotate")
-	}
-	if res, ok := err.Stack[1].Data["foo2"]; ok {
-		if res != "bar2" {
-			err.Annotate(nil)
-			t.Error("foo2 -> bar should be set")
-		}
-	} else {
-		err.Annotate(nil)
-		t.Error("foo2 should be set")
 	}
 }

@@ -28,9 +28,9 @@ import (
 	"sync"
 )
 
-// Error is the iodine error which contains a pointer to the original error
+// WrappedError is the iodine error which contains a pointer to the original error
 // and stack traces.
-type Error struct {
+type WrappedError struct {
 	EmbeddedError error `json:"-"`
 	ErrorMessage  string
 
@@ -88,19 +88,33 @@ func GetGlobalStateKey(k string) string {
 	return result
 }
 
-// New - instantiate an error, turning it into an iodine error.
+// Error - instantiate an error, turning it into an iodine error.
 // Adds an initial stack trace.
-func New(err error, data map[string]string) *Error {
+func Error(err error, data map[string]string) error {
 	if err != nil {
 		entry := createStackEntry()
+		var newErr WrappedError
+
+		// check if error is wrapped
+		switch typedError := err.(type) {
+		case WrappedError:
+			{
+				newErr = typedError
+			}
+		default:
+			{
+				newErr = WrappedError{
+					EmbeddedError: err,
+					ErrorMessage:  err.Error(),
+					Stack:         []StackEntry{},
+				}
+			}
+		}
 		for k, v := range data {
 			entry.Data[k] = v
 		}
-		return &Error{
-			EmbeddedError: err,
-			ErrorMessage:  err.Error(),
-			Stack:         []StackEntry{entry},
-		}
+		newErr.Stack = append(newErr.Stack, entry)
+		return newErr
 	}
 	return nil
 }
@@ -146,24 +160,24 @@ func getSystemData() map[string]string {
 }
 
 // Annotate an error with a stack entry and returns itself
-func (err *Error) Annotate(info map[string]string) *Error {
-	entry := createStackEntry()
-	for k, v := range info {
-		entry.Data[k] = v
-	}
-	err.Stack = append(err.Stack, entry)
-	return err
-}
+//func (err *WrappedError) Annotate(info map[string]string) *WrappedError {
+//	entry := createStackEntry()
+//	for k, v := range info {
+//		entry.Data[k] = v
+//	}
+//	err.Stack = append(err.Stack, entry)
+//	return err
+//}
 
 // EmitJSON writes JSON output for the error
-func (err Error) EmitJSON() ([]byte, error) {
+func (err WrappedError) EmitJSON() ([]byte, error) {
 	return json.Marshal(err)
 }
 
 // EmitHumanReadable returns a human readable error message
-func (err Error) EmitHumanReadable() string {
+func (err WrappedError) EmitHumanReadable() string {
 	var errorBuffer bytes.Buffer
-	fmt.Fprintln(&errorBuffer, err.Error())
+	fmt.Fprintln(&errorBuffer, err.ErrorMessage)
 	for i, entry := range err.Stack {
 		fmt.Fprintln(&errorBuffer, "-", i, entry.Host+":"+entry.File+":"+strconv.Itoa(entry.Line), entry.Data)
 	}
@@ -171,8 +185,8 @@ func (err Error) EmitHumanReadable() string {
 }
 
 // Emits the original error message
-func (err Error) Error() string {
-	return err.EmbeddedError.Error()
+func (err WrappedError) Error() string {
+	return err.EmitHumanReadable()
 }
 
 func init() {
