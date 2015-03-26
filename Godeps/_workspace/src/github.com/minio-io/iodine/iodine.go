@@ -30,7 +30,7 @@ import (
 
 // WrappedError is the iodine error which contains a pointer to the original error
 // and stack traces.
-type WrappedError struct {
+type Error struct {
 	EmbeddedError error `json:"-"`
 	ErrorMessage  string
 
@@ -90,20 +90,20 @@ func GetGlobalStateKey(k string) string {
 
 // Error - instantiate an error, turning it into an iodine error.
 // Adds an initial stack trace.
-func Error(err error, data map[string]string) error {
+func New(err error, data map[string]string) error {
 	if err != nil {
 		entry := createStackEntry()
-		var newErr WrappedError
+		var newErr Error
 
 		// check if error is wrapped
 		switch typedError := err.(type) {
-		case WrappedError:
+		case Error:
 			{
 				newErr = typedError
 			}
 		default:
 			{
-				newErr = WrappedError{
+				newErr = Error{
 					EmbeddedError: err,
 					ErrorMessage:  err.Error(),
 					Stack:         []StackEntry{},
@@ -170,12 +170,12 @@ func getSystemData() map[string]string {
 //}
 
 // EmitJSON writes JSON output for the error
-func (err WrappedError) EmitJSON() ([]byte, error) {
+func (err Error) EmitJSON() ([]byte, error) {
 	return json.Marshal(err)
 }
 
 // EmitHumanReadable returns a human readable error message
-func (err WrappedError) EmitHumanReadable() string {
+func (err Error) EmitHumanReadable() string {
 	var errorBuffer bytes.Buffer
 	fmt.Fprintln(&errorBuffer, err.ErrorMessage)
 	for i, entry := range err.Stack {
@@ -185,7 +185,7 @@ func (err WrappedError) EmitHumanReadable() string {
 }
 
 // Emits the original error message
-func (err WrappedError) Error() string {
+func (err Error) Error() string {
 	return err.EmitHumanReadable()
 }
 

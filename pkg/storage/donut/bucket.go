@@ -26,7 +26,7 @@ func (b donutBucket) AddNode(nodeID, bucketID string) error {
 	errParams := map[string]string{"node": nodeID, "bucketID": bucketID}
 	tokens := strings.Split(bucketID, ":")
 	if len(tokens) != 3 {
-		return iodine.Error(errors.New("Bucket ID malformeD: "+bucketID), errParams)
+		return iodine.New(errors.New("Bucket ID malformeD: "+bucketID), errParams)
 
 	}
 	// bucketName := tokens[0]
@@ -34,7 +34,7 @@ func (b donutBucket) AddNode(nodeID, bucketID string) error {
 	// aggregate := "0"
 	part, err := strconv.Atoi(tokens[2])
 	if err != nil {
-		return iodine.Error(errors.New("Part malformed: "+tokens[2]), errParams)
+		return iodine.New(errors.New("Part malformed: "+tokens[2]), errParams)
 	}
 	b.nodes[part] = nodeID
 	return nil

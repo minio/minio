@@ -110,7 +110,7 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 			}
 		default:
 			{
-				err := iodine.Error(errors.New("Invalid API type"), nil)
+				err := iodine.New(errors.New("Invalid API type"), nil)
 				log.Fatal(err)
 			}
 		}
@@ -142,7 +142,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
-				log.Errorln(iodine.Error(err, nil))
+				log.Errorln(iodine.New(err, nil))
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage", "file")
@@ -154,7 +154,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
-				log.Errorln(iodine.Error(err, nil))
+				log.Errorln(iodine.New(err, nil))
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-driver", "donut")
@@ -164,7 +164,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		}
 	default: // should never happen
 		{
-			log.Fatal(iodine.Error(errors.New("No driver found"), nil))
+			log.Fatal(iodine.New(errors.New("No driver found"), nil))
 		}
 	}
 	return
