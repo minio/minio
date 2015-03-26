@@ -11,7 +11,7 @@ import (
 func newDonutObjectWriter(objectDir string) (Writer, error) {
 	dataFile, err := os.OpenFile(path.Join(objectDir, "data"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return nil, iodine.Error(err, map[string]string{"objectDir": objectDir})
+		return nil, iodine.New(err, map[string]string{"objectDir": objectDir})
 	}
 	return donutObjectWriter{
 		root:          objectDir,
@@ -31,26 +31,26 @@ type donutObjectWriter struct {
 
 func (d donutObjectWriter) Write(data []byte) (int, error) {
 	written, err := d.file.Write(data)
-	return written, iodine.Error(err, nil)
+	return written, iodine.New(err, nil)
 }
 
 func (d donutObjectWriter) Close() error {
 	if d.err != nil {
-		return iodine.Error(d.err, nil)
+		return iodine.New(d.err, nil)
 	}
 	metadata, _ := json.Marshal(d.metadata)
 	ioutil.WriteFile(path.Join(d.root, "metadata.json"), metadata, 0600)
 	donutMetadata, _ := json.Marshal(d.donutMetadata)
 	ioutil.WriteFile(path.Join(d.root, "donutMetadata.json"), donutMetadata, 0600)
 
-	return iodine.Error(d.file.Close(), nil)
+	return iodine.New(d.file.Close(), nil)
 }
 
 func (d donutObjectWriter) CloseWithError(err error) error {
 	if d.err != nil {
 		d.err = err
 	}
-	return iodine.Error(d.Close(), nil)
+	return iodine.New(d.Close(), nil)
 }
 
 func (d donutObjectWriter) SetMetadata(metadata map[string]string) error {

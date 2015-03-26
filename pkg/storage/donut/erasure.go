@@ -25,7 +25,7 @@ func getErasureTechnique(technique string) (erasure.Technique, error) {
 	case technique == "Vandermonde":
 		return erasure.Cauchy, nil
 	default:
-		return erasure.None, iodine.Error(errors.New("Invalid erasure technique: "+technique), nil)
+		return erasure.None, iodine.New(errors.New("Invalid erasure technique: "+technique), nil)
 	}
 }
 
@@ -33,45 +33,45 @@ func getErasureTechnique(technique string) (erasure.Technique, error) {
 func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, writer *io.PipeWriter) {
 	totalChunks, err := strconv.Atoi(donutMetadata["chunkCount"])
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	totalLeft, err := strconv.ParseInt(donutMetadata["size"], 10, 64)
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	blockSize, err := strconv.Atoi(donutMetadata["blockSize"])
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	parsedk, err := strconv.ParseUint(donutMetadata["erasureK"], 10, 8)
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	k := uint8(parsedk)
 	parsedm, err := strconv.ParseUint(donutMetadata["erasureM"], 10, 8)
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	m := uint8(parsedm)
 	expectedMd5sum, err := hex.DecodeString(donutMetadata["md5"])
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	technique, err := getErasureTechnique(donutMetadata["erasureTechnique"])
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 		return
 	}
 	hasher := md5.New()
 	params, err := erasure.ParseEncoderParams(k, m, technique)
 	if err != nil {
-		writer.CloseWithError(iodine.Error(err, donutMetadata))
+		writer.CloseWithError(iodine.New(err, donutMetadata))
 	}
 	encoder := erasure.NewEncoder(params)
 	for i := 0; i < totalChunks; i++ {
@@ -83,12 +83,12 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 			for k, v := range donutMetadata {
 				errParams[k] = v
 			}
-			writer.CloseWithError(iodine.Error(err, errParams))
+			writer.CloseWithError(iodine.New(err, errParams))
 		}
 	}
 	actualMd5sum := hasher.Sum(nil)
 	if bytes.Compare(expectedMd5sum, actualMd5sum) != 0 {
-		writer.CloseWithError(iodine.Error(errors.New("decoded md5sum did not match. expected: "+string(expectedMd5sum)+" actual: "+string(actualMd5sum)), donutMetadata))
+		writer.CloseWithError(iodine.New(errors.New("decoded md5sum did not match. expected: "+string(expectedMd5sum)+" actual: "+string(actualMd5sum)), donutMetadata))
 		return
 	}
 	writer.Close()
@@ -114,7 +114,7 @@ func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *erasur
 			errParams["part"] = strconv.FormatInt(written, 10)
 			errParams["block.written"] = strconv.FormatInt(written, 10)
 			errParams["block.length"] = strconv.Itoa(curChunkSize)
-			return totalLeft, iodine.Error(err, errParams)
+			return totalLeft, iodine.New(err, errParams)
 		}
 		encodedBytes[i] = bytesBuffer.Bytes()
 	}
@@ -122,19 +122,19 @@ func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *erasur
 	if err != nil {
 		errParams := map[string]string{}
 		errParams["block.length"] = strconv.Itoa(curChunkSize)
-		return totalLeft, iodine.Error(err, errParams)
+		return totalLeft, iodine.New(err, errParams)
 	}
 	_, err = hasher.Write(decodedData) // not expecting errors from hash, will also catch further down on .Sum mismatch in parent
 	if err != nil {
 		errParams := map[string]string{}
 		errParams["block.length"] = strconv.Itoa(curChunkSize)
-		return totalLeft, iodine.Error(err, errParams)
+		return totalLeft, iodine.New(err, errParams)
 	}
 	_, err = io.Copy(writer, bytes.NewBuffer(decodedData))
 	if err != nil {
 		errParams := map[string]string{}
 		errParams["block.length"] = strconv.Itoa(curChunkSize)
-		return totalLeft, iodine.Error(err, errParams)
+		return totalLeft, iodine.New(err, errParams)
 	}
 	totalLeft = totalLeft - int64(blockSize)
 	return totalLeft, nil

@@ -133,7 +133,7 @@ func main() {
 	app.Action = runCmd
 	err := app.Run(os.Args)
 	switch typedErr := err.(type) {
-	case *iodine.WrappedError:
+	case *iodine.Error:
 		{
 			log.Errorln(typedErr.EmitHumanReadable())
 		}

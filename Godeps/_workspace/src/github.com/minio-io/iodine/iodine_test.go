@@ -24,12 +24,12 @@ import (
 )
 
 func TestIodine(t *testing.T) {
-	iodineError := Error(errors.New("Hello"), nil)
-	iodineError = Error(iodineError, nil)
-	iodineError = Error(iodineError, nil)
-	iodineError = Error(iodineError, nil)
+	iodineError := New(errors.New("Hello"), nil)
+	iodineError = New(iodineError, nil)
+	iodineError = New(iodineError, nil)
+	iodineError = New(iodineError, nil)
 	switch typedError := iodineError.(type) {
-	case WrappedError:
+	case Error:
 		{
 			if len(typedError.Stack) != 4 {
 				t.Fail()
@@ -63,9 +63,9 @@ func TestState(t *testing.T) {
 		t.Fail()
 	}
 	SetGlobalState("foo", "bar")
-	err := Error(errors.New("a simple error"), nil)
+	err := New(errors.New("a simple error"), nil)
 	switch typedError := err.(type) {
-	case WrappedError:
+	case Error:
 		{
 			if res, ok := typedError.Stack[0].Data["foo"]; ok {
 				if res != "bar" {
@@ -74,7 +74,7 @@ func TestState(t *testing.T) {
 			} else {
 				t.Fail()
 			}
-			typedError = Error(typedError, map[string]string{"foo2": "bar2"}).(WrappedError)
+			typedError = New(typedError, map[string]string{"foo2": "bar2"}).(Error)
 			if res, ok := typedError.Stack[0].Data["foo"]; ok {
 				if res != "bar" {
 					t.Error("annotate should not modify previous data entries")
