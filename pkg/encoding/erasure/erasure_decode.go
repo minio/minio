@@ -37,9 +37,6 @@ import (
 //    blocks.
 // "dataLen" is the length of original source data
 func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData []byte, err error) {
-	var decodeMatrix *C.uint8_t
-	var decodeTbls *C.uint8_t
-	var decodeIndex *C.uint32_t
 	var source, target **C.uint8_t
 
 	k := int(e.params.K)
@@ -82,9 +79,19 @@ func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 		}
 	}
 
-	// Initialzie decoder
-	C.minio_init_decoder(missingEncodedBlocksC, C.int(k), C.int(n), C.int(missingEncodedBlocksCount-1),
-		e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
+	// If not already initialized, recompute and cache
+	if e.decodeMatrix == nil || e.decodeTbls == nil || e.decodeIndex == nil {
+		var decodeMatrix, decodeTbls *C.uint8_t
+		var decodeIndex *C.uint32_t
+
+		C.minio_init_decoder(missingEncodedBlocksC, C.int(k), C.int(n), C.int(missingEncodedBlocksCount-1),
+			e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
+
+		// cache this for future needs
+		e.decodeMatrix = decodeMatrix
+		e.decodeTbls = decodeTbls
+		e.decodeIndex = decodeIndex
+	}
 
 	// Make a slice of pointers to encoded blocks. Necessary to bridge to the C world.
 	pointers := make([]*byte, n)
@@ -94,13 +101,13 @@ func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 
 	// Get pointers to source "data" and target "parity" blocks from the output byte array.
 	ret := C.minio_get_source_target(C.int(missingEncodedBlocksCount-1), C.int(k), C.int(m), missingEncodedBlocksC,
-		decodeIndex, (**C.uint8_t)(unsafe.Pointer(&pointers[0])), &source, &target)
+		e.decodeIndex, (**C.uint8_t)(unsafe.Pointer(&pointers[0])), &source, &target)
 	if int(ret) == -1 {
 		return nil, errors.New("Unable to decode data")
 	}
 
 	// Decode data
-	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(missingEncodedBlocksCount-1), decodeTbls,
+	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(missingEncodedBlocksCount-1), e.decodeTbls,
 		source, target)
 
 	// Allocate buffer to output buffer
@@ -108,10 +115,6 @@ func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 	for i := 0; i < int(k); i++ {
 		decodedData = append(decodedData, encodedDataBlocks[i]...)
 	}
-
-	// TODO cache this if necessary
-	e.decodeMatrix = decodeMatrix
-	e.decodeTbls = decodeTbls
 
 	return decodedData[:dataLen], nil
 }
