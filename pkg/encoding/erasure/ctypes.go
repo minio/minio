@@ -23,8 +23,8 @@ import (
 	"unsafe"
 )
 
-// Integer to Int conversion
-func int2CInt(srcErrList []int) *C.int32_t {
+// intSlice2CIntArray converts Go int slice to C int array
+func intSlice2CIntArray(srcErrList []int) *C.int32_t {
 	var sizeErrInt = int(unsafe.Sizeof(srcErrList[0]))
 	switch sizeInt {
 	case sizeErrInt:

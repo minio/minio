@@ -161,7 +161,7 @@ func (e *Encoder) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
 	}
 
 	// Extend inputData buffer to accommodate coded parity blocks
-	if true { // create a temporary scope to trigger garbage collect
+	{ // Local Scope
 		encodedParityBlocksLen := encodedBlockLen * m
 		parityBlocks := make([]byte, encodedParityBlocksLen)
 		inputData = append(inputData, parityBlocks...)
