@@ -47,7 +47,8 @@ func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 	n := k + m
 	// We need the data and parity blocks preserved in the same order. Missing blocks are set to nil.
 	if len(encodedDataBlocks) != n {
-		return nil, errors.New(fmt.Sprintf("Encoded data blocks slice must of length [%d]", n))
+		msg := fmt.Sprintf("Encoded data blocks slice must of length [%d]", n)
+		return nil, errors.New(msg)
 	}
 
 	// Length of a single encoded block
@@ -55,7 +56,7 @@ func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 
 	// Keep track of errors per block.
 	missingEncodedBlocks := make([]int, n+1)
-	var missingEncodedBlocksCount int = 0
+	var missingEncodedBlocksCount int
 
 	// Check for the missing encoded blocks
 	for i := range encodedDataBlocks {
