@@ -23,12 +23,10 @@ func (b donutBucket) GetNodes() ([]string, error) {
 
 // AddNode - adds a node to a bucket
 func (b donutBucket) AddNode(nodeID, bucketID string) error {
+	errParams := map[string]string{"node": nodeID, "bucketID": bucketID}
 	tokens := strings.Split(bucketID, ":")
 	if len(tokens) != 3 {
-		var err error
-		err = iodine.Error(nil, nil)
-		return err
-		//		return iodine.Error(errors.New("Bucket ID malformed: "+bucketID), map[string]string{"nodeID": nodeID, "bucketID": bucketID})
+		return iodine.Error(errors.New("Bucket ID malformeD: "+bucketID), errParams)
 
 	}
 	// bucketName := tokens[0]
@@ -36,7 +34,7 @@ func (b donutBucket) AddNode(nodeID, bucketID string) error {
 	// aggregate := "0"
 	part, err := strconv.Atoi(tokens[2])
 	if err != nil {
-		return iodine.Error(errors.New("Part malformed: "+tokens[2]), map[string]string{"nodeID": nodeID, "bucketID": bucketID})
+		return iodine.Error(errors.New("Part malformed: "+tokens[2]), errParams)
 	}
 	b.nodes[part] = nodeID
 	return nil
