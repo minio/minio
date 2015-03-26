@@ -91,15 +91,18 @@ func GetGlobalStateKey(k string) string {
 // New - instantiate an error, turning it into an iodine error.
 // Adds an initial stack trace.
 func New(err error, data map[string]string) *Error {
-	entry := createStackEntry()
-	for k, v := range data {
-		entry.Data[k] = v
+	if err != nil {
+		entry := createStackEntry()
+		for k, v := range data {
+			entry.Data[k] = v
+		}
+		return &Error{
+			EmbeddedError: err,
+			ErrorMessage:  err.Error(),
+			Stack:         []StackEntry{entry},
+		}
 	}
-	return &Error{
-		EmbeddedError: err,
-		ErrorMessage:  err.Error(),
-		Stack:         []StackEntry{entry},
-	}
+	return nil
 }
 
 // createStackEntry - create stack entries
