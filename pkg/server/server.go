@@ -17,11 +17,12 @@
 package server
 
 import (
-	"log"
 	"os/user"
 	"path"
 	"reflect"
 
+	"errors"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/drivers"
@@ -29,6 +30,7 @@ import (
 	"github.com/minio-io/minio/pkg/drivers/file"
 	"github.com/minio-io/minio/pkg/drivers/memory"
 	"github.com/minio-io/minio/pkg/server/httpserver"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // Config - http server parameters
@@ -107,7 +109,10 @@ func getHTTPChannels(configs []Config) (ctrlChans []chan<- string, statusChans [
 				statusChans = append(statusChans, statusChan)
 			}
 		default:
-			log.Fatal("Invalid api type")
+			{
+				err := iodine.New(errors.New("Invalid API type"), nil)
+				log.Fatal(err.EmitHumanReadable())
+			}
 		}
 	}
 	return
@@ -137,6 +142,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
+				log.Errorln(iodine.New(err, nil).EmitHumanReadable())
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage", "file")
@@ -148,6 +154,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
+				log.Errorln(iodine.New(err, nil).EmitHumanReadable())
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-driver", "donut")
@@ -156,7 +163,10 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 			statusChans = append(statusChans, statusChan)
 		}
 	default: // should never happen
-		log.Fatal("No driver found")
+		{
+			err := iodine.New(errors.New("No driver found"), nil)
+			log.Fatal(err.EmitHumanReadable())
+		}
 	}
 	return
 }
