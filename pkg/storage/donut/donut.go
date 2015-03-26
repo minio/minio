@@ -50,7 +50,7 @@ func (d donut) CreateBucket(bucketName string) error {
 	if _, ok := d.buckets[bucketName]; ok == false {
 		bucketName = strings.TrimSpace(bucketName)
 		if bucketName == "" {
-			return errors.New("Cannot create bucket with no name")
+			return iodine.Error(errors.New("Cannot create bucket with no name"), map[string]string{"bucket": bucketName})
 		}
 		// assign nodes
 		// TODO assign other nodes
@@ -58,7 +58,10 @@ func (d donut) CreateBucket(bucketName string) error {
 		for i := 0; i < 16; i++ {
 			nodes[i] = "localhost"
 			if node, ok := d.nodes["localhost"]; ok {
-				node.CreateBucket(bucketName + ":0:" + strconv.Itoa(i))
+				err := node.CreateBucket(bucketName + ":0:" + strconv.Itoa(i))
+				if err != nil {
+					return iodine.Error(err, map[string]string{"node": nodes[i], "bucket": bucketName})
+				}
 			}
 		}
 		bucket := donutBucket{
@@ -67,7 +70,7 @@ func (d donut) CreateBucket(bucketName string) error {
 		d.buckets[bucketName] = bucket
 		return nil
 	}
-	return errors.New("Bucket exists")
+	return iodine.Error(errors.New("Bucket exists"), map[string]string{"bucket": bucketName})
 }
 
 // ListBuckets - list all buckets
@@ -86,35 +89,37 @@ func (d donut) GetObjectWriter(bucketName, objectName string) (ObjectWriter, err
 		writers := make([]Writer, 16)
 		nodes, err := bucket.GetNodes()
 		if err != nil {
-			return nil, err
+			return nil, iodine.Error(err, map[string]string{"bucket": bucketName, "object": objectName})
 		}
 		for i, nodeID := range nodes {
 			if node, ok := d.nodes[nodeID]; ok == true {
-				writer, err := node.GetWriter(bucketName+":0:"+strconv.Itoa(i), objectName)
+				bucketID := bucketName + ":0:" + strconv.Itoa(i)
+				writer, err := node.GetWriter(bucketID, objectName)
 				if err != nil {
 					for _, writerToClose := range writers {
 						if writerToClose != nil {
-							writerToClose.CloseWithError(err)
+							writerToClose.CloseWithError(iodine.Error(err, nil))
 						}
 					}
-					return nil, err
+					return nil, iodine.Error(err, map[string]string{"bucketid": bucketID})
 				}
 				writers[i] = writer
 			}
 		}
 		return newErasureWriter(writers), nil
 	}
-	return nil, errors.New("Bucket not found")
+	return nil, iodine.Error(errors.New("Bucket not found"), map[string]string{"bucket": bucketName})
 }
 
 // GetObjectReader - get a new reader interface for a new object
 func (d donut) GetObjectReader(bucketName, objectName string) (io.ReadCloser, error) {
+	errParams := map[string]string{"bucket": bucketName, "object": objectName}
 	r, w := io.Pipe()
 	if bucket, ok := d.buckets[bucketName]; ok == true {
 		readers := make([]io.ReadCloser, 16)
 		nodes, err := bucket.GetNodes()
 		if err != nil {
-			return nil, err
+			return nil, iodine.Error(err, errParams)
 		}
 		var metadata map[string]string
 		for i, nodeID := range nodes {
@@ -122,13 +127,15 @@ func (d donut) GetObjectReader(bucketName, objectName string) (io.ReadCloser, er
 				bucketID := bucketName + ":0:" + strconv.Itoa(i)
 				reader, err := node.GetReader(bucketID, objectName)
 				if err != nil {
-					return nil, err
+					errParams["node"] = nodeID
+					return nil, iodine.Error(err, errParams)
 				}
 				readers[i] = reader
 				if metadata == nil {
 					metadata, err = node.GetDonutMetadata(bucketID, objectName)
 					if err != nil {
-						return nil, err
+						errParams["node"] = nodeID
+						return nil, iodine.Error(err, errParams)
 					}
 				}
 			}
@@ -136,46 +143,54 @@ func (d donut) GetObjectReader(bucketName, objectName string) (io.ReadCloser, er
 		go erasureReader(readers, metadata, w)
 		return r, nil
 	}
-	return nil, errors.New("Bucket not found")
+	return nil, iodine.Error(errors.New("Bucket not found"), errParams)
 }
 
 // GetObjectMetadata returns metadata for a given object in a bucket
 func (d donut) GetObjectMetadata(bucketName, object string) (map[string]string, error) {
+	errParams := map[string]string{"bucket": bucketName, "object": object}
 	if bucket, ok := d.buckets[bucketName]; ok {
 		nodes, err := bucket.GetNodes()
 		if err != nil {
-			return nil, err
+			return nil, iodine.Error(err, errParams)
 		}
 		if node, ok := d.nodes[nodes[0]]; ok {
 			bucketID := bucketName + ":0:0"
 			metadata, err := node.GetMetadata(bucketID, object)
 			if err != nil {
-				return nil, err
+				errParams["bucketID"] = bucketID
+				return nil, iodine.Error(err, errParams)
 			}
 			donutMetadata, err := node.GetDonutMetadata(bucketID, object)
 			if err != nil {
-				return nil, err
+				errParams["bucketID"] = bucketID
+				return nil, iodine.Error(err, errParams)
 			}
 			metadata["sys.created"] = donutMetadata["created"]
 			metadata["sys.md5"] = donutMetadata["md5"]
 			metadata["sys.size"] = donutMetadata["size"]
 			return metadata, nil
 		}
-		return nil, errors.New("Cannot connect to node: " + nodes[0])
+		errParams["node"] = nodes[0]
+		return nil, iodine.Error(errors.New("Cannot connect to node: "+nodes[0]), errParams)
 	}
 	return nil, errors.New("Bucket not found")
 }
 
 // ListObjects - list all the available objects in a bucket
 func (d donut) ListObjects(bucketName string) ([]string, error) {
+	errParams := map[string]string{"bucket": bucketName}
 	if bucket, ok := d.buckets[bucketName]; ok {
 		nodes, err := bucket.GetNodes()
 		if err != nil {
-			return nil, err
+			return nil, iodine.Error(err, errParams)
 		}
 		if node, ok := d.nodes[nodes[0]]; ok {
-			return node.ListObjects(bucketName + ":0:0")
+			bucketID := bucketName + ":0:0"
+			objects, err := node.ListObjects(bucketID)
+			errParams["bucketID"] = bucketID
+			return objects, iodine.Error(err, errParams)
 		}
 	}
-	return nil, errors.New("Bucket not found")
+	return nil, iodine.Error(errors.New("Bucket not found"), errParams)
 }
