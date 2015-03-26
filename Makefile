@@ -70,3 +70,4 @@ clean:
 	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv cover.out
 	@rm -fv pkg/storage/erasure/*.syso
+	@rm -fv build-constants.go
