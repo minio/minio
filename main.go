@@ -26,10 +26,6 @@ import (
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
-// commitID is automatically set by git. Settings are controlled
-// through .gitattributes
-const commitID = "$Id$"
-
 var flags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "domain,d",
@@ -123,13 +119,13 @@ func runCmd(c *cli.Context) {
 
 func main() {
 	// set up iodine
-	iodine.SetGlobalState("minio.git", commitID)
+	iodine.SetGlobalState("minio.git", gitCommitHash)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
 
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = commitID
+	app.Version = gitCommitHash
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.EnableBashCompletion = true
