@@ -2,6 +2,7 @@ package donut
 
 import (
 	"encoding/json"
+	"github.com/minio-io/iodine"
 	"io/ioutil"
 	"os"
 	"path"
@@ -10,7 +11,7 @@ import (
 func newDonutObjectWriter(objectDir string) (Writer, error) {
 	dataFile, err := os.OpenFile(path.Join(objectDir, "data"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return nil, err
+		return nil, iodine.Error(err, map[string]string{"objectDir": objectDir})
 	}
 	return donutObjectWriter{
 		root:          objectDir,
@@ -29,26 +30,29 @@ type donutObjectWriter struct {
 }
 
 func (d donutObjectWriter) Write(data []byte) (int, error) {
-	return d.file.Write(data)
+	written, err := d.file.Write(data)
+	iodine.Error(err, nil)
+	return written, err
 }
 
 func (d donutObjectWriter) Close() error {
 	if d.err != nil {
-		return d.err
+		return iodine.Error(d.err, nil)
 	}
 	metadata, _ := json.Marshal(d.metadata)
 	ioutil.WriteFile(path.Join(d.root, "metadata.json"), metadata, 0600)
 	donutMetadata, _ := json.Marshal(d.donutMetadata)
 	ioutil.WriteFile(path.Join(d.root, "donutMetadata.json"), donutMetadata, 0600)
 
-	return d.file.Close()
+	return iodine.Error(d.file.Close(), nil)
 }
 
 func (d donutObjectWriter) CloseWithError(err error) error {
 	if d.err != nil {
 		d.err = err
 	}
-	return d.Close()
+	// TODO semantics between this and d.Close are weird, work out something better
+	return iodine.Error(d.Close(), nil)
 }
 
 func (d donutObjectWriter) SetMetadata(metadata map[string]string) error {
