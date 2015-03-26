@@ -1,6 +1,7 @@
 package donut
 
 import (
+	"github.com/minio-io/iodine"
 	"io"
 )
 
@@ -18,8 +19,8 @@ type Donut interface {
 
 // Bucket interface
 type Bucket interface {
-	GetNodes() ([]string, error)
-	AddNode(nodeID, bucketID string) error
+	GetNodes() ([]string, *iodine.Error)
+	AddNode(nodeID, bucketID string) *iodine.Error
 }
 
 // Node interface
