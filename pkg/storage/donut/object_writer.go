@@ -50,7 +50,6 @@ func (d donutObjectWriter) CloseWithError(err error) error {
 	if d.err != nil {
 		d.err = err
 	}
-	// TODO semantics between this and d.Close are weird, work out something better
 	return iodine.Error(d.Close(), nil)
 }
 
