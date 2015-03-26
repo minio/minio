@@ -73,11 +73,12 @@ func getDriverType(input string) server.DriverType {
 		return server.Memory
 	case input == "donut":
 		return server.Donut
+	case input == "":
+		return server.Donut
 	default:
 		{
-			log.Println("Unknown driver type:", input)
-			log.Println("Choosing default driver type as 'file'..")
-			return server.File
+			log.Fatal("Unknown driver type: '", input, "', Please specify a valid driver.")
+			return -1 // should never reach here
 		}
 	}
 }
@@ -134,5 +135,11 @@ func main() {
 	app.EnableBashCompletion = true
 	app.Flags = flags
 	app.Action = runCmd
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	switch typedErr := err.(type) {
+	case *iodine.Error:
+		{
+			log.Errorln(typedErr.EmitHumanReadable())
+		}
+	}
 }
