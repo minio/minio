@@ -31,8 +31,7 @@ type donutObjectWriter struct {
 
 func (d donutObjectWriter) Write(data []byte) (int, error) {
 	written, err := d.file.Write(data)
-	iodine.Error(err, nil)
-	return written, err
+	return written, iodine.Error(err, nil)
 }
 
 func (d donutObjectWriter) Close() error {
