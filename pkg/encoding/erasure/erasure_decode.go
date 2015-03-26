@@ -32,9 +32,6 @@ import (
 //
 // Decoded data is exactly similar in length and content as the original data.
 func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
-	var decodeMatrix *C.uint8_t
-	var decodeTbls *C.uint8_t
-	var decodeIndex *C.uint32_t
 	var source, target **C.uint8_t
 
 	k := int(e.params.K)
@@ -72,8 +69,19 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 		}
 	}
 
-	C.minio_init_decoder(errorIndexPtr, C.int(k), C.int(n), C.int(errCount-1),
-		e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
+	// If not already initialized, recompute and cache
+	if e.decodeMatrix == nil || e.decodeTbls == nil || e.decodeIndex == nil {
+		var decodeMatrix, decodeTbls *C.uint8_t
+		var decodeIndex *C.uint32_t
+
+		C.minio_init_decoder(errorIndexPtr, C.int(k), C.int(n), C.int(errCount-1),
+			e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
+
+		// cache this for future needs
+		e.decodeMatrix = decodeMatrix
+		e.decodeTbls = decodeTbls
+		e.decodeIndex = decodeIndex
+	}
 
 	pointers := make([]*byte, n)
 	for i := range chunks {
@@ -83,23 +91,19 @@ func (e *Encoder) Decode(chunks [][]byte, length int) ([]byte, error) {
 	data := (**C.uint8_t)(unsafe.Pointer(&pointers[0]))
 
 	ret := C.minio_get_source_target(C.int(errCount-1), C.int(k), C.int(m), errorIndexPtr,
-		decodeIndex, data, &source, &target)
+		e.decodeIndex, data, &source, &target)
 
 	if int(ret) == -1 {
 		return nil, errors.New("Decoding source target failed")
 	}
 
-	C.ec_encode_data(C.int(chunkLen), C.int(k), C.int(errCount-1), decodeTbls,
+	C.ec_encode_data(C.int(chunkLen), C.int(k), C.int(errCount-1), e.decodeTbls,
 		source, target)
 
 	recoveredOutput := make([]byte, 0, chunkLen*int(k))
 	for i := 0; i < int(k); i++ {
 		recoveredOutput = append(recoveredOutput, chunks[i]...)
 	}
-
-	// TODO cache this if necessary
-	e.decodeMatrix = decodeMatrix
-	e.decodeTbls = decodeTbls
 
 	return recoveredOutput[:length], nil
 }

@@ -56,11 +56,10 @@ type EncoderParams struct {
 
 // Encoder is an object used to encode and decode data.
 type Encoder struct {
-	params *EncoderParams
-	encodeMatrix,
-	encodeTbls,
-	decodeMatrix,
-	decodeTbls *C.uint8_t
+	params                   *EncoderParams
+	encodeMatrix, encodeTbls *C.uint8_t
+	decodeMatrix, decodeTbls *C.uint8_t
+	decodeIndex              *C.uint32_t
 }
 
 // ParseEncoderParams creates an EncoderParams object.
@@ -114,6 +113,7 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 		encodeTbls:   encodeTbls,
 		decodeMatrix: nil,
 		decodeTbls:   nil,
+		decodeIndex:  nil,
 	}
 }
 
