@@ -19,22 +19,26 @@ getdeps: checkdeps checkgopath
 verifiers: getdeps vet fmt lint cyclo
 
 vet:
-	@echo "Running $@"
+	@echo "Running $@:"
 	@go vet ./...
 fmt:
-	@echo "Running $@"
+	@echo "Running $@:"
 	@test -z "$$(gofmt -s -l . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)" || \
 		echo "+ please format Go code with 'gofmt -s'"
 lint:
-	@echo "Running $@"
+	@echo "Running $@:"
 	@test -z "$$(golint ./... | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
 cyclo:
-	@echo "Running $@"
+	@echo "Running $@:"
 	@test -z "$$(gocyclo -over 15 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
+pre-build: 
+	@echo "Running pre-build:"	
+	@(env bash $(PWD)/buildscripts/git-commit-id.sh)
+
 build-all: verifiers
-	@echo "Building Libraries"
+	@echo "Building Libraries:"
 	@godep go generate ./...
 	@godep go build ./...
 
@@ -44,10 +48,10 @@ test-all: build-all
 
 test: test-all
 
-minio: build-all test-all
+minio: pre-build build-all test-all
 
 install: minio
-	@godep go install github.com/minio-io/minio && echo "Installed minio"
+	@godep go install github.com/minio-io/minio && echo "Installed minio:"
 
 save: restore
 	@godep save ./...
@@ -62,7 +66,7 @@ docs-deploy:
 	@mkdocs gh-deploy --clean
 
 clean:
-	@echo "Cleaning up all the generated files"
+	@echo "Cleaning up all the generated files:"
 	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv cover.out
 	@rm -fv pkg/storage/erasure/*.syso
