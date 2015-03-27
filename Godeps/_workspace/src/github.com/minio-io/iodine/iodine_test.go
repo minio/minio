@@ -17,7 +17,6 @@
 package iodine
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -34,13 +33,8 @@ func TestIodine(t *testing.T) {
 			if len(typedError.Stack) != 4 {
 				t.Fail()
 			}
-			jsonResult, err := typedError.EmitJSON()
+			_, err := json.MarshalIndent(typedError, "", "  ")
 			if err != nil {
-				t.Fail()
-			}
-			var prettyBuffer bytes.Buffer
-			json.Indent(&prettyBuffer, jsonResult, "", "  ")
-			if prettyBuffer.String() == "" {
 				t.Fail()
 			}
 		}

@@ -20,7 +20,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/iodine",
-			"Rev": "b44f7faaff4e722dcdb60b9788d33850606dc07b"
+			"Rev": "55cc4d4256c68fbd6f0775f1a25e37e6a2f6457e"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
