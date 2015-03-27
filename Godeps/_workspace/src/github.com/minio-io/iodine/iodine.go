@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 type Error struct {
 	EmbeddedError error `json:"-"`
 	ErrorMessage  string
+	ErrorType     string
 
 	Stack []StackEntry
 }
@@ -106,6 +108,7 @@ func New(err error, data map[string]string) error {
 				newErr = Error{
 					EmbeddedError: err,
 					ErrorMessage:  err.Error(),
+					ErrorType:     reflect.TypeOf(err).String(),
 					Stack:         []StackEntry{},
 				}
 			}
