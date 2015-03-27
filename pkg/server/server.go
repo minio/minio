@@ -157,7 +157,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 				log.Errorln(iodine.New(err, nil))
 				return nil, nil, nil
 			}
-			root := path.Join(u.HomeDir, "minio-driver", "donut")
+			root := path.Join(u.HomeDir, "minio-storage", "donut")
 			ctrlChan, statusChan, driver = donut.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
