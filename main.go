@@ -133,7 +133,7 @@ func main() {
 	app.Action = runCmd
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Errorln(err)
+		log.Error.Println(err)
 	}
 
 }

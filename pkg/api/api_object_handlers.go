@@ -42,7 +42,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			log.Println("Found: " + bucket + "#" + object)
 			httpRange, err := newRange(req, metadata.Size)
 			if err != nil {
-				log.Errorln(err)
+				log.Error.Println(err)
 				error := errorCodeError(InvalidRange)
 				errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 				w.WriteHeader(error.HTTPStatusCode)
@@ -53,7 +53,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			case true:
 				writeObjectHeaders(w, metadata)
 				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
-					log.Errorln(err)
+					log.Error.Println(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 					w.WriteHeader(error.HTTPStatusCode)
@@ -66,7 +66,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				w.WriteHeader(http.StatusPartialContent)
 				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
-					log.Errorln(err)
+					log.Error.Println(err)
 					error := errorCodeError(InternalError)
 					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 					w.WriteHeader(error.HTTPStatusCode)
@@ -107,7 +107,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	default:
 		{
 			// Embed errors log on serve side
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -147,7 +147,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -182,7 +182,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 			w.WriteHeader(error.HTTPStatusCode)
