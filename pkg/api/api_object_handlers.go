@@ -83,6 +83,13 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
+	case drivers.BucketNotFound:
+		{
+			error := errorCodeError(NoSuchBucket)
+			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			w.WriteHeader(error.HTTPStatusCode)
+			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+		}
 	case drivers.ObjectNameInvalid:
 		{
 			error := errorCodeError(NoSuchKey)
@@ -97,7 +104,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			w.WriteHeader(error.HTTPStatusCode)
 			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-	case drivers.ImplementationError:
+	default:
 		{
 			// Embed errors log on serve side
 			log.Errorln(err)
