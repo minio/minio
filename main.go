@@ -132,10 +132,8 @@ func main() {
 	app.Flags = flags
 	app.Action = runCmd
 	err := app.Run(os.Args)
-	switch typedErr := err.(type) {
-	case *iodine.Error:
-		{
-			log.Errorln(typedErr.EmitHumanReadable())
-		}
+	if err != nil {
+		log.Errorln(err)
 	}
+
 }
