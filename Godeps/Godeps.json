@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/minio-io/minio",
-	"GoVersion": "go1.4.2",
+	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
@@ -21,6 +21,18 @@
 		{
 			"ImportPath": "github.com/minio-io/iodine",
 			"Rev": "55cc4d4256c68fbd6f0775f1a25e37e6a2f6457e"
+		},
+		{
+			"ImportPath": "github.com/stretchr/objx",
+			"Rev": "cbeaeb16a013161a98496fad62933b1d21786672"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/mock",
+			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
