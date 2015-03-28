@@ -142,7 +142,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
-				log.Errorln(iodine.New(err, nil))
+				log.Error.Println(iodine.New(err, nil))
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage", "file")
@@ -154,7 +154,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 		{
 			u, err := user.Current()
 			if err != nil {
-				log.Errorln(iodine.New(err, nil))
+				log.Error.Println(iodine.New(err, nil))
 				return nil, nil, nil
 			}
 			root := path.Join(u.HomeDir, "minio-storage", "donut")

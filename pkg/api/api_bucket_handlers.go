@@ -62,7 +62,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	case drivers.ImplementationError:
 		{
 			// Embed error log on server side
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -100,7 +100,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case drivers.ImplementationError:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
 			w.WriteHeader(error.HTTPStatusCode)
@@ -108,7 +108,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case drivers.BackendCorrupted:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, "")
 			w.WriteHeader(error.HTTPStatusCode)
@@ -155,7 +155,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	case drivers.ImplementationError:
 		{
 			// Embed errors log on server side
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)

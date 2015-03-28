@@ -67,7 +67,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case drivers.BackendCorrupted:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -75,7 +75,7 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case drivers.ImplementationError:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -131,7 +131,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case drivers.BackendCorrupted:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)
@@ -139,7 +139,7 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		}
 	case drivers.ImplementationError:
 		{
-			log.Errorln(err)
+			log.Error.Println(err)
 			error := errorCodeError(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
 			w.WriteHeader(error.HTTPStatusCode)

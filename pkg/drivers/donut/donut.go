@@ -50,7 +50,7 @@ func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 	s.donut, err = donut.NewDonut(path)
 	err = iodine.New(err, map[string]string{"path": path})
 	if err != nil {
-		log.Errorln(err)
+		log.Error.Println(err)
 	}
 
 	go start(ctrlChannel, errorChannel, s)
