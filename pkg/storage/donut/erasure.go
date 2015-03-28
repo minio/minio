@@ -15,6 +15,7 @@ import (
 	"github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
 	"hash"
+	"log"
 )
 
 // getErasureTechnique - convert technique string into Technique type
@@ -75,6 +76,7 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	}
 	encoder := erasure.NewEncoder(params)
 	for i := 0; i < totalChunks; i++ {
+		log.Println(i)
 		totalLeft, err = decodeChunk(writer, readers, encoder, hasher, k, m, totalLeft, blockSize)
 		if err != nil {
 			errParams := map[string]string{
@@ -106,7 +108,6 @@ func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *erasur
 	curChunkSize := erasure.GetEncodedBlockLen(curBlockSize, uint8(k))
 	encodedBytes := make([][]byte, 16)
 	for i, reader := range readers {
-		defer reader.Close()
 		var bytesBuffer bytes.Buffer
 		written, err := io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
 		if err != nil {
