@@ -147,7 +147,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	default:
 		{
-			log.Trace.Println(err)
+			log.Error.Println(err)
 			// get error
 			errorCode := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(errorCode, "")
