@@ -28,8 +28,8 @@
 //  2. Create a new encoder
 //  3. Decode data
 //
-// Encoder parameters contain three configurable elements:
-//  ParseEncoderParams(k, m, technique int) (EncoderParams, error)
+// Erasure parameters contain three configurable elements:
+//  ValidateParams(k, m, technique int) (ErasureParams, error)
 //  k - Number of rows in matrix
 //  m - Number of colums in matrix
 //  technique - Matrix type, can be either Cauchy (recommended) or Vandermonde
@@ -53,15 +53,15 @@
 //
 // Creating and using an encoder
 //  var bytes []byte
-//  params := erasure.ParseEncoderParams(10, 5, erasure.Cauchy)
-//  encoder := erasure.NewEncoder(params)
+//  params := erasure.ValidateParams(10, 5, erasure.Cauchy)
+//  encoder := erasure.NewErasure(params)
 //  encodedData, length := encoder.Encode(bytes)
 //
 // Creating and using a decoder
 //  var encodedData [][]byte
 //  var length int
-//  params := erasure.ParseEncoderParams(10, 5, erasure.Cauchy)
-//  encoder := erasure.NewEncoder(params)
+//  params := erasure.ValidateParams(10, 5, erasure.Cauchy)
+//  encoder := erasure.NewErasure(params)
 //  originalData, err := encoder.Decode(encodedData, length)
 //
 package erasure

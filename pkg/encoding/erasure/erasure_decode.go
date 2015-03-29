@@ -36,7 +36,7 @@ import (
 //    are set to "nil". There must be at least "K" number of data|parity
 //    blocks.
 // "dataLen" is the length of original source data
-func (e *Encoder) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData []byte, err error) {
+func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData []byte, err error) {
 	var source, target **C.uint8_t
 
 	k := int(e.params.K)

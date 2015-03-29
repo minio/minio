@@ -47,27 +47,27 @@ const (
 	SIMDAlign = 32
 )
 
-// EncoderParams is a configuration set for building an encoder. It is created using ValidateParams.
-type EncoderParams struct {
+// ErasureParams is a configuration set for building an encoder. It is created using ValidateParams().
+type ErasureParams struct {
 	K         uint8
 	M         uint8
 	Technique Technique // cauchy or vandermonde matrix (RS)
 }
 
-// Encoder is an object used to encode and decode data.
-type Encoder struct {
-	params                   *EncoderParams
+// Erasure is an object used to encode and decode data.
+type Erasure struct {
+	params                   *ErasureParams
 	encodeMatrix, encodeTbls *C.uint8_t
 	decodeMatrix, decodeTbls *C.uint8_t
 	decodeIndex              *C.uint32_t
 }
 
-// ParseEncoderParams creates an EncoderParams object.
+// ValidateParams creates an ErasureParams object.
 //
 // k and m represent the matrix size, which corresponds to the protection level
 // technique is the matrix type. Valid inputs are Cauchy (recommended) or Vandermonde.
 //
-func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error) {
+func ValidateParams(k, m uint8, technique Technique) (*ErasureParams, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be zero")
 	}
@@ -89,15 +89,15 @@ func ParseEncoderParams(k, m uint8, technique Technique) (*EncoderParams, error)
 		return nil, errors.New("Technique can be either vandermonde or cauchy")
 	}
 
-	return &EncoderParams{
+	return &ErasureParams{
 		K:         k,
 		M:         m,
 		Technique: technique,
 	}, nil
 }
 
-// NewEncoder creates an encoder object with a given set of parameters.
-func NewEncoder(ep *EncoderParams) *Encoder {
+// NewErasure creates an encoder object with a given set of parameters.
+func NewErasure(ep *ErasureParams) *Erasure {
 	var k = C.int(ep.K)
 	var m = C.int(ep.M)
 
@@ -107,7 +107,7 @@ func NewEncoder(ep *EncoderParams) *Encoder {
 	C.minio_init_encoder(C.int(ep.Technique), k, m, &encodeMatrix,
 		&encodeTbls)
 
-	return &Encoder{
+	return &Erasure{
 		params:       ep,
 		encodeMatrix: encodeMatrix,
 		encodeTbls:   encodeTbls,
@@ -138,7 +138,7 @@ func GetEncodedBlockLen(inputLen int, k uint8) (encodedOutputLen int) {
 
 // Encode erasure codes a block of data in "k" data blocks and "m" parity blocks.
 // Output is [k+m][]blocks of data and parity slices.
-func (e *Encoder) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
+func (e *Erasure) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
 	k := int(e.params.K) // "k" data blocks
 	m := int(e.params.M) // "m" parity blocks
 	n := k + m           // "n" total encoded blocks
