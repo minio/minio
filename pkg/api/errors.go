@@ -185,7 +185,7 @@ var errorCodeResponse = map[int]Error{
 }
 
 // errorCodeError provides errorCode to Error. It returns empty if the code provided is unknown
-func errorCodeError(code int) Error {
+func getErrorCode(code int) Error {
 	return errorCodeResponse[code]
 }
 

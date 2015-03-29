@@ -60,6 +60,9 @@ var std = New(os.Stderr, "", LstdFlags)
 // Error is an error logger
 var Error = New(os.Stderr, "", 0)
 
+// Trace is an error logger
+var Trace = New(os.Stderr, "", 0)
+
 // Cheap integer to fixed-width decimal ASCII.  Give a negative width to avoid zero-padding.
 // Knows the buffer has capacity.
 func itoa(buf *[]byte, i int, wid int) {

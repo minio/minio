@@ -35,22 +35,22 @@ type encoder interface {
 //// helpers
 
 // Write http common headers
-func writeCommonHeaders(w http.ResponseWriter, acceptsType string) {
+func setCommonHeaders(w http.ResponseWriter, acceptsType string) {
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
+	w.Header().Set("Connection", "close")
 }
 
 // Write error response headers
-func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType contentType) []byte {
+func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 	var bytesBuffer bytes.Buffer
 	var encoder encoder
 	// write common headers
-	writeCommonHeaders(w, getContentString(acceptsType))
 	switch acceptsType {
-	case xmlType:
+	case xmlContentType:
 		encoder = xml.NewEncoder(&bytesBuffer)
-	case jsonType:
+	case jsonContentType:
 		encoder = json.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
@@ -61,7 +61,7 @@ func writeErrorResponse(w http.ResponseWriter, response interface{}, acceptsType
 func writeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
-	writeCommonHeaders(w, metadata.ContentType)
+	setCommonHeaders(w, metadata.ContentType)
 	w.Header().Set("ETag", metadata.Md5)
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
@@ -72,27 +72,22 @@ func writeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) 
 func writeRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, ra string) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
-	writeCommonHeaders(w, metadata.ContentType)
+	setCommonHeaders(w, metadata.ContentType)
 	w.Header().Set("ETag", metadata.Md5)
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Range", ra)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
 }
 
-// Write object header and response
-func writeObjectHeadersAndResponse(w http.ResponseWriter, response interface{}, acceptsType contentType) []byte {
-	var bytesBuffer bytes.Buffer
+func encodeResponse(response interface{}, acceptsType contentType) []byte {
 	var encoder encoder
-	// common headers
-	writeCommonHeaders(w, getContentString(acceptsType))
+	var bytesBuffer bytes.Buffer
 	switch acceptsType {
-	case xmlType:
+	case xmlContentType:
 		encoder = xml.NewEncoder(&bytesBuffer)
-	case jsonType:
+	case jsonContentType:
 		encoder = json.NewEncoder(&bytesBuffer)
 	}
-
-	w.Header().Set("Connection", "close")
 	encoder.Encode(response)
 	return bytesBuffer.Bytes()
 }
