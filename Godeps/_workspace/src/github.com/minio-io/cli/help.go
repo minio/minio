@@ -71,6 +71,7 @@ var helpCommand = Command{
 			ShowAppHelp(c)
 		}
 	},
+	Hide: true,
 }
 
 var helpSubcommand = Command{
@@ -85,6 +86,7 @@ var helpSubcommand = Command{
 			ShowSubcommandHelp(c)
 		}
 	},
+	Hide: true,
 }
 
 // Prints help for the App
@@ -99,9 +101,15 @@ func ShowAppHelp(c *Context) {
 	// Make a copy of c.App context
 	app := *c.App
 	app.Flags = make([]Flag, 0)
+	app.Commands = make([]Command, 0)
 	for _, flag := range c.App.Flags {
 		if flag.isNotHidden() {
 			app.Flags = append(app.Flags, flag)
+		}
+	}
+	for _, command := range c.App.Commands {
+		if command.isNotHidden() {
+			app.Commands = append(app.Commands, command)
 		}
 	}
 	HelpPrinter(AppHelpTemplate, app)
@@ -110,8 +118,10 @@ func ShowAppHelp(c *Context) {
 // Prints the list of subcommands as the default app completion method
 func DefaultAppComplete(c *Context) {
 	for _, command := range c.App.Commands {
-		for _, name := range command.Names() {
-			fmt.Fprintln(c.App.Writer, name)
+		if command.isNotHidden() {
+			for _, name := range command.Names() {
+				fmt.Fprintln(c.App.Writer, name)
+			}
 		}
 	}
 }
@@ -123,9 +133,15 @@ func ShowCommandHelp(c *Context, command string) {
 		// Make a copy of c.App context
 		app := *c.App
 		app.Flags = make([]Flag, 0)
+		app.Commands = make([]Command, 0)
 		for _, flag := range c.App.Flags {
 			if flag.isNotHidden() {
 				app.Flags = append(app.Flags, flag)
+			}
+		}
+		for _, command := range c.App.Commands {
+			if command.isNotHidden() {
+				app.Commands = append(app.Commands, command)
 			}
 		}
 		HelpPrinter(SubcommandHelpTemplate, app)

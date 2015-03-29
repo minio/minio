@@ -27,6 +27,7 @@ var VersionFlag = BoolFlag{
 var HelpFlag = BoolFlag{
 	Name:  "help, h",
 	Usage: "show help",
+	Hide:  true,
 }
 
 // Flag is a common interface related to parsing flags in cli.

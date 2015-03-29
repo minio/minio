@@ -15,8 +15,8 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/cli",
-			"Comment": "1.2.0-96-gfcc23e2",
-			"Rev": "fcc23e23a705c0d95fce2a446c364ac31a1c73a5"
+			"Comment": "1.2.0-99-g1ee5c11",
+			"Rev": "1ee5c115af7856a16f133e2f2d3d9f91895c2ddb"
 		},
 		{
 			"ImportPath": "github.com/minio-io/iodine",

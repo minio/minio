@@ -36,6 +36,8 @@ type Command struct {
 	SkipFlagParsing bool
 	// Boolean to hide built-in help command
 	HideHelp bool
+	// Boolean to hide this command from help or completion
+	Hide bool
 }
 
 // Invokes the command given the context, parses ctx.Args() to generate command-specific flags
@@ -137,6 +139,10 @@ func (c Command) HasName(name string) bool {
 		}
 	}
 	return false
+}
+
+func (c Command) isNotHidden() bool {
+	return !c.Hide
 }
 
 func (c Command) startApp(ctx *Context) error {
