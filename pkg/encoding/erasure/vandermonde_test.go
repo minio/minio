@@ -22,21 +22,40 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func (s *MySuite) TestVanderMondeDecode(c *C) {
-	ep, _ := ParseEncoderParams(k, m, Vandermonde)
+func corruptChunks(chunks [][]byte, errorIndex []int) [][]byte {
+	for _, err := range errorIndex {
+		chunks[err] = nil
+	}
+	return chunks
+}
+
+func (s *MySuite) TestVanderMondeEncodeDecodeFailure(c *C) {
+	ep, _ := ValidateParams(k, m, Vandermonde)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
-	e := NewEncoder(ep)
+	e := NewErasure(ep)
 	chunks, err := e.Encode(data)
-	c.Logf("chunks length: %d", len(chunks))
-	c.Logf("length: %d", len(data))
+	c.Assert(err, IsNil)
 
-	chunks[0] = nil
-	chunks[3] = nil
-	chunks[5] = nil
-	chunks[9] = nil
-	chunks[13] = nil
+	errorIndex := []int{0, 3, 5, 9, 11, 13}
+	chunks = corruptChunks(chunks, errorIndex)
+
+	_, err = e.Decode(chunks, len(data))
+	c.Assert(err, Not(IsNil))
+}
+
+func (s *MySuite) TestVanderMondeEncodeDecodeSuccess(c *C) {
+	ep, _ := ValidateParams(k, m, Vandermonde)
+
+	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
+
+	e := NewErasure(ep)
+	chunks, err := e.Encode(data)
+	c.Assert(err, IsNil)
+
+	errorIndex := []int{0, 3, 5, 9, 13}
+	chunks = corruptChunks(chunks, errorIndex)
 
 	recoveredData, err := e.Decode(chunks, len(data))
 	c.Assert(err, IsNil)

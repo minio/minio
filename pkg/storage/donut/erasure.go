@@ -3,6 +3,7 @@ package donut
 import (
 	"bytes"
 	"errors"
+	"hash"
 	"io"
 	"strconv"
 	"strings"
@@ -12,21 +13,19 @@ import (
 	"encoding/hex"
 
 	"github.com/minio-io/iodine"
-	"github.com/minio-io/minio/pkg/encoding/erasure"
+	encoding "github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
-	"hash"
-	"log"
 )
 
 // getErasureTechnique - convert technique string into Technique type
-func getErasureTechnique(technique string) (erasure.Technique, error) {
+func getErasureTechnique(technique string) (encoding.Technique, error) {
 	switch true {
 	case technique == "Cauchy":
-		return erasure.Cauchy, nil
+		return encoding.Cauchy, nil
 	case technique == "Vandermonde":
-		return erasure.Cauchy, nil
+		return encoding.Cauchy, nil
 	default:
-		return erasure.None, iodine.New(errors.New("Invalid erasure technique: "+technique), nil)
+		return encoding.None, iodine.New(errors.New("Invalid erasure technique: "+technique), nil)
 	}
 }
 
@@ -70,13 +69,12 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 		return
 	}
 	hasher := md5.New()
-	params, err := erasure.ParseEncoderParams(k, m, technique)
+	params, err := encoding.ValidateParams(k, m, technique)
 	if err != nil {
 		writer.CloseWithError(iodine.New(err, donutMetadata))
 	}
-	encoder := erasure.NewEncoder(params)
+	encoder := encoding.NewErasure(params)
 	for i := 0; i < totalChunks; i++ {
-		log.Println(i)
 		totalLeft, err = decodeChunk(writer, readers, encoder, hasher, k, m, totalLeft, blockSize)
 		if err != nil {
 			errParams := map[string]string{
@@ -97,7 +95,7 @@ func erasureReader(readers []io.ReadCloser, donutMetadata map[string]string, wri
 	return
 }
 
-func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *erasure.Encoder, hasher hash.Hash, k, m uint8, totalLeft int64, blockSize int) (int64, error) {
+func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *encoding.Erasure, hasher hash.Hash, k, m uint8, totalLeft int64, blockSize int) (int64, error) {
 	curBlockSize := 0
 	if int64(blockSize) < totalLeft {
 		curBlockSize = blockSize
@@ -105,7 +103,7 @@ func decodeChunk(writer *io.PipeWriter, readers []io.ReadCloser, encoder *erasur
 		curBlockSize = int(totalLeft) // cast is safe, blockSize in if protects
 	}
 
-	curChunkSize := erasure.GetEncodedBlockLen(curBlockSize, uint8(k))
+	curChunkSize := encoding.GetEncodedBlockLen(curBlockSize, uint8(k))
 	encodedBytes := make([][]byte, 16)
 	for i, reader := range readers {
 		var bytesBuffer bytes.Buffer
@@ -167,8 +165,8 @@ func newErasureWriter(writers []Writer) ObjectWriter {
 
 func erasureGoroutine(r *io.PipeReader, eWriter erasureWriter, isClosed chan<- bool) {
 	chunks := split.Stream(r, 10*1024*1024)
-	params, _ := erasure.ParseEncoderParams(8, 8, erasure.Cauchy)
-	encoder := erasure.NewEncoder(params)
+	params, _ := encoding.ValidateParams(8, 8, encoding.Cauchy)
+	encoder := encoding.NewErasure(params)
 	chunkCount := 0
 	totalLength := 0
 	summer := md5.New()
