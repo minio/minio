@@ -57,26 +57,29 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if accessKey != "" {
 		if err := h.conf.ReadConfig(); err != nil {
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, "")
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		} else {
 			user, ok := h.conf.Users[accessKey]
 			if ok == false {
-				error := errorCodeError(AccessDenied)
+				error := getErrorCode(AccessDenied)
 				errorResponse := getErrorResponse(error, "")
+				setCommonHeaders(w, getContentTypeString(acceptsContentType))
 				w.WriteHeader(error.HTTPStatusCode)
-				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+				w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 			} else {
 				ok, _ = ValidateRequest(user, r)
 				if ok {
 					h.handler.ServeHTTP(w, r)
 				} else {
-					error := errorCodeError(AccessDenied)
+					error := getErrorCode(AccessDenied)
 					errorResponse := getErrorResponse(error, "")
+					setCommonHeaders(w, getContentTypeString(acceptsContentType))
 					w.WriteHeader(error.HTTPStatusCode)
-					w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+					w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 				}
 			}
 		}
@@ -106,10 +109,11 @@ func ignoreResourcesHandler(h http.Handler) http.Handler {
 func (h rHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
-		error := errorCodeError(NotImplemented)
+		error := getErrorCode(NotImplemented)
 		errorResponse := getErrorResponse(error, "")
+		setCommonHeaders(w, getContentTypeString(acceptsContentType))
 		w.WriteHeader(error.HTTPStatusCode)
-		w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+		w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 	} else {
 		h.handler.ServeHTTP(w, r)
 	}

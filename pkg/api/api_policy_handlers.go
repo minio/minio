@@ -36,10 +36,11 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 
 	policy, ok := drivers.Parsepolicy(req.Body)
 	if ok == false {
-		error := errorCodeError(InvalidPolicyDocument)
+		error := getErrorCode(InvalidPolicyDocument)
 		errorResponse := getErrorResponse(error, bucket)
+		setCommonHeaders(w, getContentTypeString(acceptsContentType))
 		w.WriteHeader(error.HTTPStatusCode)
-		w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+		w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		return
 	}
 
@@ -48,38 +49,42 @@ func (server *minioAPI) putBucketPolicyHandler(w http.ResponseWriter, req *http.
 	case nil:
 		{
 			w.WriteHeader(http.StatusNoContent)
-			writeCommonHeaders(w, getContentString(acceptsContentType))
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.Header().Set("Connection", "keep-alive")
 		}
 	case drivers.BucketNameInvalid:
 		{
-			error := errorCodeError(InvalidBucketName)
+			error := getErrorCode(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.BucketNotFound:
 		{
-			error := errorCodeError(NoSuchBucket)
+			error := getErrorCode(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.BackendCorrupted:
 		{
 			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.ImplementationError:
 		{
 			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	}
 }
@@ -99,51 +104,57 @@ func (server *minioAPI) getBucketPolicyHandler(w http.ResponseWriter, req *http.
 		{
 			responsePolicy, ret := json.Marshal(p)
 			if ret != nil {
-				error := errorCodeError(InternalError)
+				error := getErrorCode(InternalError)
 				errorResponse := getErrorResponse(error, bucket)
+				setCommonHeaders(w, getContentTypeString(acceptsContentType))
 				w.WriteHeader(error.HTTPStatusCode)
-				w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+				w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 			}
-			writeCommonHeaders(w, getContentString(acceptsContentType))
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.Header().Set("Connection", "keep-alive")
 			w.Write(responsePolicy)
 		}
 	case drivers.BucketNameInvalid:
 		{
-			error := errorCodeError(InvalidBucketName)
+			error := getErrorCode(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.BucketNotFound:
 		{
-			error := errorCodeError(NoSuchBucket)
+			error := getErrorCode(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.BucketPolicyNotFound:
 		{
-			error := errorCodeError(NoSuchBucketPolicy)
+			error := getErrorCode(NoSuchBucketPolicy)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.BackendCorrupted:
 		{
 			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	case drivers.ImplementationError:
 		{
 			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
 		}
 	}
 }

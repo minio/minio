@@ -46,41 +46,70 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 
 	acceptsContentType := getContentType(req)
 	objects, resources, err := server.driver.ListObjects(bucket, resources)
-	switch err := err.(type) {
+	switch err.(type) {
 	case nil: // success
 		{
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			w.WriteHeader(http.StatusOK)
+			// write body
 			response := generateObjectsListResult(bucket, objects, resources)
-			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
+			encodedResponse := encodeResponse(response, acceptsContentType)
+			w.Write(encodedResponse)
 		}
 	case drivers.BucketNotFound:
 		{
-			error := errorCodeError(NoSuchBucket)
+			// get error
+			error := getErrorCode(NoSuchBucket)
 			errorResponse := getErrorResponse(error, bucket)
+
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+
+			// write body
+			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedErrorResponse)
 		}
 	case drivers.ImplementationError:
 		{
-			// Embed error log on server side
-			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			// get error
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+
+			// write body
+			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedErrorResponse)
 		}
 	case drivers.BucketNameInvalid:
 		{
-			error := errorCodeError(InvalidBucketName)
+			error := getErrorCode(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
+
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+
+			// write body
+			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedErrorResponse)
 		}
 	case drivers.ObjectNameInvalid:
 		{
-			error := errorCodeError(NoSuchKey)
+			error := getErrorCode(NoSuchKey)
 			errorResponse := getErrorResponse(error, resources.Prefix)
+
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+
+			// write body
+			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedErrorResponse)
 		}
 	}
 }
@@ -96,23 +125,37 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	case nil:
 		{
 			response := generateBucketsListResult(buckets)
-			w.Write(writeObjectHeadersAndResponse(w, response, acceptsContentType))
-		}
-	case drivers.ImplementationError:
-		{
-			log.Error.Println(err)
-			error := errorCodeError(InternalError)
-			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			w.WriteHeader(http.StatusOK)
+			// write response
+			encodedResponse := encodeResponse(response, acceptsContentType)
+			w.Write(encodedResponse)
 		}
 	case drivers.BackendCorrupted:
 		{
 			log.Error.Println(err)
-			error := errorCodeError(InternalError)
-			errorResponse := getErrorResponse(error, "")
-			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			// get error
+			errorCode := getErrorCode(InternalError)
+			errorResponse := getErrorResponse(errorCode, "")
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			w.WriteHeader(errorCode.HTTPStatusCode)
+			// write
+			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedErrorResponse)
+		}
+	default:
+		{
+			log.Trace.Println(err)
+			// get error
+			errorCode := getErrorCode(InternalError)
+			errorResponse := getErrorResponse(errorCode, "")
+			// write headers
+			w.WriteHeader(errorCode.HTTPStatusCode)
+			// write body
+			encodedError := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedError)
 		}
 	}
 }
@@ -132,7 +175,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	}
 
 	acceptsContentType := getContentType(req)
-	switch err := err.(type) {
+	switch err.(type) {
 	case nil:
 		{
 			w.Header().Set("Server", "Minio")
@@ -140,26 +183,37 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.BucketNameInvalid:
 		{
-			error := errorCodeError(InvalidBucketName)
+			error := getErrorCode(InvalidBucketName)
 			errorResponse := getErrorResponse(error, bucket)
+			// write header
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			// write object
+			encodedResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedResponse)
 		}
 	case drivers.BucketExists:
 		{
-			error := errorCodeError(BucketAlreadyExists)
+			error := getErrorCode(BucketAlreadyExists)
 			errorResponse := getErrorResponse(error, bucket)
+			// write header
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			// write object
+			encodedResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedResponse)
 		}
 	case drivers.ImplementationError:
 		{
 			// Embed errors log on server side
-			log.Error.Println(err)
-			error := errorCodeError(InternalError)
+			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, bucket)
+			// write header
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+			// write object
+			encodedResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+			w.Write(encodedResponse)
 		}
 	}
 }

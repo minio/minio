@@ -18,36 +18,38 @@ package api
 
 import (
 	"net/http"
+	"strings"
 )
 
 type contentType int
 
 const (
-	xmlType contentType = iota
-	jsonType
+	xmlContentType contentType = iota
+	jsonContentType
 )
-
-// content-type to human readable map
-var typeToString = map[contentType]string{
-	xmlType:  "application/xml",
-	jsonType: "application/json",
-}
-
-// human readbale to content-type map
-var acceptToType = map[string]contentType{
-	"application/xml":  xmlType,
-	"application/json": jsonType,
-}
 
 // Get content type requested from 'Accept' header
 func getContentType(req *http.Request) contentType {
-	if accept := req.Header.Get("Accept"); accept != "" {
-		return acceptToType[accept]
+	acceptHeader := req.Header.Get("Accept")
+	switch {
+	case strings.HasPrefix(acceptHeader, "application/json"):
+		return jsonContentType
+	default:
+		return xmlContentType
 	}
-	return xmlType
 }
 
 // Content type to human readable string
-func getContentString(content contentType) string {
-	return typeToString[content]
+func getContentTypeString(content contentType) string {
+	switch content {
+	case jsonContentType:
+		{
+
+			return "application/json"
+		}
+	default:
+		{
+			return "application/xml"
+		}
+	}
 }
