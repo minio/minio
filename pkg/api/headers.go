@@ -58,7 +58,7 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 }
 
 // Write object header
-func writeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
+func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
 	setCommonHeaders(w, metadata.ContentType)
