@@ -52,14 +52,10 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			}
 			switch httpRange.start == 0 && httpRange.length == 0 {
 			case true:
-				writeObjectHeaders(w, metadata)
+				setObjectHeaders(w, metadata)
 				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
 					log.Error.Println(err)
-					error := getErrorCode(InternalError)
-					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-					setCommonHeaders(w, getContentTypeString(acceptsContentType))
-					w.WriteHeader(error.HTTPStatusCode)
-					w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
+					// unable to write headers, we've already printed data. Just close the connection.
 					return
 				}
 			case false:
@@ -69,11 +65,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
 					log.Error.Println(err)
-					error := getErrorCode(InternalError)
-					errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
-					setCommonHeaders(w, getContentTypeString(acceptsContentType))
-					w.WriteHeader(error.HTTPStatusCode)
-					w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
+					// unable to write headers, we've already printed data. Just close the connection.
 					return
 				}
 
@@ -137,7 +129,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
-		writeObjectHeaders(w, metadata)
+		setObjectHeaders(w, metadata)
 	case drivers.ObjectNotFound:
 		{
 			error := getErrorCode(NoSuchKey)
