@@ -39,15 +39,15 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	switch err := err.(type) {
 	case nil: // success
 		{
-			log.Println("Found: " + bucket + "#" + object)
-			httpRange, err := newRange(req, metadata.Size)
+			httpRange, err := getRequestedRange(req, metadata.Size)
 			if err != nil {
 				log.Error.Println(err)
 				error := getErrorCode(InvalidRange)
 				errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
 				setCommonHeaders(w, getContentTypeString(acceptsContentType))
 				w.WriteHeader(error.HTTPStatusCode)
-				w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
+				encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+				w.Write(encodedErrorResponse)
 				return
 			}
 			switch httpRange.start == 0 && httpRange.length == 0 {
@@ -60,7 +60,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				}
 			case false:
 				metadata.Size = httpRange.length
-				writeRangeObjectHeaders(w, metadata, httpRange.getContentRange())
+				setRangeObjectHeaders(w, metadata, httpRange)
 				w.WriteHeader(http.StatusPartialContent)
 				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
