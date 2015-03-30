@@ -42,10 +42,13 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			httpRange, err := getRequestedRange(req, metadata.Size)
 			if err != nil {
 				log.Error.Println(err)
+				// get error
 				error := getErrorCode(InvalidRange)
 				errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+				// set headers
 				setCommonHeaders(w, getContentTypeString(acceptsContentType))
 				w.WriteHeader(error.HTTPStatusCode)
+				// write body
 				encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 				w.Write(encodedErrorResponse)
 				return
@@ -73,46 +76,61 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.ObjectNotFound:
 		{
+			// get error
 			error := getErrorCode(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			// set headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
+			// write body
 			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 			w.Write(encodedErrorResponse)
 		}
 	case drivers.BucketNotFound:
 		{
+			// get error
 			error := getErrorCode(NoSuchBucket)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			// set headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
+			// write body
 			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 			w.Write(encodedErrorResponse)
 		}
 	case drivers.ObjectNameInvalid:
 		{
+			// get error
 			error := getErrorCode(NoSuchKey)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			// set headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
+			// write body
 			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 			w.Write(encodedErrorResponse)
 		}
 	case drivers.BucketNameInvalid:
 		{
+			// get error
 			error := getErrorCode(InvalidBucketName)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			// set headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
+			// wrkite body
 			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 			w.Write(encodedErrorResponse)
 		}
 	default:
 		{
+			// get error
 			// Embed errors log on serve side
 			log.Error.Println(err)
+			// set headers
 			error := getErrorCode(InternalError)
 			errorResponse := getErrorResponse(error, "/"+bucket+"/"+object)
+			// write body
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(error.HTTPStatusCode)
 			encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
