@@ -40,7 +40,7 @@ func (r *httpRange) getContentRange() string {
 }
 
 // Grab new range from request header
-func newRange(req *http.Request, size int64) (*httpRange, error) {
+func getRequestedRange(req *http.Request, size int64) (*httpRange, error) {
 	r := &httpRange{
 		start:  0,
 		length: 0,

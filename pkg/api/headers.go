@@ -65,18 +65,16 @@ func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 	w.Header().Set("ETag", metadata.Md5)
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
-	w.Header().Set("Connection", "close")
 }
 
 // Write range object header
-func writeRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, ra string) {
-	lastModified := metadata.Created.Format(time.RFC1123)
-	// common headers
+func setRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, contentRange *httpRange) {
+	// set common headers
 	setCommonHeaders(w, metadata.ContentType)
-	w.Header().Set("ETag", metadata.Md5)
-	w.Header().Set("Last-Modified", lastModified)
-	w.Header().Set("Content-Range", ra)
-	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
+	// set object headers
+	setObjectHeaders(w, metadata)
+	// set content range
+	w.Header().Set("Content-Range", contentRange.getContentRange())
 }
 
 func encodeResponse(response interface{}, acceptsType contentType) []byte {
