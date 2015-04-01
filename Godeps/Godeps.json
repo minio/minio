@@ -19,6 +19,10 @@
 			"Rev": "1ee5c115af7856a16f133e2f2d3d9f91895c2ddb"
 		},
 		{
+			"ImportPath": "github.com/minio-io/erasure",
+			"Rev": "2a52bdad9b271ef680374a22f0cb68513a79ebf5"
+		},
+		{
 			"ImportPath": "github.com/minio-io/iodine",
 			"Rev": "55cc4d4256c68fbd6f0775f1a25e37e6a2f6457e"
 		},

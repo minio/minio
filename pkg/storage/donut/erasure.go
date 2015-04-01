@@ -12,8 +12,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
+	encoding "github.com/minio-io/erasure"
 	"github.com/minio-io/iodine"
-	encoding "github.com/minio-io/minio/pkg/encoding/erasure"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
 
