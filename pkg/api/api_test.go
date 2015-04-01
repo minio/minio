@@ -65,7 +65,7 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		root, _ := ioutil.TempDir(os.TempDir(), "minio-api-fs")
+		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
 		_, _, driver := file.Start(root)
 		return driver, root
 	},
