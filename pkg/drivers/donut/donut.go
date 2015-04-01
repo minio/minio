@@ -118,6 +118,13 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucket, object string, start,
 // GetObjectMetadata retrieves an object's metadata
 func (d donutDriver) GetObjectMetadata(bucket, key string, prefix string) (drivers.ObjectMetadata, error) {
 	metadata, err := d.donut.GetObjectMetadata(bucket, key)
+	if err != nil {
+		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
+		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
+			Bucket: bucket,
+			Object: key,
+		}
+	}
 	created, err := time.Parse(time.RFC3339Nano, metadata["sys.created"])
 	if err != nil {
 		return drivers.ObjectMetadata{}, err

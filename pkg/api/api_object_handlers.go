@@ -84,6 +84,11 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 		}
+	case drivers.ImplementationError:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	default:
 		{
 			log.Error.Println(err)
@@ -105,8 +110,10 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
-		setObjectHeaders(w, metadata)
-		w.WriteHeader(http.StatusOK)
+		{
+			setObjectHeaders(w, metadata)
+			w.WriteHeader(http.StatusOK)
+		}
 	case drivers.ObjectNotFound:
 		{
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
@@ -116,6 +123,11 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ImplementationError:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	default:
 		{
 			log.Error.Println(err)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
@@ -173,6 +185,11 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	case drivers.InvalidDigest:
 		{
 			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
