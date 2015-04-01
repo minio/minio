@@ -28,6 +28,7 @@ import (
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/storage/donut"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"io/ioutil"
 )
 
 // donutDriver - creates a new single disk drivers driver using donut
@@ -112,7 +113,23 @@ func (d donutDriver) GetObject(target io.Writer, bucket, key string) (int64, err
 
 // GetPartialObject retrieves an object range and writes it to a writer
 func (d donutDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
-	return 0, errors.New("Not Implemented")
+	// TODO more efficient get partial object with proper donut support
+	errParams := map[string]string{
+		"bucket": bucket,
+		"object": object,
+		"start":  strconv.FormatInt(start, 10),
+		"length": strconv.FormatInt(length, 10),
+	}
+	reader, err := d.donut.GetObjectReader(bucket, object)
+	if err != nil {
+		return 0, iodine.New(err, errParams)
+	}
+	_, err = io.CopyN(ioutil.Discard, reader, start)
+	if err != nil {
+		return 0, iodine.New(err, errParams)
+	}
+	n, err := io.CopyN(w, reader, length)
+	return n, iodine.New(err, errParams)
 }
 
 // GetObjectMetadata retrieves an object's metadata
