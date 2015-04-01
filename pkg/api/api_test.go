@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,31 +41,66 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type MySuite struct {
-	Driver func() drivers.Driver
+	Driver     drivers.Driver
+	MockDriver *mocks.Driver
+	initDriver func() (drivers.Driver, string)
+	Root       string
 }
 
 var _ = Suite(&MySuite{
-	Driver: func() drivers.Driver {
-		return startMockDriver()
+	initDriver: func() (drivers.Driver, string) {
+		return startMockDriver(), ""
 	},
 })
 
 var _ = Suite(&MySuite{
-	Driver: func() drivers.Driver {
+	initDriver: func() (drivers.Driver, string) {
 		_, _, driver := memory.Start()
-		return driver
+		return driver, ""
 	},
 })
 
-func (s *MySuite) TestNonExistantObject(c *C) {
-	driver := s.Driver()
-	switch typedDriver := driver.(type) {
+var _ = Suite(&MySuite{
+	initDriver: func() (drivers.Driver, string) {
+		_, _, driver := memory.Start()
+		return driver, ""
+	},
+})
+
+func (s *MySuite) SetUpTest(c *C) {
+	driver, root := s.initDriver()
+	s.Root = root
+	var typedDriver *mocks.Driver
+	switch driver := driver.(type) {
 	case *mocks.Driver:
 		{
-			typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
-			defer typedDriver.AssertExpectations(c)
+			typedDriver = driver
+		}
+	default:
+		{
+			typedDriver = startMockDriver()
 		}
 	}
+	s.Driver = driver
+	s.MockDriver = typedDriver
+}
+
+func (s *MySuite) TearDownTest(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
+	if s.Root != "" {
+		os.RemoveAll(s.Root)
+	}
+
+}
+
+func (s *MySuite) TestNonExistantObject(c *C) {
+	driver := s.Driver
+	s.MockDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -76,26 +112,21 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 }
 
 func (s *MySuite) TestEmptyObject(c *C) {
-	driver := s.Driver()
-	switch typedDriver := driver.(type) {
-	case *mocks.Driver:
-		{
-			metadata := drivers.ObjectMetadata{
-				Bucket:      "bucket",
-				Key:         "key",
-				ContentType: "application/octet-stream",
-				Created:     time.Now(),
-				Md5:         "d41d8cd98f00b204e9800998ecf8427e",
-				Size:        0,
-			}
-			typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-			typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
-			typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
-			typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
-			typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
-			defer typedDriver.AssertExpectations(c)
-		}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	metadata := drivers.ObjectMetadata{
+		Bucket:      "bucket",
+		Key:         "key",
+		ContentType: "application/octet-stream",
+		Created:     time.Now(),
+		Md5:         "d41d8cd98f00b204e9800998ecf8427e",
+		Size:        0,
 	}
+	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
+	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -112,32 +143,28 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 
-	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
+	resMetadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, 0, "application/octet-stream", metadata.Md5)
+	verifyHeaders(c, response.Header, resMetadata.Created, 0, "application/octet-stream", resMetadata.Md5)
 }
 
 func (s *MySuite) TestObject(c *C) {
-	driver := s.Driver()
-	switch typedDriver := driver.(type) {
-	case *mocks.Driver:
-		{
-			metadata := drivers.ObjectMetadata{
-				Bucket:      "bucket",
-				Key:         "key",
-				ContentType: "application/octet-stream",
-				Created:     time.Now(),
-				Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
-				Size:        11,
-			}
-			typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-			typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
-			typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Twice()
-			typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
-			typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
-			defer typedDriver.AssertExpectations(c)
-		}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	metadata := drivers.ObjectMetadata{
+		Bucket:      "bucket",
+		Key:         "key",
+		ContentType: "application/octet-stream",
+		Created:     time.Now(),
+		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
+		Size:        11,
 	}
+	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Twice()
+	typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
+	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
+
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -154,26 +181,14 @@ func (s *MySuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(responseBody, DeepEquals, []byte("hello world"))
 
-	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
+	resMetadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
-	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
+	verifyHeaders(c, response.Header, resMetadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-
-			defer typedDriver.AssertExpectations(c)
-		}
-	default:
-		{
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 	metadata1 := drivers.ObjectMetadata{
 		Bucket:      "bucket",
 		Key:         "object1",
@@ -295,20 +310,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 }
 
 func (s *MySuite) TestNotImplemented(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer typedDriver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -319,21 +321,8 @@ func (s *MySuite) TestNotImplemented(c *C) {
 }
 
 func (s *MySuite) TestHeader(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
-
+	driver := s.Driver
+	typedDriver := s.MockDriver
 	typedDriver.AssertExpectations(c)
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -374,20 +363,8 @@ func (s *MySuite) TestHeader(c *C) {
 }
 
 func (s *MySuite) TestPutBucket(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -416,20 +393,8 @@ func (s *MySuite) TestPutBucket(c *C) {
 }
 
 func (s *MySuite) TestPutObject(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -503,20 +468,8 @@ func (s *MySuite) TestPutObject(c *C) {
 }
 
 func (s *MySuite) TestListBuckets(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -608,20 +561,9 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 }
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -648,20 +590,8 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			//				 we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -688,20 +618,9 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 }
 
 func (s *MySuite) TestContentTypePersists(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			//				 we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -775,20 +694,9 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 }
 
 func (s *MySuite) TestPartialContent(c *C) {
-	driver := s.Driver()
-	var typedDriver *mocks.Driver
-	switch driver := driver.(type) {
-	case *mocks.Driver:
-		{
-			typedDriver = driver
-			defer driver.AssertExpectations(c)
-		}
-	default:
-		{
-			//				 we never assert expectations
-			typedDriver = startMockDriver()
-		}
-	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
