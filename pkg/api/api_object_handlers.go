@@ -48,9 +48,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			case true:
 				setObjectHeaders(w, metadata)
 				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
-					log.Error.Println(err)
 					// unable to write headers, we've already printed data. Just close the connection.
-					return
 				}
 			case false:
 				metadata.Size = httpRange.length
@@ -58,11 +56,9 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 				w.WriteHeader(http.StatusPartialContent)
 				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 				if err != nil {
-					log.Error.Println(err)
 					// unable to write headers, we've already printed data. Just close the connection.
-					return
+					log.Error.Println(err)
 				}
-
 			}
 		}
 	case drivers.ObjectNotFound:
@@ -132,6 +128,8 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Policy == true && object == "" {
+		// TODO figure out if we can hand this off to router instead of embedding here.
+		// hand off request to pubBucketPolicyHandler
 		server.putBucketPolicyHandler(w, req)
 		return
 	}
