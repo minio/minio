@@ -21,9 +21,11 @@ import (
 	"encoding/xml"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,6 +33,7 @@ import (
 
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/minio/pkg/drivers/file"
 	"github.com/minio-io/minio/pkg/drivers/memory"
 	"github.com/minio-io/minio/pkg/drivers/mocks"
 	"github.com/stretchr/testify/mock"
@@ -62,14 +65,22 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		_, _, driver := memory.Start()
-		return driver, ""
+		root, _ := ioutil.TempDir(os.TempDir(), "minio-api-fs")
+		_, _, driver := file.Start(root)
+		return driver, root
 	},
 })
 
+func (s *MySuite) SetUpSuite(c *C) {
+	driver, root := s.initDriver()
+	if root != "" {
+		defer os.RemoveAll(root)
+	}
+	log.Println("Running API Suite:", reflect.TypeOf(driver))
+}
+
 func (s *MySuite) SetUpTest(c *C) {
 	driver, root := s.initDriver()
-	s.Root = root
 	var typedDriver *mocks.Driver
 	switch driver := driver.(type) {
 	case *mocks.Driver:
@@ -82,6 +93,7 @@ func (s *MySuite) SetUpTest(c *C) {
 		}
 	}
 	s.Driver = driver
+	s.Root = root
 	s.MockDriver = typedDriver
 }
 
@@ -92,10 +104,12 @@ func (s *MySuite) TearDownTest(c *C) {
 			driver.AssertExpectations(c)
 		}
 	}
-	if s.Root != "" {
+	root := strings.TrimSpace(s.Root)
+	if root != "" {
 		os.RemoveAll(s.Root)
 	}
-
+	s.Driver = nil
+	s.Root = ""
 }
 
 func (s *MySuite) TestNonExistantObject(c *C) {
@@ -410,7 +424,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, Not(IsNil))
 
-	date1 := time.Now()
+	date1 := time.Now().Add(-time.Second)
 
 	// Put Bucket before - Put Object into a bucket
 	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
