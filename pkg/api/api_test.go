@@ -424,8 +424,8 @@ func (s *MySuite) TestPutObject(c *C) {
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(err, Not(IsNil))
 
-	// breaks on fs driver, so we subtract one second
-	//	date1 := time.Now()
+	// breaks on fs driver,// breaks on fs driver, so we subtract one second
+	// date1 := time.Now()
 	date1 := time.Now().Add(-time.Second)
 
 	// Put Bucket before - Put Object into a bucket
