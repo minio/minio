@@ -45,7 +45,7 @@ type MySuite struct {
 
 var _ = Suite(&MySuite{
 	Driver: func() drivers.Driver {
-		return startDriver()
+		return startMockDriver()
 	},
 })
 
@@ -152,7 +152,6 @@ func (s *MySuite) TestObject(c *C) {
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
-	println(string(responseBody))
 	c.Assert(responseBody, DeepEquals, []byte("hello world"))
 
 	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
@@ -172,7 +171,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		}
 	default:
 		{
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	metadata1 := drivers.ObjectMetadata{
@@ -307,7 +306,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -331,7 +330,7 @@ func (s *MySuite) TestHeader(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 
@@ -386,7 +385,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 
@@ -428,7 +427,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -460,7 +459,6 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything).Return(nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
-	println(err)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -516,7 +514,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -621,7 +619,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	default:
 		{
 			// we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -661,7 +659,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	default:
 		{
 			//				 we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -701,7 +699,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	default:
 		{
 			//				 we never assert expectations
-			typedDriver = startDriver()
+			typedDriver = startMockDriver()
 		}
 	}
 	httpHandler := api.HTTPHandler("", driver)
@@ -776,7 +774,62 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 }
 
-func startDriver() *mocks.Driver {
+func (s *MySuite) TestPartialContent(c *C) {
+	driver := s.Driver()
+	var typedDriver *mocks.Driver
+	switch driver := driver.(type) {
+	case *mocks.Driver:
+		{
+			typedDriver = driver
+			defer driver.AssertExpectations(c)
+		}
+	default:
+		{
+			//				 we never assert expectations
+			typedDriver = startMockDriver()
+		}
+	}
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	metadata := drivers.ObjectMetadata{
+		Bucket:      "foo",
+		Key:         "bar",
+		ContentType: "application/octet-stream",
+		Created:     time.Now(),
+		// TODO Determine if md5 of range or full object needed
+		Md5:  "e81c4e4f2b7b93b481e13a8553c2ae1b",
+		Size: 11,
+	}
+
+	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
+
+	typedDriver.On("CreateObject", "foo", "bar", "", "", mock.Anything).Return(nil).Once()
+	driver.CreateBucket("foo")
+	driver.CreateObject("foo", "bar", "", "", bytes.NewBufferString("hello world"))
+
+	// prepare for GET on range request
+	typedDriver.SetGetObjectWriter("foo", "bar", []byte("hello world"))
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(metadata, nil).Once()
+	typedDriver.On("GetPartialObject", mock.Anything, "foo", "bar", int64(6), int64(2)).Return(int64(2), nil).Once()
+
+	// prepare request
+	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	request.Header.Add("Accept", "application/json")
+	request.Header.Add("Range", "bytes=6-7")
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+	partialObject, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	c.Assert(string(partialObject), Equals, "wo")
+}
+
+func startMockDriver() *mocks.Driver {
 	return &mocks.Driver{
 		ObjectWriterData: make(map[string][]byte),
 	}

@@ -80,8 +80,16 @@ func (memory memoryDriver) GetObject(w io.Writer, bucket string, object string) 
 }
 
 // GetPartialObject - GET object from memory buffer range
-func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, end int64) (int64, error) {
-	return 0, drivers.APINotImplemented{API: "GetPartialObject"}
+func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+	var sourceBuffer bytes.Buffer
+	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
+		return 0, err
+	}
+	var nilBuffer bytes.Buffer
+	if _, err := io.CopyN(&nilBuffer, &sourceBuffer, start); err != nil {
+		return 0, err
+	}
+	return io.CopyN(w, &sourceBuffer, length)
 }
 
 // CreateBucketPolicy - Not implemented

@@ -6,6 +6,8 @@ import "github.com/stretchr/testify/mock"
 import (
 	"bytes"
 	"io"
+
+	"github.com/minio-io/iodine"
 )
 
 // Driver is a mock
@@ -56,7 +58,7 @@ func (m *Driver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
 // SetGetObjectWriter is a mock
 func (m *Driver) SetGetObjectWriter(bucket, object string, data []byte) {
 	m.ObjectWriterData[bucket+":"+object] = data
-	println(string(m.ObjectWriterData["bucket:object"]))
+	//	println(string(m.ObjectWriterData["bucket:object"]))
 }
 
 // GetObject is a mock
@@ -80,6 +82,17 @@ func (m *Driver) GetPartialObject(w io.Writer, bucket string, object string, sta
 
 	r0 := ret.Get(0).(int64)
 	r1 := ret.Error(1)
+
+	if r1 == nil {
+		if obj, ok := m.ObjectWriterData[bucket+":"+object]; ok {
+			source := bytes.NewBuffer(obj)
+			var nilSink bytes.Buffer
+			io.CopyN(&nilSink, source, start)
+			n, _ := io.CopyN(w, source, length)
+			r0 = n
+		}
+	}
+	r1 = iodine.New(r1, nil)
 
 	return r0, r1
 }

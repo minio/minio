@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
@@ -46,18 +47,24 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			}
 			switch httpRange.start == 0 && httpRange.length == 0 {
 			case true:
-				setObjectHeaders(w, metadata)
-				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
+				{
+					setObjectHeaders(w, metadata)
+					if _, err := server.driver.GetObject(w, bucket, object); err != nil {
+						// unable to write headers, we've already printed data. Just close the connection.
+					}
 				}
 			case false:
-				metadata.Size = httpRange.length
-				setRangeObjectHeaders(w, metadata, httpRange)
-				w.WriteHeader(http.StatusPartialContent)
-				_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
-				if err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
-					log.Error.Println(err)
+				{
+					metadata.Size = httpRange.length
+					setRangeObjectHeaders(w, metadata, httpRange)
+					//					contentRangeValue := "bytes "  + strconv.FormatInt(httpRange.start, 10) + "-"  +  strconv.FormatInt(httpRange.length, 10) + "/" + strconv.FormatInt(httpRange.size, 10)
+					w.WriteHeader(http.StatusPartialContent)
+					_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
+					if err != nil {
+						err = iodine.New(err, nil)
+						// unable to write headers, we've already printed data. Just close the connection.
+						log.Error.Println(err)
+					}
 				}
 			}
 		}
