@@ -39,6 +39,7 @@ pre-build:
 
 build-all: verifiers
 	@echo "Building Libraries:"
+	@godep go generate github.com/minio-io/erasure
 	@godep go generate ./...
 	@godep go build ./...
 
@@ -69,5 +70,4 @@ clean:
 	@echo "Cleaning up all the generated files:"
 	@rm -fv cover.out
 	@rm -fv pkg/utils/split/TESTPREFIX.*
-	@rm -fv pkg/encoding/erasure/*.syso
 	@rm -fv build-constants.go
