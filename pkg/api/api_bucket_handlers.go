@@ -73,6 +73,11 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		{
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
+	default:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 }
 
@@ -83,6 +88,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	buckets, err := server.driver.ListBuckets()
+	// cannot fallthrough in (type) switch :(
 	switch err := err.(type) {
 	case nil:
 		{
@@ -96,7 +102,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case drivers.BackendCorrupted:
 		{
-			log.Error.Println("Backend Corrupted")
+			log.Error.Println(err)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	default:
@@ -139,6 +145,12 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.ImplementationError:
 		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(err)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
