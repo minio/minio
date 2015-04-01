@@ -29,6 +29,7 @@ import (
 	"encoding/hex"
 
 	"github.com/minio-io/minio/pkg/drivers"
+	"io/ioutil"
 )
 
 // memoryDriver - local variables
@@ -85,8 +86,7 @@ func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, 
 	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
 		return 0, err
 	}
-	var nilBuffer bytes.Buffer
-	if _, err := io.CopyN(&nilBuffer, &sourceBuffer, start); err != nil {
+	if _, err := io.CopyN(ioutil.Discard, &sourceBuffer, start); err != nil {
 		return 0, err
 	}
 	return io.CopyN(w, &sourceBuffer, length)
