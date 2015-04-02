@@ -38,7 +38,7 @@ func XmlToJson(xmlVal []byte, safeEncoding ...bool) ([]byte, error) {
 func XmlToJsonWriter(xmlVal []byte, jsonWriter io.Writer, safeEncoding ...bool) ([]byte, error) {
 	m, err := NewMapXml(xmlVal)
 	if err != nil {
-		return  nil, err
+		return nil, err
 	}
 	return m.JsonWriterRaw(jsonWriter, safeEncoding...)
 }

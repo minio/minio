@@ -8,8 +8,8 @@ package mxj_test
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"github.com/clbanning/mxj"
+	"io"
 )
 
 func ExampleHandleXmlReader() {
@@ -246,59 +246,59 @@ func ExampleMap_ValuesForKeyPath() {
 }
 
 func ExampleMap_UpdateValuesForPath() {
-/*
-	
-var biblioDoc = []byte(`
-<biblio>
-	<author>
-		<name>William Gaddis</name>
-		<books>
-			<book>
-				<title>The Recognitions</title>
-				<date>1955</date>
-				<review>A novel that changed the face of American literature.</review>
-			</book>
-			<book>
-				<title>JR</title>
-				<date>1975</date>
-				<review>Winner of National Book Award for Fiction.</review>
-			</book>
-		</books>
-	</author>
-</biblio>`)
+	/*
 
-	...
-	m, merr := mxj.NewMapXml(biblioDoc)
-	if merr != nil {
-		// handle error
-	}
+	   var biblioDoc = []byte(`
+	   <biblio>
+	   	<author>
+	   		<name>William Gaddis</name>
+	   		<books>
+	   			<book>
+	   				<title>The Recognitions</title>
+	   				<date>1955</date>
+	   				<review>A novel that changed the face of American literature.</review>
+	   			</book>
+	   			<book>
+	   				<title>JR</title>
+	   				<date>1975</date>
+	   				<review>Winner of National Book Award for Fiction.</review>
+	   			</book>
+	   		</books>
+	   	</author>
+	   </biblio>`)
 
-	// change 'review' for a book
-	count, err := m.UpdateValuesForPath("review:National Book Award winner." "*.*.*.*", "title:JR")
-	if err != nil {
-		// handle error
-	}
-	...
+	   	...
+	   	m, merr := mxj.NewMapXml(biblioDoc)
+	   	if merr != nil {
+	   		// handle error
+	   	}
 
-	// change 'date' value from string type to float64 type
-	// Note: the following is equivalent to m, merr := NewMapXml(biblioDoc, mxj.Cast).
-	path := m.PathForKeyShortest("date")
-	v, err := m.ValuesForPath(path)
-	if err != nil {
-		// handle error
-	}
-	var total int
-	for _, vv := range v {
-		oldVal := "date:" + vv.(string)
-		newVal := "date:" + vv.(string) + ":num"
-		n, err := m.UpdateValuesForPath(newVal, path, oldVal)
-		if err != nil {
-			// handle error
-		}
-		total += n
-	}
-	...
-*/
+	   	// change 'review' for a book
+	   	count, err := m.UpdateValuesForPath("review:National Book Award winner." "*.*.*.*", "title:JR")
+	   	if err != nil {
+	   		// handle error
+	   	}
+	   	...
+
+	   	// change 'date' value from string type to float64 type
+	   	// Note: the following is equivalent to m, merr := NewMapXml(biblioDoc, mxj.Cast).
+	   	path := m.PathForKeyShortest("date")
+	   	v, err := m.ValuesForPath(path)
+	   	if err != nil {
+	   		// handle error
+	   	}
+	   	var total int
+	   	for _, vv := range v {
+	   		oldVal := "date:" + vv.(string)
+	   		newVal := "date:" + vv.(string) + ":num"
+	   		n, err := m.UpdateValuesForPath(newVal, path, oldVal)
+	   		if err != nil {
+	   			// handle error
+	   		}
+	   		total += n
+	   	}
+	   	...
+	*/
 }
 
 func ExampleMap_Copy() {
@@ -313,34 +313,32 @@ func ExampleMap_Copy() {
 		private  string
 	}
 	s := str{IntVal: 4, StrVal: "now's the time", FloatVal: 3.14159, BoolVal: true, private: "Skies are blue"}
-	m := make(map[string]interface{},0)
+	m := make(map[string]interface{}, 0)
 	m["struct"] = interface{}(s)
 	m["struct_ptr"] = interface{}(&s)
 	m["misc"] = interface{}(`Now is the time`)
 
-
 	mv := mxj.Map(m)
-	cp,_ := mv.Copy()
+	cp, _ := mv.Copy()
 
 	fmt.Printf("mv:%s\n", mv.StringIndent(2))
 	fmt.Printf("cp:%s\n", cp.StringIndent(2))
 
-// Output:
-// mv:
-//     struct :[unknown] mxj_test.str{IntVal:4, StrVal:"now's the time", FloatVal:3.14159, BoolVal:true, private:"Skies are blue"}
-//     struct_ptr :[unknown] &mxj_test.str{IntVal:4, StrVal:"now's the time", FloatVal:3.14159, BoolVal:true, private:"Skies are blue"}
-//     misc :[string] Now is the time
-// cp:
-//     misc :[string] Now is the time
-//     struct :
-//       int :[float64] 4.00e+00
-//       str :[string] now's the time
-//       float :[float64] 3.14e+00
-//       bool :[bool] true
-//     struct_ptr :
-//       int :[float64] 4.00e+00
-//       str :[string] now's the time
-//       float :[float64] 3.14e+00
-//       bool :[bool] true
+	// Output:
+	// mv:
+	//     struct :[unknown] mxj_test.str{IntVal:4, StrVal:"now's the time", FloatVal:3.14159, BoolVal:true, private:"Skies are blue"}
+	//     struct_ptr :[unknown] &mxj_test.str{IntVal:4, StrVal:"now's the time", FloatVal:3.14159, BoolVal:true, private:"Skies are blue"}
+	//     misc :[string] Now is the time
+	// cp:
+	//     misc :[string] Now is the time
+	//     struct :
+	//       int :[float64] 4.00e+00
+	//       str :[string] now's the time
+	//       float :[float64] 3.14e+00
+	//       bool :[bool] true
+	//     struct_ptr :
+	//       int :[float64] 4.00e+00
+	//       str :[string] now's the time
+	//       float :[float64] 3.14e+00
+	//       bool :[bool] true
 }
-

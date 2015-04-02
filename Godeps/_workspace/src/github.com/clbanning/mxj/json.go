@@ -124,7 +124,7 @@ var JsonUseNumber bool
 func NewMapJson(jsonVal []byte) (Map, error) {
 	// empty or nil begets empty
 	if len(jsonVal) == 0 {
-		m := make(map[string]interface{},0)
+		m := make(map[string]interface{}, 0)
 		return m, nil
 	}
 	// handle a goofy case ...

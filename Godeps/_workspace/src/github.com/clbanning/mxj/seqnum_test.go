@@ -30,7 +30,7 @@ func TestSeqNumHeader(t *testing.T) {
 }
 
 func TestSeqNum(t *testing.T) {
-	IncludeTagSeqNum( true )
+	IncludeTagSeqNum(true)
 
 	m, err := NewMapXml(seqdata1, Cast)
 	if err != nil {
@@ -48,5 +48,5 @@ func TestSeqNum(t *testing.T) {
 	j, _ = m.JsonIndent("", "  ")
 	fmt.Println(string(j))
 
-	IncludeTagSeqNum( false )
+	IncludeTagSeqNum(false)
 }

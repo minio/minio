@@ -22,9 +22,9 @@ import (
 	"strings"
 )
 
-// (Map)NewMap - create a new Map from data in the current Map. 
+// (Map)NewMap - create a new Map from data in the current Map.
 //	'keypairs' are key mappings "oldKey:newKey" and specify that the current value of 'oldKey'
-//	should be the value for 'newKey' in the returned Map. 
+//	should be the value for 'newKey' in the returned Map.
 //		- 'oldKey' supports dot-notation as described for (Map)ValuesForPath()
 //		- 'newKey' supports dot-notation but with no wildcards, '*', or indexed arrays
 //		- "oldKey" is shorthand for for the keypair value "oldKey:oldKey"
@@ -32,7 +32,7 @@ import (
 //		- if 'oldKey' does not exist in the current Map, it is not written to the new Map.
 //		  "null" is not supported unless it is the current Map.
 //		- see newmap_test.go for several syntax examples
-//	
+//
 //	NOTE: mv.NewMap() == mxj.New().
 func (mv Map) NewMap(keypairs ...string) (Map, error) {
 	n := make(map[string]interface{}, 0)
@@ -67,7 +67,7 @@ func (mv Map) NewMap(keypairs ...string) (Map, error) {
 			return n, errors.New("newKey value cannot contain indexed arrays - " + v)
 		}
 		if oldKey == "" || newKey == "" {
-			return n, errors.New("oldKey or newKey is not specified - " +  v)
+			return n, errors.New("oldKey or newKey is not specified - " + v)
 		}
 
 		// get oldKey value
@@ -125,7 +125,7 @@ func addNewVal(n *map[string]interface{}, path []string, val []interface{}) {
 			// The placement of the next value in the array is dependent
 			// on the sequence of members - could land on a map or a nil
 			// value first.  TODO: how to test this.
-			a := make([]interface{},0)
+			a := make([]interface{}, 0)
 			var foundmap bool
 			for _, vv := range m[k].([]interface{}) {
 				switch vv.(type) {
@@ -135,7 +135,7 @@ func addNewVal(n *map[string]interface{}, path []string, val []interface{}) {
 						continue
 					}
 					nm = make(map[string]interface{}, 0)
-					a = append(a,interface{}(nm))
+					a = append(a, interface{}(nm))
 					foundmap = true
 				case map[string]interface{}:
 					if foundmap { // use the first one in array
@@ -151,7 +151,7 @@ func addNewVal(n *map[string]interface{}, path []string, val []interface{}) {
 			}
 			// no map found in array
 			if !foundmap {
-				nm = make(map[string]interface{},0)
+				nm = make(map[string]interface{}, 0)
 				a = append(a, interface{}(nm))
 			}
 			m[k] = interface{}(a) // must insert in map
@@ -178,6 +178,6 @@ func addNewVal(n *map[string]interface{}, path []string, val []interface{}) {
 	default: // v exists:string, float64, bool, map[string]interface, etc.
 		a := make([]interface{}, 0)
 		a = append(a, v, newVal)
-		m[k] =interface{}(a)
+		m[k] = interface{}(a)
 	}
 }

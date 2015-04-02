@@ -6,8 +6,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"github.com/clbanning/mxj"
+	"io"
 )
 
 // Demo how to compensate for irregular tag labels in data.

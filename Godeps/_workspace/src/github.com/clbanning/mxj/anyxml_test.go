@@ -43,7 +43,7 @@ func TestAnyXml(t *testing.T) {
 	}
 	fmt.Println("[]->x:", string(x))
 
-	a := []interface{}{ "try", "this", 3.14159265, true }
+	a := []interface{}{"try", "this", 3.14159265, true}
 	x, err = AnyXml(a)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestAnyXmlIndent(t *testing.T) {
 	}
 	fmt.Println("[]->x:\n", string(x))
 
-	a := []interface{}{ "try", "this", 3.14159265, true }
+	a := []interface{}{"try", "this", 3.14159265, true}
 	x, err = AnyXmlIndent(a, "", "  ")
 	if err != nil {
 		t.Fatal(err)

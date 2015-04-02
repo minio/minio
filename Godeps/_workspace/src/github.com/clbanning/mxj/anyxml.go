@@ -9,21 +9,21 @@ const (
 	DefaultElementTag = "element"
 )
 
-// Encode arbitrary value as XML. 
-// 
+// Encode arbitrary value as XML.
+//
 // Note: unmarshaling the resultant
 // XML may not return the original value, since tag labels may have been injected
 // to create the XML representation of the value.
 /*
  Encode an arbitrary JSON object.
 	package main
-	
+
 	import (
 		"encoding/json"
 		"fmt"
 		"github/clbanning/mxj"
 	)
-	
+
 	func main() {
 		jsondata := []byte(`[
 			{ "somekey":"somevalue" },
@@ -42,7 +42,7 @@ const (
 		}
 		fmt.Println(string(x))
 	}
-	
+
 	output:
 		<mydoc>
 		  <somekey>somevalue</somekey>
@@ -109,7 +109,6 @@ func AnyXml(v interface{}, tags ...string) ([]byte, error) {
 
 	return b, err
 }
-
 
 // Encode an arbitrary value as a pretty XML string.
 // Alternative values for DefaultRootTag and DefaultElementTag can be set as:

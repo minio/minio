@@ -45,6 +45,6 @@ func main() {
 	}
 
 	for _, v := range values {
-		fmt.Println("v:",v)
+		fmt.Println("v:", v)
 	}
 }

@@ -38,7 +38,7 @@ func (mv Map) Old() map[string]interface{} {
 //	      be represented as a map[string]interface{} value.
 func (mv Map) Copy() (Map, error) {
 	// this is the poor-man's deep copy
-	// not efficient, but it works 
+	// not efficient, but it works
 	j, jerr := mv.Json()
 	// must handle, we don't know how mv got built
 	if jerr != nil {

@@ -39,10 +39,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/clbanning/mxj"
 	"log"
 	"os"
 	"time"
-	"github.com/clbanning/mxj"
 )
 
 func main() {
@@ -81,7 +81,7 @@ func main() {
 	fmt.Println(time.Now().String(), "... XML Unmarshaled - len:", len(m))
 
 	// Get just the key values of interest.
-	// Could also use m.ValuesForKey("Metric"), 
+	// Could also use m.ValuesForKey("Metric"),
 	// since there's just the one path.
 	metricVals, err := m.ValuesForPath("Metrics.Metric")
 	if err != nil {

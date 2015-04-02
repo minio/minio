@@ -36,4 +36,3 @@ var jsondata = []byte(`
 {"book":{"author":"John Hawkes","review":"A lyrical novel about the construction of Ft. Peck Dam in Montana.","title":"The Beetle Leg"}}
 {"book":{"author":{"first_name":"T.E.","last_name":"Porter"},"review":"A magical novella.","title":"King's Day"}}
 { "here":"we", "put":"in", "an":error }`)
-

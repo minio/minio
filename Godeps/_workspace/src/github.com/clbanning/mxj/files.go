@@ -9,7 +9,7 @@ import (
 type Maps []Map
 
 func NewMaps() Maps {
-	return make(Maps,0)
+	return make(Maps, 0)
 }
 
 type MapRaw struct {
@@ -33,7 +33,7 @@ func NewMapsFromJsonFile(name string) (Maps, error) {
 	}
 	defer fh.Close()
 
-	am := make([]Map,0)
+	am := make([]Map, 0)
 	for {
 		m, raw, err := NewMapJsonReaderRaw(fh)
 		if err != nil && err != io.EOF {
@@ -65,7 +65,7 @@ func NewMapsFromJsonFileRaw(name string) ([]MapRaw, error) {
 	}
 	defer fh.Close()
 
-	am := make([]MapRaw,0)
+	am := make([]MapRaw, 0)
 	for {
 		mr := new(MapRaw)
 		mr.M, mr.R, err = NewMapJsonReaderRaw(fh)
@@ -104,7 +104,7 @@ func NewMapsFromXmlFile(name string) (Maps, error) {
 	}
 	defer fh.Close()
 
-	am := make([]Map,0)
+	am := make([]Map, 0)
 	for {
 		m, raw, err := NewMapXmlReaderRaw(fh)
 		if err != nil && err != io.EOF {
@@ -130,7 +130,6 @@ func NewMapsFromXmlFileRaw(name string) ([]MapRaw, error) {
 		XmlWriterBufSize = x
 	}()
 
-
 	fi, err := os.Stat(name)
 	if err != nil {
 		return nil, err
@@ -145,7 +144,7 @@ func NewMapsFromXmlFileRaw(name string) ([]MapRaw, error) {
 	}
 	defer fh.Close()
 
-	am := make([]MapRaw,0)
+	am := make([]MapRaw, 0)
 	for {
 		mr := new(MapRaw)
 		mr.M, mr.R, err = NewMapXmlReaderRaw(fh)
@@ -298,4 +297,3 @@ func (mvs Maps) XmlFileIndent(file, prefix, indent string) error {
 	fh.WriteString(s)
 	return nil
 }
-
