@@ -108,12 +108,6 @@ func (s *MySuite) SetUpTest(c *C) {
 }
 
 func (s *MySuite) TearDownTest(c *C) {
-	switch driver := s.Driver.(type) {
-	case *mocks.Driver:
-		{
-			driver.AssertExpectations(c)
-		}
-	}
 	root := strings.TrimSpace(s.Root)
 	if root != "" {
 		os.RemoveAll(s.Root)
@@ -151,6 +145,12 @@ func parseResponse(res *http.Response) (*responseMap, error) {
 }
 
 func (s *MySuite) TestNonExistantObject(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	s.MockDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	httpHandler := api.HTTPHandler("", driver)
@@ -163,6 +163,12 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 }
 
 func (s *MySuite) TestEmptyObject(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	metadata := drivers.ObjectMetadata{
@@ -200,6 +206,12 @@ func (s *MySuite) TestEmptyObject(c *C) {
 }
 
 func (s *MySuite) TestObject(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	metadata := drivers.ObjectMetadata{
@@ -238,6 +250,12 @@ func (s *MySuite) TestObject(c *C) {
 }
 
 func (s *MySuite) TestMultipleObjects(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	metadata1 := drivers.ObjectMetadata{
@@ -364,6 +382,12 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 }
 
 func (s *MySuite) TestNotImplemented(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -376,6 +400,12 @@ func (s *MySuite) TestNotImplemented(c *C) {
 }
 
 func (s *MySuite) TestHeader(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	typedDriver.AssertExpectations(c)
@@ -422,6 +452,12 @@ func (s *MySuite) TestHeader(c *C) {
 }
 
 func (s *MySuite) TestPutBucket(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
@@ -452,6 +488,12 @@ func (s *MySuite) TestPutBucket(c *C) {
 }
 
 func (s *MySuite) TestPutObject(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
@@ -529,6 +571,12 @@ func (s *MySuite) TestPutObject(c *C) {
 }
 
 func (s *MySuite) TestListBuckets(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
@@ -592,18 +640,42 @@ func readListBucket(reader io.Reader) (api.BucketListResponse, error) {
 }
 
 func (s *MySuite) TestListObjects(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	// TODO Implement
 }
 
 func (s *MySuite) TestShouldNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	// TODO Implement
 }
 
 func (s *MySuite) TestHeadOnObject(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	// TODO
 }
 
 func (s *MySuite) TestDateFormat(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	// TODO
 }
 
@@ -622,6 +694,12 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 }
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
@@ -651,6 +729,12 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	httpHandler := api.HTTPHandler("", driver)
@@ -679,6 +763,12 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 }
 
 func (s *MySuite) TestContentTypePersists(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
@@ -755,6 +845,12 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 }
 
 func (s *MySuite) TestPartialContent(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
