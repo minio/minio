@@ -51,13 +51,13 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 					setObjectHeaders(w, metadata)
 					if _, err := server.driver.GetObject(w, bucket, object); err != nil {
 						// unable to write headers, we've already printed data. Just close the connection.
+						log.Error.Println(err)
 					}
 				}
 			case false:
 				{
 					metadata.Size = httpRange.length
 					setRangeObjectHeaders(w, metadata, httpRange)
-					//					contentRangeValue := "bytes "  + strconv.FormatInt(httpRange.start, 10) + "-"  +  strconv.FormatInt(httpRange.length, 10) + "/" + strconv.FormatInt(httpRange.size, 10)
 					w.WriteHeader(http.StatusPartialContent)
 					_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 					if err != nil {
@@ -147,8 +147,14 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Policy == true && object == "" {
-		// TODO figure out if we can hand this off to router instead of embedding here.
-		// hand off request to pubBucketPolicyHandler
+		// TODO
+		// ----
+		// This is handled here instead of router, is only because semantically
+		// resource queries are not treated differently by Gorilla mux
+		//
+		// In-fact a request coming in as /bucket/?policy={} and /bucket/object are
+		// treated similarly. A proper fix would be to remove this comment and
+		// find a right regex pattern for individual requests
 		server.putBucketPolicyHandler(w, req)
 		return
 	}

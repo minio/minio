@@ -88,6 +88,11 @@ func (file *fileDriver) GetObject(w io.Writer, bucket string, object string) (in
 		return 0, drivers.BucketNameInvalid{Bucket: bucket}
 	}
 
+	// check bucket exists
+	if _, err := os.Stat(path.Join(file.root, bucket)); os.IsNotExist(err) {
+		return 0, drivers.BucketNotFound{Bucket: bucket}
+	}
+
 	// validate object
 	if drivers.IsValidObject(object) == false {
 		return 0, drivers.ObjectNameInvalid{Bucket: bucket, Object: object}

@@ -54,15 +54,11 @@ func generateBucketsListResult(buckets []drivers.BucketMetadata) BucketListRespo
 	return data
 }
 
+// itemKey
 type itemKey []*Item
 
-// Len
-func (b itemKey) Len() int { return len(b) }
-
-// Swap
-func (b itemKey) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-
-// Less
+func (b itemKey) Len() int           { return len(b) }
+func (b itemKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
 // takes a set of objects and prepares the objects for serialization
