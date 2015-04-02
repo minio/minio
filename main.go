@@ -17,7 +17,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"os/user"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio-io/cli"
@@ -25,6 +30,8 @@ import (
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
+
+var globalDebugFlag = false
 
 var flags = []cli.Flag{
 	cli.StringFlag{
@@ -59,6 +66,18 @@ var flags = []cli.Flag{
 		Value: "donut",
 		Usage: "valid entries: file,inmemory,donut",
 	},
+	cli.BoolFlag{
+		Name:  "debug",
+		Usage: "print debug information",
+	},
+}
+
+func init() {
+	// Check for the environment early on and gracefuly report.
+	_, err := user.Current()
+	if err != nil {
+		log.Fatalf("minio: Unable to obtain user's home directory. \nError: %s\n", err)
+	}
 }
 
 func getDriverType(input string) server.DriverType {
@@ -117,20 +136,71 @@ func runCmd(c *cli.Context) {
 	server.Start(serverConfigs)
 }
 
+// Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
+func formatBytes(i int64) (result string) {
+	switch {
+	case i > (1024 * 1024 * 1024 * 1024):
+		result = fmt.Sprintf("%.02f TB", float64(i)/1024/1024/1024/1024)
+	case i > (1024 * 1024 * 1024):
+		result = fmt.Sprintf("%.02f GB", float64(i)/1024/1024/1024)
+	case i > (1024 * 1024):
+		result = fmt.Sprintf("%.02f MB", float64(i)/1024/1024)
+	case i > 1024:
+		result = fmt.Sprintf("%.02f KB", float64(i)/1024)
+	default:
+		result = fmt.Sprintf("%d B", i)
+	}
+	result = strings.Trim(result, " ")
+	return
+}
+
+// Tries to get os/arch/platform specific information
+// Returns a map of current os/arch/platform/memstats
+func getSystemData() map[string]string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	memstats := &runtime.MemStats{}
+	runtime.ReadMemStats(memstats)
+	mem := fmt.Sprintf("Used: %s | Allocated: %s | Used-Heap: %s | Allocated-Heap: %s",
+		formatBytes(int64(memstats.Alloc)),
+		formatBytes(int64(memstats.TotalAlloc)),
+		formatBytes(int64(memstats.HeapAlloc)),
+		formatBytes(int64(memstats.HeapSys)))
+	platform := fmt.Sprintf("Host: %s | OS: %s | Arch: %s",
+		host,
+		runtime.GOOS,
+		runtime.GOARCH)
+	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
+	return map[string]string{
+		"PLATFORM": platform,
+		"RUNTIME":  goruntime,
+		"MEM":      mem,
+	}
+}
+
 func main() {
 	// set up iodine
-	iodine.SetGlobalState("minio.git", gitCommitHash)
+	iodine.SetGlobalState("minio.git", minioGitCommitHash)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
 
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = gitCommitHash
+	app.Version = minioGitCommitHash
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.EnableBashCompletion = true
 	app.Flags = flags
 	app.Action = runCmd
+	app.Before = func(c *cli.Context) error {
+		globalDebugFlag = c.GlobalBool("debug")
+		if globalDebugFlag {
+			app.ExtraInfo = getSystemData()
+		}
+		return nil
+	}
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error.Println(err)

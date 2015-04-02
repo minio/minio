@@ -10,10 +10,9 @@ cat > $CONST_FILE <<EOF
 package main
 
 const (
-	gitCommitHash = "__GIT_COMMIT_HASH__"
+	minioGitCommitHash = "__GIT_COMMIT_HASH__"
 )
 EOF
 
 commit_id=$(git log --format="%H" -n 1)
 sed -i "s/__GIT_COMMIT_HASH__/$commit_id/" $CONST_FILE
-
