@@ -36,6 +36,14 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Policy == true {
+		// TODO
+		// ----
+		// This is handled here instead of router, is only because semantically
+		// resource queries are not treated differently by Gorilla mux
+		//
+		// In-fact a request coming in as /bucket/?policy={} and /bucket/object are
+		// treated similarly. A proper fix would be to remove this comment and
+		// find a right regex pattern for individual requests
 		server.getBucketPolicyHandler(w, req)
 		return
 	}

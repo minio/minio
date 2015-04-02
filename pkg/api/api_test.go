@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/clbanning/mxj"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/drivers/donut"
@@ -121,6 +122,34 @@ func (s *MySuite) TearDownTest(c *C) {
 	s.Root = ""
 }
 
+/* **** SAMPLE ERROR RESPONSE ****
+<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+   <Code>AccessDenied</Code>
+   <Message>Access Denied</Message>
+   <Resource>/mybucket/myphoto.jpg</Resource>
+   <RequestId>F19772218238A85A</RequestId>
+   <HostId>GuWkjyviSiGHizehqpmsD1ndz5NClSP19DOT+s2mv7gXGQ8/X1lhbDGiIJEXpGFD</HostId>
+</Error>
+*/
+
+type responseMap struct {
+	res    *http.Response // response headers
+	resMsg mxj.Map        // Keys: Code, Message, Resource, RequestId, HostId
+}
+
+// parseResponse returns a new initialized S3.Error structure
+func parseResponse(res *http.Response) (*responseMap, error) {
+	var err error
+	resp := responseMap{}
+	resp.res = res
+	resp.resMsg, err = mxj.NewMapXmlReader(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (s *MySuite) TestNonExistantObject(c *C) {
 	driver := s.Driver
 	s.MockDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
@@ -130,7 +159,6 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
-	c.Log(response.StatusCode)
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
@@ -217,9 +245,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Key:         "object1",
 		ContentType: "application/octet-stream",
 		Created:     time.Now(),
-		// TODO correct md5
-		Md5:  "5eb63bbbe01eeed093cb22bb8f5acdc3",
-		Size: 9,
+		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Size:        9,
 	}
 	metadata2 := drivers.ObjectMetadata{
 		Bucket:      "bucket",
@@ -258,8 +285,12 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
-	// TODO Test Headers
+	responseMap, err := parseResponse(response)
+	c.Assert(err, IsNil)
+	c.Assert(responseMap.res.StatusCode, Equals, http.StatusNotFound)
+	values, err := responseMap.resMsg.ValuesForKey("Code")
+	c.Assert(err, IsNil)
+	c.Assert(values[0], Equals, "NoSuchKey")
 
 	//// test object 1
 
@@ -341,6 +372,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 	response, err := http.Get(testServer.URL + "/bucket/object?acl")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
+
 }
 
 func (s *MySuite) TestHeader(c *C) {
@@ -354,7 +386,12 @@ func (s *MySuite) TestHeader(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
+	responseMap, err := parseResponse(response)
+	c.Assert(err, IsNil)
+	c.Assert(responseMap.res.StatusCode, Equals, http.StatusNotFound)
+	values, err := responseMap.resMsg.ValuesForKey("Code")
+	c.Assert(err, IsNil)
+	c.Assert(values[0], Equals, "NoSuchKey")
 
 	buffer := bytes.NewBufferString("hello world")
 	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
@@ -367,9 +404,8 @@ func (s *MySuite) TestHeader(c *C) {
 		Key:         "object",
 		ContentType: "application/octet-stream",
 		Created:     time.Now(),
-		// TODO correct md5
-		Md5:  "5eb63bbbe01eeed093cb22bb8f5acdc3",
-		Size: 11,
+		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Size:        11,
 	}
 
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(objectMetadata, nil).Once()
@@ -731,9 +767,8 @@ func (s *MySuite) TestPartialContent(c *C) {
 		Key:         "bar",
 		ContentType: "application/octet-stream",
 		Created:     time.Now(),
-		// TODO Determine if md5 of range or full object needed
-		Md5:  "e81c4e4f2b7b93b481e13a8553c2ae1b",
-		Size: 11,
+		Md5:         "e81c4e4f2b7b93b481e13a8553c2ae1b", // TODO Determine if md5 of range or full object needed
+		Size:        11,
 	}
 
 	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
