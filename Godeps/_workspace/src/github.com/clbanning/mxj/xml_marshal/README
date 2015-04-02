@@ -1,0 +1,26 @@
+The mxj package terminates empty elements using '/>' rather than '<tag ...></tag>'.  
+
+The Xml(), XmlIndent(), XmlWriter() marshals Map values that can have structures or any other Go type 
+that xml.Marshal() can encode.  If you want to have xml.Marshal() encode empty elements in a manner 
+consist with maputil, then you need to hack the src/pkg/encoding/xml/marshal.go file to support that 
+convention.
+
+The marshal.go.v1_2 file in this repo does that for Go v1.2; use it in place of the standard library 
+marshal.go file.
+
+The example_test.go.v1_2 file extends the package example_test.go file in the src/pkg/encoding/xml
+directory to provide an example of the SetUseNullEndTag() function that you'll see in the new godoc 
+documentation for encoding/xml.  xml.SetUseNullEndTag(true) causes xml.Marshal() to encode empty XML 
+elements as <tag .../>, just like this package.
+
+With the new marshal.go, you can then force all marshaling that uses encoding/xml to use mxj's <tag .../>
+syntax rather than the Go standard <tag ...></tag> syntax.
+
+NOTE:
+If you install this patch then only use either 
+
+    - xml.SetUseNullEndTag() 
+or 
+    - mxj.XmlGoEmptyElemSyntax()
+
+to have consistent encoding of empty XML elements.
