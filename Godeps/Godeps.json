@@ -23,8 +23,8 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/cli",
-			"Comment": "1.2.0-99-g1ee5c11",
-			"Rev": "1ee5c115af7856a16f133e2f2d3d9f91895c2ddb"
+			"Comment": "1.2.0-100-g6d6f8d3",
+			"Rev": "6d6f8d3cc162bfcb60379888e2f37d73ff6a6253"
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",

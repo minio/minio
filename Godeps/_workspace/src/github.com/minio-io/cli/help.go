@@ -14,9 +14,12 @@ USAGE:
 VERSION:
    {{.Version}}
 
-AUTHOR(S):
-   {{range .Authors}}{{ . }} {{end}}
-
+BUILD:
+   {{.Compiled}}
+{{range $key, $value := .ExtraInfo}}
+{{ $key }}:
+   {{ $value }}
+{{ end }}
 COMMANDS:
    {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}

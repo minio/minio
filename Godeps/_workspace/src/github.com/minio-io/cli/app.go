@@ -3,12 +3,13 @@ package cli
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
+	"time"
+
+	"io/ioutil"
 	"text/tabwriter"
 	"text/template"
-	"time"
 )
 
 // App is the main structure of a cli application. It is recomended that
@@ -44,6 +45,8 @@ type App struct {
 	CommandNotFound func(context *Context, command string)
 	// Compilation date
 	Compiled time.Time
+	// ExtraInfo pass additional info as a key value map
+	ExtraInfo map[string]string
 	// List of all authors who contributed
 	Authors []Author
 	// Name of Author (Note: Use App.Authors, this is deprecated)
