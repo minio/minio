@@ -1,9 +1,9 @@
 package mxj
 
 import (
-	"io"
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
 )
 
@@ -18,7 +18,7 @@ func TestNewMap(t *testing.T) {
 	m, _ := NewMapJson(j)
 	fmt.Printf("m: %#v\n", m)
 
-	fmt.Println("\n",`eval - m.NewMap("A:AA", "B:BB", "C:cc", "D:help")`)
+	fmt.Println("\n", `eval - m.NewMap("A:AA", "B:BB", "C:cc", "D:help")`)
 	n, err := m.NewMap("A:AA", "B:BB", "C:cc", "D:help")
 	if err != nil {
 		fmt.Println("err:", err.Error())
@@ -26,11 +26,11 @@ func TestNewMap(t *testing.T) {
 	j, _ = n.Json()
 	fmt.Println("n.Json():", string(j))
 	x, _ := n.Xml()
-	fmt.Println("n.Xml():\n",string(x))
+	fmt.Println("n.Xml():\n", string(x))
 	x, _ = n.XmlIndent("", "  ")
-	fmt.Println("n.XmlIndent():\n",string(x))
+	fmt.Println("n.XmlIndent():\n", string(x))
 
-	fmt.Println("\n",`eval - m.NewMap("A:AA.A", "B:AA.B", "C:AA.B.cc", "D:hello.help")`)
+	fmt.Println("\n", `eval - m.NewMap("A:AA.A", "B:AA.B", "C:AA.B.cc", "D:hello.help")`)
 	n, err = m.NewMap("A:AA.A", "B:AA.B", "C:AA.B.cc", "D:hello.help")
 	if err != nil {
 		fmt.Println("err:", err.Error())
@@ -38,12 +38,12 @@ func TestNewMap(t *testing.T) {
 	j, _ = n.Json()
 	fmt.Println("n.Json():", string(j))
 	x, _ = n.Xml()
-	fmt.Println("n.Xml():\n",string(x))
+	fmt.Println("n.Xml():\n", string(x))
 	x, _ = n.XmlIndent("", "  ")
-	fmt.Println("n.XmlIndent():\n",string(x))
+	fmt.Println("n.XmlIndent():\n", string(x))
 
-	var keypairs = []string{ "A:xml.AA", "B:xml.AA.hello.again", "C:xml.AA", "D:xml.AA.hello.help" }
-	fmt.Println("\n",`eval - m.NewMap keypairs:`,keypairs)
+	var keypairs = []string{"A:xml.AA", "B:xml.AA.hello.again", "C:xml.AA", "D:xml.AA.hello.help"}
+	fmt.Println("\n", `eval - m.NewMap keypairs:`, keypairs)
 	n, err = m.NewMap(keypairs...)
 	if err != nil {
 		fmt.Println("err:", err.Error())
@@ -51,9 +51,9 @@ func TestNewMap(t *testing.T) {
 	j, _ = n.Json()
 	fmt.Println("n.Json():", string(j))
 	x, _ = n.Xml()
-	fmt.Println("n.Xml():\n",string(x))
+	fmt.Println("n.Xml():\n", string(x))
 	x, _ = n.XmlIndent("", "  ")
-	fmt.Println("n.XmlIndent():\n",string(x))
+	fmt.Println("n.XmlIndent():\n", string(x))
 }
 
 // Need to normalize from an XML stream the values for "netid" and "idnet".

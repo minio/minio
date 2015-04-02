@@ -31,7 +31,7 @@ SUMMARY
    Marshal Map value, 'm', to an XML Writer (io.Writer):
       err := m.XmlWriter(xmlWriter)
       raw, err := m.XmlWriterRaw(xmlWriter) // 'raw' is the raw XML that was written on xmlWriter
-	
+
    Also, for prettified output:
       xmlValue, err := m.XmlIndent(prefix, indent, ...)
       err := m.XmlIndentWriter(xmlWriter, prefix, indent, ...)
@@ -72,7 +72,7 @@ XML PARSING CONVENTIONS
    - Attributes are parsed to map[string]interface{} values by prefixing a hyphen, '-',
      to the attribute label. (PrependAttrWithHyphen(false) will override this.)
    - If the element is a simple element and has attributes, the element value
-     is given the key '#text' for its map[string]interface{} representation. 
+     is given the key '#text' for its map[string]interface{} representation.
 
 XML ENCODING CONVENTIONS
 

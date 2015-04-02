@@ -40,10 +40,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/clbanning/mxj"
 	"log"
 	"os"
 	"time"
-	"github.com/clbanning/mxj"
 )
 
 func main() {

@@ -11,7 +11,7 @@ checkgopath:
 	@if [ ! -d ${MINIOPATH} ]; then echo "Project not found in $GOPATH, please follow instructions provided at https://github.com/Minio-io/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi
 
 getdeps: checkdeps checkgopath
-	@go get github.com/tools/godep && echo "Installed godep:"
+	@go get github.com/minio-io/godep && echo "Installed godep:"
 	@go get github.com/golang/lint/golint && echo "Installed golint:"
 	@go get golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get github.com/fzipp/gocyclo && echo "Installed gocyclo:"

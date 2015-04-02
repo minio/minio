@@ -79,7 +79,7 @@ func TestNewMapXmlReader(t *testing.T) {
 // ---------------------  Xml() and XmlWriter() test cases -------------------
 
 func TestXml_1(t *testing.T) {
-	mv := Map{"tag1": "some data", "tag2": "more data", "boolean": true, "float": 3.14159625, "null":nil}
+	mv := Map{"tag1": "some data", "tag2": "more data", "boolean": true, "float": 3.14159625, "null": nil}
 
 	x, err := mv.Xml()
 	if err != nil {
@@ -91,8 +91,8 @@ func TestXml_1(t *testing.T) {
 }
 
 func TestXml_2(t *testing.T) {
-	a := []interface{}{ "string", true, 36.4 }
-	mv := Map{"array": a }
+	a := []interface{}{"string", true, 36.4}
+	mv := Map{"array": a}
 
 	x, err := mv.Xml()
 	if err != nil {
@@ -104,8 +104,8 @@ func TestXml_2(t *testing.T) {
 }
 
 func TestXml_3(t *testing.T) {
-	a := []interface{}{ "string", true, 36.4 }
-	mv := Map{"array": []interface{}{a, "string2"} }
+	a := []interface{}{"string", true, 36.4}
+	mv := Map{"array": []interface{}{a, "string2"}}
 
 	x, err := mv.Xml()
 	if err != nil {
@@ -117,8 +117,8 @@ func TestXml_3(t *testing.T) {
 }
 
 func TestXml_4(t *testing.T) {
-	a := []interface{}{ "string", true, 36.4 }
-	mv := Map{"array": map[string]interface{}{ "innerkey": []interface{}{a, "string2"} } }
+	a := []interface{}{"string", true, 36.4}
+	mv := Map{"array": map[string]interface{}{"innerkey": []interface{}{a, "string2"}}}
 
 	x, err := mv.Xml()
 	if err != nil {
@@ -130,8 +130,8 @@ func TestXml_4(t *testing.T) {
 }
 
 func TestXml_5(t *testing.T) {
-	a := []interface{}{ "string", true, 36.4 }
-	mv := Map{"array": []interface{}{ map[string]interface{}{ "innerkey": []interface{}{a, "string2"} }, map[string]interface{}{"some":"more"} } }
+	a := []interface{}{"string", true, 36.4}
+	mv := Map{"array": []interface{}{map[string]interface{}{"innerkey": []interface{}{a, "string2"}}, map[string]interface{}{"some": "more"}}}
 
 	x, err := mv.Xml()
 	if err != nil {
@@ -148,10 +148,10 @@ func TestXmlWriter(t *testing.T) {
 
 	raw, err := mv.XmlWriterRaw(w, "myRootTag")
 	if err != nil {
-		t.Fatal("err:",err.Error())
+		t.Fatal("err:", err.Error())
 	}
 
-	b := make([]byte,w.Len())
+	b := make([]byte, w.Len())
 	_, err = w.Read(b)
 	if err != nil {
 		t.Fatal("err:", err.Error())

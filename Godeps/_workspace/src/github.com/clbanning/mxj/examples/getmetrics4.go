@@ -1,7 +1,7 @@
 // getmetrics2.go - transform Eclipse Metrics (v3) XML report into CSV files for each metric
 // Uses an in-memory buffer for the XML data and direct XML decoding of the buffer into a Map.
 // Then XML buffer is decoded into a Map while the raw XML is copied using NewMapXmlReaderRaw()
-// to illustrate processing overhead relative to getmetrics2.go.  Not a practical example, 
+// to illustrate processing overhead relative to getmetrics2.go.  Not a practical example,
 // but confirms the getmetrics1.go vs. getmetrics3.go use case.
 
 /*
@@ -41,10 +41,10 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"github.com/clbanning/mxj"
 	"log"
 	"os"
 	"time"
-	"github.com/clbanning/mxj"
 )
 
 func main() {
@@ -79,7 +79,7 @@ func main() {
 
 	// load XML into a Map value
 	// Note: there is a single record with root tag of "Metrics".
-	m, raw, merr := mxj.NewMapXmlReaderRaw(xmlReader)	// don't catch the pointer to raw XML
+	m, raw, merr := mxj.NewMapXmlReaderRaw(xmlReader) // don't catch the pointer to raw XML
 	if merr != nil {
 		log.Fatal("merr:", merr.Error())
 	}
@@ -87,7 +87,7 @@ func main() {
 	fmt.Println("raw XML buffer size (should be same as File size):", len(*raw))
 
 	// Get just the key values of interest.
-	// Could also use m.ValuesForKey("Metric"), 
+	// Could also use m.ValuesForKey("Metric"),
 	// since there's just the one path.
 	metricVals, err := m.ValuesForPath("Metrics.Metric")
 	if err != nil {

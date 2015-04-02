@@ -108,9 +108,9 @@ func fullPath(xmldata [][]byte) {
 }
 
 func partPath1(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "Envelope.Body.*.*.ClaimStatusCodeRecord"
 	values, err := m.ValueForPath(path)
 	if err != nil {
@@ -130,9 +130,9 @@ func partPath1(msg []byte) {
 }
 
 func partPath2(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "Envelope.Body.*.*.*"
 	values, err := m.ValueForPath(path)
 	if err != nil {
@@ -152,9 +152,9 @@ func partPath2(msg []byte) {
 }
 
 func partPath3(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*"
 	values, err := m.ValueForPath(path)
 	if err != nil {
@@ -174,9 +174,9 @@ func partPath3(msg []byte) {
 }
 
 func partPath4(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.Description"
 	values, err := m.ValueForPath(path)
 	if err != nil {
@@ -196,9 +196,9 @@ func partPath4(msg []byte) {
 }
 
 func partPath5(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.*"
 	values, err := m.ValueForPath(path)
 	if err != nil {
@@ -218,9 +218,9 @@ func partPath5(msg []byte) {
 }
 
 func partPath6(msg []byte) {
-	fmt.Println("\nmsg:",string(msg))
+	fmt.Println("\nmsg:", string(msg))
 	m, _ := mxj.NewMapXml(msg)
-	fmt.Println("m:",m.StringIndent())
+	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.*.*"
 	values, err := m.ValueForPath(path)
 	if err != nil {

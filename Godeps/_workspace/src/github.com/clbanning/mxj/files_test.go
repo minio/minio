@@ -104,7 +104,7 @@ func TestNewXmFileRaw(t *testing.T) {
 func TestMaps(t *testing.T) {
 	fmt.Println("TestMaps()")
 	mvs := NewMaps()
-	for i := 0 ; i < 2 ; i++ {
+	for i := 0; i < 2; i++ {
 		m, _ := NewMapJson([]byte(`{ "this":"is", "a":"test" }`))
 		mvs = append(mvs, m)
 	}
@@ -138,7 +138,7 @@ func TestJsonFile(t *testing.T) {
 	}
 	fmt.Println("files_test_dup.json written")
 
-	err = am.JsonFileIndent("files_test_indent.json","", "  ")
+	err = am.JsonFileIndent("files_test_indent.json", "", "  ")
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -160,7 +160,7 @@ func TestXmlFile(t *testing.T) {
 	}
 	fmt.Println("files_test_dup.xml written")
 
-	err = am.XmlFileIndent("files_test_indent.xml","", "  ")
+	err = am.XmlFileIndent("files_test_indent.xml", "", "  ")
 	if err != nil {
 		t.Fatal(err.Error())
 	}

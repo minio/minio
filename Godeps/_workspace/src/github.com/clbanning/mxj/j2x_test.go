@@ -27,4 +27,3 @@ func TestJ2X(t *testing.T) {
 	fmt.Println("j2x, m    :", m)
 	fmt.Println("j2x, xml  :", string(x))
 }
-

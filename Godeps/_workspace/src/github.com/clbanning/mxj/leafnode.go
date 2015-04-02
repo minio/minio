@@ -23,7 +23,7 @@ type LeafNode struct {
 // LeafNodes - returns an array of all LeafNode values for the Map.
 // The option no_attr argument suppresses attribute values (keys with prepended hyphen, '-')
 // as well as the "#text" key for the associated simple element value.
-func (mv Map)LeafNodes(no_attr ...bool) []LeafNode {
+func (mv Map) LeafNodes(no_attr ...bool) []LeafNode {
 	var a bool
 	if len(no_attr) == 1 {
 		a = no_attr[0]
@@ -64,8 +64,8 @@ func getLeafNodes(path, node string, mv interface{}, l *[]LeafNode, noattr bool)
 // LeafPaths - all paths that terminate in LeafNode values.
 func (mv Map) LeafPaths(no_attr ...bool) []string {
 	ln := mv.LeafNodes()
-	ss := make([]string,len(ln))
-	for i := 0 ; i < len(ln); i++ {
+	ss := make([]string, len(ln))
+	for i := 0; i < len(ln); i++ {
 		ss[i] = ln[i].Path
 	}
 	return ss
@@ -74,8 +74,8 @@ func (mv Map) LeafPaths(no_attr ...bool) []string {
 // LeafValues - all terminal values in the Map.
 func (mv Map) LeafValues(no_attr ...bool) []interface{} {
 	ln := mv.LeafNodes()
-	vv := make([]interface{},len(ln))
-	for i := 0 ; i < len(ln); i++ {
+	vv := make([]interface{}, len(ln))
+	for i := 0; i < len(ln); i++ {
 		vv[i] = ln[i].Value
 	}
 	return vv
