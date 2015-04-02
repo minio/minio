@@ -52,7 +52,7 @@ test: test-all
 minio: pre-build build-all test-all
 
 install: minio
-	@godep go install github.com/minio-io/minio && echo "Installed minio:"
+	@godep go install -a github.com/minio-io/minio && echo "Installed minio:"
 
 save: restore
 	@godep save ./...
