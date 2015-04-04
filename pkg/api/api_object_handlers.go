@@ -116,14 +116,9 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		{
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
-	case drivers.ImplementationError:
-		{
-			log.Error.Println(err)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
 	default:
 		{
-			log.Error.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
