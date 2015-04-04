@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/minio-io/minio",
+	"ImportPath": "github.com/minio-io/minio/pkg/api",
 	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
@@ -14,13 +14,8 @@
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
-			"ImportPath": "github.com/minio-io/cli",
-			"Comment": "1.2.0-100-g6d6f8d3",
-			"Rev": "6d6f8d3cc162bfcb60379888e2f37d73ff6a6253"
-		},
-		{
 			"ImportPath": "github.com/minio-io/erasure",
-			"Rev": "2a52bdad9b271ef680374a22f0cb68513a79ebf5"
+			"Rev": "3cece1a107115563682604b1430418e28f65dd80"
 		},
 		{
 			"ImportPath": "github.com/minio-io/iodine",

@@ -18,12 +18,9 @@ package api_test
 
 import (
 	"bytes"
-	"encoding/xml"
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"reflect"
 	"strconv"
@@ -31,7 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/clbanning/mxj"
+	"encoding/xml"
+	"net/http"
+	"net/http/httptest"
+
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/drivers/donut"
@@ -114,34 +114,6 @@ func (s *MySuite) TearDownTest(c *C) {
 	}
 	s.Driver = nil
 	s.Root = ""
-}
-
-/* **** SAMPLE ERROR RESPONSE ****
-<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-   <Code>AccessDenied</Code>
-   <Message>Access Denied</Message>
-   <Resource>/mybucket/myphoto.jpg</Resource>
-   <RequestId>F19772218238A85A</RequestId>
-   <HostId>GuWkjyviSiGHizehqpmsD1ndz5NClSP19DOT+s2mv7gXGQ8/X1lhbDGiIJEXpGFD</HostId>
-</Error>
-*/
-
-type responseMap struct {
-	res    *http.Response // response headers
-	resMsg mxj.Map        // Keys: Code, Message, Resource, RequestId, HostId
-}
-
-// parseResponse returns a new initialized S3.Error structure
-func parseResponse(res *http.Response) (*responseMap, error) {
-	var err error
-	resp := responseMap{}
-	resp.res = res
-	resp.resMsg, err = mxj.NewMapXmlReader(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }
 
 func (s *MySuite) TestNonExistantObject(c *C) {
@@ -303,13 +275,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
-	responseMap, err := parseResponse(response)
-	c.Assert(err, IsNil)
-	c.Assert(responseMap.res.StatusCode, Equals, http.StatusNotFound)
-	values, err := responseMap.resMsg.ValuesForKey("Code")
-	c.Assert(err, IsNil)
-	c.Assert(values[0], Equals, "NoSuchKey")
-
+	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 	//// test object 1
 
 	// get object
@@ -416,12 +382,7 @@ func (s *MySuite) TestHeader(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
-	responseMap, err := parseResponse(response)
-	c.Assert(err, IsNil)
-	c.Assert(responseMap.res.StatusCode, Equals, http.StatusNotFound)
-	values, err := responseMap.resMsg.ValuesForKey("Code")
-	c.Assert(err, IsNil)
-	c.Assert(values[0], Equals, "NoSuchKey")
+	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
 	buffer := bytes.NewBufferString("hello world")
 	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
