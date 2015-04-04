@@ -894,19 +894,9 @@ func (s *MySuite) TestPartialContent(c *C) {
 }
 
 func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
-	switch driver := s.Driver.(type) {
-	case *mocks.Driver:
-		{
-			driver.AssertExpectations(c)
-		}
-	default:
-		{
-			// We mock failures here to test
-			return
-		}
-	}
-	driver := s.Driver
-	typedDriver := s.MockDriver
+	driver := startMockDriver()
+	typedDriver := driver
+	defer driver.AssertExpectations(c)
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -938,6 +928,24 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	request, err = http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
+}
+
+func (s *MySuite) TestListBucketsErrors(c *C) {
+	driver := startMockDriver()
+	typedDriver := driver
+	defer driver.AssertExpectations(c)
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.BackendCorrupted{}).Once()
+	request, err := http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
 }

@@ -105,14 +105,9 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			encodedResponse := encodeResponse(response, acceptsContentType)
 			w.Write(encodedResponse)
 		}
-	case drivers.BackendCorrupted:
-		{
-			log.Error.Println(err)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
 	default:
 		{
-			log.Error.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
