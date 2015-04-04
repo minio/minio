@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"encoding/json"
-	"github.com/minio-io/iodine"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/minio-io/iodine"
 )
 
 type localDirectoryNode struct {

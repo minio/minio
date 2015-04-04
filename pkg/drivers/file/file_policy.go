@@ -21,6 +21,7 @@ import (
 	"path"
 
 	"encoding/json"
+
 	"github.com/minio-io/minio/pkg/drivers"
 )
 

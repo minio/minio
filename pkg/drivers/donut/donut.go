@@ -24,11 +24,12 @@ import (
 	"strings"
 	"time"
 
+	"io/ioutil"
+
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/storage/donut"
 	"github.com/minio-io/minio/pkg/utils/log"
-	"io/ioutil"
 )
 
 // donutDriver - creates a new single disk drivers driver using donut

@@ -21,8 +21,9 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/minio-io/check"
 	"time"
+
+	"github.com/minio-io/check"
 )
 
 // APITestSuite - collection of API tests
