@@ -61,9 +61,8 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 					w.WriteHeader(http.StatusPartialContent)
 					_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
 					if err != nil {
-						err = iodine.New(err, nil)
 						// unable to write headers, we've already printed data. Just close the connection.
-						log.Error.Println(err)
+						log.Error.Println(iodine.New(err, nil))
 					}
 				}
 			}
@@ -84,14 +83,9 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 		}
-	case drivers.ImplementationError:
-		{
-			log.Error.Println(err)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
 	default:
 		{
-			log.Error.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
