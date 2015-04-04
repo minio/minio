@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"testing"
 
+	. "github.com/minio-io/check"
 	"github.com/minio-io/minio/pkg/utils/crypto/md5"
-	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }
