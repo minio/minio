@@ -28,8 +28,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
-	"github.com/minio-io/minio/pkg/drivers"
 	"io/ioutil"
+
+	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // memoryDriver - local variables

@@ -2,10 +2,11 @@ package donut
 
 import (
 	"encoding/json"
-	"github.com/minio-io/iodine"
 	"io/ioutil"
 	"os"
 	"path"
+
+	"github.com/minio-io/iodine"
 )
 
 func newDonutObjectWriter(objectDir string) (Writer, error) {

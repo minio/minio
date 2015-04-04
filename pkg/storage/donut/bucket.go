@@ -2,9 +2,10 @@ package donut
 
 import (
 	"errors"
-	"github.com/minio-io/iodine"
 	"strconv"
 	"strings"
+
+	"github.com/minio-io/iodine"
 )
 
 type donutBucket struct {

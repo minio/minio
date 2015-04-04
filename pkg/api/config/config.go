@@ -18,12 +18,13 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/minio-io/iodine"
 	"io"
 	"os"
 	"os/user"
 	"path"
 	"sync"
+
+	"github.com/minio-io/iodine"
 )
 
 // Config context
