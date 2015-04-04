@@ -894,9 +894,18 @@ func (s *MySuite) TestPartialContent(c *C) {
 }
 
 func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
-	driver := startMockDriver()
-	typedDriver := driver
-	defer driver.AssertExpectations(c)
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -933,9 +942,18 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 }
 
 func (s *MySuite) TestListBucketsErrors(c *C) {
-	driver := startMockDriver()
-	typedDriver := driver
-	defer driver.AssertExpectations(c)
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -950,10 +968,19 @@ func (s *MySuite) TestListBucketsErrors(c *C) {
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
 }
 
-func (s *MySuite) TestPutBucketHandler(c *C) {
-	driver := startMockDriver()
-	typedDriver := driver
-	defer driver.AssertExpectations(c)
+func (s *MySuite) TestPutBucketErrors(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -976,6 +1003,61 @@ func (s *MySuite) TestPutBucketHandler(c *C) {
 
 	typedDriver.On("CreateBucket", "foo").Return(drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
+}
+
+func (s *MySuite) TestGetObjectErrors(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
+	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNameInvalid{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.BucketNameInvalid{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.BackendCorrupted{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
