@@ -1,0 +1,3 @@
+v1.0 - Erasure Golang Package
+============================
+- First release, supports only amd64 or x86-64 architecture
