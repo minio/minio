@@ -14,6 +14,10 @@
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
+			"ImportPath": "github.com/minio-io/check",
+			"Rev": "bc4e66da8cd7ff58a4b9b84301f906352b8f2c94"
+		},
+		{
 			"ImportPath": "github.com/minio-io/cli",
 			"Comment": "1.2.0-100-g6d6f8d3",
 			"Rev": "6d6f8d3cc162bfcb60379888e2f37d73ff6a6253"
@@ -37,10 +41,6 @@
 		{
 			"ImportPath": "github.com/stretchr/testify/mock",
 			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
-		},
-		{
-			"ImportPath": "gopkg.in/check.v1",
-			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
 		}
 	]
 }

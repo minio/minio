@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"testing"
 
+	. "github.com/minio-io/check"
 	"github.com/minio-io/minio/pkg/utils/split"
-	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}

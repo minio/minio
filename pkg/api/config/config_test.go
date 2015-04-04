@@ -23,8 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	. "github.com/minio-io/check"
 	"github.com/minio-io/minio/pkg/utils/crypto/keys"
-	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}

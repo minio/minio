@@ -40,7 +40,7 @@ import (
 	"github.com/minio-io/minio/pkg/drivers/mocks"
 	"github.com/stretchr/testify/mock"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio-io/check"
 )
 
 func Test(t *testing.T) { TestingT(t) }

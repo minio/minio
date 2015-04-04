@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"gopkg.in/check.v1"
+	"github.com/minio-io/check"
 	"time"
 )
 

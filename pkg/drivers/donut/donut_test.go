@@ -23,7 +23,7 @@ import (
 
 	"github.com/minio-io/minio/pkg/drivers"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio-io/check"
 )
 
 func Test(t *testing.T) { TestingT(t) }
