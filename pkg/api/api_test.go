@@ -1025,6 +1025,44 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
 }
 
+func (s *MySuite) TestGetObjectRangeErrors(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	metadata := drivers.ObjectMetadata{
+		Bucket: "foo",
+		Key:    "bar",
+
+		ContentType: "application/octet-stream",
+		Created:     time.Now(),
+		Md5:         "e81c4e4f2b7b93b481e13a8553c2ae1b",
+		Size:        11,
+	}
+
+	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(metadata, nil).Once()
+	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", bytes.NewBufferString(""))
+	request.Header.Add("Range", "bytes=7-6")
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
+}
+
 func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
 	data, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
