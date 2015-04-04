@@ -19,13 +19,14 @@ package web
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"path"
 
 	"github.com/gorilla/mux"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/utils/crypto/keys"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 const (
@@ -48,7 +49,7 @@ func HTTPHandler() http.Handler {
 	var api = webAPI{}
 
 	if err := api.conf.SetupConfig(); err != nil {
-		log.Fatal(err)
+		log.Fatal(iodine.New(err, nil))
 	}
 
 	api.webPath = path.Join(api.conf.GetConfigPath(), defaultWeb)
@@ -79,6 +80,7 @@ func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 
 	err = web.conf.ReadConfig()
 	if err != nil {
+		log.Error.Println(iodine.New(err, nil))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -94,6 +96,7 @@ func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 
 	accesskey, err = keys.GenerateRandomAlphaNumeric(keys.MinioAccessID)
 	if err != nil {
+		log.Error.Println(iodine.New(err, nil))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -102,6 +105,7 @@ func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 
 	secretkey, err = keys.GenerateRandomBase64(keys.MinioSecretID)
 	if err != nil {
+		log.Error.Println(iodine.New(err, nil))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -111,6 +115,7 @@ func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 	web.conf.AddUser(user)
 	err = web.conf.WriteConfig()
 	if err != nil {
+		log.Error.Println(iodine.New(err, nil))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -118,6 +123,7 @@ func (web *webAPI) accessHandler(w http.ResponseWriter, req *http.Request) {
 
 	err = web.conf.ReadConfig()
 	if err != nil {
+		log.Error.Println(iodine.New(err, nil))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return

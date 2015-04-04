@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
@@ -69,10 +70,6 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		{
 			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 		}
-	case drivers.ImplementationError:
-		{
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
 	case drivers.BucketNameInvalid:
 		{
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
@@ -83,7 +80,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	default:
 		{
-			log.Error.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}

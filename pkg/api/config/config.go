@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/minio-io/iodine"
 	"io"
 	"os"
 	"os/user"
@@ -44,12 +45,12 @@ type User struct {
 func (c *Config) SetupConfig() error {
 	u, err := user.Current()
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 
 	confPath := path.Join(u.HomeDir, ".minio")
 	if err := os.MkdirAll(confPath, os.ModeDir); err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 
 	c.ConfigPath = confPath
@@ -57,7 +58,7 @@ func (c *Config) SetupConfig() error {
 	if _, err := os.Stat(c.ConfigFile); os.IsNotExist(err) {
 		_, err = os.Create(c.ConfigFile)
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 	}
 
@@ -113,7 +114,7 @@ func (c *Config) WriteConfig() error {
 	file, err = os.OpenFile(c.ConfigFile, os.O_WRONLY, 0666)
 	defer file.Close()
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 
 	encoder := json.NewEncoder(file)
@@ -132,7 +133,7 @@ func (c *Config) ReadConfig() error {
 	file, err = os.OpenFile(c.ConfigFile, os.O_RDONLY, 0666)
 	defer file.Close()
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 
 	users := make(map[string]User)
@@ -145,6 +146,6 @@ func (c *Config) ReadConfig() error {
 		c.Users = users
 		return nil
 	default:
-		return err
+		return iodine.New(err, nil)
 	}
 }
