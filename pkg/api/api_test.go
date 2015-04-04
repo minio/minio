@@ -950,6 +950,38 @@ func (s *MySuite) TestListBucketsErrors(c *C) {
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
 }
 
+func (s *MySuite) TestPutBucketHandler(c *C) {
+	driver := startMockDriver()
+	typedDriver := driver
+	defer driver.AssertExpectations(c)
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketNameInvalid{}).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketExists{}).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "BucketAlreadyExists", "The requested bucket name is not available.", http.StatusConflict)
+
+	typedDriver.On("CreateBucket", "foo").Return(drivers.BackendCorrupted{}).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
+}
+
 func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
 	data, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)

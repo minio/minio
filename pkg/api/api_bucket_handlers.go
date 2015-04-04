@@ -141,16 +141,11 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.BucketExists:
 		{
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-		}
-	case drivers.ImplementationError:
-		{
-			log.Error.Println(err)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
-			log.Error.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
