@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/drivers"
 )
@@ -83,7 +84,7 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 
 	var conf = config.Config{}
 	if err := conf.SetupConfig(); err != nil {
-		log.Fatal(err)
+		log.Fatal(iodine.New(err, map[string]string{"domain": domain}))
 	}
 
 	return validateHandler(conf, ignoreResourcesHandler(mux))

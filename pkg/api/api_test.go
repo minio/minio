@@ -893,6 +893,66 @@ func (s *MySuite) TestPartialContent(c *C) {
 	c.Assert(string(partialObject), Equals, "wo")
 }
 
+func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			// We mock failures here to test
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.BucketNotFound{}).Once()
+
+	request, err := http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
+
+	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.BucketNameInvalid{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.ObjectNameInvalid{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
+
+	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.BackendCorrupted{}).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
+}
+
+func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
+	data, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	errorResponse := api.ErrorResponse{}
+	err = xml.Unmarshal(data, &errorResponse)
+	c.Assert(err, IsNil)
+	c.Assert(errorResponse.Code, Equals, code)
+	c.Assert(errorResponse.Message, Equals, description)
+	c.Assert(response.StatusCode, Equals, statusCode)
+}
+
 func startMockDriver() *mocks.Driver {
 	return &mocks.Driver{
 		ObjectWriterData: make(map[string][]byte),
