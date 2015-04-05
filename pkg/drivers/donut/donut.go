@@ -154,16 +154,14 @@ func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) 
 		return 0, iodine.New(err, nil)
 	}
 	if _, ok := buckets[bucketName]; !ok {
-		return 0, iodine.New(errors.New("bucket does not exist"), errParams)
+		return 0, drivers.BucketNotFound{Bucket: bucketName}
 	}
 	reader, size, err := buckets[bucketName].GetObject(objectName)
-	if os.IsNotExist(err) {
+	if err != nil {
 		return 0, drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}
-	} else if err != nil {
-		return 0, iodine.New(err, errParams)
 	}
 	n, err := io.CopyN(target, reader, size)
 	return n, iodine.New(err, errParams)
@@ -193,16 +191,14 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		return 0, iodine.New(err, nil)
 	}
 	if _, ok := buckets[bucketName]; !ok {
-		return 0, iodine.New(errors.New("bucket does not exist"), errParams)
+		return 0, drivers.BucketNotFound{Bucket: bucketName}
 	}
 	reader, size, err := buckets[bucketName].GetObject(objectName)
-	if os.IsNotExist(err) {
+	if err != nil {
 		return 0, drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}
-	} else if err != nil {
-		return 0, iodine.New(err, errParams)
 	}
 	if start > size || (start+length-1) > size {
 		return 0, iodine.New(errors.New("invalid range"), errParams)
@@ -227,31 +223,35 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string
 		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := buckets[bucketName]; !ok {
-		return drivers.ObjectMetadata{}, iodine.New(errors.New("bucket does not exist"), errParams)
+		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
 	}
 	objectList, err := buckets[bucketName].ListObjects()
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	donutObjectMetadata, err := objectList[objectName].GetDonutObjectMetadata()
-	if os.IsNotExist(err) {
+	object, ok := objectList[objectName]
+	if !ok {
 		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
 		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}
-	} else if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	objectMetadata, err := objectList[objectName].GetObjectMetadata()
-	if os.IsNotExist(err) {
+	donutObjectMetadata, err := object.GetDonutObjectMetadata()
+	if err != nil {
 		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
 		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}
-	} else if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
+	}
+	objectMetadata, err := object.GetObjectMetadata()
+	if err != nil {
+		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
+		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
+			Bucket: bucketName,
+			Object: objectName,
+		}
 	}
 	created, err := time.Parse(time.RFC3339Nano, donutObjectMetadata["created"])
 	if err != nil {
@@ -289,7 +289,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := buckets[bucketName]; !ok {
-		return nil, drivers.BucketResourcesMetadata{}, iodine.New(errors.New("bucket does not exist"), errParams)
+		return nil, drivers.BucketResourcesMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
 	}
 	objectList, err := buckets[bucketName].ListObjects()
 	if err != nil {
@@ -360,7 +360,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		return iodine.New(err, errParams)
 	}
 	if _, ok := buckets[bucketName]; !ok {
-		return iodine.New(errors.New("bucket does not exist"), errParams)
+		return drivers.BucketNotFound{Bucket: bucketName}
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"

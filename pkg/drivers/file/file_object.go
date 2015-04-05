@@ -134,11 +134,13 @@ func (file *fileDriver) GetObjectMetadata(bucket, object, prefix string) (driver
 	if drivers.IsValidBucket(bucket) == false {
 		return drivers.ObjectMetadata{}, drivers.BucketNameInvalid{Bucket: bucket}
 	}
-
 	if drivers.IsValidObject(object) == false {
 		return drivers.ObjectMetadata{}, drivers.ObjectNameInvalid{Bucket: bucket, Object: bucket}
 	}
-
+	// check bucket exists
+	if _, err := os.Stat(path.Join(file.root, bucket)); os.IsNotExist(err) {
+		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+	}
 	// Do not use path.Join() since path.Join strips off any object names with '/', use them as is
 	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
 	objectPath := file.root + "/" + bucket + "/" + object

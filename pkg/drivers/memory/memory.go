@@ -71,6 +71,9 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 
 // GetObject - GET object from memory buffer
 func (memory memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		return 0, drivers.BucketNotFound{Bucket: bucket}
+	}
 	// get object
 	key := object
 	if val, ok := memory.objectdata[key]; ok {
@@ -269,6 +272,10 @@ func (memory memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
 
 // GetObjectMetadata - get object metadata from memory
 func (memory memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drivers.ObjectMetadata, error) {
+	// check if bucket exists
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+	}
 	if object, ok := memory.objectdata[key]; ok == true {
 		return object.metadata, nil
 	}
