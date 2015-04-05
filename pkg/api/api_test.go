@@ -379,14 +379,15 @@ func (s *MySuite) TestHeader(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
+	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	driver.CreateBucket("bucket")
+
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
 	buffer := bytes.NewBufferString("hello world")
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-	driver.CreateBucket("bucket")
 	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
 	driver.CreateObject("bucket", "object", "", "", buffer)
 

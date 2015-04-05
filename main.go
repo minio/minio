@@ -201,9 +201,5 @@ func main() {
 		}
 		return nil
 	}
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Error.Println(err)
-	}
-
+	app.RunAndExitOnError()
 }
