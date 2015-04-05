@@ -19,6 +19,8 @@ package donut
 import (
 	"errors"
 	"io"
+	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,9 +28,9 @@ import (
 
 	"io/ioutil"
 
+	"github.com/minio-io/donut"
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/drivers"
-	"github.com/minio-io/minio/pkg/storage/donut"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -41,19 +43,43 @@ const (
 	blockSize = 10 * 1024 * 1024
 )
 
+// This is a dummy nodeDiskMap which is going to be deprecated soon
+// once the Management API is standardized, this map is useful for now
+// to show multi disk API correctness behavior.
+//
+// This should be obtained from donut configuration file
+func createNodeDiskMap(p string) map[string][]string {
+	nodes := make(map[string][]string)
+	nodes["localhost"] = make([]string, 16)
+	for i := 0; i < len(nodes["localhost"]); i++ {
+		diskPath := path.Join(p, strconv.Itoa(i))
+		if _, err := os.Stat(diskPath); err != nil {
+			if os.IsNotExist(err) {
+				os.MkdirAll(diskPath, 0700)
+			}
+		}
+		nodes["localhost"][i] = diskPath
+	}
+	return nodes
+}
+
 // Start a single disk subsystem
 func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	s := new(donutDriver)
+	errParams := map[string]string{"path": path}
 
-	// TODO donut driver should be passed in as Start param and driven by config
-	var err error
-	s.donut, err = donut.NewDonut(path)
-	err = iodine.New(err, map[string]string{"path": path})
+	// Soon to be user configurable, when Management API
+	// is finished we remove "default" to something
+	// which is passed down from configuration
+	donut, err := donut.NewDonut("default", createNodeDiskMap(path))
 	if err != nil {
+		err = iodine.New(err, errParams)
 		log.Error.Println(err)
 	}
+
+	s := new(donutDriver)
+	s.donut = donut
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
@@ -63,26 +89,37 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, s *donutDriver)
 	close(errorChannel)
 }
 
+// byBucketName is a type for sorting bucket metadata by bucket name
+type byBucketName []drivers.BucketMetadata
+
+func (b byBucketName) Len() int           { return len(b) }
+func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
+
 // ListBuckets returns a list of buckets
 func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error) {
 	buckets, err := d.donut.ListBuckets()
 	if err != nil {
 		return nil, err
 	}
-	for _, bucket := range buckets {
+	for name := range buckets {
 		result := drivers.BucketMetadata{
-			Name: bucket,
+			Name: name,
 			// TODO Add real created date
 			Created: time.Now(),
 		}
 		results = append(results, result)
 	}
+	sort.Sort(byBucketName(results))
 	return results, nil
 }
 
 // CreateBucket creates a new bucket
-func (d donutDriver) CreateBucket(bucket string) error {
-	return d.donut.CreateBucket(bucket)
+func (d donutDriver) CreateBucket(bucketName string) error {
+	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
+		return d.donut.MakeBucket(bucketName)
+	}
+	return errors.New("Invalid bucket")
 }
 
 // GetBucketMetadata retrieves an bucket's metadata
@@ -101,29 +138,74 @@ func (d donutDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error
 }
 
 // GetObject retrieves an object and writes it to a writer
-func (d donutDriver) GetObject(target io.Writer, bucket, key string) (int64, error) {
-	reader, err := d.donut.GetObjectReader(bucket, key)
-	if err != nil {
-		return 0, drivers.ObjectNotFound{
-			Bucket: bucket,
-			Object: key,
-		}
+func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) (int64, error) {
+	errParams := map[string]string{
+		"bucketName": bucketName,
+		"objectName": objectName,
 	}
-	return io.Copy(target, reader)
+	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
+		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	}
+	if objectName == "" || strings.TrimSpace(objectName) == "" {
+		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	}
+	buckets, err := d.donut.ListBuckets()
+	if err != nil {
+		return 0, iodine.New(err, nil)
+	}
+	if _, ok := buckets[bucketName]; !ok {
+		return 0, iodine.New(errors.New("bucket does not exist"), errParams)
+	}
+	reader, size, err := buckets[bucketName].GetObject(objectName)
+	if os.IsNotExist(err) {
+		return 0, drivers.ObjectNotFound{
+			Bucket: bucketName,
+			Object: objectName,
+		}
+	} else if err != nil {
+		return 0, iodine.New(err, errParams)
+	}
+	n, err := io.CopyN(target, reader, size)
+	return n, iodine.New(err, errParams)
 }
 
 // GetPartialObject retrieves an object range and writes it to a writer
-func (d donutDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string, start, length int64) (int64, error) {
 	// TODO more efficient get partial object with proper donut support
 	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-		"start":  strconv.FormatInt(start, 10),
-		"length": strconv.FormatInt(length, 10),
+		"bucketName": bucketName,
+		"objectName": objectName,
+		"start":      strconv.FormatInt(start, 10),
+		"length":     strconv.FormatInt(length, 10),
 	}
-	reader, err := d.donut.GetObjectReader(bucket, object)
+
+	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
+		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	}
+	if objectName == "" || strings.TrimSpace(objectName) == "" {
+		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	}
+	if start < 0 {
+		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	}
+	buckets, err := d.donut.ListBuckets()
 	if err != nil {
+		return 0, iodine.New(err, nil)
+	}
+	if _, ok := buckets[bucketName]; !ok {
+		return 0, iodine.New(errors.New("bucket does not exist"), errParams)
+	}
+	reader, size, err := buckets[bucketName].GetObject(objectName)
+	if os.IsNotExist(err) {
+		return 0, drivers.ObjectNotFound{
+			Bucket: bucketName,
+			Object: objectName,
+		}
+	} else if err != nil {
 		return 0, iodine.New(err, errParams)
+	}
+	if start > size || (start+length-1) > size {
+		return 0, iodine.New(errors.New("invalid range"), errParams)
 	}
 	_, err = io.CopyN(ioutil.Discard, reader, start)
 	if err != nil {
@@ -134,156 +216,160 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucket, object string, start,
 }
 
 // GetObjectMetadata retrieves an object's metadata
-func (d donutDriver) GetObjectMetadata(bucket, key string, prefix string) (drivers.ObjectMetadata, error) {
-	metadata, err := d.donut.GetObjectMetadata(bucket, key)
+func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string) (drivers.ObjectMetadata, error) {
+	errParams := map[string]string{
+		"bucketName": bucketName,
+		"objectName": objectName,
+		"prefixName": prefixName,
+	}
+	buckets, err := d.donut.ListBuckets()
 	if err != nil {
+		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
+	}
+	if _, ok := buckets[bucketName]; !ok {
+		return drivers.ObjectMetadata{}, iodine.New(errors.New("bucket does not exist"), errParams)
+	}
+	objectList, err := buckets[bucketName].ListObjects()
+	if err != nil {
+		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
+	}
+	donutObjectMetadata, err := objectList[objectName].GetDonutObjectMetadata()
+	if os.IsNotExist(err) {
 		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
 		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
-			Bucket: bucket,
-			Object: key,
+			Bucket: bucketName,
+			Object: objectName,
 		}
+	} else if err != nil {
+		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	created, err := time.Parse(time.RFC3339Nano, metadata["sys.created"])
+	objectMetadata, err := objectList[objectName].GetObjectMetadata()
+	if os.IsNotExist(err) {
+		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
+		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
+			Bucket: bucketName,
+			Object: objectName,
+		}
+	} else if err != nil {
+		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
+	}
+	created, err := time.Parse(time.RFC3339Nano, donutObjectMetadata["created"])
 	if err != nil {
-		return drivers.ObjectMetadata{}, err
+		return drivers.ObjectMetadata{}, iodine.New(err, nil)
 	}
-	size, err := strconv.ParseInt(metadata["sys.size"], 10, 64)
+	size, err := strconv.ParseInt(donutObjectMetadata["size"], 10, 64)
 	if err != nil {
-		return drivers.ObjectMetadata{}, err
+		return drivers.ObjectMetadata{}, iodine.New(err, nil)
 	}
-	objectMetadata := drivers.ObjectMetadata{
-		Bucket: bucket,
-		Key:    key,
+	driversObjectMetadata := drivers.ObjectMetadata{
+		Bucket: bucketName,
+		Key:    objectName,
 
-		ContentType: metadata["contentType"],
+		ContentType: objectMetadata["contentType"],
 		Created:     created,
-		Md5:         metadata["sys.md5"],
+		Md5:         donutObjectMetadata["md5"],
 		Size:        size,
 	}
-	return objectMetadata, nil
+	return driversObjectMetadata, nil
 }
 
+type byObjectKey []drivers.ObjectMetadata
+
+func (b byObjectKey) Len() int           { return len(b) }
+func (b byObjectKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
+
 // ListObjects - returns list of objects
-func (d donutDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
-	// TODO Fix IsPrefixSet && IsDelimiterSet and use them
-	objects, err := d.donut.ListObjects(bucket)
+func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	errParams := map[string]string{
+		"bucketName": bucketName,
+	}
+	buckets, err := d.donut.ListBuckets()
 	if err != nil {
-		return nil, drivers.BucketResourcesMetadata{}, err
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
+	}
+	if _, ok := buckets[bucketName]; !ok {
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(errors.New("bucket does not exist"), errParams)
+	}
+	objectList, err := buckets[bucketName].ListObjects()
+	if err != nil {
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
+	}
+	var objects []string
+	for key := range objectList {
+		objects = append(objects, key)
 	}
 	sort.Strings(objects)
-	if resources.Prefix != "" {
-		objects = filterPrefix(objects, resources.Prefix)
-		objects = removePrefix(objects, resources.Prefix)
-	}
+
 	if resources.Maxkeys <= 0 || resources.Maxkeys > 1000 {
 		resources.Maxkeys = 1000
 	}
-
-	var actualObjects []string
-	var commonPrefixes []string
-	if strings.TrimSpace(resources.Delimiter) != "" {
-		actualObjects = filterDelimited(objects, resources.Delimiter)
-		commonPrefixes = filterNotDelimited(objects, resources.Delimiter)
-		commonPrefixes = extractDir(commonPrefixes, resources.Delimiter)
-		commonPrefixes = uniqueObjects(commonPrefixes)
-		resources.CommonPrefixes = commonPrefixes
-	} else {
-		actualObjects = objects
-	}
+	// Populate filtering mode
+	resources.Mode = drivers.GetMode(resources)
+	// filter objects based on resources.Prefix and resources.Delimiter
+	actualObjects, commonPrefixes := d.filter(objects, resources)
+	resources.CommonPrefixes = commonPrefixes
 
 	var results []drivers.ObjectMetadata
-	for _, object := range actualObjects {
+	for _, objectName := range actualObjects {
 		if len(results) >= resources.Maxkeys {
 			resources.IsTruncated = true
 			break
 		}
-		metadata, err := d.GetObjectMetadata(bucket, resources.Prefix+object, "")
+		if _, ok := objectList[objectName]; !ok {
+			return nil, drivers.BucketResourcesMetadata{}, iodine.New(errors.New("object corrupted"), errParams)
+		}
+		objectMetadata, err := objectList[objectName].GetDonutObjectMetadata()
 		if err != nil {
-			return nil, drivers.BucketResourcesMetadata{}, err
+			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
+		}
+		t, err := time.Parse(time.RFC3339Nano, objectMetadata["created"])
+		if err != nil {
+			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, nil)
+		}
+		size, err := strconv.ParseInt(objectMetadata["size"], 10, 64)
+		if err != nil {
+			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, nil)
+		}
+		metadata := drivers.ObjectMetadata{
+			Key:     objectName,
+			Created: t,
+			Size:    size,
 		}
 		results = append(results, metadata)
 	}
+	sort.Sort(byObjectKey(results))
 	return results, resources, nil
 }
 
-func filterPrefix(objects []string, prefix string) []string {
-	var results []string
-	for _, object := range objects {
-		if strings.HasPrefix(object, prefix) {
-			results = append(results, object)
-		}
-	}
-	return results
-}
-
-func removePrefix(objects []string, prefix string) []string {
-	var results []string
-	for _, object := range objects {
-		results = append(results, strings.TrimPrefix(object, prefix))
-	}
-	return results
-}
-
-func filterDelimited(objects []string, delim string) []string {
-	var results []string
-	for _, object := range objects {
-		if !strings.Contains(object, delim) {
-			results = append(results, object)
-		}
-	}
-	return results
-}
-func filterNotDelimited(objects []string, delim string) []string {
-	var results []string
-	for _, object := range objects {
-		if strings.Contains(object, delim) {
-			results = append(results, object)
-		}
-	}
-	return results
-}
-
-func extractDir(objects []string, delim string) []string {
-	var results []string
-	for _, object := range objects {
-		parts := strings.Split(object, delim)
-		results = append(results, parts[0]+"/")
-	}
-	return results
-}
-
-func uniqueObjects(objects []string) []string {
-	objectMap := make(map[string]string)
-	for _, v := range objects {
-		objectMap[v] = v
-	}
-	var results []string
-	for k := range objectMap {
-		results = append(results, k)
-	}
-	sort.Strings(results)
-	return results
-}
-
 // CreateObject creates a new object
-func (d donutDriver) CreateObject(bucketKey, objectKey, contentType, expectedMd5sum string, reader io.Reader) error {
-	writer, err := d.donut.GetObjectWriter(bucketKey, objectKey)
-	if err != nil {
-		return err
+func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMd5sum string, reader io.Reader) error {
+	errParams := map[string]string{
+		"bucketName":  bucketName,
+		"objectName":  objectName,
+		"contentType": contentType,
 	}
-	if _, err := io.Copy(writer, reader); err != nil {
-		return err
+	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
+		return iodine.New(errors.New("invalid argument"), errParams)
+	}
+	if objectName == "" || strings.TrimSpace(objectName) == "" {
+		return iodine.New(errors.New("invalid argument"), errParams)
+	}
+	buckets, err := d.donut.ListBuckets()
+	if err != nil {
+		return iodine.New(err, errParams)
+	}
+	if _, ok := buckets[bucketName]; !ok {
+		return iodine.New(errors.New("bucket does not exist"), errParams)
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 	contentType = strings.TrimSpace(contentType)
-	metadata := make(map[string]string)
-	metadata["bucket"] = bucketKey
-	metadata["object"] = objectKey
-	metadata["contentType"] = contentType
-	if err = writer.SetMetadata(metadata); err != nil {
-		return err
+	err = buckets[bucketName].PutObject(objectName, contentType, reader)
+	if err != nil {
+		return iodine.New(err, errParams)
 	}
-	return writer.Close()
+	// handle expectedMd5sum
+	return nil
 }

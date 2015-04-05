@@ -17,6 +17,7 @@
 package server
 
 import (
+	"fmt"
 	"os/user"
 	"path"
 	"reflect"
@@ -187,7 +188,8 @@ func Start(configs []Config) {
 				for _, ch := range ctrlChans {
 					close(ch)
 				}
-				log.Fatal(value.Interface())
+				msg := fmt.Sprintf("%q", value.Interface())
+				log.Fatal(iodine.New(errors.New(msg), nil))
 			}
 		case false:
 			// Channel closed, remove from list
