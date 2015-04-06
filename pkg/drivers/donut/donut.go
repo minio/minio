@@ -194,6 +194,7 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		return 0, drivers.BucketNotFound{Bucket: bucketName}
 	}
 	reader, size, err := buckets[bucketName].GetObject(objectName)
+	defer reader.Close()
 	if err != nil {
 		return 0, drivers.ObjectNotFound{
 			Bucket: bucketName,
