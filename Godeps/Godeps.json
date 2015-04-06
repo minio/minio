@@ -24,11 +24,11 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/donut",
-			"Rev": "5647e1e6c6a95caec431610a497b15f8298d56cf"
+			"Rev": "1cb5d3239ed989c4dd153af9931bcfb8ec4f0b87"
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",
-			"Rev": "2a52bdad9b271ef680374a22f0cb68513a79ebf5"
+			"Rev": "8a72b14991a6835b4d30403e7cb201f373b7cb3a"
 		},
 		{
 			"ImportPath": "github.com/minio-io/iodine",

@@ -2,7 +2,7 @@
   Copyright(c) 2011-2015 Intel Corporation All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the following conditions 
+  modification, are permitted provided that the following conditions
   are met:
     * Redistributions of source code must retain the above copyright
       notice, this list of conditions and the following disclaimer.
@@ -41,7 +41,7 @@
 extern "C" {
 #endif
 
-#ifndef __unix__
+#if !defined(__unix__) && !defined(__APPLE__)
 #ifdef __MINGW32__
 # include <_mingw.h>
 #endif
@@ -59,7 +59,7 @@ typedef unsigned char      UINT8;
 #endif
 
 
-#ifdef __unix__
+#if defined(__unix__) || defined(__APPLE__)
 # define DECLARE_ALIGNED(decl, alignval) decl __attribute__((aligned(alignval)))
 # define __forceinline static inline
 #else

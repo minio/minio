@@ -19,7 +19,7 @@ package erasure
 import (
 	"bytes"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio-io/check"
 )
 
 func corruptChunks(chunks [][]byte, errorIndex []int) [][]byte {

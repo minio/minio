@@ -12,7 +12,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",
-			"Rev": "3cece1a107115563682604b1430418e28f65dd80"
+			"Rev": "8a72b14991a6835b4d30403e7cb201f373b7cb3a"
 		},
 		{
 			"ImportPath": "github.com/minio-io/minio/pkg/utils/split",

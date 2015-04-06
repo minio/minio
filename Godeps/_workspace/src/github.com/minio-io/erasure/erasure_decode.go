@@ -32,9 +32,10 @@ import (
 // blocks. Decode can withstand data loss up to any M number of blocks.
 //
 // "encodedDataBlocks" is an array of K data blocks and M parity
-//    blocks. Data blocks are position and order dependent. Missing blocks
-//    are set to "nil". There must be at least "K" number of data|parity
-//    blocks.
+// blocks. Data blocks are position and order dependent. Missing blocks
+// are set to "nil". There must be at least "K" number of data|parity
+// blocks.
+//
 // "dataLen" is the length of original source data
 func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData []byte, err error) {
 	var source, target **C.uchar
