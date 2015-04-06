@@ -60,6 +60,9 @@ var std = New(os.Stderr, "", LstdFlags)
 // Error is an error logger
 var Error = New(os.Stderr, "", 0)
 
+// Debug is an error logger
+var Debug = New(os.Stderr, "", 0)
+
 // Trace is an error logger
 var Trace = New(os.Stderr, "", 0)
 
