@@ -17,6 +17,9 @@
 package donut
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -102,7 +105,7 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 	if err != nil {
 		return nil, err
 	}
-	for name := range buckets {
+	for _, name := range buckets {
 		result := drivers.BucketMetadata{
 			Name: name,
 			// TODO Add real created date
@@ -149,14 +152,7 @@ func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) 
 	if objectName == "" || strings.TrimSpace(objectName) == "" {
 		return 0, iodine.New(errors.New("invalid argument"), errParams)
 	}
-	buckets, err := d.donut.ListBuckets()
-	if err != nil {
-		return 0, iodine.New(err, nil)
-	}
-	if _, ok := buckets[bucketName]; !ok {
-		return 0, drivers.BucketNotFound{Bucket: bucketName}
-	}
-	reader, size, err := buckets[bucketName].GetObject(objectName)
+	reader, size, err := d.donut.GetObject(bucketName, objectName)
 	if err != nil {
 		return 0, drivers.ObjectNotFound{
 			Bucket: bucketName,
@@ -176,7 +172,6 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		"start":      strconv.FormatInt(start, 10),
 		"length":     strconv.FormatInt(length, 10),
 	}
-
 	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
 		return 0, iodine.New(errors.New("invalid argument"), errParams)
 	}
@@ -186,14 +181,7 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 	if start < 0 {
 		return 0, iodine.New(errors.New("invalid argument"), errParams)
 	}
-	buckets, err := d.donut.ListBuckets()
-	if err != nil {
-		return 0, iodine.New(err, nil)
-	}
-	if _, ok := buckets[bucketName]; !ok {
-		return 0, drivers.BucketNotFound{Bucket: bucketName}
-	}
-	reader, size, err := buckets[bucketName].GetObject(objectName)
+	reader, size, err := d.donut.GetObject(bucketName, objectName)
 	defer reader.Close()
 	if err != nil {
 		return 0, drivers.ObjectNotFound{
@@ -209,7 +197,10 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		return 0, iodine.New(err, errParams)
 	}
 	n, err := io.CopyN(w, reader, length)
-	return n, iodine.New(err, errParams)
+	if err != nil {
+		return 0, iodine.New(err, errParams)
+	}
+	return n, nil
 }
 
 // GetObjectMetadata retrieves an object's metadata
@@ -219,59 +210,31 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string
 		"objectName": objectName,
 		"prefixName": prefixName,
 	}
-	buckets, err := d.donut.ListBuckets()
+	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
+	if err != nil {
+		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
+			Bucket: bucketName,
+			Object: objectName,
+		}
+	}
+	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := buckets[bucketName]; !ok {
-		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
-	}
-	objectList, err := buckets[bucketName].ListObjects()
+	size, err := strconv.ParseInt(metadata["size"], 10, 64)
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	object, ok := objectList[objectName]
-	if !ok {
-		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
-		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
-			Bucket: bucketName,
-			Object: objectName,
-		}
-	}
-	donutObjectMetadata, err := object.GetDonutObjectMetadata()
-	if err != nil {
-		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
-		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
-			Bucket: bucketName,
-			Object: objectName,
-		}
-	}
-	objectMetadata, err := object.GetObjectMetadata()
-	if err != nil {
-		// return ObjectNotFound quickly on an error, API needs this to handle invalid requests
-		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
-			Bucket: bucketName,
-			Object: objectName,
-		}
-	}
-	created, err := time.Parse(time.RFC3339Nano, donutObjectMetadata["created"])
-	if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, nil)
-	}
-	size, err := strconv.ParseInt(donutObjectMetadata["size"], 10, 64)
-	if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, nil)
-	}
-	driversObjectMetadata := drivers.ObjectMetadata{
+	objectMetadata := drivers.ObjectMetadata{
 		Bucket: bucketName,
 		Key:    objectName,
 
-		ContentType: objectMetadata["contentType"],
+		ContentType: metadata["contentType"],
 		Created:     created,
-		Md5:         donutObjectMetadata["md5"],
+		Md5:         metadata["md5"],
 		Size:        size,
 	}
-	return driversObjectMetadata, nil
+	return objectMetadata, nil
 }
 
 type byObjectKey []drivers.ObjectMetadata
@@ -285,42 +248,20 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	errParams := map[string]string{
 		"bucketName": bucketName,
 	}
-	buckets, err := d.donut.ListBuckets()
+	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName,
+		resources.Prefix,
+		resources.Marker,
+		resources.Delimiter,
+		resources.Maxkeys)
 	if err != nil {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := buckets[bucketName]; !ok {
-		return nil, drivers.BucketResourcesMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
-	}
-	objectList, err := buckets[bucketName].ListObjects()
-	if err != nil {
-		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
-	}
-	var objects []string
-	for key := range objectList {
-		objects = append(objects, key)
-	}
-	sort.Strings(objects)
-
-	if resources.Maxkeys <= 0 || resources.Maxkeys > 1000 {
-		resources.Maxkeys = 1000
-	}
-	// Populate filtering mode
-	resources.Mode = drivers.GetMode(resources)
-	// filter objects based on resources.Prefix and resources.Delimiter
-	actualObjects, commonPrefixes := d.filter(objects, resources)
 	resources.CommonPrefixes = commonPrefixes
+	resources.IsTruncated = isTruncated
 
 	var results []drivers.ObjectMetadata
 	for _, objectName := range actualObjects {
-		if len(results) >= resources.Maxkeys {
-			resources.IsTruncated = true
-			break
-		}
-		if _, ok := objectList[objectName]; !ok {
-			return nil, drivers.BucketResourcesMetadata{}, iodine.New(errors.New("object corrupted"), errParams)
-		}
-		objectMetadata, err := objectList[objectName].GetDonutObjectMetadata()
+		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 		if err != nil {
 			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 		}
@@ -356,21 +297,39 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	if objectName == "" || strings.TrimSpace(objectName) == "" {
 		return iodine.New(errors.New("invalid argument"), errParams)
 	}
-	buckets, err := d.donut.ListBuckets()
-	if err != nil {
-		return iodine.New(err, errParams)
-	}
-	if _, ok := buckets[bucketName]; !ok {
-		return drivers.BucketNotFound{Bucket: bucketName}
-	}
-	if contentType == "" {
+	if strings.TrimSpace(contentType) == "" {
 		contentType = "application/octet-stream"
 	}
-	contentType = strings.TrimSpace(contentType)
-	err = buckets[bucketName].PutObject(objectName, contentType, reader)
+	metadata := make(map[string]string)
+	metadata["contentType"] = contentType
+	err := d.donut.PutObject(bucketName, objectName, ioutil.NopCloser(reader), metadata)
 	if err != nil {
 		return iodine.New(err, errParams)
 	}
-	// handle expectedMd5sum
+	if strings.TrimSpace(expectedMd5sum) != "" {
+		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
+		if err != nil {
+			return iodine.New(err, errParams)
+		}
+		expectedMd5sumBytes, err := base64.StdEncoding.DecodeString(expectedMd5sum)
+		if err != nil {
+			return iodine.New(err, errParams)
+		}
+		if _, ok := objectMetadata["md5"]; !ok {
+			return iodine.New(errors.New("corrupted metadata"), nil)
+		}
+		actualMd5sumBytes, err := hex.DecodeString(objectMetadata["md5"])
+		if err != nil {
+			return iodine.New(err, errParams)
+		}
+
+		if !bytes.Equal(expectedMd5sumBytes, actualMd5sumBytes) {
+			return drivers.BadDigest{
+				Md5:    expectedMd5sum,
+				Bucket: bucketName,
+				Key:    objectName,
+			}
+		}
+	}
 	return nil
 }

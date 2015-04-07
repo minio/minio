@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/fkautz/testify/mock"
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/objectdriver"
+	"github.com/stretchr/testify/mock"
 )
 
 // Driver is a mock
