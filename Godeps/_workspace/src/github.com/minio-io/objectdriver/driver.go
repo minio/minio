@@ -28,6 +28,7 @@ type Driver interface {
 	// Bucket Operations
 	ListBuckets() ([]BucketMetadata, error)
 	CreateBucket(bucket string) error
+	GetBucketMetadata(bucket string) (BucketMetadata, error)
 	CreateBucketPolicy(bucket string, p BucketPolicy) error
 	GetBucketPolicy(bucket string) (BucketPolicy, error)
 

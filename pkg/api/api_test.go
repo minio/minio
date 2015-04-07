@@ -32,13 +32,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/fkautz/testify/mock"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/objectdriver"
 	"github.com/minio-io/objectdriver/donut"
 	"github.com/minio-io/objectdriver/file"
 	"github.com/minio-io/objectdriver/memory"
 	"github.com/minio-io/objectdriver/mocks"
+	"github.com/stretchr/testify/mock"
 
 	. "github.com/minio-io/check"
 )
@@ -175,6 +175,33 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	resMetadata, err := driver.GetObjectMetadata("bucket", "object", "")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, resMetadata.Created, 0, "application/octet-stream", resMetadata.Md5)
+}
+
+func (s *MySuite) TestBucket(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	metadata := drivers.BucketMetadata{
+		Name:    "bucket",
+		Created: time.Now(),
+	}
+	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Twice()
+
+	httpHandler := api.HTTPHandler("", driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	driver.CreateBucket("bucket")
+
+	response, err := http.Head(testServer.URL + "/bucket")
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
 func (s *MySuite) TestObject(c *C) {

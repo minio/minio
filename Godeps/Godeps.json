@@ -1,14 +1,10 @@
 {
 	"ImportPath": "github.com/minio-io/minio",
-	"GoVersion": "go1.4.2",
+	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
-		{
-			"ImportPath": "github.com/fkautz/testify/mock",
-			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
-		},
 		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
@@ -28,7 +24,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/donut",
-			"Rev": "1adb050ccbc6b56caa8b29502adf43592d16adbd"
+			"Rev": "9d0c663a857103c780414e15d7e426c6fca9984e"
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",
@@ -40,7 +36,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/objectdriver",
-			"Rev": "144846812e29de66814a67b38c949f9875e0ee46"
+			"Rev": "3efb266b6a644b161d8a4d9a1f55bea95a2e391b"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",
@@ -48,6 +44,10 @@
 		},
 		{
 			"ImportPath": "github.com/stretchr/testify/assert",
+			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/mock",
 			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
 		}
 	]

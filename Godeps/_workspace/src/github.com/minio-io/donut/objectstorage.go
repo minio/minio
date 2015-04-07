@@ -6,19 +6,30 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio-io/iodine"
 )
 
 func (d donut) MakeBucket(bucket string) error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return errors.New("invalid argument")
+		return iodine.New(errors.New("invalid argument"), nil)
 	}
 	return d.makeBucket(bucket)
 }
 
 func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
-	return nil, errors.New("Not implemented")
+	err := d.getAllBuckets()
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	if _, ok := d.buckets[bucket]; !ok {
+		return nil, iodine.New(errors.New("bucket does not exist"), nil)
+	}
+	metadata := make(map[string]string)
+	metadata["name"] = bucket
+	metadata["created"] = time.Now().Format(time.RFC3339Nano) // TODO get this, from whatever is written from SetBucketMetadata
+	return metadata, nil
 }
 
 func (d donut) SetBucketMetadata(bucket string, metadata map[string]string) error {

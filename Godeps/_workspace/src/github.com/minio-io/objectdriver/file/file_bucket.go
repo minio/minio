@@ -30,6 +30,19 @@ import (
 
 /// Bucket Operations
 
+// GetBucketMetadata - head
+func (file *fileDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	st, err := os.Stat(path.Join(file.root, bucket))
+	if err != nil {
+		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+	}
+	bucketMetadata := drivers.BucketMetadata{
+		Name:    st.Name(),
+		Created: st.ModTime(),
+	}
+	return bucketMetadata, nil
+}
+
 // ListBuckets - Get service
 func (file *fileDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
 	files, err := ioutil.ReadDir(file.root)

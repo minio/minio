@@ -35,6 +35,15 @@ func (m *Driver) CreateBucket(bucket string) error {
 	return r0
 }
 
+// GetBucketMetadata is a mock
+func (m *Driver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	ret := m.Called(bucket)
+	r0 := ret.Get(0).(drivers.BucketMetadata)
+	r1 := ret.Error(1)
+
+	return r0, r1
+}
+
 // CreateBucketPolicy is a mock
 func (m *Driver) CreateBucketPolicy(bucket string, p drivers.BucketPolicy) error {
 	ret := m.Called(bucket, p)
@@ -71,7 +80,6 @@ func (m *Driver) GetObject(w io.Writer, bucket string, object string) (int64, er
 			r0 = n
 		}
 	}
-
 	return r0, r1
 }
 
