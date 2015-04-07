@@ -17,9 +17,6 @@
 package donut
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -302,34 +299,12 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	}
 	metadata := make(map[string]string)
 	metadata["contentType"] = contentType
+	if strings.TrimSpace(expectedMd5sum) != "" {
+		metadata["expectedMd5sum"] = expectedMd5sum
+	}
 	err := d.donut.PutObject(bucketName, objectName, ioutil.NopCloser(reader), metadata)
 	if err != nil {
 		return iodine.New(err, errParams)
-	}
-	if strings.TrimSpace(expectedMd5sum) != "" {
-		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
-		if err != nil {
-			return iodine.New(err, errParams)
-		}
-		expectedMd5sumBytes, err := base64.StdEncoding.DecodeString(expectedMd5sum)
-		if err != nil {
-			return iodine.New(err, errParams)
-		}
-		if _, ok := objectMetadata["md5"]; !ok {
-			return iodine.New(errors.New("corrupted metadata"), nil)
-		}
-		actualMd5sumBytes, err := hex.DecodeString(objectMetadata["md5"])
-		if err != nil {
-			return iodine.New(err, errParams)
-		}
-
-		if !bytes.Equal(expectedMd5sumBytes, actualMd5sumBytes) {
-			return drivers.BadDigest{
-				Md5:    expectedMd5sum,
-				Bucket: bucketName,
-				Key:    objectName,
-			}
-		}
 	}
 	return nil
 }

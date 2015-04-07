@@ -23,7 +23,7 @@ func ExampleApp() {
 	}
 	app.Author = "Harrison"
 	app.Email = "harrison@lolwut.com"
-	app.Authors = []cli.Author{cli.Author{Name: "Oliver Allen", Email: "oliver@toyshop.com"}}
+	app.Authors = []cli.Author{{Name: "Oliver Allen", Email: "oliver@toyshop.com"}}
 	app.Run(os.Args)
 	// Output:
 	// Hello Jeremy
@@ -401,7 +401,7 @@ func TestApp_BeforeFunc(t *testing.T) {
 	}
 
 	app.Commands = []cli.Command{
-		cli.Command{
+		{
 			Name: "sub",
 			Action: func(c *cli.Context) {
 				subcommandRun = true
@@ -467,7 +467,7 @@ func TestApp_AfterFunc(t *testing.T) {
 	}
 
 	app.Commands = []cli.Command{
-		cli.Command{
+		{
 			Name: "sub",
 			Action: func(c *cli.Context) {
 				subcommandRun = true
@@ -578,7 +578,7 @@ func TestAppCommandNotFound(t *testing.T) {
 	}
 
 	app.Commands = []cli.Command{
-		cli.Command{
+		{
 			Name: "bar",
 			Action: func(c *cli.Context) {
 				subcommandRun = true
@@ -601,7 +601,7 @@ func TestGlobalFlagsInSubcommands(t *testing.T) {
 	}
 
 	app.Commands = []cli.Command{
-		cli.Command{
+		{
 			Name: "foo",
 			Subcommands: []cli.Command{
 				{
