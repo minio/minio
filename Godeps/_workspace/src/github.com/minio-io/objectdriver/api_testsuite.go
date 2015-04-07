@@ -154,7 +154,7 @@ func testPaging(c *check.C, create func() Driver) {
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 1)
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "also/")
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/is/also/")
 	}
 	time.Sleep(time.Second)
 

@@ -193,11 +193,7 @@ func (memory memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedNa
 	case key == resources.Prefix+delimitedName:
 		keys = appendUniq(keys, key)
 	case delimitedName != "":
-		if delimitedName == resources.Delimiter {
-			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
-		} else {
-			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
-		}
+		resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
 	}
 	return resources, keys
 }

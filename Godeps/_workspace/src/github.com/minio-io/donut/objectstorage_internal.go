@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 func filterPrefix(objects []string, prefix string) []string {
 	var results []string
 	for _, object := range objects {
@@ -50,7 +59,7 @@ func extractDir(objects []string, delim string) []string {
 	var results []string
 	for _, object := range objects {
 		parts := strings.Split(object, delim)
-		results = append(results, parts[0]+"/")
+		results = append(results, parts[0]+delim)
 	}
 	return results
 }

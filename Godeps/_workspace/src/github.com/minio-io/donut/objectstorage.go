@@ -70,25 +70,31 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 	}
 
 	var actualObjects []string
-	var commonPrefixes []string
+	var actualPrefixes []string
 	var isTruncated bool
 	if strings.TrimSpace(delimiter) != "" {
 		actualObjects = filterDelimited(donutObjects, delimiter)
-		commonPrefixes = filterNotDelimited(donutObjects, delimiter)
-		commonPrefixes = extractDir(commonPrefixes, delimiter)
-		commonPrefixes = uniqueObjects(commonPrefixes)
+		actualPrefixes = filterNotDelimited(donutObjects, delimiter)
+		actualPrefixes = extractDir(actualPrefixes, delimiter)
+		actualPrefixes = uniqueObjects(actualPrefixes)
 	} else {
 		actualObjects = donutObjects
 	}
+
 	var results []string
+	var commonPrefixes []string
 	for _, objectName := range actualObjects {
 		if len(results) >= maxkeys {
 			isTruncated = true
 			break
 		}
-		results = append(results, prefix+objectName)
+		results = appendUniq(results, prefix+objectName)
+	}
+	for _, commonPrefix := range actualPrefixes {
+		commonPrefixes = appendUniq(commonPrefixes, prefix+commonPrefix)
 	}
 	sort.Strings(results)
+	sort.Strings(commonPrefixes)
 	return results, commonPrefixes, isTruncated, nil
 }
 
