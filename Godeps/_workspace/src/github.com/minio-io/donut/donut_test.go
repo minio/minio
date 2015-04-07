@@ -210,14 +210,33 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	_, err = io.CopyN(&readerBuffer2, obj2, size)
 	c.Assert(err, IsNil)
 	c.Assert(readerBuffer2.Bytes(), DeepEquals, []byte("two"))
+
 	// test list objects
-	listObjects, _, isTruncated, err := donut.ListObjects("foo", "o", "", "", 1)
+	listObjects, prefixes, isTruncated, err := donut.ListObjects("foo", "o", "", "1", 1)
 	c.Assert(err, IsNil)
-	c.Assert(isTruncated, Equals, true)
-	c.Assert(listObjects, DeepEquals, []string{"obj1"})
+	c.Assert(isTruncated, Equals, false)
+	c.Assert(prefixes[0], DeepEquals, "obj1")
 
 	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 10)
 	c.Assert(err, IsNil)
 	c.Assert(isTruncated, Equals, false)
 	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
+
+	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
+	err = donut.PutObject("foo", "obj3", three, nil)
+	c.Assert(err, IsNil)
+
+	obj3, size, err := donut.GetObject("foo", "obj3")
+	c.Assert(err, IsNil)
+	c.Assert(size, Equals, int64(len([]byte("three"))))
+
+	var readerBuffer3 bytes.Buffer
+	_, err = io.CopyN(&readerBuffer3, obj3, size)
+	c.Assert(err, IsNil)
+	c.Assert(readerBuffer3.Bytes(), DeepEquals, []byte("three"))
+
+	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 2)
+	c.Assert(err, IsNil)
+	c.Assert(isTruncated, Equals, true)
+	c.Assert(len(listObjects), Equals, 2)
 }

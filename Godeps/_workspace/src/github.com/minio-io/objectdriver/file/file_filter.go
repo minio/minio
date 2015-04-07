@@ -40,11 +40,7 @@ func (file *fileDriver) filterDelimiterPrefix(bucket, name, fname, delimitedName
 			return drivers.ObjectMetadata{}, resources, drivers.EmbedError(bucket, "", err)
 		}
 	case delimitedName != "":
-		if delimitedName == resources.Delimiter {
-			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
-		} else {
-			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
-		}
+		resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
 	}
 	return metadata, resources, nil
 }
