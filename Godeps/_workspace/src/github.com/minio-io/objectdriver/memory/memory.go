@@ -30,7 +30,7 @@ import (
 
 	"io/ioutil"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // memoryDriver - local variables

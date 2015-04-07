@@ -22,7 +22,7 @@ import (
 
 	"encoding/json"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // GetBucketPolicy - GET bucket policy

@@ -20,7 +20,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // parse bucket url queries

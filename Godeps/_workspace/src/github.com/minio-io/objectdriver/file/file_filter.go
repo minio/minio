@@ -20,7 +20,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 func (file *fileDriver) filterDelimiterPrefix(bucket, name, fname, delimitedName string, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {

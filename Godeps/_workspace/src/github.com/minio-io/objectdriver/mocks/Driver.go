@@ -1,6 +1,6 @@
 package mocks
 
-import "github.com/minio-io/minio/pkg/drivers"
+import "github.com/minio-io/objectdriver"
 import "github.com/stretchr/testify/mock"
 
 import (

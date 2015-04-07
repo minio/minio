@@ -33,11 +33,11 @@ import (
 	"net/http/httptest"
 
 	"github.com/minio-io/minio/pkg/api"
-	"github.com/minio-io/minio/pkg/drivers"
-	"github.com/minio-io/minio/pkg/drivers/donut"
-	"github.com/minio-io/minio/pkg/drivers/file"
-	"github.com/minio-io/minio/pkg/drivers/memory"
-	"github.com/minio-io/minio/pkg/drivers/mocks"
+	"github.com/minio-io/objectdriver"
+	"github.com/minio-io/objectdriver/donut"
+	"github.com/minio-io/objectdriver/file"
+	"github.com/minio-io/objectdriver/memory"
+	"github.com/minio-io/objectdriver/mocks"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/minio-io/check"

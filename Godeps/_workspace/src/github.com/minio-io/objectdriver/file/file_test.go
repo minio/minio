@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package memory
+package file
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 
 	. "github.com/minio-io/check"
 )
@@ -31,9 +33,21 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
+	var storageList []string
 	create := func() drivers.Driver {
-		_, _, store := Start()
+		path, err := ioutil.TempDir(os.TempDir(), "minio-file-")
+		c.Check(err, IsNil)
+		storageList = append(storageList, path)
+		_, _, store := Start(path)
 		return store
 	}
 	drivers.APITestSuite(c, create)
+	removeRoots(c, storageList)
+}
+
+func removeRoots(c *C, roots []string) {
+	for _, root := range roots {
+		err := os.RemoveAll(root)
+		c.Check(err, IsNil)
+	}
 }

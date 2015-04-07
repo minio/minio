@@ -26,12 +26,12 @@ import (
 	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
-	"github.com/minio-io/minio/pkg/drivers"
-	"github.com/minio-io/minio/pkg/drivers/donut"
-	"github.com/minio-io/minio/pkg/drivers/file"
-	"github.com/minio-io/minio/pkg/drivers/memory"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio-io/objectdriver"
+	"github.com/minio-io/objectdriver/donut"
+	"github.com/minio-io/objectdriver/file"
+	"github.com/minio-io/objectdriver/memory"
 )
 
 // Config - http server parameters

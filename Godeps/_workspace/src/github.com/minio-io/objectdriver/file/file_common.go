@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // fileDriver - file local variables

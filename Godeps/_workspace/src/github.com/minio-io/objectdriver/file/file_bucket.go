@@ -25,7 +25,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 /// Bucket Operations

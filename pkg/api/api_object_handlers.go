@@ -21,8 +21,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio-io/iodine"
-	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio-io/objectdriver"
 )
 
 // GET Object
