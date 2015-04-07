@@ -18,6 +18,8 @@ package drivers
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/base64"
 	"math/rand"
 	"strconv"
 
@@ -61,9 +63,14 @@ func testMultipleObjectCreation(c *check.C, create func() Driver) {
 		for _, num := range randomPerm {
 			randomString = randomString + strconv.Itoa(num)
 		}
+
+		hasher := md5.New()
+		hasher.Write([]byte(randomString))
+		md5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		err := drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(randomString))
+		err := drivers.CreateObject("bucket", key, "", md5Sum, bytes.NewBufferString(randomString))
 		c.Assert(err, check.IsNil)
 	}
 
@@ -192,9 +199,18 @@ func testPaging(c *check.C, create func() Driver) {
 func testObjectOverwriteFails(c *check.C, create func() Driver) {
 	drivers := create()
 	drivers.CreateBucket("bucket")
-	err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
+
+	hasher1 := md5.New()
+	hasher1.Write([]byte("one"))
+	md5Sum1 := base64.StdEncoding.EncodeToString(hasher1.Sum(nil))
+	err := drivers.CreateObject("bucket", "object", "", md5Sum1, bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
-	err = drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("three"))
+
+	hasher2 := md5.New()
+	hasher2.Write([]byte("three"))
+	md5Sum2 := base64.StdEncoding.EncodeToString(hasher2.Sum(nil))
+	err = drivers.CreateObject("bucket", "object", "", md5Sum2, bytes.NewBufferString("three"))
+
 	c.Assert(err, check.Not(check.IsNil))
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "object")
@@ -221,8 +237,13 @@ func testPutObjectInSubdir(c *check.C, create func() Driver) {
 	drivers := create()
 	err := drivers.CreateBucket("bucket")
 	c.Assert(err, check.IsNil)
-	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
+
+	hasher := md5.New()
+	hasher.Write([]byte("hello world"))
+	md5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", md5Sum, bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
+
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("hello world"))

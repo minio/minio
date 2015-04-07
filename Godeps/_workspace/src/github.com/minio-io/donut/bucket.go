@@ -17,7 +17,6 @@
 package donut
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -29,9 +28,6 @@ import (
 
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
-
-	"github.com/minio-io/minio/pkg/utils/split"
 )
 
 type bucket struct {
@@ -52,10 +48,6 @@ func NewBucket(bucketName, donutName string, nodes map[string]Node) (Bucket, err
 	b.objects = make(map[string]Object)
 	b.nodes = nodes
 	return b, nil
-}
-
-func (b bucket) ListNodes() (map[string]Node, error) {
-	return b.nodes, nil
 }
 
 func (b bucket) ListObjects() (map[string]Object, error) {
@@ -105,75 +97,27 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 	if !ok {
 		return nil, 0, os.ErrNotExist
 	}
-	donutObjectMetadata, err := object.GetDonutObjectMetadata()
+	objectMetata, err := object.GetObjectMetadata()
 	if err != nil {
 		return nil, 0, err
 	}
-	if objectName == "" || writer == nil || len(donutObjectMetadata) == 0 {
+	if objectName == "" || writer == nil || len(objectMetata) == 0 {
 		return nil, 0, errors.New("invalid argument")
 	}
-	size, err = strconv.ParseInt(donutObjectMetadata["size"], 10, 64)
+	size, err = strconv.ParseInt(objectMetata["size"], 10, 64)
 	if err != nil {
 		return nil, 0, err
 	}
-	go b.getObject(b.normalizeObjectName(objectName), writer, donutObjectMetadata)
+	go b.readEncodedData(b.normalizeObjectName(objectName), writer, objectMetata)
 	return reader, size, nil
 }
 
-func (b bucket) WriteObjectMetadata(objectName string, objectMetadata map[string]string) error {
-	if len(objectMetadata) == 0 {
+func (b bucket) PutObject(objectName string, objectData io.Reader, metadata map[string]string) error {
+	if objectName == "" || objectData == nil {
 		return errors.New("invalid argument")
 	}
-	objectMetadataWriters, err := b.getDiskWriters(objectName, objectMetadataConfig)
-	if err != nil {
-		return err
-	}
-	for _, objectMetadataWriter := range objectMetadataWriters {
-		defer objectMetadataWriter.Close()
-	}
-	for _, objectMetadataWriter := range objectMetadataWriters {
-		jenc := json.NewEncoder(objectMetadataWriter)
-		if err := jenc.Encode(objectMetadata); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b bucket) WriteDonutObjectMetadata(objectName string, donutObjectMetadata map[string]string) error {
-	if len(donutObjectMetadata) == 0 {
-		return errors.New("invalid argument")
-	}
-	donutObjectMetadataWriters, err := b.getDiskWriters(objectName, donutObjectMetadataConfig)
-	if err != nil {
-		return err
-	}
-	for _, donutObjectMetadataWriter := range donutObjectMetadataWriters {
-		defer donutObjectMetadataWriter.Close()
-	}
-	for _, donutObjectMetadataWriter := range donutObjectMetadataWriters {
-		jenc := json.NewEncoder(donutObjectMetadataWriter)
-		if err := jenc.Encode(donutObjectMetadata); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// This a temporary normalization of object path, need to find a better way
-func (b bucket) normalizeObjectName(objectName string) string {
-	// replace every '/' with '-'
-	return strings.Replace(objectName, "/", "-", -1)
-}
-
-func (b bucket) PutObject(objectName, contentType string, objectData io.Reader) error {
-	if objectName == "" {
-		return errors.New("invalid argument")
-	}
-	if objectData == nil {
-		return errors.New("invalid argument")
-	}
-	if contentType == "" || strings.TrimSpace(contentType) == "" {
+	contentType, ok := metadata["contentType"]
+	if !ok || strings.TrimSpace(contentType) == "" {
 		contentType = "application/octet-stream"
 	}
 	writers, err := b.getDiskWriters(b.normalizeObjectName(objectName), "data")
@@ -184,7 +128,7 @@ func (b bucket) PutObject(objectName, contentType string, objectData io.Reader) 
 		defer writer.Close()
 	}
 	summer := md5.New()
-	donutObjectMetadata := make(map[string]string)
+	objectMetata := make(map[string]string)
 	switch len(writers) == 1 {
 	case true:
 		mw := io.MultiWriter(writers[0], summer)
@@ -192,48 +136,30 @@ func (b bucket) PutObject(objectName, contentType string, objectData io.Reader) 
 		if err != nil {
 			return err
 		}
-		donutObjectMetadata["size"] = strconv.FormatInt(totalLength, 10)
+		objectMetata["size"] = strconv.FormatInt(totalLength, 10)
 	case false:
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
 			return err
 		}
-		chunks := split.Stream(objectData, 10*1024*1024)
-		encoder, err := NewEncoder(k, m, "Cauchy")
+		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, summer)
 		if err != nil {
 			return err
 		}
-		chunkCount := 0
-		totalLength := 0
-		for chunk := range chunks {
-			if chunk.Err == nil {
-				totalLength = totalLength + len(chunk.Data)
-				encodedBlocks, _ := encoder.Encode(chunk.Data)
-				summer.Write(chunk.Data)
-				for blockIndex, block := range encodedBlocks {
-					io.Copy(writers[blockIndex], bytes.NewBuffer(block))
-				}
-			}
-			chunkCount = chunkCount + 1
-		}
-		donutObjectMetadata["blockSize"] = strconv.Itoa(10 * 1024 * 1024)
-		donutObjectMetadata["chunkCount"] = strconv.Itoa(chunkCount)
-		donutObjectMetadata["erasureK"] = strconv.FormatUint(uint64(k), 10)
-		donutObjectMetadata["erasureM"] = strconv.FormatUint(uint64(m), 10)
-		donutObjectMetadata["erasureTechnique"] = "Cauchy"
-		donutObjectMetadata["size"] = strconv.Itoa(totalLength)
+		objectMetata["blockSize"] = strconv.Itoa(10 * 1024 * 1024)
+		objectMetata["chunkCount"] = strconv.Itoa(chunkCount)
+		objectMetata["erasureK"] = strconv.FormatUint(uint64(k), 10)
+		objectMetata["erasureM"] = strconv.FormatUint(uint64(m), 10)
+		objectMetata["erasureTechnique"] = "Cauchy"
+		objectMetata["size"] = strconv.Itoa(totalLength)
 	}
 	dataMd5sum := summer.Sum(nil)
-	donutObjectMetadata["created"] = time.Now().Format(time.RFC3339Nano)
-	donutObjectMetadata["md5"] = hex.EncodeToString(dataMd5sum)
-	if err := b.WriteDonutObjectMetadata(b.normalizeObjectName(objectName), donutObjectMetadata); err != nil {
-		return err
-	}
-	objectMetadata := make(map[string]string)
-	objectMetadata["bucket"] = b.name
-	objectMetadata["object"] = objectName
-	objectMetadata["contentType"] = strings.TrimSpace(contentType)
-	if err := b.WriteObjectMetadata(b.normalizeObjectName(objectName), objectMetadata); err != nil {
+	objectMetata["created"] = time.Now().Format(time.RFC3339Nano)
+	objectMetata["md5"] = hex.EncodeToString(dataMd5sum)
+	objectMetata["bucket"] = b.name
+	objectMetata["object"] = objectName
+	objectMetata["contentType"] = strings.TrimSpace(contentType)
+	if err := b.writeDonutObjectMetadata(b.normalizeObjectName(objectName), objectMetata); err != nil {
 		return err
 	}
 	return nil
