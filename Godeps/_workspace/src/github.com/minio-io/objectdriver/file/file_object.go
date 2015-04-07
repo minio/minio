@@ -23,12 +23,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/minio-io/objectdriver"
+
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/hex"
-
-	"github.com/minio-io/minio/pkg/drivers"
 )
 
 /// Object Operations

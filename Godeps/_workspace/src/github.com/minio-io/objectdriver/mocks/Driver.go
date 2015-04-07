@@ -1,13 +1,12 @@
 package mocks
 
-import "github.com/minio-io/minio/pkg/drivers"
-import "github.com/stretchr/testify/mock"
-
 import (
 	"bytes"
 	"io"
 
+	"github.com/fkautz/testify/mock"
 	"github.com/minio-io/iodine"
+	"github.com/minio-io/objectdriver"
 )
 
 // Driver is a mock

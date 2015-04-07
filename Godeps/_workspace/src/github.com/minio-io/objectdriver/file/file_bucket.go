@@ -22,10 +22,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio-io/objectdriver"
+
 	"io/ioutil"
 	"path/filepath"
-
-	"github.com/minio-io/minio/pkg/drivers"
 )
 
 /// Bucket Operations

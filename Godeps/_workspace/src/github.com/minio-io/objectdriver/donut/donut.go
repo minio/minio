@@ -30,8 +30,8 @@ import (
 
 	"github.com/minio-io/donut"
 	"github.com/minio-io/iodine"
-	"github.com/minio-io/minio/pkg/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio-io/objectdriver"
 )
 
 // donutDriver - creates a new single disk drivers driver using donut

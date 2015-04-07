@@ -19,7 +19,7 @@ package api
 import (
 	"sort"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // Reply date format

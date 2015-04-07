@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 func delimiter(object, delimiter string) string {

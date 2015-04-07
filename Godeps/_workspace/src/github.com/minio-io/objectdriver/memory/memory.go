@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio-io/objectdriver"
+
 	"crypto/md5"
 	"encoding/hex"
 
 	"io/ioutil"
-
-	"github.com/minio-io/minio/pkg/drivers"
 )
 
 // memoryDriver - local variables

@@ -20,7 +20,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"github.com/minio-io/objectdriver"
 )
 
 // Start filesystem channel
