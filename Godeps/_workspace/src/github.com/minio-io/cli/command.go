@@ -38,11 +38,14 @@ type Command struct {
 	HideHelp bool
 	// Boolean to hide this command from help or completion
 	Hide bool
+	// CustomHelpTemplate the text template for the command help topic.
+	// cli.go uses text/template to render templates. You can
+	// render custom help text by setting this variable.
+	CustomHelpTemplate string
 }
 
-// Invokes the command given the context, parses ctx.Args() to generate command-specific flags
+// Run - Invokes the command given the context, parses ctx.Args() to generate command-specific flags
 func (c Command) Run(ctx *Context) error {
-
 	if len(c.Subcommands) > 0 || c.Before != nil || c.After != nil {
 		return c.startApp(ctx)
 	}
@@ -121,6 +124,7 @@ func (c Command) Run(ctx *Context) error {
 	return nil
 }
 
+// Names - returns collection of all name, shortname and aliases
 func (c Command) Names() []string {
 	names := []string{c.Name}
 
@@ -131,7 +135,7 @@ func (c Command) Names() []string {
 	return append(names, c.Aliases...)
 }
 
-// Returns true if Command.Name or Command.ShortName matches given name
+// HasName - Returns true if Command.Name or Command.ShortName matches given name
 func (c Command) HasName(name string) bool {
 	for _, n := range c.Names() {
 		if n == name {

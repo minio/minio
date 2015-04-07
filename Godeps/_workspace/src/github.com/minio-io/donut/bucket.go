@@ -97,18 +97,18 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 	if !ok {
 		return nil, 0, os.ErrNotExist
 	}
-	objectMetata, err := object.GetObjectMetadata()
+	objectMetadata, err := object.GetObjectMetadata()
 	if err != nil {
 		return nil, 0, err
 	}
-	if objectName == "" || writer == nil || len(objectMetata) == 0 {
+	if objectName == "" || writer == nil || len(objectMetadata) == 0 {
 		return nil, 0, errors.New("invalid argument")
 	}
-	size, err = strconv.ParseInt(objectMetata["size"], 10, 64)
+	size, err = strconv.ParseInt(objectMetadata["size"], 10, 64)
 	if err != nil {
 		return nil, 0, err
 	}
-	go b.readEncodedData(b.normalizeObjectName(objectName), writer, objectMetata)
+	go b.readEncodedData(b.normalizeObjectName(objectName), writer, objectMetadata)
 	return reader, size, nil
 }
 
@@ -128,7 +128,7 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, metadata map[
 		defer writer.Close()
 	}
 	summer := md5.New()
-	objectMetata := make(map[string]string)
+	objectMetadata := make(map[string]string)
 	switch len(writers) == 1 {
 	case true:
 		mw := io.MultiWriter(writers[0], summer)
@@ -136,7 +136,7 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, metadata map[
 		if err != nil {
 			return err
 		}
-		objectMetata["size"] = strconv.FormatInt(totalLength, 10)
+		objectMetadata["size"] = strconv.FormatInt(totalLength, 10)
 	case false:
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
@@ -146,20 +146,25 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, metadata map[
 		if err != nil {
 			return err
 		}
-		objectMetata["blockSize"] = strconv.Itoa(10 * 1024 * 1024)
-		objectMetata["chunkCount"] = strconv.Itoa(chunkCount)
-		objectMetata["erasureK"] = strconv.FormatUint(uint64(k), 10)
-		objectMetata["erasureM"] = strconv.FormatUint(uint64(m), 10)
-		objectMetata["erasureTechnique"] = "Cauchy"
-		objectMetata["size"] = strconv.Itoa(totalLength)
+		objectMetadata["blockSize"] = strconv.Itoa(10 * 1024 * 1024)
+		objectMetadata["chunkCount"] = strconv.Itoa(chunkCount)
+		objectMetadata["erasureK"] = strconv.FormatUint(uint64(k), 10)
+		objectMetadata["erasureM"] = strconv.FormatUint(uint64(m), 10)
+		objectMetadata["erasureTechnique"] = "Cauchy"
+		objectMetadata["size"] = strconv.Itoa(totalLength)
 	}
 	dataMd5sum := summer.Sum(nil)
-	objectMetata["created"] = time.Now().Format(time.RFC3339Nano)
-	objectMetata["md5"] = hex.EncodeToString(dataMd5sum)
-	objectMetata["bucket"] = b.name
-	objectMetata["object"] = objectName
-	objectMetata["contentType"] = strings.TrimSpace(contentType)
-	if err := b.writeDonutObjectMetadata(b.normalizeObjectName(objectName), objectMetata); err != nil {
+	objectMetadata["created"] = time.Now().Format(time.RFC3339Nano)
+	objectMetadata["md5"] = hex.EncodeToString(dataMd5sum)
+	if _, ok := metadata["expectedMd5Sum"]; ok {
+		if err := b.isMD5SumEqual(metadata["expectedMd5sum"], objectMetadata["md5"]); err != nil {
+			return err
+		}
+	}
+	objectMetadata["bucket"] = b.name
+	objectMetadata["object"] = objectName
+	objectMetadata["contentType"] = strings.TrimSpace(contentType)
+	if err := b.writeDonutObjectMetadata(b.normalizeObjectName(objectName), objectMetadata); err != nil {
 		return err
 	}
 	return nil

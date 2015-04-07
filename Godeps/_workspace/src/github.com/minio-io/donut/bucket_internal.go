@@ -19,6 +19,7 @@ package donut
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -29,8 +30,27 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
+
+func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
+	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
+		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(expectedMD5Sum)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
+			return iodine.New(errors.New("bad digest, md5sum mismatch"), nil)
+		}
+		return nil
+	}
+	return iodine.New(errors.New("invalid argument"), nil)
+}
 
 func (b bucket) writeDonutObjectMetadata(objectName string, objectMetadata map[string]string) error {
 	if len(objectMetadata) == 0 {

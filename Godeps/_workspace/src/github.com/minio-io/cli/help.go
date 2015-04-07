@@ -1,6 +1,9 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // The text template for the Default help topic.
 // cli.go uses text/template to render templates. You can
@@ -31,7 +34,7 @@ GLOBAL OPTIONS:
 // The text template for the command help topic.
 // cli.go uses text/template to render templates. You can
 // render custom help text by setting this variable.
-var CommandHelpTemplate = `NAME:
+var DefaultCommandHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
@@ -48,7 +51,7 @@ OPTIONS:
 // The text template for the subcommand help topic.
 // cli.go uses text/template to render templates. You can
 // render custom help text by setting this variable.
-var SubcommandHelpTemplate = `NAME:
+var DefaultSubcommandHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
@@ -95,11 +98,13 @@ var helpSubcommand = Command{
 // Prints help for the App
 type helpPrinter func(templ string, data interface{})
 
-var HelpPrinter helpPrinter = nil
+// HelpPrinter - prints help for the app
+var HelpPrinter helpPrinter
 
 // Prints version for the App
 var VersionPrinter = printVersion
 
+// ShowAppHelp - Prints the list of subcommands for the app
 func ShowAppHelp(c *Context) {
 	// Make a copy of c.App context
 	app := *c.App
@@ -118,7 +123,7 @@ func ShowAppHelp(c *Context) {
 	HelpPrinter(AppHelpTemplate, app)
 }
 
-// Prints the list of subcommands as the default app completion method
+// DefaultAppComplete - Prints the list of subcommands as the default app completion method
 func DefaultAppComplete(c *Context) {
 	for _, command := range c.App.Commands {
 		if command.isNotHidden() {
@@ -129,7 +134,13 @@ func DefaultAppComplete(c *Context) {
 	}
 }
 
-// Prints help for the given command
+// ShowCommandHelpAndExit - exits with code after showing help
+func ShowCommandHelpAndExit(c *Context, command string, code int) {
+	ShowCommandHelp(c, command)
+	os.Exit(code)
+}
+
+// ShowCommandHelp - Prints help for the given command
 func ShowCommandHelp(c *Context, command string) {
 	// show the subcommand help for a command with subcommands
 	if command == "" {
@@ -147,7 +158,7 @@ func ShowCommandHelp(c *Context, command string) {
 				app.Commands = append(app.Commands, command)
 			}
 		}
-		HelpPrinter(SubcommandHelpTemplate, app)
+		HelpPrinter(DefaultSubcommandHelpTemplate, app)
 		return
 	}
 
@@ -161,7 +172,11 @@ func ShowCommandHelp(c *Context, command string) {
 					c0.Flags = append(c0.Flags, flag)
 				}
 			}
-			HelpPrinter(CommandHelpTemplate, c0)
+			if c0.CustomHelpTemplate != "" {
+				HelpPrinter(c0.CustomHelpTemplate, c0)
+			} else {
+				HelpPrinter(DefaultCommandHelpTemplate, c0)
+			}
 			return
 		}
 	}
@@ -173,12 +188,12 @@ func ShowCommandHelp(c *Context, command string) {
 	}
 }
 
-// Prints help for the given subcommand
+// ShowSubcommandHelp - Prints help for the given subcommand
 func ShowSubcommandHelp(c *Context) {
 	ShowCommandHelp(c, c.Command.Name)
 }
 
-// Prints the version number of the App
+// ShowVersion - Prints the version number of the App
 func ShowVersion(c *Context) {
 	VersionPrinter(c)
 }
@@ -187,7 +202,7 @@ func printVersion(c *Context) {
 	fmt.Fprintf(c.App.Writer, "%v version %v\n", c.App.Name, c.App.Version)
 }
 
-// Prints the lists of commands within a given context
+// ShowCompletions - Prints the lists of commands within a given context
 func ShowCompletions(c *Context) {
 	a := c.App
 	if a != nil && a.BashComplete != nil {
@@ -195,7 +210,7 @@ func ShowCompletions(c *Context) {
 	}
 }
 
-// Prints the custom completions for a given command
+// ShowCommandCompletions - Prints the custom completions for a given command
 func ShowCommandCompletions(ctx *Context, command string) {
 	c := ctx.App.Command(command)
 	if c != nil && c.BashComplete != nil {

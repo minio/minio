@@ -67,7 +67,7 @@ func compileTime() time.Time {
 	return info.ModTime()
 }
 
-// Creates a new cli Application with some reasonable defaults for Name, Usage, Version and Action.
+// NewApp - Creates a new cli Application with some reasonable defaults for Name, Usage, Version and Action.
 func NewApp() *App {
 	return &App{
 		Name:         os.Args[0],
@@ -80,12 +80,37 @@ func NewApp() *App {
 	}
 }
 
-// Entry point to the cli app. Parses the arguments slice and routes to the proper flag/args combination
-func (a *App) Run(arguments []string) (err error) {
-	if a.Author != "" || a.Email != "" {
-		a.Authors = append(a.Authors, Author{Name: a.Author, Email: a.Email})
-	}
+// getNewContext -
+func (a *App) getNewContext(arguments []string) (*Context, error) {
+	// parse flags
+	set := flagSet(a.Name, a.Flags)
+	set.SetOutput(ioutil.Discard)
+	context := NewContext(a, set, set)
 
+	err := set.Parse(arguments[1:])
+	if err != nil {
+		fmt.Fprintf(a.Writer, "Incorrect Usage.\n\n")
+		ShowAppHelp(context)
+		fmt.Fprintln(a.Writer)
+		return nil, err
+
+	}
+	nerr := normalizeFlags(a.Flags, set)
+	if nerr != nil {
+		fmt.Fprintln(a.Writer, nerr)
+		ShowAppHelp(context)
+		fmt.Fprintln(a.Writer)
+		return nil, nerr
+	}
+	return context, nil
+}
+
+// Run - Entry point to the cli app. Parses the arguments slice and routes to the proper flag/args combination
+func (a *App) Run(arguments []string) (err error) {
+	// Comment this out as its not going to be used
+	// if a.Author != "" || a.Email != "" {
+	// a.Authors = append(a.Authors, Author{Name: a.Author, Email: a.Email})
+	//}
 	if HelpPrinter == nil {
 		defer func() {
 			HelpPrinter = nil
@@ -123,36 +148,12 @@ func (a *App) Run(arguments []string) (err error) {
 		a.appendFlag(VersionFlag)
 	}
 
-	// parse flags
-	set := flagSet(a.Name, a.Flags)
-	set.SetOutput(ioutil.Discard)
-	err = set.Parse(arguments[1:])
-	nerr := normalizeFlags(a.Flags, set)
-	if nerr != nil {
-		fmt.Fprintln(a.Writer, nerr)
-		context := NewContext(a, set, set)
-		ShowAppHelp(context)
-		fmt.Fprintln(a.Writer)
-		return nerr
-	}
-	context := NewContext(a, set, set)
-
+	context, err := a.getNewContext(arguments)
 	if err != nil {
-		fmt.Fprintf(a.Writer, "Incorrect Usage.\n\n")
-		ShowAppHelp(context)
-		fmt.Fprintln(a.Writer)
 		return err
 	}
 
-	if checkCompletions(context) {
-		return nil
-	}
-
-	if checkHelp(context) {
-		return nil
-	}
-
-	if checkVersion(context) {
+	if checkCompletions(context) || checkHelp(context) || checkVersion(context) {
 		return nil
 	}
 
@@ -186,7 +187,7 @@ func (a *App) Run(arguments []string) (err error) {
 	return nil
 }
 
-// Another entry point to the cli app, takes care of passing arguments and error handling
+// RunAndExitOnError - Another entry point to the cli app, takes care of passing arguments and error handling
 func (a *App) RunAndExitOnError() {
 	if err := a.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -194,7 +195,7 @@ func (a *App) RunAndExitOnError() {
 	}
 }
 
-// Invokes the subcommand given the context, parses ctx.Args() to generate command-specific flags
+// RunAsSubcommand - Invokes the subcommand given the context, parses ctx.Args() to generate command-specific flags
 func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 	// append help to commands
 	if len(a.Commands) > 0 {
@@ -280,7 +281,7 @@ func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 	return nil
 }
 
-// Returns the named command on App. Returns nil if the command does not exist
+// Command - Returns the named command on App. Returns nil if the command does not exist
 func (a *App) Command(name string) *Command {
 	for _, c := range a.Commands {
 		if c.HasName(name) {
