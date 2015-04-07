@@ -96,6 +96,14 @@ func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, 
 	return io.CopyN(w, &sourceBuffer, length)
 }
 
+// GetBucketMetadata -
+func (memory memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+	}
+	return memory.bucketdata[bucket].metadata, nil
+}
+
 // CreateBucketPolicy - Not implemented
 func (memory memoryDriver) CreateBucketPolicy(bucket string, policy drivers.BucketPolicy) error {
 	return drivers.APINotImplemented{API: "PutBucketPolicy"}

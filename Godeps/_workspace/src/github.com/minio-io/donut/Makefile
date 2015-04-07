@@ -60,8 +60,8 @@ docs-deploy:
 	@mkdocs gh-deploy --clean
 
 install: test-all
-	@echo "Installing donut-cli:"
-	@godep go install -a github.com/minio-io/donut/cmd/donut-cli
+	@echo "Installing donut tool:"
+	@godep go install -a github.com/minio-io/donut/cmd/donut
 	@mkdir -p $(HOME)/.minio/donut
 
 clean:

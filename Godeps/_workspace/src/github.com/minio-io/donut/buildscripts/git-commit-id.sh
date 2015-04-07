@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CONST_FILE=${PWD}/cmd/donut-cli/build-constants.go
+CONST_FILE=${PWD}/cmd/donut/build-constants.go
 
 cat > $CONST_FILE <<EOF
 /*

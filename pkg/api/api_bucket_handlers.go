@@ -150,3 +150,39 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		}
 	}
 }
+
+// HEAD Bucket
+// ----------
+// This operation is useful to determine if a bucket exists.
+// The operation returns a 200 OK if the bucket exists and you
+// have permission to access it. Otherwise, the operation might
+// return responses such as 404 Not Found and 403 Forbidden.
+func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
+	// TODO need to peek into bucketPolicy return appropriate checks here
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	acceptsContentType := getContentType(req)
+
+	_, err := server.driver.GetBucketMetadata(bucket)
+	switch err.(type) {
+	case nil:
+		{
+			w.Header().Set("Server", "Minio")
+			w.Header().Set("Connection", "close")
+			w.WriteHeader(http.StatusOK)
+		}
+	case drivers.BucketNameInvalid:
+		{
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		}
+	case drivers.BucketNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
+}

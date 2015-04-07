@@ -35,6 +35,7 @@ func APITestSuite(c *check.C, create func() Driver) {
 	testPaging(c, create)
 	testObjectOverwriteFails(c, create)
 	testNonExistantBucketOperations(c, create)
+	testBucketMetadata(c, create)
 	testBucketRecreateFails(c, create)
 	testPutObjectInSubdir(c, create)
 	testListBuckets(c, create)
@@ -43,7 +44,6 @@ func APITestSuite(c *check.C, create func() Driver) {
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
 	testDefaultContentType(c, create)
-	//testContentMd5Set(c, create) TODO
 }
 
 func testCreateBucket(c *check.C, create func() Driver) {
@@ -223,6 +223,16 @@ func testNonExistantBucketOperations(c *check.C, create func() Driver) {
 	drivers := create()
 	err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
+}
+
+func testBucketMetadata(c *check.C, create func() Driver) {
+	drivers := create()
+	err := drivers.CreateBucket("string")
+	c.Assert(err, check.IsNil)
+
+	metadata, err := drivers.GetBucketMetadata("string")
+	c.Assert(err, check.IsNil)
+	c.Assert(metadata.Name, check.Equals, "string")
 }
 
 func testBucketRecreateFails(c *check.C, create func() Driver) {

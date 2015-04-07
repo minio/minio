@@ -119,22 +119,37 @@ func (d donutDriver) CreateBucket(bucketName string) error {
 	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
 		return d.donut.MakeBucket(bucketName)
 	}
-	return errors.New("Invalid bucket")
+	return iodine.New(errors.New("Invalid bucket"), map[string]string{"bucket": bucketName})
 }
 
 // GetBucketMetadata retrieves an bucket's metadata
-func (d donutDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
-	return drivers.BucketMetadata{}, errors.New("Not Implemented")
+func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadata, error) {
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return drivers.BucketMetadata{}, drivers.BucketNameInvalid{Bucket: bucketName}
+	}
+	metadata, err := d.donut.GetBucketMetadata(bucketName)
+	if err != nil {
+		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
+	}
+	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
+	if err != nil {
+		return drivers.BucketMetadata{}, iodine.New(err, nil)
+	}
+	bucketMetadata := drivers.BucketMetadata{
+		Name:    metadata["name"],
+		Created: created,
+	}
+	return bucketMetadata, nil
 }
 
 // CreateBucketPolicy sets a bucket's access policy
 func (d donutDriver) CreateBucketPolicy(bucket string, p drivers.BucketPolicy) error {
-	return errors.New("Not Implemented")
+	return iodine.New(errors.New("Not Implemented"), nil)
 }
 
 // GetBucketPolicy returns a bucket's access policy
 func (d donutDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
-	return drivers.BucketPolicy{}, errors.New("Not Implemented")
+	return drivers.BucketPolicy{}, iodine.New(errors.New("Not Implemented"), nil)
 }
 
 // GetObject retrieves an object and writes it to a writer

@@ -6,6 +6,10 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/minio-io/check",
+			"Rev": "bc4e66da8cd7ff58a4b9b84301f906352b8f2c94"
+		},
+		{
 			"ImportPath": "github.com/minio-io/cli",
 			"Comment": "1.2.0-102-gecb385c",
 			"Rev": "ecb385c3fefd53678e3b6beba6a608fb7c8dfac1"
@@ -13,6 +17,10 @@
 		{
 			"ImportPath": "github.com/minio-io/erasure",
 			"Rev": "8a72b14991a6835b4d30403e7cb201f373b7cb3a"
+		},
+		{
+			"ImportPath": "github.com/minio-io/iodine",
+			"Rev": "55cc4d4256c68fbd6f0775f1a25e37e6a2f6457e"
 		},
 		{
 			"ImportPath": "github.com/minio-io/minio/pkg/utils/split",
