@@ -20,9 +20,9 @@ import (
 	"os"
 	"path"
 
-	"encoding/json"
+	"github.com/minio-io/objectdriver"
 
-	"github.com/minio-io/minio/pkg/drivers"
+	"encoding/json"
 )
 
 // GetBucketPolicy - GET bucket policy

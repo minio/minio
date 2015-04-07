@@ -21,9 +21,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/minio-io/minio/pkg/drivers"
-
 	. "github.com/minio-io/check"
+	"github.com/minio-io/objectdriver"
 )
 
 func Test(t *testing.T) { TestingT(t) }
