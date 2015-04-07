@@ -43,7 +43,7 @@ type ObjectStorage interface {
 	// Object Operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
 	GetObjectMetadata(bucket, object string) (map[string]string, error)
-	PutObject(bucket, object string, reader io.ReadCloser, metadata map[string]string) error
+	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) error
 }
 
 // Management is a donut management system interface
@@ -71,12 +71,13 @@ type Bucket interface {
 	ListObjects() (map[string]Object, error)
 
 	GetObject(object string) (io.ReadCloser, int64, error)
-	PutObject(object string, contents io.Reader, metadata map[string]string) error
+	PutObject(object string, contents io.Reader, expectedMD5Sum string, metadata map[string]string) error
 }
 
 // Object interface
 type Object interface {
 	GetObjectMetadata() (map[string]string, error)
+	GetDonutObjectMetadata() (map[string]string, error)
 }
 
 // Node interface
@@ -104,8 +105,3 @@ type Disk interface {
 	GetOrder() int
 	GetFSInfo() map[string]string
 }
-
-const (
-	objectMetadataConfig = "objectMetadata.json"
-	donutConfig          = "donutMetadata.json"
-)

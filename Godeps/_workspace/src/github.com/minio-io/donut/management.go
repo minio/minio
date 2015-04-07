@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"path"
+
+	"github.com/minio-io/iodine"
 )
 
 func (d donut) Heal() error {
@@ -15,7 +17,7 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 	for nodeName, node := range d.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return nil, err
+			return nil, iodine.New(err, nil)
 		}
 		diskList := make([]string, len(disks))
 		for diskName, disk := range disks {
@@ -28,7 +30,7 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 
 func (d donut) AttachNode(node Node) error {
 	if node == nil {
-		return errors.New("invalid argument")
+		return iodine.New(errors.New("invalid argument"), nil)
 	}
 	d.nodes[node.GetNodeName()] = node
 	return nil
@@ -43,19 +45,19 @@ func (d donut) SaveConfig() error {
 	for hostname, node := range d.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		for _, disk := range disks {
 			donutConfigPath := path.Join(d.name, donutConfig)
 			donutConfigWriter, err := disk.MakeFile(donutConfigPath)
 			defer donutConfigWriter.Close()
 			if err != nil {
-				return err
+				return iodine.New(err, nil)
 			}
 			nodeDiskMap[hostname][disk.GetOrder()] = disk.GetPath()
 			jenc := json.NewEncoder(donutConfigWriter)
 			if err := jenc.Encode(nodeDiskMap); err != nil {
-				return err
+				return iodine.New(err, nil)
 			}
 		}
 	}

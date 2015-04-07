@@ -18,6 +18,8 @@ package donut
 
 import (
 	"errors"
+
+	"github.com/minio-io/iodine"
 )
 
 type node struct {
@@ -28,7 +30,7 @@ type node struct {
 // NewNode - instantiates a new node
 func NewNode(hostname string) (Node, error) {
 	if hostname == "" {
-		return nil, errors.New("invalid argument")
+		return nil, iodine.New(errors.New("invalid argument"), nil)
 	}
 	disks := make(map[string]Disk)
 	n := node{
@@ -48,7 +50,7 @@ func (n node) ListDisks() (map[string]Disk, error) {
 
 func (n node) AttachDisk(disk Disk) error {
 	if disk == nil {
-		return errors.New("Invalid argument")
+		return iodine.New(errors.New("Invalid argument"), nil)
 	}
 	n.disks[disk.GetPath()] = disk
 	return nil

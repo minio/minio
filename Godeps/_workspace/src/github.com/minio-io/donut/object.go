@@ -25,9 +25,10 @@ import (
 )
 
 type object struct {
-	name           string
-	objectPath     string
-	objectMetadata map[string]string
+	name                string
+	objectPath          string
+	objectMetadata      map[string]string
+	donutObjectMetadata map[string]string
 }
 
 // NewObject - instantiate a new object
@@ -51,5 +52,18 @@ func (o object) GetObjectMetadata() (map[string]string, error) {
 		return nil, err
 	}
 	o.objectMetadata = objectMetadata
-	return objectMetadata, nil
+	return o.objectMetadata, nil
+}
+
+func (o object) GetDonutObjectMetadata() (map[string]string, error) {
+	donutObjectMetadata := make(map[string]string)
+	donutObjectMetadataBytes, err := ioutil.ReadFile(path.Join(o.objectPath, donutObjectMetadataConfig))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(donutObjectMetadataBytes, &donutObjectMetadata); err != nil {
+		return nil, err
+	}
+	o.donutObjectMetadata = donutObjectMetadata
+	return o.donutObjectMetadata, nil
 }

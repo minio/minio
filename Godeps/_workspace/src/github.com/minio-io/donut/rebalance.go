@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/minio-io/iodine"
 )
 
 func (d donut) Rebalance() error {
@@ -13,14 +15,14 @@ func (d donut) Rebalance() error {
 	for _, node := range d.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		totalOffSetLength = len(disks)
 		fmt.Println(totalOffSetLength)
 		for _, disk := range disks {
 			dirs, err := disk.ListDir(d.name)
 			if err != nil {
-				return err
+				return iodine.New(err, nil)
 			}
 			if len(dirs) == 0 {
 				newDisks = append(newDisks, disk)

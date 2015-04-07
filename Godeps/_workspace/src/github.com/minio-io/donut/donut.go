@@ -16,7 +16,11 @@
 
 package donut
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/minio-io/iodine"
+)
 
 type donut struct {
 	name    string
@@ -24,28 +28,34 @@ type donut struct {
 	nodes   map[string]Node
 }
 
+const (
+	donutObjectMetadataConfig = "donutObjectMetadata.json"
+	objectMetadataConfig      = "objectMetadata.json"
+	donutConfig               = "donutMetadata.json"
+)
+
 // attachDonutNode - wrapper function to instantiate a new node for associated donut
 // based on the configuration
 func (d donut) attachDonutNode(hostname string, disks []string) error {
 	node, err := NewNode(hostname)
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 	for i, disk := range disks {
 		// Order is necessary for maps, keep order number separately
 		newDisk, err := NewDisk(disk, i)
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		if err := newDisk.MakeDir(d.name); err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		if err := node.AttachDisk(newDisk); err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 	}
 	if err := d.AttachNode(node); err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 	return nil
 }
@@ -53,7 +63,7 @@ func (d donut) attachDonutNode(hostname string, disks []string) error {
 // NewDonut - instantiate a new donut
 func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) {
 	if donutName == "" || len(nodeDiskMap) == 0 {
-		return nil, errors.New("invalid argument")
+		return nil, iodine.New(errors.New("invalid argument"), nil)
 	}
 	nodes := make(map[string]Node)
 	buckets := make(map[string]Bucket)
@@ -64,11 +74,11 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 	}
 	for k, v := range nodeDiskMap {
 		if len(v) == 0 {
-			return nil, errors.New("invalid number of disks per node")
+			return nil, iodine.New(errors.New("invalid number of disks per node"), nil)
 		}
 		err := d.attachDonutNode(k, v)
 		if err != nil {
-			return nil, err
+			return nil, iodine.New(err, nil)
 		}
 	}
 	return d, nil
