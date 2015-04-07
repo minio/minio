@@ -18,8 +18,10 @@ package donut
 
 import (
 	"errors"
+	"strconv"
 
 	encoding "github.com/minio-io/erasure"
+	"github.com/minio-io/iodine"
 )
 
 type encoder struct {
@@ -36,20 +38,25 @@ func getErasureTechnique(technique string) (encoding.Technique, error) {
 	case technique == "Vandermonde":
 		return encoding.Cauchy, nil
 	default:
-		return encoding.None, errors.New("Invalid erasure technique")
+		return encoding.None, iodine.New(errors.New("Invalid erasure technique"), nil)
 	}
 }
 
 // NewEncoder - instantiate a new encoder
 func NewEncoder(k, m uint8, technique string) (Encoder, error) {
+	errParams := map[string]string{
+		"k":         strconv.FormatUint(uint64(k), 10),
+		"m":         strconv.FormatUint(uint64(m), 10),
+		"technique": technique,
+	}
 	e := encoder{}
 	t, err := getErasureTechnique(technique)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, errParams)
 	}
 	params, err := encoding.ValidateParams(k, m, t)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, errParams)
 	}
 	e.encoder = encoding.NewErasure(params)
 	e.k = k
@@ -59,19 +66,19 @@ func NewEncoder(k, m uint8, technique string) (Encoder, error) {
 }
 
 func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
-	if dataLength == 0 {
-		return 0, errors.New("invalid argument")
+	if dataLength <= 0 {
+		return 0, iodine.New(errors.New("invalid argument"), nil)
 	}
 	return encoding.GetEncodedBlockLen(dataLength, e.k), nil
 }
 
 func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 	if data == nil {
-		return nil, errors.New("invalid argument")
+		return nil, iodine.New(errors.New("invalid argument"), nil)
 	}
 	encodedData, err = e.encoder.Encode(data)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	return encodedData, nil
 }
@@ -79,7 +86,7 @@ func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 func (e encoder) Decode(encodedData [][]byte, dataLength int) (data []byte, err error) {
 	decodedData, err := e.encoder.Decode(encodedData, dataLength)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	return decodedData, nil
 }

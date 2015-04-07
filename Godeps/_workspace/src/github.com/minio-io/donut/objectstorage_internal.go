@@ -6,6 +6,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/minio-io/iodine"
 )
 
 func appendUniq(slice []string, i string) []string {
@@ -80,27 +82,27 @@ func uniqueObjects(objects []string) []string {
 func (d donut) makeBucket(bucketName string) error {
 	err := d.getAllBuckets()
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 	if _, ok := d.buckets[bucketName]; ok {
-		return errors.New("bucket exists")
+		return iodine.New(errors.New("bucket exists"), nil)
 	}
 	bucket, err := NewBucket(bucketName, d.name, d.nodes)
 	if err != nil {
-		return err
+		return iodine.New(err, nil)
 	}
 	nodeNumber := 0
 	d.buckets[bucketName] = bucket
 	for _, node := range d.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		for _, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, disk.GetOrder())
 			err := disk.MakeDir(path.Join(d.name, bucketSlice))
 			if err != nil {
-				return err
+				return iodine.New(err, nil)
 			}
 		}
 		nodeNumber = nodeNumber + 1
@@ -112,23 +114,23 @@ func (d donut) getAllBuckets() error {
 	for _, node := range d.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return err
+			return iodine.New(err, nil)
 		}
 		for _, disk := range disks {
 			dirs, err := disk.ListDir(d.name)
 			if err != nil {
-				return err
+				return iodine.New(err, nil)
 			}
 			for _, dir := range dirs {
 				splitDir := strings.Split(dir.Name(), "$")
 				if len(splitDir) < 3 {
-					return errors.New("corrupted backend")
+					return iodine.New(errors.New("corrupted backend"), nil)
 				}
 				bucketName := splitDir[0]
 				// we dont need this NewBucket once we cache these
 				bucket, err := NewBucket(bucketName, d.name, d.nodes)
 				if err != nil {
-					return err
+					return iodine.New(err, nil)
 				}
 				d.buckets[bucketName] = bucket
 			}

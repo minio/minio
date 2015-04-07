@@ -23,6 +23,8 @@ import (
 	"syscall"
 
 	"io/ioutil"
+
+	"github.com/minio-io/iodine"
 )
 
 type disk struct {
@@ -34,19 +36,19 @@ type disk struct {
 // NewDisk - instantiate new disk
 func NewDisk(diskPath string, diskOrder int) (Disk, error) {
 	if diskPath == "" || diskOrder < 0 {
-		return nil, errors.New("invalid argument")
+		return nil, iodine.New(errors.New("invalid argument"), nil)
 	}
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(diskPath, &s)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	if !st.IsDir() {
-		return nil, syscall.ENOTDIR
+		return nil, iodine.New(syscall.ENOTDIR, nil)
 	}
 	d := disk{
 		root:       diskPath,
@@ -58,7 +60,7 @@ func NewDisk(diskPath string, diskOrder int) (Disk, error) {
 		d.filesystem["MountPoint"] = d.root
 		return d, nil
 	}
-	return nil, errors.New("unsupported filesystem")
+	return nil, iodine.New(errors.New("unsupported filesystem"), nil)
 }
 
 func (d disk) GetPath() string {
@@ -87,7 +89,7 @@ func (d disk) MakeDir(dirname string) error {
 func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
 	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	var directories []os.FileInfo
 	for _, content := range contents {
@@ -102,7 +104,7 @@ func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
 func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	var files []os.FileInfo
 	for _, content := range contents {
@@ -116,35 +118,27 @@ func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 
 func (d disk) MakeFile(filename string) (*os.File, error) {
 	if filename == "" {
-		return nil, errors.New("Invalid argument")
+		return nil, iodine.New(errors.New("Invalid argument"), nil)
 	}
 	filePath := path.Join(d.root, filename)
 	// Create directories if they don't exist
 	if err := os.MkdirAll(path.Dir(filePath), 0700); err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	dataFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	return dataFile, nil
 }
 
 func (d disk) OpenFile(filename string) (*os.File, error) {
 	if filename == "" {
-		return nil, errors.New("Invalid argument")
+		return nil, iodine.New(errors.New("Invalid argument"), nil)
 	}
 	dataFile, err := os.Open(path.Join(d.root, filename))
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	return dataFile, nil
-}
-
-func (d disk) SaveConfig() error {
-	return errors.New("Not Implemented")
-}
-
-func (d disk) LoadConfig() error {
-	return errors.New("Not Implemented")
 }

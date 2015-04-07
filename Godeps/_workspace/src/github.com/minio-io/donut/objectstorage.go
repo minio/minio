@@ -109,7 +109,7 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 	return results, commonPrefixes, isTruncated, nil
 }
 
-func (d donut) PutObject(bucket, object string, reader io.ReadCloser, metadata map[string]string) error {
+func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) error {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -127,7 +127,7 @@ func (d donut) PutObject(bucket, object string, reader io.ReadCloser, metadata m
 	if _, ok := d.buckets[bucket]; !ok {
 		return iodine.New(errors.New("bucket does not exist"), nil)
 	}
-	err = d.buckets[bucket].PutObject(object, reader, metadata)
+	err = d.buckets[bucket].PutObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
 		return iodine.New(err, errParams)
 	}

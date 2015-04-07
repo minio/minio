@@ -24,7 +24,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/donut",
-			"Rev": "9d0c663a857103c780414e15d7e426c6fca9984e"
+			"Rev": "2b8c72e28768f47511730adae5e780550fdc0236"
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",
@@ -36,7 +36,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/objectdriver",
-			"Rev": "3efb266b6a644b161d8a4d9a1f55bea95a2e391b"
+			"Rev": "64e55f18297dd962102afc7e81ea63488fc4706a"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",
