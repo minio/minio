@@ -1,2 +1,0 @@
-# objectdriver
-Object Storage Driver

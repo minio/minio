@@ -24,6 +24,7 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// encoder internal struct
 type encoder struct {
 	encoder   *encoding.Erasure
 	k, m      uint8
@@ -65,6 +66,8 @@ func NewEncoder(k, m uint8, technique string) (Encoder, error) {
 	return e, nil
 }
 
+// TODO - think again if this is needed
+// GetEncodedBlockLen - wrapper around erasure function with the same name
 func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
 	if dataLength <= 0 {
 		return 0, iodine.New(errors.New("invalid argument"), nil)
@@ -72,6 +75,7 @@ func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
 	return encoding.GetEncodedBlockLen(dataLength, e.k), nil
 }
 
+// Encode - erasure code input bytes
 func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 	if data == nil {
 		return nil, iodine.New(errors.New("invalid argument"), nil)
@@ -83,6 +87,7 @@ func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 	return encodedData, nil
 }
 
+// Decode - erasure decode input encoded bytes
 func (e encoder) Decode(encodedData [][]byte, dataLength int) (data []byte, err error) {
 	decodedData, err := e.encoder.Decode(encodedData, dataLength)
 	if err != nil {

@@ -22,7 +22,9 @@ import (
 	"strings"
 )
 
-// Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
+/// This file contains all the internal functions used inside Disk interface
+
+// formatBytes - Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
 func (d disk) formatBytes(i int64) (result string) {
 	switch {
 	case i > (1024 * 1024 * 1024 * 1024):
@@ -40,6 +42,7 @@ func (d disk) formatBytes(i int64) (result string) {
 	return
 }
 
+// fsType2StrinMap - list of filesystems supported by donut
 var fsType2StringMap = map[string]string{
 	"137d":     "EXT",
 	"ef51":     "EXT2OLD",
@@ -53,6 +56,7 @@ var fsType2StringMap = map[string]string{
 	"58465342": "XFS",
 }
 
+// getFSType - get filesystem type
 func (d disk) getFSType(fsType int64) string {
 	fsTypeHex := strconv.FormatInt(fsType, 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]

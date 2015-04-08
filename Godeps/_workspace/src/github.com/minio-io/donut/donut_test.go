@@ -1,3 +1,19 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package donut
 
 import (
@@ -37,19 +53,21 @@ func createTestNodeDiskMap(p string) map[string][]string {
 	return nodes
 }
 
-func (s *MySuite) TestEmptyBucket(c *C) {
+// test empty donut
+func (s *MySuite) TestEmptyDonut(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 
-	// check buckets are empty
+	// check donut is empty
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
 	c.Assert(buckets, IsNil)
 }
 
+// test make bucket without name
 func (s *MySuite) TestBucketWithoutNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -64,6 +82,23 @@ func (s *MySuite) TestBucketWithoutNameFails(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+// test empty bucket
+func (s *MySuite) TestEmptyBucket(c *C) {
+	root, err := ioutil.TempDir(os.TempDir(), "donut-")
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(root)
+	donut, err := NewDonut("test", createTestNodeDiskMap(root))
+	c.Assert(err, IsNil)
+
+	c.Assert(donut.MakeBucket("foo"), IsNil)
+	// check if bucket is empty
+	objects, _, istruncated, err := donut.ListObjects("foo", "", "", "", 1)
+	c.Assert(err, IsNil)
+	c.Assert(objects, IsNil)
+	c.Assert(istruncated, Equals, false)
+}
+
+// test bucket list
 func (s *MySuite) TestMakeBucketAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -80,6 +115,7 @@ func (s *MySuite) TestMakeBucketAndList(c *C) {
 	c.Assert(buckets, DeepEquals, []string{"foo"})
 }
 
+// test re-create bucket
 func (s *MySuite) TestMakeBucketWithSameNameFails(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -93,6 +129,7 @@ func (s *MySuite) TestMakeBucketWithSameNameFails(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+// test make multiple buckets
 func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -118,6 +155,7 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	c.Assert(buckets, DeepEquals, []string{"bar", "foo", "foobar"})
 }
 
+// test object create without bucket
 func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -128,6 +166,7 @@ func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+// test create object metadata
 func (s *MySuite) TestNewObjectMetadata(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -160,6 +199,7 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	c.Assert(objectMetadata["hello"], Equals, metadata["hello"])
 }
 
+// test create object fails without name
 func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -174,6 +214,7 @@ func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+// test create object
 func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -208,12 +249,13 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(expectedMd5Sum, Equals, actualMetadata["md5"])
-	c.Assert("11", Equals, actualMetadata["size"])
+	c.Assert(strconv.Itoa(len(data)), Equals, actualMetadata["size"])
 	c.Assert("1.0", Equals, actualMetadata["version"])
 	_, err = time.Parse(time.RFC3339Nano, actualMetadata["created"])
 	c.Assert(err, IsNil)
 }
 
+// test list objects
 func (s *MySuite) TestMultipleNewObjects(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
@@ -249,12 +291,22 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(readerBuffer2.Bytes(), DeepEquals, []byte("two"))
 
-	// test list objects
+	/// test list of objects
+
+	// test list objects with prefix and delimiter
 	listObjects, prefixes, isTruncated, err := donut.ListObjects("foo", "o", "", "1", 1)
 	c.Assert(err, IsNil)
 	c.Assert(isTruncated, Equals, false)
-	c.Assert(prefixes[0], DeepEquals, "obj1")
+	c.Assert(prefixes[0], Equals, "obj1")
 
+	// test list objects with only delimiter
+	listObjects, prefixes, isTruncated, err = donut.ListObjects("foo", "", "", "1", 10)
+	c.Assert(err, IsNil)
+	c.Assert(listObjects[0], Equals, "obj2")
+	c.Assert(isTruncated, Equals, false)
+	c.Assert(prefixes[0], Equals, "obj1")
+
+	// test list objects with only prefix
 	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 10)
 	c.Assert(err, IsNil)
 	c.Assert(isTruncated, Equals, false)
@@ -273,6 +325,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(readerBuffer3.Bytes(), DeepEquals, []byte("three"))
 
+	// test list objects with maxkeys
 	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 2)
 	c.Assert(err, IsNil)
 	c.Assert(isTruncated, Equals, true)

@@ -21,44 +21,6 @@ import (
 	"os"
 )
 
-// Collection of Donut specification interfaces
-
-// Donut interface
-type Donut interface {
-	ObjectStorage
-	Management
-}
-
-// ObjectStorage interface
-type ObjectStorage interface {
-	// Storage service Operations
-	GetBucketMetadata(bucket string) (map[string]string, error)
-	SetBucketMetadata(bucket string, metadata map[string]string) error
-	ListBuckets() ([]string, error)
-	MakeBucket(bucket string) error
-
-	// Bucket Operations
-	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (result []string, prefixes []string, isTruncated bool, err error)
-
-	// Object Operations
-	GetObject(bucket, object string) (io.ReadCloser, int64, error)
-	GetObjectMetadata(bucket, object string) (map[string]string, error)
-	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) error
-}
-
-// Management is a donut management system interface
-type Management interface {
-	Heal() error
-	Rebalance() error
-	Info() (map[string][]string, error)
-
-	AttachNode(node Node) error
-	DetachNode(node Node) error
-
-	SaveConfig() error
-	LoadConfig() error
-}
-
 // Encoder interface
 type Encoder interface {
 	GetEncodedBlockLen(dataLength int) (int, error)
