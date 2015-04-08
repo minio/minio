@@ -33,6 +33,9 @@ import (
 	"github.com/minio-io/minio/pkg/utils/split"
 )
 
+/// This file contains all the internal functions used by Bucket interface
+
+// isMD5SumEqual - returns error if md5sum mismatches, other its `nil`
 func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
@@ -51,6 +54,7 @@ func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
+// writeObjectMetadata - write additional object metadata
 func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string]string) error {
 	if len(objectMetadata) == 0 {
 		return iodine.New(errors.New("invalid argument"), nil)
@@ -71,6 +75,7 @@ func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string
 	return nil
 }
 
+// writeDonutObjectMetadata - write donut related object metadata
 func (b bucket) writeDonutObjectMetadata(objectName string, objectMetadata map[string]string) error {
 	if len(objectMetadata) == 0 {
 		return iodine.New(errors.New("invalid argument"), nil)
@@ -91,12 +96,20 @@ func (b bucket) writeDonutObjectMetadata(objectName string, objectMetadata map[s
 	return nil
 }
 
-// This a temporary normalization of object path, need to find a better way
+// TODO - This a temporary normalization of objectNames, need to find a better way
+//
+// normalizedObjectName - all objectNames with "/" get normalized to a simple objectName
+//
+// example:
+// user provided value - "this/is/my/deep/directory/structure"
+// donut normalized value - "this-is-my-deep-directory-structure"
+//
 func (b bucket) normalizeObjectName(objectName string) string {
 	// replace every '/' with '-'
 	return strings.Replace(objectName, "/", "-", -1)
 }
 
+// getDataAndParity - calculate k, m (data and parity) values from number of disks
 func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error) {
 	if totalWriters <= 1 {
 		return 0, 0, iodine.New(errors.New("invalid argument"), nil)
@@ -112,6 +125,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 	return k, m, nil
 }
 
+// writeEncodedData -
 func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, summer hash.Hash) (int, int, error) {
 	chunks := split.Stream(objectData, 10*1024*1024)
 	encoder, err := NewEncoder(k, m, "Cauchy")
@@ -137,6 +151,7 @@ func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectDat
 	return chunkCount, totalLength, nil
 }
 
+// readEncodedData -
 func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutObjectMetadata map[string]string) {
 	expectedMd5sum, err := hex.DecodeString(donutObjectMetadata["sys.md5"])
 	if err != nil {
@@ -152,7 +167,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 	mwriter := io.MultiWriter(writer, hasher)
 	switch len(readers) == 1 {
 	case false:
-		totalChunks, totalLeft, blockSize, k, m, err := b.metadata2Values(donutObjectMetadata)
+		totalChunks, totalLeft, blockSize, k, m, err := b.donutMetadata2Values(donutObjectMetadata)
 		if err != nil {
 			writer.CloseWithError(iodine.New(err, nil))
 			return
@@ -169,7 +184,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 			return
 		}
 		for i := 0; i < totalChunks; i++ {
-			decodedData, err := b.decodeData(totalLeft, blockSize, readers, encoder, writer)
+			decodedData, err := b.decodeEncodedData(totalLeft, blockSize, readers, encoder, writer)
 			if err != nil {
 				writer.CloseWithError(iodine.New(err, nil))
 				return
@@ -198,7 +213,8 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 	return
 }
 
-func (b bucket) decodeData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder Encoder, writer *io.PipeWriter) ([]byte, error) {
+// decodeEncodedData -
+func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder Encoder, writer *io.PipeWriter) ([]byte, error) {
 	var curBlockSize int64
 	if blockSize < totalLeft {
 		curBlockSize = blockSize
@@ -225,7 +241,8 @@ func (b bucket) decodeData(totalLeft, blockSize int64, readers []io.ReadCloser, 
 	return decodedData, nil
 }
 
-func (b bucket) metadata2Values(donutObjectMetadata map[string]string) (totalChunks int, totalLeft, blockSize int64, k, m uint64, err error) {
+// donutMetadata2Values -
+func (b bucket) donutMetadata2Values(donutObjectMetadata map[string]string) (totalChunks int, totalLeft, blockSize int64, k, m uint64, err error) {
 	totalChunks, err = strconv.Atoi(donutObjectMetadata["sys.chunkCount"])
 	if err != nil {
 		return 0, 0, 0, 0, 0, iodine.New(err, nil)
@@ -249,6 +266,7 @@ func (b bucket) metadata2Values(donutObjectMetadata map[string]string) (totalChu
 	return totalChunks, totalLeft, blockSize, k, m, nil
 }
 
+// getDiskReaders -
 func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
 	nodeSlice := 0
@@ -272,6 +290,7 @@ func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, 
 	return readers, nil
 }
 
+// getDiskWriters -
 func (b bucket) getDiskWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
 	var writers []io.WriteCloser
 	nodeSlice := 0

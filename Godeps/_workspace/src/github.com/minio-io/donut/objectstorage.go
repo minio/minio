@@ -1,3 +1,19 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package donut
 
 import (
@@ -11,15 +27,17 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// MakeBucket - make a new bucket
 func (d donut) MakeBucket(bucket string) error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return iodine.New(errors.New("invalid argument"), nil)
 	}
-	return d.makeBucket(bucket)
+	return d.makeDonutBucket(bucket)
 }
 
+// GetBucketMetadata - get bucket metadata
 func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
-	err := d.getAllBuckets()
+	err := d.getDonutBuckets()
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -32,12 +50,14 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 	return metadata, nil
 }
 
+// SetBucketMetadata - set bucket metadata
 func (d donut) SetBucketMetadata(bucket string, metadata map[string]string) error {
 	return errors.New("Not implemented")
 }
 
+// ListBuckets - return list of buckets
 func (d donut) ListBuckets() (results []string, err error) {
-	err = d.getAllBuckets()
+	err = d.getDonutBuckets()
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -48,6 +68,7 @@ func (d donut) ListBuckets() (results []string, err error) {
 	return results, nil
 }
 
+// ListObjects - return list of objects
 func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
 	// TODO: Marker is not yet handled please handle it
 	errParams := map[string]string{
@@ -57,7 +78,7 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 		"delimiter": delimiter,
 		"maxkeys":   strconv.Itoa(maxkeys),
 	}
-	err := d.getAllBuckets()
+	err := d.getDonutBuckets()
 	if err != nil {
 		return nil, nil, false, iodine.New(err, errParams)
 	}
@@ -109,6 +130,7 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 	return results, commonPrefixes, isTruncated, nil
 }
 
+// PutObject - put object
 func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) error {
 	errParams := map[string]string{
 		"bucket": bucket,
@@ -120,7 +142,7 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 	if object == "" || strings.TrimSpace(object) == "" {
 		return iodine.New(errors.New("invalid argument"), errParams)
 	}
-	err := d.getAllBuckets()
+	err := d.getDonutBuckets()
 	if err != nil {
 		return iodine.New(err, errParams)
 	}
@@ -134,6 +156,7 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 	return nil
 }
 
+// GetObject - get object
 func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int64, err error) {
 	errParams := map[string]string{
 		"bucket": bucket,
@@ -145,7 +168,7 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 	if object == "" || strings.TrimSpace(object) == "" {
 		return nil, 0, iodine.New(errors.New("invalid argument"), errParams)
 	}
-	err = d.getAllBuckets()
+	err = d.getDonutBuckets()
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
@@ -155,12 +178,13 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 	return d.buckets[bucket].GetObject(object)
 }
 
+// GetObjectMetadata - get object metadata
 func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
 	}
-	err := d.getAllBuckets()
+	err := d.getDonutBuckets()
 	if err != nil {
 		return nil, iodine.New(err, errParams)
 	}
@@ -171,9 +195,9 @@ func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, erro
 	if err != nil {
 		return nil, iodine.New(err, errParams)
 	}
-	objectStruct, ok := objectList[object]
+	donutObject, ok := objectList[object]
 	if !ok {
 		return nil, iodine.New(errors.New("object does not exist"), errParams)
 	}
-	return objectStruct.GetObjectMetadata()
+	return donutObject.GetObjectMetadata()
 }

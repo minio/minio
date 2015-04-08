@@ -26,12 +26,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio-io/iodine"
-
 	"crypto/md5"
 	"encoding/hex"
+
+	"github.com/minio-io/iodine"
 )
 
+// internal struct carrying bucket specific information
 type bucket struct {
 	name      string
 	donutName string
@@ -56,6 +57,7 @@ func NewBucket(bucketName, donutName string, nodes map[string]Node) (Bucket, err
 	return b, nil
 }
 
+// ListObjects - list all objects
 func (b bucket) ListObjects() (map[string]Object, error) {
 	nodeSlice := 0
 	for _, node := range b.nodes {
@@ -91,6 +93,7 @@ func (b bucket) ListObjects() (map[string]Object, error) {
 	return b.objects, nil
 }
 
+// GetObject - get object
 func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, err error) {
 	reader, writer := io.Pipe()
 	// get list of objects
@@ -103,6 +106,7 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 	if !ok {
 		return nil, 0, iodine.New(os.ErrNotExist, nil)
 	}
+	// verify if objectMetadata is readable, before we serve the request
 	objectMetadata, err := object.GetObjectMetadata()
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
@@ -114,14 +118,17 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
+	// verify if donutObjectMetadata is readable, before we server the request
 	donutObjectMetadata, err := object.GetDonutObjectMetadata()
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
+	// read and reply back to GetObject() request in a go-routine
 	go b.readEncodedData(b.normalizeObjectName(objectName), writer, donutObjectMetadata)
 	return reader, size, nil
 }
 
+// PutObject - put a new object
 func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) error {
 	if objectName == "" || objectData == nil {
 		return iodine.New(errors.New("invalid argument"), nil)
@@ -135,6 +142,7 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 	donutObjectMetadata := make(map[string]string)
 	objectMetadata["version"] = "1.0"
 	donutObjectMetadata["version"] = "1.0"
+	// if total writers are only '1' do not compute erasure
 	switch len(writers) == 1 {
 	case true:
 		mw := io.MultiWriter(writers[0], summer)
@@ -145,24 +153,29 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 		donutObjectMetadata["sys.size"] = strconv.FormatInt(totalLength, 10)
 		objectMetadata["size"] = strconv.FormatInt(totalLength, 10)
 	case false:
+		// calculate data and parity dictated by total number of writers
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
 			return iodine.New(err, nil)
 		}
+		// encoded data with k, m and write
 		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, summer)
 		if err != nil {
 			return iodine.New(err, nil)
 		}
+		/// donutMetadata section
 		donutObjectMetadata["sys.blockSize"] = strconv.Itoa(10 * 1024 * 1024)
 		donutObjectMetadata["sys.chunkCount"] = strconv.Itoa(chunkCount)
 		donutObjectMetadata["sys.erasureK"] = strconv.FormatUint(uint64(k), 10)
 		donutObjectMetadata["sys.erasureM"] = strconv.FormatUint(uint64(m), 10)
 		donutObjectMetadata["sys.erasureTechnique"] = "Cauchy"
 		donutObjectMetadata["sys.size"] = strconv.Itoa(totalLength)
+		// keep size inside objectMetadata as well for Object API requests
 		objectMetadata["size"] = strconv.Itoa(totalLength)
 	}
 	objectMetadata["bucket"] = b.name
 	objectMetadata["object"] = objectName
+	// store all user provided metadata
 	for k, v := range metadata {
 		objectMetadata[k] = v
 	}

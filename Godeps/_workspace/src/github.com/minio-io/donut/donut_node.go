@@ -22,6 +22,7 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// node struct internal
 type node struct {
 	hostname string
 	disks    map[string]Disk
@@ -40,14 +41,17 @@ func NewNode(hostname string) (Node, error) {
 	return n, nil
 }
 
+// GetNodeName - return hostname
 func (n node) GetNodeName() string {
 	return n.hostname
 }
 
+// ListDisks - return number of disks
 func (n node) ListDisks() (map[string]Disk, error) {
 	return n.disks, nil
 }
 
+// AttachDisk - attach a disk
 func (n node) AttachDisk(disk Disk) error {
 	if disk == nil {
 		return iodine.New(errors.New("Invalid argument"), nil)
@@ -56,15 +60,18 @@ func (n node) AttachDisk(disk Disk) error {
 	return nil
 }
 
+// DetachDisk - detach a disk
 func (n node) DetachDisk(disk Disk) error {
 	delete(n.disks, disk.GetPath())
 	return nil
 }
 
+// SaveConfig - save node configuration
 func (n node) SaveConfig() error {
 	return errors.New("Not Implemented")
 }
 
+// LoadConfig - load node configuration from saved configs
 func (n node) LoadConfig() error {
 	return errors.New("Not Implemented")
 }

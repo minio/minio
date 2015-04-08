@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/minio-io/minio",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.4.2",
 	"Packages": [
 		"./..."
 	],
@@ -24,7 +24,7 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/donut",
-			"Rev": "2b8c72e28768f47511730adae5e780550fdc0236"
+			"Rev": "107c0aff49fb961c2c7bfd1e5d1c26c958accbdc"
 		},
 		{
 			"ImportPath": "github.com/minio-io/erasure",
@@ -33,10 +33,6 @@
 		{
 			"ImportPath": "github.com/minio-io/iodine",
 			"Rev": "55cc4d4256c68fbd6f0775f1a25e37e6a2f6457e"
-		},
-		{
-			"ImportPath": "github.com/minio-io/objectdriver",
-			"Rev": "64e55f18297dd962102afc7e81ea63488fc4706a"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",

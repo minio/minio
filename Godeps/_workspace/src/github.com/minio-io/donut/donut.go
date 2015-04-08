@@ -22,12 +22,14 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// donut struct internal data
 type donut struct {
 	name    string
 	buckets map[string]Bucket
 	nodes   map[string]Node
 }
 
+// config files used inside Donut
 const (
 	donutObjectMetadataConfig = "donutObjectMetadata.json"
 	objectMetadataConfig      = "objectMetadata.json"
@@ -35,7 +37,7 @@ const (
 )
 
 // attachDonutNode - wrapper function to instantiate a new node for associated donut
-// based on the configuration
+// based on the provided configuration
 func (d donut) attachDonutNode(hostname string, disks []string) error {
 	node, err := NewNode(hostname)
 	if err != nil {

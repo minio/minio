@@ -27,6 +27,7 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// internal disk struct
 type disk struct {
 	root       string
 	order      int
@@ -63,14 +64,17 @@ func NewDisk(diskPath string, diskOrder int) (Disk, error) {
 	return nil, iodine.New(errors.New("unsupported filesystem"), nil)
 }
 
+// GetPath - get root disk path
 func (d disk) GetPath() string {
 	return d.root
 }
 
+// GetOrder - get order of disk present in graph
 func (d disk) GetOrder() int {
 	return d.order
 }
 
+// GetFSInfo - get disk filesystem and its usage information
 func (d disk) GetFSInfo() map[string]string {
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(d.root, &s)
@@ -82,10 +86,12 @@ func (d disk) GetFSInfo() map[string]string {
 	return d.filesystem
 }
 
+// MakeDir - make a directory inside disk root path
 func (d disk) MakeDir(dirname string) error {
 	return os.MkdirAll(path.Join(d.root, dirname), 0700)
 }
 
+// ListDir - list a directory inside disk root path, get only directories
 func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
 	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
 	if err != nil {
@@ -101,6 +107,7 @@ func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
 	return directories, nil
 }
 
+// ListFiles - list a directory inside disk root path, get only files
 func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
 	if err != nil {
@@ -116,6 +123,7 @@ func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 	return files, nil
 }
 
+// MakeFile - create a file inside disk root path
 func (d disk) MakeFile(filename string) (*os.File, error) {
 	if filename == "" {
 		return nil, iodine.New(errors.New("Invalid argument"), nil)
@@ -132,6 +140,7 @@ func (d disk) MakeFile(filename string) (*os.File, error) {
 	return dataFile, nil
 }
 
+// OpenFile - read a file inside disk root path
 func (d disk) OpenFile(filename string) (*os.File, error) {
 	if filename == "" {
 		return nil, iodine.New(errors.New("Invalid argument"), nil)

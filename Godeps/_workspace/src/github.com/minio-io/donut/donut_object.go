@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 )
 
+// object internal struct
 type object struct {
 	name                string
 	objectPath          string

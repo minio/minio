@@ -8,10 +8,12 @@ import (
 	"github.com/minio-io/iodine"
 )
 
+// Heal - heal a donut and fix bad data blocks
 func (d donut) Heal() error {
 	return errors.New("Not Implemented")
 }
 
+// Info - return info about donut configuration
 func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 	nodeDiskMap = make(map[string][]string)
 	for nodeName, node := range d.nodes {
@@ -28,6 +30,7 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 	return nodeDiskMap, nil
 }
 
+// AttachNode - attach node
 func (d donut) AttachNode(node Node) error {
 	if node == nil {
 		return iodine.New(errors.New("invalid argument"), nil)
@@ -35,11 +38,14 @@ func (d donut) AttachNode(node Node) error {
 	d.nodes[node.GetNodeName()] = node
 	return nil
 }
+
+// DetachNode - detach node
 func (d donut) DetachNode(node Node) error {
 	delete(d.nodes, node.GetNodeName())
 	return nil
 }
 
+// SaveConfig - save donut configuration
 func (d donut) SaveConfig() error {
 	nodeDiskMap := make(map[string][]string)
 	for hostname, node := range d.nodes {
@@ -64,6 +70,7 @@ func (d donut) SaveConfig() error {
 	return nil
 }
 
+// LoadConfig - load configuration
 func (d donut) LoadConfig() error {
 	return errors.New("Not Implemented")
 }
