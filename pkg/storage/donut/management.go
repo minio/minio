@@ -5,7 +5,7 @@ import (
 	"errors"
 	"path"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 // Heal - heal a donut and fix bad data blocks

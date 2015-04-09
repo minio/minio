@@ -24,9 +24,9 @@ import (
 
 	"errors"
 
-	"github.com/minio-io/iodine"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
+	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"

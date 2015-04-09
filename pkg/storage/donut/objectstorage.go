@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 // MakeBucket - make a new bucket

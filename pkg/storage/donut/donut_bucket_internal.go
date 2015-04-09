@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
 

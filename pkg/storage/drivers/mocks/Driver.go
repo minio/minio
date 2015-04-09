@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/stretchr/testify/mock"
 )

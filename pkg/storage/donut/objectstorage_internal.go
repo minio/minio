@@ -22,7 +22,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 func (d donut) makeDonutBucket(bucketName string) error {

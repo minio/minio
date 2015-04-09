@@ -31,7 +31,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-// WrappedError is the iodine error which contains a pointer to the original error
+// Error is the iodine error which contains a pointer to the original error
 // and stack traces.
 type Error struct {
 	EmbeddedError error `json:"-"`
@@ -93,7 +93,7 @@ func GetGlobalStateKey(k string) string {
 	return result
 }
 
-// Error - instantiate an error, turning it into an iodine error.
+// New - instantiate an error, turning it into an iodine error.
 // Adds an initial stack trace.
 func New(err error, data map[string]string) error {
 	if err != nil {
