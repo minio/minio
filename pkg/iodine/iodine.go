@@ -94,6 +94,7 @@ func GetGlobalStateKey(k string) string {
 	return result
 }
 
+// ToError returns the input if it is not an iodine error. It returns the embedded error if it is an iodine error. If nil, returns nil.
 func ToError(err error) error {
 	switch err := err.(type) {
 	case nil:
