@@ -20,8 +20,8 @@ import (
 	"errors"
 	"strconv"
 
-	encoding "github.com/minio-io/erasure"
 	"github.com/minio-io/iodine"
+	encoding "github.com/minio-io/minio/pkg/erasure"
 )
 
 // encoder internal struct
