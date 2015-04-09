@@ -19,7 +19,7 @@ package donut
 import (
 	"errors"
 
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 // node struct internal

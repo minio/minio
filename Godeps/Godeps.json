@@ -6,6 +6,10 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/dustin/go-humanize",
+			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
@@ -21,10 +25,6 @@
 			"ImportPath": "github.com/minio-io/cli",
 			"Comment": "1.2.0-102-gecb385c",
 			"Rev": "ecb385c3fefd53678e3b6beba6a608fb7c8dfac1"
-		},
-		{
-			"ImportPath": "github.com/minio-io/iodine",
-			"Rev": "9a63d02ce3934e159d00732f15e096e4f86a6dbb"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",

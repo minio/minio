@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/iodine"
+	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
