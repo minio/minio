@@ -19,6 +19,7 @@ package iodine
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -91,6 +92,27 @@ func GetGlobalStateKey(k string) string {
 		return ""
 	}
 	return result
+}
+
+func ToError(err error) error {
+	switch err := err.(type) {
+	case nil:
+		{
+			return nil
+		}
+	case Error:
+		{
+			if err.EmbeddedError != nil {
+				return err.EmbeddedError
+			} else {
+				return errors.New(err.ErrorMessage)
+			}
+		}
+	default:
+		{
+			return err
+		}
+	}
 }
 
 // New - instantiate an error, turning it into an iodine error.

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"encoding/json"
+	"os"
 )
 
 func TestIodine(t *testing.T) {
@@ -99,5 +100,17 @@ func TestState(t *testing.T) {
 				t.Error("foo2 should be set")
 			}
 		}
+	}
+}
+
+func TestToError(t *testing.T) {
+	_, err := os.Stat("hello")
+	ierr := New(err, nil)
+	if ToError(ierr) != err {
+		t.Error("Error is not the same")
+	}
+	ierr = New(ierr, nil)
+	if ToError(ierr) != err {
+		t.Error("Stacked Error is not the same")
 	}
 }
