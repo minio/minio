@@ -17,9 +17,11 @@
 package iodine
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
+
+	"encoding/json"
 )
 
 func TestIodine(t *testing.T) {
@@ -27,9 +29,13 @@ func TestIodine(t *testing.T) {
 	iodineError = New(iodineError, nil)
 	iodineError = New(iodineError, nil)
 	iodineError = New(iodineError, nil)
+
 	switch typedError := iodineError.(type) {
 	case Error:
 		{
+			// Visually watch out for formating errors
+			fmt.Println(typedError.EmitHumanReadable())
+
 			if len(typedError.Stack) != 4 {
 				t.Fail()
 			}

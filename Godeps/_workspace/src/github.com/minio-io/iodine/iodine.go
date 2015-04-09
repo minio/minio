@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/dustin/go-humanize"
 )
 
 // WrappedError is the iodine error which contains a pointer to the original error
@@ -43,6 +45,7 @@ type Error struct {
 type StackEntry struct {
 	Host string
 	File string
+	Func string
 	Line int
 	Data map[string]string
 }
@@ -125,7 +128,9 @@ func New(err error, data map[string]string) error {
 // createStackEntry - create stack entries
 func createStackEntry() StackEntry {
 	host, _ := os.Hostname()
-	_, file, line, _ := runtime.Caller(2)
+	pc, file, line, _ := runtime.Caller(2)
+	function := runtime.FuncForPC(pc).Name()
+	_, function = path.Split(function)
 	file = strings.TrimPrefix(file, gopath) // trim gopath from file
 
 	data := GetGlobalState()
@@ -136,6 +141,7 @@ func createStackEntry() StackEntry {
 	entry := StackEntry{
 		Host: host,
 		File: file,
+		Func: function,
 		Line: line,
 		Data: data,
 	}
@@ -155,10 +161,10 @@ func getSystemData() map[string]string {
 		"sys.arch":               runtime.GOARCH,
 		"sys.go":                 runtime.Version(),
 		"sys.cpus":               strconv.Itoa(runtime.NumCPU()),
-		"sys.mem.used":           strconv.FormatUint(memstats.Alloc, 10),
-		"sys.mem.allocated":      strconv.FormatUint(memstats.TotalAlloc, 10),
-		"sys.mem.heap.used":      strconv.FormatUint(memstats.HeapAlloc, 10),
-		"sys.mem.heap.allocated": strconv.FormatUint(memstats.HeapSys, 10),
+		"sys.mem.used":           humanize.Bytes(memstats.Alloc),
+		"sys.mem.allocated":      humanize.Bytes(memstats.TotalAlloc),
+		"sys.mem.heap.used":      humanize.Bytes(memstats.HeapAlloc),
+		"sys.mem.heap.allocated": humanize.Bytes(memstats.HeapSys),
 	}
 }
 
@@ -182,7 +188,8 @@ func (err Error) EmitHumanReadable() string {
 	var errorBuffer bytes.Buffer
 	fmt.Fprintln(&errorBuffer, err.ErrorMessage)
 	for i, entry := range err.Stack {
-		fmt.Fprintln(&errorBuffer, "-", i, entry.Host+":"+entry.File+":"+strconv.Itoa(entry.Line), entry.Data)
+		prettyData, _ := json.Marshal(entry.Data)
+		fmt.Fprintln(&errorBuffer, "-", i, entry.Host+":"+entry.File+":"+strconv.Itoa(entry.Line)+" "+entry.Func+"():", string(prettyData))
 	}
 	return string(errorBuffer.Bytes())
 }
