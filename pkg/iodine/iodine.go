@@ -105,9 +105,8 @@ func ToError(err error) error {
 		{
 			if err.EmbeddedError != nil {
 				return err.EmbeddedError
-			} else {
-				return errors.New(err.ErrorMessage)
 			}
+			return errors.New(err.ErrorMessage)
 		}
 	default:
 		{
