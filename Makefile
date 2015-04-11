@@ -62,9 +62,6 @@ restore:
 env:
 	@godep go env
 
-docs-deploy:
-	@mkdocs gh-deploy --clean
-
 clean:
 	@echo "Cleaning up all the generated files:"
 	@rm -fv cover.out

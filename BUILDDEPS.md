@@ -2,10 +2,9 @@
 ### Build Dependencies
 This installation document assumes Ubuntu 14.04 or later on x86-64 platform.
 
-##### Install Git, GCC and MkDocs
+##### Install Git, GCC
 ```sh
-$ sudo apt-get install git build-essential python-pip
-$ sudo pip install mkdocs
+$ sudo apt-get install git build-essential
 ```
 
 ##### Install YASM
@@ -53,10 +52,9 @@ This installation document assumes Mac OSX Yosemite 10.10 or later on x86-64 pla
 $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
-##### Install Git, Python and MkDocs
+##### Install Git, Python
 ```sh
 $ brew install git python
-$ pip install mkdocs
 ```
 
 ##### Install YASM
