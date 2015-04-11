@@ -1,3 +1,0 @@
-### Management API
-
-#### GET /
