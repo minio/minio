@@ -1,16 +1,17 @@
 language: go
 before_install:
- - git clone https://github.com/yasm/yasm
- - cd yasm
- - git checkout v1.2.0
- - ./autogen.sh
- - ./configure
- - make
- - export PATH=$PATH:`pwd`
- - cd ..
-
+- git clone https://github.com/yasm/yasm
+- cd yasm
+- git checkout v1.2.0
+- "./autogen.sh"
+- "./configure"
+- make
+- export PATH=$PATH:`pwd`
+- cd ..
 sudo: false
-
 go:
- - 1.4
- - release
+- 1.4
+- release
+notifications:
+  slack:
+    secure: jlDBuqna7waJXJrl/EOeTH1fXgqJu3WrTDl0Sv7oJBNVH1Af4cGmHaa1oVWrYUMB7lEPjpuF+xcBNA+N+mcR53JbpqueR3sIKlokqHL4TPZBg4XX+1yqtmYMkL6V2woWQ7Wmtis0kDstSoVZjEUVHgk3YF8hcLlK49oMhTeqY08=
