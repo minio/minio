@@ -159,10 +159,6 @@ check_deps() {
 	MISSING="${MISSING} yasm(1.2.0)"
     fi
 
-    env mkdocs help >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-	MISSING="${MISSING} mkdocs"
-    fi
 }
 
 main() {
