@@ -60,7 +60,7 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		_, _, driver := memory.Start()
+		_, _, driver := memory.Start(1000)
 		return driver, ""
 	},
 })

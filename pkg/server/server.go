@@ -136,7 +136,7 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 	switch {
 	case driverType == Memory:
 		{
-			ctrlChan, statusChan, driver = memory.Start()
+			ctrlChan, statusChan, driver = memory.Start(1000)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}

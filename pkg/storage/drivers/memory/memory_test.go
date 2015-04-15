@@ -31,7 +31,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	create := func() drivers.Driver {
-		_, _, store := Start()
+		_, _, store := Start(1000)
 		return store
 	}
 	drivers.APITestSuite(c, create)
