@@ -71,6 +71,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 
 // GetObject - GET object from memory buffer
 func (memory memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	if _, ok := memory.bucketdata[bucket]; ok == false {
 		return 0, drivers.BucketNotFound{Bucket: bucket}
 	}
@@ -86,6 +88,8 @@ func (memory memoryDriver) GetObject(w io.Writer, bucket string, object string) 
 
 // GetPartialObject - GET object from memory buffer range
 func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	var sourceBuffer bytes.Buffer
 	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
 		return 0, err
@@ -98,6 +102,8 @@ func (memory memoryDriver) GetPartialObject(w io.Writer, bucket, object string, 
 
 // GetBucketMetadata -
 func (memory memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	if _, ok := memory.bucketdata[bucket]; ok == false {
 		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucket}
 	}
@@ -116,16 +122,18 @@ func (memory memoryDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy,
 
 // CreateObject - PUT object to memory buffer
 func (memory memoryDriver) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
+	memory.lock.RLock()
 
 	if _, ok := memory.bucketdata[bucket]; ok == false {
+		memory.lock.RUnlock()
 		return drivers.BucketNotFound{Bucket: bucket}
 	}
 
 	if _, ok := memory.objectdata[key]; ok == true {
+		memory.lock.RUnlock()
 		return drivers.ObjectExists{Bucket: bucket, Object: key}
 	}
+	memory.lock.RUnlock()
 
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -150,26 +158,41 @@ func (memory memoryDriver) CreateObject(bucket, key, contentType, md5sum string,
 		}
 		newObject.data = bytesBuffer.Bytes()
 	}
+	memory.lock.Lock()
+	if _, ok := memory.bucketdata[bucket]; ok == false {
+		memory.lock.Unlock()
+		return drivers.BucketNotFound{Bucket: bucket}
+	}
+
+	if _, ok := memory.objectdata[key]; ok == true {
+		memory.lock.Unlock()
+		return drivers.ObjectExists{Bucket: bucket, Object: key}
+	}
 	memory.objectdata[key] = newObject
+	memory.lock.Unlock()
 	return nil
 }
 
 // CreateBucket - create bucket in memory
 func (memory memoryDriver) CreateBucket(bucketName string) error {
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
+	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucketName) {
+		memory.lock.RUnlock()
 		return drivers.BucketNameInvalid{Bucket: bucketName}
 	}
 
 	if _, ok := memory.bucketdata[bucketName]; ok == true {
+		memory.lock.RUnlock()
 		return drivers.BucketExists{Bucket: bucketName}
 	}
+	memory.lock.RUnlock()
 
 	var newBucket = storedBucket{}
 	newBucket.metadata = drivers.BucketMetadata{}
 	newBucket.metadata.Name = bucketName
 	newBucket.metadata.Created = time.Now()
+	memory.lock.Lock()
+	defer memory.lock.Unlock()
 	memory.bucketdata[bucketName] = newBucket
 
 	return nil
@@ -208,6 +231,8 @@ func (memory memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedNa
 
 // ListObjects - list objects from memory
 func (memory memoryDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	if _, ok := memory.bucketdata[bucket]; ok == false {
 		return []drivers.ObjectMetadata{}, drivers.BucketResourcesMetadata{IsTruncated: false}, drivers.BucketNotFound{Bucket: bucket}
 	}
@@ -266,6 +291,8 @@ func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from memory
 func (memory memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	var results []drivers.BucketMetadata
 	for _, bucket := range memory.bucketdata {
 		results = append(results, bucket.metadata)
@@ -276,6 +303,8 @@ func (memory memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
 
 // GetObjectMetadata - get object metadata from memory
 func (memory memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drivers.ObjectMetadata, error) {
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
 	// check if bucket exists
 	if _, ok := memory.bucketdata[bucket]; ok == false {
 		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucket}
