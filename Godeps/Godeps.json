@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/minio-io/minio",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.4.2",
 	"Packages": [
 		"./..."
 	],
@@ -8,6 +8,10 @@
 		{
 			"ImportPath": "github.com/dustin/go-humanize",
 			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
+		},
+		{
+			"ImportPath": "github.com/golang/groupcache/lru",
+			"Rev": "604ed5785183e59ae2789449d89e73f3a2a77987"
 		},
 		{
 			"ImportPath": "github.com/gorilla/context",
