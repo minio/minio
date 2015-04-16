@@ -82,8 +82,6 @@ func init() {
 
 func getDriverType(input string) server.DriverType {
 	switch {
-	case input == "file":
-		return server.File
 	case input == "memory":
 		return server.Memory
 	case input == "donut":

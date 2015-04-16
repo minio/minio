@@ -30,7 +30,6 @@ import (
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers/file"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
@@ -61,7 +60,6 @@ type DriverType int
 // Driver types
 const (
 	Memory DriverType = iota
-	File
 	Donut
 )
 
@@ -137,18 +135,6 @@ func getDriverChannels(driverType DriverType) (ctrlChans []chan<- string, status
 	case driverType == Memory:
 		{
 			ctrlChan, statusChan, driver = memory.Start(1000)
-			ctrlChans = append(ctrlChans, ctrlChan)
-			statusChans = append(statusChans, statusChan)
-		}
-	case driverType == File:
-		{
-			u, err := user.Current()
-			if err != nil {
-				log.Error.Println(iodine.New(err, nil))
-				return nil, nil, nil
-			}
-			root := path.Join(u.HomeDir, "minio-storage", "file")
-			ctrlChan, statusChan, driver = file.Start(root)
 			ctrlChans = append(ctrlChans, ctrlChan)
 			statusChans = append(statusChans, statusChan)
 		}
