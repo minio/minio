@@ -35,7 +35,6 @@ import (
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers/file"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/storage/drivers/mocks"
 	"github.com/stretchr/testify/mock"
@@ -62,14 +61,6 @@ var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
 		_, _, driver := memory.Start(1000)
 		return driver, ""
-	},
-})
-
-var _ = Suite(&MySuite{
-	initDriver: func() (drivers.Driver, string) {
-		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
-		_, _, driver := file.Start(root)
-		return driver, root
 	},
 })
 
