@@ -56,9 +56,6 @@ type DigestError struct {
 
 /// Bucket related errors
 
-// BucketPolicyNotFound - missing bucket policy
-type BucketPolicyNotFound GenericBucketError
-
 // BucketNameInvalid - bucketname provided is invalid
 type BucketNameInvalid GenericBucketError
 
@@ -105,11 +102,6 @@ func EmbedError(bucket, object string, err error) ImplementationError {
 		Object: object,
 		Err:    err,
 	}
-}
-
-// Return string an error formatted as the given text
-func (e BucketPolicyNotFound) Error() string {
-	return "Bucket policy not found for: " + e.Bucket
 }
 
 // Return string an error formatted as the given text

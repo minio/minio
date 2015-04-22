@@ -44,25 +44,6 @@ func (m *Driver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error
 	return r0, r1
 }
 
-// CreateBucketPolicy is a mock
-func (m *Driver) CreateBucketPolicy(bucket string, p drivers.BucketPolicy) error {
-	ret := m.Called(bucket, p)
-
-	r0 := ret.Error(0)
-
-	return r0
-}
-
-// GetBucketPolicy is a mock
-func (m *Driver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
-	ret := m.Called(bucket)
-
-	r0 := ret.Get(0).(drivers.BucketPolicy)
-	r1 := ret.Error(1)
-
-	return r0, r1
-}
-
 // SetGetObjectWriter is a mock
 func (m *Driver) SetGetObjectWriter(bucket, object string, data []byte) {
 	m.ObjectWriterData[bucket+":"+object] = data

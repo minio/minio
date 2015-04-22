@@ -134,20 +134,6 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	resources := getBucketResources(req.URL.Query())
-	if resources.Policy == true && object == "" {
-		// TODO
-		// ----
-		// This is handled here instead of router, is only because semantically
-		// resource queries are not treated differently by Gorilla mux
-		//
-		// In-fact a request coming in as /bucket/?policy={} and /bucket/object are
-		// treated similarly. A proper fix would be to remove this comment and
-		// find a right regex pattern for individual requests
-		server.putBucketPolicyHandler(w, req)
-		return
-	}
-
 	// get Content-MD5 sent by client
 	md5 := req.Header.Get("Content-MD5")
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)

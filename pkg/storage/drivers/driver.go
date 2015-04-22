@@ -29,8 +29,6 @@ type Driver interface {
 	ListBuckets() ([]BucketMetadata, error)
 	CreateBucket(bucket string) error
 	GetBucketMetadata(bucket string) (BucketMetadata, error)
-	CreateBucketPolicy(bucket string, p BucketPolicy) error
-	GetBucketPolicy(bucket string) (BucketPolicy, error)
 
 	// Object Operations
 	GetObject(w io.Writer, bucket, object string) (int64, error)
@@ -78,7 +76,6 @@ type BucketResourcesMetadata struct {
 	CommonPrefixes []string
 	Mode           FilterMode
 
-	Policy bool
 	// TODO
 	Logging      string
 	Notification string
