@@ -36,23 +36,9 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	bucket := vars["bucket"]
 
 	resources := getBucketResources(req.URL.Query())
-	if resources.Policy == true {
-		// TODO
-		// ----
-		// This is handled here instead of router, is only because semantically
-		// resource queries are not treated differently by Gorilla mux
-		//
-		// In-fact a request coming in as /bucket/?policy={} and /bucket/object are
-		// treated similarly. A proper fix would be to remove this comment and
-		// find a right regex pattern for individual requests
-		server.getBucketPolicyHandler(w, req)
-		return
-	}
-
 	if resources.Maxkeys == 0 {
 		resources.Maxkeys = maxObjectList
 	}
-
 	acceptsContentType := getContentType(req)
 	objects, resources, err := server.driver.ListObjects(bucket, resources)
 	switch err.(type) {
@@ -121,12 +107,6 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	bucket := vars["bucket"]
 	err := server.driver.CreateBucket(bucket)
 
-	resources := getBucketResources(req.URL.Query())
-	if resources.Policy == true {
-		server.putBucketPolicyHandler(w, req)
-		return
-	}
-
 	acceptsContentType := getContentType(req)
 	switch err.(type) {
 	case nil:
@@ -158,7 +138,6 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
-	// TODO need to peek into bucketPolicy return appropriate checks here
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	acceptsContentType := getContentType(req)

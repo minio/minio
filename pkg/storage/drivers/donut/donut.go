@@ -144,16 +144,6 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 	return bucketMetadata, nil
 }
 
-// CreateBucketPolicy sets a bucket's access policy
-func (d donutDriver) CreateBucketPolicy(bucket string, p drivers.BucketPolicy) error {
-	return iodine.New(errors.New("Not Implemented"), nil)
-}
-
-// GetBucketPolicy returns a bucket's access policy
-func (d donutDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
-	return drivers.BucketPolicy{}, iodine.New(errors.New("Not Implemented"), nil)
-}
-
 // GetObject retrieves an object and writes it to a writer
 func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) (int64, error) {
 	errParams := map[string]string{

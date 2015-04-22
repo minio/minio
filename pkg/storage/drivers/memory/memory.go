@@ -30,8 +30,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
-	"github.com/golang/groupcache/lru"
 	"io/ioutil"
+
+	"github.com/golang/groupcache/lru"
 )
 
 // memoryDriver - local variables
@@ -115,16 +116,6 @@ func (memory memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMetad
 		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucket}
 	}
 	return memory.bucketMetadata[bucket].metadata, nil
-}
-
-// CreateBucketPolicy - Not implemented
-func (memory memoryDriver) CreateBucketPolicy(bucket string, policy drivers.BucketPolicy) error {
-	return drivers.APINotImplemented{API: "PutBucketPolicy"}
-}
-
-// GetBucketPolicy - Not implemented
-func (memory memoryDriver) GetBucketPolicy(bucket string) (drivers.BucketPolicy, error) {
-	return drivers.BucketPolicy{}, drivers.APINotImplemented{API: "GetBucketPolicy"}
 }
 
 // CreateObject - PUT object to memory buffer
