@@ -453,6 +453,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -499,6 +500,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -970,6 +972,8 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketNameInvalid{}).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
@@ -977,6 +981,8 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketExists{}).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "BucketAlreadyExists", "The requested bucket name is not available.", http.StatusConflict)
@@ -984,9 +990,20 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	typedDriver.On("CreateBucket", "foo").Return(drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
+
+	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "unknown")
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
 }
 
 func (s *MySuite) TestGetObjectErrors(c *C) {

@@ -16,10 +16,7 @@
 
 package api
 
-import (
-	"net/http"
-	"strings"
-)
+import "net/http"
 
 type contentType int
 
@@ -32,14 +29,17 @@ const (
 // Get content type requested from 'Accept' header
 func getContentType(req *http.Request) contentType {
 	acceptHeader := req.Header.Get("Accept")
-	switch {
-	case strings.HasPrefix(acceptHeader, "application/json"):
-		return jsonContentType
-	case strings.HasPrefix(acceptHeader, "application/xml"):
-		return xmlContentType
-	default:
-		return unknownContentType
+	if acceptHeader != "" {
+		switch {
+		case acceptHeader == "application/json":
+			return jsonContentType
+		case acceptHeader == "application/xml":
+			return xmlContentType
+		default:
+			return unknownContentType
+		}
 	}
+	return xmlContentType
 }
 
 // Content type to human readable string
