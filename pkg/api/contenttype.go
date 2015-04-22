@@ -24,7 +24,8 @@ import (
 type contentType int
 
 const (
-	xmlContentType contentType = iota
+	unknownContentType contentType = iota
+	xmlContentType
 	jsonContentType
 )
 
@@ -34,8 +35,10 @@ func getContentType(req *http.Request) contentType {
 	switch {
 	case strings.HasPrefix(acceptHeader, "application/json"):
 		return jsonContentType
-	default:
+	case strings.HasPrefix(acceptHeader, "application/xml"):
 		return xmlContentType
+	default:
+		return unknownContentType
 	}
 }
 
@@ -44,8 +47,11 @@ func getContentTypeString(content contentType) string {
 	switch content {
 	case jsonContentType:
 		{
-
 			return "application/json"
+		}
+	case xmlContentType:
+		{
+			return "application/xml"
 		}
 	default:
 		{

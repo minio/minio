@@ -30,12 +30,16 @@ import (
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
 func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
-	var object, bucket string
 	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil: // success
@@ -95,12 +99,16 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
 func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Request) {
-	var object, bucket string
 	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
@@ -128,14 +136,22 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
 func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
 	var object, bucket string
 	vars := mux.Vars(req)
-	acceptsContentType := getContentType(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-
-	// get Content-MD5 sent by client
+	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
+	if !isValidMD5(md5) {
+		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		return
+	}
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
 	switch err := err.(type) {
 	case nil:

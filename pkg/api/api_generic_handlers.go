@@ -142,14 +142,3 @@ func ignoreUnImplementedObjectResources(req *http.Request) bool {
 	}
 	return false
 }
-
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
-	error := getErrorCode(errorType)
-	errorResponse := getErrorResponse(error, resource)
-	// set headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType))
-	w.WriteHeader(error.HTTPStatusCode)
-	// write body
-	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
-	w.Write(encodedErrorResponse)
-}

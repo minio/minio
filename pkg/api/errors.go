@@ -38,7 +38,7 @@ type ErrorResponse struct {
 	HostID    string
 }
 
-// Error codes, non exhaustive list
+// Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
 	AccessDenied = iota
 	BadDigest
@@ -61,6 +61,11 @@ const (
 	RequestTimeTooSkewed
 	SignatureDoesNotMatch
 	TooManyBuckets
+)
+
+// Error codes, non exhaustive list - standard HTTP errors
+const (
+	NotAcceptable = iota + 21
 )
 
 // Error code to Error structure map
@@ -169,6 +174,12 @@ var errorCodeResponse = map[int]Error{
 		Code:           "TooManyBuckets",
 		Description:    "You have attempted to create more buckets than allowed.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	NotAcceptable: {
+		Code: "NotAcceptable",
+		Description: `The requested resource is only capable of generating content
+                              not acceptable according to the Accept headers sent in the request.`,
+		HTTPStatusCode: http.StatusNotAcceptable,
 	},
 }
 
