@@ -20,14 +20,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
-	"github.com/minio-io/minio/pkg/storage/drivers"
 )
 
 type vHandler struct {
 	conf    config.Config
-	driver  drivers.Driver
 	handler http.Handler
 }
 
@@ -50,10 +47,9 @@ func stripAccessKey(r *http.Request) string {
 
 // Validate handler is wrapper handler used for API request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
-func validateHandler(conf config.Config, driver drivers.Driver, h http.Handler) http.Handler {
+func validateHandler(conf config.Config, h http.Handler) http.Handler {
 	return vHandler{
 		conf:    conf,
-		driver:  driver,
 		handler: h,
 	}
 }
@@ -66,25 +62,6 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
 		return
 	}
-	// verify for if bucket is private or public
-	vars := mux.Vars(r)
-	bucket, ok := vars["bucket"]
-	if ok {
-		bucketMetadata, err := h.driver.GetBucketMetadata(bucket)
-		if err != nil {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-			return
-		}
-		if accessKey == "" && bucketMetadata.ACL.IsPrivate() {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-			return
-		}
-		if r.Method == "PUT" && bucketMetadata.ACL.IsPublicRead() {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-			return
-		}
-	}
-
 	switch true {
 	case accessKey != "":
 		if err := h.conf.ReadConfig(); err != nil {

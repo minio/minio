@@ -29,17 +29,18 @@ const (
 // Get content type requested from 'Accept' header
 func getContentType(req *http.Request) contentType {
 	acceptHeader := req.Header.Get("Accept")
-	if acceptHeader != "" {
-		switch {
-		case acceptHeader == "application/json":
-			return jsonContentType
-		case acceptHeader == "application/xml":
-			return xmlContentType
-		default:
-			return unknownContentType
-		}
+	switch {
+	case acceptHeader == "application/json":
+		return jsonContentType
+	case acceptHeader == "application/xml":
+		return xmlContentType
+	case acceptHeader == "*/*":
+		return xmlContentType
+	case acceptHeader != "":
+		return unknownContentType
+	default:
+		return xmlContentType
 	}
-	return xmlContentType
 }
 
 // Content type to human readable string

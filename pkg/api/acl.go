@@ -16,10 +16,7 @@
 
 package api
 
-import (
-	"net/http"
-	"strings"
-)
+import "net/http"
 
 // Please read for more information - http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl
 //
@@ -41,16 +38,20 @@ const (
 // Get acl type requested from 'x-amz-acl' header
 func getACLType(req *http.Request) ACLType {
 	aclHeader := req.Header.Get("x-amz-acl")
-	switch {
-	case strings.HasPrefix(aclHeader, "private"):
-		return privateACLType
-	case strings.HasPrefix(aclHeader, "public-read"):
-		return publicReadACLType
-	case strings.HasPrefix(aclHeader, "public-read-write"):
-		return publicReadWriteACLType
-	default:
-		return unsupportedACLType
+	if aclHeader != "" {
+		switch {
+		case aclHeader == "private":
+			return privateACLType
+		case aclHeader == "public-read":
+			return publicReadACLType
+		case aclHeader == "public-read-write":
+			return publicReadWriteACLType
+		default:
+			return unsupportedACLType
+		}
 	}
+	// make it default private
+	return privateACLType
 }
 
 // ACL type to human readable string
@@ -68,7 +69,11 @@ func getACLTypeString(acl ACLType) string {
 		{
 			return "public-read-write"
 		}
+	case unsupportedACLType:
+		{
+			return ""
+		}
 	default:
-		return ""
+		return "private"
 	}
 }

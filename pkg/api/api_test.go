@@ -115,11 +115,11 @@ func (s *MySuite) TestNonExistantObject(c *C) {
 		}
 	}
 	driver := s.Driver
-	s.MockDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
+	s.MockDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)

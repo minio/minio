@@ -40,6 +40,16 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	// Enable this after tests supports them
+
+	// verify for if bucket is private or public
+	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
+	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//        return
+	// }
+
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil: // success
@@ -51,23 +61,18 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 			}
 			switch httpRange.start == 0 && httpRange.length == 0 {
 			case true:
-				{
-					setObjectHeaders(w, metadata)
-					if _, err := server.driver.GetObject(w, bucket, object); err != nil {
-						// unable to write headers, we've already printed data. Just close the connection.
-						log.Error.Println(err)
-					}
+				setObjectHeaders(w, metadata)
+				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
+					// unable to write headers, we've already printed data. Just close the connection.
+					log.Error.Println(err)
 				}
 			case false:
-				{
-					metadata.Size = httpRange.length
-					setRangeObjectHeaders(w, metadata, httpRange)
-					w.WriteHeader(http.StatusPartialContent)
-					_, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length)
-					if err != nil {
-						// unable to write headers, we've already printed data. Just close the connection.
-						log.Error.Println(iodine.New(err, nil))
-					}
+				metadata.Size = httpRange.length
+				setRangeObjectHeaders(w, metadata, httpRange)
+				w.WriteHeader(http.StatusPartialContent)
+				if _, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length); err != nil {
+					// unable to write headers, we've already printed data. Just close the connection.
+					log.Error.Println(iodine.New(err, nil))
 				}
 			}
 		}
@@ -109,6 +114,15 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	// verify for if bucket is private or public
+	// verify for if bucket is private or public
+	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
+	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//        return
+	// }
+
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
 	switch err := err.(type) {
 	case nil:
@@ -146,6 +160,15 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	// verify for if bucket is private or public
+	// verify for if bucket is private or public
+	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) || bucketMetadtata.ACL.IsPublicRead() {
+	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//        return
+	// }
+
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {

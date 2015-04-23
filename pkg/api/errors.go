@@ -176,9 +176,8 @@ var errorCodeResponse = map[int]Error{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	NotAcceptable: {
-		Code: "NotAcceptable",
-		Description: `The requested resource is only capable of generating content
-                              not acceptable according to the Accept headers sent in the request.`,
+		Code:           "NotAcceptable",
+		Description:    "The requested resource is only capable of generating content not acceptable according to the Accept headers sent in the request.",
 		HTTPStatusCode: http.StatusNotAcceptable,
 	},
 }
