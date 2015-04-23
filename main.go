@@ -94,6 +94,9 @@ EXAMPLES:
   2. Create a temporary donut volume under "/tmp"
       $ minio mode {{.Name}} /tmp
 
+  3. Create a donut volume under collection of paths
+      $ minio mode {{.Name}} /mnt/backup2014feb /mnt/backup2014feb
+
 `,
 }
 
@@ -135,7 +138,7 @@ func (f webFactory) getStartServerFunc() startServerFunc {
 
 type donutFactory struct {
 	server.Config
-	path string
+	paths []string
 }
 
 func (f donutFactory) getStartServerFunc() startServerFunc {
@@ -146,7 +149,7 @@ func (f donutFactory) getStartServerFunc() startServerFunc {
 		httpConfig.CertFile = f.CertFile
 		httpConfig.KeyFile = f.KeyFile
 		httpConfig.Websocket = false
-		_, _, driver := donut.Start(f.path)
+		_, _, driver := donut.Start(f.paths)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
 		return ctrl, status
 	}
@@ -223,14 +226,21 @@ func runDonut(c *cli.Context) {
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
 	}
-	p := c.Args().First()
-	if strings.TrimSpace(p) == "" {
-		p = path.Join(u.HomeDir, "minio-storage", "donut")
+
+	// supporting multiple paths
+	var paths []string
+	if strings.TrimSpace(c.Args().First()) == "" {
+		p := path.Join(u.HomeDir, "minio-storage", "donut")
+		paths = append(paths, p)
+	} else {
+		for _, arg := range c.Args() {
+			paths = append(paths, strings.TrimSpace(arg))
+		}
 	}
 	apiServerConfig := getAPIServerConfig(c)
 	donutDriver := donutFactory{
 		Config: apiServerConfig,
-		path:   p,
+		paths:  paths,
 	}
 	apiServer := donutDriver.getStartServerFunc()
 	webServer := getWebServerConfigFunc(c)
