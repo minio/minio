@@ -34,7 +34,6 @@ import (
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/server/httpserver"
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
@@ -101,56 +100,38 @@ EXAMPLES:
 }
 
 type memoryFactory struct {
-	server.Config
+	httpserver.Config
 	maxMemory uint64
 }
 
 func (f memoryFactory) getStartServerFunc() startServerFunc {
 	return func() (chan<- string, <-chan error) {
-		httpConfig := httpserver.Config{}
-		httpConfig.Address = f.Address
-		httpConfig.TLS = f.TLS
-		httpConfig.CertFile = f.CertFile
-		httpConfig.KeyFile = f.KeyFile
-		httpConfig.Websocket = false
 		_, _, driver := memory.Start(f.maxMemory)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
 		return ctrl, status
 	}
 }
 
 type webFactory struct {
-	server.Config
+	httpserver.Config
 }
 
 func (f webFactory) getStartServerFunc() startServerFunc {
 	return func() (chan<- string, <-chan error) {
-		httpConfig := httpserver.Config{}
-		httpConfig.Address = f.Address
-		httpConfig.TLS = f.TLS
-		httpConfig.CertFile = f.CertFile
-		httpConfig.KeyFile = f.KeyFile
-		httpConfig.Websocket = false
-		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), httpConfig)
+		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), f.Config)
 		return ctrl, status
 	}
 }
 
 type donutFactory struct {
-	server.Config
+	httpserver.Config
 	paths []string
 }
 
 func (f donutFactory) getStartServerFunc() startServerFunc {
 	return func() (chan<- string, <-chan error) {
-		httpConfig := httpserver.Config{}
-		httpConfig.Address = f.Address
-		httpConfig.TLS = f.TLS
-		httpConfig.CertFile = f.CertFile
-		httpConfig.KeyFile = f.KeyFile
-		httpConfig.Websocket = false
 		_, _, driver := donut.Start(f.paths)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
 		return ctrl, status
 	}
 }
@@ -248,14 +229,14 @@ func runDonut(c *cli.Context) {
 	startMinio(servers)
 }
 
-func getAPIServerConfig(c *cli.Context) server.Config {
+func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	certFile := c.String("cert")
 	keyFile := c.String("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		log.Fatalln("Both certificate and key must be provided to enable https")
 	}
 	tls := (certFile != "" && keyFile != "")
-	return server.Config{
+	return httpserver.Config{
 		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("api-address"),
 		TLS:      tls,
@@ -265,7 +246,7 @@ func getAPIServerConfig(c *cli.Context) server.Config {
 }
 
 func getWebServerConfigFunc(c *cli.Context) startServerFunc {
-	config := server.Config{
+	config := httpserver.Config{
 		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("web-address"),
 		TLS:      false,
