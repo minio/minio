@@ -42,8 +42,8 @@ type memoryDriver struct {
 	objectMetadata map[string]storedObject
 	objects        *lru.Cache
 	lock           *sync.RWMutex
-	totalSize      int64
-	maxSize        int64
+	totalSize      uint64
+	maxSize        uint64
 }
 
 type storedBucket struct {
@@ -57,7 +57,7 @@ type storedObject struct {
 }
 
 // Start memory object server
-func Start(maxSize int64) (chan<- string, <-chan error, drivers.Driver) {
+func Start(maxSize uint64) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 
@@ -199,7 +199,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string
 	}
 	memory.objectMetadata[objectKey] = newObject
 	memory.objects.Add(objectKey, dataSlice)
-	memory.totalSize = memory.totalSize + newObject.metadata.Size
+	memory.totalSize = memory.totalSize + uint64(newObject.metadata.Size)
 	for memory.totalSize > memory.maxSize {
 		memory.objects.RemoveOldest()
 	}
@@ -376,7 +376,7 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
-	memory.totalSize = memory.totalSize - memory.objectMetadata[k].metadata.Size
+	memory.totalSize = memory.totalSize - uint64(memory.objectMetadata[k].metadata.Size)
 	log.Println("evicting:", k)
 	delete(memory.objectMetadata, k)
 }

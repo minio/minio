@@ -20,21 +20,25 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"errors"
+	"reflect"
+
+	"github.com/dustin/go-humanize"
 	"github.com/minio-io/cli"
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/server/httpserver"
+	"github.com/minio-io/minio/pkg/storage/drivers/donut"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
-	"reflect"
 )
 
 var globalDebugFlag = false
@@ -51,30 +55,50 @@ var modeCommands = []cli.Command{
 var modeCmd = cli.Command{
 	Name:        "mode",
 	Subcommands: modeCommands,
+	Description: "Mode of execution",
 }
 
 var memoryCmd = cli.Command{
-	Name:   "memory",
-	Action: runMemory,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "max-memory",
-			Value: "100M",
-			Usage: "",
-		},
-	},
+	Name:        "memory",
+	Description: "Limit maximum memory usage to SIZE in [B, KB, MB, GB]",
+	Action:      runMemory,
+	CustomHelpTemplate: `NAME:
+  minio {{.Name}} - {{.Description}}
+
+USAGE:
+  minio {{.Name}} SIZE
+
+EXAMPLES:
+  1. Limit maximum memory usage to 64MB
+      $ minio {{.Name}} 64MB
+
+  2. Limit maximum memory usage to 4GB
+      $ minio {{.Name}} 4GB
+`,
 }
 
 var donutCmd = cli.Command{
-	Name:   "donut",
-	Action: runDonut,
-	Flags:  []cli.Flag{},
+	Name:        "donut",
+	Description: "Specify a path to instantiate donut",
+	Action:      runDonut,
+	CustomHelpTemplate: `NAME:
+  minio {{.Name}} - {{.Description}}
+
+USAGE:
+  minio {{.Name}} PATH
+
+EXAMPLES:
+  1. Use a regular disk to create donut
+      $ minio {{.Name}} /mnt/disk1
+
+  2. Use a lvm group to create donut
+      $ minio {{.Name}} /media/lvm/groups
+`,
 }
 
 type memoryFactory struct {
 	server.Config
-
-	maxMemory int64
+	maxMemory uint64
 }
 
 func (f memoryFactory) getStartServerFunc() startServerFunc {
@@ -85,7 +109,7 @@ func (f memoryFactory) getStartServerFunc() startServerFunc {
 		httpConfig.CertFile = f.CertFile
 		httpConfig.KeyFile = f.KeyFile
 		httpConfig.Websocket = false
-		_, _, driver := memory.Start(1024 * 1024 * 1024)
+		_, _, driver := memory.Start(f.maxMemory)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
 		return ctrl, status
 	}
@@ -110,11 +134,20 @@ func (f webFactory) getStartServerFunc() startServerFunc {
 
 type donutFactory struct {
 	server.Config
+	path string
 }
 
 func (f donutFactory) getStartServerFunc() startServerFunc {
 	return func() (chan<- string, <-chan error) {
-		return nil, nil
+		httpConfig := httpserver.Config{}
+		httpConfig.Address = f.Address
+		httpConfig.TLS = f.TLS
+		httpConfig.CertFile = f.CertFile
+		httpConfig.KeyFile = f.KeyFile
+		httpConfig.Websocket = false
+		_, _, driver := donut.Start(f.path)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
+		return ctrl, status
 	}
 }
 
@@ -162,25 +195,14 @@ func init() {
 
 type startServerFunc func() (chan<- string, <-chan error)
 
-func runCmd(c *cli.Context) {
-	// default to memory driver, 1GB
-	apiServerConfig := getAPIServerConfig(c)
-	memoryDriver := memoryFactory{
-		Config:    apiServerConfig,
-		maxMemory: 1024 * 1024 * 1024,
-	}
-	apiServer := memoryDriver.getStartServerFunc()
-	webServer := getWebServerConfigFunc(c)
-	servers := []startServerFunc{apiServer, webServer}
-	startMinio(servers)
-}
-
 func runMemory(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		cli.ShowCommandHelpAndExit(c, "memory", 1) // last argument is exit code
+	}
 	apiServerConfig := getAPIServerConfig(c)
-	// TODO max-memory should take human readable values
-	maxMemory, err := strconv.ParseInt(c.String("max-memory"), 10, 64)
+	maxMemory, err := humanize.ParseBytes(c.Args().First())
 	if err != nil {
-		log.Println("max-memory not a numeric value")
+		log.Fatalf("MaxMemory not a numeric value with reason: %s", err)
 	}
 	memoryDriver := memoryFactory{
 		Config:    apiServerConfig,
@@ -193,9 +215,21 @@ func runMemory(c *cli.Context) {
 }
 
 func runDonut(c *cli.Context) {
+	u, err := user.Current()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(c.Args()) < 1 {
+		cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
+	}
+	p := c.Args().First()
+	if strings.TrimSpace(p) == "" {
+		p = path.Join(u.HomeDir, "minio-storage", "donut")
+	}
 	apiServerConfig := getAPIServerConfig(c)
 	donutDriver := donutFactory{
 		Config: apiServerConfig,
+		path:   p,
 	}
 	apiServer := donutDriver.getStartServerFunc()
 	webServer := getWebServerConfigFunc(c)
@@ -207,12 +241,12 @@ func getAPIServerConfig(c *cli.Context) server.Config {
 	certFile := c.String("cert")
 	keyFile := c.String("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
-		log.Fatal("Both certificate and key must be provided to enable https")
+		log.Fatalln("Both certificate and key must be provided to enable https")
 	}
 	tls := (certFile != "" && keyFile != "")
 	return server.Config{
-		Domain:   c.String("domain"),
-		Address:  c.String("api-address"),
+		Domain:   c.GlobalString("domain"),
+		Address:  c.GlobalString("api-address"),
 		TLS:      tls,
 		CertFile: certFile,
 		KeyFile:  keyFile,
@@ -221,8 +255,8 @@ func getAPIServerConfig(c *cli.Context) server.Config {
 
 func getWebServerConfigFunc(c *cli.Context) startServerFunc {
 	config := server.Config{
-		Domain:   c.String("domain"),
-		Address:  c.String("web-address"),
+		Domain:   c.GlobalString("domain"),
+		Address:  c.GlobalString("web-address"),
 		TLS:      false,
 		CertFile: "",
 		KeyFile:  "",
@@ -282,24 +316,6 @@ func createSelectCases(channels []<-chan error) []reflect.SelectCase {
 	return cases
 }
 
-// Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
-func formatBytes(i int64) (result string) {
-	switch {
-	case i > (1024 * 1024 * 1024 * 1024):
-		result = fmt.Sprintf("%.02f TB", float64(i)/1024/1024/1024/1024)
-	case i > (1024 * 1024 * 1024):
-		result = fmt.Sprintf("%.02f GB", float64(i)/1024/1024/1024)
-	case i > (1024 * 1024):
-		result = fmt.Sprintf("%.02f MB", float64(i)/1024/1024)
-	case i > 1024:
-		result = fmt.Sprintf("%.02f KB", float64(i)/1024)
-	default:
-		result = fmt.Sprintf("%d B", i)
-	}
-	result = strings.Trim(result, " ")
-	return
-}
-
 // Tries to get os/arch/platform specific information
 // Returns a map of current os/arch/platform/memstats
 func getSystemData() map[string]string {
@@ -310,10 +326,10 @@ func getSystemData() map[string]string {
 	memstats := &runtime.MemStats{}
 	runtime.ReadMemStats(memstats)
 	mem := fmt.Sprintf("Used: %s | Allocated: %s | Used-Heap: %s | Allocated-Heap: %s",
-		formatBytes(int64(memstats.Alloc)),
-		formatBytes(int64(memstats.TotalAlloc)),
-		formatBytes(int64(memstats.HeapAlloc)),
-		formatBytes(int64(memstats.HeapSys)))
+		humanize.Bytes(memstats.Alloc),
+		humanize.Bytes(memstats.TotalAlloc),
+		humanize.Bytes(memstats.HeapAlloc),
+		humanize.Bytes(memstats.HeapSys))
 	platform := fmt.Sprintf("Host: %s | OS: %s | Arch: %s",
 		host,
 		runtime.GOOS,
@@ -337,10 +353,8 @@ func main() {
 	app.Version = minioGitCommitHash
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
-	app.EnableBashCompletion = true
 	app.Flags = flags
 	app.Commands = commands
-	app.Action = runCmd
 	app.Before = func(c *cli.Context) error {
 		globalDebugFlag = c.GlobalBool("debug")
 		if globalDebugFlag {
