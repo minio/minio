@@ -188,13 +188,16 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string
 }
 
 // CreateBucket - create bucket in memory
-func (memory *memoryDriver) CreateBucket(bucketName string) error {
+func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucketName) {
 		memory.lock.RUnlock()
 		return drivers.BucketNameInvalid{Bucket: bucketName}
 	}
-
+	if !drivers.IsValidBucketACL(acl) {
+		memory.lock.RUnlock()
+		return drivers.InvalidACL{ACL: acl}
+	}
 	if _, ok := memory.bucketMetadata[bucketName]; ok == true {
 		memory.lock.RUnlock()
 		return drivers.BucketExists{Bucket: bucketName}
@@ -205,6 +208,7 @@ func (memory *memoryDriver) CreateBucket(bucketName string) error {
 	newBucket.metadata = drivers.BucketMetadata{}
 	newBucket.metadata.Name = bucketName
 	newBucket.metadata.Created = time.Now()
+	newBucket.metadata.ACL = drivers.BucketACL(acl)
 	memory.lock.Lock()
 	defer memory.lock.Unlock()
 	memory.bucketMetadata[bucketName] = newBucket
@@ -234,7 +238,7 @@ func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedN
 	switch true {
 	case key == resources.Prefix:
 		keys = appendUniq(keys, key)
-		// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
+	// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
 	case key == resources.Prefix+delimitedName:
 		keys = appendUniq(keys, key)
 	case delimitedName != "":
@@ -339,8 +343,6 @@ func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
 
 	memory.totalSize = memory.totalSize - memory.objectMetadata[k].metadata.Size
-
 	log.Println("evicting:", k)
-
 	delete(memory.objectMetadata, k)
 }

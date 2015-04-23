@@ -31,9 +31,13 @@ type donut struct {
 
 // config files used inside Donut
 const (
+	// donut object metadata and config
 	donutObjectMetadataConfig = "donutObjectMetadata.json"
-	objectMetadataConfig      = "objectMetadata.json"
 	donutConfig               = "donutMetadata.json"
+
+	// bucket, object metadata
+	bucketMetadataConfig = "bucketMetadata.json"
+	objectMetadataConfig = "objectMetadata.json"
 )
 
 // attachDonutNode - wrapper function to instantiate a new node for associated donut

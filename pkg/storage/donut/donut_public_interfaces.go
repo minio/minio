@@ -32,7 +32,7 @@ type ObjectStorage interface {
 	GetBucketMetadata(bucket string) (map[string]string, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
 	ListBuckets() ([]string, error)
-	MakeBucket(bucket string) error
+	MakeBucket(bucket, acl string) error
 
 	// Bucket Operations
 	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (result []string, prefixes []string, isTruncated bool, err error)

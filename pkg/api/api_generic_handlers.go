@@ -79,6 +79,10 @@ func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
 			return
 		}
+		if r.Method == "PUT" && bucketMetadata.ACL.IsPublicRead() {
+			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+			return
+		}
 	}
 
 	switch true {

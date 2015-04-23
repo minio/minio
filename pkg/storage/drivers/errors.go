@@ -54,6 +54,17 @@ type DigestError struct {
 	Md5    string
 }
 
+/// ACL related errors
+
+// InvalidACL - acl invalid
+type InvalidACL struct {
+	ACL string
+}
+
+func (e InvalidACL) Error() string {
+	return "Requested ACL is " + e.ACL + " invalid"
+}
+
 /// Bucket related errors
 
 // BucketNameInvalid - bucketname provided is invalid
