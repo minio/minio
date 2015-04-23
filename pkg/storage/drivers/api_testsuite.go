@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio-io/check"
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 // APITestSuite - collection of API tests
@@ -105,6 +106,7 @@ func testPaging(c *check.C, create func() Driver) {
 		key := "obj" + strconv.Itoa(i)
 		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
+		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, i+1)
 		c.Assert(resources.IsTruncated, check.Equals, false)
@@ -115,6 +117,7 @@ func testPaging(c *check.C, create func() Driver) {
 		key := "obj" + strconv.Itoa(i)
 		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
 		resources.Maxkeys = 5
+		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(len(objects), check.Equals, 5)
 		c.Assert(resources.IsTruncated, check.Equals, true)
@@ -329,7 +332,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() Driver) {
 	c.Assert(length, check.Equals, int64(0))
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(len(byteBuffer.Bytes()), check.Equals, 0)
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case ObjectNotFound:
 		{
 			c.Assert(err, check.ErrorMatches, "Object not Found: bucket#dir1")
@@ -352,7 +355,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Driver) {
 	var byteBuffer bytes.Buffer
 	length, err := drivers.GetObject(&byteBuffer, "bucket", "dir1")
 	c.Assert(length, check.Equals, int64(0))
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case ObjectNotFound:
 		{
 			c.Assert(err.Bucket, check.Equals, "bucket")
@@ -369,7 +372,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Driver) {
 	var byteBuffer2 bytes.Buffer
 	length, err = drivers.GetObject(&byteBuffer, "bucket", "dir1/")
 	c.Assert(length, check.Equals, int64(0))
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case ObjectNotFound:
 		{
 			c.Assert(err.Bucket, check.Equals, "bucket")

@@ -16,6 +16,8 @@
 
 package drivers
 
+import "fmt"
+
 // BackendError - generic disk backend error
 type BackendError struct {
 	Path string
@@ -163,4 +165,24 @@ func (e BadDigest) Error() string {
 // Return string an error formatted as the given text
 func (e InvalidDigest) Error() string {
 	return "Md5 provided " + e.Md5 + " is invalid"
+}
+
+// OperationNotPermitted - operation not permitted
+type OperationNotPermitted struct {
+	Op     string
+	Reason string
+}
+
+func (e OperationNotPermitted) Error() string {
+	return "Operation " + e.Op + " not permitted for reason: " + e.Reason
+}
+
+// InvalidRange - invalid range
+type InvalidRange struct {
+	Start  int64
+	Length int64
+}
+
+func (e InvalidRange) Error() string {
+	return fmt.Sprintf("Invalid range start:%d length:%d", e.Start, e.Length)
 }

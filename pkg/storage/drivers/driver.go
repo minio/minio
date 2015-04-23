@@ -19,6 +19,7 @@ package drivers
 import (
 	"io"
 	"regexp"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -185,6 +186,9 @@ func IsValidBucket(bucket string) bool {
 // IsValidObject - verify object name in accordance with
 //   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func IsValidObject(object string) bool {
+	if strings.TrimSpace(object) == "" {
+		return true
+	}
 	if len(object) > 1024 || len(object) == 0 {
 		return false
 	}

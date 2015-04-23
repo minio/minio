@@ -44,9 +44,10 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 	if _, ok := d.buckets[bucket]; !ok {
 		return nil, iodine.New(errors.New("bucket does not exist"), nil)
 	}
+	// TODO get this, from whatever is written from SetBucketMetadata
 	metadata := make(map[string]string)
 	metadata["name"] = bucket
-	metadata["created"] = time.Now().Format(time.RFC3339Nano) // TODO get this, from whatever is written from SetBucketMetadata
+	metadata["created"] = time.Now().Format(time.RFC3339Nano)
 	metadata["acl"] = "private"
 	return metadata, nil
 }

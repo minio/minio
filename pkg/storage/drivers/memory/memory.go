@@ -25,14 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio-io/minio/pkg/storage/drivers"
-
 	"crypto/md5"
 	"encoding/hex"
 
 	"io/ioutil"
 
 	"github.com/golang/groupcache/lru"
+	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -91,8 +91,14 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
+	if !drivers.IsValidBucket(bucket) {
+		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObject(object) {
+		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
+	}
 	if _, ok := memory.bucketMetadata[bucket]; ok == false {
-		return 0, drivers.BucketNotFound{Bucket: bucket}
+		return 0, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	// get object
 	objectKey := bucket + "/" + object
@@ -101,10 +107,10 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 			dataSlice := data.([]byte)
 			objectBuffer := bytes.NewBuffer(dataSlice)
 			written, err := io.Copy(w, objectBuffer)
-			return written, err
+			return written, iodine.New(err, nil)
 		}
 	}
-	return 0, drivers.ObjectNotFound{Bucket: bucket, Object: object}
+	return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 }
 
 // GetPartialObject - GET object from memory buffer range
@@ -112,11 +118,17 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
 	var sourceBuffer bytes.Buffer
+	if !drivers.IsValidBucket(bucket) {
+		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObject(object) {
+		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
+	}
 	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
-		return 0, err
+		return 0, iodine.New(err, nil)
 	}
 	if _, err := io.CopyN(ioutil.Discard, &sourceBuffer, start); err != nil {
-		return 0, err
+		return 0, iodine.New(err, nil)
 	}
 	return io.CopyN(w, &sourceBuffer, length)
 }
@@ -125,8 +137,11 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 func (memory *memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
+	if !drivers.IsValidBucket(bucket) {
+		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
 	if _, ok := memory.bucketMetadata[bucket]; ok == false {
-		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	return memory.bucketMetadata[bucket].metadata, nil
 }
@@ -134,17 +149,22 @@ func (memory *memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMeta
 // CreateObject - PUT object to memory buffer
 func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
 	memory.lock.RLock()
-
+	if !drivers.IsValidBucket(bucket) {
+		memory.lock.RUnlock()
+		return iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObject(key) {
+		memory.lock.RUnlock()
+		return iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+	}
 	if _, ok := memory.bucketMetadata[bucket]; ok == false {
 		memory.lock.RUnlock()
-		return drivers.BucketNotFound{Bucket: bucket}
+		return iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-
 	objectKey := bucket + "/" + key
-
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
 		memory.lock.RUnlock()
-		return drivers.ObjectExists{Bucket: bucket, Object: key}
+		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
 	memory.lock.RUnlock()
 
@@ -175,7 +195,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string
 	memory.lock.Lock()
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
 		memory.lock.Unlock()
-		return drivers.ObjectExists{Bucket: bucket, Object: key}
+		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
 	memory.objectMetadata[objectKey] = newObject
 	memory.objects.Add(objectKey, dataSlice)
@@ -192,15 +212,15 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucketName) {
 		memory.lock.RUnlock()
-		return drivers.BucketNameInvalid{Bucket: bucketName}
+		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidBucketACL(acl) {
 		memory.lock.RUnlock()
-		return drivers.InvalidACL{ACL: acl}
+		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
 	if _, ok := memory.bucketMetadata[bucketName]; ok == true {
 		memory.lock.RUnlock()
-		return drivers.BucketExists{Bucket: bucketName}
+		return iodine.New(drivers.BucketExists{Bucket: bucketName}, nil)
 	}
 	memory.lock.RUnlock()
 
@@ -247,42 +267,53 @@ func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedN
 	return resources, keys
 }
 
+func (memory *memoryDriver) listObjectsInternal(keys []string, key string, resources drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
+	switch true {
+	// Prefix absent, delimit object key based on delimiter
+	case resources.IsDelimiterSet():
+		delimitedName := delimiter(key, resources.Delimiter)
+		switch true {
+		case delimitedName == "" || delimitedName == key:
+			keys = appendUniq(keys, key)
+		case delimitedName != "":
+			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+		}
+	// Prefix present, delimit object key with prefix key based on delimiter
+	case resources.IsDelimiterPrefixSet():
+		if strings.HasPrefix(key, resources.Prefix) {
+			trimmedName := strings.TrimPrefix(key, resources.Prefix)
+			delimitedName := delimiter(trimmedName, resources.Delimiter)
+			resources, keys = memory.filterDelimiterPrefix(keys, key, delimitedName, resources)
+		}
+	// Prefix present, nothing to delimit
+	case resources.IsPrefixSet():
+		keys = appendUniq(keys, key)
+	// Prefix and delimiter absent
+	case resources.IsDefault():
+		keys = appendUniq(keys, key)
+	}
+	return keys, resources
+}
+
 // ListObjects - list objects from memory
 func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
+	if !drivers.IsValidBucket(bucket) {
+		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObject(resources.Prefix) {
+		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
+	}
 	if _, ok := memory.bucketMetadata[bucket]; ok == false {
-		return []drivers.ObjectMetadata{}, drivers.BucketResourcesMetadata{IsTruncated: false}, drivers.BucketNotFound{Bucket: bucket}
+		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	var results []drivers.ObjectMetadata
 	var keys []string
 	for key := range memory.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			switch true {
-			// Prefix absent, delimit object key based on delimiter
-			case resources.IsDelimiterSet():
-				delimitedName := delimiter(key, resources.Delimiter)
-				switch true {
-				case delimitedName == "" || delimitedName == key:
-					keys = appendUniq(keys, key)
-				case delimitedName != "":
-					resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
-				}
-			// Prefix present, delimit object key with prefix key based on delimiter
-			case resources.IsDelimiterPrefixSet():
-				if strings.HasPrefix(key, resources.Prefix) {
-					trimmedName := strings.TrimPrefix(key, resources.Prefix)
-					delimitedName := delimiter(trimmedName, resources.Delimiter)
-					resources, keys = memory.filterDelimiterPrefix(keys, key, delimitedName, resources)
-				}
-			// Prefix present, nothing to delimit
-			case resources.IsPrefixSet():
-				keys = appendUniq(keys, key)
-			// Prefix and delimiter absent
-			case resources.IsDefault():
-				keys = appendUniq(keys, key)
-			}
+			keys, resources = memory.listObjectsInternal(keys, key, resources)
 		}
 	}
 	sort.Strings(keys)
@@ -327,21 +358,24 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
 	// check if bucket exists
-	if _, ok := memory.bucketMetadata[bucket]; ok == false {
-		return drivers.ObjectMetadata{}, drivers.BucketNotFound{Bucket: bucket}
+	if !drivers.IsValidBucket(bucket) {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-
+	if !drivers.IsValidObject(key) || !drivers.IsValidObject(prefix) {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+	}
+	if _, ok := memory.bucketMetadata[bucket]; ok == false {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+	}
 	objectKey := bucket + "/" + key
-
 	if object, ok := memory.objectMetadata[objectKey]; ok == true {
 		return object.metadata, nil
 	}
-	return drivers.ObjectMetadata{}, drivers.ObjectNotFound{Bucket: bucket, Object: key}
+	return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
 }
 
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
-
 	memory.totalSize = memory.totalSize - memory.objectMetadata[k].metadata.Size
 	log.Println("evicting:", k)
 	delete(memory.objectMetadata, k)

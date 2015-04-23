@@ -19,7 +19,6 @@ package donut
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"io"
 	"os"
 	"path"
@@ -136,7 +135,7 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 	}
 	metadata, err := d.donut.GetBucketMetadata(bucketName)
 	if err != nil {
-		return drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: bucketName}
+		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
 	}
 	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
 	if err != nil {
@@ -156,25 +155,21 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 
 // GetObject retrieves an object and writes it to a writer
 func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) (int64, error) {
-	errParams := map[string]string{
-		"bucketName": bucketName,
-		"objectName": objectName,
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
-		return 0, iodine.New(errors.New("invalid argument"), errParams)
-	}
-	if objectName == "" || strings.TrimSpace(objectName) == "" {
-		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	reader, size, err := d.donut.GetObject(bucketName, objectName)
 	if err != nil {
-		return 0, drivers.ObjectNotFound{
+		return 0, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
-		}
+		}, nil)
 	}
 	n, err := io.CopyN(target, reader, size)
-	return n, iodine.New(err, errParams)
+	return n, iodine.New(err, nil)
 }
 
 // GetPartialObject retrieves an object range and writes it to a writer
@@ -186,25 +181,31 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		"start":      strconv.FormatInt(start, 10),
 		"length":     strconv.FormatInt(length, 10),
 	}
-	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
-		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, errParams)
 	}
-	if objectName == "" || strings.TrimSpace(objectName) == "" {
-		return 0, iodine.New(errors.New("invalid argument"), errParams)
+	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
 	if start < 0 {
-		return 0, iodine.New(errors.New("invalid argument"), errParams)
+		return 0, iodine.New(drivers.InvalidRange{
+			Start:  start,
+			Length: length,
+		}, errParams)
 	}
 	reader, size, err := d.donut.GetObject(bucketName, objectName)
 	defer reader.Close()
 	if err != nil {
-		return 0, drivers.ObjectNotFound{
+		return 0, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
-		}
+		}, nil)
 	}
 	if start > size || (start+length-1) > size {
-		return 0, iodine.New(errors.New("invalid range"), errParams)
+		return 0, iodine.New(drivers.InvalidRange{
+			Start:  start,
+			Length: length,
+		}, errParams)
 	}
 	_, err = io.CopyN(ioutil.Discard, reader, start)
 	if err != nil {
@@ -223,6 +224,12 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string
 		"bucketName": bucketName,
 		"objectName": objectName,
 		"prefixName": prefixName,
+	}
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
+	}
+	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
@@ -261,6 +268,12 @@ func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
+	}
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
+	}
+	if !drivers.IsValidObject(resources.Prefix) {
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
 	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName,
 		resources.Prefix,
@@ -305,11 +318,11 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		"objectName":  objectName,
 		"contentType": contentType,
 	}
-	if bucketName == "" || strings.TrimSpace(bucketName) == "" {
-		return iodine.New(errors.New("invalid argument"), errParams)
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if objectName == "" || strings.TrimSpace(objectName) == "" {
-		return iodine.New(errors.New("invalid argument"), errParams)
+	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+		return iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	if strings.TrimSpace(contentType) == "" {
 		contentType = "application/octet-stream"
@@ -324,7 +337,6 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-
 	err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, ioutil.NopCloser(reader), metadata)
 	if err != nil {
 		return iodine.New(err, errParams)
