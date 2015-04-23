@@ -36,22 +36,17 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	// Enable this after tests supports them
-
-	// verify for if bucket is private or public
-	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
-	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
-	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-	//        return
-	// }
-
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case nil: // success
 		{
 			httpRange, err := getRequestedRange(req, metadata.Size)
@@ -80,17 +75,9 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
-	case drivers.BucketNotFound:
-		{
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		}
 	case drivers.ObjectNameInvalid:
 		{
 			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BucketNameInvalid:
-		{
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
@@ -110,21 +97,17 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	// verify for if bucket is private or public
-	// verify for if bucket is private or public
-	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
-	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
-	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-	//        return
-	// }
-
 	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
 			setObjectHeaders(w, metadata)
@@ -156,18 +139,15 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// handle PublicRead ACL here
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-
-	// verify for if bucket is private or public
-	// verify for if bucket is private or public
-	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
-	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) || bucketMetadtata.ACL.IsPublicRead() {
-	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-	//        return
-	// }
 
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
@@ -176,24 +156,11 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case nil:
 		w.Header().Set("Server", "Minio")
 		w.Header().Set("Connection", "close")
 		w.WriteHeader(http.StatusOK)
-	case drivers.ImplementationError:
-		{
-			log.Error.Println(err)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BucketNotFound:
-		{
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BucketNameInvalid:
-		{
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-		}
 	case drivers.ObjectExists:
 		{
 			writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
@@ -205,6 +172,11 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	case drivers.InvalidDigest:
 		{
 			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		}
+	case drivers.ImplementationError:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{

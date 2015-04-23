@@ -25,6 +25,35 @@ import (
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
+func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	switch iodine.ToError(err).(type) {
+	case drivers.BucketNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			return false
+		}
+	case drivers.BucketNameInvalid:
+		{
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			return false
+		}
+	case nil:
+		if stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate() {
+			writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			return false
+		}
+		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
+			writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			return false
+		}
+	}
+	return true
+}
+
 // GET Bucket (List Objects)
 // -------------------------
 // This implementation of the GET operation returns some or all (up to 1000)
@@ -37,6 +66,10 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
+	// verify if bucket allows this operation
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Maxkeys == 0 {
@@ -46,16 +79,8 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	// Enable this after tests supports them
-	// verify for if bucket is private or public
-	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
-	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
-	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-	//        return
-	// }
-
 	objects, resources, err := server.driver.ListObjects(bucket, resources)
-	switch err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case nil: // success
 		{
 			// write headers
@@ -66,13 +91,9 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			w.Write(encodedSuccessResponse)
 		}
-	case drivers.BucketNotFound:
+	case drivers.ObjectNotFound:
 		{
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BucketNameInvalid:
-		{
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ObjectNameInvalid:
 		{
@@ -99,7 +120,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 
 	buckets, err := server.driver.ListBuckets()
 	// cannot fallthrough in (type) switch :(
-	switch err := err.(type) {
+	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
 			response := generateBucketsListResult(buckets)
@@ -138,7 +159,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	err := server.driver.CreateBucket(bucket, getACLTypeString(aclType))
-	switch err.(type) {
+	switch iodine.ToError(err).(type) {
 	case nil:
 		{
 			w.Header().Set("Server", "Minio")
@@ -174,37 +195,13 @@ func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-
-	// Enable this after tests supports them
-	// verify for if bucket is private or public
-	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
-	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
-	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-	//        return
-	// }
-
-	_, err := server.driver.GetBucketMetadata(bucket)
-	switch err.(type) {
-	case nil:
-		{
-			w.Header().Set("Server", "Minio")
-			w.Header().Set("Connection", "close")
-			w.WriteHeader(http.StatusOK)
-		}
-	case drivers.BucketNameInvalid:
-		{
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BucketNotFound:
-		{
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
+	// verify if bucket allows this operation
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
 	}
+
+	// Always a success if isValidOp succeeds
+	w.Header().Set("Server", "Minio")
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(http.StatusOK)
 }

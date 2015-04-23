@@ -56,43 +56,49 @@ func validateHandler(conf config.Config, h http.Handler) http.Handler {
 
 // Validate handler ServeHTTP() wrapper
 func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	accessKey := stripAccessKey(r)
 	acceptsContentType := getContentType(r)
 	if acceptsContentType == unknownContentType {
 		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
 		return
 	}
-	switch true {
-	case accessKey != "":
-		if err := h.conf.ReadConfig(); err != nil {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
-			return
+	// success
+	h.handler.ServeHTTP(w, r)
+
+	// Enable below only when webcli is ready
+
+	/*
+		switch true {
+		case accessKey != "":
+			if err := h.conf.ReadConfig(); err != nil {
+				writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+				return
+			}
+			user, ok := h.conf.Users[accessKey]
+			if !ok {
+				writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+				return
+			}
+			ok, _ = ValidateRequest(user, r)
+			if !ok {
+				writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+				return
+			}
+			// Success
+			h.handler.ServeHTTP(w, r)
+		default:
+			// Control reaches when no access key is found, ideally we would
+			// like to throw back `403`. But for now with our tests lacking
+			// this functionality it is better for us to be serving anonymous
+			// requests as well.
+			// We should remove this after adding tests to support signature request
+			h.handler.ServeHTTP(w, r)
+			// ## Uncommented below links of code after disabling anonymous requests
+			// error := errorCodeError(AccessDenied)
+			// errorResponse := getErrorResponse(error, "")
+			// w.WriteHeader(error.HTTPStatusCode)
+			// w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
 		}
-		user, ok := h.conf.Users[accessKey]
-		if !ok {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-			return
-		}
-		ok, _ = ValidateRequest(user, r)
-		if !ok {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-			return
-		}
-		// Success
-		h.handler.ServeHTTP(w, r)
-	default:
-		// Control reaches when no access key is found, ideally we would
-		// like to throw back `403`. But for now with our tests lacking
-		// this functionality it is better for us to be serving anonymous
-		// requests as well.
-		// We should remove this after adding tests to support signature request
-		h.handler.ServeHTTP(w, r)
-		// ## Uncommented below links of code after disabling anonymous requests
-		// error := errorCodeError(AccessDenied)
-		// errorResponse := getErrorResponse(error, "")
-		// w.WriteHeader(error.HTTPStatusCode)
-		// w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
-	}
+	*/
 }
 
 // Ignore resources handler is wrapper handler used for API request resource validation
