@@ -63,17 +63,17 @@ var memoryCmd = cli.Command{
 	Description: "Limit maximum memory usage to SIZE in [B, KB, MB, GB]",
 	Action:      runMemory,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Description}}
+  minio mode {{.Name}} - {{.Description}}
 
 USAGE:
-  minio {{.Name}} SIZE
+  minio mode {{.Name}} SIZE
 
 EXAMPLES:
   1. Limit maximum memory usage to 64MB
-      $ minio {{.Name}} 64MB
+      $ minio mode {{.Name}} 64MB
 
   2. Limit maximum memory usage to 4GB
-      $ minio {{.Name}} 4GB
+      $ minio mode {{.Name}} 4GB
 `,
 }
 
@@ -82,17 +82,18 @@ var donutCmd = cli.Command{
 	Description: "Specify a path to instantiate donut",
 	Action:      runDonut,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Description}}
+  minio mode {{.Name}} - {{.Description}}
 
 USAGE:
-  minio {{.Name}} PATH
+  minio mode {{.Name}} PATH
 
 EXAMPLES:
-  1. Use a regular disk to create donut
-      $ minio {{.Name}} /mnt/disk1
+  1. Create a donut volume under "/mnt/backup"
+      $ minio mode {{.Name}} /mnt/backup
 
-  2. Use a lvm group to create donut
-      $ minio {{.Name}} /media/lvm/groups
+  2. Create a temporary donut volume under "/tmp"
+      $ minio mode {{.Name}} /tmp
+
 `,
 }
 
