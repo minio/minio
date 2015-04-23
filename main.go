@@ -26,17 +26,11 @@ import (
 	"strings"
 	"time"
 
-	"errors"
-	"reflect"
-
 	"github.com/dustin/go-humanize"
 	"github.com/minio-io/cli"
-	"github.com/minio-io/minio/pkg/api"
-	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/server/httpserver"
-	"github.com/minio-io/minio/pkg/storage/drivers/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
 )
 
@@ -99,43 +93,6 @@ EXAMPLES:
 `,
 }
 
-type memoryFactory struct {
-	httpserver.Config
-	maxMemory uint64
-}
-
-func (f memoryFactory) getStartServerFunc() startServerFunc {
-	return func() (chan<- string, <-chan error) {
-		_, _, driver := memory.Start(f.maxMemory)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
-		return ctrl, status
-	}
-}
-
-type webFactory struct {
-	httpserver.Config
-}
-
-func (f webFactory) getStartServerFunc() startServerFunc {
-	return func() (chan<- string, <-chan error) {
-		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), f.Config)
-		return ctrl, status
-	}
-}
-
-type donutFactory struct {
-	httpserver.Config
-	paths []string
-}
-
-func (f donutFactory) getStartServerFunc() startServerFunc {
-	return func() (chan<- string, <-chan error) {
-		_, _, driver := donut.Start(f.paths)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
-		return ctrl, status
-	}
-}
-
 var flags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "domain,d",
@@ -178,8 +135,6 @@ func init() {
 	}
 }
 
-type startServerFunc func() (chan<- string, <-chan error)
-
 func runMemory(c *cli.Context) {
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "memory", 1) // last argument is exit code
@@ -189,14 +144,14 @@ func runMemory(c *cli.Context) {
 	if err != nil {
 		log.Fatalf("MaxMemory not a numeric value with reason: %s", err)
 	}
-	memoryDriver := memoryFactory{
+	memoryDriver := server.MemoryFactory{
 		Config:    apiServerConfig,
-		maxMemory: maxMemory,
+		MaxMemory: maxMemory,
 	}
-	apiServer := memoryDriver.getStartServerFunc()
+	apiServer := memoryDriver.GetStartServerFunc()
 	webServer := getWebServerConfigFunc(c)
-	servers := []startServerFunc{apiServer, webServer}
-	startMinio(servers)
+	servers := []server.StartServerFunc{apiServer, webServer}
+	server.StartMinio(servers)
 }
 
 func runDonut(c *cli.Context) {
@@ -219,14 +174,14 @@ func runDonut(c *cli.Context) {
 		}
 	}
 	apiServerConfig := getAPIServerConfig(c)
-	donutDriver := donutFactory{
+	donutDriver := server.DonutFactory{
 		Config: apiServerConfig,
-		paths:  paths,
+		Paths:  paths,
 	}
-	apiServer := donutDriver.getStartServerFunc()
+	apiServer := donutDriver.GetStartServerFunc()
 	webServer := getWebServerConfigFunc(c)
-	servers := []startServerFunc{apiServer, webServer}
-	startMinio(servers)
+	servers := []server.StartServerFunc{apiServer, webServer}
+	server.StartMinio(servers)
 }
 
 func getAPIServerConfig(c *cli.Context) httpserver.Config {
@@ -245,7 +200,7 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 }
 
-func getWebServerConfigFunc(c *cli.Context) startServerFunc {
+func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	config := httpserver.Config{
 		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("web-address"),
@@ -253,59 +208,10 @@ func getWebServerConfigFunc(c *cli.Context) startServerFunc {
 		CertFile: "",
 		KeyFile:  "",
 	}
-	webDrivers := webFactory{
+	webDrivers := server.WebFactory{
 		Config: config,
 	}
-	return webDrivers.getStartServerFunc()
-}
-
-func startMinio(servers []startServerFunc) {
-	var ctrlChannels []chan<- string
-	var errChannels []<-chan error
-	for _, server := range servers {
-		ctrlChannel, errChannel := server()
-		ctrlChannels = append(ctrlChannels, ctrlChannel)
-		errChannels = append(errChannels, errChannel)
-	}
-	cases := createSelectCases(errChannels)
-	for len(cases) > 0 {
-		chosen, value, recvOk := reflect.Select(cases)
-		switch recvOk {
-		case true:
-			// Status Message Received
-			switch true {
-			case value.Interface() != nil:
-				// For any error received cleanup all existing channels and fail
-				for _, ch := range ctrlChannels {
-					close(ch)
-				}
-				msg := fmt.Sprintf("%q", value.Interface())
-				log.Fatal(iodine.New(errors.New(msg), nil))
-			}
-		case false:
-			// Channel closed, remove from list
-			var aliveStatusChans []<-chan error
-			for i, ch := range errChannels {
-				if i != chosen {
-					aliveStatusChans = append(aliveStatusChans, ch)
-				}
-			}
-			// create new select cases without defunct channel
-			errChannels = aliveStatusChans
-			cases = createSelectCases(errChannels)
-		}
-	}
-}
-
-func createSelectCases(channels []<-chan error) []reflect.SelectCase {
-	cases := make([]reflect.SelectCase, len(channels))
-	for i, ch := range channels {
-		cases[i] = reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ch),
-		}
-	}
-	return cases
+	return webDrivers.GetStartServerFunc()
 }
 
 // Tries to get os/arch/platform specific information
