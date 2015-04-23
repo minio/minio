@@ -39,6 +39,7 @@ import (
 // donutDriver - creates a new single disk drivers driver using donut
 type donutDriver struct {
 	donut donut.Donut
+	path  string
 }
 
 const (
@@ -82,6 +83,7 @@ func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
 
 	s := new(donutDriver)
 	s.donut = donut
+	s.path = path
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
@@ -117,11 +119,14 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 }
 
 // CreateBucket creates a new bucket
-func (d donutDriver) CreateBucket(bucketName string) error {
-	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
-		return d.donut.MakeBucket(bucketName)
+func (d donutDriver) CreateBucket(bucketName, acl string) error {
+	if !drivers.IsValidBucketACL(acl) {
+		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
-	return iodine.New(errors.New("Invalid bucket"), map[string]string{"bucket": bucketName})
+	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
+		return d.donut.MakeBucket(bucketName, acl)
+	}
+	return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 }
 
 // GetBucketMetadata retrieves an bucket's metadata
@@ -137,9 +142,14 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 	if err != nil {
 		return drivers.BucketMetadata{}, iodine.New(err, nil)
 	}
+	acl, ok := metadata["acl"]
+	if !ok {
+		return drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{Path: d.path}, nil)
+	}
 	bucketMetadata := drivers.BucketMetadata{
 		Name:    metadata["name"],
 		Created: created,
+		ACL:     drivers.BucketACL(acl),
 	}
 	return bucketMetadata, nil
 }

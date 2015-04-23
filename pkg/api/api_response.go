@@ -17,6 +17,7 @@
 package api
 
 import (
+	"net/http"
 	"sort"
 
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -106,4 +107,15 @@ func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, 
 	}
 	data.CommonPrefixes = prefixes
 	return data
+}
+
+func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
+	error := getErrorCode(errorType)
+	errorResponse := getErrorResponse(error, resource)
+	// set headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType))
+	w.WriteHeader(error.HTTPStatusCode)
+	// write body
+	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+	w.Write(encodedErrorResponse)
 }

@@ -35,22 +35,27 @@ import (
 // internal struct carrying bucket specific information
 type bucket struct {
 	name      string
+	acl       string
+	time      time.Time
 	donutName string
 	nodes     map[string]Node
 	objects   map[string]Object
 }
 
 // NewBucket - instantiate a new bucket
-func NewBucket(bucketName, donutName string, nodes map[string]Node) (Bucket, error) {
+func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bucket, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"donutName":  donutName,
+		"aclType":    aclType,
 	}
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
 		return nil, iodine.New(errors.New("invalid argument"), errParams)
 	}
 	b := bucket{}
 	b.name = bucketName
+	b.acl = aclType
+	b.time = time.Now()
 	b.donutName = donutName
 	b.objects = make(map[string]Object)
 	b.nodes = nodes

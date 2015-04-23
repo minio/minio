@@ -16,15 +16,13 @@
 
 package api
 
-import (
-	"net/http"
-	"strings"
-)
+import "net/http"
 
 type contentType int
 
 const (
-	xmlContentType contentType = iota
+	unknownContentType contentType = iota
+	xmlContentType
 	jsonContentType
 )
 
@@ -32,8 +30,14 @@ const (
 func getContentType(req *http.Request) contentType {
 	acceptHeader := req.Header.Get("Accept")
 	switch {
-	case strings.HasPrefix(acceptHeader, "application/json"):
+	case acceptHeader == "application/json":
 		return jsonContentType
+	case acceptHeader == "application/xml":
+		return xmlContentType
+	case acceptHeader == "*/*":
+		return xmlContentType
+	case acceptHeader != "":
+		return unknownContentType
 	default:
 		return xmlContentType
 	}
@@ -44,8 +48,11 @@ func getContentTypeString(content contentType) string {
 	switch content {
 	case jsonContentType:
 		{
-
 			return "application/json"
+		}
+	case xmlContentType:
+		{
+			return "application/xml"
 		}
 	default:
 		{

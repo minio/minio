@@ -32,14 +32,28 @@ import (
 // criteria to return a subset of the objects in a bucket.
 //
 func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Maxkeys == 0 {
 		resources.Maxkeys = maxObjectList
 	}
-	acceptsContentType := getContentType(req)
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	// Enable this after tests supports them
+	// verify for if bucket is private or public
+	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
+	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//        return
+	// }
+
 	objects, resources, err := server.driver.ListObjects(bucket, resources)
 	switch err.(type) {
 	case nil: // success
@@ -49,8 +63,8 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 			w.WriteHeader(http.StatusOK)
 			// write body
 			response := generateObjectsListResult(bucket, objects, resources)
-			encodedResponse := encodeResponse(response, acceptsContentType)
-			w.Write(encodedResponse)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			w.Write(encodedSuccessResponse)
 		}
 	case drivers.BucketNotFound:
 		{
@@ -78,6 +92,11 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 // owned by the authenticated sender of the request.
 func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
 	buckets, err := server.driver.ListBuckets()
 	// cannot fallthrough in (type) switch :(
 	switch err := err.(type) {
@@ -88,8 +107,8 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
 			w.WriteHeader(http.StatusOK)
 			// write response
-			encodedResponse := encodeResponse(response, acceptsContentType)
-			w.Write(encodedResponse)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			w.Write(encodedSuccessResponse)
 		}
 	default:
 		{
@@ -103,11 +122,22 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	// read from 'x-amz-acl'
+	aclType := getACLType(req)
+	if aclType == unsupportedACLType {
+		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	err := server.driver.CreateBucket(bucket)
-
-	acceptsContentType := getContentType(req)
+	err := server.driver.CreateBucket(bucket, getACLTypeString(aclType))
 	switch err.(type) {
 	case nil:
 		{
@@ -138,9 +168,22 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	acceptsContentType := getContentType(req)
+
+	// Enable this after tests supports them
+	// verify for if bucket is private or public
+	// bucketMetadata, err := server.driver.GetBucketMetadata(bucket)
+	// if err != nil || (stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate()) {
+	//        writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//        return
+	// }
 
 	_, err := server.driver.GetBucketMetadata(bucket)
 	switch err.(type) {

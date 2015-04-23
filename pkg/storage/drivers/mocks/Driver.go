@@ -27,8 +27,8 @@ func (m *Driver) ListBuckets() ([]drivers.BucketMetadata, error) {
 }
 
 // CreateBucket is a mock
-func (m *Driver) CreateBucket(bucket string) error {
-	ret := m.Called(bucket)
+func (m *Driver) CreateBucket(bucket, acl string) error {
+	ret := m.Called(bucket, acl)
 
 	r0 := ret.Error(0)
 

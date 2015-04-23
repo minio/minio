@@ -48,42 +48,39 @@ func stripAccessKey(r *http.Request) string {
 // Validate handler is wrapper handler used for API request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
 func validateHandler(conf config.Config, h http.Handler) http.Handler {
-	return vHandler{conf, h}
+	return vHandler{
+		conf:    conf,
+		handler: h,
+	}
 }
 
 // Validate handler ServeHTTP() wrapper
 func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	accessKey := stripAccessKey(r)
 	acceptsContentType := getContentType(r)
-	if accessKey != "" {
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
+		return
+	}
+	switch true {
+	case accessKey != "":
 		if err := h.conf.ReadConfig(); err != nil {
-			error := getErrorCode(InternalError)
-			errorResponse := getErrorResponse(error, "")
-			setCommonHeaders(w, getContentTypeString(acceptsContentType))
-			w.WriteHeader(error.HTTPStatusCode)
-			w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
-		} else {
-			user, ok := h.conf.Users[accessKey]
-			if ok == false {
-				error := getErrorCode(AccessDenied)
-				errorResponse := getErrorResponse(error, "")
-				setCommonHeaders(w, getContentTypeString(acceptsContentType))
-				w.WriteHeader(error.HTTPStatusCode)
-				w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
-			} else {
-				ok, _ = ValidateRequest(user, r)
-				if ok {
-					h.handler.ServeHTTP(w, r)
-				} else {
-					error := getErrorCode(AccessDenied)
-					errorResponse := getErrorResponse(error, "")
-					setCommonHeaders(w, getContentTypeString(acceptsContentType))
-					w.WriteHeader(error.HTTPStatusCode)
-					w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
-				}
-			}
+			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			return
 		}
-	} else {
+		user, ok := h.conf.Users[accessKey]
+		if !ok {
+			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+			return
+		}
+		ok, _ = ValidateRequest(user, r)
+		if !ok {
+			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+			return
+		}
+		// Success
+		h.handler.ServeHTTP(w, r)
+	default:
 		// Control reaches when no access key is found, ideally we would
 		// like to throw back `403`. But for now with our tests lacking
 		// this functionality it is better for us to be serving anonymous
@@ -141,15 +138,4 @@ func ignoreUnImplementedObjectResources(req *http.Request) bool {
 		}
 	}
 	return false
-}
-
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
-	error := getErrorCode(errorType)
-	errorResponse := getErrorResponse(error, resource)
-	// set headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType))
-	w.WriteHeader(error.HTTPStatusCode)
-	// write body
-	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
-	w.Write(encodedErrorResponse)
 }

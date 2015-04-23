@@ -28,11 +28,11 @@ import (
 )
 
 // MakeBucket - make a new bucket
-func (d donut) MakeBucket(bucket string) error {
+func (d donut) MakeBucket(bucket, acl string) error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return iodine.New(errors.New("invalid argument"), nil)
 	}
-	return d.makeDonutBucket(bucket)
+	return d.makeDonutBucket(bucket, acl)
 }
 
 // GetBucketMetadata - get bucket metadata
@@ -47,6 +47,7 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 	metadata := make(map[string]string)
 	metadata["name"] = bucket
 	metadata["created"] = time.Now().Format(time.RFC3339Nano) // TODO get this, from whatever is written from SetBucketMetadata
+	metadata["acl"] = "private"
 	return metadata, nil
 }
 

@@ -52,6 +52,9 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 		encoder = xml.NewEncoder(&bytesBuffer)
 	case jsonContentType:
 		encoder = json.NewEncoder(&bytesBuffer)
+	// by default even if unknown Accept header received handle it by sending XML contenttype response
+	default:
+		encoder = xml.NewEncoder(&bytesBuffer)
 	}
 	encoder.Encode(response)
 	return bytesBuffer.Bytes()
@@ -77,7 +80,7 @@ func setRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadat
 	w.Header().Set("Content-Range", contentRange.getContentRange())
 }
 
-func encodeResponse(response interface{}, acceptsType contentType) []byte {
+func encodeSuccessResponse(response interface{}, acceptsType contentType) []byte {
 	var encoder encoder
 	var bytesBuffer bytes.Buffer
 	switch acceptsType {
