@@ -38,7 +38,7 @@ import (
 // donutDriver - creates a new single disk drivers driver using donut
 type donutDriver struct {
 	donut donut.Donut
-	path  string
+	paths []string
 }
 
 const (
@@ -47,9 +47,9 @@ const (
 
 // This is a dummy nodeDiskMap which is going to be deprecated soon
 // once the Management API is standardized, this map is useful for now
-// to show multi disk API correctness behavior.
+// to show multi disk API correctness and parity calculation
 //
-// This should be obtained from donut configuration file
+// Ideally this should be obtained from per node configuration file
 func createNodeDiskMap(p string) map[string][]string {
 	nodes := make(map[string][]string)
 	nodes["localhost"] = make([]string, 16)
@@ -65,24 +65,51 @@ func createNodeDiskMap(p string) map[string][]string {
 	return nodes
 }
 
+// This is a dummy nodeDiskMap which is going to be deprecated soon
+// once the Management API is standardized, and we have way of adding
+// and removing disks. This is useful for now to take inputs from CLI
+func createNodeDiskMapFromSlice(paths []string) map[string][]string {
+	diskPaths := make([]string, len(paths))
+	nodes := make(map[string][]string)
+	for i, p := range paths {
+		diskPath := path.Join(p, strconv.Itoa(i))
+		if _, err := os.Stat(diskPath); err != nil {
+			if os.IsNotExist(err) {
+				os.MkdirAll(diskPath, 0700)
+			}
+		}
+		diskPaths[i] = diskPath
+	}
+	nodes["localhost"] = diskPaths
+	return nodes
+}
+
 // Start a single disk subsystem
-func Start(path string) (chan<- string, <-chan error, drivers.Driver) {
+func Start(paths []string) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
-	errParams := map[string]string{"path": path}
 
-	// Soon to be user configurable, when Management API
-	// is finished we remove "default" to something
-	// which is passed down from configuration
-	donut, err := donut.NewDonut("default", createNodeDiskMap(path))
-	if err != nil {
-		err = iodine.New(err, errParams)
-		log.Error.Println(err)
+	// Soon to be user configurable, when Management API is available
+	// we should remove "default" to something which is passed down
+	// from configuration paramters
+	var d donut.Donut
+	var err error
+	if len(paths) == 1 {
+		d, err = donut.NewDonut("default", createNodeDiskMap(paths[0]))
+		if err != nil {
+			err = iodine.New(err, nil)
+			log.Error.Println(err)
+		}
+	} else {
+		d, err = donut.NewDonut("default", createNodeDiskMapFromSlice(paths))
+		if err != nil {
+			err = iodine.New(err, nil)
+			log.Error.Println(err)
+		}
 	}
-
 	s := new(donutDriver)
-	s.donut = donut
-	s.path = path
+	s.donut = d
+	s.paths = paths
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
@@ -143,7 +170,7 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 	}
 	acl, ok := metadata["acl"]
 	if !ok {
-		return drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{Path: d.path}, nil)
+		return drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{}, nil)
 	}
 	bucketMetadata := drivers.BucketMetadata{
 		Name:    metadata["name"],

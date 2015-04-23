@@ -70,7 +70,9 @@ var _ = Suite(&MySuite{
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
 		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
-		_, _, driver := donut.Start(root)
+		var roots []string
+		roots = append(roots, root)
+		_, _, driver := donut.Start(roots)
 		return driver, root
 	},
 })

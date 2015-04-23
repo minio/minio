@@ -32,13 +32,14 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	//	c.Skip("Not Implemented")
 	var storageList []string
 	create := func() drivers.Driver {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
+		var paths []string
+		p, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
-		storageList = append(storageList, path)
-		_, _, store := Start(path) // TODO Make InMemory driver
+		storageList = append(storageList, p)
+		paths = append(paths, p)
+		_, _, store := Start(paths)
 		return store
 	}
 	drivers.APITestSuite(c, create)
