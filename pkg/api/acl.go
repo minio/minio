@@ -27,6 +27,8 @@ import (
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#setting-acls
 
 // Minio only supports three types for now i.e 'private, public-read, public-read-write'
+
+// ACLType - different acl types
 type ACLType int
 
 const (

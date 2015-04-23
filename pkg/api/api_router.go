@@ -89,5 +89,5 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 		log.Fatal(iodine.New(err, map[string]string{"domain": domain}))
 	}
 
-	return validateHandler(conf, ignoreResourcesHandler(mux))
+	return validateHandler(conf, api.driver, ignoreResourcesHandler(mux))
 }

@@ -142,7 +142,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 		Md5:         "d41d8cd98f00b204e9800998ecf8427e",
 		Size:        0,
 	}
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
@@ -152,7 +152,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("")
-	driver.CreateBucket("bucket")
+	driver.CreateBucket("bucket", "private")
 	driver.CreateObject("bucket", "object", "", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -181,14 +181,14 @@ func (s *MySuite) TestBucket(c *C) {
 		Name:    "bucket",
 		Created: time.Now(),
 	}
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Twice()
 
 	httpHandler := api.HTTPHandler("", driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	driver.CreateBucket("bucket")
+	driver.CreateBucket("bucket", "private")
 
 	response, err := http.Head(testServer.URL + "/bucket")
 	c.Assert(err, IsNil)
@@ -212,7 +212,7 @@ func (s *MySuite) TestObject(c *C) {
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
 		Size:        11,
 	}
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(nil).Once()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Twice()
 	typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
@@ -223,7 +223,7 @@ func (s *MySuite) TestObject(c *C) {
 	defer testServer.Close()
 
 	buffer := bytes.NewBufferString("hello world")
-	driver.CreateBucket("bucket")
+	driver.CreateBucket("bucket", "private")
 	driver.CreateObject("bucket", "object", "", "", buffer)
 
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -280,8 +280,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	buffer2 := bytes.NewBufferString("hello two")
 	buffer3 := bytes.NewBufferString("hello three")
 
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-	driver.CreateBucket("bucket")
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	driver.CreateBucket("bucket", "private")
 	typedDriver.On("CreateObject", "bucket", "object1", "", "", mock.Anything).Return(nil).Once()
 	driver.CreateObject("bucket", "object1", "", "", buffer1)
 	typedDriver.On("CreateObject", "bucket", "object2", "", "", mock.Anything).Return(nil).Once()
@@ -397,8 +397,8 @@ func (s *MySuite) TestHeader(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-	driver.CreateBucket("bucket")
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	driver.CreateBucket("bucket", "private")
 
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	response, err := http.Get(testServer.URL + "/bucket/object")
@@ -450,7 +450,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	c.Assert(len(buckets), Equals, 0)
 	c.Assert(err, IsNil)
 
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
@@ -497,7 +497,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	date1 := time.Now().Add(-time.Second)
 
 	// Put Bucket before - Put Object into a bucket
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
@@ -575,8 +575,9 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 0)
 
-	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
-	driver.CreateBucket("foo")
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	err = driver.CreateBucket("foo", "private")
+	c.Assert(err, IsNil)
 
 	bucketMetadata := []drivers.BucketMetadata{
 		{Name: "foo", Created: time.Now()},
@@ -592,8 +593,9 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(len(listResponse.Buckets.Bucket), Equals, 1)
 	c.Assert(listResponse.Buckets.Bucket[0].Name, Equals, "foo")
 
-	typedDriver.On("CreateBucket", "bar").Return(nil).Once()
-	driver.CreateBucket("bar")
+	typedDriver.On("CreateBucket", "bar", "private").Return(nil).Once()
+	err = driver.CreateBucket("bar", "private")
+	c.Assert(err, IsNil)
 
 	bucketMetadata = []drivers.BucketMetadata{
 		{Name: "bar", Created: time.Now()},
@@ -689,8 +691,8 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
-	err := driver.CreateBucket("foo")
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	err := driver.CreateBucket("foo", "private")
 	c.Assert(err, IsNil)
 
 	typedDriver.On("ListBuckets").Return([]drivers.BucketMetadata{{Name: "foo", Created: time.Now()}}, nil)
@@ -723,8 +725,8 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
-	err := driver.CreateBucket("foo")
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	err := driver.CreateBucket("foo", "private")
 	c.Assert(err, IsNil)
 
 	typedDriver.On("ListObjects", "foo", mock.Anything).Return([]drivers.ObjectMetadata{}, drivers.BucketResourcesMetadata{}, nil).Once()
@@ -758,8 +760,8 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	typedDriver.On("CreateBucket", "bucket").Return(nil).Once()
-	err := driver.CreateBucket("bucket")
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	err := driver.CreateBucket("bucket", "private")
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -849,10 +851,11 @@ func (s *MySuite) TestPartialContent(c *C) {
 		Size:        11,
 	}
 
-	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
-
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
 	typedDriver.On("CreateObject", "foo", "bar", "", "", mock.Anything).Return(nil).Once()
-	driver.CreateBucket("foo")
+	err := driver.CreateBucket("foo", "private")
+	c.Assert(err, IsNil)
+
 	driver.CreateObject("foo", "bar", "", "", bytes.NewBufferString("hello world"))
 
 	// prepare for GET on range request
@@ -969,7 +972,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	defer testServer.Close()
 	client := http.Client{}
 
-	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketNameInvalid{}).Once()
+	typedDriver.On("CreateBucket", "foo", "private").Return(drivers.BucketNameInvalid{}).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
@@ -978,7 +981,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	typedDriver.On("CreateBucket", "foo").Return(drivers.BucketExists{}).Once()
+	typedDriver.On("CreateBucket", "foo", "private").Return(drivers.BucketExists{}).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
@@ -987,7 +990,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "BucketAlreadyExists", "The requested bucket name is not available.", http.StatusConflict)
 
-	typedDriver.On("CreateBucket", "foo").Return(drivers.BackendCorrupted{}).Once()
+	typedDriver.On("CreateBucket", "foo", "private").Return(drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
@@ -996,7 +999,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InternalError", "We encountered an internal error, please try again.", http.StatusInternalServerError)
 
-	typedDriver.On("CreateBucket", "foo").Return(nil).Once()
+	typedDriver.On("CreateBucket", "foo", "unknown").Return(nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "unknown")

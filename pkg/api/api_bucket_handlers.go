@@ -128,7 +128,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	err := server.driver.CreateBucket(bucket)
+	err := server.driver.CreateBucket(bucket, getACLTypeString(aclType))
 	switch err.(type) {
 	case nil:
 		{
