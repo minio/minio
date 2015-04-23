@@ -25,13 +25,98 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/minio-io/cli"
+	"github.com/minio-io/minio/pkg/api"
+	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/server"
+	"github.com/minio-io/minio/pkg/server/httpserver"
+	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"reflect"
 )
 
 var globalDebugFlag = false
+
+var commands = []cli.Command{
+	modeCmd,
+}
+
+var modeCommands = []cli.Command{
+	memoryCmd,
+	donutCmd,
+}
+
+var modeCmd = cli.Command{
+	Name:        "mode",
+	Subcommands: modeCommands,
+}
+
+var memoryCmd = cli.Command{
+	Name:   "memory",
+	Action: runMemory,
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "max-memory",
+			Value: "100M",
+			Usage: "",
+		},
+	},
+}
+
+var donutCmd = cli.Command{
+	Name:   "donut",
+	Action: runDonut,
+	Flags:  []cli.Flag{},
+}
+
+type memoryFactory struct {
+	server.Config
+
+	maxMemory int64
+}
+
+func (f memoryFactory) getStartServerFunc() startServerFunc {
+	return func() (chan<- string, <-chan error) {
+		httpConfig := httpserver.Config{}
+		httpConfig.Address = f.Address
+		httpConfig.TLS = f.TLS
+		httpConfig.CertFile = f.CertFile
+		httpConfig.KeyFile = f.KeyFile
+		httpConfig.Websocket = false
+		_, _, driver := memory.Start(1024 * 1024 * 1024)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), httpConfig)
+		return ctrl, status
+	}
+}
+
+type webFactory struct {
+	server.Config
+}
+
+func (f webFactory) getStartServerFunc() startServerFunc {
+	return func() (chan<- string, <-chan error) {
+		httpConfig := httpserver.Config{}
+		httpConfig.Address = f.Address
+		httpConfig.TLS = f.TLS
+		httpConfig.CertFile = f.CertFile
+		httpConfig.KeyFile = f.KeyFile
+		httpConfig.Websocket = false
+		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), httpConfig)
+		return ctrl, status
+	}
+}
+
+type donutFactory struct {
+	server.Config
+}
+
+func (f donutFactory) getStartServerFunc() startServerFunc {
+	return func() (chan<- string, <-chan error) {
+		return nil, nil
+	}
+}
 
 var flags = []cli.Flag{
 	cli.StringFlag{
@@ -61,11 +146,6 @@ var flags = []cli.Flag{
 		Value: "",
 		Usage: "key.pem",
 	},
-	cli.StringFlag{
-		Name:  "driver-type,t",
-		Value: "donut",
-		Usage: "valid entries: file,inmemory,donut",
-	},
 	cli.BoolFlag{
 		Name:  "debug",
 		Usage: "print debug information",
@@ -80,58 +160,126 @@ func init() {
 	}
 }
 
-func getDriverType(input string) server.DriverType {
-	switch {
-	case input == "memory":
-		return server.Memory
-	case input == "donut":
-		return server.Donut
-	case input == "":
-		return server.Donut
-	default:
-		{
-			log.Fatal("Unknown driver type: '", input, "', Please specify a valid driver.")
-			return -1 // should never reach here
-		}
-	}
-}
+type startServerFunc func() (chan<- string, <-chan error)
 
 func runCmd(c *cli.Context) {
-	driverTypeStr := c.String("driver-type")
-	domain := c.String("domain")
-	apiaddress := c.String("api-address")
-	webaddress := c.String("web-address")
+	// default to memory driver, 1GB
+	apiServerConfig := getAPIServerConfig(c)
+	memoryDriver := memoryFactory{
+		Config:    apiServerConfig,
+		maxMemory: 1024 * 1024 * 1024,
+	}
+	apiServer := memoryDriver.getStartServerFunc()
+	webServer := getWebServerConfigFunc(c)
+	servers := []startServerFunc{apiServer, webServer}
+	startMinio(servers)
+}
+
+func runMemory(c *cli.Context) {
+	apiServerConfig := getAPIServerConfig(c)
+	// TODO max-memory should take human readable values
+	maxMemory, err := strconv.ParseInt(c.String("max-memory"), 10, 64)
+	if err != nil {
+		log.Println("max-memory not a numeric value")
+	}
+	memoryDriver := memoryFactory{
+		Config:    apiServerConfig,
+		maxMemory: maxMemory,
+	}
+	apiServer := memoryDriver.getStartServerFunc()
+	webServer := getWebServerConfigFunc(c)
+	servers := []startServerFunc{apiServer, webServer}
+	startMinio(servers)
+}
+
+func runDonut(c *cli.Context) {
+	apiServerConfig := getAPIServerConfig(c)
+	donutDriver := donutFactory{
+		Config: apiServerConfig,
+	}
+	apiServer := donutDriver.getStartServerFunc()
+	webServer := getWebServerConfigFunc(c)
+	servers := []startServerFunc{apiServer, webServer}
+	startMinio(servers)
+}
+
+func getAPIServerConfig(c *cli.Context) server.Config {
 	certFile := c.String("cert")
 	keyFile := c.String("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		log.Fatal("Both certificate and key must be provided to enable https")
 	}
 	tls := (certFile != "" && keyFile != "")
-	driverType := getDriverType(driverTypeStr)
-	var serverConfigs []server.Config
-	apiServerConfig := server.Config{
-		Domain:   domain,
-		Address:  apiaddress,
+	return server.Config{
+		Domain:   c.String("domain"),
+		Address:  c.String("api-address"),
 		TLS:      tls,
 		CertFile: certFile,
 		KeyFile:  keyFile,
-		APIType: server.MinioAPI{
-			DriverType: driverType,
-		},
 	}
-	webUIServerConfig := server.Config{
-		Domain:   domain,
-		Address:  webaddress,
+}
+
+func getWebServerConfigFunc(c *cli.Context) startServerFunc {
+	config := server.Config{
+		Domain:   c.String("domain"),
+		Address:  c.String("web-address"),
 		TLS:      false,
 		CertFile: "",
 		KeyFile:  "",
-		APIType: server.Web{
-			Websocket: false,
-		},
 	}
-	serverConfigs = append(serverConfigs, apiServerConfig)
-	serverConfigs = append(serverConfigs, webUIServerConfig)
-	server.Start(serverConfigs)
+	webDrivers := webFactory{
+		Config: config,
+	}
+	return webDrivers.getStartServerFunc()
+}
+
+func startMinio(servers []startServerFunc) {
+	var ctrlChannels []chan<- string
+	var errChannels []<-chan error
+	for _, server := range servers {
+		ctrlChannel, errChannel := server()
+		ctrlChannels = append(ctrlChannels, ctrlChannel)
+		errChannels = append(errChannels, errChannel)
+	}
+	cases := createSelectCases(errChannels)
+	for len(cases) > 0 {
+		chosen, value, recvOk := reflect.Select(cases)
+		switch recvOk {
+		case true:
+			// Status Message Received
+			switch true {
+			case value.Interface() != nil:
+				// For any error received cleanup all existing channels and fail
+				for _, ch := range ctrlChannels {
+					close(ch)
+				}
+				msg := fmt.Sprintf("%q", value.Interface())
+				log.Fatal(iodine.New(errors.New(msg), nil))
+			}
+		case false:
+			// Channel closed, remove from list
+			var aliveStatusChans []<-chan error
+			for i, ch := range errChannels {
+				if i != chosen {
+					aliveStatusChans = append(aliveStatusChans, ch)
+				}
+			}
+			// create new select cases without defunct channel
+			errChannels = aliveStatusChans
+			cases = createSelectCases(errChannels)
+		}
+	}
+}
+
+func createSelectCases(channels []<-chan error) []reflect.SelectCase {
+	cases := make([]reflect.SelectCase, len(channels))
+	for i, ch := range channels {
+		cases[i] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch),
+		}
+	}
+	return cases
 }
 
 // Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
@@ -191,6 +339,7 @@ func main() {
 	app.Usage = "Minimalist Object Storage"
 	app.EnableBashCompletion = true
 	app.Flags = flags
+	app.Commands = commands
 	app.Action = runCmd
 	app.Before = func(c *cli.Context) error {
 		globalDebugFlag = c.GlobalBool("debug")
