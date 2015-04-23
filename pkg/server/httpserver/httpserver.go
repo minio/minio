@@ -29,6 +29,7 @@ type Config struct {
 	CertFile  string
 	KeyFile   string
 	Websocket bool // TODO
+	Domain    string
 }
 
 // Server - http server related

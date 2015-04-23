@@ -17,11 +17,3 @@
 package server
 
 // Config - http server parameters
-type Config struct {
-	Domain   string
-	Address  string
-	TLS      bool
-	CertFile string
-	KeyFile  string
-	APIType  interface{}
-}
