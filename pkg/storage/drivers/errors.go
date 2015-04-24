@@ -86,6 +86,13 @@ type ObjectNotFound GenericObjectError
 // ObjectExists - object already exists
 type ObjectExists GenericObjectError
 
+// EntityTooLarge - object size exceeds maximum limit
+type EntityTooLarge struct {
+	GenericObjectError
+	Size      string
+	TotalSize string
+}
+
 // ObjectNameInvalid - object name provided is invalid
 type ObjectNameInvalid GenericObjectError
 
@@ -150,6 +157,11 @@ func (e BucketNotFound) Error() string {
 // Return string an error formatted as the given text
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
+}
+
+// Return string an error formatted as the given text
+func (e EntityTooLarge) Error() string {
+	return e.Bucket + "#" + e.Object + "with " + e.Size + "reached maximum allowed size limit " + e.TotalSize
 }
 
 // Return string an error formatted as the given text
