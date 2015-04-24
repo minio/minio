@@ -89,5 +89,7 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 		log.Fatal(iodine.New(err, map[string]string{"domain": domain}))
 	}
 
-	return validateHandler(conf, ignoreResourcesHandler(mux))
+	h := validateHandler(conf, ignoreResourcesHandler(mux))
+	// quota handler is always last
+	return QuotaHandler(h)
 }
