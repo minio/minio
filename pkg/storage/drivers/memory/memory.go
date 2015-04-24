@@ -21,12 +21,15 @@ import (
 	"bytes"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
+	"errors"
 
 	"io/ioutil"
 
@@ -34,6 +37,7 @@ import (
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio-io/minio/pkg/utils/split"
 )
 
 // memoryDriver - local variables
@@ -146,8 +150,27 @@ func (memory *memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMeta
 	return memory.bucketMetadata[bucket].metadata, nil
 }
 
+// isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
+func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
+	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
+		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
+			return iodine.New(errors.New("bad digest, md5sum mismatch"), nil)
+		}
+		return nil
+	}
+	return iodine.New(errors.New("invalid argument"), nil)
+}
+
 // CreateObject - PUT object to memory buffer
-func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string, data io.Reader) error {
+func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) error {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
 		memory.lock.RUnlock()
@@ -174,31 +197,61 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, md5sum string
 
 	contentType = strings.TrimSpace(contentType)
 
+	memory.lock.Lock()
+	if strings.TrimSpace(expectedMD5Sum) != "" {
+		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+		if err != nil {
+			// pro-actively close the connection
+			return iodine.New(drivers.InvalidDigest{Md5: expectedMD5Sum}, nil)
+		}
+		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
+	}
+
 	var bytesBuffer bytes.Buffer
 	var newObject = storedObject{}
-	var dataSlice []byte
-	if _, ok := io.Copy(&bytesBuffer, data); ok == nil {
-		size := bytesBuffer.Len()
-		md5SumBytes := md5.Sum(bytesBuffer.Bytes())
-		md5Sum := hex.EncodeToString(md5SumBytes[:])
-		newObject.metadata = drivers.ObjectMetadata{
-			Bucket: bucket,
-			Key:    key,
 
-			ContentType: contentType,
-			Created:     time.Now(),
-			Md5:         md5Sum,
-			Size:        int64(size),
+	chunks := split.Stream(data, 10*1024*1024)
+	totalLength := 0
+	summer := md5.New()
+	for chunk := range chunks {
+		if chunk.Err == nil {
+			totalLength = totalLength + len(chunk.Data)
+			summer.Write(chunk.Data)
+			_, err := io.Copy(&bytesBuffer, bytes.NewBuffer(chunk.Data))
+			if err != nil {
+				return iodine.New(err, nil)
+			}
+			if uint64(totalLength) > memory.maxSize {
+				return iodine.New(drivers.EntityTooLarge{
+					Size:      strconv.FormatInt(int64(totalLength), 10),
+					TotalSize: strconv.FormatUint(memory.totalSize, 10),
+				}, nil)
+			}
 		}
-		dataSlice = bytesBuffer.Bytes()
 	}
-	memory.lock.Lock()
+	md5SumBytes := summer.Sum(nil)
+	md5Sum := hex.EncodeToString(md5SumBytes)
+	// Verify if the written object is equal to what is expected, only if it is requested as such
+	if strings.TrimSpace(expectedMD5Sum) != "" {
+		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
+			return iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
+		}
+	}
+	newObject.metadata = drivers.ObjectMetadata{
+		Bucket: bucket,
+		Key:    key,
+
+		ContentType: contentType,
+		Created:     time.Now(),
+		Md5:         md5Sum,
+		Size:        int64(totalLength),
+	}
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
 		memory.lock.Unlock()
 		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
 	memory.objectMetadata[objectKey] = newObject
-	memory.objects.Add(objectKey, dataSlice)
+	memory.objects.Add(objectKey, bytesBuffer.Bytes())
 	memory.totalSize = memory.totalSize + uint64(newObject.metadata.Size)
 	for memory.totalSize > memory.maxSize {
 		memory.objects.RemoveOldest()

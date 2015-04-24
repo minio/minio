@@ -169,6 +169,10 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
 		}
+	case drivers.EntityTooLarge:
+		{
+			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		}
 	case drivers.InvalidDigest:
 		{
 			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
