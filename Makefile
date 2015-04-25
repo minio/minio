@@ -33,7 +33,6 @@ cyclo:
 
 pre-build:
 	@echo "Running pre-build:"
-	@(env bash $(PWD)/buildscripts/git-commit-id.sh)
 
 build-all: verifiers
 	@echo "Building Libraries:"
