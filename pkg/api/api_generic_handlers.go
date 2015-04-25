@@ -145,16 +145,3 @@ func ignoreUnImplementedObjectResources(req *http.Request) bool {
 	}
 	return false
 }
-
-type quotaHandler struct {
-	handler http.Handler
-}
-
-func (h quotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	h.handler.ServeHTTP(w, req)
-}
-
-// QuotaHandler implements quotas
-func QuotaHandler(h http.Handler) http.Handler {
-	return quotaHandler{handler: h}
-}
