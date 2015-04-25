@@ -17,10 +17,10 @@
 package quota
 
 import (
+	"encoding/binary"
 	"log"
+	"net"
 	"net/http"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -56,16 +56,35 @@ type httpQuotaHandler struct {
 	quotas  *quotaMap
 }
 
+type longIP struct {
+	net.IP
+}
+
+// []byte to uint32 representation
+func (p longIP) IptoUint32() uint32 {
+	ip := p.To4()
+	if ip == nil {
+		return 0
+	}
+	// golang net.IP is BigEndian
+	return binary.BigEndian.Uint32([]byte(ip))
+}
+
+// any uint32 back to IP representation
+func uint32ToIP(ip uint32) net.IP {
+	addr := net.IP{0, 0, 0, 0}
+	binary.BigEndian.PutUint32(addr, ip)
+	return addr
+}
+
 // ServeHTTP is an http.Handler ServeHTTP method
 func (h *httpQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ipString := strings.Split(req.RemoteAddr, ":")[0]
-	ipSplit := strings.Split(ipString, ".")
-	q0, _ := strconv.Atoi(ipSplit[0])
-	q1, _ := strconv.Atoi(ipSplit[1])
-	q2, _ := strconv.Atoi(ipSplit[2])
-	q3, _ := strconv.Atoi(ipSplit[3])
-	longIP := uint32(q0)<<24 + uint32(q1)<<16 + uint32(q2)<<8 + uint32(q3)
-	h.quotas.Add(longIP, uint64(req.ContentLength))
+	host, _, _ := net.SplitHostPort(req.RemoteAddr)
+	log.Println(host)
+
+	longIP := longIP{net.ParseIP(host)}
+	h.quotas.Add(longIP.IptoUint32(), uint64(req.ContentLength))
+
 	log.Println("quota called")
 	log.Println(h.quotas)
 	h.handler.ServeHTTP(w, req)
