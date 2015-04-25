@@ -240,15 +240,18 @@ func getSystemData() map[string]string {
 	}
 }
 
+// Version is based on MD5SUM of its binary
+var Version = mustHashBinarySelf()
+
 func main() {
 	// set up iodine
-	iodine.SetGlobalState("minio.git", minioGitCommitHash)
+	iodine.SetGlobalState("minio.version", Version)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
 
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = minioGitCommitHash
+	app.Version = Version
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.Flags = flags
