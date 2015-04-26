@@ -4,24 +4,30 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"crypto/md5"
 )
 
-// mustHashBinarySelf computes MD5SUM of a binary file on disk
+// hashBinary computes MD5SUM of a binary file on disk
 func hashBinary(progName string) (string, error) {
-	h := md5.New()
-
-	file, err := os.Open(progName) // For read access.
+	path, err := exec.LookPath(progName)
 	if err != nil {
 		return "", err
 	}
 
-	io.Copy(h, file)
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	m := md5.New()
+
+	file, err := os.Open(path) // For read access.
+	if err != nil {
+		return "", err
+	}
+
+	io.Copy(m, file)
+	return fmt.Sprintf("%x", m.Sum(nil)), nil
 }
 
-// mustHashBinarySelf computes MD5SUM of its binary file on disk
+// mustHashBinarySelf masks any error returned by hashBinary
 func mustHashBinarySelf() string {
 	hash, _ := hashBinary(os.Args[0])
 	return hash
