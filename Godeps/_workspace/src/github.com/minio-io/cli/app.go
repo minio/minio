@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -58,16 +57,12 @@ type App struct {
 	Writer io.Writer
 }
 
-// mustCompileTime - determines the modification time of the current binary
-func mustCompileTime() time.Time {
-	path, err := exec.LookPath(os.Args[0])
+// Tries to find out when this binary was compiled.
+// Returns the current time if it fails to find it.
+func compileTime() time.Time {
+	info, err := os.Stat(os.Args[0])
 	if err != nil {
-		return time.Time{}
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}
+		return time.Now()
 	}
 	return info.ModTime()
 }
@@ -80,7 +75,7 @@ func NewApp() *App {
 		Version:      "0.0.0",
 		BashComplete: DefaultAppComplete,
 		Action:       helpCommand.Action,
-		Compiled:     mustCompileTime(),
+		Compiled:     compileTime(),
 		Writer:       os.Stdout,
 	}
 }

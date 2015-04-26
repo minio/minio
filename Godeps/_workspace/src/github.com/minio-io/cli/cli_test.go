@@ -3,7 +3,7 @@ package cli_test
 import (
 	"os"
 
-	"github.com/minio-io/cli"
+	"github.com/codegangsta/cli"
 )
 
 func Example() {
