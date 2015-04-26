@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codegangsta/cli"
+	"github.com/minio-io/cli"
 )
 
 var boolFlagTests = []struct {
