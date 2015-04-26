@@ -25,6 +25,7 @@ import (
 	"github.com/minio-io/minio/pkg/api/quota"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
+	"time"
 )
 
 // private use
@@ -91,6 +92,7 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 	}
 
 	h := validateHandler(conf, ignoreResourcesHandler(mux))
-	// quota handler is always last
-	return quota.BandwidthCap(h, int64(100*1024*1024))
+	h = quota.BandwidthCap(h, 250*1024*1024, time.Duration(30*time.Minute))
+	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
+	return h
 }

@@ -1,0 +1,83 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package quota
+
+import (
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"time"
+)
+
+// bandwidthQuotaHandler
+type bandwidthQuotaHandler struct {
+	handler http.Handler
+	quotas  *quotaMap
+}
+
+// ServeHTTP is an http.Handler ServeHTTP method
+func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	host, _, _ := net.SplitHostPort(req.RemoteAddr)
+	longIP := longIP{net.ParseIP(host)}.IptoUint32()
+	req.Body = quotaReader{
+		ReadCloser: req.Body,
+		quotas:     h.quotas,
+		ip:         longIP,
+	}
+	h.handler.ServeHTTP(w, req)
+}
+
+// BandwidthCap sets a quote based upon bandwidth used
+func BandwidthCap(h http.Handler, limit int64, duration time.Duration) http.Handler {
+	return &bandwidthQuotaHandler{
+		handler: h,
+		quotas: &quotaMap{
+			data:        make(map[int64]map[uint32]int64),
+			limit:       int64(limit),
+			duration:    duration,
+			segmentSize: segmentSize(duration),
+		},
+	}
+}
+
+type quotaReader struct {
+	io.ReadCloser
+	quotas *quotaMap
+	ip     uint32
+}
+
+func (q quotaReader) Read(b []byte) (int, error) {
+	if q.quotas.IsQuotaMet(q.ip) {
+		return 0, errors.New("Quota Met")
+	}
+	n, err := q.ReadCloser.Read(b)
+	q.quotas.Add(q.ip, int64(n))
+	return n, err
+}
+
+func (q quotaReader) Close() error {
+	return q.ReadCloser.Close()
+}
+
+func segmentSize(duration time.Duration) time.Duration {
+	var segmentSize time.Duration
+	for i := int64(1); i < duration.Nanoseconds(); i = i * 10 {
+		segmentSize = time.Duration(i)
+	}
+	return segmentSize
+}
