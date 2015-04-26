@@ -47,20 +47,27 @@ func (q *quotaMap) Add(ip uint32, size int64) {
 
 func (q *quotaMap) IsQuotaMet(ip uint32) bool {
 	q.clean()
+	if q.GetQuotaUsed(ip) >= q.limit {
+		return true
+	}
+	return false
+}
+
+func (q *quotaMap) GetQuotaUsed(ip uint32) (total int64) {
 	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
 	if _, ok := q.data[currentMinute]; !ok {
 		q.data[currentMinute] = make(map[uint32]int64)
 	}
-	var total int64
 	for _, segment := range q.data {
 		if used, ok := segment[ip]; ok {
 			total += used
 		}
 	}
-	if total >= q.limit {
-		return true
-	}
-	return false
+	return
+}
+
+func (q *quotaMap) WillExceedQuota(ip uint32, size int64) (result bool) {
+	return q.GetQuotaUsed(ip)+size > q.limit
 }
 
 func (q *quotaMap) clean() {
