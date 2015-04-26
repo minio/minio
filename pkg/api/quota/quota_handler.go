@@ -17,8 +17,6 @@
 package quota
 
 import (
-	"encoding/binary"
-	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -34,6 +32,8 @@ type quotaMap struct {
 }
 
 func (q *quotaMap) Add(ip uint32, size uint64) bool {
+	q.Lock()
+	defer q.Unlock()
 	currentMinute := time.Now().Unix() / q.duration
 	expiredQuotas := (time.Now().Unix() / q.duration) - 5
 	for time := range q.data {
@@ -41,19 +41,23 @@ func (q *quotaMap) Add(ip uint32, size uint64) bool {
 			delete(q.data, time)
 		}
 	}
-	log.Println(currentMinute)
 	if _, ok := q.data[currentMinute]; !ok {
 		q.data[currentMinute] = make(map[uint32]uint64)
 	}
 	currentData, _ := q.data[currentMinute][ip]
-	q.data[currentMinute][ip] = currentData + size
-	return false
+	proposedDataSize := currentData + size
+	if proposedDataSize > q.limit {
+		return false
+	}
+	q.data[currentMinute][ip] = proposedDataSize
+	return true
 }
 
 // HttpQuotaHandler
 type httpQuotaHandler struct {
 	handler http.Handler
 	quotas  *quotaMap
+	adder   func(uint64) uint64
 }
 
 type longIP struct {
@@ -61,37 +65,30 @@ type longIP struct {
 }
 
 // []byte to uint32 representation
-func (p longIP) IptoUint32() uint32 {
+func (p longIP) IptoUint32() (result uint32) {
 	ip := p.To4()
 	if ip == nil {
 		return 0
 	}
-	// golang net.IP is BigEndian
-	return binary.BigEndian.Uint32([]byte(ip))
-}
-
-// any uint32 back to IP representation
-func uint32ToIP(ip uint32) net.IP {
-	addr := net.IP{0, 0, 0, 0}
-	binary.BigEndian.PutUint32(addr, ip)
-	return addr
+	q0 := uint32(ip[0]) << 24
+	q1 := uint32(ip[1]) << 16
+	q2 := uint32(ip[2]) << 8
+	q3 := uint32(ip[3])
+	result = q0 + q1 + q2 + q3
+	return
 }
 
 // ServeHTTP is an http.Handler ServeHTTP method
 func (h *httpQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
-	log.Println(host)
-
-	longIP := longIP{net.ParseIP(host)}
-	h.quotas.Add(longIP.IptoUint32(), uint64(req.ContentLength))
-
-	log.Println("quota called")
-	log.Println(h.quotas)
-	h.handler.ServeHTTP(w, req)
+	longIP := longIP{net.ParseIP(host)}.IptoUint32()
+	if h.quotas.Add(longIP, h.adder(uint64(req.ContentLength))) {
+		h.handler.ServeHTTP(w, req)
+	}
 }
 
-// Handler implements quotas
-func Handler(h http.Handler, limit int64) http.Handler {
+// BandwidthCap sets a quote based upon bandwidth used
+func BandwidthCap(h http.Handler, limit int64) http.Handler {
 	return &httpQuotaHandler{
 		handler: h,
 		quotas: &quotaMap{
@@ -99,5 +96,19 @@ func Handler(h http.Handler, limit int64) http.Handler {
 			limit:    uint64(limit),
 			duration: int64(60),
 		},
+		adder: func(count uint64) uint64 { return count },
+	}
+}
+
+// RequestLimit sets a quota based upon request count
+func RequestLimit(h http.Handler, limit int64) http.Handler {
+	return &httpQuotaHandler{
+		handler: h,
+		quotas: &quotaMap{
+			data:     make(map[int64]map[uint32]uint64),
+			limit:    uint64(limit),
+			duration: int64(60),
+		},
+		adder: func(count uint64) uint64 { return 1 },
 	}
 }
