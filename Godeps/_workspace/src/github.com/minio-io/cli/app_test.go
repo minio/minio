@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/codegangsta/cli"
+	"github.com/minio-io/cli"
 )
 
 func ExampleApp() {

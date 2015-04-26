@@ -11,7 +11,7 @@ import (
 // Context is a type that is passed through to
 // each Handler action in a cli application. Context
 // can be used to retrieve context-specific Args and
-// parsed command-line options.
+// parsed command-line flags.
 type Context struct {
 	App            *App
 	Command        Command
@@ -177,6 +177,11 @@ func (a Args) Get(n int) string {
 // First - Returns the first argument, or else a blank string
 func (a Args) First() string {
 	return a.Get(0)
+}
+
+// Last - Return the last argument, or else a blank String
+func (a Args) Last() string {
+	return a.Get(len(a) - 1)
 }
 
 // Tail - Return the rest of the arguments (not the first one)

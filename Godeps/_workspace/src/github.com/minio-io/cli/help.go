@@ -12,7 +12,7 @@ var AppHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
-   {{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
+   {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
 
 VERSION:
    {{.Version}}
@@ -26,7 +26,7 @@ BUILD:
 COMMANDS:
    {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
-GLOBAL OPTIONS:
+GLOBAL FLAGS:
    {{range .Flags}}{{.}}
    {{end}}{{end}}
 `
@@ -38,12 +38,12 @@ var DefaultCommandHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
-   command {{.Name}}{{if .Flags}} [command options]{{end}} [arguments...]{{if .Description}}
+   command {{.Name}}{{if .Flags}} [command flags]{{end}} [arguments...]{{if .Description}}
 
 DESCRIPTION:
    {{.Description}}{{end}}{{if .Flags}}
 
-OPTIONS:
+FLAGS:
    {{range .Flags}}{{.}}
    {{end}}{{ end }}
 `
@@ -55,12 +55,12 @@ var DefaultSubcommandHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
-   {{.Name}} command{{if .Flags}} [command options]{{end}} [arguments...]
+   {{.Name}} command{{if .Flags}} [command flags]{{end}} [arguments...]
 
 COMMANDS:
    {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
-OPTIONS:
+FLAGS:
    {{range .Flags}}{{.}}
    {{end}}{{end}}
 `

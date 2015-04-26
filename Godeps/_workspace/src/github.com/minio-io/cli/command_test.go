@@ -4,7 +4,7 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/codegangsta/cli"
+	"github.com/minio-io/cli"
 )
 
 func TestCommandDoNotIgnoreFlags(t *testing.T) {
