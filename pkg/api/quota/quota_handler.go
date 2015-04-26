@@ -17,6 +17,7 @@
 package quota
 
 import (
+	"encoding/binary"
 	"net"
 	"net/http"
 	"sync"
@@ -70,12 +71,7 @@ func (p longIP) IptoUint32() (result uint32) {
 	if ip == nil {
 		return 0
 	}
-	q0 := uint32(ip[0]) << 24
-	q1 := uint32(ip[1]) << 16
-	q2 := uint32(ip[2]) << 8
-	q3 := uint32(ip[3])
-	result = q0 + q1 + q2 + q3
-	return
+	return binary.BigEndian.Uint32(ip)
 }
 
 // ServeHTTP is an http.Handler ServeHTTP method
