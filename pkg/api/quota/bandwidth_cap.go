@@ -18,6 +18,7 @@ package quota
 
 import (
 	"errors"
+	"github.com/minio-io/minio/pkg/iodine"
 	"io"
 	"net"
 	"net/http"
@@ -38,6 +39,11 @@ func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 		ReadCloser: req.Body,
 		quotas:     h.quotas,
 		ip:         longIP,
+	}
+	w = quotaWriter{
+		ResponseWriter: w,
+		quotas:         h.quotas,
+		ip:             longIP,
 	}
 	h.handler.ServeHTTP(w, req)
 }
@@ -63,15 +69,32 @@ type quotaReader struct {
 
 func (q quotaReader) Read(b []byte) (int, error) {
 	if q.quotas.IsQuotaMet(q.ip) {
-		return 0, errors.New("Quota Met")
+		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
 	n, err := q.ReadCloser.Read(b)
 	q.quotas.Add(q.ip, int64(n))
-	return n, err
+	return n, iodine.New(err, nil)
 }
 
 func (q quotaReader) Close() error {
-	return q.ReadCloser.Close()
+	return iodine.New(q.ReadCloser.Close(), nil)
+}
+
+type quotaWriter struct {
+	http.ResponseWriter
+	quotas *quotaMap
+	ip     uint32
+}
+
+func (q quotaWriter) Write(b []byte) (int, error) {
+	if q.quotas.IsQuotaMet(q.ip) {
+		return 0, iodine.New(errors.New("Quota Met"), nil)
+	}
+	q.quotas.Add(q.ip, int64(len(b)))
+	n, err := q.ResponseWriter.Write(b)
+	// remove from quota if a full write isn't performed
+	q.quotas.Add(q.ip, int64(n-len(b)))
+	return n, iodine.New(err, nil)
 }
 
 func segmentSize(duration time.Duration) time.Duration {
