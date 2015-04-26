@@ -109,7 +109,8 @@ func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, 
 	return data
 }
 
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
+// WriteErrorResponse writes a formatted error to the user
+func WriteErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
 	error := getErrorCode(errorType)
 	errorResponse := getErrorResponse(error, resource)
 	// set headers
