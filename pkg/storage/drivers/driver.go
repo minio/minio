@@ -30,6 +30,7 @@ type Driver interface {
 	ListBuckets() ([]BucketMetadata, error)
 	CreateBucket(bucket, acl string) error
 	GetBucketMetadata(bucket string) (BucketMetadata, error)
+	SetBucketMetadata(bucket, acl string) error
 
 	// Object Operations
 	GetObject(w io.Writer, bucket, object string) (int64, error)

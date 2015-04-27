@@ -76,7 +76,6 @@ type Owner struct {
 
 // List of not implemented bucket queries
 var unimplementedBucketResourceNames = map[string]bool{
-	"acl":            true,
 	"policy":         true,
 	"cors":           true,
 	"lifecycle":      true,
@@ -94,7 +93,6 @@ var unimplementedBucketResourceNames = map[string]bool{
 // List of not implemented object queries
 var unimplementedObjectResourceNames = map[string]bool{
 	"uploadId": true,
-	"acl":      true,
 	"torrent":  true,
 	"uploads":  true,
 }

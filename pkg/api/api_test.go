@@ -447,7 +447,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
-	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object?acl", nil)
+	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object?policy", nil)
 	c.Assert(err, IsNil)
 	setAuthHeader(request)
 

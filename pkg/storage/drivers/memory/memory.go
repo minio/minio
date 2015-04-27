@@ -154,6 +154,29 @@ func (memory *memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMeta
 	return memory.bucketMetadata[bucket].metadata, nil
 }
 
+// SetBucketMetadata -
+func (memory *memoryDriver) SetBucketMetadata(bucket, acl string) error {
+	memory.lock.RLock()
+	if !drivers.IsValidBucket(bucket) {
+		memory.lock.RUnlock()
+		return iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if _, ok := memory.bucketMetadata[bucket]; ok == false {
+		memory.lock.RUnlock()
+		return iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+	}
+	if strings.TrimSpace(acl) == "" {
+		acl = "private"
+	}
+	memory.lock.RUnlock()
+	memory.lock.Lock()
+	defer memory.lock.Unlock()
+	storedBucket := memory.bucketMetadata[bucket]
+	storedBucket.metadata.ACL = drivers.BucketACL(acl)
+	memory.bucketMetadata[bucket] = storedBucket
+	return nil
+}
+
 // isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
 func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
