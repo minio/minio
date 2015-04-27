@@ -235,7 +235,7 @@ func testBucketMetadata(c *check.C, create func() Driver) {
 
 	metadata, err := drivers.GetBucketMetadata("string")
 	c.Assert(err, check.IsNil)
-	c.Assert(metadata.Name, check.Equals, "string")
+	c.Assert(metadata.ACL, check.Equals, BucketACL("private"))
 }
 
 func testBucketRecreateFails(c *check.C, create func() Driver) {

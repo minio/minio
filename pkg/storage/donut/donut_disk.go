@@ -133,7 +133,7 @@ func (d disk) MakeFile(filename string) (*os.File, error) {
 	if err := os.MkdirAll(path.Dir(filePath), 0700); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	dataFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	dataFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}

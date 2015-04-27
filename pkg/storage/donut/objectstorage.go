@@ -19,10 +19,10 @@ package donut
 import (
 	"errors"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/minio-io/minio/pkg/iodine"
 )
@@ -44,17 +44,25 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 	if _, ok := d.buckets[bucket]; !ok {
 		return nil, iodine.New(errors.New("bucket does not exist"), nil)
 	}
-	// TODO get this, from whatever is written from SetBucketMetadata
-	metadata := make(map[string]string)
-	metadata["name"] = bucket
-	metadata["created"] = time.Now().Format(time.RFC3339Nano)
-	metadata["acl"] = "private"
-	return metadata, nil
+	metadata, err := d.getDonutBucketMetadata()
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	return metadata[bucket], nil
 }
 
 // SetBucketMetadata - set bucket metadata
-func (d donut) SetBucketMetadata(bucket string, metadata map[string]string) error {
-	return errors.New("Not implemented")
+func (d donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string) error {
+	err := d.getDonutBuckets()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	metadata, err := d.getDonutBucketMetadata()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	metadata[bucket] = bucketMetadata
+	return d.setDonutBucketMetadata(metadata)
 }
 
 // ListBuckets - return list of buckets
@@ -63,7 +71,16 @@ func (d donut) ListBuckets() (results []string, err error) {
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	for name := range d.buckets {
+	metadata, err := d.getDonutBucketMetadata()
+	if err != nil {
+		err = iodine.ToError(err)
+		if os.IsNotExist(err) {
+			// valid case
+			return nil, nil
+		}
+		return nil, iodine.New(err, nil)
+	}
+	for name := range metadata {
 		results = append(results, name)
 	}
 	sort.Strings(results)
@@ -151,6 +168,15 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 	if _, ok := d.buckets[bucket]; !ok {
 		return iodine.New(errors.New("bucket does not exist"), nil)
 	}
+	objectList, err := d.buckets[bucket].ListObjects()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	for objectName := range objectList {
+		if objectName == object {
+			return iodine.New(errors.New("object exists"), nil)
+		}
+	}
 	err = d.buckets[bucket].PutObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
 		return iodine.New(err, errParams)
@@ -177,7 +203,16 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 	if _, ok := d.buckets[bucket]; !ok {
 		return nil, 0, iodine.New(errors.New("bucket does not exist"), errParams)
 	}
-	return d.buckets[bucket].GetObject(object)
+	objectList, err := d.buckets[bucket].ListObjects()
+	if err != nil {
+		return nil, 0, iodine.New(err, nil)
+	}
+	for objectName := range objectList {
+		if objectName == object {
+			return d.buckets[bucket].GetObject(object)
+		}
+	}
+	return nil, 0, iodine.New(errors.New("object not found"), nil)
 }
 
 // GetObjectMetadata - get object metadata

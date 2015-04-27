@@ -150,6 +150,9 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
 	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
+		if strings.TrimSpace(acl) == "" {
+			acl = "private"
+		}
 		return d.donut.MakeBucket(bucketName, acl)
 	}
 	return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
@@ -173,7 +176,7 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 		return drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{}, nil)
 	}
 	bucketMetadata := drivers.BucketMetadata{
-		Name:    metadata["name"],
+		Name:    bucketName,
 		Created: created,
 		ACL:     drivers.BucketACL(acl),
 	}

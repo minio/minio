@@ -45,13 +45,13 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 
 		if stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate() {
 			return true
-			// Uncomment this when we have webCli
+			// Uncomment this before release
 			// writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 			// return false
 		}
 		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
 			return true
-			// Uncomment this when we have webCli
+			// Uncomment this before release
 			// writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 			// return false
 		}
