@@ -197,7 +197,6 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 
 	contentType = strings.TrimSpace(contentType)
 
-	memory.lock.Lock()
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
@@ -246,6 +245,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 		Md5:         md5Sum,
 		Size:        int64(totalLength),
 	}
+	memory.lock.Lock()
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
 		memory.lock.Unlock()
 		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
