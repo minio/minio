@@ -243,6 +243,9 @@ func getSystemData() map[string]string {
 // Version is based on MD5SUM of its binary
 var Version = mustHashBinarySelf()
 
+// BuilDate - build time
+var BuilDate string
+
 func main() {
 	// set up iodine
 	iodine.SetGlobalState("minio.version", Version)
@@ -252,6 +255,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "minio"
 	app.Version = Version
+	app.Compiled, _ = time.Parse(time.RFC3339Nano, BuilDate)
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.Flags = flags
