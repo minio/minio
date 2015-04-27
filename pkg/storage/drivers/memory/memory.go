@@ -285,6 +285,10 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	}
 	memory.lock.RUnlock()
 
+	if strings.TrimSpace(acl) == "" {
+		// default is private
+		acl = "private"
+	}
 	var newBucket = storedBucket{}
 	newBucket.metadata = drivers.BucketMetadata{}
 	newBucket.metadata.Name = bucketName
