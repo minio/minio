@@ -43,15 +43,18 @@ type bucket struct {
 }
 
 // NewBucket - instantiate a new bucket
-func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bucket, error) {
+func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bucket, map[string]string, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"donutName":  donutName,
 		"aclType":    aclType,
 	}
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
-		return nil, iodine.New(errors.New("invalid argument"), errParams)
+		return nil, nil, iodine.New(errors.New("invalid argument"), errParams)
 	}
+	bucketMetadata := make(map[string]string)
+	bucketMetadata["acl"] = aclType
+	bucketMetadata["created"] = time.Now().Format(time.RFC3339Nano)
 	b := bucket{}
 	b.name = bucketName
 	b.acl = aclType
@@ -59,7 +62,7 @@ func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bu
 	b.donutName = donutName
 	b.objects = make(map[string]Object)
 	b.nodes = nodes
-	return b, nil
+	return b, bucketMetadata, nil
 }
 
 // ListObjects - list all objects
