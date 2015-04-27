@@ -52,6 +52,8 @@ func block(dig *digest, p []byte) {
 		blockAVX(dig, p)
 	case cpu.HasSSE41() == true:
 		blockSSE(dig, p)
+	default:
+		blockSoftware(dig, p)
 	}
 }
 
