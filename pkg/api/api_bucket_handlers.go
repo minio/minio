@@ -33,12 +33,12 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 	switch iodine.ToError(err).(type) {
 	case drivers.BucketNotFound:
 		{
-			WriteErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 			return false
 		}
 	case drivers.BucketNameInvalid:
 		{
-			WriteErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 			return false
 		}
 	case nil:
@@ -68,7 +68,7 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 	// verify if bucket allows this operation
@@ -98,16 +98,16 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 		}
 	case drivers.ObjectNotFound:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ObjectNameInvalid:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
@@ -119,7 +119,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 
@@ -139,7 +139,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
@@ -150,14 +150,14 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
-		WriteErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
 		return
 	}
 
@@ -173,16 +173,16 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.BucketNameInvalid:
 		{
-			WriteErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 		}
 	case drivers.BucketExists:
 		{
-			WriteErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
@@ -196,7 +196,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 

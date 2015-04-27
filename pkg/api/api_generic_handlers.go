@@ -58,7 +58,7 @@ func validateHandler(conf config.Config, h http.Handler) http.Handler {
 func (h vHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
+		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
 		return
 	}
 	// success

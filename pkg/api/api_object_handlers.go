@@ -32,7 +32,7 @@ import (
 func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 
@@ -51,7 +51,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		{
 			httpRange, err := getRequestedRange(req, metadata.Size)
 			if err != nil {
-				WriteErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
+				writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
 				return
 			}
 			switch httpRange.start == 0 && httpRange.length == 0 {
@@ -73,16 +73,16 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		}
 	case drivers.ObjectNotFound:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ObjectNameInvalid:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
@@ -93,7 +93,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 
@@ -115,16 +115,16 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		}
 	case drivers.ObjectNotFound:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ObjectNameInvalid:
 		{
-			WriteErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
@@ -135,7 +135,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
-		WriteErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 
@@ -152,7 +152,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
-		WriteErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 		return
 	}
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
@@ -163,29 +163,29 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		w.WriteHeader(http.StatusOK)
 	case drivers.ObjectExists:
 		{
-			WriteErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
 		}
 	case drivers.BadDigest:
 		{
-			WriteErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
 		}
 	case drivers.EntityTooLarge:
 		{
-			WriteErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 		}
 	case drivers.InvalidDigest:
 		{
-			WriteErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 		}
 	case drivers.ImplementationError:
 		{
 			log.Error.Println(err)
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
 			log.Error.Println(err)
-			WriteErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
 }
