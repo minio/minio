@@ -60,6 +60,10 @@ type storedObject struct {
 	metadata drivers.ObjectMetadata
 }
 
+const (
+	totalBuckets = 100
+)
+
 // Start memory object server
 func Start(maxSize uint64) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
@@ -263,6 +267,10 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 // CreateBucket - create bucket in memory
 func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	memory.lock.RLock()
+	if len(memory.bucketMetadata) == totalBuckets {
+		memory.lock.RLock()
+		return iodine.New(drivers.TooManyBuckets{Bucket: bucketName}, nil)
+	}
 	if !drivers.IsValidBucket(bucketName) {
 		memory.lock.RUnlock()
 		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)

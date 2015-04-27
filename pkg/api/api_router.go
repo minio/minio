@@ -20,12 +20,13 @@ import (
 	"log"
 	"net/http"
 
+	"time"
+
 	router "github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/api/quota"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
-	"time"
 )
 
 // private use
