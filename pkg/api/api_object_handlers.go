@@ -163,11 +163,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		w.WriteHeader(http.StatusOK)
 	case drivers.ObjectExists:
 		{
-			// we need to debate about this, if this is the right message to send back
-			// https://github.com/minio-io/minio/issues/505
-
-			// Ideally we can use 405 Method No Allowed
-			writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 		}
 	case drivers.BadDigest:
 		{
