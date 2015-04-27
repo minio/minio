@@ -92,8 +92,8 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 	}
 
 	h := validateHandler(conf, ignoreResourcesHandler(mux))
-	h = quota.BandwidthCap(h, 1*1024*1024*1024, time.Duration(30*time.Minute))
-	h = quota.BandwidthCap(h, 1024*1024*1024, time.Duration(24*time.Hour))
+	h = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
+	h = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
 	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
 	h = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
 	h = quota.ConnectionLimit(h, 5)

@@ -31,16 +31,38 @@ type bandwidthQuotaHandler struct {
 	quotas  *quotaMap
 }
 
+var bandwidthQuotaExceeded = ErrorResponse{
+	Code:      "BandwithQuotaExceeded",
+	Message:   "Bandwidth Quota Exceeded",
+	Resource:  "",
+	RequestID: "",
+	HostID:    "",
+}
+
+var bandwidthInsufficientToProceed = ErrorResponse{
+	Code:      "BandwidthQuotaWillBeExceeded",
+	Message:   "Bandwidth quota will be exceeded with this request",
+	Resource:  "",
+	RequestID: "",
+	HostID:    "",
+}
+
 // ServeHTTP is an http.Handler ServeHTTP method
 func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
-	req.Body = quotaReader{
+	if h.quotas.WillExceedQuota(longIP, req.ContentLength) {
+		writeError(w, req, bandwidthInsufficientToProceed, 429)
+		return
+	}
+	req.Body = &quotaReader{
 		ReadCloser: req.Body,
 		quotas:     h.quotas,
 		ip:         longIP,
+		w:          w,
+		req:        req,
 	}
-	w = quotaWriter{
+	w = &quotaWriter{
 		ResponseWriter: w,
 		quotas:         h.quotas,
 		ip:             longIP,
@@ -65,10 +87,18 @@ type quotaReader struct {
 	io.ReadCloser
 	quotas *quotaMap
 	ip     uint32
+	w      http.ResponseWriter
+	req    *http.Request
+	err    bool
 }
 
-func (q quotaReader) Read(b []byte) (int, error) {
+func (q *quotaReader) Read(b []byte) (int, error) {
+	if q.err {
+		return 0, iodine.New(errors.New("Quota Met"), nil)
+	}
 	if q.quotas.IsQuotaMet(q.ip) {
+		q.err = true
+		writeError(q.w, q.req, bandwidthQuotaExceeded, 429)
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
 	n, err := q.ReadCloser.Read(b)
@@ -76,17 +106,17 @@ func (q quotaReader) Read(b []byte) (int, error) {
 	return n, iodine.New(err, nil)
 }
 
-func (q quotaReader) Close() error {
+func (q *quotaReader) Close() error {
 	return iodine.New(q.ReadCloser.Close(), nil)
 }
 
 type quotaWriter struct {
-	http.ResponseWriter
-	quotas *quotaMap
-	ip     uint32
+	ResponseWriter http.ResponseWriter
+	quotas         *quotaMap
+	ip             uint32
 }
 
-func (q quotaWriter) Write(b []byte) (int, error) {
+func (q *quotaWriter) Write(b []byte) (int, error) {
 	if q.quotas.IsQuotaMet(q.ip) {
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
@@ -95,6 +125,16 @@ func (q quotaWriter) Write(b []byte) (int, error) {
 	// remove from quota if a full write isn't performed
 	q.quotas.Add(q.ip, int64(n-len(b)))
 	return n, iodine.New(err, nil)
+}
+func (q *quotaWriter) Header() http.Header {
+	return q.ResponseWriter.Header()
+}
+
+func (q *quotaWriter) WriteHeader(status int) {
+	if q.quotas.IsQuotaMet(q.ip) {
+		return
+	}
+	q.ResponseWriter.WriteHeader(status)
 }
 
 func segmentSize(duration time.Duration) time.Duration {
