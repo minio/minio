@@ -123,6 +123,7 @@ func setAuthHeader(req *http.Request) {
 	encoder.Write(hm.Sum(nil))
 	encoder.Close()
 	req.Header.Set("Authorization", authHeader.String())
+	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 }
 
 func (s *MySuite) TestNonExistantBucket(c *C) {

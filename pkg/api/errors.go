@@ -51,6 +51,7 @@ const (
 	InvalidBucketName
 	InvalidDigest
 	InvalidRange
+	InvalidRequest
 	MalformedXML
 	MissingContentLength
 	MissingRequestBodyError
@@ -61,11 +62,12 @@ const (
 	RequestTimeTooSkewed
 	SignatureDoesNotMatch
 	TooManyBuckets
+	MethodNotAllowed
 )
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 21
+	NotAcceptable = iota + 23
 )
 
 // Error code to Error structure map
@@ -174,6 +176,11 @@ var errorCodeResponse = map[int]Error{
 		Code:           "TooManyBuckets",
 		Description:    "You have attempted to create more buckets than allowed.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	MethodNotAllowed: {
+		Code:           "MethodNotAllowed",
+		Description:    "The specified method is not allowed against this resource.",
+		HTTPStatusCode: http.StatusMethodNotAllowed,
 	},
 	NotAcceptable: {
 		Code:           "NotAcceptable",
