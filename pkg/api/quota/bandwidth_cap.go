@@ -18,11 +18,12 @@ package quota
 
 import (
 	"errors"
-	"github.com/minio-io/minio/pkg/iodine"
 	"io"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/minio-io/minio/pkg/iodine"
 )
 
 // bandwidthQuotaHandler
@@ -31,28 +32,12 @@ type bandwidthQuotaHandler struct {
 	quotas  *quotaMap
 }
 
-var bandwidthQuotaExceeded = ErrorResponse{
-	Code:      "BandwithQuotaExceeded",
-	Message:   "Bandwidth Quota Exceeded",
-	Resource:  "",
-	RequestID: "",
-	HostID:    "",
-}
-
-var bandwidthInsufficientToProceed = ErrorResponse{
-	Code:      "BandwidthQuotaWillBeExceeded",
-	Message:   "Bandwidth quota will be exceeded with this request",
-	Resource:  "",
-	RequestID: "",
-	HostID:    "",
-}
-
 // ServeHTTP is an http.Handler ServeHTTP method
 func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
 	if h.quotas.WillExceedQuota(longIP, req.ContentLength) {
-		writeError(w, req, bandwidthInsufficientToProceed, 429)
+		writeErrorResponse(w, req, BandWidthInsufficientToProceed, req.URL.Path)
 		return
 	}
 	req.Body = &quotaReader{
@@ -98,7 +83,7 @@ func (q *quotaReader) Read(b []byte) (int, error) {
 	}
 	if q.quotas.IsQuotaMet(q.ip) {
 		q.err = true
-		writeError(q.w, q.req, bandwidthQuotaExceeded, 429)
+		writeErrorResponse(q.w, q.req, BandWidthQuotaExceeded, q.req.URL.Path)
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
 	n, err := q.ReadCloser.Read(b)

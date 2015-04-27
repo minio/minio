@@ -17,11 +17,8 @@
 package quota
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/xml"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -94,25 +91,4 @@ func (p longIP) IptoUint32() (result uint32) {
 		return 0
 	}
 	return binary.BigEndian.Uint32(ip)
-}
-
-// copied from api, no cyclic deps allowed
-
-// ErrorResponse - error response format
-type ErrorResponse struct {
-	XMLName   xml.Name `xml:"Error" json:"-"`
-	Code      string
-	Message   string
-	Resource  string
-	RequestID string
-	HostID    string
-}
-
-func writeError(w http.ResponseWriter, req *http.Request, errorResponse ErrorResponse, status int) {
-	var buf bytes.Buffer
-	encoder := xml.NewEncoder(&buf)
-	w.WriteHeader(status)
-	encoder.Encode(errorResponse)
-	encoder.Flush()
-	w.Write(buf.Bytes())
 }

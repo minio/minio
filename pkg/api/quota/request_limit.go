@@ -33,7 +33,7 @@ func (h *requestLimitHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
 	if h.quotas.IsQuotaMet(longIP) {
-		return
+		writeErrorResponse(w, req, SlowDown, req.URL.Path)
 	}
 	h.quotas.Add(longIP, 1)
 	h.handler.ServeHTTP(w, req)
