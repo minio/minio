@@ -171,6 +171,10 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 			w.Header().Set("Connection", "close")
 			w.WriteHeader(http.StatusOK)
 		}
+	case drivers.TooManyBuckets:
+		{
+			writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
+		}
 	case drivers.BucketNameInvalid:
 		{
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)

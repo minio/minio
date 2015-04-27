@@ -78,6 +78,9 @@ type BucketExists GenericBucketError
 // BucketNotFound - requested bucket not found
 type BucketNotFound GenericBucketError
 
+// TooManyBuckets - total buckets exceeded
+type TooManyBuckets GenericBucketError
+
 /// Object related errors
 
 // ObjectNotFound - requested object not found
@@ -147,6 +150,11 @@ func (e BucketNameInvalid) Error() string {
 // Return string an error formatted as the given text
 func (e BucketExists) Error() string {
 	return "Bucket exists: " + e.Bucket
+}
+
+// Return string an error formatted as the given text
+func (e TooManyBuckets) Error() string {
+	return "Bucket limit exceeded beyond 100, cannot create bucket: " + e.Bucket
 }
 
 // Return string an error formatted as the given text
