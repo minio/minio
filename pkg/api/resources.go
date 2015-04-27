@@ -39,3 +39,16 @@ func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
 	}
 	return
 }
+
+// check if req query values have acl
+func isRequestBucketACL(values url.Values) bool {
+	for key := range values {
+		switch true {
+		case key == "acl":
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}

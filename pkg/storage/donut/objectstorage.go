@@ -61,7 +61,10 @@ func (d donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	metadata[bucket] = bucketMetadata
+	oldBucketMetadata := metadata[bucket]
+	// TODO ignore rest of the keys for now, only mutable data is "acl"
+	oldBucketMetadata["acl"] = bucketMetadata["acl"]
+	metadata[bucket] = oldBucketMetadata
 	return d.setDonutBucketMetadata(metadata)
 }
 

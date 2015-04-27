@@ -153,7 +153,14 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 		if strings.TrimSpace(acl) == "" {
 			acl = "private"
 		}
-		return d.donut.MakeBucket(bucketName, acl)
+		if err := d.donut.MakeBucket(bucketName, acl); err != nil {
+			err = iodine.ToError(err)
+			if err.Error() == "bucket exists" {
+				return iodine.New(drivers.BucketExists{Bucket: bucketName}, nil)
+			}
+			return err
+		}
+		return nil
 	}
 	return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 }
@@ -181,6 +188,23 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 		ACL:     drivers.BucketACL(acl),
 	}
 	return bucketMetadata, nil
+}
+
+// SetBucketMetadata sets bucket's metadata
+func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
+	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+		return drivers.BucketNameInvalid{Bucket: bucketName}
+	}
+	if strings.TrimSpace(acl) == "" {
+		acl = "private"
+	}
+	bucketMetadata := make(map[string]string)
+	bucketMetadata["acl"] = acl
+	err := d.donut.SetBucketMetadata(bucketName, bucketMetadata)
+	if err != nil {
+		return iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
+	}
+	return nil
 }
 
 // GetObject retrieves an object and writes it to a writer

@@ -44,6 +44,15 @@ func (m *Driver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error
 	return r0, r1
 }
 
+// SetBucketMetadata is a mock
+func (m *Driver) SetBucketMetadata(bucket, acl string) error {
+	ret := m.Called(bucket, acl)
+
+	r0 := ret.Error(0)
+
+	return r0
+}
+
 // SetGetObjectWriter is a mock
 func (m *Driver) SetGetObjectWriter(bucket, object string, data []byte) {
 	m.ObjectWriterData[bucket+":"+object] = data

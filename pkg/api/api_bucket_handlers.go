@@ -148,6 +148,11 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+	if isRequestBucketACL(req.URL.Query()) {
+		server.putBucketACLHandler(w, req)
+		return
+	}
+
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
 		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
@@ -182,6 +187,49 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	case drivers.BucketExists:
 		{
 			writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
+}
+
+// PUT Bucket ACL
+// ----------
+// This implementation of the PUT operation modifies the bucketACL for authenticated request
+func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	// read from 'x-amz-acl'
+	aclType := getACLType(req)
+	if aclType == unsupportedACLType {
+		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	err := server.driver.SetBucketMetadata(bucket, getACLTypeString(aclType))
+	switch iodine.ToError(err).(type) {
+	case nil:
+		{
+			w.Header().Set("Server", "Minio")
+			w.Header().Set("Connection", "close")
+			w.WriteHeader(http.StatusOK)
+		}
+	case drivers.BucketNameInvalid:
+		{
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		}
+	case drivers.BucketNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{
