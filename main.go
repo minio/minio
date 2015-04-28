@@ -101,12 +101,12 @@ var flags = []cli.Flag{
 		Usage: "domain used for routing incoming API requests",
 	},
 	cli.StringFlag{
-		Name:  "port-api",
+		Name:  "api-address",
 		Value: ":9000",
 		Usage: "address for incoming API requests",
 	},
 	cli.StringFlag{
-		Name:  "port-mgmt",
+		Name:  "web-address",
 		Value: ":9001",
 		Usage: "address for incoming Management UI requests",
 	},
