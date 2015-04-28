@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path"
@@ -264,6 +265,8 @@ func main() {
 		globalDebugFlag = c.GlobalBool("debug")
 		if globalDebugFlag {
 			app.ExtraInfo = getSystemData()
+		} else {
+			log.Debug = log.New(ioutil.Discard, "", 0)
 		}
 		return nil
 	}

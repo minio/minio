@@ -23,9 +23,10 @@ import (
 	"net/http"
 	"time"
 
+	"sync"
+
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/utils/log"
-	"sync"
 )
 
 // bandwidthQuotaHandler
@@ -39,6 +40,8 @@ func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
 	if h.quotas.WillExceedQuota(longIP, req.ContentLength) {
+		hosts, _ := net.LookupAddr(uint32ToIP(longIP).String())
+		log.Debug.Printf("Offending Host: %s, BandwidthUsed: %d", hosts, h.quotas.GetQuotaUsed(longIP))
 		writeErrorResponse(w, req, BandWidthInsufficientToProceed, req.URL.Path)
 		return
 	}
@@ -94,6 +97,8 @@ func (q *quotaReader) Read(b []byte) (int, error) {
 	if q.err == false && q.quotas.IsQuotaMet(q.ip) {
 		defer q.lock.Unlock()
 		q.err = true
+		hosts, _ := net.LookupAddr(uint32ToIP(q.ip).String())
+		log.Debug.Printf("Offending Host: %s, BandwidthUsed: %d", hosts, q.quotas.GetQuotaUsed(q.ip))
 		writeErrorResponse(q.w, q.req, BandWidthQuotaExceeded, q.req.URL.Path)
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
