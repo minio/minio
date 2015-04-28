@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/dustin/go-humanize",
-			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
+			"Rev": "00897f070f09f194c26d65afae734ba4c32404e8"
 		},
 		{
 			"ImportPath": "github.com/golang/groupcache/lru",
@@ -15,11 +15,11 @@
 		},
 		{
 			"ImportPath": "github.com/gorilla/context",
-			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
+			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
-			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
+			"Rev": "660d31f8602b95058fed6833debf113e85350868"
 		},
 		{
 			"ImportPath": "github.com/minio-io/check",

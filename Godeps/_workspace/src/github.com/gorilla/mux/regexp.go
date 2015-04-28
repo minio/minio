@@ -150,11 +150,7 @@ func (r *routeRegexp) Match(req *http.Request, match *RouteMatch) bool {
 }
 
 // url builds a URL part using the given values.
-func (r *routeRegexp) url(pairs ...string) (string, error) {
-	values, err := mapFromPairs(pairs...)
-	if err != nil {
-		return "", err
-	}
+func (r *routeRegexp) url(values map[string]string) (string, error) {
 	urlValues := make([]interface{}, len(r.varsN))
 	for k, v := range r.varsN {
 		value, ok := values[v]

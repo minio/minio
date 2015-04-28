@@ -135,6 +135,33 @@ func TestHost(t *testing.T) {
 			path:        "",
 			shouldMatch: false,
 		},
+		{
+			title:       "Path route with single pattern with pipe, match",
+			route:       new(Route).Path("/{category:a|b/c}"),
+			request:     newRequest("GET", "http://localhost/a"),
+			vars:        map[string]string{"category": "a"},
+			host:        "",
+			path:        "/a",
+			shouldMatch: true,
+		},
+		{
+			title:       "Path route with single pattern with pipe, match",
+			route:       new(Route).Path("/{category:a|b/c}"),
+			request:     newRequest("GET", "http://localhost/b/c"),
+			vars:        map[string]string{"category": "b/c"},
+			host:        "",
+			path:        "/b/c",
+			shouldMatch: true,
+		},
+		{
+			title:       "Path route with multiple patterns with pipe, match",
+			route:       new(Route).Path("/{category:a|b/c}/{product}/{id:[0-9]+}"),
+			request:     newRequest("GET", "http://localhost/a/product_name/1"),
+			vars:        map[string]string{"category": "a", "product": "product_name", "id": "1"},
+			host:        "",
+			path:        "/a/product_name/1",
+			shouldMatch: true,
+		},
 	}
 	for _, test := range tests {
 		testRoute(t, test)
@@ -585,6 +612,39 @@ func TestMatcherFunc(t *testing.T) {
 			host:        "",
 			path:        "",
 			shouldMatch: false,
+		},
+	}
+
+	for _, test := range tests {
+		testRoute(t, test)
+	}
+}
+
+func TestBuildVarsFunc(t *testing.T) {
+	tests := []routeTest{
+		{
+			title: "BuildVarsFunc set on route",
+			route: new(Route).Path(`/111/{v1:\d}{v2:.*}`).BuildVarsFunc(func(vars map[string]string) map[string]string {
+				vars["v1"] = "3"
+				vars["v2"] = "a"
+				return vars
+			}),
+			request:     newRequest("GET", "http://localhost/111/2"),
+			path:        "/111/3a",
+			shouldMatch: true,
+		},
+		{
+			title: "BuildVarsFunc set on route and parent route",
+			route: new(Route).PathPrefix(`/{v1:\d}`).BuildVarsFunc(func(vars map[string]string) map[string]string {
+				vars["v1"] = "2"
+				return vars
+			}).Subrouter().Path(`/{v2:\w}`).BuildVarsFunc(func(vars map[string]string) map[string]string {
+				vars["v2"] = "b"
+				return vars
+			}),
+			request:     newRequest("GET", "http://localhost/1/a"),
+			path:        "/2/b",
+			shouldMatch: true,
 		},
 	}
 
