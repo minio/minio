@@ -96,28 +96,28 @@ EXAMPLES:
 
 var flags = []cli.Flag{
 	cli.StringFlag{
-		Name:  "domain",
+		Name:  "domain,d",
 		Value: "",
 		Usage: "domain used for routing incoming API requests",
 	},
 	cli.StringFlag{
-		Name:  "port-api",
+		Name:  "api-address,a",
 		Value: ":9000",
 		Usage: "address for incoming API requests",
 	},
 	cli.StringFlag{
-		Name:  "port-mgmt",
+		Name:  "web-address,w",
 		Value: ":9001",
 		Usage: "address for incoming Management UI requests",
 	},
 	cli.StringFlag{
-		Name:  "cert",
+		Name:  "cert,c",
 		Hide:  true,
 		Value: "",
 		Usage: "cert.pem",
 	},
 	cli.StringFlag{
-		Name:  "key",
+		Name:  "key,k",
 		Hide:  true,
 		Value: "",
 		Usage: "key.pem",
