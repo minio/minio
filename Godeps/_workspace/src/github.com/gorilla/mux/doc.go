@@ -89,7 +89,7 @@ There are several other matchers that can be added. To match path prefixes:
 
 	r.MatcherFunc(func(r *http.Request, rm *RouteMatch) bool {
 		return r.ProtoMajor == 0
-    })
+	})
 
 ...and finally, it is possible to combine several matchers in a single route:
 
@@ -164,8 +164,8 @@ This also works for host variables:
 
 	// url.String() will be "http://news.domain.com/articles/technology/42"
 	url, err := r.Get("article").URL("subdomain", "news",
-									 "category", "technology",
-									 "id", "42")
+	                                 "category", "technology",
+	                                 "id", "42")
 
 All variables defined in the route are required, and their values must
 conform to the corresponding patterns. These requirements guarantee that a
@@ -193,7 +193,7 @@ as well:
 
 	// "http://news.domain.com/articles/technology/42"
 	url, err := r.Get("article").URL("subdomain", "news",
-									 "category", "technology",
-									 "id", "42")
+	                                 "category", "technology",
+	                                 "id", "42")
 */
 package mux
