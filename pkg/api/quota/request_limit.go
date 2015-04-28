@@ -17,9 +17,12 @@
 package quota
 
 import (
+	"encoding/binary"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // requestLimitHandler
@@ -28,11 +31,20 @@ type requestLimitHandler struct {
 	quotas  *quotaMap
 }
 
+//convert a uint32 to an ipv4
+func uint32ToIP(ip uint32) net.IP {
+	addr := net.IP{0, 0, 0, 0}
+	binary.BigEndian.PutUint32(addr, ip)
+	return addr
+}
+
 // ServeHTTP is an http.Handler ServeHTTP method
 func (h *requestLimitHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
 	if h.quotas.IsQuotaMet(longIP) {
+		hosts, _ := net.LookupAddr(uint32ToIP(longIP).String())
+		log.Debug.Printf("Offending Host: %s, RequestUSED: %d\n", hosts, h.quotas.GetQuotaUsed(longIP))
 		writeErrorResponse(w, req, SlowDown, req.URL.Path)
 	}
 	h.quotas.Add(longIP, 1)

@@ -32,10 +32,21 @@ type quotaMap struct {
 	segmentSize time.Duration
 }
 
+func (q *quotaMap) CanExpire() {
+	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
+	// divide by segmentSize, otherwise expiredQuotas will always be negative
+	expiredQuotas := currentMinute - (q.duration.Nanoseconds() / q.segmentSize.Nanoseconds())
+	for time := range q.data {
+		if time < expiredQuotas {
+			delete(q.data, time)
+		}
+	}
+}
+
 func (q *quotaMap) Add(ip uint32, size int64) {
 	q.Lock()
 	defer q.Unlock()
-	q.clean()
+	q.CanExpire()
 	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
 	if _, ok := q.data[currentMinute]; !ok {
 		q.data[currentMinute] = make(map[uint32]int64)
@@ -46,7 +57,7 @@ func (q *quotaMap) Add(ip uint32, size int64) {
 }
 
 func (q *quotaMap) IsQuotaMet(ip uint32) bool {
-	q.clean()
+	q.CanExpire()
 	if q.GetQuotaUsed(ip) >= q.limit {
 		return true
 	}
@@ -68,16 +79,6 @@ func (q *quotaMap) GetQuotaUsed(ip uint32) (total int64) {
 
 func (q *quotaMap) WillExceedQuota(ip uint32, size int64) (result bool) {
 	return q.GetQuotaUsed(ip)+size > q.limit
-}
-
-func (q *quotaMap) clean() {
-	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
-	expiredQuotas := currentMinute - q.duration.Nanoseconds()
-	for time := range q.data {
-		if time < expiredQuotas {
-			delete(q.data, time)
-		}
-	}
 }
 
 type longIP struct {
