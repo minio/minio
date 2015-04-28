@@ -245,7 +245,9 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 			summer.Write(chunk.Data)
 			_, err := io.Copy(&bytesBuffer, bytes.NewBuffer(chunk.Data))
 			if err != nil {
-				return iodine.New(err, nil)
+				err := iodine.New(err, nil)
+				log.Println(err)
+				return err
 			}
 			if uint64(totalLength) > memory.maxSize {
 				return iodine.New(drivers.EntityTooLarge{

@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio-io/minio/pkg/utils/log"
+	"sync"
 )
 
 // bandwidthQuotaHandler
@@ -40,17 +42,20 @@ func (h *bandwidthQuotaHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 		writeErrorResponse(w, req, BandWidthInsufficientToProceed, req.URL.Path)
 		return
 	}
-	req.Body = &quotaReader{
+	qr := &quotaReader{
 		ReadCloser: req.Body,
 		quotas:     h.quotas,
 		ip:         longIP,
 		w:          w,
 		req:        req,
+		lock:       &sync.RWMutex{},
 	}
+	req.Body = qr
 	w = &quotaWriter{
 		ResponseWriter: w,
 		quotas:         h.quotas,
 		ip:             longIP,
+		quotaReader:    qr,
 	}
 	h.handler.ServeHTTP(w, req)
 }
@@ -75,13 +80,19 @@ type quotaReader struct {
 	w      http.ResponseWriter
 	req    *http.Request
 	err    bool
+	lock   *sync.RWMutex
 }
 
 func (q *quotaReader) Read(b []byte) (int, error) {
+	log.Println(q.quotas.GetQuotaUsed(q.ip))
+	log.Println(q.quotas.limit)
+	q.lock.Lock()
+	defer q.lock.Unlock()
 	if q.err {
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
-	if q.quotas.IsQuotaMet(q.ip) {
+	if q.err == false && q.quotas.IsQuotaMet(q.ip) {
+		defer q.lock.Unlock()
 		q.err = true
 		writeErrorResponse(q.w, q.req, BandWidthQuotaExceeded, q.req.URL.Path)
 		return 0, iodine.New(errors.New("Quota Met"), nil)
@@ -99,9 +110,12 @@ type quotaWriter struct {
 	ResponseWriter http.ResponseWriter
 	quotas         *quotaMap
 	ip             uint32
+	quotaReader    *quotaReader
 }
 
 func (q *quotaWriter) Write(b []byte) (int, error) {
+	q.quotaReader.lock.RLock()
+	defer q.quotaReader.lock.RUnlock()
 	if q.quotas.IsQuotaMet(q.ip) {
 		return 0, iodine.New(errors.New("Quota Met"), nil)
 	}
@@ -116,7 +130,9 @@ func (q *quotaWriter) Header() http.Header {
 }
 
 func (q *quotaWriter) WriteHeader(status int) {
-	if q.quotas.IsQuotaMet(q.ip) {
+	q.quotaReader.lock.RLock()
+	defer q.quotaReader.lock.RUnlock()
+	if q.quotas.IsQuotaMet(q.ip) || q.quotaReader.err {
 		return
 	}
 	q.ResponseWriter.WriteHeader(status)
