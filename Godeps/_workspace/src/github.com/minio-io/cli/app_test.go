@@ -98,41 +98,6 @@ func ExampleAppHelp() {
 	//    This is how we describe describeit the function
 }
 
-func ExampleAppBashComplete() {
-	// set args for examples sake
-	os.Args = []string{"greet", "--generate-bash-completion"}
-
-	app := cli.NewApp()
-	app.Name = "greet"
-	app.EnableBashCompletion = true
-	app.Commands = []cli.Command{
-		{
-			Name:        "describeit",
-			Aliases:     []string{"d"},
-			Usage:       "use it to see a description",
-			Description: "This is how we describe describeit the function",
-			Action: func(c *cli.Context) {
-				fmt.Printf("i like to describe things")
-			},
-		}, {
-			Name:        "next",
-			Usage:       "next example",
-			Description: "more stuff to see when generating bash completion",
-			Action: func(c *cli.Context) {
-				fmt.Printf("the next example")
-			},
-		},
-	}
-
-	app.Run(os.Args)
-	// Output:
-	// describeit
-	// d
-	// next
-	// help
-	// h
-}
-
 func TestApp_Run(t *testing.T) {
 	s := ""
 

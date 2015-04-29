@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"io/ioutil"
 	"text/tabwriter"
@@ -45,7 +44,7 @@ type App struct {
 	// Execute this function if the proper command cannot be found
 	CommandNotFound func(context *Context, command string)
 	// Compilation date
-	Compiled time.Time
+	Compiled string
 	// ExtraInfo pass additional info as a key value map
 	ExtraInfo map[string]string
 	// List of all authors who contributed
@@ -56,20 +55,24 @@ type App struct {
 	Email string
 	// Writer writer to write output to
 	Writer io.Writer
+	// CustomAppHelpTemplate the text template for app help topic.
+	// cli.go uses text/template to render templates. You can
+	// render custom help text by setting this variable.
+	CustomAppHelpTemplate string
 }
 
 // mustCompileTime - determines the modification time of the current binary
-func mustCompileTime() time.Time {
+func mustCompileTime() string {
 	path, err := exec.LookPath(os.Args[0])
 	if err != nil {
-		return time.Time{}
+		return ""
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return time.Time{}
+		return ""
 	}
-	return info.ModTime()
+	return info.ModTime().String()
 }
 
 // NewApp - Creates a new cli Application with some reasonable defaults for Name, Usage, Version and Action.

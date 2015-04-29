@@ -213,6 +213,18 @@ func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	return webDrivers.GetStartServerFunc()
 }
 
+// Build date
+var BuildDate string
+
+// getBuildDate -
+func getBuildDate() string {
+	if BuildDate == "" {
+		return ""
+	}
+	t, _ := time.Parse(time.RFC3339Nano, BuildDate)
+	return t.String()
+}
+
 // Tries to get os/arch/platform specific information
 // Returns a map of current os/arch/platform/memstats
 func getSystemData() map[string]string {
@@ -242,9 +254,6 @@ func getSystemData() map[string]string {
 // Version is based on MD5SUM of its binary
 var Version = mustHashBinarySelf()
 
-// BuildDate - build time
-var BuildDate string
-
 func main() {
 	// set up iodine
 	iodine.SetGlobalState("minio.version", Version)
@@ -254,7 +263,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "minio"
 	app.Version = Version
-	app.Compiled, _ = time.Parse(time.RFC3339Nano, BuildDate)
+	app.Compiled = getBuildDate()
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.Flags = flags
@@ -265,5 +274,28 @@ func main() {
 		}
 		return nil
 	}
+	app.CustomAppHelpTemplate = `NAME:
+  {{.Name}} - {{.Usage}}
+
+USAGE:
+  {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
+
+COMMANDS:
+  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .Flags}}
+GLOBAL FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}{{end}}
+VERSION:
+  {{.Version}}
+  {{if .Compiled}}
+BUILD:
+  {{.Compiled}}{{end}}
+  {{range $key, $value := .ExtraInfo}}
+{{$key}}:
+  {{$value}}
+{{end}}
+`
+
 	app.RunAndExitOnError()
 }
