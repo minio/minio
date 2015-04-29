@@ -33,9 +33,9 @@ import (
 
 	"io/ioutil"
 
-	"github.com/golang/groupcache/lru"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
+	"github.com/minio-io/minio/pkg/storage/drivers/memory/lru"
 	"github.com/minio-io/minio/pkg/utils/log"
 	"github.com/minio-io/minio/pkg/utils/split"
 )
@@ -59,7 +59,8 @@ type storedBucket struct {
 }
 
 type storedObject struct {
-	metadata drivers.ObjectMetadata
+	metadata     drivers.ObjectMetadata
+	lastAccessed time.Time
 }
 
 const (
@@ -483,29 +484,20 @@ func (memory *memoryDriver) expireObjects() {
 		if memory.shutdown {
 			return
 		}
-		var keysToRemove []string
 		if len(memory.objectMetadata) > 0 {
-			memory.lock.RLock()
-			var earliest time.Time
-			for key, object := range memory.objectMetadata {
-				if time.Now().Add(-memory.expiration).After(object.metadata.Created) {
-					keysToRemove = append(keysToRemove, key)
+			var sleepDuration time.Duration
+			memory.lock.Lock()
+			if k, _, ok := memory.objects.GetOldest(); ok {
+				key := k.(string)
+				object := memory.objectMetadata[key]
+				if time.Now().Sub(object.lastAccessed) > memory.expiration {
+					memory.objects.RemoveOldest()
 				} else {
-					if object.metadata.Created.Before(earliest) {
-						earliest = object.metadata.Created
-					}
+					sleepDuration = memory.expiration - time.Now().Sub(object.lastAccessed)
 				}
 			}
-			memory.lock.RUnlock()
-			memory.lock.Lock()
-			for _, key := range keysToRemove {
-				memory.objects.Remove(key)
-			}
 			memory.lock.Unlock()
-			sleepFor := earliest.Sub(time.Now())
-			if sleepFor > 0 {
-				time.Sleep(sleepFor)
-			}
+			time.Sleep(sleepDuration)
 		} else {
 			time.Sleep(memory.expiration)
 		}
