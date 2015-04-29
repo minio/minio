@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"path"
@@ -32,7 +31,6 @@ import (
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/server/httpserver"
-	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 var globalDebugFlag = false
@@ -132,7 +130,7 @@ func init() {
 	// Check for the environment early on and gracefuly report.
 	_, err := user.Current()
 	if err != nil {
-		log.Fatalf("minio: Unable to obtain user's home directory. \nError: %s\n", err)
+		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
 }
 
@@ -143,7 +141,7 @@ func runMemory(c *cli.Context) {
 	apiServerConfig := getAPIServerConfig(c)
 	maxMemory, err := humanize.ParseBytes(c.Args().First())
 	if err != nil {
-		log.Fatalf("MaxMemory not a numeric value with reason: %s", err)
+		Fatalf("Invalid memory size [%s] passed. Reason: %s\n", c.Args().First(), err)
 	}
 	memoryDriver := server.MemoryFactory{
 		Config:    apiServerConfig,
@@ -158,7 +156,7 @@ func runMemory(c *cli.Context) {
 func runDonut(c *cli.Context) {
 	u, err := user.Current()
 	if err != nil {
-		log.Fatalln(err)
+		Fatalln("Unable to determine current user. Reason: %s\n", err)
 	}
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
@@ -189,7 +187,7 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	certFile := c.String("cert")
 	keyFile := c.String("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
-		log.Fatalln("Both certificate and key must be provided to enable https")
+		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
@@ -262,11 +260,8 @@ func main() {
 	app.Flags = flags
 	app.Commands = commands
 	app.Before = func(c *cli.Context) error {
-		globalDebugFlag = c.GlobalBool("debug")
-		if globalDebugFlag {
+		if c.GlobalBool("debug") {
 			app.ExtraInfo = getSystemData()
-		} else {
-			log.Debug = log.New(ioutil.Discard, "", 0)
 		}
 		return nil
 	}
