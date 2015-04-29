@@ -484,34 +484,30 @@ func (memory *memoryDriver) expireObjects() {
 			return
 		}
 		var keysToRemove []string
-		memory.lock.RLock()
-		var earliest time.Time
-		empty := true
-		for key, object := range memory.objectMetadata {
-			if empty {
-				empty = false
-			}
-			if time.Now().Add(-memory.expiration).After(object.metadata.Created) {
-				keysToRemove = append(keysToRemove, key)
-			} else {
-				if object.metadata.Created.Before(earliest) {
-					earliest = object.metadata.Created
+		if len(memory.objectMetadata) > 0 {
+			memory.lock.RLock()
+			var earliest time.Time
+			for key, object := range memory.objectMetadata {
+				if time.Now().Add(-memory.expiration).After(object.metadata.Created) {
+					keysToRemove = append(keysToRemove, key)
+				} else {
+					if object.metadata.Created.Before(earliest) {
+						earliest = object.metadata.Created
+					}
 				}
 			}
-		}
-		memory.lock.RUnlock()
-		memory.lock.Lock()
-		for _, key := range keysToRemove {
-			memory.objects.Remove(key)
-		}
-		memory.lock.Unlock()
-		if empty {
-			time.Sleep(memory.expiration)
-		} else {
+			memory.lock.RUnlock()
+			memory.lock.Lock()
+			for _, key := range keysToRemove {
+				memory.objects.Remove(key)
+			}
+			memory.lock.Unlock()
 			sleepFor := earliest.Sub(time.Now())
 			if sleepFor > 0 {
 				time.Sleep(sleepFor)
 			}
+		} else {
+			time.Sleep(memory.expiration)
 		}
 	}
 }
