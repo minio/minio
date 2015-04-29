@@ -123,6 +123,7 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 			dataSlice := data.([]byte)
 			objectBuffer := bytes.NewBuffer(dataSlice)
 			written, err := io.Copy(w, objectBuffer)
+			go memory.updateAccessTime(objectKey)
 			return written, iodine.New(err, nil)
 		}
 	}
@@ -282,6 +283,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 		Md5:         md5Sum,
 		Size:        int64(totalLength),
 	}
+	newObject.lastAccessed = time.Now()
 	memory.lock.Lock()
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
 		memory.lock.Unlock()
@@ -501,5 +503,14 @@ func (memory *memoryDriver) expireObjects() {
 		} else {
 			time.Sleep(memory.expiration)
 		}
+	}
+}
+
+func (memory *memoryDriver) updateAccessTime(key string) {
+	memory.lock.Lock()
+	defer memory.lock.Unlock()
+	if object, ok := memory.objectMetadata[key]; ok {
+		object.lastAccessed = time.Now()
+		memory.objectMetadata[key] = object
 	}
 }
