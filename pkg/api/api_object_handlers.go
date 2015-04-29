@@ -139,7 +139,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// handle PublicRead ACL here
+	// handle ACL's here at bucket level
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -153,6 +153,19 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		return
+	}
+	size := req.Header.Get("Content-Length")
+	if size == "" {
+		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+		return
+	}
+	if isMaxObjectSize(size) {
+		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		return
+	}
+	if isMinObjectSize(size) {
+		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 		return
 	}
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
