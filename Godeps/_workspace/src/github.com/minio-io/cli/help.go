@@ -8,27 +8,25 @@ import (
 // The text template for the Default help topic.
 // cli.go uses text/template to render templates. You can
 // render custom help text by setting this variable.
-var AppHelpTemplate = `NAME:
+var DefaultAppHelpTemplate = `NAME:
    {{.Name}} - {{.Usage}}
 
 USAGE:
    {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
 
-VERSION:
-   {{.Version}}
-
-BUILD:
-   {{.Compiled}}
-{{range $key, $value := .ExtraInfo}}
-{{ $key }}:
-   {{ $value }}
-{{ end }}
 COMMANDS:
    {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
 GLOBAL FLAGS:
    {{range .Flags}}{{.}}
    {{end}}{{end}}
+VERSION:
+   {{.Version}}
+{{if .Compiled}}
+BUILD:
+   {{.Compiled}}{{end}}
+{{range $key, $value := .ExtraInfo}}
+{{$value}}{{end}}
 `
 
 // The text template for the command help topic.
@@ -120,7 +118,11 @@ func ShowAppHelp(c *Context) {
 			app.Commands = append(app.Commands, command)
 		}
 	}
-	HelpPrinter(AppHelpTemplate, app)
+	if app.CustomAppHelpTemplate != "" {
+		HelpPrinter(app.CustomAppHelpTemplate, app)
+	} else {
+		HelpPrinter(DefaultAppHelpTemplate, app)
+	}
 }
 
 // DefaultAppComplete - Prints the list of subcommands as the default app completion method
