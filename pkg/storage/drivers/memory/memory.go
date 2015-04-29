@@ -419,7 +419,8 @@ func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketR
 	sort.Strings(keys)
 	for _, key := range keys {
 		if len(results) == resources.Maxkeys {
-			return results, drivers.BucketResourcesMetadata{IsTruncated: true}, nil
+			resources.IsTruncated = true
+			return results, resources, nil
 		}
 		object := memory.objectMetadata[bucket+"/"+key]
 		if bucket == object.metadata.Bucket {
