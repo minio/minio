@@ -109,6 +109,14 @@ func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, 
 	return data
 }
 
+// writeSuccessResponse - write success headers
+func writeSuccessResponse(w http.ResponseWriter) {
+	w.Header().Set("Server", "Minio")
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(http.StatusOK)
+}
+
+// writeErrorRespone - write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
 	error := getErrorCode(errorType)
 	errorResponse := getErrorResponse(error, resource)

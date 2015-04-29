@@ -172,9 +172,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			w.Header().Set("Server", "Minio")
-			w.Header().Set("Connection", "close")
-			w.WriteHeader(http.StatusOK)
+			writeSuccessResponse(w)
 		}
 	case drivers.TooManyBuckets:
 		{
@@ -219,9 +217,7 @@ func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Req
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			w.Header().Set("Server", "Minio")
-			w.Header().Set("Connection", "close")
-			w.WriteHeader(http.StatusOK)
+			writeSuccessResponse(w)
 		}
 	case drivers.BucketNameInvalid:
 		{
@@ -258,7 +254,5 @@ func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Always a success if isValidOp succeeds
-	w.Header().Set("Server", "Minio")
-	w.Header().Set("Connection", "close")
-	w.WriteHeader(http.StatusOK)
+	writeSuccessResponse(w)
 }
