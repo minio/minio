@@ -34,6 +34,7 @@ package lru
 
 import (
 	"container/list"
+	"sync"
 )
 
 // Cache is an LRU cache. It is not safe for concurrent access.
@@ -48,6 +49,7 @@ type Cache struct {
 
 	ll    *list.List
 	cache map[interface{}]*list.Element
+	lock  *sync.RWMutex
 }
 
 // A Key may be any value that is comparable. See http://golang.org/ref/spec#Comparison_operators
@@ -66,11 +68,14 @@ func New(maxEntries int) *Cache {
 		MaxEntries: maxEntries,
 		ll:         list.New(),
 		cache:      make(map[interface{}]*list.Element),
+		lock:       &sync.RWMutex{},
 	}
 }
 
 // Add adds a value to the cache.
 func (c *Cache) Add(key Key, value interface{}) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		c.cache = make(map[interface{}]*list.Element)
 		c.ll = list.New()
@@ -89,6 +94,8 @@ func (c *Cache) Add(key Key, value interface{}) {
 
 // Get looks up a key's value from the cache.
 func (c *Cache) Get(key Key) (value interface{}, ok bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		return
 	}
@@ -101,6 +108,8 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 
 // Remove removes the provided key from the cache.
 func (c *Cache) Remove(key Key) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		return
 	}
@@ -111,6 +120,8 @@ func (c *Cache) Remove(key Key) {
 
 // RemoveOldest removes the oldest item from the cache.
 func (c *Cache) RemoveOldest() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		return
 	}
@@ -122,6 +133,8 @@ func (c *Cache) RemoveOldest() {
 
 // GetOldest returns the oldest key, value, ok without modifying the lru
 func (c *Cache) GetOldest() (key Key, value interface{}, ok bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		return nil, nil, false
 	}
@@ -143,6 +156,8 @@ func (c *Cache) removeElement(e *list.Element) {
 
 // Len returns the number of items in the cache.
 func (c *Cache) Len() int {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.cache == nil {
 		return 0
 	}

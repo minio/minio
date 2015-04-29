@@ -39,7 +39,7 @@ type MemoryFactory struct {
 // GetStartServerFunc builds memory api servers
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := memory.Start(f.MaxMemory, 3*time.Hour)
+		_, _, driver := memory.Start(f.MaxMemory, 1*time.Hour)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
 		return ctrl, status
 	}
