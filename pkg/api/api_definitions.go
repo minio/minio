@@ -25,8 +25,8 @@ const (
 	maxObjectList = 1000
 )
 
-// ObjectListResponse format
-type ObjectListResponse struct {
+// ListObjectsResponse - format for list objects response
+type ListObjectsResponse struct {
 	XMLName        xml.Name `xml:"ListBucketResult" json:"-"`
 	Name           string
 	Prefix         string
@@ -38,8 +38,8 @@ type ObjectListResponse struct {
 	CommonPrefixes []*Prefix
 }
 
-// BucketListResponse - bucket list response format
-type BucketListResponse struct {
+// ListBucketsResponse - format for list buckets response
+type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult" json:"-"`
 	Owner   Owner
 	Buckets struct {
@@ -75,7 +75,7 @@ type Owner struct {
 }
 
 // List of not implemented bucket queries
-var unimplementedBucketResourceNames = map[string]bool{
+var notimplementedBucketResourceNames = map[string]bool{
 	"policy":         true,
 	"cors":           true,
 	"lifecycle":      true,
@@ -91,7 +91,7 @@ var unimplementedBucketResourceNames = map[string]bool{
 }
 
 // List of not implemented object queries
-var unimplementedObjectResourceNames = map[string]bool{
+var notimplementedObjectResourceNames = map[string]bool{
 	"uploadId": true,
 	"torrent":  true,
 	"uploads":  true,

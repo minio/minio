@@ -40,6 +40,8 @@ func setCommonHeaders(w http.ResponseWriter, acceptsType string) {
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
 	w.Header().Set("Connection", "close")
+	// should be set to '0' by default
+	w.Header().Set("Content-Length", "0")
 }
 
 // Write error response headers

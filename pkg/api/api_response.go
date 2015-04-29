@@ -19,6 +19,7 @@ package api
 import (
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/minio-io/minio/pkg/storage/drivers"
 )
@@ -34,9 +35,9 @@ const (
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateBucketsListResult(buckets []drivers.BucketMetadata) BucketListResponse {
+func generateListBucketsResponse(buckets []drivers.BucketMetadata) ListBucketsResponse {
 	var listbuckets []*Bucket
-	var data = BucketListResponse{}
+	var data = ListBucketsResponse{}
 	var owner = Owner{}
 
 	owner.ID = "minio"
@@ -70,11 +71,11 @@ func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, bucketResources drivers.BucketResourcesMetadata) ObjectListResponse {
+func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata, bucketResources drivers.BucketResourcesMetadata) ListObjectsResponse {
 	var contents []*Item
 	var prefixes []*Prefix
 	var owner = Owner{}
-	var data = ObjectListResponse{}
+	var data = ListObjectsResponse{}
 
 	owner.ID = "minio"
 	owner.DisplayName = "minio"
@@ -110,20 +111,23 @@ func generateObjectsListResult(bucket string, objects []drivers.ObjectMetadata, 
 }
 
 // writeSuccessResponse - write success headers
-func writeSuccessResponse(w http.ResponseWriter) {
-	w.Header().Set("Server", "Minio")
-	w.Header().Set("Connection", "close")
+func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
+	setCommonHeaders(w, getContentTypeString(acceptsContentType))
 	w.WriteHeader(http.StatusOK)
 }
 
 // writeErrorRespone - write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
 	error := getErrorCode(errorType)
+	// generate error response
 	errorResponse := getErrorResponse(error, resource)
-	// set headers
+	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+	// set common headers
 	setCommonHeaders(w, getContentTypeString(acceptsContentType))
+	// set content-length to size of error response
+	w.Header().Set("Content-Length", strconv.Itoa(len(encodedErrorResponse)))
+	// set headers
 	w.WriteHeader(error.HTTPStatusCode)
 	// write body
-	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 	w.Write(encodedErrorResponse)
 }
