@@ -175,7 +175,26 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
-			writeSuccessResponse(w)
+			metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
+			switch err := iodine.ToError(err).(type) {
+			case nil:
+				w.Header().Set("ETag", metadata.Md5)
+				writeSuccessResponse(w, acceptsContentType)
+			case drivers.ObjectNotFound:
+				{
+					writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+				}
+			case drivers.ObjectNameInvalid:
+				{
+					writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+				}
+			default:
+				{
+					log.Error.Println(iodine.New(err, nil))
+					writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+				}
+			}
+
 		}
 	case drivers.ObjectExists:
 		{

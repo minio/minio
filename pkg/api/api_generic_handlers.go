@@ -162,7 +162,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
 		return
 	}
-	if ignoreUnImplementedObjectResources(r) || ignoreUnImplementedBucketResources(r) {
+	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
 		error := getErrorCode(NotImplemented)
 		errorResponse := getErrorResponse(error, "")
 		setCommonHeaders(w, getContentTypeString(acceptsContentType))
@@ -175,22 +175,22 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 //// helpers
 
-// Checks requests for unimplemented Bucket resources
-func ignoreUnImplementedBucketResources(req *http.Request) bool {
+// Checks requests for not implemented Bucket resources
+func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
-		if unimplementedBucketResourceNames[name] {
+		if notimplementedBucketResourceNames[name] {
 			return true
 		}
 	}
 	return false
 }
 
-// Checks requests for unimplemented Object resources
-func ignoreUnImplementedObjectResources(req *http.Request) bool {
+// Checks requests for not implemented Object resources
+func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	q := req.URL.Query()
 	for name := range q {
-		if unimplementedObjectResourceNames[name] {
+		if notimplementedObjectResourceNames[name] {
 			return true
 		}
 	}

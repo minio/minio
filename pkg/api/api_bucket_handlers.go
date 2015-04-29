@@ -18,6 +18,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/iodine"
@@ -88,12 +89,15 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	switch err := iodine.ToError(err).(type) {
 	case nil: // success
 		{
+			// generate response
+			response := generateListObjectsResponse(bucket, objects, resources)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			// set content-length to the size of the body
+			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
 			w.WriteHeader(http.StatusOK)
 			// write body
-			response := generateObjectsListResult(bucket, objects, resources)
-			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			w.Write(encodedSuccessResponse)
 		}
 	case drivers.ObjectNotFound:
@@ -128,12 +132,15 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
-			response := generateBucketsListResult(buckets)
+			// generate response
+			response := generateListBucketsResponse(buckets)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			// set content-length to the size of the body
+			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
 			w.WriteHeader(http.StatusOK)
 			// write response
-			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			w.Write(encodedSuccessResponse)
 		}
 	default:
@@ -172,7 +179,9 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			writeSuccessResponse(w)
+			// Make sure to add Location information here only for bucket
+			w.Header().Set("Location", "/"+bucket)
+			writeSuccessResponse(w, acceptsContentType)
 		}
 	case drivers.TooManyBuckets:
 		{
@@ -217,7 +226,7 @@ func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Req
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			writeSuccessResponse(w)
+			writeSuccessResponse(w, acceptsContentType)
 		}
 	case drivers.BucketNameInvalid:
 		{
@@ -254,5 +263,5 @@ func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Always a success if isValidOp succeeds
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, acceptsContentType)
 }
