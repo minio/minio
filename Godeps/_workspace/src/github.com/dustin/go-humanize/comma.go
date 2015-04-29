@@ -33,7 +33,7 @@ func Comma(v int64) string {
 		j--
 	}
 	parts[j] = strconv.Itoa(int(v))
-	return sign + strings.Join(parts[j:len(parts)], ",")
+	return sign + strings.Join(parts[j:], ",")
 }
 
 // Commaf produces a string form of the given number in base 10 with
@@ -97,5 +97,5 @@ func BigComma(b *big.Int) string {
 		j--
 	}
 	parts[j] = strconv.Itoa(int(b.Int64()))
-	return sign + strings.Join(parts[j:len(parts)], ",")
+	return sign + strings.Join(parts[j:], ",")
 }
