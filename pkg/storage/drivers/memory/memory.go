@@ -48,6 +48,8 @@ type memoryDriver struct {
 	lock           *sync.RWMutex
 	totalSize      uint64
 	maxSize        uint64
+	expiration     time.Duration
+	shutdown       bool
 }
 
 type storedBucket struct {
@@ -65,7 +67,7 @@ const (
 )
 
 // Start memory object server
-func Start(maxSize uint64) (chan<- string, <-chan error, drivers.Driver) {
+func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan error, drivers.Driver) {
 	ctrlChannel := make(chan string)
 	errorChannel := make(chan error)
 
@@ -75,6 +77,8 @@ func Start(maxSize uint64) (chan<- string, <-chan error, drivers.Driver) {
 	memory.objectMetadata = make(map[string]storedObject)
 	memory.objects = lru.New(0)
 	memory.lock = new(sync.RWMutex)
+	memory.expiration = expiration
+	memory.shutdown = false
 
 	switch {
 	case maxSize == 0:
@@ -86,6 +90,9 @@ func Start(maxSize uint64) (chan<- string, <-chan error, drivers.Driver) {
 	}
 
 	memory.objects.OnEvicted = memory.evictObject
+
+	// set up memory expiration
+	go memory.expireObjects()
 
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, memory
@@ -469,4 +476,42 @@ func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	memory.totalSize = memory.totalSize - uint64(memory.objectMetadata[k].metadata.Size)
 	log.Println("evicting:", k)
 	delete(memory.objectMetadata, k)
+}
+
+func (memory *memoryDriver) expireObjects() {
+	for {
+		if memory.shutdown {
+			return
+		}
+		var keysToRemove []string
+		memory.lock.RLock()
+		var earliest time.Time
+		empty := true
+		for key, object := range memory.objectMetadata {
+			if empty {
+				empty = false
+			}
+			if time.Now().Add(-memory.expiration).After(object.metadata.Created) {
+				keysToRemove = append(keysToRemove, key)
+			} else {
+				if object.metadata.Created.Before(earliest) {
+					earliest = object.metadata.Created
+				}
+			}
+		}
+		memory.lock.RUnlock()
+		memory.lock.Lock()
+		for _, key := range keysToRemove {
+			memory.objects.Remove(key)
+		}
+		memory.lock.Unlock()
+		if empty {
+			time.Sleep(memory.expiration)
+		} else {
+			sleepFor := earliest.Sub(time.Now())
+			if sleepFor > 0 {
+				time.Sleep(sleepFor)
+			}
+		}
+	}
 }

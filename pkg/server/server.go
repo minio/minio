@@ -27,6 +27,7 @@ import (
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
 	"reflect"
+	"time"
 )
 
 // MemoryFactory is used to build memory api servers
@@ -38,7 +39,7 @@ type MemoryFactory struct {
 // GetStartServerFunc builds memory api servers
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := memory.Start(f.MaxMemory)
+		_, _, driver := memory.Start(f.MaxMemory, 3*time.Hour)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
 		return ctrl, status
 	}
