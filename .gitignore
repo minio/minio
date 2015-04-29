@@ -9,3 +9,4 @@ site/
 **/*.sublime-workspace
 /.idea/
 /Minio.iml
+**/access.log
