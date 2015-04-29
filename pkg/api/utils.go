@@ -34,6 +34,8 @@ func isValidMD5(md5 string) bool {
 	return true
 }
 
+/// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
+
 // these should be configurable?
 const (
 	// maximum object size per PUT request is 5GB

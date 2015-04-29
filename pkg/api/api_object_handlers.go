@@ -155,15 +155,18 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 		return
 	}
+	/// if Content-Length missing, incomplete request throw IncompleteBody
 	size := req.Header.Get("Content-Length")
 	if size == "" {
 		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
 		return
 	}
+	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 		return
 	}
+	/// minimum Upload size for objects in a single operation
 	if isMinObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 		return
@@ -171,9 +174,9 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
-		w.Header().Set("Server", "Minio")
-		w.Header().Set("Connection", "close")
-		w.WriteHeader(http.StatusOK)
+		{
+			writeSuccessResponse(w)
+		}
 	case drivers.ObjectExists:
 		{
 			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
