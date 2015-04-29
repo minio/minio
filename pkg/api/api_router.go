@@ -20,13 +20,14 @@ import (
 	"log"
 	"net/http"
 
+	"bytes"
 	"encoding/json"
-	"fmt"
 	router "github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/api/quota"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
+	"io"
 	"os"
 	"time"
 )
@@ -107,6 +108,7 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 
 type logHandler struct {
 	http.Handler
+	Logger chan<- string
 }
 
 // LogMessage is a serializable json log message
@@ -141,10 +143,28 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logMessage.Request = req
 	logMessage.Duration = time.Now().Sub(logMessage.StartTime)
 	js, _ := json.Marshal(logMessage)
-	fmt.Fprintln(os.Stderr, string(js))
+	h.Logger <- string(js)
 }
 
 // LogHandler logs requests
 func LogHandler(h http.Handler) http.Handler {
-	return &logHandler{h}
+	logger, _ := FileLogger("access.log")
+	return &logHandler{Handler: h, Logger: logger}
+}
+
+// FileLogger returns a channel that is used to write to the logger
+func FileLogger(filename string) (chan<- string, error) {
+	ch := make(chan string)
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, iodine.New(err, map[string]string{"logfile": filename})
+	}
+	go func() {
+		for message := range ch {
+			if _, err := io.Copy(file, bytes.NewBufferString(message+"\n")); err != nil {
+				log.Println(iodine.New(err, nil))
+			}
+		}
+	}()
+	return ch, nil
 }
