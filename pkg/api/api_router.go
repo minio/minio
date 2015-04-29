@@ -20,11 +20,15 @@ import (
 	"log"
 	"net/http"
 
+	"encoding/json"
+	"fmt"
 	router "github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/api/quota"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
+	"os"
+	"time"
 )
 
 // private use
@@ -89,7 +93,6 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 	if err := conf.SetupConfig(); err != nil {
 		log.Fatal(iodine.New(err, map[string]string{"domain": domain}))
 	}
-
 	h := timeValidityHandler(mux)
 	h = ignoreResourcesHandler(h)
 	h = validateRequestHandler(conf, h)
@@ -98,5 +101,50 @@ func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
 	//	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
 	//	h = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
 	h = quota.ConnectionLimit(h, 5)
+	h = LogHandler(h)
 	return h
+}
+
+type logHandler struct {
+	http.Handler
+}
+
+// LogMessage is a serializable json log message
+type LogMessage struct {
+	Request         *http.Request
+	StartTime       time.Time
+	Duration        time.Duration
+	Status          int
+	ResponseHeaders http.Header
+}
+
+// LogWriter is used to capture status for log messages
+type LogWriter struct {
+	http.ResponseWriter
+	LogMessage *LogMessage
+}
+
+// WriteHeader writes headers and stores status in LogMessage
+func (w *LogWriter) WriteHeader(status int) {
+	w.LogMessage.Status = status
+	w.ResponseWriter.WriteHeader(status)
+	w.ResponseWriter.Header()
+}
+
+func (h *logHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	logMessage := &LogMessage{
+		StartTime: time.Now(),
+	}
+	logWriter := &LogWriter{ResponseWriter: w, LogMessage: logMessage}
+	h.Handler.ServeHTTP(logWriter, req)
+	logMessage.ResponseHeaders = w.Header()
+	logMessage.Request = req
+	logMessage.Duration = time.Now().Sub(logMessage.StartTime)
+	js, _ := json.Marshal(logMessage)
+	fmt.Fprintln(os.Stderr, string(js))
+}
+
+// LogHandler logs requests
+func LogHandler(h http.Handler) http.Handler {
+	return &logHandler{h}
 }
