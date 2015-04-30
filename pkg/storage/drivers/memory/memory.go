@@ -501,9 +501,9 @@ func (memory *memoryDriver) expireObjects() {
 		if memory.shutdown {
 			return
 		}
+		var sleepDuration time.Duration
+		memory.lock.Lock()
 		if len(memory.objectMetadata) > 0 {
-			var sleepDuration time.Duration
-			memory.lock.Lock()
 			if k, _, ok := memory.objects.GetOldest(); ok {
 				key := k.(string)
 				object := memory.objectMetadata[key]
@@ -513,11 +513,11 @@ func (memory *memoryDriver) expireObjects() {
 					sleepDuration = memory.expiration - time.Now().Sub(object.lastAccessed)
 				}
 			}
-			memory.lock.Unlock()
-			time.Sleep(sleepDuration)
 		} else {
-			time.Sleep(memory.expiration)
+			sleepDuration = memory.expiration
 		}
+		memory.lock.Unlock()
+		time.Sleep(sleepDuration)
 	}
 }
 
