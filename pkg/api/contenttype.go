@@ -32,12 +32,6 @@ func getContentType(req *http.Request) contentType {
 	switch {
 	case acceptHeader == "application/json":
 		return jsonContentType
-	case acceptHeader == "application/xml":
-		return xmlContentType
-	case acceptHeader == "*/*":
-		return xmlContentType
-	case acceptHeader != "":
-		return unknownContentType
 	default:
 		return xmlContentType
 	}

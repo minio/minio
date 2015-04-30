@@ -72,22 +72,25 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Verify if date headers are set, if not reject the request
-	if r.Header.Get("x-amz-date") == "" && r.Header.Get("Date") == "" {
-		// there is no way to knowing if this is a valid request, could be a attack reject such clients
-		writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
-		return
-	}
-	date, err := getDate(r)
-	if err != nil {
-		// there is no way to knowing if this is a valid request, could be a attack reject such clients
-		writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
-		return
-	}
-	duration := time.Since(date)
-	minutes := time.Duration(5) * time.Minute
-	if duration.Minutes() > minutes.Minutes() {
-		writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
-		return
+
+	if r.Header.Get("Authorization") != "" {
+		if r.Header.Get("x-amz-date") == "" && r.Header.Get("Date") == "" {
+			// there is no way to knowing if this is a valid request, could be a attack reject such clients
+			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			return
+		}
+		date, err := getDate(r)
+		if err != nil {
+			// there is no way to knowing if this is a valid request, could be a attack reject such clients
+			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			return
+		}
+		duration := time.Since(date)
+		minutes := time.Duration(5) * time.Minute
+		if duration.Minutes() > minutes.Minutes() {
+			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			return
+		}
 	}
 	h.handler.ServeHTTP(w, r)
 }
