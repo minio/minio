@@ -32,20 +32,24 @@ type connLimit struct {
 	limit       int
 }
 
+func (c *connLimit) IsLimitExceeded(ip uint32) bool {
+	if c.connections[ip] >= c.limit {
+		return true
+	}
+	return false
+}
+
 func (c *connLimit) GetUsed(ip uint32) int {
 	return c.connections[ip]
 }
 
-func (c *connLimit) TestAndAdd(ip uint32) bool {
+func (c *connLimit) Add(ip uint32) {
 	c.Lock()
 	defer c.Unlock()
-	count, _ := c.connections[ip]
-	if count >= c.limit {
-		return false
-	}
+	count := c.connections[ip]
 	count = count + 1
 	c.connections[ip] = count
-	return true
+	return
 }
 
 func (c *connLimit) Remove(ip uint32) {
@@ -64,11 +68,13 @@ func (c *connLimit) Remove(ip uint32) {
 func (c *connLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
-	if !c.TestAndAdd(longIP) {
+	if c.IsLimitExceeded(longIP) {
 		hosts, _ := net.LookupAddr(uint32ToIP(longIP).String())
-		log.Debug.Printf("Offending Host: %s, ConnectionsUSED: %d\n", hosts, c.GetUsed(longIP))
+		log.Debug.Printf("Connection limit reached - Host: %s, Total Connections: %d\n", hosts, c.GetUsed(longIP))
 		writeErrorResponse(w, req, ConnectionLimitExceeded, req.URL.Path)
+		return
 	}
+	c.Add(longIP)
 	defer c.Remove(longIP)
 	c.handler.ServeHTTP(w, req)
 }

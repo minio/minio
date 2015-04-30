@@ -58,11 +58,11 @@ const (
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, resource string) {
 	error := getErrorCode(errorType)
 	errorResponse := getErrorResponse(error, resource)
+	encodedErrorResponse := encodeErrorResponse(errorResponse)
 	// set headers
 	writeErrorHeaders(w)
 	w.WriteHeader(error.HTTPStatusCode)
 	// write body
-	encodedErrorResponse := encodeErrorResponse(errorResponse)
 	w.Write(encodedErrorResponse)
 }
 
