@@ -309,6 +309,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 	if memory.totalSize > memory.maxSize {
 		memory.objects.RemoveOldest()
 	}
+	log.Println("Size:", memory.totalSize)
 	memory.lock.Unlock()
 	return nil
 }
@@ -492,7 +493,8 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
 	memory.totalSize = memory.totalSize - uint64(memory.objectMetadata[k].metadata.Size)
-	log.Println("evicting:", k)
+	log.Println("evicting:", k, memory.objectMetadata[k].metadata.Size)
+	log.Println("Size:", memory.totalSize)
 	delete(memory.objectMetadata, k)
 }
 
