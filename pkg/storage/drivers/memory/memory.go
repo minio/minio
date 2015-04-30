@@ -19,19 +19,17 @@ package memory
 import (
 	"bufio"
 	"bytes"
-	"io"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-
+	"io"
 	"io/ioutil"
+	"runtime/debug"
+	"sort"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -260,11 +258,6 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 			}
 			if uint64(totalLength)+memory.totalSize > memory.maxSize {
 				memory.objects.RemoveOldest()
-				return iodine.New(drivers.EntityTooLarge{
-					Size:      strconv.FormatInt(int64(totalLength), 10),
-					TotalSize: strconv.FormatUint(memory.totalSize, 10),
-					MaxSize:   strconv.FormatUint(memory.maxSize, 10),
-				}, nil)
 			}
 		}
 	}
@@ -293,24 +286,14 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 		memory.lock.Unlock()
 		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
-	// could lead to out of Memory, verify and proceed
-	if uint64(bytesBuffer.Len())+memory.totalSize > memory.maxSize {
-		memory.objects.RemoveOldest()
-		memory.lock.Unlock()
-		return iodine.New(drivers.EntityTooLarge{
-			Size:      strconv.FormatInt(int64(bytesBuffer.Len()), 10),
-			TotalSize: strconv.FormatUint(memory.totalSize, 10),
-			MaxSize:   strconv.FormatUint(memory.maxSize, 10),
-		}, nil)
-	}
 	memory.objectMetadata[objectKey] = newObject
 	memory.objects.Add(objectKey, bytesBuffer.Bytes())
 	memory.totalSize = memory.totalSize + uint64(newObject.metadata.Size)
-	if memory.totalSize > memory.maxSize {
+	for memory.totalSize > memory.maxSize {
 		memory.objects.RemoveOldest()
 	}
-	log.Println("Size:", memory.totalSize)
 	memory.lock.Unlock()
+	debug.FreeOSMemory()
 	return nil
 }
 
@@ -493,9 +476,8 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
 	memory.totalSize = memory.totalSize - uint64(memory.objectMetadata[k].metadata.Size)
-	log.Println("evicting:", k, memory.objectMetadata[k].metadata.Size)
-	log.Println("Size:", memory.totalSize)
 	delete(memory.objectMetadata, k)
+	debug.FreeOSMemory()
 }
 
 func (memory *memoryDriver) expireObjects() {
