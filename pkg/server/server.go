@@ -19,6 +19,9 @@ package server
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"time"
+
 	"github.com/minio-io/minio/pkg/api"
 	"github.com/minio-io/minio/pkg/api/web"
 	"github.com/minio-io/minio/pkg/iodine"
@@ -26,8 +29,6 @@ import (
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
 	"github.com/minio-io/minio/pkg/utils/log"
-	"reflect"
-	"time"
 )
 
 // MemoryFactory is used to build memory api servers
