@@ -20,6 +20,8 @@ import (
 	"net"
 	"net/http"
 	"sync"
+
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 // requestLimitHandler
@@ -28,6 +30,10 @@ type connLimit struct {
 	handler     http.Handler
 	connections map[uint32]int
 	limit       int
+}
+
+func (c *connLimit) GetUsed(ip uint32) int {
+	return c.connections[ip]
 }
 
 func (c *connLimit) TestAndAdd(ip uint32) bool {
@@ -58,12 +64,13 @@ func (c *connLimit) Remove(ip uint32) {
 func (c *connLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	longIP := longIP{net.ParseIP(host)}.IptoUint32()
-	if c.TestAndAdd(longIP) {
-		defer c.Remove(longIP)
-		c.handler.ServeHTTP(w, req)
-	} else {
-		writeErrorResponse(w, req, ConnectionLimitExceeded, req.RequestURI)
+	if !c.TestAndAdd(longIP) {
+		hosts, _ := net.LookupAddr(uint32ToIP(longIP).String())
+		log.Debug.Printf("Offending Host: %s, ConnectionsUSED: %d\n", hosts, c.GetUsed(longIP))
+		writeErrorResponse(w, req, ConnectionLimitExceeded, req.URL.Path)
 	}
+	defer c.Remove(longIP)
+	c.handler.ServeHTTP(w, req)
 }
 
 // ConnectionLimit limits the number of concurrent connections
