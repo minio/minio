@@ -43,18 +43,19 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 			return false
 		}
 	case nil:
-
-		if stripAccessKey(req) == "" && bucketMetadata.ACL.IsPrivate() {
-			return true
-			// Uncomment this before release
-			// writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-			// return false
-		}
-		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
-			return true
-			// Uncomment this before release
-			// writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-			// return false
+		if _, err := stripAuth(req); err != nil {
+			if bucketMetadata.ACL.IsPrivate() {
+				return true
+				//uncomment this when we have webcli
+				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				//return false
+			}
+			if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
+				return true
+				//uncomment this when we have webcli
+				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				//return false
+			}
 		}
 	}
 	return true
@@ -126,7 +127,12 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
-
+	// uncomment this when we have webcli
+	// without access key credentials one cannot list buckets
+	// if _, err := stripAuth(req); err != nil {
+	//	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//	return
+	// }
 	buckets, err := server.driver.ListBuckets()
 	switch err := iodine.ToError(err).(type) {
 	case nil:
@@ -154,17 +160,21 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
-	if isRequestBucketACL(req.URL.Query()) {
-		server.putBucketACLHandler(w, req)
-		return
-	}
-
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
 		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
-
+	// uncomment this when we have webcli
+	// without access key credentials one cannot create a bucket
+	// if _, err := stripAuth(req); err != nil {
+	// 	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//	return
+	// }
+	if isRequestBucketACL(req.URL.Query()) {
+		server.putBucketACLHandler(w, req)
+		return
+	}
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {

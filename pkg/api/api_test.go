@@ -18,9 +18,6 @@ package api
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -31,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"encoding/base64"
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
@@ -113,19 +109,10 @@ func (s *MySuite) TearDownTest(c *C) {
 	s.Root = ""
 }
 
-func setAuthHeader(req *http.Request) {
-	if date := req.Header.Get("Date"); date == "" {
-		req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
-	}
-	hm := hmac.New(sha1.New, []byte("H+AVh8q5G7hEH2r3WxFP135+Q19Aw8yXWel8IGh/HrEjZyTNx/n4Xw=="))
-	ss := getStringToSign(req)
-	io.WriteString(hm, ss)
-	authHeader := new(bytes.Buffer)
-	fmt.Fprintf(authHeader, "AWS %s:", "AC5NH40NQLTL4D2W92PM")
-	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
-	encoder.Write(hm.Sum(nil))
-	encoder.Close()
-	req.Header.Set("Authorization", authHeader.String())
+func setDummyAuthHeader(req *http.Request) {
+	authDummy := "AWS4-HMAC-SHA256 Credential=AC5NH40NQLTL4DUMMY/20130524/us-east-1/s3/aws4_request, SignedHeaders=date;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class, Signature=98ad721746da40c64f1a55b78f14c238d841ea1380cd77a1b5971af0ece108bd"
+	req.Header.Set("Authorization", authDummy)
+	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 }
 
 func (s *MySuite) TestNonExistantBucket(c *C) {
@@ -143,7 +130,7 @@ func (s *MySuite) TestNonExistantBucket(c *C) {
 	s.MockDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	request, err := http.NewRequest("HEAD", testServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	//setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -184,7 +171,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	//setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -225,7 +212,7 @@ func (s *MySuite) TestBucket(c *C) {
 
 	request, err := http.NewRequest("HEAD", testServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -267,7 +254,7 @@ func (s *MySuite) TestObject(c *C) {
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -338,7 +325,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -354,7 +341,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object1").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object1", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -384,7 +371,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object2").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object2", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -414,7 +401,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object3").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object3", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -452,7 +439,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object?policy", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -488,7 +475,7 @@ func (s *MySuite) TestHeader(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -516,7 +503,7 @@ func (s *MySuite) TestHeader(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -553,7 +540,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -603,7 +590,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -622,7 +609,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything, mock.Anything).Return(twoMetadata.Md5, nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -673,7 +660,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	typedDriver.On("ListBuckets").Return([]drivers.BucketMetadata{}, nil).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -694,7 +681,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	typedDriver.On("ListBuckets").Return(bucketMetadata, nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -718,7 +705,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	typedDriver.On("ListBuckets").Return(bucketMetadata, nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -816,7 +803,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	request, err := http.NewRequest("GET", testServer.URL+"/", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -860,7 +847,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	request, err := http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -910,7 +897,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/one", bytes.NewBufferString("hello world"))
 	delete(request.Header, "Content-Type")
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -921,7 +908,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "one", "").Return(oneMetadata, nil).Once()
 	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/one", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -934,7 +921,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "one").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/one", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -958,7 +945,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -968,7 +955,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "two", "").Return(twoMetadata, nil).Once()
 	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/two", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -980,7 +967,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	typedDriver.On("GetObject", mock.Anything, "bucket", "two").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/two", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1029,7 +1016,7 @@ func (s *MySuite) TestPartialContent(c *C) {
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 	request.Header.Add("Range", "bytes=6-7")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -1063,7 +1050,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, drivers.BucketNameInvalid{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1072,7 +1059,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, drivers.BucketNotFound{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
@@ -1081,7 +1068,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.ObjectNameInvalid{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1091,7 +1078,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1101,7 +1088,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	typedDriver.On("ListObjects", "foo", mock.Anything).Return(make([]drivers.ObjectMetadata, 0), drivers.BucketResourcesMetadata{}, drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1138,7 +1125,7 @@ func (s *MySuite) TestListBucketsErrors(c *C) {
 		drivers.BucketResourcesMetadata{}, drivers.BackendCorrupted{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/foo", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1168,7 +1155,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1178,7 +1165,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1188,7 +1175,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1198,7 +1185,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "unknown")
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1233,7 +1220,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1242,7 +1229,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, drivers.BucketNotFound{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1252,7 +1239,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNameInvalid{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1261,7 +1248,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, drivers.BucketNameInvalid{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1271,7 +1258,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1312,7 +1299,7 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
-	setAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1347,6 +1334,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
@@ -1356,6 +1345,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.On("NewMultipartUpload", "foo", "object", "").Return("uploadid", nil).Once()
 	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploads", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response, err = client.Do(request)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -1372,6 +1363,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
@@ -1381,6 +1374,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
@@ -1407,6 +1402,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.On("CompleteMultipartUpload", "foo", "object", "uploadid", mock.Anything).Return("etag", nil).Once()
 	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploadId="+uploadID, &completeBuffer)
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -1418,6 +1415,8 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	typedDriver.SetGetObjectWriter("foo", "object", []byte("hello worldhello world"))
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/object", nil)
 	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)

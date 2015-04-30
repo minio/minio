@@ -44,6 +44,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -105,6 +106,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -147,7 +149,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// handle ACL's here at bucket level
+	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -276,17 +278,20 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 		return
 	}
+
 	/// if Content-Length missing, throw away
 	size := req.Header.Get("Content-Length")
 	if size == "" {
 		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
 		return
 	}
+
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 		return
 	}
+
 	// last part can be less than < 5MB so we need to figure out a way to handle it first
 	// and then enable below code (y4m4)
 	//
@@ -295,6 +300,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	//		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 	//		return
 	//	}
+
 	sizeInt64, err := strconv.ParseInt(size, 10, 64)
 	if err != nil {
 		writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
