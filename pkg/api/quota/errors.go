@@ -46,8 +46,8 @@ const (
 	RequestTimeTooSkewed = iota
 	BandWidthQuotaExceeded
 	BandWidthInsufficientToProceed
-	SlowDown
 	ConnectionLimitExceeded
+	SlowDown
 )
 
 // Golang http doesn't implement these
@@ -77,22 +77,22 @@ func writeErrorHeaders(w http.ResponseWriter) {
 var errorCodeResponse = map[int]Error{
 	BandWidthQuotaExceeded: {
 		Code:           "BandwidthQuotaExceeded",
-		Description:    "Bandwidth Quota Exceeded",
+		Description:    "Bandwidth Quota Exceeded.",
 		HTTPStatusCode: StatusTooManyRequests,
 	},
 	BandWidthInsufficientToProceed: {
 		Code:           "BandwidthQuotaWillBeExceeded",
-		Description:    "Bandwidth quota will be exceeded with this request",
+		Description:    "Bandwidth quota will be exceeded with this request.",
+		HTTPStatusCode: StatusTooManyRequests,
+	},
+	ConnectionLimitExceeded: {
+		Code:           "ConnectionLimitExceeded",
+		Description:    "Connections Limit Exceeded.",
 		HTTPStatusCode: StatusTooManyRequests,
 	},
 	SlowDown: {
 		Code:           "SlowDown",
 		Description:    "Reduce your request rate.",
-		HTTPStatusCode: StatusTooManyRequests,
-	},
-	ConnectionLimitExceeded: {
-		Code:           "ConnectionLimit",
-		Description:    "Connection Limit Met",
 		HTTPStatusCode: StatusTooManyRequests,
 	},
 }
