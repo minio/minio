@@ -198,8 +198,14 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-// CreateObject - PUT object to memory buffer
 func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) (string, error) {
+	humanError, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, data)
+	debug.FreeOSMemory()
+	return humanError, err
+}
+
+// CreateObject - PUT object to memory buffer
+func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) (string, error) {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
 		memory.lock.RUnlock()
@@ -290,8 +296,6 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 		memory.objects.RemoveOldest()
 	}
 	memory.lock.Unlock()
-	// free memory if possible for kernel to reclaim
-	debug.FreeOSMemory()
 	return newObject.Md5, nil
 }
 
@@ -472,6 +476,11 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 }
 
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
+	memory.doEvictObject(key, value)
+	debug.FreeOSMemory()
+}
+
+func (memory *memoryDriver) doEvictObject(key lru.Key, value interface{}) {
 	k := key.(string)
 	// loop through all buckets
 	for bucket, storedBucket := range memory.storedBuckets {
@@ -484,8 +493,6 @@ func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 			delete(memory.storedBuckets, bucket)
 		}
 	}
-	// free memory for kernel to reclaim if possible
-	debug.FreeOSMemory()
 }
 
 func (memory *memoryDriver) expireLRUObjects() {
