@@ -47,6 +47,7 @@ const (
 	BandWidthQuotaExceeded
 	BandWidthInsufficientToProceed
 	SlowDown
+	ConnectionLimitExceeded
 )
 
 // Golang http doesn't implement these
@@ -87,6 +88,11 @@ var errorCodeResponse = map[int]Error{
 	SlowDown: {
 		Code:           "SlowDown",
 		Description:    "Reduce your request rate.",
+		HTTPStatusCode: StatusTooManyRequests,
+	},
+	ConnectionLimitExceeded: {
+		Code:           "ConnectionLimit",
+		Description:    "Connection Limit Met",
 		HTTPStatusCode: StatusTooManyRequests,
 	},
 }
