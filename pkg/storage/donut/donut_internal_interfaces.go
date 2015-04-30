@@ -33,7 +33,7 @@ type Bucket interface {
 	ListObjects() (map[string]Object, error)
 
 	GetObject(object string) (io.ReadCloser, int64, error)
-	PutObject(object string, contents io.Reader, expectedMD5Sum string, metadata map[string]string) error
+	PutObject(object string, contents io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error)
 }
 
 // Object interface

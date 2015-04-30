@@ -137,13 +137,13 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 }
 
 // PutObject - put a new object
-func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) error {
+func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
 	if objectName == "" || objectData == nil {
-		return iodine.New(errors.New("invalid argument"), nil)
+		return "", iodine.New(errors.New("invalid argument"), nil)
 	}
 	writers, err := b.getDiskWriters(b.normalizeObjectName(objectName), "data")
 	if err != nil {
-		return iodine.New(err, nil)
+		return "", iodine.New(err, nil)
 	}
 	summer := md5.New()
 	objectMetadata := make(map[string]string)
@@ -156,7 +156,7 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 		mw := io.MultiWriter(writers[0], summer)
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
-			return iodine.New(err, nil)
+			return "", iodine.New(err, nil)
 		}
 		donutObjectMetadata["sys.size"] = strconv.FormatInt(totalLength, 10)
 		objectMetadata["size"] = strconv.FormatInt(totalLength, 10)
@@ -164,12 +164,12 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 		// calculate data and parity dictated by total number of writers
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
-			return iodine.New(err, nil)
+			return "", iodine.New(err, nil)
 		}
 		// encoded data with k, m and write
 		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, summer)
 		if err != nil {
-			return iodine.New(err, nil)
+			return "", iodine.New(err, nil)
 		}
 		/// donutMetadata section
 		donutObjectMetadata["sys.blockSize"] = strconv.Itoa(10 * 1024 * 1024)
@@ -198,20 +198,20 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := b.isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), objectMetadata["md5"]); err != nil {
-			return iodine.New(err, nil)
+			return "", iodine.New(err, nil)
 		}
 	}
 	// write donut specific metadata
 	if err := b.writeDonutObjectMetadata(b.normalizeObjectName(objectName), donutObjectMetadata); err != nil {
-		return iodine.New(err, nil)
+		return "", iodine.New(err, nil)
 	}
 	// write object specific metadata
 	if err := b.writeObjectMetadata(b.normalizeObjectName(objectName), objectMetadata); err != nil {
-		return iodine.New(err, nil)
+		return "", iodine.New(err, nil)
 	}
 	// close all writers, when control flow reaches here
 	for _, writer := range writers {
 		writer.Close()
 	}
-	return nil
+	return objectMetadata["md5"], nil
 }

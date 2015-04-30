@@ -199,26 +199,26 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 // CreateObject - PUT object to memory buffer
-func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) error {
+func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) (string, error) {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
 		memory.lock.RUnlock()
-		return iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !drivers.IsValidObject(key) {
 		memory.lock.RUnlock()
-		return iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := memory.storedBuckets[bucket]; ok == false {
 		memory.lock.RUnlock()
-		return iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := memory.storedBuckets[bucket]
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		memory.lock.RUnlock()
-		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
+		return "", iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
 	memory.lock.RUnlock()
 
@@ -230,7 +230,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
-			return iodine.New(drivers.InvalidDigest{Md5: expectedMD5Sum}, nil)
+			return "", iodine.New(drivers.InvalidDigest{Md5: expectedMD5Sum}, nil)
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -248,7 +248,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 			if err != nil {
 				err := iodine.New(err, nil)
 				log.Println(err)
-				return err
+				return "", err
 			}
 			if uint64(totalLength)+memory.totalSize > memory.maxSize {
 				memory.objects.RemoveOldest()
@@ -263,7 +263,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 			memory.lock.Lock()
 			defer memory.lock.Unlock()
 			memory.objects.RemoveOldest()
-			return iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
+			return "", iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
 		}
 	}
 	newObject := drivers.ObjectMetadata{
@@ -292,7 +292,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 	memory.lock.Unlock()
 	// free memory if possible for kernel to reclaim
 	debug.FreeOSMemory()
-	return nil
+	return newObject.Md5, nil
 }
 
 // CreateBucket - create bucket in memory

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"math/rand"
 	"strconv"
 
@@ -67,12 +68,14 @@ func testMultipleObjectCreation(c *check.C, create func() Driver) {
 
 		hasher := md5.New()
 		hasher.Write([]byte(randomString))
-		md5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		err := drivers.CreateObject("bucket", key, "", md5Sum, bytes.NewBufferString(randomString))
+		calculatedmd5sum, err := drivers.CreateObject("bucket", key, "", expectedmd5Sum, bytes.NewBufferString(randomString))
 		c.Assert(err, check.IsNil)
+		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
 	}
 
 	// ensure no duplicate etags
@@ -206,15 +209,17 @@ func testObjectOverwriteFails(c *check.C, create func() Driver) {
 	hasher1 := md5.New()
 	hasher1.Write([]byte("one"))
 	md5Sum1 := base64.StdEncoding.EncodeToString(hasher1.Sum(nil))
-	err := drivers.CreateObject("bucket", "object", "", md5Sum1, bytes.NewBufferString("one"))
+	md5Sum1hex := hex.EncodeToString(hasher1.Sum(nil))
+	md5Sum11, err := drivers.CreateObject("bucket", "object", "", md5Sum1, bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
+	c.Assert(md5Sum1hex, check.Equals, md5Sum11)
 
 	hasher2 := md5.New()
 	hasher2.Write([]byte("three"))
 	md5Sum2 := base64.StdEncoding.EncodeToString(hasher2.Sum(nil))
-	err = drivers.CreateObject("bucket", "object", "", md5Sum2, bytes.NewBufferString("three"))
-
+	_, err = drivers.CreateObject("bucket", "object", "", md5Sum2, bytes.NewBufferString("three"))
 	c.Assert(err, check.Not(check.IsNil))
+
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "object")
 	c.Assert(length, check.Equals, int64(len("one")))
@@ -224,7 +229,7 @@ func testObjectOverwriteFails(c *check.C, create func() Driver) {
 
 func testNonExistantBucketOperations(c *check.C, create func() Driver) {
 	drivers := create()
-	err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
+	_, err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
 }
 
@@ -253,9 +258,11 @@ func testPutObjectInSubdir(c *check.C, create func() Driver) {
 
 	hasher := md5.New()
 	hasher.Write([]byte("hello world"))
-	md5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", md5Sum, bytes.NewBufferString("hello world"))
+	md5Sum1 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+	md5Sum1hex := hex.EncodeToString(hasher.Sum(nil))
+	md5Sum11, err := drivers.CreateObject("bucket", "dir1/dir2/object", "", md5Sum1, bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
+	c.Assert(md5Sum11, check.Equals, md5Sum1hex)
 
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
@@ -349,7 +356,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Driver) {
 	err := drivers.CreateBucket("bucket", "")
 	c.Assert(err, check.IsNil)
 
-	err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
+	_, err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -393,7 +400,7 @@ func testDefaultContentType(c *check.C, create func() Driver) {
 	c.Assert(err, check.IsNil)
 
 	// test empty
-	err = drivers.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
+	_, err = drivers.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
 	metadata, err := drivers.GetObjectMetadata("bucket", "one", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
@@ -417,8 +424,13 @@ func testContentMd5Set(c *check.C, create func() Driver) {
 	c.Assert(err, check.IsNil)
 
 	// test md5 invalid
-	err = drivers.CreateObject("bucket", "one", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA", bytes.NewBufferString("one"))
+	badmd5Sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA"
+	calculatedmd5sum, err := drivers.CreateObject("bucket", "one", "", badmd5Sum, bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
-	err = drivers.CreateObject("bucket", "two", "", "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA=", bytes.NewBufferString("one"))
+	c.Assert(calculatedmd5sum, check.Not(check.Equals), badmd5Sum)
+
+	goodmd5sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA="
+	calculatedmd5sum, err = drivers.CreateObject("bucket", "two", "", goodmd5sum, bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
+	c.Assert(calculatedmd5sum, check.Equals, goodmd5sum)
 }
