@@ -476,6 +476,7 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
 	k := key.(string)
 	memory.totalSize = memory.totalSize - uint64(memory.objectMetadata[k].metadata.Size)
+	log.Println("Evicting: ", k, memory.objectMetadata[k].metadata.Size, memory.totalSize)
 	delete(memory.objectMetadata, k)
 	debug.FreeOSMemory()
 }
