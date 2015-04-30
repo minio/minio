@@ -61,6 +61,8 @@ func (c *connLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if c.TestAndAdd(longIP) {
 		defer c.Remove(longIP)
 		c.handler.ServeHTTP(w, req)
+	} else {
+		writeErrorResponse(w, req, ConnectionLimitExceeded, req.RequestURI)
 	}
 }
 
