@@ -179,7 +179,7 @@ func validateAuthHeaderHandler(h http.Handler) http.Handler {
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	_, err := stripAuth(r)
+	auth, err := stripAuth(r)
 	switch err.(type) {
 	case nil:
 		var conf = config.Config{}
@@ -191,12 +191,11 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
-		// uncomment this when we have webcli
-		// _, ok := conf.Users[auth.accessKey]
-		//if !ok {
-		//	writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-		//	return
-		//}
+		_, ok := conf.Users[auth.accessKey]
+		if !ok {
+			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+			return
+		}
 		// Success
 		h.handler.ServeHTTP(w, r)
 	default:
