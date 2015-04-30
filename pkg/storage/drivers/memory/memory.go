@@ -258,10 +258,12 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 				log.Println(err)
 				return err
 			}
-			if uint64(totalLength) > memory.maxSize {
+			if uint64(totalLength)+memory.totalSize > memory.maxSize {
+				memory.objects.RemoveOldest()
 				return iodine.New(drivers.EntityTooLarge{
 					Size:      strconv.FormatInt(int64(totalLength), 10),
 					TotalSize: strconv.FormatUint(memory.totalSize, 10),
+					MaxSize:   strconv.FormatUint(memory.maxSize, 10),
 				}, nil)
 			}
 		}
@@ -271,6 +273,7 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
+			memory.objects.RemoveOldest()
 			return iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
 		}
 	}
@@ -286,13 +289,24 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 	newObject.lastAccessed = time.Now()
 	memory.lock.Lock()
 	if _, ok := memory.objectMetadata[objectKey]; ok == true {
+		memory.objects.RemoveOldest()
 		memory.lock.Unlock()
 		return iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
+	}
+	// could lead to out of Memory, verify and proceed
+	if uint64(bytesBuffer.Len())+memory.totalSize > memory.maxSize {
+		memory.objects.RemoveOldest()
+		memory.lock.Unlock()
+		return iodine.New(drivers.EntityTooLarge{
+			Size:      strconv.FormatInt(int64(bytesBuffer.Len()), 10),
+			TotalSize: strconv.FormatUint(memory.totalSize, 10),
+			MaxSize:   strconv.FormatUint(memory.maxSize, 10),
+		}, nil)
 	}
 	memory.objectMetadata[objectKey] = newObject
 	memory.objects.Add(objectKey, bytesBuffer.Bytes())
 	memory.totalSize = memory.totalSize + uint64(newObject.metadata.Size)
-	for memory.totalSize > memory.maxSize {
+	if memory.totalSize > memory.maxSize {
 		memory.objects.RemoveOldest()
 	}
 	memory.lock.Unlock()

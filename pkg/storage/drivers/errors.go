@@ -94,6 +94,7 @@ type EntityTooLarge struct {
 	GenericObjectError
 	Size      string
 	TotalSize string
+	MaxSize   string
 }
 
 // ObjectNameInvalid - object name provided is invalid
