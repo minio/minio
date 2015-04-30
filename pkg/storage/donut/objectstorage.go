@@ -153,38 +153,38 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 }
 
 // PutObject - put object
-func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) error {
+func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
 	}
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return iodine.New(errors.New("invalid argument"), errParams)
+		return "", iodine.New(errors.New("invalid argument"), errParams)
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return iodine.New(errors.New("invalid argument"), errParams)
+		return "", iodine.New(errors.New("invalid argument"), errParams)
 	}
 	err := d.getDonutBuckets()
 	if err != nil {
-		return iodine.New(err, errParams)
+		return "", iodine.New(err, errParams)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return iodine.New(errors.New("bucket does not exist"), nil)
+		return "", iodine.New(errors.New("bucket does not exist"), nil)
 	}
 	objectList, err := d.buckets[bucket].ListObjects()
 	if err != nil {
-		return iodine.New(err, nil)
+		return "", iodine.New(err, nil)
 	}
 	for objectName := range objectList {
 		if objectName == object {
-			return iodine.New(errors.New("object exists"), nil)
+			return "", iodine.New(errors.New("object exists"), nil)
 		}
 	}
-	err = d.buckets[bucket].PutObject(object, reader, expectedMD5Sum, metadata)
+	md5sum, err := d.buckets[bucket].PutObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
-		return iodine.New(err, errParams)
+		return "", iodine.New(err, errParams)
 	}
-	return nil
+	return md5sum, nil
 }
 
 // GetObject - get object

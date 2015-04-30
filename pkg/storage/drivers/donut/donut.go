@@ -366,17 +366,17 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 }
 
 // CreateObject creates a new object
-func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMD5Sum string, reader io.Reader) error {
+func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMD5Sum string, reader io.Reader) (string, error) {
 	errParams := map[string]string{
 		"bucketName":  bucketName,
 		"objectName":  objectName,
 		"contentType": contentType,
 	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
-		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
+		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
-		return iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
+		return "", iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	if strings.TrimSpace(contentType) == "" {
 		contentType = "application/octet-stream"
@@ -387,13 +387,13 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
-			return iodine.New(err, nil)
+			return "", iodine.New(err, nil)
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-	err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, ioutil.NopCloser(reader), metadata)
+	calculatedMD5Sum, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, ioutil.NopCloser(reader), metadata)
 	if err != nil {
-		return iodine.New(err, errParams)
+		return "", iodine.New(err, errParams)
 	}
-	return nil
+	return calculatedMD5Sum, nil
 }

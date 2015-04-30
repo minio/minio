@@ -162,7 +162,7 @@ func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
 	defer os.RemoveAll(root)
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
-	err = donut.PutObject("foo", "obj", "", nil, nil)
+	_, err = donut.PutObject("foo", "obj", "", nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -188,8 +188,9 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	err = donut.MakeBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	err = donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
+	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
 
 	objectMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
@@ -207,10 +208,10 @@ func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 
-	err = donut.PutObject("foo", "", "", nil, nil)
+	_, err = donut.PutObject("foo", "", "", nil, nil)
 	c.Assert(err, Not(IsNil))
 
-	err = donut.PutObject("foo", " ", "", nil, nil)
+	_, err = donut.PutObject("foo", " ", "", nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -234,8 +235,9 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	expectedMd5Sum := hex.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	err = donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
+	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
 
 	reader, size, err := donut.GetObject("foo", "obj")
 	c.Assert(err, IsNil)
@@ -266,11 +268,11 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(donut.MakeBucket("foo", "private"), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
-	err = donut.PutObject("foo", "obj1", "", one, nil)
+	_, err = donut.PutObject("foo", "obj1", "", one, nil)
 	c.Assert(err, IsNil)
 
 	two := ioutil.NopCloser(bytes.NewReader([]byte("two")))
-	err = donut.PutObject("foo", "obj2", "", two, nil)
+	_, err = donut.PutObject("foo", "obj2", "", two, nil)
 	c.Assert(err, IsNil)
 
 	obj1, size, err := donut.GetObject("foo", "obj1")
@@ -313,7 +315,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
-	err = donut.PutObject("foo", "obj3", "", three, nil)
+	_, err = donut.PutObject("foo", "obj3", "", three, nil)
 	c.Assert(err, IsNil)
 
 	obj3, size, err := donut.GetObject("foo", "obj3")
