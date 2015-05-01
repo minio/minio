@@ -24,13 +24,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
 )
 
@@ -175,8 +175,8 @@ var subResList = []string{
 // 	  <HTTP-Request-URI, from the protocol name up to the query string> +
 // 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
 func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
-	// Grab bucket name from hostname
-	bucket := bucketFromHostname(req)
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
 	if bucket != "" {
 		buf.WriteByte('/')
 		buf.WriteString(bucket)
@@ -202,24 +202,4 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 			}
 		}
 	}
-}
-
-// Convert subdomain http request into bucketname if possible
-func bucketFromHostname(req *http.Request) string {
-	host, _, _ := net.SplitHostPort(req.Host)
-	// Verify incoming request if only IP with no bucket subdomain
-	if net.ParseIP(host) != nil {
-		return ""
-	}
-	if host == "" {
-		host = req.URL.Host
-	}
-
-	// Grab the bucket from the incoming hostname
-	host = strings.TrimSpace(host)
-	hostParts := strings.Split(host, ".")
-	if len(hostParts) > 2 {
-		return hostParts[0]
-	}
-	return ""
 }

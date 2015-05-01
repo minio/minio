@@ -41,7 +41,8 @@ type MemoryFactory struct {
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := memory.Start(f.MaxMemory, 1*time.Hour)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
+		//ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler("", driver), f.Config)
 		return ctrl, status
 	}
 }
@@ -69,7 +70,7 @@ type DonutFactory struct {
 func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := donut.Start(f.Paths)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
+		ctrl, status, _ := httpserver.Start(api.HTTPHandler("", driver), f.Config)
 		return ctrl, status
 	}
 }

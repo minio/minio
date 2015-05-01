@@ -47,6 +47,7 @@ func pathMux(api minioAPI, mux *router.Router) *router.Router {
 	return mux
 }
 
+/*
 // Domain based routing
 func domainMux(api minioAPI, mux *router.Router) *router.Router {
 	mux.HandleFunc("/",
@@ -63,15 +64,16 @@ func domainMux(api minioAPI, mux *router.Router) *router.Router {
 
 	return mux
 }
+*/
 
 // Get proper router based on domain availability
 func getMux(api minioAPI, mux *router.Router) *router.Router {
 	switch true {
 	case api.domain == "":
 		return pathMux(api, mux)
-	case api.domain != "":
-		s := mux.Host(api.domain).Subrouter()
-		return domainMux(api, s)
+		//	case api.domain != "":
+		//		s := mux.Host(api.domain).Subrouter()
+		//		return domainMux(api, s)
 	}
 	return nil
 }
