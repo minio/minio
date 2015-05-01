@@ -85,7 +85,9 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory.objects.OnEvicted = memory.evictObject
 
 	// set up memory expiration
-	go memory.expireLRUObjects()
+	if expiration > 0 {
+		go memory.expireLRUObjects()
+	}
 
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, memory
