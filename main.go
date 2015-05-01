@@ -259,6 +259,9 @@ func main() {
 	iodine.SetGlobalState("minio.version", Version)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
 
+	// set up go max processes
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
