@@ -93,11 +93,11 @@ EXAMPLES:
 }
 
 var flags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "domain",
-		Value: "",
-		Usage: "domain used for routing incoming API requests",
-	},
+	//	cli.StringFlag{
+	//		Name:  "domain",
+	//		Value: "",
+	//		Usage: "domain used for routing incoming API requests",
+	//	},
 	cli.StringFlag{
 		Name:  "api-address",
 		Value: ":9000",
@@ -191,7 +191,7 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
-		Domain:   c.GlobalString("domain"),
+		//		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("api-address"),
 		TLS:      tls,
 		CertFile: certFile,
@@ -201,7 +201,7 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 
 func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	config := httpserver.Config{
-		Domain:   c.GlobalString("domain"),
+		//		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("web-address"),
 		TLS:      false,
 		CertFile: "",
