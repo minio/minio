@@ -27,8 +27,8 @@
 		},
 		{
 			"ImportPath": "github.com/minio-io/cli",
-			"Comment": "1.2.0-108-g4ad376c",
-			"Rev": "4ad376c97a51a452e36aaa4c19e42560e64be836"
+			"Comment": "1.2.0-110-g111d644",
+			"Rev": "111d6445d384505978aaf5b218ce96d163b73c57"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",

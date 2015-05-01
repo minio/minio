@@ -34,13 +34,14 @@ import (
 // MemoryFactory is used to build memory api servers
 type MemoryFactory struct {
 	httpserver.Config
-	MaxMemory uint64
+	MaxMemory  uint64
+	Expiration time.Duration
 }
 
 // GetStartServerFunc builds memory api servers
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := memory.Start(f.MaxMemory, 1*time.Hour)
+		_, _, driver := memory.Start(f.MaxMemory, f.Expiration)
 		//ctrl, status, _ := httpserver.Start(api.HTTPHandler(f.Domain, driver), f.Config)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler("", driver), f.Config)
 		return ctrl, status

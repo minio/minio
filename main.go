@@ -141,11 +141,22 @@ func runMemory(c *cli.Context) {
 	apiServerConfig := getAPIServerConfig(c)
 	maxMemory, err := humanize.ParseBytes(c.Args().First())
 	if err != nil {
-		Fatalf("Invalid memory size [%s] passed. Reason: %s\n", c.Args().First(), err)
+		Fatalf("Invalid memory size [%s] passed. Reason: %s\n", c.Args().First(), iodine.New(err, nil))
+	}
+	tail := c.Args().Tail()
+	var expiration time.Duration
+	if tail.First() != "" {
+		expiration, err = time.ParseDuration(tail.First())
+		if err != nil {
+			Fatalf("Invalid expiration time [%s] passed. Reason: %s\n", tail.First(), iodine.New(err, nil))
+		}
+	} else {
+		expiration = 0
 	}
 	memoryDriver := server.MemoryFactory{
-		Config:    apiServerConfig,
-		MaxMemory: maxMemory,
+		Config:     apiServerConfig,
+		MaxMemory:  maxMemory,
+		Expiration: expiration,
 	}
 	apiServer := memoryDriver.GetStartServerFunc()
 	webServer := getWebServerConfigFunc(c)
