@@ -186,7 +186,7 @@ func (a Args) Last() string {
 
 // Tail - Return the rest of the arguments (not the first one)
 // or else an empty string slice
-func (a Args) Tail() []string {
+func (a Args) Tail() Args {
 	if len(a) >= 2 {
 		return []string(a)[1:]
 	}
