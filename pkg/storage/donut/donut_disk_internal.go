@@ -44,16 +44,17 @@ func (d disk) formatBytes(i int64) (result string) {
 
 // fsType2StrinMap - list of filesystems supported by donut
 var fsType2StringMap = map[string]string{
+	"01021994": "TMPFS",
 	"137d":     "EXT",
-	"ef51":     "EXT2OLD",
-	"ef53":     "EXT4",
 	"4244":     "HFS",
-	"5346544e": "NTFS",
 	"4d44":     "MSDOS",
 	"52654973": "REISERFS",
-	"6969":     "NFS",
-	"01021994": "TMPFS",
+	"5346544e": "NTFS",
 	"58465342": "XFS",
+	"61756673": "AUFS",
+	"6969":     "NFS",
+	"ef51":     "EXT2OLD",
+	"ef53":     "EXT4",
 }
 
 // getFSType - get filesystem type
