@@ -50,7 +50,7 @@ func (c *Config) SetupConfig() error {
 	}
 
 	confPath := path.Join(u.HomeDir, ".minio")
-	if err := os.MkdirAll(confPath, os.ModeDir); err != nil {
+	if err := os.MkdirAll(confPath, 0700); err != nil {
 		return iodine.New(err, nil)
 	}
 
