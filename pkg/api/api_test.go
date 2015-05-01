@@ -113,17 +113,18 @@ func (s *MySuite) TearDownTest(c *C) {
 }
 
 func setAuthHeader(req *http.Request) {
+	if date := req.Header.Get("Date"); date == "" {
+		req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	}
 	hm := hmac.New(sha1.New, []byte("H+AVh8q5G7hEH2r3WxFP135+Q19Aw8yXWel8IGh/HrEjZyTNx/n4Xw=="))
 	ss := getStringToSign(req)
 	io.WriteString(hm, ss)
-
 	authHeader := new(bytes.Buffer)
 	fmt.Fprintf(authHeader, "AWS %s:", "AC5NH40NQLTL4D2W92PM")
 	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
 	encoder.Write(hm.Sum(nil))
 	encoder.Close()
 	req.Header.Set("Authorization", authHeader.String())
-	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 }
 
 func (s *MySuite) TestNonExistantBucket(c *C) {

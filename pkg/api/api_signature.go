@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/api/config"
 )
 
@@ -169,14 +168,30 @@ var subResList = []string{
 	"website",
 }
 
+func url2BucketAndObject(url string) (string, string) {
+	var bucketName, objectName string
+	splits := strings.SplitN(url, "/", 3)
+	switch len(splits) {
+	case 0, 1:
+		bucketName = ""
+		objectName = ""
+	case 2:
+		bucketName = splits[1]
+		objectName = ""
+	case 3:
+		bucketName = splits[1]
+		objectName = splits[2]
+	}
+	return bucketName, objectName
+}
+
 // From the Amazon docs:
 //
 // CanonicalizedResource = [ "/" + Bucket ] +
 // 	  <HTTP-Request-URI, from the protocol name up to the query string> +
 // 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
 func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
+	bucket, _ := url2BucketAndObject(req.URL.Path)
 	if bucket != "" {
 		buf.WriteByte('/')
 		buf.WriteString(bucket)
