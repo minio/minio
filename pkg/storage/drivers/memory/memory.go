@@ -277,7 +277,7 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		Key:    key,
 
 		ContentType: contentType,
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         md5Sum,
 		Size:        int64(totalLength),
 	}
@@ -328,7 +328,7 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	newBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
 	newBucket.bucketMetadata = drivers.BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
-	newBucket.bucketMetadata.Created = time.Now()
+	newBucket.bucketMetadata.Created = time.Now().UTC()
 	newBucket.bucketMetadata.ACL = drivers.BucketACL(acl)
 	memory.lock.Lock()
 	defer memory.lock.Unlock()
@@ -522,5 +522,5 @@ func (memory *memoryDriver) expireLRUObjects() {
 func (memory *memoryDriver) updateAccessTime(key string) {
 	memory.lock.Lock()
 	defer memory.lock.Unlock()
-	memory.lastAccessedObjects[key] = time.Now()
+	memory.lastAccessedObjects[key] = time.Now().UTC()
 }

@@ -19,12 +19,13 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/utils/log"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio-io/minio/pkg/utils/log"
 )
 
 type logHandler struct {
@@ -56,13 +57,13 @@ func (w *LogWriter) WriteHeader(status int) {
 
 func (h *logHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logMessage := &LogMessage{
-		StartTime: time.Now(),
+		StartTime: time.Now().UTC(),
 	}
 	logWriter := &LogWriter{ResponseWriter: w, LogMessage: logMessage}
 	h.Handler.ServeHTTP(logWriter, req)
 	logMessage.ResponseHeaders = w.Header()
 	logMessage.Request = req
-	logMessage.Duration = time.Now().Sub(logMessage.StartTime)
+	logMessage.Duration = time.Now().UTC().Sub(logMessage.StartTime)
 	js, _ := json.Marshal(logMessage)
 	h.Logger <- string(js)
 }

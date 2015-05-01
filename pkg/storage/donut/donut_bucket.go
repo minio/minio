@@ -54,11 +54,12 @@ func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bu
 	}
 	bucketMetadata := make(map[string]string)
 	bucketMetadata["acl"] = aclType
-	bucketMetadata["created"] = time.Now().Format(time.RFC3339Nano)
+	t := time.Now().UTC()
+	bucketMetadata["created"] = t.Format(time.RFC3339Nano)
 	b := bucket{}
 	b.name = bucketName
 	b.acl = aclType
-	b.time = time.Now()
+	b.time = t
 	b.donutName = donutName
 	b.objects = make(map[string]Object)
 	b.nodes = nodes
@@ -188,7 +189,7 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 		objectMetadata[k] = v
 	}
 	dataMd5sum := summer.Sum(nil)
-	objectMetadata["created"] = time.Now().Format(time.RFC3339Nano)
+	objectMetadata["created"] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	// keeping md5sum for the object in two different places
 	// one for object storage and another is for internal use
