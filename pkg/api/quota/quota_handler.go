@@ -35,7 +35,7 @@ type quotaMap struct {
 func (q *quotaMap) CanExpire() {
 	q.Lock()
 	defer q.Unlock()
-	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
+	currentMinute := time.Now().UTC().UnixNano() / q.segmentSize.Nanoseconds()
 	// divide by segmentSize, otherwise expiredQuotas will always be negative
 	expiredQuotas := currentMinute - (q.duration.Nanoseconds() / q.segmentSize.Nanoseconds())
 	for time := range q.data {
@@ -49,7 +49,7 @@ func (q *quotaMap) Add(ip uint32, size int64) {
 	q.CanExpire()
 	q.Lock()
 	defer q.Unlock()
-	currentMinute := time.Now().UnixNano() / q.segmentSize.Nanoseconds()
+	currentMinute := time.Now().UTC().UnixNano() / q.segmentSize.Nanoseconds()
 	if _, ok := q.data[currentMinute]; !ok {
 		q.data[currentMinute] = make(map[uint32]int64)
 	}

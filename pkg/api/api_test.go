@@ -162,7 +162,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 		Bucket:      "bucket",
 		Key:         "key",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "d41d8cd98f00b204e9800998ecf8427e",
 		Size:        0,
 	}
@@ -209,7 +209,7 @@ func (s *MySuite) TestBucket(c *C) {
 	typedDriver := s.MockDriver
 	metadata := drivers.BucketMetadata{
 		Name:    "bucket",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
@@ -244,7 +244,7 @@ func (s *MySuite) TestObject(c *C) {
 		Bucket:      "bucket",
 		Key:         "key",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
 		Size:        11,
 	}
@@ -294,7 +294,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Bucket:      "bucket",
 		Key:         "object1",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
 		Size:        9,
 	}
@@ -302,7 +302,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Bucket:      "bucket",
 		Key:         "object2",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
 		Size:        9,
 	}
@@ -310,7 +310,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Bucket:      "bucket",
 		Key:         "object3",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
 		Size:        11,
 	}
@@ -479,7 +479,7 @@ func (s *MySuite) TestHeader(c *C) {
 
 	bucketMetadata := drivers.BucketMetadata{
 		Name:    "bucket",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 	typedDriver.On("GetBucketMetadata", "bucket").Return(bucketMetadata, nil).Once()
@@ -498,7 +498,7 @@ func (s *MySuite) TestHeader(c *C) {
 		Bucket:      "bucket",
 		Key:         "object",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
 		Size:        11,
 	}
@@ -593,8 +593,8 @@ func (s *MySuite) TestPutObject(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	// breaks on fs driver,// breaks on fs driver, so we subtract one second
-	// date1 := time.Now()
-	date1 := time.Now().Add(-time.Second)
+	// date1 := time.Now().UTC()
+	date1 := time.Now().UTC().Add(-time.Second)
 
 	// Put Bucket before - Put Object into a bucket
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
@@ -612,7 +612,7 @@ func (s *MySuite) TestPutObject(c *C) {
 		Bucket:      "bucket",
 		Key:         "two",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
 		Size:        11,
 	}
@@ -626,7 +626,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	date2 := time.Now()
+	date2 := time.Now().UTC()
 
 	resources.Maxkeys = 1000
 	resources.Prefix = ""
@@ -687,7 +687,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 
 	bucketMetadata := []drivers.BucketMetadata{
-		{Name: "foo", Created: time.Now()},
+		{Name: "foo", Created: time.Now().UTC()},
 	}
 	typedDriver.On("ListBuckets").Return(bucketMetadata, nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/", nil)
@@ -709,7 +709,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 
 	bucketMetadata = []drivers.BucketMetadata{
-		{Name: "bar", Created: time.Now()},
+		{Name: "bar", Created: time.Now().UTC()},
 		bucketMetadata[0],
 	}
 
@@ -810,7 +810,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	err := driver.CreateBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	typedDriver.On("ListBuckets").Return([]drivers.BucketMetadata{{Name: "foo", Created: time.Now()}}, nil)
+	typedDriver.On("ListBuckets").Return([]drivers.BucketMetadata{{Name: "foo", Created: time.Now().UTC()}}, nil)
 	request, err := http.NewRequest("GET", testServer.URL+"/", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
@@ -849,7 +849,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 
 	metadata := drivers.BucketMetadata{
 		Name:    "foo",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 
@@ -890,7 +890,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 
 	metadata := drivers.BucketMetadata{
 		Name:    "bucket",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 	// test head
@@ -898,7 +898,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 		Bucket:      "bucket",
 		Key:         "one",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "d41d8cd98f00b204e9800998ecf8427e",
 		Size:        0,
 	}
@@ -944,7 +944,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 		Bucket:      "bucket",
 		Key:         "one",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		// Fix MD5
 		Md5:  "d41d8cd98f00b204e9800998ecf8427e",
 		Size: 0,
@@ -1003,7 +1003,7 @@ func (s *MySuite) TestPartialContent(c *C) {
 		Bucket:      "foo",
 		Key:         "bar",
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "e81c4e4f2b7b93b481e13a8553c2ae1b", // TODO Determine if md5 of range or full object needed
 		Size:        11,
 	}
@@ -1127,7 +1127,7 @@ func (s *MySuite) TestListBucketsErrors(c *C) {
 
 	metadata := drivers.BucketMetadata{
 		Name:    "foo",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 
@@ -1224,7 +1224,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 
 	metadata := drivers.BucketMetadata{
 		Name:    "foo",
-		Created: time.Now(),
+		Created: time.Now().UTC(),
 		ACL:     drivers.BucketACL("private"),
 	}
 	typedDriver.On("GetBucketMetadata", "foo").Return(metadata, nil).Once()
@@ -1300,7 +1300,7 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 		Key:    "bar",
 
 		ContentType: "application/octet-stream",
-		Created:     time.Now(),
+		Created:     time.Now().UTC(),
 		Md5:         "e81c4e4f2b7b93b481e13a8553c2ae1b",
 		Size:        11,
 	}

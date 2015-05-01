@@ -136,7 +136,7 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 		result := drivers.BucketMetadata{
 			Name: name,
 			// TODO Add real created date
-			Created: time.Now(),
+			Created: time.Now().UTC(),
 		}
 		results = append(results, result)
 	}
