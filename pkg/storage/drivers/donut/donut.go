@@ -212,7 +212,7 @@ func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) 
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	reader, size, err := d.donut.GetObject(bucketName, objectName)
@@ -238,7 +238,7 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, errParams)
 	}
-	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
 	if start < 0 {
@@ -282,7 +282,7 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
@@ -326,7 +326,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObject(resources.Prefix) {
+	if !drivers.IsValidObjectName(resources.Prefix) {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
 	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName,
@@ -375,7 +375,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObject(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return "", iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	if strings.TrimSpace(contentType) == "" {
