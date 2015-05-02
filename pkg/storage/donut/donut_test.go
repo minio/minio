@@ -29,7 +29,6 @@ import (
 	"time"
 
 	. "github.com/minio-io/check"
-	"log"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -173,7 +172,6 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(root)
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	log.Println(err)
 	c.Assert(err, IsNil)
 
 	metadata := make(map[string]string)
