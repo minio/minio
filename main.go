@@ -58,7 +58,7 @@ var memoryCmd = cli.Command{
   minio mode {{.Name}} - {{.Description}}
 
 USAGE:
-  minio mode {{.Name}} SIZE
+  minio mode {{.Name}} limit SIZE expire TIME
 
 EXAMPLES:
   1. Limit maximum memory usage to 64MB with 1h expiration
@@ -167,7 +167,7 @@ func runMemory(c *cli.Context) {
 				args = args.Tail()
 				maxMemorySet = true
 			}
-		case "expiration":
+		case "expire":
 			{
 				if expirationSet {
 					Fatalf("Expiration should be set only once")
@@ -185,6 +185,9 @@ func runMemory(c *cli.Context) {
 				cli.ShowCommandHelpAndExit(c, "memory", 1) // last argument is exit code
 			}
 		}
+	}
+	if maxMemorySet == false {
+		Fatalln("Memory limit must be set")
 	}
 	memoryDriver := server.MemoryFactory{
 		Config:     apiServerConfig,
