@@ -100,14 +100,16 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error) {
 // GetObject - GET object from memory buffer
 func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	memory.lock.RLock()
-	defer memory.lock.RUnlock()
 	if !drivers.IsValidBucket(bucket) {
+		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !drivers.IsValidObject(object) {
+		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
 	}
 	if _, ok := memory.storedBuckets[bucket]; ok == false {
+		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := memory.storedBuckets[bucket]
@@ -117,11 +119,13 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		if data, ok := memory.objects.Get(objectKey); ok {
 			dataSlice := data.([]byte)
 			objectBuffer := bytes.NewBuffer(dataSlice)
-			written, err := io.Copy(w, objectBuffer)
+			memory.lock.RUnlock()
 			go memory.updateAccessTime(objectKey)
+			written, err := io.Copy(w, objectBuffer)
 			return written, iodine.New(err, nil)
 		}
 	}
+	memory.lock.RUnlock()
 	return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 }
 
