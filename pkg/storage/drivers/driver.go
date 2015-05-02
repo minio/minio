@@ -184,9 +184,9 @@ func IsValidBucket(bucket string) bool {
 	return match
 }
 
-// IsValidObject - verify object name in accordance with
+// IsValidObjectName - verify object name in accordance with
 //   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
-func IsValidObject(object string) bool {
+func IsValidObjectName(object string) bool {
 	if strings.TrimSpace(object) == "" {
 		return true
 	}

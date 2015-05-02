@@ -104,7 +104,7 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObject(object) {
+	if !drivers.IsValidObjectName(object) {
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
 	}
@@ -137,7 +137,7 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 	if !drivers.IsValidBucket(bucket) {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObject(object) {
+	if !drivers.IsValidObjectName(object) {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
 	}
 	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
@@ -217,7 +217,7 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		memory.lock.RUnlock()
 		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObject(key) {
+	if !drivers.IsValidObjectName(key) {
 		memory.lock.RUnlock()
 		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
@@ -408,7 +408,7 @@ func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketR
 	if !drivers.IsValidBucket(bucket) {
 		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObject(resources.Prefix) {
+	if !drivers.IsValidObjectName(resources.Prefix) {
 		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
 	if _, ok := memory.storedBuckets[bucket]; ok == false {
@@ -467,7 +467,7 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 	if !drivers.IsValidBucket(bucket) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObject(key) || !drivers.IsValidObject(prefix) {
+	if !drivers.IsValidObjectName(key) || !drivers.IsValidObjectName(prefix) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := memory.storedBuckets[bucket]; ok == false {
