@@ -61,11 +61,11 @@ USAGE:
   minio mode {{.Name}} SIZE
 
 EXAMPLES:
-  1. Limit maximum memory usage to 64MB
-      $ minio mode {{.Name}} 64MB
+  1. Limit maximum memory usage to 64MB with 1h expiration
+      $ minio mode {{.Name}} limit 64MB expire 1h
 
-  2. Limit maximum memory usage to 4GB
-      $ minio mode {{.Name}} 4GB
+  2. Limit maximum memory usage to 4GB with no time expiration
+      $ minio mode {{.Name}} limit 4GB
 `,
 }
 
@@ -135,23 +135,56 @@ func init() {
 }
 
 func runMemory(c *cli.Context) {
-	if len(c.Args()) < 1 {
+	if len(c.Args()) == 0 || len(c.Args())%2 != 0 {
 		cli.ShowCommandHelpAndExit(c, "memory", 1) // last argument is exit code
 	}
 	apiServerConfig := getAPIServerConfig(c)
-	maxMemory, err := humanize.ParseBytes(c.Args().First())
-	if err != nil {
-		Fatalf("Invalid memory size [%s] passed. Reason: %s\n", c.Args().First(), iodine.New(err, nil))
-	}
-	tail := c.Args().Tail()
+
+	var maxMemory uint64
+	maxMemorySet := false
+
 	var expiration time.Duration
-	if tail.First() != "" {
-		expiration, err = time.ParseDuration(tail.First())
-		if err != nil {
-			Fatalf("Invalid expiration time [%s] passed. Reason: %s\n", tail.First(), iodine.New(err, nil))
+	expirationSet := false
+
+	var err error
+
+	args := c.Args()
+	for len(args) > 0 {
+		switch args.First() {
+		case "limit":
+			{
+				if maxMemorySet {
+					Fatalf("Limit should be set only once")
+				}
+				args = args.Tail()
+				maxMemory, err = humanize.ParseBytes(args.First())
+				if err != nil {
+					Fatalf("Invalid memory size [%s] passed. Reason: %s\n", args.First(), iodine.New(err, nil))
+				}
+				if maxMemory < 1024*1024*10 {
+					Fatalf("Invalid memory size [%s] passed. Should be greater than 10M\n", args.First())
+				}
+				args = args.Tail()
+				maxMemorySet = true
+			}
+		case "expiration":
+			{
+				if expirationSet {
+					Fatalf("Expiration should be set only once")
+				}
+				args = args.Tail()
+				expiration, err = time.ParseDuration(args.First())
+				if err != nil {
+					Fatalf("Invalid expiration time [%s] passed. Reason: %s\n", args.First(), iodine.New(err, nil))
+				}
+				args = args.Tail()
+				expirationSet = true
+			}
+		default:
+			{
+				cli.ShowCommandHelpAndExit(c, "memory", 1) // last argument is exit code
+			}
 		}
-	} else {
-		expiration = 0
 	}
 	memoryDriver := server.MemoryFactory{
 		Config:     apiServerConfig,

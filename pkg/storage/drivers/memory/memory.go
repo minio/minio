@@ -74,7 +74,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory.shutdown = false
 
 	switch {
-	case maxSize == 0:
+	case maxSize <= 0:
 		memory.maxSize = 9223372036854775807
 	case maxSize > 0:
 		memory.maxSize = maxSize
