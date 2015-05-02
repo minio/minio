@@ -498,6 +498,7 @@ func (memory *memoryDriver) doEvictObject(key lru.Key, value interface{}) {
 		if len(storedBucket.objectMetadata) == 0 {
 			delete(memory.storedBuckets, bucket)
 		}
+		delete(memory.lastAccessedObjects, k)
 	}
 }
 
@@ -528,5 +529,7 @@ func (memory *memoryDriver) expireLRUObjects() {
 func (memory *memoryDriver) updateAccessTime(key string) {
 	memory.lock.Lock()
 	defer memory.lock.Unlock()
-	memory.lastAccessedObjects[key] = time.Now().UTC()
+	if _, ok := memory.lastAccessedObjects[key]; ok {
+		memory.lastAccessedObjects[key] = time.Now().UTC()
+	}
 }
