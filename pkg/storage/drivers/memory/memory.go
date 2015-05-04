@@ -24,10 +24,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,29 +100,43 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 	}
-	memory.lock.RUnlock()
 	written, err := io.Copy(w, bytes.NewBuffer(data))
+	memory.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
 
 // GetPartialObject - GET object from memory buffer range
 func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+	errParams := map[string]string{
+		"bucket": bucket,
+		"object": object,
+		"start":  strconv.FormatInt(start, 10),
+		"length": strconv.FormatInt(length, 10),
+	}
 	memory.lock.RLock()
-	defer memory.lock.RUnlock()
-	var sourceBuffer bytes.Buffer
 	if !drivers.IsValidBucket(bucket) {
-		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+		memory.lock.RUnlock()
+		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, errParams)
 	}
 	if !drivers.IsValidObjectName(object) {
-		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
+		memory.lock.RUnlock()
+		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, errParams)
 	}
-	if _, err := memory.GetObject(&sourceBuffer, bucket, object); err != nil {
-		return 0, iodine.New(err, nil)
+	if start < 0 {
+		return 0, iodine.New(drivers.InvalidRange{
+			Start:  start,
+			Length: length,
+		}, errParams)
 	}
-	if _, err := io.CopyN(ioutil.Discard, &sourceBuffer, start); err != nil {
-		return 0, iodine.New(err, nil)
+	objectKey := bucket + "/" + object
+	data, ok := memory.objects.Get(objectKey)
+	if !ok {
+		memory.lock.RUnlock()
+		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, errParams)
 	}
-	return io.CopyN(w, &sourceBuffer, length)
+	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
+	memory.lock.RUnlock()
+	return written, iodine.New(err, nil)
 }
 
 // GetBucketMetadata -

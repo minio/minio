@@ -248,13 +248,13 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		}, errParams)
 	}
 	reader, size, err := d.donut.GetObject(bucketName, objectName)
-	defer reader.Close()
 	if err != nil {
 		return 0, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}, nil)
 	}
+	defer reader.Close()
 	if start > size || (start+length-1) > size {
 		return 0, iodine.New(drivers.InvalidRange{
 			Start:  start,
