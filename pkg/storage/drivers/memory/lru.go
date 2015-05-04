@@ -31,7 +31,15 @@ limitations under the License.
 
 package memory
 
-import "container/list"
+import (
+	"bytes"
+	"container/list"
+	"io"
+	"strconv"
+
+	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio-io/minio/pkg/storage/drivers"
+)
 
 // CacheStats are returned by stats accessors on Group.
 type CacheStats struct {
@@ -53,7 +61,6 @@ type Cache struct {
 	totalSize    uint64
 	totalEvicted int64
 	cache        map[interface{}]*list.Element
-	value        []byte
 }
 
 // A Key may be any value that is comparable. See http://golang.org/ref/spec#Comparison_operators
@@ -61,7 +68,7 @@ type Key interface{}
 
 type entry struct {
 	key   Key
-	value []byte
+	value *bytes.Buffer
 }
 
 // NewCache creates a new Cache.
@@ -83,30 +90,37 @@ func (c *Cache) Stats() CacheStats {
 	}
 }
 
-func (c *Cache) Write(p []byte) (n int, err error) {
-	c.totalSize = c.totalSize + uint64(len(p))
-	// If MaxSize is zero expecting infinite memory
-	if c.MaxSize != 0 && c.totalSize > c.MaxSize {
-		c.totalSize -= uint64(len(p))
-		c.RemoveOldest()
-	}
-	c.value = append(c.value, p...)
-	return len(p), nil
-}
-
 // Add adds a value to the cache.
-func (c *Cache) Add(key Key) {
-	if c.cache == nil {
-		c.cache = make(map[interface{}]*list.Element)
-		c.ll = list.New()
-	}
-	ele := c.ll.PushFront(&entry{key, c.value})
-	c.value = nil
-	c.cache[key] = ele
+func (c *Cache) Add(key Key, size int64) io.WriteCloser {
+	r, w := io.Pipe()
+	go func() {
+		if uint64(size) > c.MaxSize {
+			err := iodine.New(drivers.EntityTooLarge{
+				Size:    strconv.FormatInt(size, 10),
+				MaxSize: strconv.FormatUint(c.MaxSize, 10),
+			}, nil)
+			r.CloseWithError(err)
+			return
+		}
+		// If MaxSize is zero expecting infinite memory
+		if c.MaxSize != 0 && (c.totalSize+uint64(size)) > c.MaxSize {
+			c.RemoveOldest()
+		}
+		value := new(bytes.Buffer)
+		n, err := io.CopyN(value, r, size)
+		if err != nil {
+			r.CloseWithError(iodine.New(err, nil))
+			return
+		}
+		ele := c.ll.PushFront(&entry{key, value})
+		c.cache[key] = ele
+		c.totalSize += uint64(n)
+	}()
+	return w
 }
 
 // Get looks up a key's value from the cache.
-func (c *Cache) Get(key Key) (value []byte, ok bool) {
+func (c *Cache) Get(key Key) (value *bytes.Buffer, ok bool) {
 	if c.cache == nil {
 		return
 	}
@@ -155,6 +169,7 @@ func (c *Cache) removeElement(e *list.Element) {
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	c.totalEvicted++
+	c.totalSize -= uint64(kv.value.Len())
 	if c.OnEvicted != nil {
 		c.OnEvicted(kv.key)
 	}

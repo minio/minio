@@ -116,8 +116,8 @@ func (m *Driver) ListObjects(bucket string, resources drivers.BucketResourcesMet
 }
 
 // CreateObject is a mock
-func (m *Driver) CreateObject(bucket string, key string, contentType string, md5sum string, data io.Reader) (string, error) {
-	ret := m.Called(bucket, key, contentType, md5sum, data)
+func (m *Driver) CreateObject(bucket string, key string, contentType string, md5sum string, size int64, data io.Reader) (string, error) {
+	ret := m.Called(bucket, key, contentType, md5sum, size, data)
 
 	r0 := ret.Get(0).(string)
 	r1 := ret.Error(1)

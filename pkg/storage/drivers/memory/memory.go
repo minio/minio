@@ -25,6 +25,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -33,18 +34,14 @@ import (
 
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
-	"github.com/minio-io/minio/pkg/storage/drivers/memory/lru"
-	"github.com/minio-io/minio/pkg/utils/log"
-	"github.com/minio-io/minio/pkg/utils/split"
 )
 
 // memoryDriver - local variables
 type memoryDriver struct {
 	storedBuckets       map[string]storedBucket
 	lock                *sync.RWMutex
-	objects             *lru.Cache
+	objects             *Cache
 	lastAccessedObjects map[string]time.Time
-	totalSize           uint64
 	maxSize             uint64
 	expiration          time.Duration
 	shutdown            bool
@@ -68,19 +65,11 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
 	memory.lastAccessedObjects = make(map[string]time.Time)
-	memory.objects = lru.New(0)
+	memory.objects = NewCache(maxSize)
+	memory.maxSize = maxSize
 	memory.lock = new(sync.RWMutex)
 	memory.expiration = expiration
 	memory.shutdown = false
-
-	switch {
-	case maxSize <= 0:
-		memory.maxSize = 9223372036854775807
-	case maxSize > 0:
-		memory.maxSize = maxSize
-	default:
-		log.Println("Error")
-	}
 
 	memory.objects.OnEvicted = memory.evictObject
 
@@ -88,7 +77,6 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	if expiration > 0 {
 		go memory.expireLRUObjects()
 	}
-
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, memory
 }
@@ -117,11 +105,9 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 	objectKey := bucket + "/" + object
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok {
 		if data, ok := memory.objects.Get(objectKey); ok {
-			dataSlice := data.([]byte)
-			objectBuffer := bytes.NewBuffer(dataSlice)
 			memory.lock.RUnlock()
 			go memory.updateAccessTime(objectKey)
-			written, err := io.Copy(w, objectBuffer)
+			written, err := io.Copy(w, data)
 			return written, iodine.New(err, nil)
 		}
 	}
@@ -204,14 +190,12 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) (string, error) {
-	humanError, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, data)
-	debug.FreeOSMemory()
-	return humanError, err
+func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	return memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
 }
 
 // CreateObject - PUT object to memory buffer
-func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, data io.Reader) (string, error) {
+func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
 		memory.lock.RUnlock()
@@ -247,37 +231,30 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
 
-	var bytesBuffer bytes.Buffer
-
-	chunks := split.Stream(data, 10*1024*1024)
-	totalLength := 0
-	summer := md5.New()
-	for chunk := range chunks {
-		if chunk.Err == nil {
-			totalLength = totalLength + len(chunk.Data)
-			summer.Write(chunk.Data)
-			_, err := io.Copy(&bytesBuffer, bytes.NewBuffer(chunk.Data))
-			if err != nil {
-				err := iodine.New(err, nil)
-				log.Println(err)
-				return "", err
-			}
-			if uint64(totalLength)+memory.totalSize > memory.maxSize {
-				memory.objects.RemoveOldest()
-			}
-		}
+	memory.lock.Lock()
+	md5Writer := md5.New()
+	lruWriter := memory.objects.Add(objectKey, size)
+	mw := io.MultiWriter(md5Writer, lruWriter)
+	totalLength, err := io.CopyN(mw, data, size)
+	if err != nil {
+		memory.lock.Unlock()
+		return "", iodine.New(err, nil)
 	}
-	md5SumBytes := summer.Sum(nil)
+	if err := lruWriter.Close(); err != nil {
+		memory.lock.Unlock()
+		return "", iodine.New(err, nil)
+	}
+	memory.lock.Unlock()
+
+	md5SumBytes := md5Writer.Sum(nil)
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			memory.lock.Lock()
-			defer memory.lock.Unlock()
-			memory.objects.RemoveOldest()
 			return "", iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
 		}
 	}
+
 	newObject := drivers.ObjectMetadata{
 		Bucket: bucket,
 		Key:    key,
@@ -287,21 +264,21 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		Md5:         md5Sum,
 		Size:        int64(totalLength),
 	}
+
 	memory.lock.Lock()
 	memoryObject := make(map[string]drivers.ObjectMetadata)
-	if len(memory.storedBuckets[bucket].objectMetadata) == 0 {
+	switch {
+	case len(memory.storedBuckets[bucket].objectMetadata) == 0:
 		storedBucket.objectMetadata = memoryObject
 		storedBucket.objectMetadata[objectKey] = newObject
-	} else {
+	default:
 		storedBucket.objectMetadata[objectKey] = newObject
 	}
 	memory.storedBuckets[bucket] = storedBucket
-	memory.objects.Add(objectKey, bytesBuffer.Bytes())
-	memory.totalSize = memory.totalSize + uint64(newObject.Size)
-	if memory.totalSize > memory.maxSize {
-		memory.objects.RemoveOldest()
-	}
 	memory.lock.Unlock()
+
+	// free
+	debug.FreeOSMemory()
 	return newObject.Md5, nil
 }
 
@@ -481,25 +458,21 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 	return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
 }
 
-func (memory *memoryDriver) evictObject(key lru.Key, value interface{}) {
-	memory.doEvictObject(key, value)
-	debug.FreeOSMemory()
-}
-
-func (memory *memoryDriver) doEvictObject(key lru.Key, value interface{}) {
-	k := key.(string)
+func (memory *memoryDriver) evictObject(a ...interface{}) {
+	cacheStats := memory.objects.Stats()
+	log.Printf("CurrenSize: %d, CurrentItems: %d, TotalEvictions: %d",
+		cacheStats.Bytes, memory.objects.Len(), cacheStats.Evictions)
+	key := a[0].(string)
 	// loop through all buckets
 	for bucket, storedBucket := range memory.storedBuckets {
-		memory.totalSize = memory.totalSize - uint64(storedBucket.objectMetadata[k].Size)
-		log.Printf("Evicting: %s of Size: %d", k, storedBucket.objectMetadata[k].Size)
-		log.Println("TotalSize:", memory.totalSize)
-		delete(storedBucket.objectMetadata, k)
+		delete(storedBucket.objectMetadata, key)
+		delete(memory.lastAccessedObjects, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
 			delete(memory.storedBuckets, bucket)
 		}
-		delete(memory.lastAccessedObjects, k)
 	}
+	debug.FreeOSMemory()
 }
 
 func (memory *memoryDriver) expireLRUObjects() {
@@ -509,16 +482,18 @@ func (memory *memoryDriver) expireLRUObjects() {
 		}
 		var sleepDuration time.Duration
 		memory.lock.Lock()
-		if memory.objects.Len() > 0 {
-			if k, _, ok := memory.objects.GetOldest(); ok {
+		switch {
+		case memory.objects.Len() > 0:
+			if k, ok := memory.objects.GetOldest(); ok {
 				key := k.(string)
-				if time.Now().Sub(memory.lastAccessedObjects[key]) > memory.expiration {
+				switch {
+				case time.Now().Sub(memory.lastAccessedObjects[key]) > memory.expiration:
 					memory.objects.RemoveOldest()
-				} else {
+				default:
 					sleepDuration = memory.expiration - time.Now().Sub(memory.lastAccessedObjects[key])
 				}
 			}
-		} else {
+		default:
 			sleepDuration = memory.expiration
 		}
 		memory.lock.Unlock()
