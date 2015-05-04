@@ -93,6 +93,7 @@ func (c *Cache) Stats() CacheStats {
 // Add adds a value to the cache.
 func (c *Cache) Add(key Key, size int64) io.WriteCloser {
 	r, w := io.Pipe()
+	blockingWriter := NewBlockingWriteCloser(w)
 	go func() {
 		if uint64(size) > c.MaxSize {
 			err := iodine.New(drivers.EntityTooLarge{
@@ -100,6 +101,7 @@ func (c *Cache) Add(key Key, size int64) io.WriteCloser {
 				MaxSize: strconv.FormatUint(c.MaxSize, 10),
 			}, nil)
 			r.CloseWithError(err)
+			blockingWriter.Release(err)
 			return
 		}
 		// If MaxSize is zero expecting infinite memory
@@ -109,14 +111,18 @@ func (c *Cache) Add(key Key, size int64) io.WriteCloser {
 		value := new(bytes.Buffer)
 		n, err := io.CopyN(value, r, size)
 		if err != nil {
-			r.CloseWithError(iodine.New(err, nil))
+			err := iodine.New(err, nil)
+			r.CloseWithError(err)
+			blockingWriter.Release(err)
 			return
 		}
 		ele := c.ll.PushFront(&entry{key, value})
 		c.cache[key] = ele
 		c.totalSize += uint64(n)
+		r.Close()
+		blockingWriter.Release(nil)
 	}()
-	return w
+	return blockingWriter
 }
 
 // Get looks up a key's value from the cache.

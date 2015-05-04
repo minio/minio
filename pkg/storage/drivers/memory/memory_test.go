@@ -18,6 +18,7 @@ package memory
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/minio-io/check"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -31,7 +32,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	create := func() drivers.Driver {
-		_, _, store := Start(10000000, 0)
+		_, _, store := Start(1000000, 3*time.Hour)
 		return store
 	}
 	drivers.APITestSuite(c, create)
