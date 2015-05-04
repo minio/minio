@@ -72,6 +72,7 @@ type entry struct {
 	key   string
 	time  time.Time
 	value *bytes.Buffer
+	size  int64
 }
 
 // NewCache creates a new Cache.
@@ -114,17 +115,17 @@ func (c *Cache) Add(key string, size int64) io.WriteCloser {
 				c.RemoveOldest()
 			}
 		}
-		value := new(bytes.Buffer)
-		n, err := io.CopyN(value, r, size)
+		buffer := new(bytes.Buffer)
+		written, err := io.CopyN(buffer, r, size)
 		if err != nil {
 			err := iodine.New(err, nil)
 			r.CloseWithError(err)
 			blockingWriter.Release(err)
 			return
 		}
-		ele := c.ll.PushFront(&entry{key, time.Now(), value})
+		ele := c.ll.PushFront(&entry{key, time.Now(), buffer, written})
 		c.cache[key] = ele
-		c.totalSize += uint64(n)
+		c.totalSize += uint64(written)
 		r.Close()
 		blockingWriter.Release(nil)
 	}()
@@ -187,7 +188,8 @@ func (c *Cache) removeElement(e *list.Element) {
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	c.totalEvicted++
-	c.totalSize -= uint64(kv.value.Len())
+	c.totalSize -= uint64(kv.size)
+	kv.value.Reset()
 	if c.OnEvicted != nil {
 		c.OnEvicted(kv.key)
 	}
