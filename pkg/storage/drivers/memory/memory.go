@@ -42,9 +42,6 @@ type memoryDriver struct {
 	lock                *sync.RWMutex
 	objects             *Cache
 	lastAccessedObjects map[string]time.Time
-	maxSize             uint64
-	expiration          time.Duration
-	shutdown            bool
 }
 
 type storedBucket struct {
@@ -65,11 +62,8 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
 	memory.lastAccessedObjects = make(map[string]time.Time)
-	memory.objects = NewCache(maxSize)
-	memory.maxSize = maxSize
+	memory.objects = NewCache(maxSize, expiration)
 	memory.lock = new(sync.RWMutex)
-	memory.expiration = expiration
-	memory.shutdown = false
 
 	memory.objects.OnEvicted = memory.evictObject
 
@@ -100,19 +94,15 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := memory.storedBuckets[bucket]
-	// form objectKey
 	objectKey := bucket + "/" + object
-	if _, ok := storedBucket.objectMetadata[objectKey]; ok {
-		if data, ok := memory.objects.Get(objectKey); ok {
-			memory.lock.RUnlock()
-			go memory.updateAccessTime(objectKey)
-			written, err := io.Copy(w, data)
-			return written, iodine.New(err, nil)
-		}
+	data, ok := memory.objects.Get(objectKey)
+	if !ok {
+		memory.lock.RUnlock()
+		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 	}
 	memory.lock.RUnlock()
-	return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
+	written, err := io.Copy(w, bytes.NewBuffer(data))
+	return written, iodine.New(err, nil)
 }
 
 // GetPartialObject - GET object from memory buffer range
@@ -477,34 +467,15 @@ func (memory *memoryDriver) evictObject(a ...interface{}) {
 
 func (memory *memoryDriver) expireLRUObjects() {
 	for {
-		if memory.shutdown {
-			return
-		}
 		var sleepDuration time.Duration
 		memory.lock.Lock()
 		switch {
 		case memory.objects.Len() > 0:
-			if k, ok := memory.objects.GetOldest(); ok {
-				key := k.(string)
-				switch {
-				case time.Now().Sub(memory.lastAccessedObjects[key]) > memory.expiration:
-					memory.objects.RemoveOldest()
-				default:
-					sleepDuration = memory.expiration - time.Now().Sub(memory.lastAccessedObjects[key])
-				}
-			}
+			sleepDuration = memory.objects.ExpireOldestAndWait()
 		default:
-			sleepDuration = memory.expiration
+			sleepDuration = memory.objects.Expiration
 		}
 		memory.lock.Unlock()
 		time.Sleep(sleepDuration)
-	}
-}
-
-func (memory *memoryDriver) updateAccessTime(key string) {
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
-	if _, ok := memory.lastAccessedObjects[key]; ok {
-		memory.lastAccessedObjects[key] = time.Now().UTC()
 	}
 }
