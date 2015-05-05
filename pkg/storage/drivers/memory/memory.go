@@ -38,10 +38,9 @@ import (
 
 // memoryDriver - local variables
 type memoryDriver struct {
-	storedBuckets       map[string]storedBucket
-	lock                *sync.RWMutex
-	objects             *Cache
-	lastAccessedObjects map[string]time.Time
+	storedBuckets map[string]storedBucket
+	lock          *sync.RWMutex
+	objects       *Intelligent
 }
 
 type storedBucket struct {
@@ -61,16 +60,14 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	var memory *memoryDriver
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
-	memory.lastAccessedObjects = make(map[string]time.Time)
-	memory.objects = NewCache(maxSize, expiration)
+	memory.objects = NewIntelligent(maxSize, expiration)
 	memory.lock = new(sync.RWMutex)
 
 	memory.objects.OnEvicted = memory.evictObject
 
 	// set up memory expiration
-	if expiration > 0 {
-		go memory.expireLRUObjects()
-	}
+	memory.objects.ExpireObjects(time.Millisecond * 10)
+
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, memory
 }
@@ -100,7 +97,7 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 	}
-	written, err := io.Copy(w, bytes.NewBuffer(data))
+	written, err := io.Copy(w, bytes.NewBuffer(data.([]byte)))
 	memory.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
@@ -134,7 +131,7 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, errParams)
 	}
-	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
+	written, err := io.CopyN(w, bytes.NewBuffer(data.([]byte)[start:]), length)
 	memory.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
@@ -195,7 +192,34 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	return memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	humanReadableErr, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	// free
+	debug.FreeOSMemory()
+	return humanReadableErr, iodine.New(err, nil)
+}
+
+// getMD5AndData - this is written as a wrapper to capture md5sum and data in a more memory efficient way
+func getMD5AndData(reader io.Reader) ([]byte, []byte, error) {
+	hash := md5.New()
+	var data []byte
+
+	var err error
+	var length int
+	for err == nil {
+		byteBuffer := make([]byte, 1024*1024)
+		length, err = reader.Read(byteBuffer)
+		// While hash.Write() wouldn't mind a Nil byteBuffer
+		// It is necessary for us to verify this and break
+		if length == 0 {
+			break
+		}
+		hash.Write(byteBuffer[0:length])
+		data = append(data, byteBuffer[0:length]...)
+	}
+	if err != io.EOF {
+		return nil, nil, err
+	}
+	return hash.Sum(nil), data, nil
 }
 
 // CreateObject - PUT object to memory buffer
@@ -234,23 +258,17 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-
-	memory.lock.Lock()
-	md5Writer := md5.New()
-	lruWriter := memory.objects.Add(objectKey, size)
-	mw := io.MultiWriter(md5Writer, lruWriter)
-	totalLength, err := io.CopyN(mw, data, size)
+	md5SumBytes, readBytes, err := getMD5AndData(data)
 	if err != nil {
-		memory.lock.Unlock()
 		return "", iodine.New(err, nil)
 	}
-	if err := lruWriter.Close(); err != nil {
-		memory.lock.Unlock()
-		return "", iodine.New(err, nil)
-	}
+	totalLength := len(readBytes)
+	memory.lock.Lock()
+	memory.objects.Set(objectKey, readBytes)
 	memory.lock.Unlock()
+	// de-allocating
+	readBytes = nil
 
-	md5SumBytes := md5Writer.Sum(nil)
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
@@ -280,9 +298,6 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	}
 	memory.storedBuckets[bucket] = storedBucket
 	memory.lock.Unlock()
-
-	// free
-	debug.FreeOSMemory()
 	return newObject.Md5, nil
 }
 
@@ -465,31 +480,15 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 func (memory *memoryDriver) evictObject(a ...interface{}) {
 	cacheStats := memory.objects.Stats()
 	log.Printf("CurrenSize: %d, CurrentItems: %d, TotalEvictions: %d",
-		cacheStats.Bytes, memory.objects.Len(), cacheStats.Evictions)
+		cacheStats.Bytes, cacheStats.Items, cacheStats.Evictions)
 	key := a[0].(string)
 	// loop through all buckets
 	for bucket, storedBucket := range memory.storedBuckets {
 		delete(storedBucket.objectMetadata, key)
-		delete(memory.lastAccessedObjects, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
 			delete(memory.storedBuckets, bucket)
 		}
 	}
 	debug.FreeOSMemory()
-}
-
-func (memory *memoryDriver) expireLRUObjects() {
-	for {
-		var sleepDuration time.Duration
-		memory.lock.Lock()
-		switch {
-		case memory.objects.Len() > 0:
-			sleepDuration = memory.objects.ExpireOldestAndWait()
-		default:
-			sleepDuration = memory.objects.Expiration
-		}
-		memory.lock.Unlock()
-		time.Sleep(sleepDuration)
-	}
 }
