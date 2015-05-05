@@ -35,6 +35,8 @@ func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
 			v.Maxkeys, _ = strconv.Atoi(value[0])
 		case key == "delimiter":
 			v.Delimiter = value[0]
+		case key == "encoding-type":
+			v.EncodingType = value[0]
 		}
 	}
 	return

@@ -66,7 +66,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory.objects.OnEvicted = memory.evictObject
 
 	// set up memory expiration
-	memory.objects.ExpireObjects(time.Millisecond * 10)
+	memory.objects.ExpireObjects(time.Second * 5)
 
 	go start(ctrlChannel, errorChannel)
 	return ctrlChannel, errorChannel, memory
@@ -356,45 +356,45 @@ func appendUniq(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delimitedName string, resources drivers.BucketResourcesMetadata) (drivers.BucketResourcesMetadata, []string) {
+func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delim string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
 	switch true {
-	case key == resources.Prefix:
+	case key == r.Prefix:
 		keys = appendUniq(keys, key)
-	// DelimitedName - requires resources.Prefix as it was trimmed off earlier in the flow
-	case key == resources.Prefix+delimitedName:
+	// delim - requires r.Prefix as it was trimmed off earlier
+	case key == r.Prefix+delim:
 		keys = appendUniq(keys, key)
-	case delimitedName != "":
-		resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, resources.Prefix+delimitedName)
+	case delim != "":
+		r.CommonPrefixes = appendUniq(r.CommonPrefixes, r.Prefix+delim)
 	}
-	return resources, keys
+	return keys, r
 }
 
-func (memory *memoryDriver) listObjectsInternal(keys []string, key string, resources drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
+func (memory *memoryDriver) listObjects(keys []string, key string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
 	switch true {
 	// Prefix absent, delimit object key based on delimiter
-	case resources.IsDelimiterSet():
-		delimitedName := delimiter(key, resources.Delimiter)
+	case r.IsDelimiterSet():
+		delim := delimiter(key, r.Delimiter)
 		switch true {
-		case delimitedName == "" || delimitedName == key:
+		case delim == "" || delim == key:
 			keys = appendUniq(keys, key)
-		case delimitedName != "":
-			resources.CommonPrefixes = appendUniq(resources.CommonPrefixes, delimitedName)
+		case delim != "":
+			r.CommonPrefixes = appendUniq(r.CommonPrefixes, delim)
 		}
 	// Prefix present, delimit object key with prefix key based on delimiter
-	case resources.IsDelimiterPrefixSet():
-		if strings.HasPrefix(key, resources.Prefix) {
-			trimmedName := strings.TrimPrefix(key, resources.Prefix)
-			delimitedName := delimiter(trimmedName, resources.Delimiter)
-			resources, keys = memory.filterDelimiterPrefix(keys, key, delimitedName, resources)
+	case r.IsDelimiterPrefixSet():
+		if strings.HasPrefix(key, r.Prefix) {
+			trimmedName := strings.TrimPrefix(key, r.Prefix)
+			delim := delimiter(trimmedName, r.Delimiter)
+			keys, r = memory.filterDelimiterPrefix(keys, key, delim, r)
 		}
 	// Prefix present, nothing to delimit
-	case resources.IsPrefixSet():
+	case r.IsPrefixSet():
 		keys = appendUniq(keys, key)
 	// Prefix and delimiter absent
-	case resources.IsDefault():
+	case r.IsDefault():
 		keys = appendUniq(keys, key)
 	}
-	return keys, resources
+	return keys, r
 }
 
 // ListObjects - list objects from memory
@@ -416,13 +416,28 @@ func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketR
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			keys, resources = memory.listObjectsInternal(keys, key, resources)
+			keys, resources = memory.listObjects(keys, key, resources)
 		}
 	}
-	sort.Strings(keys)
-	for _, key := range keys {
+	// Marker logic - TODO in-efficient right now fix it
+	var newKeys []string
+	switch {
+	case resources.Marker != "":
+		for _, key := range keys {
+			if key > resources.Marker {
+				newKeys = appendUniq(newKeys, key)
+			}
+		}
+	default:
+		newKeys = keys
+	}
+	sort.Strings(newKeys)
+	for _, key := range newKeys {
 		if len(results) == resources.Maxkeys {
 			resources.IsTruncated = true
+			if resources.IsTruncated && resources.IsDelimiterSet() {
+				resources.NextMarker = results[len(results)-1].Key
+			}
 			return results, resources, nil
 		}
 		object := storedBucket.objectMetadata[bucket+"/"+key]

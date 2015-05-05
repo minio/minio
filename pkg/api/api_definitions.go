@@ -27,45 +27,66 @@ const (
 
 // ListObjectsResponse - format for list objects response
 type ListObjectsResponse struct {
-	XMLName        xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListBucketResult" json:"-"`
-	Name           string
-	Prefix         string
-	Marker         string
-	MaxKeys        int
-	Delimiter      string
-	IsTruncated    bool
-	Contents       []*Item
-	CommonPrefixes []*Prefix
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListBucketResult" json:"-"`
+
+	CommonPrefixes []*CommonPrefix
+	Contents       []*Object
+
+	Delimiter string
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string
+
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
+	Marker      string
+	MaxKeys     int
+	Name        string
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects. Object storage lists objects in alphabetical
+	// order Note: This element is returned only if you have delimiter request parameter
+	// specified. If response does not include the NextMaker and it is truncated,
+	// you can use the value of the last Key in the response as the marker in the
+	// subsequent request to get the next set of object keys.
+	NextMarker string
+	Prefix     string
 }
 
 // ListBucketsResponse - format for list buckets response
 type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListAllMyBucketsResult" json:"-"`
-	Owner   Owner
+	// Container for one or more buckets.
 	Buckets struct {
 		Bucket []*Bucket
 	} // Buckets are nested
+	Owner Owner
 }
 
-// Prefix - common prefix
-type Prefix struct {
+// CommonPrefix container for prefix response in ListObjectsResponse
+type CommonPrefix struct {
 	Prefix string
 }
 
-// Bucket - bucket item
+// Bucket container for bucket metadata
 type Bucket struct {
 	Name         string
 	CreationDate string
 }
 
-// Item - object item
-type Item struct {
+// Object container for object metadata
+type Object struct {
+	ETag         string
 	Key          string
 	LastModified string
-	ETag         string
 	Size         int64
+
+	Owner Owner
+
+	// The class of storage used to store the object.
 	StorageClass string
-	Owner        Owner
 }
 
 // Owner - bucket owner/principal
