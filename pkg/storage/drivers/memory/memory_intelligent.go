@@ -89,13 +89,14 @@ func (r *Intelligent) ExpireObjects(gcInterval time.Duration) {
 	r.gcInterval = gcInterval
 	go func() {
 		for range time.Tick(gcInterval) {
+			r.Lock()
 			for key := range r.items {
-				r.Lock()
+
 				if !r.isValid(key) {
 					r.Delete(key)
 				}
-				r.Unlock()
 			}
+			r.Unlock()
 		}
 	}()
 }
