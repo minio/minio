@@ -27,7 +27,7 @@ const (
 
 // ListObjectsResponse - format for list objects response
 type ListObjectsResponse struct {
-	XMLName        xml.Name `xml:"ListBucketResult" json:"-"`
+	XMLName        xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListBucketResult" json:"-"`
 	Name           string
 	Prefix         string
 	Marker         string
@@ -40,7 +40,7 @@ type ListObjectsResponse struct {
 
 // ListBucketsResponse - format for list buckets response
 type ListBucketsResponse struct {
-	XMLName xml.Name `xml:"ListAllMyBucketsResult" json:"-"`
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListAllMyBucketsResult" json:"-"`
 	Owner   Owner
 	Buckets struct {
 		Bucket []*Bucket
