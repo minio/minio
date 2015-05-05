@@ -151,11 +151,17 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 	donutObjectMetadata := make(map[string]string)
 	objectMetadata["version"] = "1.0"
 	donutObjectMetadata["version"] = "1.0"
+	size := metadata["contentLength"]
+	sizeInt, err := strconv.ParseInt(size, 10, 64)
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+
 	// if total writers are only '1' do not compute erasure
 	switch len(writers) == 1 {
 	case true:
 		mw := io.MultiWriter(writers[0], summer)
-		totalLength, err := io.Copy(mw, objectData)
+		totalLength, err := io.CopyN(mw, objectData, sizeInt)
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}

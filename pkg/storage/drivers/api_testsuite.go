@@ -73,7 +73,8 @@ func testMultipleObjectCreation(c *check.C, create func() Driver) {
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		calculatedmd5sum, err := drivers.CreateObject("bucket", key, "", expectedmd5Sum, bytes.NewBufferString(randomString))
+		calculatedmd5sum, err := drivers.CreateObject("bucket", key, "", expectedmd5Sum, int64(len(randomString)),
+			bytes.NewBufferString(randomString))
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
 	}
@@ -107,7 +108,7 @@ func testPaging(c *check.C, create func() Driver) {
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
+		drivers.CreateObject("bucket", key, "", "", int64(len(key)), bytes.NewBufferString(key))
 		resources.Maxkeys = 5
 		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
@@ -118,7 +119,7 @@ func testPaging(c *check.C, create func() Driver) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		drivers.CreateObject("bucket", key, "", "", bytes.NewBufferString(key))
+		drivers.CreateObject("bucket", key, "", "", int64(len(key)), bytes.NewBufferString(key))
 		resources.Maxkeys = 5
 		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
@@ -128,8 +129,8 @@ func testPaging(c *check.C, create func() Driver) {
 	}
 	// check paging with prefix at end returns less objects
 	{
-		drivers.CreateObject("bucket", "newPrefix", "", "", bytes.NewBufferString("prefix1"))
-		drivers.CreateObject("bucket", "newPrefix2", "", "", bytes.NewBufferString("prefix2"))
+		drivers.CreateObject("bucket", "newPrefix", "", "", int64(len("prefix1")), bytes.NewBufferString("prefix1"))
+		drivers.CreateObject("bucket", "newPrefix2", "", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"))
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
 		objects, resources, err = drivers.ListObjects("bucket", resources)
@@ -150,8 +151,8 @@ func testPaging(c *check.C, create func() Driver) {
 
 	// check delimited results with delimiter and prefix
 	{
-		drivers.CreateObject("bucket", "this/is/delimited", "", "", bytes.NewBufferString("prefix1"))
-		drivers.CreateObject("bucket", "this/is/also/a/delimited/file", "", "", bytes.NewBufferString("prefix2"))
+		drivers.CreateObject("bucket", "this/is/delimited", "", "", int64(len("prefix1")), bytes.NewBufferString("prefix1"))
+		drivers.CreateObject("bucket", "this/is/also/a/delimited/file", "", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"))
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
 		resources.Delimiter = "/"
@@ -210,14 +211,14 @@ func testObjectOverwriteFails(c *check.C, create func() Driver) {
 	hasher1.Write([]byte("one"))
 	md5Sum1 := base64.StdEncoding.EncodeToString(hasher1.Sum(nil))
 	md5Sum1hex := hex.EncodeToString(hasher1.Sum(nil))
-	md5Sum11, err := drivers.CreateObject("bucket", "object", "", md5Sum1, bytes.NewBufferString("one"))
+	md5Sum11, err := drivers.CreateObject("bucket", "object", "", md5Sum1, int64(len("one")), bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
 	c.Assert(md5Sum1hex, check.Equals, md5Sum11)
 
 	hasher2 := md5.New()
 	hasher2.Write([]byte("three"))
 	md5Sum2 := base64.StdEncoding.EncodeToString(hasher2.Sum(nil))
-	_, err = drivers.CreateObject("bucket", "object", "", md5Sum2, bytes.NewBufferString("three"))
+	_, err = drivers.CreateObject("bucket", "object", "", md5Sum2, int64(len("three")), bytes.NewBufferString("three"))
 	c.Assert(err, check.Not(check.IsNil))
 
 	var bytesBuffer bytes.Buffer
@@ -229,7 +230,7 @@ func testObjectOverwriteFails(c *check.C, create func() Driver) {
 
 func testNonExistantBucketOperations(c *check.C, create func() Driver) {
 	drivers := create()
-	_, err := drivers.CreateObject("bucket", "object", "", "", bytes.NewBufferString("one"))
+	_, err := drivers.CreateObject("bucket", "object", "", "", int64(len("one")), bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
 }
 
@@ -260,7 +261,8 @@ func testPutObjectInSubdir(c *check.C, create func() Driver) {
 	hasher.Write([]byte("hello world"))
 	md5Sum1 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	md5Sum1hex := hex.EncodeToString(hasher.Sum(nil))
-	md5Sum11, err := drivers.CreateObject("bucket", "dir1/dir2/object", "", md5Sum1, bytes.NewBufferString("hello world"))
+	md5Sum11, err := drivers.CreateObject("bucket", "dir1/dir2/object", "", md5Sum1, int64(len("hello world")),
+		bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 	c.Assert(md5Sum11, check.Equals, md5Sum1hex)
 
@@ -356,7 +358,8 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Driver) {
 	err := drivers.CreateBucket("bucket", "")
 	c.Assert(err, check.IsNil)
 
-	_, err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", bytes.NewBufferString("hello world"))
+	_, err = drivers.CreateObject("bucket", "dir1/dir2/object", "", "", int64(len("hello world")),
+		bytes.NewBufferString("hello world"))
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -400,19 +403,19 @@ func testDefaultContentType(c *check.C, create func() Driver) {
 	c.Assert(err, check.IsNil)
 
 	// test empty
-	_, err = drivers.CreateObject("bucket", "one", "", "", bytes.NewBufferString("one"))
+	_, err = drivers.CreateObject("bucket", "one", "", "", int64(len("one")), bytes.NewBufferString("one"))
 	metadata, err := drivers.GetObjectMetadata("bucket", "one", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 
 	// test custom
-	drivers.CreateObject("bucket", "two", "application/text", "", bytes.NewBufferString("two"))
+	drivers.CreateObject("bucket", "two", "application/text", "", int64(len("two")), bytes.NewBufferString("two"))
 	metadata, err = drivers.GetObjectMetadata("bucket", "two", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/text")
 
 	// test trim space
-	drivers.CreateObject("bucket", "three", "\tapplication/json    ", "", bytes.NewBufferString("three"))
+	drivers.CreateObject("bucket", "three", "\tapplication/json    ", "", int64(len("three")), bytes.NewBufferString("three"))
 	metadata, err = drivers.GetObjectMetadata("bucket", "three", "")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/json")
@@ -425,12 +428,12 @@ func testContentMd5Set(c *check.C, create func() Driver) {
 
 	// test md5 invalid
 	badmd5Sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA"
-	calculatedmd5sum, err := drivers.CreateObject("bucket", "one", "", badmd5Sum, bytes.NewBufferString("one"))
+	calculatedmd5sum, err := drivers.CreateObject("bucket", "one", "", badmd5Sum, int64(len("one")), bytes.NewBufferString("one"))
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(calculatedmd5sum, check.Not(check.Equals), badmd5Sum)
 
 	goodmd5sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA="
-	calculatedmd5sum, err = drivers.CreateObject("bucket", "two", "", goodmd5sum, bytes.NewBufferString("one"))
+	calculatedmd5sum, err = drivers.CreateObject("bucket", "two", "", goodmd5sum, int64(len("one")), bytes.NewBufferString("one"))
 	c.Assert(err, check.IsNil)
 	c.Assert(calculatedmd5sum, check.Equals, goodmd5sum)
 }

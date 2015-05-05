@@ -37,7 +37,7 @@ type Driver interface {
 	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
 	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
-	CreateObject(bucket string, key string, contentType string, md5sum string, data io.Reader) (string, error)
+	CreateObject(bucket string, key string, contentType string, md5sum string, size int64, data io.Reader) (string, error)
 }
 
 // BucketACL - bucket level access control

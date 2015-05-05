@@ -184,6 +184,7 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	hasher.Write([]byte(data))
 	expectedMd5Sum := hex.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
+	metadata["contentLength"] = strconv.Itoa(len(data))
 
 	err = donut.MakeBucket("foo", "private")
 	c.Assert(err, IsNil)
@@ -210,9 +211,6 @@ func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
 
 	_, err = donut.PutObject("foo", "", "", nil, nil)
 	c.Assert(err, Not(IsNil))
-
-	_, err = donut.PutObject("foo", " ", "", nil, nil)
-	c.Assert(err, Not(IsNil))
 }
 
 // test create object
@@ -234,6 +232,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	hasher.Write([]byte(data))
 	expectedMd5Sum := hex.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
+	metadata["contentLength"] = strconv.Itoa(len(data))
 
 	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
@@ -268,11 +267,16 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(donut.MakeBucket("foo", "private"), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
-	_, err = donut.PutObject("foo", "obj1", "", one, nil)
+	metadata := make(map[string]string)
+	metadata["contentLength"] = strconv.Itoa(len("one"))
+
+	_, err = donut.PutObject("foo", "obj1", "", one, metadata)
 	c.Assert(err, IsNil)
 
 	two := ioutil.NopCloser(bytes.NewReader([]byte("two")))
-	_, err = donut.PutObject("foo", "obj2", "", two, nil)
+
+	metadata["contentLength"] = strconv.Itoa(len("two"))
+	_, err = donut.PutObject("foo", "obj2", "", two, metadata)
 	c.Assert(err, IsNil)
 
 	obj1, size, err := donut.GetObject("foo", "obj1")
@@ -315,7 +319,8 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
-	_, err = donut.PutObject("foo", "obj3", "", three, nil)
+	metadata["contentLength"] = strconv.Itoa(len("three"))
+	_, err = donut.PutObject("foo", "obj3", "", three, metadata)
 	c.Assert(err, IsNil)
 
 	obj3, size, err := donut.GetObject("foo", "obj3")

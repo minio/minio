@@ -248,13 +248,13 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		}, errParams)
 	}
 	reader, size, err := d.donut.GetObject(bucketName, objectName)
-	defer reader.Close()
 	if err != nil {
 		return 0, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
 		}, nil)
 	}
+	defer reader.Close()
 	if start > size || (start+length-1) > size {
 		return 0, iodine.New(drivers.InvalidRange{
 			Start:  start,
@@ -366,7 +366,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 }
 
 // CreateObject creates a new object
-func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMD5Sum string, reader io.Reader) (string, error) {
+func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMD5Sum string, size int64, reader io.Reader) (string, error) {
 	errParams := map[string]string{
 		"bucketName":  bucketName,
 		"objectName":  objectName,
@@ -383,6 +383,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	}
 	metadata := make(map[string]string)
 	metadata["contentType"] = strings.TrimSpace(contentType)
+	metadata["contentLength"] = strconv.FormatInt(size, 10)
 
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))

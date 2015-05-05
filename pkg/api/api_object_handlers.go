@@ -18,6 +18,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/iodine"
@@ -155,10 +156,10 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 		return
 	}
-	/// if Content-Length missing, incomplete request throw IncompleteBody
+	/// if Content-Length missing, throw away
 	size := req.Header.Get("Content-Length")
 	if size == "" {
-		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
 		return
 	}
 	/// maximum Upload size for objects in a single operation
@@ -171,7 +172,9 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 		return
 	}
-	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, req.Body)
+	// ignoring error here, TODO find a way to reply back if we can
+	sizeInt, _ := strconv.ParseInt(size, 10, 64)
+	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, sizeInt, req.Body)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{

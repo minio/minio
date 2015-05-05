@@ -92,9 +92,8 @@ type ObjectExists GenericObjectError
 // EntityTooLarge - object size exceeds maximum limit
 type EntityTooLarge struct {
 	GenericObjectError
-	Size      string
-	TotalSize string
-	MaxSize   string
+	Size    string
+	MaxSize string
 }
 
 // ObjectNameInvalid - object name provided is invalid
@@ -170,7 +169,7 @@ func (e ObjectNameInvalid) Error() string {
 
 // Return string an error formatted as the given text
 func (e EntityTooLarge) Error() string {
-	return e.Bucket + "#" + e.Object + "with " + e.Size + "reached maximum allowed size limit " + e.TotalSize
+	return e.Bucket + "#" + e.Object + "with " + e.Size + "reached maximum allowed size limit " + e.MaxSize
 }
 
 // Return string an error formatted as the given text

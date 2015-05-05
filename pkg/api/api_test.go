@@ -168,7 +168,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 		Size:        0,
 	}
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
-	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(metadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "object", "", "", 0, mock.Anything).Return(metadata.Md5, nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Twice()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
@@ -179,7 +179,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	buffer := bytes.NewBufferString("")
 	driver.CreateBucket("bucket", "private")
-	driver.CreateObject("bucket", "object", "", "", buffer)
+	driver.CreateObject("bucket", "object", "", "", 0, buffer)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
@@ -250,7 +250,7 @@ func (s *MySuite) TestObject(c *C) {
 		Size:        11,
 	}
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
-	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(metadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything, mock.Anything).Return(metadata.Md5, nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Twice()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Twice()
 	typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
@@ -262,7 +262,7 @@ func (s *MySuite) TestObject(c *C) {
 
 	buffer := bytes.NewBufferString("hello world")
 	driver.CreateBucket("bucket", "private")
-	driver.CreateObject("bucket", "object", "", "", buffer)
+	driver.CreateObject("bucket", "object", "", "", int64(buffer.Len()), buffer)
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
@@ -325,12 +325,12 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	driver.CreateBucket("bucket", "private")
-	typedDriver.On("CreateObject", "bucket", "object1", "", "", mock.Anything).Return(metadata1.Md5, nil).Once()
-	driver.CreateObject("bucket", "object1", "", "", buffer1)
-	typedDriver.On("CreateObject", "bucket", "object2", "", "", mock.Anything).Return(metadata2.Md5, nil).Once()
-	driver.CreateObject("bucket", "object2", "", "", buffer2)
-	typedDriver.On("CreateObject", "bucket", "object3", "", "", mock.Anything).Return(metadata3.Md5, nil).Once()
-	driver.CreateObject("bucket", "object3", "", "", buffer3)
+	typedDriver.On("CreateObject", "bucket", "object1", "", "", mock.Anything, mock.Anything).Return(metadata1.Md5, nil).Once()
+	driver.CreateObject("bucket", "object1", "", "", int64(buffer1.Len()), buffer1)
+	typedDriver.On("CreateObject", "bucket", "object2", "", "", mock.Anything, mock.Anything).Return(metadata2.Md5, nil).Once()
+	driver.CreateObject("bucket", "object2", "", "", int64(buffer2.Len()), buffer2)
+	typedDriver.On("CreateObject", "bucket", "object3", "", "", mock.Anything, mock.Anything).Return(metadata3.Md5, nil).Once()
+	driver.CreateObject("bucket", "object3", "", "", int64(buffer3.Len()), buffer3)
 
 	// test non-existant object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
@@ -506,8 +506,8 @@ func (s *MySuite) TestHeader(c *C) {
 
 	buffer := bytes.NewBufferString("hello world")
 	typedDriver.On("GetBucketMetadata", "foo").Return(bucketMetadata, nil).Once()
-	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything).Return(objectMetadata.Md5, nil).Once()
-	driver.CreateObject("bucket", "object", "", "", buffer)
+	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything, mock.Anything).Return(objectMetadata.Md5, nil).Once()
+	driver.CreateObject("bucket", "object", "", "", int64(buffer.Len()), buffer)
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(bucketMetadata, nil).Once()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(objectMetadata, nil).Once()
@@ -618,7 +618,7 @@ func (s *MySuite) TestPutObject(c *C) {
 		Size:        11,
 	}
 
-	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything).Return(twoMetadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything, mock.Anything).Return(twoMetadata.Md5, nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
 	setAuthHeader(request)
@@ -905,7 +905,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	}
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Once()
-	typedDriver.On("CreateObject", "bucket", "one", "", "", mock.Anything).Return(oneMetadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "one", "", "", mock.Anything, mock.Anything).Return(oneMetadata.Md5, nil).Once()
 	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/one", bytes.NewBufferString("hello world"))
 	delete(request.Header, "Content-Type")
 	c.Assert(err, IsNil)
@@ -952,7 +952,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	}
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Once()
-	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything).Return(twoMetadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "two", "", "", mock.Anything, mock.Anything).Return(twoMetadata.Md5, nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/two", bytes.NewBufferString("hello world"))
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
@@ -1010,11 +1010,11 @@ func (s *MySuite) TestPartialContent(c *C) {
 	}
 
 	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
-	typedDriver.On("CreateObject", "foo", "bar", "", "", mock.Anything).Return(metadata.Md5, nil).Once()
+	typedDriver.On("CreateObject", "foo", "bar", "", "", mock.Anything, mock.Anything).Return(metadata.Md5, nil).Once()
 	err := driver.CreateBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	driver.CreateObject("foo", "bar", "", "", bytes.NewBufferString("hello world"))
+	driver.CreateObject("foo", "bar", "", "", int64(len("hello world")), bytes.NewBufferString("hello world"))
 
 	// prepare for GET on range request
 	typedDriver.SetGetObjectWriter("foo", "bar", []byte("hello world"))
