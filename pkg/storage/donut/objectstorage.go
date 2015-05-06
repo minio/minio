@@ -134,9 +134,22 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 		actualObjects = donutObjects
 	}
 
+	sort.Strings(actualObjects)
+	var newActualObjects []string
+	switch {
+	case marker != "":
+		for _, objectName := range actualObjects {
+			if objectName > marker {
+				newActualObjects = append(newActualObjects, objectName)
+			}
+		}
+	default:
+		newActualObjects = actualObjects
+	}
+
 	var results []string
 	var commonPrefixes []string
-	for _, objectName := range actualObjects {
+	for _, objectName := range newActualObjects {
 		if len(results) >= maxkeys {
 			isTruncated = true
 			break

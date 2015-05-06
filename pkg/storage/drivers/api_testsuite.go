@@ -181,10 +181,25 @@ func testPaging(c *check.C, create func() Driver) {
 		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
 	}
 
+	// check results with Marker
+	{
+		var prefixes []string
+		resources.CommonPrefixes = prefixes // allocate new everytime
+		resources.Prefix = ""
+		resources.Marker = "newPrefix"
+		resources.Delimiter = "/"
+		resources.Maxkeys = 3
+		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(objects[0].Key, check.Equals, "newPrefix2")
+		c.Assert(objects[1].Key, check.Equals, "obj0")
+		c.Assert(objects[2].Key, check.Equals, "obj1")
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
+	}
 	// check ordering of results with prefix
 	{
 		resources.Prefix = "obj"
 		resources.Delimiter = ""
+		resources.Marker = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "obj0")
@@ -196,6 +211,7 @@ func testPaging(c *check.C, create func() Driver) {
 	// check ordering of results with prefix and no paging
 	{
 		resources.Prefix = "new"
+		resources.Marker = ""
 		resources.Maxkeys = 5
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
