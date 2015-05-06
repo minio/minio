@@ -92,7 +92,6 @@ func (d donut) ListBuckets() (results []string, err error) {
 
 // ListObjects - return list of objects
 func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
-	// TODO: Marker is not yet handled please handle it
 	errParams := map[string]string{
 		"bucket":    bucket,
 		"prefix":    prefix,

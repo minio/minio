@@ -329,17 +329,16 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	if !drivers.IsValidObjectName(resources.Prefix) {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
-	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName,
-		resources.Prefix,
-		resources.Marker,
-		resources.Delimiter,
+	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName, resources.Prefix, resources.Marker, resources.Delimiter,
 		resources.Maxkeys)
 	if err != nil {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 	}
 	resources.CommonPrefixes = commonPrefixes
 	resources.IsTruncated = isTruncated
-
+	if resources.IsTruncated && resources.IsDelimiterSet() {
+		resources.NextMarker = actualObjects[len(actualObjects)-1]
+	}
 	var results []drivers.ObjectMetadata
 	for _, objectName := range actualObjects {
 		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)

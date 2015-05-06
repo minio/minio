@@ -102,7 +102,9 @@ const (
 type BucketResourcesMetadata struct {
 	Prefix         string
 	Marker         string
+	NextMarker     string
 	Maxkeys        int
+	EncodingType   string
 	Delimiter      string
 	IsTruncated    bool
 	CommonPrefixes []string

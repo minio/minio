@@ -57,7 +57,7 @@ func generateListBucketsResponse(buckets []drivers.BucketMetadata) ListBucketsRe
 }
 
 // itemKey
-type itemKey []*Item
+type itemKey []*Object
 
 func (b itemKey) Len() int           { return len(b) }
 func (b itemKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
@@ -72,8 +72,8 @@ func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 // output:
 // populated struct that can be serialized to match xml and json api spec output
 func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata, bucketResources drivers.BucketResourcesMetadata) ListObjectsResponse {
-	var contents []*Item
-	var prefixes []*Prefix
+	var contents []*Object
+	var prefixes []*CommonPrefix
 	var owner = Owner{}
 	var data = ListObjectsResponse{}
 
@@ -81,7 +81,7 @@ func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata
 	owner.DisplayName = "minio"
 
 	for _, object := range objects {
-		var content = &Item{}
+		var content = &Object{}
 		if object.Key == "" {
 			continue
 		}
@@ -94,15 +94,17 @@ func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata
 		contents = append(contents, content)
 	}
 	sort.Sort(itemKey(contents))
+	// TODO - support EncodingType in xml decoding
 	data.Name = bucket
 	data.Contents = contents
 	data.MaxKeys = bucketResources.Maxkeys
 	data.Prefix = bucketResources.Prefix
 	data.Delimiter = bucketResources.Delimiter
 	data.Marker = bucketResources.Marker
+	data.NextMarker = bucketResources.NextMarker
 	data.IsTruncated = bucketResources.IsTruncated
 	for _, prefix := range bucketResources.CommonPrefixes {
-		var prefixItem = &Prefix{}
+		var prefixItem = &CommonPrefix{}
 		prefixItem.Prefix = prefix
 		prefixes = append(prefixes, prefixItem)
 	}

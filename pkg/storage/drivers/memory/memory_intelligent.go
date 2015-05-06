@@ -33,8 +33,8 @@ type Intelligent struct {
 	// items hold the cached objects
 	items map[string]interface{}
 
-	// createdAt holds the time that related item's created At
-	createdAt map[string]time.Time
+	// updatedAt holds the time that related item's updated at
+	updatedAt map[string]time.Time
 
 	// expiration is a duration for a cache key to expire
 	expiration time.Duration
@@ -69,7 +69,7 @@ type Stats struct {
 func NewIntelligent(maxSize uint64, expiration time.Duration) *Intelligent {
 	return &Intelligent{
 		items:      map[string]interface{}{},
-		createdAt:  map[string]time.Time{},
+		updatedAt:  map[string]time.Time{},
 		expiration: expiration,
 		maxSize:    maxSize,
 	}
@@ -91,7 +91,6 @@ func (r *Intelligent) ExpireObjects(gcInterval time.Duration) {
 		for range time.Tick(gcInterval) {
 			r.Lock()
 			for key := range r.items {
-
 				if !r.isValid(key) {
 					r.Delete(key)
 				}
@@ -106,7 +105,11 @@ func (r *Intelligent) Get(key string) (interface{}, bool) {
 	r.Lock()
 	defer r.Unlock()
 	value, ok := r.items[key]
-	return value, ok
+	if !ok {
+		return nil, false
+	}
+	r.updatedAt[key] = time.Now()
+	return value, true
 }
 
 // Set will persist a value to the cache
@@ -124,7 +127,7 @@ func (r *Intelligent) Set(key string, value interface{}) {
 	}
 	r.items[key] = value
 	r.currentSize += uint64(len(value.([]byte)))
-	r.createdAt[key] = time.Now()
+	r.updatedAt[key] = time.Now()
 	r.Unlock()
 	return
 }
@@ -133,7 +136,7 @@ func (r *Intelligent) Set(key string, value interface{}) {
 func (r *Intelligent) Delete(key string) {
 	r.currentSize -= uint64(len(r.items[key].([]byte)))
 	delete(r.items, key)
-	delete(r.createdAt, key)
+	delete(r.updatedAt, key)
 	r.totalEvicted++
 	if r.OnEvicted != nil {
 		r.OnEvicted(key)
@@ -141,12 +144,12 @@ func (r *Intelligent) Delete(key string) {
 }
 
 func (r *Intelligent) isValid(key string) bool {
-	createdAt, ok := r.createdAt[key]
+	updatedAt, ok := r.updatedAt[key]
 	if !ok {
 		return false
 	}
 	if r.expiration == zeroExpiration {
 		return true
 	}
-	return createdAt.Add(r.expiration).After(time.Now())
+	return updatedAt.Add(r.expiration).After(time.Now())
 }
