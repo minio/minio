@@ -61,10 +61,10 @@ USAGE:
   minio mode {{.Name}} limit SIZE expire TIME
 
 EXAMPLES:
-  1. Limit maximum memory usage to 64MB with 1h expiration
+  1. Limit maximum memory usage to 64MB with 1 hour expiration
       $ minio mode {{.Name}} limit 64MB expire 1h
 
-  2. Limit maximum memory usage to 4GB with no time expiration
+  2. Limit maximum memory usage to 4GB with no expiration
       $ minio mode {{.Name}} limit 4GB
 `,
 }
@@ -93,11 +93,6 @@ EXAMPLES:
 }
 
 var flags = []cli.Flag{
-	//	cli.StringFlag{
-	//		Name:  "domain",
-	//		Value: "",
-	//		Usage: "domain used for routing incoming API requests",
-	//	},
 	cli.StringFlag{
 		Name:  "api-address",
 		Value: ":9000",
@@ -154,7 +149,7 @@ func runMemory(c *cli.Context) {
 		case "limit":
 			{
 				if maxMemorySet {
-					Fatalf("Limit should be set only once")
+					Fatalln("Limit should be set only once")
 				}
 				args = args.Tail()
 				maxMemory, err = humanize.ParseBytes(args.First())
@@ -170,7 +165,7 @@ func runMemory(c *cli.Context) {
 		case "expire":
 			{
 				if expirationSet {
-					Fatalf("Expiration should be set only once")
+					Fatalln("Expiration should be set only once")
 				}
 				args = args.Tail()
 				expiration, err = time.ParseDuration(args.First())
@@ -203,7 +198,7 @@ func runMemory(c *cli.Context) {
 func runDonut(c *cli.Context) {
 	u, err := user.Current()
 	if err != nil {
-		Fatalln("Unable to determine current user. Reason: %s\n", err)
+		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
@@ -238,7 +233,6 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
-		//		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("api-address"),
 		TLS:      tls,
 		CertFile: certFile,
@@ -248,7 +242,6 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 
 func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	config := httpserver.Config{
-		//		Domain:   c.GlobalString("domain"),
 		Address:  c.GlobalString("web-address"),
 		TLS:      false,
 		CertFile: "",

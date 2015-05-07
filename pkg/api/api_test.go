@@ -135,7 +135,7 @@ func (s *MySuite) TestNonExistantBucket(c *C) {
 		}
 	}
 	driver := s.Driver
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -173,7 +173,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
 	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -216,7 +216,7 @@ func (s *MySuite) TestBucket(c *C) {
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Once()
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -256,7 +256,7 @@ func (s *MySuite) TestObject(c *C) {
 	typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -315,7 +315,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
 		Size:        11,
 	}
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -445,7 +445,7 @@ func (s *MySuite) TestNotImplemented(c *C) {
 		}
 	}
 	driver := s.Driver
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -470,7 +470,7 @@ func (s *MySuite) TestHeader(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 	typedDriver.AssertExpectations(c)
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -539,7 +539,7 @@ func (s *MySuite) TestPutBucket(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -576,7 +576,7 @@ func (s *MySuite) TestPutObject(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -665,7 +665,7 @@ func (s *MySuite) TestListBuckets(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -803,7 +803,7 @@ func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -836,7 +836,7 @@ func (s *MySuite) TestXMLNameNotInObjectListJson(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -881,7 +881,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -996,7 +996,7 @@ func (s *MySuite) TestPartialContent(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 
@@ -1054,7 +1054,7 @@ func (s *MySuite) TestListObjectsHandlerErrors(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 	client := http.Client{}
@@ -1121,7 +1121,7 @@ func (s *MySuite) TestListBucketsErrors(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 	client := http.Client{}
@@ -1158,7 +1158,7 @@ func (s *MySuite) TestPutBucketErrors(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 	client := http.Client{}
@@ -1218,7 +1218,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 	client := http.Client{}
@@ -1291,7 +1291,7 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 	driver := s.Driver
 	typedDriver := s.MockDriver
 
-	httpHandler := HTTPHandler("", driver)
+	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
 	client := http.Client{}
