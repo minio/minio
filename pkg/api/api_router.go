@@ -30,12 +30,16 @@ import (
 
 // private use
 type minioAPI struct {
-	domain string
 	driver drivers.Driver
 }
 
-// Path based routing
-func pathMux(api minioAPI, mux *router.Router) *router.Router {
+// HTTPHandler - http wrapper handler
+func HTTPHandler(driver drivers.Driver) http.Handler {
+	var mux *router.Router
+	var api = minioAPI{}
+	api.driver = driver
+
+	mux = router.NewRouter()
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
@@ -44,53 +48,9 @@ func pathMux(api minioAPI, mux *router.Router) *router.Router {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	return mux
-}
-
-/*
-// Domain based routing
-func domainMux(api minioAPI, mux *router.Router) *router.Router {
-	mux.HandleFunc("/",
-		api.listObjectsHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
-	mux.HandleFunc("/{object:.*}",
-		api.getObjectHandler).Host("{bucket}" + "." + api.domain).Methods("GET")
-	mux.HandleFunc("/{object:.*}",
-		api.headObjectHandler).Host("{bucket}" + "." + api.domain).Methods("HEAD")
-	mux.HandleFunc("/{object:.*}",
-		api.putObjectHandler).Host("{bucket}" + "." + api.domain).Methods("PUT")
-	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
-	mux.HandleFunc("/{bucket}", api.headBucketHandler).Methods("HEAD")
-
-	return mux
-}
-*/
-
-// Get proper router based on domain availability
-func getMux(api minioAPI, mux *router.Router) *router.Router {
-	switch true {
-	case api.domain == "":
-		return pathMux(api, mux)
-		//	case api.domain != "":
-		//		s := mux.Host(api.domain).Subrouter()
-		//		return domainMux(api, s)
-	}
-	return nil
-}
-
-// HTTPHandler - http wrapper handler
-func HTTPHandler(domain string, driver drivers.Driver) http.Handler {
-	var mux *router.Router
-	var api = minioAPI{}
-	api.driver = driver
-	api.domain = domain
-
-	r := router.NewRouter()
-	mux = getMux(api, r)
-
 	var conf = config.Config{}
 	if err := conf.SetupConfig(); err != nil {
-		log.Fatal(iodine.New(err, map[string]string{"domain": domain}))
+		log.Fatal(iodine.New(err, nil))
 	}
 	h := timeValidityHandler(mux)
 	h = ignoreResourcesHandler(h)

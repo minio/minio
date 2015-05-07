@@ -24,12 +24,10 @@ import (
 
 // Config - http server config
 type Config struct {
-	Address   string
-	TLS       bool
-	CertFile  string
-	KeyFile   string
-	Websocket bool // TODO
-	//	Domain    string
+	Address  string
+	TLS      bool
+	CertFile string
+	KeyFile  string
 }
 
 // Server - http server related
@@ -59,11 +57,12 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 	}
 	log.Println("Starting HTTP Server on:", config.Address)
 
-	if config.TLS {
+	switch {
+	default:
+		err = httpServer.ListenAndServe()
+	case config.TLS == true:
 		httpServer.TLSConfig = getDefaultTLSConfig()
 		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
-	} else {
-		err = httpServer.ListenAndServe()
 	}
 	errorChannel <- err
 	close(errorChannel)
