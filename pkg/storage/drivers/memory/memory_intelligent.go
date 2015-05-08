@@ -134,12 +134,14 @@ func (r *Intelligent) Set(key string, value interface{}) {
 
 // Delete deletes a given key if exists
 func (r *Intelligent) Delete(key string) {
-	r.currentSize -= uint64(len(r.items[key].([]byte)))
-	delete(r.items, key)
-	delete(r.updatedAt, key)
-	r.totalEvicted++
-	if r.OnEvicted != nil {
-		r.OnEvicted(key)
+	if _, ok := r.items[key]; ok {
+		r.currentSize -= uint64(len(r.items[key].([]byte)))
+		delete(r.items, key)
+		delete(r.updatedAt, key)
+		r.totalEvicted++
+		if r.OnEvicted != nil {
+			r.OnEvicted(key)
+		}
 	}
 }
 
