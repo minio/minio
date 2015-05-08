@@ -112,6 +112,14 @@ func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata
 	return data
 }
 
+func generateInitiateMultipartUploadResult(bucket, key, uploadID string) InitiateMultipartUploadResult {
+	return InitiateMultipartUploadResult{
+		Bucket:   bucket,
+		Key:      key,
+		UploadID: uploadID,
+	}
+}
+
 // writeSuccessResponse - write success headers
 func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
 	setCommonHeaders(w, getContentTypeString(acceptsContentType))

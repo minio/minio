@@ -95,6 +95,26 @@ type Owner struct {
 	DisplayName string
 }
 
+// InitiateMultipartUploadResult - Returns upload id to use
+type InitiateMultipartUploadResult struct {
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 InitiateMultipartUploadResult" json:"-"`
+
+	Bucket   string
+	Key      string
+	UploadID string `xml:"UploadId"`
+}
+
+// CompleteMultipartUpload - Construct object from uploaded parts
+type CompleteMultipartUpload struct {
+	Part []Part
+}
+
+// Part - Description of a multipart part
+type Part struct {
+	PartNumber int
+	ETag       string
+}
+
 // List of not implemented bucket queries
 var notimplementedBucketResourceNames = map[string]bool{
 	"policy":         true,
@@ -113,7 +133,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 
 // List of not implemented object queries
 var notimplementedObjectResourceNames = map[string]bool{
-	"uploadId": true,
-	"torrent":  true,
-	"uploads":  true,
+	"torrent": true,
+	"uploads": true,
 }

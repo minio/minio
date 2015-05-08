@@ -24,6 +24,7 @@ import (
 	"github.com/minio-io/minio/pkg/api/config"
 	"github.com/minio-io/minio/pkg/api/logging"
 	"github.com/minio-io/minio/pkg/api/quota"
+	"github.com/minio-io/minio/pkg/featureflags"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 )
@@ -46,6 +47,12 @@ func HTTPHandler(driver drivers.Driver) http.Handler {
 	mux.HandleFunc("/{bucket}", api.headBucketHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
+	if featureflags.Get(featureflags.MultipartPutObject) {
+		log.Println("Enabling feature", featureflags.MultipartPutObject)
+		mux.HandleFunc("/{bucket}/{object:.*}?uploads", api.newMultipartUploadHandler).Methods("POST")
+		mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
+		mux.HandleFunc("/{bucket}/{object:.*}", api.completeMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("POST")
+	}
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
 	var conf = config.Config{}

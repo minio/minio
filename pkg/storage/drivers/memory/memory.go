@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -31,6 +32,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"math/rand"
 
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -222,7 +225,7 @@ func getMD5AndData(reader io.Reader) ([]byte, []byte, error) {
 	return hash.Sum(nil), data, nil
 }
 
-// CreateObject - PUT object to memory buffer
+// createObject - PUT object to memory buffer
 func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	memory.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
@@ -506,4 +509,70 @@ func (memory *memoryDriver) evictObject(a ...interface{}) {
 		}
 	}
 	debug.FreeOSMemory()
+}
+
+func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+	// TODO verify object doesn't exist
+	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
+	uploadIDSum := sha512.Sum512(id)
+	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])
+	md5sumBytes := md5.Sum([]byte(uploadID))
+	md5sum := hex.EncodeToString(md5sumBytes[:])
+	memory.CreateObject(bucket, key+"?uploadId="+uploadID, contentType, md5sum, int64(len(uploadID)), bytes.NewBufferString(uploadID))
+	return uploadID, nil
+}
+
+func getMultipartKey(key string, uploadID string, partNumber int) string {
+	return key + "?uploadId=" + uploadID + "&partNumber=" + strconv.Itoa(partNumber)
+}
+
+func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	// TODO verify upload id exists
+	return memory.CreateObject(bucket, getMultipartKey(key, uploadID, partID), "", expectedMD5Sum, size, data)
+}
+
+func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) error {
+	// TODO verify upload id exists
+	memory.lock.Lock()
+	size := int64(0)
+	for i := 1; i <= len(parts); i++ {
+		if _, ok := parts[i]; ok {
+			if object, ok := memory.storedBuckets[bucket].objectMetadata[bucket+"/"+getMultipartKey(key, uploadID, i)]; ok == true {
+				size += object.Size
+			}
+		} else {
+			memory.lock.Unlock()
+			return iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+		}
+	}
+
+	var fullObject bytes.Buffer
+
+	for i := 1; i <= len(parts); i++ {
+		if _, ok := parts[i]; ok {
+			if object, ok := memory.objects.Get(bucket + "/" + getMultipartKey(key, uploadID, i)); ok == true {
+				obj := object.([]byte)
+				io.Copy(&fullObject, bytes.NewBuffer(obj))
+			} else {
+				log.Println("Cannot fetch: ", getMultipartKey(key, uploadID, i))
+			}
+		} else {
+			memory.lock.Unlock()
+			return iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+		}
+	}
+
+	for i := 1; i <= len(parts); i++ {
+		if _, ok := parts[i]; ok {
+			objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
+			memory.objects.Delete(objectKey)
+		}
+	}
+
+	memory.lock.Unlock()
+
+	md5sumSlice := md5.Sum(fullObject.Bytes())
+	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
+	_, err := memory.CreateObject(bucket, key, "", md5sum, size, &fullObject)
+	return err
 }

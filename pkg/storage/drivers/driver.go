@@ -38,6 +38,11 @@ type Driver interface {
 	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
 	CreateObject(bucket string, key string, contentType string, md5sum string, size int64, data io.Reader) (string, error)
+
+	// Object Multipart Operations
+	NewMultipartUpload(bucket string, key string, contentType string) (string, error)
+	CreateObjectPart(bucket string, key string, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
+	CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) error
 }
 
 // BucketACL - bucket level access control
