@@ -52,11 +52,25 @@ func stripAccessKey(r *http.Request) string {
 }
 
 func getDate(req *http.Request) (time.Time, error) {
-	if req.Header.Get("x-amz-date") != "" {
-		return time.Parse(http.TimeFormat, req.Header.Get("x-amz-date"))
+	amzDate := req.Header.Get("X-Amz-Date")
+	switch {
+	case amzDate != "":
+		if _, err := time.Parse(time.RFC1123, amzDate); err == nil {
+			return time.Parse(time.RFC1123, amzDate)
+		}
+		if _, err := time.Parse(time.RFC1123Z, amzDate); err == nil {
+			return time.Parse(time.RFC1123Z, amzDate)
+		}
 	}
-	if req.Header.Get("Date") != "" {
-		return time.Parse(http.TimeFormat, req.Header.Get("Date"))
+	date := req.Header.Get("Date")
+	switch {
+	case date != "":
+		if _, err := time.Parse(time.RFC1123, date); err == nil {
+			return time.Parse(time.RFC1123, date)
+		}
+		if _, err := time.Parse(time.RFC1123Z, date); err == nil {
+			return time.Parse(time.RFC1123Z, date)
+		}
 	}
 	return time.Time{}, errors.New("invalid request")
 }
@@ -74,7 +88,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
 
 	if r.Header.Get("Authorization") != "" {
-		if r.Header.Get("x-amz-date") == "" && r.Header.Get("Date") == "" {
+		if r.Header.Get("X-Amz-Date") == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
 			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
 			return
