@@ -120,6 +120,15 @@ func generateInitiateMultipartUploadResult(bucket, key, uploadID string) Initiat
 	}
 }
 
+func generateCompleteMultpartUploadResult(bucket, key, location, etag string) CompleteMultipartUploadResult {
+	return CompleteMultipartUploadResult{
+		Location: location,
+		Bucket:   bucket,
+		Key:      key,
+		ETag:     etag,
+	}
+}
+
 // writeSuccessResponse - write success headers
 func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
 	setCommonHeaders(w, getContentTypeString(acceptsContentType))

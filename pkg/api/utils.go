@@ -35,11 +35,11 @@ func isValidMD5(md5 string) bool {
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
-
-// these should be configurable?
 const (
 	// maximum object size per PUT request is 5GB
 	maxObjectSize = 1024 * 1024 * 1024 * 5
+	// mimimum object size per Multipart PUT request is 5MB
+	minMultiPartObjectSize = 1024 * 1024 * 5
 	// minimum object size per PUT request is 1B
 	minObjectSize = 1
 )
@@ -63,6 +63,18 @@ func isMinObjectSize(size string) bool {
 		return true
 	}
 	if i < minObjectSize {
+		return true
+	}
+	return false
+}
+
+// isMinMultipartObjectSize - verify if the uploaded multipart is of minimum size
+func isMinMultipartObjectSize(size string) bool {
+	i, err := strconv.ParseInt(size, 10, 64)
+	if err != nil {
+		return true
+	}
+	if i < minMultiPartObjectSize {
 		return true
 	}
 	return false

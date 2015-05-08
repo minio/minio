@@ -63,11 +63,12 @@ const (
 	SignatureDoesNotMatch
 	TooManyBuckets
 	MethodNotAllowed
+	InvalidPart
 )
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 23
+	NotAcceptable = iota + 24
 )
 
 // Error code to Error structure map
@@ -186,6 +187,11 @@ var errorCodeResponse = map[int]Error{
 		Code:           "NotAcceptable",
 		Description:    "The requested resource is only capable of generating content not acceptable according to the Accept headers sent in the request.",
 		HTTPStatusCode: http.StatusNotAcceptable,
+	},
+	InvalidPart: {
+		Code:           "InvalidPart",
+		Description:    "One or more of the specified parts could not be found",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 }
 

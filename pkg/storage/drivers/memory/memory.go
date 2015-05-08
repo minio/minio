@@ -195,10 +195,10 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	humanReadableErr, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	md5sum, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
 	// free
 	debug.FreeOSMemory()
-	return humanReadableErr, iodine.New(err, nil)
+	return md5sum, iodine.New(err, nil)
 }
 
 // getMD5AndData - this is written as a wrapper to capture md5sum and data in a more memory efficient way
@@ -497,15 +497,18 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 
 func (memory *memoryDriver) evictObject(a ...interface{}) {
 	cacheStats := memory.objects.Stats()
-	log.Printf("CurrenSize: %d, CurrentItems: %d, TotalEvictions: %d",
+	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalEvictions: %d",
 		cacheStats.Bytes, cacheStats.Items, cacheStats.Evictions)
 	key := a[0].(string)
 	// loop through all buckets
-	for bucket, storedBucket := range memory.storedBuckets {
+	for _, storedBucket := range memory.storedBuckets {
 		delete(storedBucket.objectMetadata, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
-			delete(memory.storedBuckets, bucket)
+			// TODO (y4m4)
+			// for now refrain from deleting buckets, due to multipart deletes before fullobject being written
+			// this case gets trigerred and we can't store the actual data at all receiving 404 on the client
+			// delete(memory.storedBuckets, bucket)
 		}
 	}
 	debug.FreeOSMemory()
@@ -531,7 +534,7 @@ func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partI
 	return memory.CreateObject(bucket, getMultipartKey(key, uploadID, partID), "", expectedMD5Sum, size, data)
 }
 
-func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) error {
+func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
 	// TODO verify upload id exists
 	memory.lock.Lock()
 	size := int64(0)
@@ -542,7 +545,7 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 			}
 		} else {
 			memory.lock.Unlock()
-			return iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+			return "", iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
 	}
 
@@ -552,13 +555,16 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 		if _, ok := parts[i]; ok {
 			if object, ok := memory.objects.Get(bucket + "/" + getMultipartKey(key, uploadID, i)); ok == true {
 				obj := object.([]byte)
-				io.Copy(&fullObject, bytes.NewBuffer(obj))
+				_, err := io.Copy(&fullObject, bytes.NewBuffer(obj))
+				if err != nil {
+					return "", iodine.New(err, nil)
+				}
 			} else {
 				log.Println("Cannot fetch: ", getMultipartKey(key, uploadID, i))
 			}
 		} else {
 			memory.lock.Unlock()
-			return iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+			return "", iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
 	}
 
@@ -573,6 +579,5 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 
 	md5sumSlice := md5.Sum(fullObject.Bytes())
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
-	_, err := memory.CreateObject(bucket, key, "", md5sum, size, &fullObject)
-	return err
+	return memory.CreateObject(bucket, key, "", md5sum, size, &fullObject)
 }

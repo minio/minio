@@ -95,7 +95,7 @@ type Owner struct {
 	DisplayName string
 }
 
-// InitiateMultipartUploadResult - Returns upload id to use
+// InitiateMultipartUploadResult container for InitiateMultiPartUpload response, provides uploadID to start MultiPart upload
 type InitiateMultipartUploadResult struct {
 	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 InitiateMultipartUploadResult" json:"-"`
 
@@ -104,12 +104,22 @@ type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
 
-// CompleteMultipartUpload - Construct object from uploaded parts
+// CompleteMultipartUpload container for completing multipart upload
 type CompleteMultipartUpload struct {
 	Part []Part
 }
 
-// Part - Description of a multipart part
+// CompleteMultipartUploadResult container for completed multipart upload response
+type CompleteMultipartUploadResult struct {
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 CompleteMultipartUploadResult" json:"-"`
+
+	Location string
+	Bucket   string
+	Key      string
+	ETag     string
+}
+
+// Part description of a multipart part
 type Part struct {
 	PartNumber int
 	ETag       string
