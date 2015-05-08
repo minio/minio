@@ -365,17 +365,15 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 		return
 	}
 
-	partMap := make(map[int]string)
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
 	uploadID := vars["uploadId"]
 
+	partMap := make(map[int]string)
 	for _, part := range parts.Part {
 		partMap[part.PartNumber] = part.ETag
 	}
-
 	etag, err := server.driver.CompleteMultipartUpload(bucket, object, uploadID, partMap)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
