@@ -124,3 +124,32 @@ func (m *Driver) CreateObject(bucket string, key string, contentType string, md5
 
 	return r0, r1
 }
+
+// NewMultipartUpload is a mock
+func (m *Driver) NewMultipartUpload(bucket string, key string, contentType string) (string, error) {
+	ret := m.Called(bucket, key, contentType)
+
+	r0 := ret.Get(0).(string)
+	r1 := ret.Error(1)
+
+	return r0, r1
+}
+
+// CreateObjectPart is a mock
+func (m *Driver) CreateObjectPart(bucket string, key string, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error) {
+	ret := m.Called(bucket, key, uploadID, partID, contentType, md5sum, size, data)
+
+	r0 := ret.Get(0).(string)
+	r1 := ret.Error(1)
+
+	return r0, r1
+}
+
+// CompleteMultipartUpload is a mock
+func (m *Driver) CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) error {
+	ret := m.Called(bucket, key, uploadID, parts)
+
+	r0 := ret.Error(0)
+
+	return r0
+}

@@ -28,6 +28,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio-io/cli"
+	"github.com/minio-io/minio/pkg/featureflags"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/server"
 	"github.com/minio-io/minio/pkg/server/httpserver"
@@ -295,6 +296,9 @@ func getSystemData() map[string]string {
 var Version = mustHashBinarySelf()
 
 func main() {
+	// enable features
+	featureflags.Enable(featureflags.MultipartPutObject)
+
 	// set up iodine
 	iodine.SetGlobalState("minio.version", Version)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))

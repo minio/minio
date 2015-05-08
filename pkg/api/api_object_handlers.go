@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"encoding/xml"
 	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -173,8 +174,8 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	// ignoring error here, TODO find a way to reply back if we can
-	sizeInt, _ := strconv.ParseInt(size, 10, 64)
-	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, sizeInt, req.Body)
+	sizeInt64, _ := strconv.ParseInt(size, 10, 64)
+	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, sizeInt64, req.Body)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
@@ -209,4 +210,157 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
+}
+
+func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	// handle ACL's here at bucket level
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
+	var object, bucket string
+	vars := mux.Vars(req)
+	bucket = vars["bucket"]
+	object = vars["object"]
+	var uploadID string
+	var err error
+	if uploadID, err = server.driver.NewMultipartUpload(bucket, object, ""); err != nil {
+		log.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		return
+	}
+	response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
+	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	// write headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType))
+	// set content-length to the size of the body
+	w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
+	w.WriteHeader(http.StatusOK)
+	// write body
+	w.Write(encodedSuccessResponse)
+}
+
+func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	// handle ACL's here at bucket level
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
+	// get Content-MD5 sent by client and verify if valid
+	md5 := req.Header.Get("Content-MD5")
+	if !isValidMD5(md5) {
+		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		return
+	}
+	/// if Content-Length missing, throw away
+	size := req.Header.Get("Content-Length")
+	if size == "" {
+		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
+		return
+	}
+	/// maximum Upload size for objects in a single operation
+	if isMaxObjectSize(size) {
+		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		return
+	}
+	/// minimum Upload size for objects in a single operation
+	if isMinObjectSize(size) {
+		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
+		return
+	}
+	// ignoring error here, TODO find a way to reply back if we can
+	sizeInt64, _ := strconv.ParseInt(size, 10, 64)
+
+	var object, bucket string
+	vars := mux.Vars(req)
+	bucket = vars["bucket"]
+	object = vars["object"]
+	uploadID := vars["uploadID"]
+	partIDString := vars["partNumber"]
+	partID, err := strconv.Atoi(partIDString)
+	if err != nil {
+		// TODO find the write value for this error
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+	}
+	calculatedMD5, err := server.driver.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body)
+	switch err := iodine.ToError(err).(type) {
+	case nil:
+		{
+			w.Header().Set("ETag", calculatedMD5)
+			writeSuccessResponse(w, acceptsContentType)
+
+		}
+	case drivers.ObjectExists:
+		{
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		}
+	case drivers.BadDigest:
+		{
+			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+		}
+	case drivers.EntityTooLarge:
+		{
+			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		}
+	case drivers.InvalidDigest:
+		{
+			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		}
+	case drivers.ImplementationError:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
+}
+
+func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+
+	decoder := xml.NewDecoder(req.Body)
+	parts := &CompleteMultipartUpload{}
+	err := decoder.Decode(parts)
+	if err != nil {
+		log.Error.Println(err)
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
+
+	partMap := make(map[int]string)
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	uploadID := vars["uploadID"]
+
+	for _, part := range parts.Part {
+		partMap[part.PartNumber] = part.ETag
+	}
+
+	err = server.driver.CompleteMultipartUpload(bucket, object, uploadID, partMap)
+}
+
+func (server *minioAPI) notImplementedHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
 }
