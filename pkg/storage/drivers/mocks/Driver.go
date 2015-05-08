@@ -146,10 +146,11 @@ func (m *Driver) CreateObjectPart(bucket string, key string, uploadID string, pa
 }
 
 // CompleteMultipartUpload is a mock
-func (m *Driver) CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) error {
+func (m *Driver) CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) (string, error) {
 	ret := m.Called(bucket, key, uploadID, parts)
 
-	r0 := ret.Error(0)
+	r0 := ret.Get(0).(string)
+	r1 := ret.Error(1)
 
-	return r0
+	return r0, r1
 }

@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"encoding/xml"
+
 	"github.com/gorilla/mux"
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -173,8 +174,11 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 		return
 	}
-	// ignoring error here, TODO find a way to reply back if we can
-	sizeInt64, _ := strconv.ParseInt(size, 10, 64)
+	sizeInt64, err := strconv.ParseInt(size, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
+		return
+	}
 	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, sizeInt64, req.Body)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
@@ -271,19 +275,24 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
 		return
 	}
-	/// maximum Upload size for objects in a single operation
+	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 		return
 	}
-	/// minimum Upload size for objects in a single operation
-	if isMinObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
+	// last part can be less than < 5MB so we need to figure out a way to handle it first
+	// and then enable below code (y4m4)
+	//
+	/// minimum Upload size for multipart objects in a single operation
+	//	if isMinMultipartObjectSize(size) {
+	//		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
+	//		return
+	//	}
+	sizeInt64, err := strconv.ParseInt(size, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
 		return
 	}
-	// ignoring error here, TODO find a way to reply back if we can
-	sizeInt64, _ := strconv.ParseInt(size, 10, 64)
-
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -292,8 +301,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	partIDString := vars["partNumber"]
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
-		// TODO find the write value for this error
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
 	}
 	calculatedMD5, err := server.driver.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body)
 	switch err := iodine.ToError(err).(type) {
@@ -345,6 +353,7 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	if err != nil {
 		log.Error.Println(err)
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		return
 	}
 
 	partMap := make(map[int]string)
@@ -357,8 +366,23 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	for _, part := range parts.Part {
 		partMap[part.PartNumber] = part.ETag
 	}
-
-	err = server.driver.CompleteMultipartUpload(bucket, object, uploadID, partMap)
+	etag, err := server.driver.CompleteMultipartUpload(bucket, object, uploadID, partMap)
+	switch err := iodine.ToError(err).(type) {
+	case nil:
+		response := generateCompleteMultpartUploadResult(bucket, object, "", etag)
+		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		// write headers
+		setCommonHeaders(w, getContentTypeString(acceptsContentType))
+		// set content-length to the size of the body
+		w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
+		w.WriteHeader(http.StatusOK)
+		// write body
+		w.Write(encodedSuccessResponse)
+	default:
+		// TODO handle all other errors, properly
+		log.Println(err)
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
 }
 
 func (server *minioAPI) notImplementedHandler(w http.ResponseWriter, req *http.Request) {

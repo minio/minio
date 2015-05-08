@@ -30,6 +30,7 @@ import (
 	"io/ioutil"
 
 	"errors"
+
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/donut"
 	"github.com/minio-io/minio/pkg/storage/drivers"
@@ -407,6 +408,6 @@ func (d donutDriver) CreateObjectPart(bucket, key, uploadID string, partID int, 
 	return "", iodine.New(errors.New("Not Implemented"), nil)
 }
 
-func (d donutDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) error {
-	return iodine.New(errors.New("Not Implemented"), nil)
+func (d donutDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
+	return "", iodine.New(errors.New("Not Implemented"), nil)
 }
