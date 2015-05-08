@@ -64,11 +64,12 @@ const (
 	TooManyBuckets
 	MethodNotAllowed
 	InvalidPart
+	InvalidPartOrder
 )
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 24
+	NotAcceptable = iota + 25
 )
 
 // Error code to Error structure map
@@ -191,6 +192,11 @@ var errorCodeResponse = map[int]Error{
 	InvalidPart: {
 		Code:           "InvalidPart",
 		Description:    "One or more of the specified parts could not be found",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidPartOrder: {
+		Code:           "InvalidPartOrder",
+		Description:    "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 }

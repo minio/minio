@@ -515,14 +515,38 @@ func (memory *memoryDriver) evictObject(a ...interface{}) {
 }
 
 func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
-	// TODO verify object doesn't exist
+	memory.lock.RLock()
+	if !drivers.IsValidBucket(bucket) {
+		memory.lock.RUnlock()
+		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObjectName(key) {
+		memory.lock.RUnlock()
+		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+	}
+	if _, ok := memory.storedBuckets[bucket]; ok == false {
+		memory.lock.RUnlock()
+		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+	}
+	storedBucket := memory.storedBuckets[bucket]
+	objectKey := bucket + "/" + key
+	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
+		memory.lock.RUnlock()
+		return "", iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
+	}
+	memory.lock.RUnlock()
+
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])
 	md5sumBytes := md5.Sum([]byte(uploadID))
 	md5sum := hex.EncodeToString(md5sumBytes[:])
-	memory.CreateObject(bucket, key+"?uploadId="+uploadID, contentType, md5sum, int64(len(uploadID)), bytes.NewBufferString(uploadID))
-	return uploadID, nil
+
+	// Create UploadID session, this is a temporary work around to instantiate a session.
+	// It would not be valid in future, since we need to work out proper sessions so that
+	// we can cleanly abort session and propagate failures.
+	_, err := memory.CreateObject(bucket, key+"?uploadId="+uploadID, contentType, md5sum, int64(len(uploadID)), bytes.NewBufferString(uploadID))
+	return uploadID, iodine.New(err, nil)
 }
 
 func getMultipartKey(key string, uploadID string, partNumber int) string {
@@ -530,14 +554,35 @@ func getMultipartKey(key string, uploadID string, partNumber int) string {
 }
 
 func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	// TODO verify upload id exists
+	// Verify upload id
+	_, ok := memory.objects.Get(key + "?uploadId=" + uploadID)
+	if !ok {
+		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+	}
 	return memory.CreateObject(bucket, getMultipartKey(key, uploadID, partID), "", expectedMD5Sum, size, data)
 }
 
 func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
-	// TODO verify upload id exists
+	// Verify upload id
+	_, ok := memory.objects.Get(key + "?uploadId=" + uploadID)
+	if !ok {
+		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+	}
+	if !drivers.IsValidBucket(bucket) {
+		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !drivers.IsValidObjectName(key) {
+		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+	}
+	memory.lock.RLock()
+	if _, ok := memory.storedBuckets[bucket]; ok == false {
+		memory.lock.RUnlock()
+		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+	}
+	memory.lock.RUnlock()
+
 	memory.lock.Lock()
-	size := int64(0)
+	var size int64
 	for i := 1; i <= len(parts); i++ {
 		if _, ok := parts[i]; ok {
 			if object, ok := memory.storedBuckets[bucket].objectMetadata[bucket+"/"+getMultipartKey(key, uploadID, i)]; ok == true {
@@ -550,7 +595,6 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 	}
 
 	var fullObject bytes.Buffer
-
 	for i := 1; i <= len(parts); i++ {
 		if _, ok := parts[i]; ok {
 			if object, ok := memory.objects.Get(bucket + "/" + getMultipartKey(key, uploadID, i)); ok == true {
