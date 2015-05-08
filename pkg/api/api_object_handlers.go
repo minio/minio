@@ -213,6 +213,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+	// TODO ensure ?uploads is part of URL
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
 		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
@@ -232,7 +233,7 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 	var err error
 	if uploadID, err = server.driver.NewMultipartUpload(bucket, object, ""); err != nil {
 		log.Println(iodine.New(err, nil))
-		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
 		return
 	}
 	response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
@@ -287,7 +288,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-	uploadID := vars["uploadID"]
+	uploadID := vars["uploadId"]
 	partIDString := vars["partNumber"]
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -351,7 +352,7 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	uploadID := vars["uploadID"]
+	uploadID := vars["uploadId"]
 
 	for _, part := range parts.Part {
 		partMap[part.PartNumber] = part.ETag
