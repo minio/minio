@@ -104,6 +104,13 @@ type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
 
+// completedParts is a sortable interface for Part slice
+type completedParts []Part
+
+func (a completedParts) Len() int           { return len(a) }
+func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
+
 // CompleteMultipartUpload container for completing multipart upload
 type CompleteMultipartUpload struct {
 	Part []Part

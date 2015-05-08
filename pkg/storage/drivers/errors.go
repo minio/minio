@@ -206,3 +206,14 @@ type InvalidRange struct {
 func (e InvalidRange) Error() string {
 	return fmt.Sprintf("Invalid range start:%d length:%d", e.Start, e.Length)
 }
+
+/// Multipart related errors
+
+// InvalidUploadID invalid upload id
+type InvalidUploadID struct {
+	UploadID string
+}
+
+func (e InvalidUploadID) Error() string {
+	return "Invalid upload id " + e.UploadID
+}

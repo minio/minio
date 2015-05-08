@@ -18,6 +18,7 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
 
 	"encoding/xml"
@@ -311,6 +312,10 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 			writeSuccessResponse(w, acceptsContentType)
 
 		}
+	case drivers.InvalidUploadID:
+		{
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		}
 	case drivers.ObjectExists:
 		{
 			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
@@ -355,6 +360,10 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		return
 	}
+	if !sort.IsSorted(completedParts(parts.Part)) {
+		writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
+		return
+	}
 
 	partMap := make(map[int]string)
 
@@ -366,6 +375,7 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	for _, part := range parts.Part {
 		partMap[part.PartNumber] = part.ETag
 	}
+
 	etag, err := server.driver.CompleteMultipartUpload(bucket, object, uploadID, partMap)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
@@ -378,8 +388,9 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 		w.WriteHeader(http.StatusOK)
 		// write body
 		w.Write(encodedSuccessResponse)
+	case drivers.InvalidUploadID:
+		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
-		// TODO handle all other errors, properly
 		log.Println(err)
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
