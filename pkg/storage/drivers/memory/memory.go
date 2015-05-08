@@ -501,14 +501,11 @@ func (memory *memoryDriver) evictObject(a ...interface{}) {
 		cacheStats.Bytes, cacheStats.Items, cacheStats.Evictions)
 	key := a[0].(string)
 	// loop through all buckets
-	for _, storedBucket := range memory.storedBuckets {
+	for bucket, storedBucket := range memory.storedBuckets {
 		delete(storedBucket.objectMetadata, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
-			// TODO (y4m4)
-			// for now refrain from deleting buckets, due to multipart deletes before fullobject being written
-			// this case gets trigerred and we can't store the actual data at all receiving 404 on the client
-			// delete(memory.storedBuckets, bucket)
+			delete(memory.storedBuckets, bucket)
 		}
 	}
 	debug.FreeOSMemory()
@@ -540,7 +537,9 @@ func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) 
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])
 	md5sumBytes := md5.Sum([]byte(uploadID))
-	md5sum := hex.EncodeToString(md5sumBytes[:])
+	// CreateObject expects in base64 which is coming over http request header
+	// while all response headers with ETag are hex encoding
+	md5sum := base64.StdEncoding.EncodeToString(md5sumBytes[:])
 
 	// Create UploadID session, this is a temporary work around to instantiate a session.
 	// It would not be valid in future, since we need to work out proper sessions so that
@@ -555,7 +554,7 @@ func getMultipartKey(key string, uploadID string, partNumber int) string {
 
 func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	// Verify upload id
-	_, ok := memory.objects.Get(key + "?uploadId=" + uploadID)
+	_, ok := memory.objects.Get(bucket + "/" + key + "?uploadId=" + uploadID)
 	if !ok {
 		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
 	}
@@ -564,7 +563,7 @@ func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partI
 
 func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
 	// Verify upload id
-	_, ok := memory.objects.Get(key + "?uploadId=" + uploadID)
+	_, ok := memory.objects.Get(bucket + "/" + key + "?uploadId=" + uploadID)
 	if !ok {
 		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
 	}
