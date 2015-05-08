@@ -66,7 +66,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory.objects = NewIntelligent(maxSize, expiration)
 	memory.lock = new(sync.RWMutex)
 
-	memory.objects.OnEvicted = memory.evictObject
+	memory.objects.OnExpired = memory.expiredObject
 
 	// set up memory expiration
 	memory.objects.ExpireObjects(time.Second * 5)
@@ -495,10 +495,10 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drive
 	return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
 }
 
-func (memory *memoryDriver) evictObject(a ...interface{}) {
+func (memory *memoryDriver) expiredObject(a ...interface{}) {
 	cacheStats := memory.objects.Stats()
-	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalEvictions: %d",
-		cacheStats.Bytes, cacheStats.Items, cacheStats.Evictions)
+	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalExpirations: %d",
+		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)
 	key := a[0].(string)
 	// loop through all buckets
 	for bucket, storedBucket := range memory.storedBuckets {

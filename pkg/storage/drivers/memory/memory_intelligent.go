@@ -39,8 +39,8 @@ type Intelligent struct {
 	// expiration is a duration for a cache key to expire
 	expiration time.Duration
 
-	// gcInterval is a duration for garbage collection
-	gcInterval time.Duration
+	// stopExpireTimer channel to quit the timer thread
+	stopExpireTimer chan struct{}
 
 	// maxSize is a total size for overall cache
 	maxSize uint64
@@ -48,18 +48,18 @@ type Intelligent struct {
 	// currentSize is a current size in memory
 	currentSize uint64
 
-	// OnEvicted - callback function for eviction
-	OnEvicted func(a ...interface{})
+	// OnExpired - callback function for eviction
+	OnExpired func(a ...interface{})
 
-	// totalEvicted counter to keep track of total evictions
-	totalEvicted uint64
+	// totalExpired counter to keep track of total expirations
+	totalExpired uint64
 }
 
 // Stats current cache statistics
 type Stats struct {
-	Bytes     uint64
-	Items     uint64
-	Evictions uint64
+	Bytes   uint64
+	Items   uint64
+	Expired uint64
 }
 
 // NewIntelligent creates an inmemory cache
@@ -78,24 +78,26 @@ func NewIntelligent(maxSize uint64, expiration time.Duration) *Intelligent {
 // Stats get current cache statistics
 func (r *Intelligent) Stats() Stats {
 	return Stats{
-		Bytes:     r.currentSize,
-		Items:     uint64(len(r.items)),
-		Evictions: r.totalEvicted,
+		Bytes:   r.currentSize,
+		Items:   uint64(len(r.items)),
+		Expired: r.totalExpired,
 	}
 }
 
 // ExpireObjects expire objects in go routine
 func (r *Intelligent) ExpireObjects(gcInterval time.Duration) {
-	r.gcInterval = gcInterval
+	r.stopExpireTimer = make(chan struct{})
+	ticker := time.NewTicker(gcInterval)
 	go func() {
-		for range time.Tick(gcInterval) {
-			r.Lock()
-			for key := range r.items {
-				if !r.isValid(key) {
-					r.Delete(key)
-				}
+		for {
+			select {
+			case <-ticker.C:
+				r.Expire()
+			case <-r.stopExpireTimer:
+				ticker.Stop()
+				return
 			}
-			r.Unlock()
+
 		}
 	}()
 }
@@ -132,15 +134,26 @@ func (r *Intelligent) Set(key string, value interface{}) {
 	return
 }
 
+// Expire expires keys which have expired
+func (r *Intelligent) Expire() {
+	r.Lock()
+	defer r.Unlock()
+	for key := range r.items {
+		if !r.isValid(key) {
+			r.Delete(key)
+		}
+	}
+}
+
 // Delete deletes a given key if exists
 func (r *Intelligent) Delete(key string) {
 	if _, ok := r.items[key]; ok {
 		r.currentSize -= uint64(len(r.items[key].([]byte)))
 		delete(r.items, key)
 		delete(r.updatedAt, key)
-		r.totalEvicted++
-		if r.OnEvicted != nil {
-			r.OnEvicted(key)
+		r.totalExpired++
+		if r.OnExpired != nil {
+			r.OnExpired(key)
 		}
 	}
 }
