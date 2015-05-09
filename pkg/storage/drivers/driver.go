@@ -41,6 +41,7 @@ type Driver interface {
 
 	// Object Multipart Operations
 	NewMultipartUpload(bucket, key, contentType string) (string, error)
+	AbortMultipartUpload(bucket, key, UploadID string) error
 	CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
 	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error)
 	ListObjectParts(bucket, key, uploadID string) (ObjectResourcesMetadata, error)

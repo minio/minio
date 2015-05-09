@@ -128,7 +128,6 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	buckets, err := server.driver.ListBuckets()
-	// cannot fallthrough in (type) switch :(
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{

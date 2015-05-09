@@ -415,3 +415,7 @@ func (d donutDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts
 func (d donutDriver) ListObjectParts(bucket, key, uploadID string) (drivers.ObjectResourcesMetadata, error) {
 	return drivers.ObjectResourcesMetadata{}, iodine.New(errors.New("Not Implemented"), nil)
 }
+
+func (d donutDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
+	return iodine.New(errors.New("Not Implemented"), nil)
+}

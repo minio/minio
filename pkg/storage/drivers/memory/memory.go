@@ -555,6 +555,20 @@ func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) 
 	return uploadID, nil
 }
 
+func (memory *memoryDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
+	memory.lock.RLock()
+	storedBucket := memory.storedBuckets[bucket]
+	if storedBucket.multiPartSession[key].uploadID != uploadID {
+		memory.lock.RUnlock()
+		return iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+	}
+	memory.lock.RUnlock()
+
+	memory.cleanupMultiparts(bucket, key, uploadID)
+	memory.cleanupMultipartSession(bucket, key, uploadID)
+	return nil
+}
+
 func getMultipartKey(key string, uploadID string, partNumber int) string {
 	return key + "?uploadId=" + uploadID + "&partNumber=" + strconv.Itoa(partNumber)
 }
@@ -586,10 +600,10 @@ func (memory *memoryDriver) cleanupMultipartSession(bucket, key, uploadID string
 	delete(memory.storedBuckets[bucket].multiPartSession, key)
 }
 
-func (memory *memoryDriver) cleanupMultiparts(bucket, key, uploadID string, parts map[int]string) {
+func (memory *memoryDriver) cleanupMultiparts(bucket, key, uploadID string) {
 	memory.lock.Lock()
 	defer memory.lock.Unlock()
-	for i := range parts {
+	for i := 1; i <= memory.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
 		memory.objects.Delete(objectKey)
 	}
@@ -655,11 +669,11 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
 	etag, err := memory.CreateObject(bucket, key, "", md5sum, size, &fullObject)
 	if err != nil {
-		memory.cleanupMultiparts(bucket, key, uploadID, parts)
-		memory.cleanupMultipartSession(bucket, key, uploadID)
+		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
+		// which would in-turn cleanup properly in accordance with S3 Spec
 		return "", iodine.New(err, nil)
 	}
-	memory.cleanupMultiparts(bucket, key, uploadID, parts)
+	memory.cleanupMultiparts(bucket, key, uploadID)
 	memory.cleanupMultipartSession(bucket, key, uploadID)
 	return etag, nil
 }

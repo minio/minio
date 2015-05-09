@@ -163,3 +163,12 @@ func (m *Driver) ListObjectParts(bucket, key, uploadID string) (drivers.ObjectRe
 
 	return r0, r1
 }
+
+// AbortMultipartUpload is a mock
+func (m *Driver) AbortMultipartUpload(bucket, key, uploadID string) error {
+	ret := m.Called(bucket, key, uploadID)
+
+	r0 := ret.Error(0)
+
+	return r0
+}
