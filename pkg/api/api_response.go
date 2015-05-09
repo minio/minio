@@ -112,6 +112,7 @@ func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata
 	return data
 }
 
+// generateInitiateMultipartUploadResult
 func generateInitiateMultipartUploadResult(bucket, key, uploadID string) InitiateMultipartUploadResult {
 	return InitiateMultipartUploadResult{
 		Bucket:   bucket,
@@ -120,6 +121,7 @@ func generateInitiateMultipartUploadResult(bucket, key, uploadID string) Initiat
 	}
 }
 
+// generateCompleteMultipartUploadResult
 func generateCompleteMultpartUploadResult(bucket, key, location, etag string) CompleteMultipartUploadResult {
 	return CompleteMultipartUploadResult{
 		Location: location,
@@ -129,13 +131,50 @@ func generateCompleteMultpartUploadResult(bucket, key, location, etag string) Co
 	}
 }
 
-// writeSuccessResponse - write success headers
+// partNumber
+type partNumber []*Part
+
+func (b partNumber) Len() int           { return len(b) }
+func (b partNumber) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b partNumber) Less(i, j int) bool { return b[i].PartNumber < b[j].PartNumber }
+
+// generateListPartsResult
+func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) ListPartsResponse {
+	// TODO - support EncodingType in xml decoding
+	listPartsResponse := ListPartsResponse{}
+	listPartsResponse.Bucket = objectMetadata.Bucket
+	listPartsResponse.Key = objectMetadata.Key
+	listPartsResponse.UploadID = objectMetadata.UploadID
+	listPartsResponse.StorageClass = "STANDARD"
+	listPartsResponse.Initiator.ID = "minio"
+	listPartsResponse.Initiator.DisplayName = "minio"
+	listPartsResponse.Owner.ID = "minio"
+	listPartsResponse.Owner.DisplayName = "minio"
+
+	listPartsResponse.MaxParts = objectMetadata.MaxParts
+	listPartsResponse.PartNumberMarker = objectMetadata.PartNumberMarker
+	listPartsResponse.IsTruncated = objectMetadata.IsTruncated
+	listPartsResponse.NextPartNumberMarker = objectMetadata.NextPartNumberMarker
+
+	listPartsResponse.Part = make([]*Part, len(objectMetadata.Part))
+	for _, part := range objectMetadata.Part {
+		newPart := &Part{}
+		newPart.PartNumber = part.PartNumber
+		newPart.ETag = part.ETag
+		newPart.Size = part.Size
+		newPart.LastModified = part.LastModified.Format(iso8601Format)
+		listPartsResponse.Part = append(listPartsResponse.Part, newPart)
+	}
+	return listPartsResponse
+}
+
+// writeSuccessResponse write success headers
 func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
 	setCommonHeaders(w, getContentTypeString(acceptsContentType))
 	w.WriteHeader(http.StatusOK)
 }
 
-// writeErrorRespone - write error headers
+// writeErrorRespone write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
 	error := getErrorCode(errorType)
 	// generate error response

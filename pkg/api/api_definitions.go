@@ -55,6 +55,29 @@ type ListObjectsResponse struct {
 	Prefix     string
 }
 
+// ListPartsResponse - format for list parts response
+type ListPartsResponse struct {
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListPartsResult" json:"-"`
+
+	Bucket   string
+	Key      string
+	UploadID string `xml:"UploadId"`
+
+	Initiator Initiator
+	Owner     Owner
+
+	// The class of storage used to store the object.
+	StorageClass string
+
+	PartNumberMarker     int
+	NextPartNumberMarker int
+	MaxParts             int
+	IsTruncated          bool
+
+	// List of parts
+	Part []*Part
+}
+
 // ListBucketsResponse - format for list buckets response
 type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListAllMyBucketsResult" json:"-"`
@@ -76,6 +99,14 @@ type Bucket struct {
 	CreationDate string
 }
 
+// Part container for part metadata
+type Part struct {
+	PartNumber   int
+	ETag         string
+	LastModified string
+	Size         int64
+}
+
 // Object container for object metadata
 type Object struct {
 	ETag         string
@@ -88,6 +119,9 @@ type Object struct {
 	// The class of storage used to store the object.
 	StorageClass string
 }
+
+// Initiator inherit from Owner struct, fields are same
+type Initiator Owner
 
 // Owner - bucket owner/principal
 type Owner struct {
@@ -124,12 +158,6 @@ type CompleteMultipartUploadResult struct {
 	Bucket   string
 	Key      string
 	ETag     string
-}
-
-// Part description of a multipart part
-type Part struct {
-	PartNumber int
-	ETag       string
 }
 
 // List of not implemented bucket queries

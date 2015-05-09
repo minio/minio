@@ -345,6 +345,37 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	}
 }
 
+func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
+		return
+	}
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	uploadID := vars["uploadId"]
+
+	objectResourcesMetadata, err := server.driver.ListObjectParts(bucket, object, uploadID)
+	switch err := iodine.ToError(err).(type) {
+	case nil:
+		response := generateListPartsResult(objectResourcesMetadata)
+		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		// write headers
+		setCommonHeaders(w, getContentTypeString(acceptsContentType))
+		// set content-length to the size of the body
+		w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
+		w.WriteHeader(http.StatusOK)
+		// write body
+		w.Write(encodedSuccessResponse)
+	case drivers.InvalidUploadID:
+		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+	default:
+		log.Println(err)
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
+}
+
 func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	if acceptsContentType == unknownContentType {
