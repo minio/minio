@@ -56,11 +56,10 @@ func (m *Driver) SetBucketMetadata(bucket, acl string) error {
 // SetGetObjectWriter is a mock
 func (m *Driver) SetGetObjectWriter(bucket, object string, data []byte) {
 	m.ObjectWriterData[bucket+":"+object] = data
-	//	println(string(m.ObjectWriterData["bucket:object"]))
 }
 
 // GetObject is a mock
-func (m *Driver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+func (m *Driver) GetObject(w io.Writer, bucket, object string) (int64, error) {
 	ret := m.Called(w, bucket, object)
 	r0 := ret.Get(0).(int64)
 	r1 := ret.Error(1)
@@ -74,7 +73,7 @@ func (m *Driver) GetObject(w io.Writer, bucket string, object string) (int64, er
 }
 
 // GetPartialObject is a mock
-func (m *Driver) GetPartialObject(w io.Writer, bucket string, object string, start int64, length int64) (int64, error) {
+func (m *Driver) GetPartialObject(w io.Writer, bucket, object string, start int64, length int64) (int64, error) {
 	ret := m.Called(w, bucket, object, start, length)
 
 	r0 := ret.Get(0).(int64)
@@ -95,7 +94,7 @@ func (m *Driver) GetPartialObject(w io.Writer, bucket string, object string, sta
 }
 
 // GetObjectMetadata is a mock
-func (m *Driver) GetObjectMetadata(bucket string, object string, prefix string) (drivers.ObjectMetadata, error) {
+func (m *Driver) GetObjectMetadata(bucket, object, prefix string) (drivers.ObjectMetadata, error) {
 	ret := m.Called(bucket, object, prefix)
 
 	r0 := ret.Get(0).(drivers.ObjectMetadata)
@@ -116,7 +115,7 @@ func (m *Driver) ListObjects(bucket string, resources drivers.BucketResourcesMet
 }
 
 // CreateObject is a mock
-func (m *Driver) CreateObject(bucket string, key string, contentType string, md5sum string, size int64, data io.Reader) (string, error) {
+func (m *Driver) CreateObject(bucket, key, contentType, md5sum string, size int64, data io.Reader) (string, error) {
 	ret := m.Called(bucket, key, contentType, md5sum, size, data)
 
 	r0 := ret.Get(0).(string)
@@ -126,7 +125,7 @@ func (m *Driver) CreateObject(bucket string, key string, contentType string, md5
 }
 
 // NewMultipartUpload is a mock
-func (m *Driver) NewMultipartUpload(bucket string, key string, contentType string) (string, error) {
+func (m *Driver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
 	ret := m.Called(bucket, key, contentType)
 
 	r0 := ret.Get(0).(string)
@@ -136,7 +135,7 @@ func (m *Driver) NewMultipartUpload(bucket string, key string, contentType strin
 }
 
 // CreateObjectPart is a mock
-func (m *Driver) CreateObjectPart(bucket string, key string, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error) {
+func (m *Driver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error) {
 	ret := m.Called(bucket, key, uploadID, partID, contentType, md5sum, size, data)
 
 	r0 := ret.Get(0).(string)
@@ -146,10 +145,20 @@ func (m *Driver) CreateObjectPart(bucket string, key string, uploadID string, pa
 }
 
 // CompleteMultipartUpload is a mock
-func (m *Driver) CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) (string, error) {
+func (m *Driver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
 	ret := m.Called(bucket, key, uploadID, parts)
 
 	r0 := ret.Get(0).(string)
+	r1 := ret.Error(1)
+
+	return r0, r1
+}
+
+// ListObjectParts is a mock
+func (m *Driver) ListObjectParts(bucket, key, uploadID string) (drivers.ObjectResourcesMetadata, error) {
+	ret := m.Called(bucket, key, uploadID)
+
+	r0 := ret.Get(0).(drivers.ObjectResourcesMetadata)
 	r1 := ret.Error(1)
 
 	return r0, r1

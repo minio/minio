@@ -35,14 +35,15 @@ type Driver interface {
 	// Object Operations
 	GetObject(w io.Writer, bucket, object string) (int64, error)
 	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
-	GetObjectMetadata(bucket string, object string, prefix string) (ObjectMetadata, error)
+	GetObjectMetadata(bucket, key, prefix string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
-	CreateObject(bucket string, key string, contentType string, md5sum string, size int64, data io.Reader) (string, error)
+	CreateObject(bucket, key, contentType, md5sum string, size int64, data io.Reader) (string, error)
 
 	// Object Multipart Operations
-	NewMultipartUpload(bucket string, key string, contentType string) (string, error)
-	CreateObjectPart(bucket string, key string, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
-	CompleteMultipartUpload(bucket string, key string, uploadID string, parts map[int]string) (string, error)
+	NewMultipartUpload(bucket, key, contentType string) (string, error)
+	CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
+	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error)
+	ListObjectParts(bucket, key, uploadID string) (ObjectResourcesMetadata, error)
 }
 
 // BucketACL - bucket level access control
@@ -102,6 +103,37 @@ const (
 	PrefixMode
 	DefaultMode
 )
+
+// PartMetadata - various types of individual part resources
+type PartMetadata struct {
+	PartNumber   int
+	LastModified time.Time
+	ETag         string
+	Size         int64
+}
+
+// ObjectResourcesMetadata - various types of object resources
+type ObjectResourcesMetadata struct {
+	Bucket       string
+	EncodingType string
+	Key          string
+	UploadID     string
+	Initiator    struct {
+		ID          string
+		DisplayName string
+	}
+	Owner struct {
+		ID          string
+		DisplayName string
+	}
+	StorageClass         string
+	PartNumberMarker     int
+	NextPartNumberMarker int
+	MaxParts             int
+	IsTruncated          bool
+
+	Part []*PartMetadata
+}
 
 // BucketResourcesMetadata - various types of bucket resources
 type BucketResourcesMetadata struct {

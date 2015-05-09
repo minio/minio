@@ -45,14 +45,16 @@ func HTTPHandler(driver drivers.Driver) http.Handler {
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
 	mux.HandleFunc("/{bucket}", api.headBucketHandler).Methods("HEAD")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.headObjectHandler).Methods("HEAD")
 	if featureflags.Get(featureflags.MultipartPutObject) {
 		log.Println("Enabling feature", featureflags.MultipartPutObject)
-		mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
+		mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectPartHandler).Queries("partNumber",
+			"{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
+		mux.HandleFunc("/{bucket}/{object:.*}", api.listObjectPartsHandler).Queries("uploadId", "{uploadId:.*}").Methods("GET")
 		mux.HandleFunc("/{bucket}/{object:.*}", api.completeMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("POST")
 		mux.HandleFunc("/{bucket}/{object:.*}", api.newMultipartUploadHandler).Methods("POST")
 	}
+	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
 	var conf = config.Config{}

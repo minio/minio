@@ -42,6 +42,23 @@ func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
 	return
 }
 
+// parse object url queries
+func getObjectResources(values url.Values) (v drivers.ObjectResourcesMetadata) {
+	for key, value := range values {
+		switch true {
+		case key == "uploadId":
+			v.UploadID = value[0]
+		case key == "part-number-marker":
+			v.PartNumberMarker, _ = strconv.Atoi(value[0])
+		case key == "max-parts":
+			v.MaxParts, _ = strconv.Atoi(value[0])
+		case key == "encoding-type":
+			v.EncodingType = value[0]
+		}
+	}
+	return
+}
+
 // check if req query values have acl
 func isRequestBucketACL(values url.Values) bool {
 	for key := range values {
