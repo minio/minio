@@ -685,7 +685,7 @@ func (a partNumber) Len() int           { return len(a) }
 func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-func (memory *memoryDriver) ListObjectParts(bucket, key, uploadID string) (drivers.ObjectResourcesMetadata, error) {
+func (memory *memoryDriver) ListObjectParts(bucket, key string, resources drivers.ObjectResourcesMetadata) (drivers.ObjectResourcesMetadata, error) {
 	// Verify upload id
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
@@ -693,24 +693,29 @@ func (memory *memoryDriver) ListObjectParts(bucket, key, uploadID string) (drive
 		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := memory.storedBuckets[bucket]
-	if storedBucket.multiPartSession[key].uploadID != uploadID {
-		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+	if storedBucket.multiPartSession[key].uploadID != resources.UploadID {
+		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.InvalidUploadID{UploadID: resources.UploadID}, nil)
 	}
-	// TODO support PartNumberMarker and NextPartNumberMarker
-	objectResourcesMetadata := drivers.ObjectResourcesMetadata{}
-	objectResourcesMetadata.UploadID = uploadID
+	objectResourcesMetadata := resources
 	objectResourcesMetadata.Bucket = bucket
 	objectResourcesMetadata.Key = key
-	objectResourcesMetadata.MaxParts = 1000
 	var parts []*drivers.PartMetadata
-	for i := 1; i <= storedBucket.multiPartSession[key].totalParts; i++ {
+	var startPartNumber int
+	switch {
+	case objectResourcesMetadata.PartNumberMarker == 0:
+		startPartNumber = 1
+	default:
+		startPartNumber = objectResourcesMetadata.PartNumberMarker
+	}
+	for i := startPartNumber; i <= storedBucket.multiPartSession[key].totalParts; i++ {
 		if len(parts) > objectResourcesMetadata.MaxParts {
 			sort.Sort(partNumber(parts))
 			objectResourcesMetadata.IsTruncated = true
 			objectResourcesMetadata.Part = parts
+			objectResourcesMetadata.NextPartNumberMarker = i
 			return objectResourcesMetadata, nil
 		}
-		object, ok := storedBucket.objectMetadata[bucket+"/"+getMultipartKey(key, uploadID, i)]
+		object, ok := storedBucket.objectMetadata[resources.Bucket+"/"+getMultipartKey(resources.Key, resources.UploadID, i)]
 		if !ok {
 			return drivers.ObjectResourcesMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}

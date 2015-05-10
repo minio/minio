@@ -44,7 +44,7 @@ type Driver interface {
 	AbortMultipartUpload(bucket, key, UploadID string) error
 	CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
 	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error)
-	ListObjectParts(bucket, key, uploadID string) (ObjectResourcesMetadata, error)
+	ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error)
 }
 
 // BucketACL - bucket level access control
