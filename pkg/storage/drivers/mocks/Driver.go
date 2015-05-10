@@ -158,8 +158,8 @@ func (m *Driver) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 }
 
 // ListObjectParts is a mock
-func (m *Driver) ListObjectParts(bucket, key, uploadID string) (drivers.ObjectResourcesMetadata, error) {
-	ret := m.Called(bucket, key, uploadID)
+func (m *Driver) ListObjectParts(bucket, key string, resources drivers.ObjectResourcesMetadata) (drivers.ObjectResourcesMetadata, error) {
+	ret := m.Called(bucket, key, resources)
 
 	r0 := ret.Get(0).(drivers.ObjectResourcesMetadata)
 	r1 := ret.Error(1)
