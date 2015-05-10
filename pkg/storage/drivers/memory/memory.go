@@ -542,7 +542,7 @@ func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) 
 	memory.lock.Lock()
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
-	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])
+	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
 
 	storedBucket.multiPartSession = make(map[string]multiPartSession)
 	storedBucket.multiPartSession[key] = multiPartSession{
