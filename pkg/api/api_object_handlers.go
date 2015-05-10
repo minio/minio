@@ -27,6 +27,7 @@ import (
 	"github.com/minio-io/minio/pkg/iodine"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/utils/log"
+	"strings"
 )
 
 // GET Object
@@ -299,6 +300,10 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 	uploadID := vars["uploadId"]
+	// workaround for mux not splitting on & properly
+	if len(uploadID) > 1 {
+		uploadID = strings.Split(uploadID, "&")[0]
+	}
 	partIDString := vars["partNumber"]
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -411,7 +416,7 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	parts := &CompleteMultipartUpload{}
 	err := decoder.Decode(parts)
 	if err != nil {
-		log.Error.Println(err)
+		log.Error.Println(iodine.New(err, nil))
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		return
 	}
@@ -444,7 +449,7 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	case drivers.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
-		log.Println(err)
+		log.Println(iodine.New(err, nil))
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }

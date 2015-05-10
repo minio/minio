@@ -36,6 +36,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/minio-io/minio/pkg/featureflags"
 	"github.com/minio-io/minio/pkg/storage/drivers"
 	"github.com/minio-io/minio/pkg/storage/drivers/donut"
 	"github.com/minio-io/minio/pkg/storage/drivers/memory"
@@ -1316,6 +1317,106 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
+}
+
+func (s *MySuite) TestPutMultipart(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		{
+			return
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	featureflags.Enable(featureflags.MultipartPutObject)
+
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	// create bucket
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	//	 Initiate multipart upload
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("NewMultipartUpload", "foo", "object", "").Return("uploadid", nil).Once()
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploads", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResult{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(newResponse.UploadID, Equals, "uploadid")
+
+	// put part one
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId=uploadid&partNumber=1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	//	// put part two
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId=uploadid&partNumber=2", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	//
+	// complete multipart upload
+
+	completeUploads := &CompleteMultipartUpload{
+		Part: []Part{
+			{
+				PartNumber: 1,
+			},
+			{
+				PartNumber: 2,
+			},
+		},
+	}
+
+	var completeBuffer bytes.Buffer
+	encoder := xml.NewEncoder(&completeBuffer)
+	encoder.Encode(completeUploads)
+
+	typedDriver.On("CompleteMultipartUpload", "foo", "object", "uploadid", mock.Anything).Return("etag", nil).Once()
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploadId=uploadid", &completeBuffer)
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// get data
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "object", "").Return(drivers.ObjectMetadata{Size: 22}, nil).Once()
+	typedDriver.On("GetObject", mock.Anything, "foo", "object").Return(int64(22), nil).Once()
+	typedDriver.SetGetObjectWriter("foo", "object", []byte("hello worldhello world"))
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/object", nil)
+	c.Assert(err, IsNil)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	object, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(object), Equals, ("hello worldhello world"))
 }
 
 func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
