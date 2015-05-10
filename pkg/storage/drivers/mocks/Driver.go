@@ -65,7 +65,10 @@ func (m *Driver) GetObject(w io.Writer, bucket, object string) (int64, error) {
 	r1 := ret.Error(1)
 	if r1 == nil {
 		if obj, ok := m.ObjectWriterData[bucket+":"+object]; ok {
-			n, _ := io.Copy(w, bytes.NewBuffer(obj))
+			n, err := io.Copy(w, bytes.NewBuffer(obj))
+			if err != nil {
+				panic(err)
+			}
 			r0 = n
 		}
 	}
