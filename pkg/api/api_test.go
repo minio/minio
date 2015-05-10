@@ -1327,7 +1327,11 @@ func (s *MySuite) TestPutMultipart(c *C) {
 		}
 	default:
 		{
-			return
+			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
+
+			} else {
+				return
+			}
 		}
 	}
 	driver := s.Driver
@@ -1360,25 +1364,26 @@ func (s *MySuite) TestPutMultipart(c *C) {
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)
-	c.Assert(newResponse.UploadID, Equals, "uploadid")
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+	uploadID := newResponse.UploadID
 
 	// put part one
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
 	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
-	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId=uploadid&partNumber=1", bytes.NewBufferString("hello world"))
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	response, err = client.Do(request)
+	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	//	// put part two
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
 	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
-	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId=uploadid&partNumber=2", bytes.NewBufferString("hello world"))
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	response, err = client.Do(request)
+	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 	//
 	// complete multipart upload
 
@@ -1386,9 +1391,11 @@ func (s *MySuite) TestPutMultipart(c *C) {
 		Part: []Part{
 			{
 				PartNumber: 1,
+				ETag:       response1.Header.Get("ETag"),
 			},
 			{
 				PartNumber: 2,
+				ETag:       response2.Header.Get("ETag"),
 			},
 		},
 	}
@@ -1398,7 +1405,7 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	encoder.Encode(completeUploads)
 
 	typedDriver.On("CompleteMultipartUpload", "foo", "object", "uploadid", mock.Anything).Return("etag", nil).Once()
-	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploadId=uploadid", &completeBuffer)
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploadId="+uploadID, &completeBuffer)
 	c.Assert(err, IsNil)
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
