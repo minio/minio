@@ -299,7 +299,7 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	memory.lock.Lock()
 	memoryObject := make(map[string]drivers.ObjectMetadata)
 	switch {
-	case len(memory.storedBuckets[bucket].objectMetadata) == 0:
+	case len(storedBucket.objectMetadata) == 0:
 		storedBucket.objectMetadata = memoryObject
 		storedBucket.objectMetadata[objectKey] = newObject
 	default:
@@ -591,6 +591,7 @@ func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partI
 	multiPartSession := storedBucket.multiPartSession[key]
 	multiPartSession.totalParts++
 	storedBucket.multiPartSession[key] = multiPartSession
+
 	return etag, nil
 }
 
@@ -715,7 +716,7 @@ func (memory *memoryDriver) ListObjectParts(bucket, key string, resources driver
 			objectResourcesMetadata.NextPartNumberMarker = i
 			return objectResourcesMetadata, nil
 		}
-		object, ok := storedBucket.objectMetadata[resources.Bucket+"/"+getMultipartKey(resources.Key, resources.UploadID, i)]
+		object, ok := storedBucket.objectMetadata[bucket+"/"+getMultipartKey(key, resources.UploadID, i)]
 		if !ok {
 			return drivers.ObjectResourcesMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
