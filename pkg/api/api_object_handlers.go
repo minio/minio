@@ -305,15 +305,8 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	var uploadID, partIDString string
-	for key, value := range req.URL.Query() {
-		switch true {
-		case key == "uploadId":
-			uploadID = value[0]
-		case key == "partNumber":
-			partIDString = value[0]
-		}
-	}
+	uploadID := req.URL.Query().Get("uploadId")
+	partIDString := req.URL.Query().Get("partNumber")
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
