@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/minio/minio",
-	"GoVersion": "go1.4.2",
+	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
@@ -19,12 +19,12 @@
 		},
 		{
 			"ImportPath": "github.com/minio/check",
-			"Rev": "bc4e66da8cd7ff58a4b9b84301f906352b8f2c94"
+			"Rev": "67f8c16c6c27bb03c82e41c2be533ace00035ab4"
 		},
 		{
 			"ImportPath": "github.com/minio/cli",
-			"Comment": "1.2.0-110-g111d644",
-			"Rev": "111d6445d384505978aaf5b218ce96d163b73c57"
+			"Comment": "1.2.0-111-g432a101",
+			"Rev": "432a1019ded42d1b34fb5f1aad60fb609245d5a1"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",
