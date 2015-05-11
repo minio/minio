@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/minio-io/check"
-	"github.com/minio-io/minio/pkg/utils/cpu"
+	. "github.com/minio/check"
+	"github.com/minio/minio/pkg/utils/cpu"
 )
 
 func Test(t *testing.T) { TestingT(t) }

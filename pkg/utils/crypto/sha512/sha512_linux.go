@@ -15,7 +15,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/minio-io/minio/pkg/utils/cpu"
+	"github.com/minio/minio/pkg/utils/cpu"
 )
 
 // The size of a SHA512 checksum in bytes.

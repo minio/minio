@@ -35,8 +35,8 @@ import (
 
 	"math/rand"
 
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/drivers"
 )
 
 // memoryDriver - local variables

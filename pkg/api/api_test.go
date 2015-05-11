@@ -32,14 +32,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/minio-io/minio/pkg/featureflags"
-	"github.com/minio-io/minio/pkg/storage/drivers"
-	"github.com/minio-io/minio/pkg/storage/drivers/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers/memory"
-	"github.com/minio-io/minio/pkg/storage/drivers/mocks"
+	"github.com/minio/minio/pkg/featureflags"
+	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/drivers/donut"
+	"github.com/minio/minio/pkg/storage/drivers/memory"
+	"github.com/minio/minio/pkg/storage/drivers/mocks"
 	"github.com/stretchr/testify/mock"
 
-	. "github.com/minio-io/check"
+	. "github.com/minio/check"
 )
 
 func Test(t *testing.T) { TestingT(t) }

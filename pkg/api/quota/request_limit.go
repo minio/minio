@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 // requestLimitHandler

@@ -4,7 +4,7 @@
 package check_test
 
 import (
-	"github.com/minio-io/check"
+	"github.com/minio/check"
 	"os"
 	"reflect"
 	"runtime"

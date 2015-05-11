@@ -25,7 +25,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/iodine"
 )
 
 /// This file contains all the internal functions used by Object interface

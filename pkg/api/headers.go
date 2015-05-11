@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/minio-io/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/drivers"
 )
 
 // No encoder interface exists, so we create one.

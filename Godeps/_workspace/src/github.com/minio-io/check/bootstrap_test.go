@@ -14,7 +14,7 @@ package check_test
 
 import (
 	"fmt"
-	"github.com/minio-io/check"
+	"github.com/minio/check"
 	"strings"
 )
 

@@ -2,7 +2,7 @@ package check_test
 
 import (
 	"errors"
-	"github.com/minio-io/check"
+	"github.com/minio/check"
 	"reflect"
 	"runtime"
 )

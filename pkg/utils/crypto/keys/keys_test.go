@@ -19,8 +19,8 @@ package keys_test
 import (
 	"testing"
 
-	. "github.com/minio-io/check"
-	"github.com/minio-io/minio/pkg/utils/crypto/keys"
+	. "github.com/minio/check"
+	"github.com/minio/minio/pkg/utils/crypto/keys"
 )
 
 func Test(t *testing.T) { TestingT(t) }

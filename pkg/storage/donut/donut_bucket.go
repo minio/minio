@@ -29,7 +29,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
-	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/iodine"
 )
 
 // internal struct carrying bucket specific information

@@ -3,11 +3,11 @@ Instructions
 
 Install the package with:
 
-    go get github.com/minio-io/check
+    go get github.com/minio/check
     
 Import it with:
 
-    import "github.com/minio-io/check"
+    import "github.com/minio/check"
 
 and use _check_ as the package name inside the code.
 

@@ -22,13 +22,13 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/minio-io/minio/pkg/api"
-	"github.com/minio-io/minio/pkg/api/web"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/server/httpserver"
-	"github.com/minio-io/minio/pkg/storage/drivers/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers/memory"
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/api"
+	"github.com/minio/minio/pkg/api/web"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/server/httpserver"
+	"github.com/minio/minio/pkg/storage/drivers/donut"
+	"github.com/minio/minio/pkg/storage/drivers/memory"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 // MemoryFactory is used to build memory api servers

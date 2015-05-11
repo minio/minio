@@ -21,12 +21,12 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkg/api/config"
-	"github.com/minio-io/minio/pkg/api/logging"
-	"github.com/minio-io/minio/pkg/api/quota"
-	"github.com/minio-io/minio/pkg/featureflags"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/api/logging"
+	"github.com/minio/minio/pkg/api/quota"
+	"github.com/minio/minio/pkg/featureflags"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/drivers"
 )
 
 // private use

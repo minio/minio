@@ -29,8 +29,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/utils/split"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/utils/split"
 )
 
 /// This file contains all the internal functions used by Bucket interface
