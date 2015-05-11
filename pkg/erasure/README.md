@@ -6,7 +6,7 @@ Erasure is an open source Golang library written on top of ISAL (Intel Intellige
 * [Get Source](./CONTRIBUTING.md)
 * [Build Dependencies](./BUILDDEPS.md)
 * [Development Workflow](./CONTRIBUTING.md#developer-guidelines)
-* [Developer discussions and bugs](https://github.com/Minio-io/erasure/issues)
+* [Developer discussions and bugs](https://github.com/minio/erasure/issues)
 
 ### Supported platforms
 
