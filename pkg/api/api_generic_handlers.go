@@ -29,7 +29,7 @@ type timeHandler struct {
 	handler http.Handler
 }
 
-type validateHandler struct {
+type validateAuthHandler struct {
 	conf    config.Config
 	handler http.Handler
 }
@@ -38,18 +38,45 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-// strip AccessKey from authorization header
-func stripAccessKey(r *http.Request) string {
-	fields := strings.Fields(r.Header.Get("Authorization"))
-	if len(fields) < 2 {
-		return ""
-	}
-	splits := strings.Split(fields[1], ":")
-	if len(splits) < 2 {
-		return ""
-	}
-	return splits[0]
+type auth struct {
+	prefix        string
+	credential    string
+	signedheaders string
+	signature     string
+	accessKey     string
 }
+
+// strip auth from authorization header
+func stripAuth(r *http.Request) (*auth, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return nil, errors.New("Missing auth header")
+	}
+	a := new(auth)
+	authFields := strings.Fields(authHeader)
+	if len(authFields) < 4 {
+		return nil, errors.New("Missing fields in Auth header")
+	}
+	a.prefix = authFields[0]
+	credentials := strings.Split(authFields[1], ",")[0]
+	if len(credentials) < 2 {
+		return nil, errors.New("Missing fields in Auth header")
+	}
+	signedheaders := strings.Split(authFields[2], ",")[0]
+	if len(signedheaders) < 2 {
+		return nil, errors.New("Missing fields in Auth header")
+	}
+	signature := authFields[3]
+	a.credential = strings.Split(credentials, "=")[1]
+	a.signedheaders = strings.Split(signedheaders, "=")[1]
+	a.signature = strings.Split(signature, "=")[1]
+	a.accessKey = strings.Split(a.credential, "/")[0]
+	return a, nil
+}
+
+const (
+	timeFormat = "20060102T150405Z"
+)
 
 func getDate(req *http.Request) (time.Time, error) {
 	amzDate := req.Header.Get("X-Amz-Date")
@@ -61,6 +88,9 @@ func getDate(req *http.Request) (time.Time, error) {
 		if _, err := time.Parse(time.RFC1123Z, amzDate); err == nil {
 			return time.Parse(time.RFC1123Z, amzDate)
 		}
+		if _, err := time.Parse(timeFormat, amzDate); err == nil {
+			return time.Parse(timeFormat, amzDate)
+		}
 	}
 	date := req.Header.Get("Date")
 	switch {
@@ -70,6 +100,9 @@ func getDate(req *http.Request) (time.Time, error) {
 		}
 		if _, err := time.Parse(time.RFC1123Z, date); err == nil {
 			return time.Parse(time.RFC1123Z, date)
+		}
+		if _, err := time.Parse(timeFormat, amzDate); err == nil {
+			return time.Parse(timeFormat, amzDate)
 		}
 	}
 	return time.Time{}, errors.New("invalid request")
@@ -86,7 +119,6 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Verify if date headers are set, if not reject the request
-
 	if r.Header.Get("Authorization") != "" {
 		if r.Header.Get("X-Amz-Date") == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
@@ -109,60 +141,42 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// Validate handler is wrapper handler used for API request validation with authorization header.
+// validate auth header handler is wrapper handler used for API request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
-func validateRequestHandler(conf config.Config, h http.Handler) http.Handler {
-	return validateHandler{
+func validateAuthHeaderHandler(conf config.Config, h http.Handler) http.Handler {
+	return validateAuthHandler{
 		conf:    conf,
 		handler: h,
 	}
 }
 
-// Validate handler ServeHTTP() wrapper
-func (h validateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// validate auth header handler ServeHTTP() wrapper
+func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if acceptsContentType == unknownContentType {
 		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
 		return
 	}
-	// success
-	h.handler.ServeHTTP(w, r)
-
-	// Enable below only when webcli is ready
-
-	/*
-		switch true {
-		case accessKey != "":
-			if err := h.conf.ReadConfig(); err != nil {
-				writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
-				return
-			}
-			user, ok := h.conf.Users[accessKey]
-			if !ok {
-				writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-				return
-			}
-			ok, _ = ValidateRequest(user, r)
-			if !ok {
-				writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-				return
-			}
-			// Success
-			h.handler.ServeHTTP(w, r)
-		default:
-			// Control reaches when no access key is found, ideally we would
-			// like to throw back `403`. But for now with our tests lacking
-			// this functionality it is better for us to be serving anonymous
-			// requests as well.
-			// We should remove this after adding tests to support signature request
-			h.handler.ServeHTTP(w, r)
-			// ## Uncommented below links of code after disabling anonymous requests
-			// error := errorCodeError(AccessDenied)
-			// errorResponse := getErrorResponse(error, "")
-			// w.WriteHeader(error.HTTPStatusCode)
-			// w.Write(writeErrorResponse(w, errorResponse, acceptsContentType))
+	_, err := stripAuth(r)
+	switch err.(type) {
+	case nil:
+		if err := h.conf.ReadConfig(); err != nil {
+			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			return
 		}
-	*/
+		// uncomment this when we have webcli
+		// _, ok := h.conf.Users[auth.accessKey]
+		//if !ok {
+		//	writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+		//	return
+		//}
+		// Success
+		h.handler.ServeHTTP(w, r)
+	default:
+		// control reaches here, we should just send the request up the stack - internally
+		// individual calls will validate themselves against un-authenticated requests
+		h.handler.ServeHTTP(w, r)
+	}
 }
 
 // Ignore resources handler is wrapper handler used for API request resource validation
