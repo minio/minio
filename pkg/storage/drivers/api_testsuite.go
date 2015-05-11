@@ -26,8 +26,8 @@ import (
 
 	"time"
 
-	"github.com/minio-io/check"
-	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio/check"
+	"github.com/minio/minio/pkg/iodine"
 )
 
 // APITestSuite - collection of API tests

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio-io/cli"
+	"github.com/minio/cli"
 )
 
 func TestNewContext(t *testing.T) {

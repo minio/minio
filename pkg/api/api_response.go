@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/minio-io/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/drivers"
 )
 
 // Reply date format

@@ -27,11 +27,11 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio-io/cli"
-	"github.com/minio-io/minio/pkg/featureflags"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/server"
-	"github.com/minio-io/minio/pkg/server/httpserver"
+	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/featureflags"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/server"
+	"github.com/minio/minio/pkg/server/httpserver"
 )
 
 var globalDebugFlag = false

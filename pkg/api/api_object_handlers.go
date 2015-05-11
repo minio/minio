@@ -24,9 +24,9 @@ import (
 	"encoding/xml"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/storage/drivers"
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 const (

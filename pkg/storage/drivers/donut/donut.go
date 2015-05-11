@@ -31,10 +31,10 @@ import (
 
 	"errors"
 
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/storage/donut"
-	"github.com/minio-io/minio/pkg/storage/drivers"
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut"
+	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 // donutDriver - creates a new single disk drivers driver using donut

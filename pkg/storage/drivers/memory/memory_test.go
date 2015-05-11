@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/minio-io/check"
-	"github.com/minio-io/minio/pkg/storage/drivers"
+	. "github.com/minio/check"
+	"github.com/minio/minio/pkg/storage/drivers"
 )
 
 func Test(t *testing.T) { TestingT(t) }

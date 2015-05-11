@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio-io/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/api/config"
 )
 
 type timeHandler struct {

@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/minio-io/minio",
+	"ImportPath": "github.com/minio/minio",
 	"GoVersion": "go1.4.2",
 	"Packages": [
 		"./..."
@@ -18,11 +18,11 @@
 			"Rev": "660d31f8602b95058fed6833debf113e85350868"
 		},
 		{
-			"ImportPath": "github.com/minio-io/check",
+			"ImportPath": "github.com/minio/check",
 			"Rev": "bc4e66da8cd7ff58a4b9b84301f906352b8f2c94"
 		},
 		{
-			"ImportPath": "github.com/minio-io/cli",
+			"ImportPath": "github.com/minio/cli",
 			"Comment": "1.2.0-110-g111d644",
 			"Rev": "111d6445d384505978aaf5b218ce96d163b73c57"
 		},

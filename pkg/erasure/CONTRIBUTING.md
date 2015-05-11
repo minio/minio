@@ -1,10 +1,10 @@
 ### Setup your Erasure Github Repository
-Fork [Erasure upstream](https://github.com/minio-io/erasure/fork) source repository to your own personal repository. Copy the URL and pass it to ``go get`` command. Go uses git to clone a copy into your project workspace folder.
+Fork [Erasure upstream](https://github.com/minio/erasure/fork) source repository to your own personal repository. Copy the URL and pass it to ``go get`` command. Go uses git to clone a copy into your project workspace folder.
 ```sh
 $ git clone https://github.com/$USER_ID/erasure
 $ cd erasure
-$ mkdir -p ${GOPATH}/src/github.com/minio-io
-$ ln -s ${PWD} $GOPATH/src/github.com/minio-io/
+$ mkdir -p ${GOPATH}/src/github.com/minio
+$ ln -s ${PWD} $GOPATH/src/github.com/minio/
 ```
 
 ### Compiling Erasure from source

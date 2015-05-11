@@ -19,7 +19,7 @@ package httpserver
 import (
 	"net/http"
 
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 // Config - http server config

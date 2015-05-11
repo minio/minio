@@ -19,7 +19,7 @@ package donut
 import (
 	"errors"
 
-	"github.com/minio-io/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/iodine"
 )
 
 // donut struct internal data

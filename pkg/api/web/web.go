@@ -23,10 +23,10 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	"github.com/minio-io/minio/pkg/api/config"
-	"github.com/minio-io/minio/pkg/iodine"
-	"github.com/minio-io/minio/pkg/utils/crypto/keys"
-	"github.com/minio-io/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/utils/crypto/keys"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 const (

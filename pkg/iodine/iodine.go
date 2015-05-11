@@ -225,6 +225,6 @@ func init() {
 	_, iodineFile, _, _ := runtime.Caller(0)
 	iodineFile = path.Dir(iodineFile)   // trim iodine.go
 	iodineFile = path.Dir(iodineFile)   // trim iodine
-	iodineFile = path.Dir(iodineFile)   // trim minio-io
+	iodineFile = path.Dir(iodineFile)   // trim minio
 	gopath = path.Dir(iodineFile) + "/" // trim github.com
 }
