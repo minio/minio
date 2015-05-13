@@ -39,11 +39,6 @@ const (
 // you must have READ access to the object.
 func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -101,11 +96,6 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 // The HEAD operation retrieves metadata from an object without returning the object itself.
 func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -144,11 +134,6 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 // This implementation of the PUT operation adds an object to a bucket.
 func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// verify if this operation is allowed
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -224,13 +209,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
-	// TODO ensure ?uploads is part of URL
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// handle ACL's here at bucket level
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -262,11 +241,6 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 
 func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// handle ACL's here at bucket level
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -356,10 +330,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 
 func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -381,10 +352,7 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 
 func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
+
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -415,10 +383,6 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 
 func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
 
 	decoder := xml.NewDecoder(req.Body)
 	parts := &CompleteMultipartUpload{}
