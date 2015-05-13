@@ -44,10 +44,6 @@ func getContentTypeString(content contentType) string {
 		{
 			return "application/json"
 		}
-	case xmlContentType:
-		{
-			return "application/xml"
-		}
 	default:
 		{
 			return "application/xml"
