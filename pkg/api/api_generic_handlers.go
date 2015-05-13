@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/featureflags"
 )
 
 type timeHandler struct {
@@ -153,25 +154,24 @@ func validateAuthHeaderHandler(conf config.Config, h http.Handler) http.Handler 
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
-		return
-	}
 	_, err := stripAuth(r)
 	switch err.(type) {
 	case nil:
-		if err := h.conf.ReadConfig(); err != nil {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
-			return
+		{
+			if err := h.conf.ReadConfig(); err != nil {
+				writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+				return
+			}
+			if featureflags.Get(featureflags.WebCli) {
+				_, ok := h.conf.Users[auth.accessKey]
+				if !ok {
+					writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+					return
+				}
+			}
+			// Success
+			h.handler.ServeHTTP(w, r)
 		}
-		// uncomment this when we have webcli
-		// _, ok := h.conf.Users[auth.accessKey]
-		//if !ok {
-		//	writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-		//	return
-		//}
-		// Success
-		h.handler.ServeHTTP(w, r)
 	default:
 		// control reaches here, we should just send the request up the stack - internally
 		// individual calls will validate themselves against un-authenticated requests
