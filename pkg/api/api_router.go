@@ -21,11 +21,9 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/api/config"
 	"github.com/minio/minio/pkg/api/logging"
 	"github.com/minio/minio/pkg/api/quota"
 	"github.com/minio/minio/pkg/featureflags"
-	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/storage/drivers"
 )
 
@@ -57,13 +55,10 @@ func HTTPHandler(driver drivers.Driver) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	var conf = config.Config{}
-	if err := conf.SetupConfig(); err != nil {
-		log.Fatal(iodine.New(err, nil))
-	}
-	h := timeValidityHandler(mux)
+	h := validContentTypeHandler(mux)
+	h = timeValidityHandler(h)
 	h = ignoreResourcesHandler(h)
-	h = validateAuthHeaderHandler(conf, h)
+	h = validateAuthHeaderHandler(h)
 	//	h = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
 	//	h = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
 	//	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))

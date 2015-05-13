@@ -25,12 +25,15 @@ import (
 	"github.com/minio/minio/pkg/api/config"
 )
 
+type contentTypeHandler struct {
+	handler http.Handler
+}
+
 type timeHandler struct {
 	handler http.Handler
 }
 
 type validateAuthHandler struct {
-	conf    config.Config
 	handler http.Handler
 }
 
@@ -45,6 +48,10 @@ type auth struct {
 	signature     string
 	accessKey     string
 }
+
+const (
+	timeFormat = "20060102T150405Z"
+)
 
 // strip auth from authorization header
 func stripAuth(r *http.Request) (*auth, error) {
@@ -73,10 +80,6 @@ func stripAuth(r *http.Request) (*auth, error) {
 	a.accessKey = strings.Split(a.credential, "/")[0]
 	return a, nil
 }
-
-const (
-	timeFormat = "20060102T150405Z"
-)
 
 func getDate(req *http.Request) (time.Time, error) {
 	amzDate := req.Header.Get("X-Amz-Date")
@@ -108,16 +111,25 @@ func getDate(req *http.Request) (time.Time, error) {
 	return time.Time{}, errors.New("invalid request")
 }
 
+func validContentTypeHandler(h http.Handler) http.Handler {
+	return contentTypeHandler{h}
+}
+
+func (h contentTypeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	acceptsContentType := getContentType(r)
+	if acceptsContentType == unknownContentType {
+		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
+		return
+	}
+	h.handler.ServeHTTP(w, r)
+}
+
 func timeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
 }
 
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
-		return
-	}
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
 		if r.Header.Get("X-Amz-Date") == "" && r.Header.Get("Date") == "" {
@@ -143,29 +155,27 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // validate auth header handler is wrapper handler used for API request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
-func validateAuthHeaderHandler(conf config.Config, h http.Handler) http.Handler {
-	return validateAuthHandler{
-		conf:    conf,
-		handler: h,
-	}
+func validateAuthHeaderHandler(h http.Handler) http.Handler {
+	return validateAuthHandler{h}
 }
 
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
-		return
-	}
 	_, err := stripAuth(r)
 	switch err.(type) {
 	case nil:
-		if err := h.conf.ReadConfig(); err != nil {
+		var conf = config.Config{}
+		if err := conf.SetupConfig(); err != nil {
+			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			return
+		}
+		if err := conf.ReadConfig(); err != nil {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
 		// uncomment this when we have webcli
-		// _, ok := h.conf.Users[auth.accessKey]
+		// _, ok := conf.Users[auth.accessKey]
 		//if !ok {
 		//	writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
 		//	return
@@ -189,10 +199,6 @@ func ignoreResourcesHandler(h http.Handler) http.Handler {
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
-		return
-	}
 	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
 		error := getErrorCode(NotImplemented)
 		errorResponse := getErrorResponse(error, "")

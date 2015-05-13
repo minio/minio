@@ -69,10 +69,6 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 //
 func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
 	// verify if bucket allows this operation
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
@@ -123,10 +119,6 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 // owned by the authenticated sender of the request.
 func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
 	// uncomment this when we have webcli
 	// without access key credentials one cannot list buckets
 	// if _, err := stripAuth(req); err != nil {
@@ -161,10 +153,6 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
 	// uncomment this when we have webcli
 	// without access key credentials one cannot create a bucket
 	// if _, err := stripAuth(req); err != nil {
@@ -217,11 +205,6 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
 func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
@@ -261,11 +244,6 @@ func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Req
 // return responses such as 404 Not Found and 403 Forbidden.
 func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, req, NotAcceptable, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	// verify if bucket allows this operation
 	if !server.isValidOp(w, req, acceptsContentType) {
 		return
