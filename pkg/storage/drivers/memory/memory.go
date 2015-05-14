@@ -43,7 +43,7 @@ import (
 type memoryDriver struct {
 	storedBuckets map[string]storedBucket
 	lock          *sync.RWMutex
-	objects       *Intelligent
+	objects       *Cache
 }
 
 type storedBucket struct {
@@ -69,7 +69,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	var memory *memoryDriver
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
-	memory.objects = NewIntelligent(maxSize, expiration)
+	memory.objects = NewCache(maxSize, expiration)
 	memory.lock = new(sync.RWMutex)
 
 	memory.objects.OnExpired = memory.expiredObject
@@ -207,30 +207,6 @@ func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Su
 	return md5sum, iodine.New(err, nil)
 }
 
-// getMD5AndData - this is written as a wrapper to capture md5sum and data in a more memory efficient way
-func getMD5AndData(reader io.Reader) ([]byte, []byte, error) {
-	hash := md5.New()
-	var data []byte
-
-	var err error
-	var length int
-	for err == nil {
-		byteBuffer := make([]byte, 1024*1024)
-		length, err = reader.Read(byteBuffer)
-		// While hash.Write() wouldn't mind a Nil byteBuffer
-		// It is necessary for us to verify this and break
-		if length == 0 {
-			break
-		}
-		hash.Write(byteBuffer[0:length])
-		data = append(data, byteBuffer[0:length]...)
-	}
-	if err != io.EOF {
-		return nil, nil, err
-	}
-	return hash.Sum(nil), data, nil
-}
-
 // createObject - PUT object to memory buffer
 func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	memory.lock.RLock()
@@ -267,15 +243,35 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-	md5SumBytes, readBytes, err := getMD5AndData(data)
-	if err != nil {
+
+	// calculate md5
+	hash := md5.New()
+	var readBytes []byte
+
+	var err error
+	var length int
+	for err == nil {
+		byteBuffer := make([]byte, 1024*1024)
+		length, err = data.Read(byteBuffer)
+		// While hash.Write() wouldn't mind a Nil byteBuffer
+		// It is necessary for us to verify this and break
+		if length == 0 {
+			break
+		}
+		hash.Write(byteBuffer[0:length])
+		readBytes = append(readBytes, byteBuffer[0:length]...)
+	}
+	if err != io.EOF {
 		return "", iodine.New(err, nil)
 	}
+	go debug.FreeOSMemory()
+	md5SumBytes := hash.Sum(nil)
 	totalLength := len(readBytes)
+
 	memory.lock.Lock()
 	memory.objects.Set(objectKey, readBytes)
 	memory.lock.Unlock()
-	// de-allocating
+	// setting up for de-allocation
 	readBytes = nil
 
 	md5Sum := hex.EncodeToString(md5SumBytes)

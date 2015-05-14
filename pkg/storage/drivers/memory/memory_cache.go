@@ -23,9 +23,9 @@ import (
 
 var zeroExpiration = time.Duration(0)
 
-// Intelligent holds the required variables to compose an in memory cache system
+// Cache holds the required variables to compose an in memory cache system
 // which also provides expiring key mechanism and also maxSize
-type Intelligent struct {
+type Cache struct {
 	// Mutex is used for handling the concurrent
 	// read/write requests for cache
 	sync.Mutex
@@ -62,12 +62,12 @@ type Stats struct {
 	Expired uint64
 }
 
-// NewIntelligent creates an inmemory cache
+// NewCache creates an inmemory cache
 //
 // maxSize is used for expiring objects before we run out of memory
 // expiration is used for expiration of a key from cache
-func NewIntelligent(maxSize uint64, expiration time.Duration) *Intelligent {
-	return &Intelligent{
+func NewCache(maxSize uint64, expiration time.Duration) *Cache {
+	return &Cache{
 		items:      map[string]interface{}{},
 		updatedAt:  map[string]time.Time{},
 		expiration: expiration,
@@ -76,7 +76,7 @@ func NewIntelligent(maxSize uint64, expiration time.Duration) *Intelligent {
 }
 
 // Stats get current cache statistics
-func (r *Intelligent) Stats() Stats {
+func (r *Cache) Stats() Stats {
 	return Stats{
 		Bytes:   r.currentSize,
 		Items:   uint64(len(r.items)),
@@ -85,7 +85,7 @@ func (r *Intelligent) Stats() Stats {
 }
 
 // ExpireObjects expire objects in go routine
-func (r *Intelligent) ExpireObjects(gcInterval time.Duration) {
+func (r *Cache) ExpireObjects(gcInterval time.Duration) {
 	r.stopExpireTimer = make(chan struct{})
 	ticker := time.NewTicker(gcInterval)
 	go func() {
@@ -103,7 +103,7 @@ func (r *Intelligent) ExpireObjects(gcInterval time.Duration) {
 }
 
 // Get returns a value of a given key if it exists
-func (r *Intelligent) Get(key string) (interface{}, bool) {
+func (r *Cache) Get(key string) (interface{}, bool) {
 	r.Lock()
 	defer r.Unlock()
 	value, ok := r.items[key]
@@ -115,7 +115,7 @@ func (r *Intelligent) Get(key string) (interface{}, bool) {
 }
 
 // Set will persist a value to the cache
-func (r *Intelligent) Set(key string, value interface{}) {
+func (r *Cache) Set(key string, value interface{}) {
 	r.Lock()
 	// remove random key if only we reach the maxSize threshold,
 	// if not assume infinite memory
@@ -135,7 +135,7 @@ func (r *Intelligent) Set(key string, value interface{}) {
 }
 
 // Expire expires keys which have expired
-func (r *Intelligent) Expire() {
+func (r *Cache) Expire() {
 	r.Lock()
 	defer r.Unlock()
 	for key := range r.items {
@@ -146,7 +146,7 @@ func (r *Intelligent) Expire() {
 }
 
 // Delete deletes a given key if exists
-func (r *Intelligent) Delete(key string) {
+func (r *Cache) Delete(key string) {
 	if _, ok := r.items[key]; ok {
 		r.currentSize -= uint64(len(r.items[key].([]byte)))
 		delete(r.items, key)
@@ -158,7 +158,7 @@ func (r *Intelligent) Delete(key string) {
 	}
 }
 
-func (r *Intelligent) isValid(key string) bool {
+func (r *Cache) isValid(key string) bool {
 	updatedAt, ok := r.updatedAt[key]
 	if !ok {
 		return false
