@@ -55,6 +55,7 @@ type storedBucket struct {
 type multiPartSession struct {
 	totalParts int
 	uploadID   string
+	initiated  time.Time
 }
 
 const (
@@ -424,7 +425,6 @@ func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketR
 			keys, resources = memory.listObjects(keys, key, resources)
 		}
 	}
-	// Marker logic - TODO in-efficient right now fix it
 	var newKeys []string
 	switch {
 	case resources.Marker != "":
@@ -543,6 +543,7 @@ func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) 
 	storedBucket.multiPartSession = make(map[string]multiPartSession)
 	storedBucket.multiPartSession[key] = multiPartSession{
 		uploadID:   uploadID,
+		initiated:  time.Now(),
 		totalParts: 0,
 	}
 	memory.storedBuckets[bucket] = storedBucket
@@ -675,6 +676,45 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 	return etag, nil
 }
 
+// byKey is a sortable interface for UploadMetadata slice
+type byKey []*drivers.UploadMetadata
+
+func (a byKey) Len() int           { return len(a) }
+func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
+
+func (memory *memoryDriver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
+	// TODO handle delimiter, prefix, uploadIDMarker
+	memory.lock.RLock()
+	defer memory.lock.RUnlock()
+	if _, ok := memory.storedBuckets[bucket]; ok == false {
+		return drivers.BucketMultipartResourcesMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+	}
+	storedBucket := memory.storedBuckets[bucket]
+	var uploads []*drivers.UploadMetadata
+
+	for key, session := range storedBucket.multiPartSession {
+		if len(uploads) > resources.MaxUploads {
+			sort.Sort(byKey(uploads))
+			resources.Upload = uploads
+			resources.NextKeyMarker = key
+			resources.NextUploadIDMarker = session.uploadID
+			resources.IsTruncated = true
+			return resources, nil
+		}
+		if key > resources.KeyMarker {
+			upload := new(drivers.UploadMetadata)
+			upload.Key = key
+			upload.UploadID = session.uploadID
+			upload.Initiated = session.initiated
+			uploads = append(uploads, upload)
+		}
+	}
+	sort.Sort(byKey(uploads))
+	resources.Upload = uploads
+	return resources, nil
+}
+
 // partNumber is a sortable interface for Part slice
 type partNumber []*drivers.PartMetadata
 
@@ -690,6 +730,9 @@ func (memory *memoryDriver) ListObjectParts(bucket, key string, resources driver
 		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := memory.storedBuckets[bucket]
+	if _, ok := storedBucket.multiPartSession[key]; ok == false {
+		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
+	}
 	if storedBucket.multiPartSession[key].uploadID != resources.UploadID {
 		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.InvalidUploadID{UploadID: resources.UploadID}, nil)
 	}

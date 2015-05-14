@@ -16,9 +16,7 @@
 
 package api
 
-import (
-	"encoding/xml"
-)
+import "encoding/xml"
 
 // Limit number of objects in a given response
 const (
@@ -78,6 +76,24 @@ type ListPartsResponse struct {
 	Part []*Part
 }
 
+// ListMultipartUploadsResponse - format for list multipart uploads response
+type ListMultipartUploadsResponse struct {
+	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListMultipartUploadsResult" json:"-"`
+
+	Bucket             string
+	KeyMarker          string
+	UploadIDMarker     string `xml:"UploadIdMarker"`
+	NextKeyMarker      string
+	NextUploadIDMarker string `xml:"NextUploadIdMarker"`
+	EncodingType       string
+	MaxUploads         int
+	IsTruncated        bool
+	Upload             []*Upload
+	Prefix             string
+	Delimiter          string
+	CommonPrefixes     []*CommonPrefix
+}
+
 // ListBucketsResponse - format for list buckets response
 type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListAllMyBucketsResult" json:"-"`
@@ -86,6 +102,16 @@ type ListBucketsResponse struct {
 		Bucket []*Bucket
 	} // Buckets are nested
 	Owner Owner
+}
+
+// Upload container for in progress multipart upload
+type Upload struct {
+	Key          string
+	UploadID     string `xml:"UploadId"`
+	Initiator    Initiator
+	Owner        Owner
+	StorageClass string
+	Initiated    string
 }
 
 // CommonPrefix container for prefix response in ListObjectsResponse

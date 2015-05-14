@@ -400,6 +400,10 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	return calculatedMD5Sum, nil
 }
 
+func (d donutDriver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
+	return drivers.BucketMultipartResourcesMetadata{}, iodine.New(errors.New("Not Implemented"), nil)
+}
+
 func (d donutDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
 	return "", iodine.New(errors.New("Not Implemented"), nil)
 }

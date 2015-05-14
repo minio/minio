@@ -61,6 +61,56 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 	return true
 }
 
+// GET Bucket (List Multipart uploads)
+// -------------------------
+// This operation lists in-progress multipart uploads. An in-progress
+// multipart upload is a multipart upload that has been initiated,
+// using the Initiate Multipart Upload request, but has not yet been completed or aborted.
+// This operation returns at most 1,000 multipart uploads in the response.
+//
+func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
+	acceptsContentType := getContentType(req)
+	// verify if bucket allows this operation
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
+	resources := getBucketMultipartResources(req.URL.Query())
+	if resources.MaxUploads == 0 {
+		resources.MaxUploads = maxObjectList
+	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	resources, err := server.driver.ListMultipartUploads(bucket, resources)
+	switch err := iodine.ToError(err).(type) {
+	case nil: // success
+		{
+			// generate response
+			response := generateListMultipartUploadsResult(bucket, resources)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType))
+			// set content-length to the size of the body
+			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
+			w.WriteHeader(http.StatusOK)
+			// write body
+			w.Write(encodedSuccessResponse)
+		}
+	case drivers.ObjectNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
+
+}
+
 // GET Bucket (List Objects)
 // -------------------------
 // This implementation of the GET operation returns some or all (up to 1000)
@@ -71,6 +121,11 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	acceptsContentType := getContentType(req)
 	// verify if bucket allows this operation
 	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
+	if isRequestUploads(req.URL.Query()) {
+		server.listMultipartUploadsHandler(w, req)
 		return
 	}
 

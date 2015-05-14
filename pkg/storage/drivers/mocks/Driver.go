@@ -167,6 +167,16 @@ func (m *Driver) ListObjectParts(bucket, key string, resources drivers.ObjectRes
 	return r0, r1
 }
 
+// ListMultipartUploads is a mock
+func (m *Driver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
+	ret := m.Called(bucket, resources)
+
+	r0 := ret.Get(0).(drivers.BucketMultipartResourcesMetadata)
+	r1 := ret.Error(1)
+
+	return r0, r1
+}
+
 // AbortMultipartUpload is a mock
 func (m *Driver) AbortMultipartUpload(bucket, key, uploadID string) error {
 	ret := m.Called(bucket, key, uploadID)
