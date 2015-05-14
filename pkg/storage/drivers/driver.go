@@ -40,6 +40,7 @@ type Driver interface {
 	CreateObject(bucket, key, contentType, md5sum string, size int64, data io.Reader) (string, error)
 
 	// Object Multipart Operations
+	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error)
 	NewMultipartUpload(bucket, key, contentType string) (string, error)
 	AbortMultipartUpload(bucket, key, UploadID string) error
 	CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
@@ -115,18 +116,10 @@ type PartMetadata struct {
 
 // ObjectResourcesMetadata - various types of object resources
 type ObjectResourcesMetadata struct {
-	Bucket       string
-	EncodingType string
-	Key          string
-	UploadID     string
-	Initiator    struct {
-		ID          string
-		DisplayName string
-	}
-	Owner struct {
-		ID          string
-		DisplayName string
-	}
+	Bucket               string
+	EncodingType         string
+	Key                  string
+	UploadID             string
 	StorageClass         string
 	PartNumberMarker     int
 	NextPartNumberMarker int
@@ -134,6 +127,29 @@ type ObjectResourcesMetadata struct {
 	IsTruncated          bool
 
 	Part []*PartMetadata
+}
+
+// UploadMetadata container capturing metadata on in progress multipart upload in a given bucket
+type UploadMetadata struct {
+	Key          string
+	UploadID     string
+	StorageClass string
+	Initiated    time.Time
+}
+
+// BucketMultipartResourcesMetadata - various types of bucket resources for inprogress multipart uploads
+type BucketMultipartResourcesMetadata struct {
+	KeyMarker          string
+	UploadIDMarker     string
+	NextKeyMarker      string
+	NextUploadIDMarker string
+	EncodingType       string
+	MaxUploads         int
+	IsTruncated        bool
+	Upload             []*UploadMetadata
+	Prefix             string
+	Delimiter          string
+	CommonPrefixes     []string
 }
 
 // BucketResourcesMetadata - various types of bucket resources

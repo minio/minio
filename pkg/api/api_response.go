@@ -131,13 +131,6 @@ func generateCompleteMultpartUploadResult(bucket, key, location, etag string) Co
 	}
 }
 
-// partNumber
-type partNumber []*Part
-
-func (b partNumber) Len() int           { return len(b) }
-func (b partNumber) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b partNumber) Less(i, j int) bool { return b[i].PartNumber < b[j].PartNumber }
-
 // generateListPartsResult
 func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) ListPartsResponse {
 	// TODO - support EncodingType in xml decoding
@@ -166,6 +159,31 @@ func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) Lis
 		listPartsResponse.Part = append(listPartsResponse.Part, newPart)
 	}
 	return listPartsResponse
+}
+
+// generateListMultipartUploadsResult
+func generateListMultipartUploadsResult(bucket string, metadata drivers.BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
+	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
+	listMultipartUploadsResponse.Bucket = bucket
+	listMultipartUploadsResponse.Delimiter = metadata.Delimiter
+	listMultipartUploadsResponse.IsTruncated = metadata.IsTruncated
+	listMultipartUploadsResponse.EncodingType = metadata.EncodingType
+	listMultipartUploadsResponse.Prefix = metadata.Prefix
+	listMultipartUploadsResponse.KeyMarker = metadata.KeyMarker
+	listMultipartUploadsResponse.NextKeyMarker = metadata.NextKeyMarker
+	listMultipartUploadsResponse.MaxUploads = metadata.MaxUploads
+	listMultipartUploadsResponse.NextUploadIDMarker = metadata.NextUploadIDMarker
+	listMultipartUploadsResponse.UploadIDMarker = metadata.UploadIDMarker
+
+	listMultipartUploadsResponse.Upload = make([]*Upload, len(metadata.Upload))
+	for _, upload := range metadata.Upload {
+		newUpload := &Upload{}
+		newUpload.UploadID = upload.UploadID
+		newUpload.Key = upload.Key
+		newUpload.Initiated = upload.Initiated.Format(iso8601Format)
+		listMultipartUploadsResponse.Upload = append(listMultipartUploadsResponse.Upload, newUpload)
+	}
+	return listMultipartUploadsResponse
 }
 
 // writeSuccessResponse write success headers

@@ -33,6 +33,17 @@ func getBucketResources(values url.Values) (v drivers.BucketResourcesMetadata) {
 	return
 }
 
+// part bucket url queries for ?uploads
+func getBucketMultipartResources(values url.Values) (v drivers.BucketMultipartResourcesMetadata) {
+	v.Prefix = values.Get("prefix")
+	v.KeyMarker = values.Get("key-marker")
+	v.MaxUploads, _ = strconv.Atoi(values.Get("max-uploads"))
+	v.Delimiter = values.Get("delimiter")
+	v.EncodingType = values.Get("encoding-type")
+	v.UploadIDMarker = values.Get("upload-id-marker")
+	return
+}
+
 // parse object url queries
 func getObjectResources(values url.Values) (v drivers.ObjectResourcesMetadata) {
 	v.UploadID = values.Get("uploadId")
@@ -42,15 +53,14 @@ func getObjectResources(values url.Values) (v drivers.ObjectResourcesMetadata) {
 	return
 }
 
-// check if req query values have acl
+// check if req quere values carry uploads resource
+func isRequestUploads(values url.Values) bool {
+	_, ok := values["uploads"]
+	return ok
+}
+
+// check if req query values carry acl resource
 func isRequestBucketACL(values url.Values) bool {
-	for key := range values {
-		switch true {
-		case key == "acl":
-			return true
-		default:
-			return false
-		}
-	}
-	return false
+	_, ok := values["acl"]
+	return ok
 }
