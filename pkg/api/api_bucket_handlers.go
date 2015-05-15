@@ -70,10 +70,6 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 //
 func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	// verify if bucket allows this operation
-	if !server.isValidOp(w, req, acceptsContentType) {
-		return
-	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads == 0 {
@@ -98,9 +94,9 @@ func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
-	case drivers.ObjectNotFound:
+	case drivers.BucketNotFound:
 		{
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 		}
 	default:
 		{

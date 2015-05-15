@@ -215,6 +215,11 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 		return
 	}
 
+	if !isRequestUploads(req.URL.Query()) {
+		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		return
+	}
+
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -330,6 +335,10 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 
 func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+	// handle ACL's here at bucket level
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
@@ -352,14 +361,19 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 
 func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+	// handle ACL's here at bucket level
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
 
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	if objectResourcesMetadata.MaxParts == 0 {
 		objectResourcesMetadata.MaxParts = maxPartsList
 	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
 
 	objectResourcesMetadata, err := server.driver.ListObjectParts(bucket, object, objectResourcesMetadata)
 	switch err := iodine.ToError(err).(type) {
@@ -383,6 +397,10 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 
 func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+	// handle ACL's here at bucket level
+	if !server.isValidOp(w, req, acceptsContentType) {
+		return
+	}
 
 	decoder := xml.NewDecoder(req.Body)
 	parts := &CompleteMultipartUpload{}

@@ -1306,13 +1306,14 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
 }
 
-func (s *MySuite) TestPutMultipart(c *C) {
+func (s *MySuite) TestObjectMultipartAbort(c *C) {
 	switch driver := s.Driver.(type) {
 	case *mocks.Driver:
 		{
 			driver.AssertExpectations(c)
 		}
 	default:
+		// Donut doesn't have multipart support yet
 		{
 			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
 
@@ -1369,7 +1370,7 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	//	// put part two
+	// put part two
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
 	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
 	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
@@ -1379,9 +1380,267 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
-	//
-	// complete multipart upload
 
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("AbortMultipartUpload", "foo", "object", "uploadid").Return(nil).Once()
+	request, err = http.NewRequest("DELETE", testServer.URL+"/foo/object?uploadId="+uploadID, nil)
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response3, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response3.StatusCode, Equals, http.StatusNoContent)
+}
+
+func (s *MySuite) TestBuckeMultipartList(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		// Donut doesn't have multipart support yet
+		{
+			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
+
+			} else {
+				return
+			}
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	featureflags.Enable(featureflags.MultipartPutObject)
+
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	// create bucket
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	//	 Initiate multipart upload
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("NewMultipartUpload", "foo", "object", "").Return("uploadid", nil).Once()
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploads", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResult{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+	uploadID := newResponse.UploadID
+
+	// put part one
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response1, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response1.StatusCode, Equals, http.StatusOK)
+
+	// put part two
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response2, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("ListMultipartUploads", "foo", mock.Anything).Return(drivers.BucketMultipartResourcesMetadata{}, nil).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo?uploads", nil)
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response3, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response3.StatusCode, Equals, http.StatusOK)
+}
+
+func (s *MySuite) TestObjectMultipartList(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		// Donut doesn't have multipart support yet
+		{
+			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
+
+			} else {
+				return
+			}
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	featureflags.Enable(featureflags.MultipartPutObject)
+
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	// create bucket
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	//	 Initiate multipart upload
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("NewMultipartUpload", "foo", "object", "").Return("uploadid", nil).Once()
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploads", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResult{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+	uploadID := newResponse.UploadID
+
+	// put part one
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response1, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response1.StatusCode, Equals, http.StatusOK)
+
+	// put part two
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response2, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("ListObjectParts", "foo", "object", mock.Anything).Return(drivers.ObjectResourcesMetadata{}, nil).Once()
+	request, err = http.NewRequest("GET", testServer.URL+"/foo/object?uploadId="+uploadID, nil)
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response3, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response3.StatusCode, Equals, http.StatusOK)
+
+}
+
+func (s *MySuite) TestObjectMultipart(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	default:
+		// Donut doesn't have multipart support yet
+		{
+			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
+
+			} else {
+				return
+			}
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	featureflags.Enable(featureflags.MultipartPutObject)
+
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+	client := http.Client{}
+
+	// create bucket
+	typedDriver.On("CreateBucket", "foo", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/foo", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	//	 Initiate multipart upload
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("NewMultipartUpload", "foo", "object", "").Return("uploadid", nil).Once()
+	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploads", bytes.NewBufferString(""))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResult{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+	uploadID := newResponse.UploadID
+
+	// put part one
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 1, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response1, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response1.StatusCode, Equals, http.StatusOK)
+
+	// put part two
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObjectPart", "foo", "object", "uploadid", 2, "", "", 11, mock.Anything).Return("5eb63bbbe01eeed093cb22bb8f5acdc3", nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/foo/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response2, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	// complete multipart upload
 	completeUploads := &CompleteMultipartUpload{
 		Part: []Part{
 			{
@@ -1399,6 +1658,7 @@ func (s *MySuite) TestPutMultipart(c *C) {
 	encoder := xml.NewEncoder(&completeBuffer)
 	encoder.Encode(completeUploads)
 
+	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
 	typedDriver.On("CompleteMultipartUpload", "foo", "object", "uploadid", mock.Anything).Return("etag", nil).Once()
 	request, err = http.NewRequest("POST", testServer.URL+"/foo/object?uploadId="+uploadID, &completeBuffer)
 	c.Assert(err, IsNil)
