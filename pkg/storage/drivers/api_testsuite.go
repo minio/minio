@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"math/rand"
+	"reflect"
 	"strconv"
 
 	"time"
@@ -46,11 +47,80 @@ func APITestSuite(c *check.C, create func() Driver) {
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
 	testDefaultContentType(c, create)
+	testMultipartObjectCreation(c, create)
 }
 
 func testCreateBucket(c *check.C, create func() Driver) {
 	drivers := create()
 	err := drivers.CreateBucket("bucket", "")
+	c.Assert(err, check.IsNil)
+}
+
+func testMultipartObjectCreation(c *check.C, create func() Driver) {
+	drivers := create()
+	switch {
+	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
+		return
+	}
+	err := drivers.CreateBucket("bucket", "")
+	c.Assert(err, check.IsNil)
+	uploadID, err := drivers.NewMultipartUpload("bucket", "key", "")
+	c.Assert(err, check.IsNil)
+
+	parts := make(map[int]string)
+	for i := 1; i <= 10; i++ {
+		randomPerm := rand.Perm(10)
+		randomString := ""
+		for _, num := range randomPerm {
+			randomString = randomString + strconv.Itoa(num)
+		}
+
+		hasher := md5.New()
+		hasher.Write([]byte(randomString))
+		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+
+		calculatedmd5sum, err := drivers.CreateObjectPart("bucket", "key", uploadID, i, "", expectedmd5Sum, int64(len(randomString)),
+			bytes.NewBufferString(randomString))
+		c.Assert(err, check.IsNil)
+		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
+		parts[i] = calculatedmd5sum
+	}
+	_, err = drivers.CompleteMultipartUpload("bucket", "key", uploadID, parts)
+	c.Assert(err, check.IsNil)
+}
+
+func testMultipartObjectAbort(c *check.C, create func() Driver) {
+	drivers := create()
+	switch {
+	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
+		return
+	}
+	err := drivers.CreateBucket("bucket", "")
+	c.Assert(err, check.IsNil)
+	uploadID, err := drivers.NewMultipartUpload("bucket", "key", "")
+	c.Assert(err, check.IsNil)
+
+	parts := make(map[int]string)
+	for i := 1; i <= 10; i++ {
+		randomPerm := rand.Perm(10)
+		randomString := ""
+		for _, num := range randomPerm {
+			randomString = randomString + strconv.Itoa(num)
+		}
+
+		hasher := md5.New()
+		hasher.Write([]byte(randomString))
+		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+
+		calculatedmd5sum, err := drivers.CreateObjectPart("bucket", "key", uploadID, i, "", expectedmd5Sum, int64(len(randomString)),
+			bytes.NewBufferString(randomString))
+		c.Assert(err, check.IsNil)
+		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
+		parts[i] = calculatedmd5sum
+	}
+	err = drivers.AbortMultipartUpload("bucket", "key", uploadID)
 	c.Assert(err, check.IsNil)
 }
 
