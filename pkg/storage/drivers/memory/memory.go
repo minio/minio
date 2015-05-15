@@ -334,6 +334,7 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	}
 	var newBucket = storedBucket{}
 	newBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
+	newBucket.multiPartSession = make(map[string]multiPartSession)
 	newBucket.bucketMetadata = drivers.BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
@@ -540,13 +541,11 @@ func (memory *memoryDriver) NewMultipartUpload(bucket, key, contentType string) 
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
 
-	storedBucket.multiPartSession = make(map[string]multiPartSession)
-	storedBucket.multiPartSession[key] = multiPartSession{
+	memory.storedBuckets[bucket].multiPartSession[key] = multiPartSession{
 		uploadID:   uploadID,
 		initiated:  time.Now(),
 		totalParts: 0,
 	}
-	memory.storedBuckets[bucket] = storedBucket
 	memory.lock.Unlock()
 
 	return uploadID, nil
