@@ -115,16 +115,22 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 		}
 	case drivers.ObjectNotFound:
 		{
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			error := getErrorCode(NoSuchKey)
+			w.Header().Set("Server", "Minio")
+			w.WriteHeader(error.HTTPStatusCode)
 		}
 	case drivers.ObjectNameInvalid:
 		{
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			error := getErrorCode(NoSuchKey)
+			w.Header().Set("Server", "Minio")
+			w.WriteHeader(error.HTTPStatusCode)
 		}
 	default:
 		{
 			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			error := getErrorCode(InternalError)
+			w.Header().Set("Server", "Minio")
+			w.WriteHeader(error.HTTPStatusCode)
 		}
 	}
 }
@@ -227,17 +233,23 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 	uploadID, err := server.driver.NewMultipartUpload(bucket, object, "")
 	switch err := iodine.ToError(err).(type) {
 	case nil:
-		response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+		{
+			response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+			// write body
+			w.Write(encodedSuccessResponse)
+		}
 	case drivers.ObjectExists:
-		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		{
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		}
 	default:
-		log.Println(iodine.New(err, nil))
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		{
+			log.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 }
 
@@ -346,13 +358,19 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 	err := server.driver.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
-		w.WriteHeader(http.StatusNoContent)
+		{
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
+			w.WriteHeader(http.StatusNoContent)
+		}
 	case drivers.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		{
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		}
 	default:
-		log.Println(err)
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		{
+			log.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 }
 
@@ -375,17 +393,23 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 	objectResourcesMetadata, err := server.driver.ListObjectParts(bucket, object, objectResourcesMetadata)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
-		response := generateListPartsResult(objectResourcesMetadata)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+		{
+			response := generateListPartsResult(objectResourcesMetadata)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+			// write body
+			w.Write(encodedSuccessResponse)
+		}
 	case drivers.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		{
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		}
 	default:
-		log.Println(err)
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		{
+			log.Println(err)
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 }
 
@@ -422,16 +446,22 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	etag, err := server.driver.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, partMap)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
-		response := generateCompleteMultpartUploadResult(bucket, object, "", etag)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+		{
+			response := generateCompleteMultpartUploadResult(bucket, object, "", etag)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+			// write body
+			w.Write(encodedSuccessResponse)
+		}
 	case drivers.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		{
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		}
 	default:
-		log.Println(iodine.New(err, nil))
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		{
+			log.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 }
