@@ -202,9 +202,10 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
 		error := getErrorCode(NotImplemented)
 		errorResponse := getErrorResponse(error, "")
-		setCommonHeaders(w, getContentTypeString(acceptsContentType))
+		encodeErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodeErrorResponse))
 		w.WriteHeader(error.HTTPStatusCode)
-		w.Write(encodeErrorResponse(errorResponse, acceptsContentType))
+		w.Write(encodeErrorResponse)
 		return
 	}
 	h.handler.ServeHTTP(w, r)

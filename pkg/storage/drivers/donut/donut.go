@@ -275,11 +275,10 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 }
 
 // GetObjectMetadata retrieves an object's metadata
-func (d donutDriver) GetObjectMetadata(bucketName, objectName, prefixName string) (drivers.ObjectMetadata, error) {
+func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.ObjectMetadata, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"objectName": objectName,
-		"prefixName": prefixName,
 	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)

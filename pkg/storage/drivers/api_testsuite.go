@@ -157,7 +157,7 @@ func testMultipleObjectCreation(c *check.C, create func() Driver) {
 		c.Assert(err, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
-		metadata, err := drivers.GetObjectMetadata("bucket", key, "")
+		metadata, err := drivers.GetObjectMetadata("bucket", key)
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
 
@@ -490,19 +490,19 @@ func testDefaultContentType(c *check.C, create func() Driver) {
 
 	// test empty
 	_, err = drivers.CreateObject("bucket", "one", "", "", int64(len("one")), bytes.NewBufferString("one"))
-	metadata, err := drivers.GetObjectMetadata("bucket", "one", "")
+	metadata, err := drivers.GetObjectMetadata("bucket", "one")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 
 	// test custom
 	drivers.CreateObject("bucket", "two", "application/text", "", int64(len("two")), bytes.NewBufferString("two"))
-	metadata, err = drivers.GetObjectMetadata("bucket", "two", "")
+	metadata, err = drivers.GetObjectMetadata("bucket", "two")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/text")
 
 	// test trim space
 	drivers.CreateObject("bucket", "three", "\tapplication/json    ", "", int64(len("three")), bytes.NewBufferString("three"))
-	metadata, err = drivers.GetObjectMetadata("bucket", "three", "")
+	metadata, err = drivers.GetObjectMetadata("bucket", "three")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/json")
 }

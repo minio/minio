@@ -35,13 +35,13 @@ type encoder interface {
 //// helpers
 
 // Write http common headers
-func setCommonHeaders(w http.ResponseWriter, acceptsType string) {
+func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength int) {
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
 	w.Header().Set("Connection", "close")
 	// should be set to '0' by default
-	w.Header().Set("Content-Length", "0")
+	w.Header().Set("Content-Length", strconv.Itoa(contentLength))
 }
 
 // Write error response headers
@@ -66,16 +66,16 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 	lastModified := metadata.Created.Format(time.RFC1123)
 	// common headers
-	setCommonHeaders(w, metadata.ContentType)
+	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
+	// object related headers
 	w.Header().Set("ETag", metadata.Md5)
 	w.Header().Set("Last-Modified", lastModified)
-	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
 }
 
 // Write range object header
 func setRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, contentRange *httpRange) {
 	// set common headers
-	setCommonHeaders(w, metadata.ContentType)
+	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
 	// set object headers
 	setObjectHeaders(w, metadata)
 	// set content range

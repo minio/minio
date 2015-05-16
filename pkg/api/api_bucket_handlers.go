@@ -18,7 +18,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/iodine"
@@ -87,10 +86,7 @@ func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *
 			response := generateListMultipartUploadsResult(bucket, resources)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType))
-			// set content-length to the size of the body
-			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
-			w.WriteHeader(http.StatusOK)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
@@ -141,10 +137,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 			response := generateListObjectsResponse(bucket, objects, resources)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType))
-			// set content-length to the size of the body
-			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
-			w.WriteHeader(http.StatusOK)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
@@ -184,10 +177,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 			response := generateListBucketsResponse(buckets)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType))
-			// set content-length to the size of the body
-			w.Header().Set("Content-Length", strconv.Itoa(len(encodedSuccessResponse)))
-			w.WriteHeader(http.StatusOK)
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 			// write response
 			w.Write(encodedSuccessResponse)
 		}
