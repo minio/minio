@@ -35,7 +35,7 @@ type Driver interface {
 	// Object Operations
 	GetObject(w io.Writer, bucket, object string) (int64, error)
 	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
-	GetObjectMetadata(bucket, key, prefix string) (ObjectMetadata, error)
+	GetObjectMetadata(bucket, key string) (ObjectMetadata, error)
 	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
 	CreateObject(bucket, key, contentType, md5sum string, size int64, data io.Reader) (string, error)
 

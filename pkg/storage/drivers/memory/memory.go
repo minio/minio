@@ -478,14 +478,14 @@ func (memory *memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
 }
 
 // GetObjectMetadata - get object metadata from memory
-func (memory *memoryDriver) GetObjectMetadata(bucket, key, prefix string) (drivers.ObjectMetadata, error) {
+func (memory *memoryDriver) GetObjectMetadata(bucket, key string) (drivers.ObjectMetadata, error) {
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
 	// check if bucket exists
 	if !drivers.IsValidBucket(bucket) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObjectName(key) || !drivers.IsValidObjectName(prefix) {
+	if !drivers.IsValidObjectName(key) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := memory.storedBuckets[bucket]; ok == false {

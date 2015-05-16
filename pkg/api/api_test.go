@@ -158,9 +158,9 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("CreateObject", "bucket", "object", "", "", 0, mock.Anything).Return(metadata.Md5, nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Twice()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(metadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(metadata, nil).Once()
 	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
 	defer testServer.Close()
@@ -182,7 +182,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 
-	resMetadata, err := driver.GetObjectMetadata("bucket", "object", "")
+	resMetadata, err := driver.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, resMetadata.Created, 0, "application/octet-stream", resMetadata.Md5)
 }
@@ -240,7 +240,7 @@ func (s *MySuite) TestObject(c *C) {
 	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
 	typedDriver.On("CreateObject", "bucket", "object", "", "", mock.Anything, mock.Anything).Return(metadata.Md5, nil).Once()
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Twice()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(metadata, nil).Twice()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(metadata, nil).Twice()
 	typedDriver.SetGetObjectWriter("bucket", "object", []byte("hello world"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
 
@@ -265,7 +265,7 @@ func (s *MySuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(responseBody, DeepEquals, []byte("hello world"))
 
-	resMetadata, err := driver.GetObjectMetadata("bucket", "object", "")
+	resMetadata, err := driver.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, resMetadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
@@ -322,7 +322,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	// test non-existant object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -336,7 +336,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	// get object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object1", "").Return(metadata1, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object1").Return(metadata1, nil).Once()
 	typedDriver.SetGetObjectWriter("bucket", "object1", []byte("hello one"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object1").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object1", nil)
@@ -349,8 +349,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	// get metadata
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object1", "").Return(metadata1, nil).Once()
-	metadata, err := driver.GetObjectMetadata("bucket", "object1", "")
+	typedDriver.On("GetObjectMetadata", "bucket", "object1").Return(metadata1, nil).Once()
+	metadata, err := driver.GetObjectMetadata("bucket", "object1")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -366,7 +366,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	// test object 2
 	// get object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object2", "").Return(metadata2, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object2").Return(metadata2, nil).Once()
 	typedDriver.SetGetObjectWriter("bucket", "object2", []byte("hello two"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object2").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object2", nil)
@@ -379,8 +379,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	// get metadata
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object2", "").Return(metadata2, nil).Once()
-	metadata, err = driver.GetObjectMetadata("bucket", "object2", "")
+	typedDriver.On("GetObjectMetadata", "bucket", "object2").Return(metadata2, nil).Once()
+	metadata, err = driver.GetObjectMetadata("bucket", "object2")
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -396,7 +396,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 	// test object 3
 	// get object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object3", "").Return(metadata3, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object3").Return(metadata3, nil).Once()
 	typedDriver.SetGetObjectWriter("bucket", "object3", []byte("hello three"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object3").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object3", nil)
@@ -409,8 +409,8 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 
 	// get metadata
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object3", "").Return(metadata3, nil).Once()
-	metadata, err = driver.GetObjectMetadata("bucket", "object3", "")
+	typedDriver.On("GetObjectMetadata", "bucket", "object3").Return(metadata3, nil).Once()
+	metadata, err = driver.GetObjectMetadata("bucket", "object3")
 
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -472,7 +472,7 @@ func (s *MySuite) TestHeader(c *C) {
 		ACL:     drivers.BucketACL("private"),
 	}
 	typedDriver.On("GetBucketMetadata", "bucket").Return(bucketMetadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -498,7 +498,7 @@ func (s *MySuite) TestHeader(c *C) {
 	driver.CreateObject("bucket", "object", "", "", int64(buffer.Len()), buffer)
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(bucketMetadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(objectMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(objectMetadata, nil).Once()
 	typedDriver.SetGetObjectWriter("", "", []byte("hello world"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "object").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
@@ -511,8 +511,8 @@ func (s *MySuite) TestHeader(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(bucketMetadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "object", "").Return(objectMetadata, nil).Once()
-	metadata, err := driver.GetObjectMetadata("bucket", "object", "")
+	typedDriver.On("GetObjectMetadata", "bucket", "object").Return(objectMetadata, nil).Once()
+	metadata, err := driver.GetObjectMetadata("bucket", "object")
 	c.Assert(err, IsNil)
 	verifyHeaders(c, response.Header, metadata.Created, len("hello world"), "application/octet-stream", metadata.Md5)
 }
@@ -629,14 +629,14 @@ func (s *MySuite) TestPutObject(c *C) {
 
 	var writer bytes.Buffer
 
-	typedDriver.On("GetObjectMetadata", "bucket", "two", "").Return(twoMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "two").Return(twoMetadata, nil).Once()
 	typedDriver.SetGetObjectWriter("bucket", "two", []byte("hello world"))
 	typedDriver.On("GetObject", mock.Anything, "bucket", "two").Return(int64(11), nil).Once()
 	driver.GetObject(&writer, "bucket", "two")
 
 	c.Assert(bytes.Equal(writer.Bytes(), []byte("hello world")), Equals, true)
 
-	metadata, err := driver.GetObjectMetadata("bucket", "two", "")
+	metadata, err := driver.GetObjectMetadata("bucket", "two")
 	c.Assert(err, IsNil)
 	lastModified := metadata.Created
 
@@ -905,7 +905,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "one", "").Return(oneMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "one").Return(oneMetadata, nil).Once()
 	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/one", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -917,7 +917,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	// test get object
 	typedDriver.SetGetObjectWriter("bucket", "once", []byte(""))
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Twice()
-	typedDriver.On("GetObjectMetadata", "bucket", "one", "").Return(oneMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "one").Return(oneMetadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "one").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/one", nil)
 	c.Assert(err, IsNil)
@@ -952,7 +952,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "bucket", "two", "").Return(twoMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "two").Return(twoMetadata, nil).Once()
 	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/two", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -963,7 +963,7 @@ func (s *MySuite) TestContentTypePersists(c *C) {
 
 	// test get object
 	typedDriver.On("GetBucketMetadata", "bucket").Return(metadata, nil).Twice()
-	typedDriver.On("GetObjectMetadata", "bucket", "two", "").Return(twoMetadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "two").Return(twoMetadata, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "bucket", "two").Return(int64(0), nil).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/bucket/two", nil)
 	c.Assert(err, IsNil)
@@ -1008,7 +1008,7 @@ func (s *MySuite) TestPartialContent(c *C) {
 	typedDriver.SetGetObjectWriter("foo", "bar", []byte("hello world"))
 
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(metadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "bar").Return(metadata, nil).Once()
 	typedDriver.On("GetPartialObject", mock.Anything, "foo", "bar", int64(6), int64(2)).Return(int64(2), nil).Once()
 
 	// prepare request
@@ -1217,7 +1217,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 		ACL:     drivers.BucketACL("private"),
 	}
 	typedDriver.On("GetBucketMetadata", "foo").Return(metadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "bar").Return(drivers.ObjectMetadata{}, drivers.ObjectNotFound{}).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -1236,7 +1236,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
 	typedDriver.On("GetBucketMetadata", "foo").Return(metadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.ObjectNameInvalid{}).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "bar").Return(drivers.ObjectMetadata{}, drivers.ObjectNameInvalid{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -1255,7 +1255,7 @@ func (s *MySuite) TestGetObjectErrors(c *C) {
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
 	typedDriver.On("GetBucketMetadata", "foo").Return(metadata, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(drivers.ObjectMetadata{}, drivers.BackendCorrupted{}).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "bar").Return(drivers.ObjectMetadata{}, drivers.BackendCorrupted{}).Once()
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	c.Assert(err, IsNil)
 	setDummyAuthHeader(request)
@@ -1295,7 +1295,7 @@ func (s *MySuite) TestGetObjectRangeErrors(c *C) {
 	}
 
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "bar", "").Return(metadata, nil).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "bar").Return(metadata, nil).Once()
 	request, err := http.NewRequest("GET", testServer.URL+"/foo/bar", nil)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
@@ -1670,7 +1670,7 @@ func (s *MySuite) TestObjectMultipart(c *C) {
 
 	// get data
 	typedDriver.On("GetBucketMetadata", "foo").Return(drivers.BucketMetadata{}, nil).Once()
-	typedDriver.On("GetObjectMetadata", "foo", "object", "").Return(drivers.ObjectMetadata{Size: 22}, nil).Once()
+	typedDriver.On("GetObjectMetadata", "foo", "object").Return(drivers.ObjectMetadata{Size: 22}, nil).Once()
 	typedDriver.On("GetObject", mock.Anything, "foo", "object").Return(int64(22), nil).Once()
 	typedDriver.SetGetObjectWriter("foo", "object", []byte("hello worldhello world"))
 	request, err = http.NewRequest("GET", testServer.URL+"/foo/object", nil)

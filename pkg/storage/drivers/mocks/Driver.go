@@ -97,8 +97,8 @@ func (m *Driver) GetPartialObject(w io.Writer, bucket, object string, start int6
 }
 
 // GetObjectMetadata is a mock
-func (m *Driver) GetObjectMetadata(bucket, object, prefix string) (drivers.ObjectMetadata, error) {
-	ret := m.Called(bucket, object, prefix)
+func (m *Driver) GetObjectMetadata(bucket, object string) (drivers.ObjectMetadata, error) {
+	ret := m.Called(bucket, object)
 
 	r0 := ret.Get(0).(drivers.ObjectMetadata)
 	r1 := ret.Error(1)

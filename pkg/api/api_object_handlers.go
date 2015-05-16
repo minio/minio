@@ -49,7 +49,7 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
+	metadata, err := server.driver.GetObjectMetadata(bucket, object)
 	switch err := iodine.ToError(err).(type) {
 	case nil: // success
 		{
@@ -106,7 +106,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := server.driver.GetObjectMetadata(bucket, object, "")
+	metadata, err := server.driver.GetObjectMetadata(bucket, object)
 	switch err := iodine.ToError(err).(type) {
 	case nil:
 		{
