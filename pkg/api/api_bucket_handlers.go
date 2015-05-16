@@ -285,11 +285,31 @@ func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Req
 // return responses such as 404 Not Found and 403 Forbidden.
 func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
-	// verify if bucket allows this operation
-	if !server.isValidOp(w, req, acceptsContentType) {
-		return
-	}
 
-	// Always a success if isValidOp succeeds
-	writeSuccessResponse(w, acceptsContentType)
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	_, err := server.driver.GetBucketMetadata(bucket)
+	switch iodine.ToError(err).(type) {
+	case nil:
+		{
+			writeSuccessResponse(w, acceptsContentType)
+		}
+	case drivers.BucketNotFound:
+		{
+			error := getErrorCode(NoSuchBucket)
+			w.WriteHeader(error.HTTPStatusCode)
+		}
+	case drivers.BucketNameInvalid:
+		{
+			error := getErrorCode(InvalidBucketName)
+			w.WriteHeader(error.HTTPStatusCode)
+		}
+	default:
+		{
+			log.Println(err)
+			error := getErrorCode(InternalError)
+			w.WriteHeader(error.HTTPStatusCode)
+		}
+	}
 }
