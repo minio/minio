@@ -19,7 +19,6 @@ package api
 import (
 	"net/http"
 	"sort"
-	"strconv"
 
 	"github.com/minio/minio/pkg/storage/drivers"
 )
@@ -188,7 +187,7 @@ func generateListMultipartUploadsResult(bucket string, metadata drivers.BucketMu
 
 // writeSuccessResponse write success headers
 func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
-	setCommonHeaders(w, getContentTypeString(acceptsContentType))
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -199,11 +198,9 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int,
 	errorResponse := getErrorResponse(error, resource)
 	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
 	// set common headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType))
-	// set content-length to size of error response
-	w.Header().Set("Content-Length", strconv.Itoa(len(encodedErrorResponse)))
-	// set headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedErrorResponse))
+	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
-	// write body
+	// write error body
 	w.Write(encodedErrorResponse)
 }
