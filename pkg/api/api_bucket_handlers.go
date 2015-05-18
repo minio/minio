@@ -56,6 +56,11 @@ func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acce
 				//return false
 			}
 		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 	}
 	return true
 }
@@ -79,7 +84,7 @@ func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *
 	bucket := vars["bucket"]
 
 	resources, err := server.driver.ListMultipartUploads(bucket, resources)
-	switch err := iodine.ToError(err).(type) {
+	switch iodine.ToError(err).(type) {
 	case nil: // success
 		{
 			// generate response
@@ -130,7 +135,7 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 	bucket := vars["bucket"]
 
 	objects, resources, err := server.driver.ListObjects(bucket, resources)
-	switch err := iodine.ToError(err).(type) {
+	switch iodine.ToError(err).(type) {
 	case nil: // success
 		{
 			// generate response
@@ -170,7 +175,7 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	//	return
 	// }
 	buckets, err := server.driver.ListBuckets()
-	switch err := iodine.ToError(err).(type) {
+	switch iodine.ToError(err).(type) {
 	case nil:
 		{
 			// generate response
@@ -307,7 +312,7 @@ func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Reque
 		}
 	default:
 		{
-			log.Println(err)
+			log.Error.Println(iodine.New(err, nil))
 			error := getErrorCode(InternalError)
 			w.WriteHeader(error.HTTPStatusCode)
 		}

@@ -105,10 +105,6 @@ func (memory *memoryDriver) CreateObjectPart(bucket, key, uploadID string, partI
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
-	// once successful, update totalParts
-	multiPartSession := storedBucket.multiPartSession[key]
-	multiPartSession.totalParts++
-	storedBucket.multiPartSession[key] = multiPartSession
 	// free
 	debug.FreeOSMemory()
 	return etag, nil
@@ -204,6 +200,9 @@ func (memory *memoryDriver) createObjectPart(bucket, key, uploadID string, partI
 	default:
 		storedBucket.partMetadata[partKey] = newPart
 	}
+	multiPartSession := storedBucket.multiPartSession[key]
+	multiPartSession.totalParts++
+	storedBucket.multiPartSession[key] = multiPartSession
 	memory.storedBuckets[bucket] = storedBucket
 	memory.lock.Unlock()
 
@@ -294,7 +293,7 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 func (memory *memoryDriver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
-	// TODO handle delimiter, prefix, uploadIDMarker
+	// TODO handle delimiter
 	memory.lock.RLock()
 	defer memory.lock.RUnlock()
 	if _, ok := memory.storedBuckets[bucket]; ok == false {
@@ -304,20 +303,42 @@ func (memory *memoryDriver) ListMultipartUploads(bucket string, resources driver
 	var uploads []*drivers.UploadMetadata
 
 	for key, session := range storedBucket.multiPartSession {
-		if len(uploads) > resources.MaxUploads {
-			sort.Sort(byKey(uploads))
-			resources.Upload = uploads
-			resources.NextKeyMarker = key
-			resources.NextUploadIDMarker = session.uploadID
-			resources.IsTruncated = true
-			return resources, nil
-		}
-		if key > resources.KeyMarker {
-			upload := new(drivers.UploadMetadata)
-			upload.Key = key
-			upload.UploadID = session.uploadID
-			upload.Initiated = session.initiated
-			uploads = append(uploads, upload)
+		if strings.HasPrefix(key, resources.Prefix) {
+			if len(uploads) > resources.MaxUploads {
+				sort.Sort(byKey(uploads))
+				resources.Upload = uploads
+				resources.NextKeyMarker = key
+				resources.NextUploadIDMarker = session.uploadID
+				resources.IsTruncated = true
+				return resources, nil
+			}
+			// uploadIDMarker is ignored if KeyMarker is empty
+			switch {
+			case resources.KeyMarker != "" && resources.UploadIDMarker == "":
+				if key > resources.KeyMarker {
+					upload := new(drivers.UploadMetadata)
+					upload.Key = key
+					upload.UploadID = session.uploadID
+					upload.Initiated = session.initiated
+					uploads = append(uploads, upload)
+				}
+			case resources.KeyMarker != "" && resources.UploadIDMarker != "":
+				if session.uploadID > resources.UploadIDMarker {
+					if key >= resources.KeyMarker {
+						upload := new(drivers.UploadMetadata)
+						upload.Key = key
+						upload.UploadID = session.uploadID
+						upload.Initiated = session.initiated
+						uploads = append(uploads, upload)
+					}
+				}
+			default:
+				upload := new(drivers.UploadMetadata)
+				upload.Key = key
+				upload.UploadID = session.uploadID
+				upload.Initiated = session.initiated
+				uploads = append(uploads, upload)
+			}
 		}
 	}
 	sort.Sort(byKey(uploads))
