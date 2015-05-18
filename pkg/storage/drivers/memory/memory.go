@@ -295,14 +295,7 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	}
 
 	memory.lock.Lock()
-	memoryObject := make(map[string]drivers.ObjectMetadata)
-	switch {
-	case len(storedBucket.objectMetadata) == 0:
-		storedBucket.objectMetadata = memoryObject
-		storedBucket.objectMetadata[objectKey] = newObject
-	default:
-		storedBucket.objectMetadata[objectKey] = newObject
-	}
+	storedBucket.objectMetadata[objectKey] = newObject
 	memory.storedBuckets[bucket] = storedBucket
 	memory.lock.Unlock()
 	return newObject.Md5, nil
@@ -336,6 +329,7 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	var newBucket = storedBucket{}
 	newBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
 	newBucket.multiPartSession = make(map[string]multiPartSession)
+	newBucket.partMetadata = make(map[string]drivers.PartMetadata)
 	newBucket.bucketMetadata = drivers.BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
