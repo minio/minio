@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"log"
 	"math/rand"
 	"runtime/debug"
 	"sort"
@@ -192,14 +191,7 @@ func (memory *memoryDriver) createObjectPart(bucket, key, uploadID string, partI
 	}
 
 	memory.lock.Lock()
-	memoryPart := make(map[string]drivers.PartMetadata)
-	switch {
-	case len(storedBucket.partMetadata) == 0:
-		storedBucket.partMetadata = memoryPart
-		storedBucket.partMetadata[partKey] = newPart
-	default:
-		storedBucket.partMetadata[partKey] = newPart
-	}
+	storedBucket.partMetadata[partKey] = newPart
 	multiPartSession := storedBucket.multiPartSession[key]
 	multiPartSession.totalParts++
 	storedBucket.multiPartSession[key] = multiPartSession
@@ -398,9 +390,6 @@ func (memory *memoryDriver) ListObjectParts(bucket, key string, resources driver
 }
 
 func (memory *memoryDriver) expiredPart(a ...interface{}) {
-	cacheStats := memory.multiPartObjects.Stats()
-	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalExpirations: %d",
-		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)
 	key := a[0].(string)
 	// loop through all buckets
 	for _, storedBucket := range memory.storedBuckets {
