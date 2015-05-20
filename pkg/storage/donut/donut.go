@@ -38,6 +38,10 @@ const (
 	// bucket, object metadata
 	bucketMetadataConfig = "bucketMetadata.json"
 	objectMetadataConfig = "objectMetadata.json"
+
+	// versions
+	objectMetadataVersion      = "1.0"
+	donutObjectMetadataVersion = "1.0"
 )
 
 // attachDonutNode - wrapper function to instantiate a new node for associated donut

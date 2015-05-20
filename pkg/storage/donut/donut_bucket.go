@@ -149,8 +149,8 @@ func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Su
 	summer := md5.New()
 	objectMetadata := make(map[string]string)
 	donutObjectMetadata := make(map[string]string)
-	objectMetadata["version"] = "1.0"
-	donutObjectMetadata["version"] = "1.0"
+	objectMetadata["version"] = objectMetadataVersion
+	donutObjectMetadata["version"] = donutObjectMetadataVersion
 	size := metadata["contentLength"]
 	sizeInt, err := strconv.ParseInt(size, 10, 64)
 	if err != nil {
