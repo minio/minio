@@ -29,7 +29,7 @@ lint:
 
 cyclo:
 	@echo "Running $@:"
-	@test -z "$$(gocyclo -over 18 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
+	@test -z "$$(gocyclo -over 16 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
 pre-build:
 	@echo "Running pre-build:"
