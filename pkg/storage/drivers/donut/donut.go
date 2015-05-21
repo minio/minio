@@ -134,11 +134,14 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range buckets {
+	for name, metadata := range buckets {
+		created, err := time.Parse(time.RFC3339Nano, metadata["created"])
+		if err != nil {
+			return nil, iodine.New(err, nil)
+		}
 		result := drivers.BucketMetadata{
-			Name: name,
-			// TODO Add real created date
-			Created: time.Now().UTC(),
+			Name:    name,
+			Created: created,
 		}
 		results = append(results, result)
 	}
