@@ -48,11 +48,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:    config.Address,
-		Handler: router,
-		// TODO add this later with a proper timer thread
-		//		ReadTimeout:    20 * time.Second,
-		//		WriteTimeout:   20 * time.Second,
+		Addr:           config.Address,
+		Handler:        router,
 		MaxHeaderBytes: 1 << 20,
 	}
 	log.Println("Starting HTTP Server on:", config.Address)

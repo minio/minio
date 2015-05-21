@@ -130,7 +130,7 @@ func (s *MySuite) TestNonExistantBucket(c *C) {
 	s.MockDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, drivers.BucketNotFound{Bucket: "bucket"}).Once()
 	request, err := http.NewRequest("HEAD", testServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
-	//setDummyAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -171,7 +171,7 @@ func (s *MySuite) TestEmptyObject(c *C) {
 
 	request, err := http.NewRequest("GET", testServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	//setDummyAuthHeader(request)
+	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -284,7 +284,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Key:         "object1",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Md5:         "6f11ac20bf1d3c85c586fa793fa03186",
 		Size:        9,
 	}
 	metadata2 := drivers.ObjectMetadata{
@@ -292,7 +292,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Key:         "object2",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Md5:         "c1c7f5decb9ff01edf1af096ebb8f4a4",
 		Size:        9,
 	}
 	metadata3 := drivers.ObjectMetadata{
@@ -300,7 +300,7 @@ func (s *MySuite) TestMultipleObjects(c *C) {
 		Key:         "object3",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Md5:         "4e74ad3b92e2843e208a13ae1cf0d52c",
 		Size:        11,
 	}
 	httpHandler := HTTPHandler(driver)
@@ -488,7 +488,7 @@ func (s *MySuite) TestHeader(c *C) {
 		Key:         "object",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3", // TODO correct md5
+		Md5:         "6f5902ac237024bdd0c176cb93063dc4",
 		Size:        11,
 	}
 
@@ -602,7 +602,7 @@ func (s *MySuite) TestPutObject(c *C) {
 		Key:         "two",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "5eb63bbbe01eeed093cb22bb8f5acdc3",
+		Md5:         "6f5902ac237024bdd0c176cb93063dc4",
 		Size:        11,
 	}
 
@@ -737,14 +737,38 @@ func (s *MySuite) TestListObjects(c *C) {
 	// TODO Implement
 }
 
-func (s *MySuite) TestShouldNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+func (s *MySuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
 	switch driver := s.Driver.(type) {
 	case *mocks.Driver:
 		{
 			driver.AssertExpectations(c)
 		}
 	}
-	// TODO Implement
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	objectMetadata := drivers.ObjectMetadata{
+		Bucket:      "bucket",
+		Key:         "object1",
+		ContentType: "application/octet-stream",
+		Created:     time.Now().UTC(),
+		Md5:         "6f5902ac237024bdd0c176cb93063dc4",
+		Size:        11,
+	}
+
+	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, drivers.BucketNotFound{}).Once()
+	typedDriver.On("CreateObject", "bucket", "object1", "", "", mock.Anything, mock.Anything).Return(objectMetadata.Md5, nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket/object1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
 func (s *MySuite) TestHeadOnObject(c *C) {
@@ -754,7 +778,85 @@ func (s *MySuite) TestHeadOnObject(c *C) {
 			driver.AssertExpectations(c)
 		}
 	}
-	// TODO
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	objectMetadata := drivers.ObjectMetadata{
+		Bucket:      "bucket",
+		Key:         "object1",
+		ContentType: "application/octet-stream",
+		Created:     time.Now().UTC(),
+		Md5:         "6f5902ac237024bdd0c176cb93063dc4",
+		Size:        11,
+	}
+
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+	setDummyAuthHeader(request)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("CreateObject", "bucket", "object1", "", "", mock.Anything, mock.Anything).Return(objectMetadata.Md5, nil).Once()
+	request, err = http.NewRequest("PUT", testServer.URL+"/bucket/object1", bytes.NewBufferString("hello world"))
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
+	typedDriver.On("GetObjectMetadata", "bucket", "object1").Return(objectMetadata, nil).Once()
+	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket/object1", nil)
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
+
+func (s *MySuite) TestHeadOnBucket(c *C) {
+	switch driver := s.Driver.(type) {
+	case *mocks.Driver:
+		{
+			driver.AssertExpectations(c)
+		}
+	}
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+	setDummyAuthHeader(request)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	typedDriver.On("GetBucketMetadata", "bucket").Return(drivers.BucketMetadata{}, nil).Once()
+	request, err = http.NewRequest("HEAD", testServer.URL+"/bucket", nil)
+	c.Assert(err, IsNil)
+	setDummyAuthHeader(request)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
 func (s *MySuite) TestDateFormat(c *C) {
@@ -764,7 +866,30 @@ func (s *MySuite) TestDateFormat(c *C) {
 			driver.AssertExpectations(c)
 		}
 	}
-	// TODO
+	driver := s.Driver
+	typedDriver := s.MockDriver
+	httpHandler := HTTPHandler(driver)
+	testServer := httptest.NewServer(httpHandler)
+	defer testServer.Close()
+
+	typedDriver.On("CreateBucket", "bucket", "private").Return(nil).Once()
+	request, err := http.NewRequest("PUT", testServer.URL+"/bucket", nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+	setDummyAuthHeader(request)
+
+	// set an invalid date
+	request.Header.Set("Date", "asfasdfadf")
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "RequestTimeTooSkewed",
+		"The difference between the request time and the server's time is too large.", http.StatusForbidden)
+
+	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
 func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
@@ -993,7 +1118,7 @@ func (s *MySuite) TestPartialContent(c *C) {
 		Key:         "bar",
 		ContentType: "application/octet-stream",
 		Created:     time.Now().UTC(),
-		Md5:         "e81c4e4f2b7b93b481e13a8553c2ae1b", // TODO Determine if md5 of range or full object needed
+		Md5:         "6f5902ac237024bdd0c176cb93063dc4", // even for range requests, md5sum is returned for the full object
 		Size:        11,
 	}
 
