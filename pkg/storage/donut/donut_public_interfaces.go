@@ -31,7 +31,7 @@ type ObjectStorage interface {
 	// Storage service Operations
 	GetBucketMetadata(bucket string) (map[string]string, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
-	ListBuckets() ([]string, error)
+	ListBuckets() (map[string]map[string]string, error)
 	MakeBucket(bucket, acl string) error
 
 	// Bucket Operations

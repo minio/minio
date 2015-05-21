@@ -19,7 +19,6 @@ package donut
 import (
 	"errors"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,25 +68,20 @@ func (d donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string
 }
 
 // ListBuckets - return list of buckets
-func (d donut) ListBuckets() (results []string, err error) {
+func (d donut) ListBuckets() (metadata map[string]map[string]string, err error) {
 	err = d.getDonutBuckets()
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	metadata, err := d.getDonutBucketMetadata()
+	dummyMetadata := make(map[string]map[string]string)
+	metadata, err = d.getDonutBucketMetadata()
 	if err != nil {
-		err = iodine.ToError(err)
-		if os.IsNotExist(err) {
-			// valid case
-			return nil, nil
-		}
-		return nil, iodine.New(err, nil)
+		// intentionally left out the error when Donut is empty
+		// but we need to revisit this area in future - since we need
+		// to figure out between acceptable and unacceptable errors
+		return dummyMetadata, nil
 	}
-	for name := range metadata {
-		results = append(results, name)
-	}
-	sort.Strings(results)
-	return results, nil
+	return metadata, nil
 }
 
 // ListObjects - return list of objects

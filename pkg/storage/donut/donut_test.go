@@ -62,9 +62,9 @@ func (s *MySuite) TestEmptyDonut(c *C) {
 	c.Assert(err, IsNil)
 
 	// check donut is empty
-	buckets, err := donut.ListBuckets()
+	metadata, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(buckets, IsNil)
+	c.Assert(len(metadata), Equals, 0)
 }
 
 // test make bucket without name
@@ -112,7 +112,8 @@ func (s *MySuite) TestMakeBucketAndList(c *C) {
 	// check bucket exists
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(buckets, DeepEquals, []string{"foo"})
+	c.Assert(len(buckets), Equals, 1)
+	c.Assert(buckets["foo"]["acl"], Equals, "private")
 }
 
 // test re-create bucket
@@ -145,14 +146,19 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(buckets, DeepEquals, []string{"bar", "foo"})
+
+	_, ok := buckets["foo"]
+	c.Assert(ok, Equals, true)
+	_, ok = buckets["bar"]
+	c.Assert(ok, Equals, true)
 
 	err = donut.MakeBucket("foobar", "private")
 	c.Assert(err, IsNil)
 
 	buckets, err = donut.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(buckets, DeepEquals, []string{"bar", "foo", "foobar"})
+	_, ok = buckets["foobar"]
+	c.Assert(ok, Equals, true)
 }
 
 // test object create without bucket
