@@ -1,7 +1,6 @@
 ## Introduction
 
-Minio is an open source object storage released under [Apache license v2](./LICENSE) . It uses ``Rubberband Erasure`` coding to dynamically protect the data.
-Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack for its immutable data structure.
+Minio is an open source object storage released under [Apache license v2](./LICENSE) . It uses ``Rubberband Erasure`` coding to dynamically protect the data. Our design is inspired by Amazon's S3 for its API and Facebook's Haystack for its immutable data structure.
 
 [![GoDoc](https://godoc.org/github.com/minio/minio?status.svg)](https://godoc.org/github.com/minio/minio)  [![Build Status](https://travis-ci.org/minio/minio.svg)](https://travis-ci.org/minio/minio)
 
@@ -34,6 +33,3 @@ Minio's design is inspired by Amazon's S3 for its API and Facebook's Haystack fo
 | x86-64 | Yes |
 | arm64 | Not yet|
 | i386 | Never |
-
-[![Analytics](https://ga-beacon.appspot.com/UA-56860620-3/minio/readme)](https://github.com/igrigorik/ga-beacon)
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/minio/minio/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
