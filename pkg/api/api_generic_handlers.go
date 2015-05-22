@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/utils/crypto/keys"
 )
 
 type contentTypeHandler struct {
@@ -78,6 +79,9 @@ func stripAuth(r *http.Request) (*auth, error) {
 	a.signedheaders = strings.Split(signedheaders, "=")[1]
 	a.signature = strings.Split(signature, "=")[1]
 	a.accessKey = strings.Split(a.credential, "/")[0]
+	if !keys.IsValidAccessKey(a.accessKey) {
+		return nil, errors.New("Invalid access key")
+	}
 	return a, nil
 }
 

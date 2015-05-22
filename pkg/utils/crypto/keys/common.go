@@ -16,6 +16,8 @@
 
 package keys
 
+import "regexp"
+
 // AccessID and SecretID length in bytes
 const (
 	MinioAccessID = 20
@@ -24,26 +26,20 @@ const (
 
 /// helpers
 
-// Is alphanumeric?
-func isalnum(c byte) bool {
-	return '0' <= c && c <= '9' || 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
+// IsValidSecretKey - validate secret key
+func IsValidSecretKey(secretAccessKey string) bool {
+	if secretAccessKey == "" {
+		return true
+	}
+	regex := regexp.MustCompile("^.{40}$")
+	return regex.MatchString(secretAccessKey)
 }
 
-// IsValidAccessKey - validate access key for only alphanumeric characters
-func IsValidAccessKey(key []byte) bool {
-	for _, char := range key {
-		if isalnum(char) {
-			continue
-		}
-		switch char {
-		case '-':
-		case '.':
-		case '_':
-		case '~':
-			continue
-		default:
-			return false
-		}
+// IsValidAccessKey - validate access key
+func IsValidAccessKey(accessKeyID string) bool {
+	if accessKeyID == "" {
+		return true
 	}
-	return true
+	regex := regexp.MustCompile("^[A-Z0-9\\-\\.\\_\\~]{20}$")
+	return regex.MatchString(accessKeyID)
 }
