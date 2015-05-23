@@ -168,10 +168,19 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	/// minimum Upload size for objects in a single operation
-	if isMinObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
-		return
-	}
+	//
+	// Surprisingly while Amazon in their document states that S3 objects have 1byte
+	// as the minimum limit, they do not seem to enforce it one can successfully
+	// create a 0byte file using a regular putObject() operation
+	//
+	// For example take a look at :-
+	//
+	//   $ mc ls https://s3.amazonaws.com/ferenginar/test.go
+	//
+	// if isMinObjectSize(size) {
+	//      writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
+	//	return
+	// }
 	sizeInt64, err := strconv.ParseInt(size, 10, 64)
 	if err != nil {
 		writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
@@ -274,15 +283,6 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 		return
 	}
-
-	// last part can be less than < 5MB so we need to figure out a way to handle it first
-	// and then enable below code (y4m4)
-	//
-	/// minimum Upload size for multipart objects in a single operation
-	//	if isMinMultipartObjectSize(size) {
-	//		writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
-	//		return
-	//	}
 
 	sizeInt64, err := strconv.ParseInt(size, 10, 64)
 	if err != nil {
