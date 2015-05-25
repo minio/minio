@@ -54,6 +54,10 @@ const (
 	timeFormat = "20060102T150405Z"
 )
 
+const (
+	authHeaderPrefix = "AWS4-HMAC-SHA256"
+)
+
 // strip auth from authorization header
 func stripAuth(r *http.Request) (*auth, error) {
 	authHeader := r.Header.Get("Authorization")
@@ -61,23 +65,32 @@ func stripAuth(r *http.Request) (*auth, error) {
 		return nil, errors.New("Missing auth header")
 	}
 	a := new(auth)
-	authFields := strings.Fields(authHeader)
-	if len(authFields) < 4 {
+	authFields := strings.Split(authHeader, ",")
+	if len(authFields) != 3 {
 		return nil, errors.New("Missing fields in Auth header")
 	}
-	a.prefix = authFields[0]
-	credentials := strings.Split(authFields[1], ",")[0]
-	if len(credentials) < 2 {
+	authPrefixFields := strings.Fields(authFields[0])
+	if len(authPrefixFields) != 2 {
 		return nil, errors.New("Missing fields in Auth header")
 	}
-	signedheaders := strings.Split(authFields[2], ",")[0]
-	if len(signedheaders) < 2 {
+	if authPrefixFields[0] != authHeaderPrefix {
+		return nil, errors.New("Missing fields is Auth header")
+	}
+	credentials := strings.Split(authPrefixFields[1], "=")
+	if len(credentials) != 2 {
 		return nil, errors.New("Missing fields in Auth header")
 	}
-	signature := authFields[3]
-	a.credential = strings.Split(credentials, "=")[1]
-	a.signedheaders = strings.Split(signedheaders, "=")[1]
-	a.signature = strings.Split(signature, "=")[1]
+	signedheaders := strings.Split(authFields[1], "=")
+	if len(signedheaders) != 2 {
+		return nil, errors.New("Missing fields in Auth header")
+	}
+	signature := strings.Split(authFields[2], "=")
+	if len(signature) != 2 {
+		return nil, errors.New("Missing fields in Auth header")
+	}
+	a.credential = credentials[1]
+	a.signedheaders = signedheaders[1]
+	a.signature = signature[1]
 	a.accessKey = strings.Split(a.credential, "/")[0]
 	if !keys.IsValidAccessKey(a.accessKey) {
 		return nil, errors.New("Invalid access key")
