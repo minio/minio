@@ -39,6 +39,7 @@ type LogMessage struct {
 	StartTime       time.Time
 	Duration        time.Duration
 	Status          int
+	StatusText      string
 	ResponseHeaders http.Header
 }
 
@@ -50,6 +51,7 @@ type LogWriter struct {
 
 // WriteHeader writes headers and stores status in LogMessage
 func (w *LogWriter) WriteHeader(status int) {
+	w.LogMessage.StatusText = http.StatusText(status)
 	w.LogMessage.Status = status
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -69,12 +71,12 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		StartTime: time.Now().UTC(),
 	}
 	logWriter := &LogWriter{ResponseWriter: w, LogMessage: logMessage}
+	h.Handler.ServeHTTP(logWriter, req)
 	logMessage.ResponseHeaders = w.Header()
 	logMessage.Request = req
 	logMessage.Duration = time.Now().UTC().Sub(logMessage.StartTime)
 	js, _ := json.Marshal(logMessage)
 	h.Logger <- string(js)
-	h.Handler.ServeHTTP(logWriter, req)
 }
 
 // LogHandler logs requests
