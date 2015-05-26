@@ -259,11 +259,11 @@ var BuildDate string
 
 // getBuildDate -
 func getBuildDate() string {
-	if BuildDate == "" {
+	t, _ := time.Parse(time.RFC3339Nano, BuildDate)
+	if t.IsZero() {
 		return ""
 	}
-	t, _ := time.Parse(time.RFC3339Nano, BuildDate)
-	return t.String()
+	return t.Format(time.RFC1123)
 }
 
 // Tries to get os/arch/platform specific information
