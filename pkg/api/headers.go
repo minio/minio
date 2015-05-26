@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/minio/minio/pkg/storage/drivers"
 )
@@ -64,11 +63,11 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 
 // Write object header
 func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
-	lastModified := metadata.Created.Format(time.RFC1123)
+	lastModified := metadata.Created.Format(http.TimeFormat)
 	// common headers
 	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
 	// object related headers
-	w.Header().Set("ETag", metadata.Md5)
+	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
 	w.Header().Set("Last-Modified", lastModified)
 }
 

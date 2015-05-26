@@ -894,7 +894,7 @@ func (s *MySuite) TestDateFormat(c *C) {
 
 func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentType string, etag string) {
 	// Verify date
-	c.Assert(header.Get("Last-Modified"), Equals, date.Format(time.RFC1123))
+	c.Assert(header.Get("Last-Modified"), Equals, date.Format(http.TimeFormat))
 
 	// verify size
 	c.Assert(header.Get("Content-Length"), Equals, strconv.Itoa(size))
@@ -903,7 +903,7 @@ func verifyHeaders(c *C, header http.Header, date time.Time, size int, contentTy
 	c.Assert(header.Get("Content-Type"), Equals, contentType)
 
 	// verify etag
-	c.Assert(header.Get("Etag"), Equals, etag)
+	c.Assert(header.Get("Etag"), Equals, "\""+etag+"\"")
 }
 
 func (s *MySuite) TestXMLNameNotInBucketListJson(c *C) {
