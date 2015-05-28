@@ -2,17 +2,9 @@
 ### Build Dependencies
 This installation document assumes Ubuntu 14.04+ on x86-64 platform.
 
-##### Install Git, GCC
+##### Install Git, GCC, yasm
 ```sh
-$ sudo apt-get install git build-essential
-```
-
-##### Install YASM
-
-Minio depends on Intel ISAL library for erasure coding, ISAL uses Intel AVX2 processor instructions, to compile these files one needs to install ``yasm`` which supports AVX2 instructions. AVX2 support only ended in ``yasm`` from version ``1.2.0``, any version below ``1.2.0`` will throw a build error.
-
-```sh
-$ sudo apt-get install yasm
+$ sudo apt-get install git build-essential yasm
 ```
 
 ##### Install Go 1.4+
@@ -47,15 +39,7 @@ $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/maste
 
 ##### Install Git, Python
 ```sh
-$ brew install git python
-```
-
-##### Install YASM
-
-Minio depends on Intel ISAL library for erasure coding, ISAL uses Intel AVX2 processor instructions, to compile these files one needs to install ``yasm`` which supports AVX2 instructions. AVX2 support only ended in ``yasm`` from version ``1.2.0``, any version below ``1.2.0`` will throw a build error.
-
-```sh
-$ brew install yasm
+$ brew install git python yasm
 ```
 
 ##### Install Go 1.4+
