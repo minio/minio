@@ -1,7 +1,6 @@
 ## Minio Server (minio) [![Build Status](https://travis-ci.org/minio/minio.svg)](https://travis-ci.org/minio/minio)
 
-``minio`` is a minimal object storage server written in Golang and licensed under [Apache license v2](./LICENSE).
-``minio`` is compatible with Amazon S3 APIs. 
+Minio is a minimal object storage server written in Golang and licensed under [Apache license v2](./LICENSE). Minio is compatible with Amazon S3 APIs. 
 
 ## Roadmap
 
@@ -31,12 +30,21 @@ Storage Management:
   - Status: Work in progress.
 ~~~
 
+### Minio Client (mc) 
+
+``mc`` provides minimal tools to work with Amazon S3 compatible object storage and filesystems. Go to [Minio Client](https://github.com/minio/mc#minio-client-mc-).
+
+### Minimal S3 Compatible Client Libraries
+- [Golang Library](https://github.com/minio/minio-go)
+- [Java Library](https://github.com/minio/minio-java)
+- [Nodejs Library](https://github.com/minio/minio-js)
+
 ### Join The Community
 * Community hangout on Gitter    [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * Ask questions on Quora  [![Quora](http://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Quora_logo.svg/55px-Quora_logo.svg.png)](http://www.quora.com/Minio)
 
-### Developers
-* [Development Environment](./CONTRIBUTING.md)
+### Contribute
+* [Contributors Guide](./CONTRIBUTING.md)
 
 ### Download
 
