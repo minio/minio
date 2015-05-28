@@ -271,8 +271,11 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	totalLength := len(readBytes)
 
 	memory.lock.Lock()
-	memory.objects.Set(objectKey, readBytes)
+	ok := memory.objects.Set(objectKey, readBytes)
 	memory.lock.Unlock()
+	if !ok {
+		return "", iodine.New(drivers.InternalError{}, nil)
+	}
 	// setting up for de-allocation
 	readBytes = nil
 

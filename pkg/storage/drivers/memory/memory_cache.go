@@ -115,23 +115,28 @@ func (r *Cache) Get(key string) (interface{}, bool) {
 }
 
 // Set will persist a value to the cache
-func (r *Cache) Set(key string, value interface{}) {
+func (r *Cache) Set(key string, value interface{}) bool {
 	r.Lock()
-	// remove random key if only we reach the maxSize threshold,
-	// if not assume infinite memory
+	defer r.Unlock()
+	valueLen := uint64(len(value.([]byte)))
 	if r.maxSize > 0 {
+		// check if the size of the object is not bigger than the
+		// capacity of the cache
+		if valueLen > r.maxSize {
+			return false
+		}
+		// remove random key if only we reach the maxSize threshold
 		for key := range r.items {
-			for (r.currentSize + uint64(len(value.([]byte)))) > r.maxSize {
+			for (r.currentSize + valueLen) > r.maxSize {
 				r.Delete(key)
 			}
 			break
 		}
 	}
 	r.items[key] = value
-	r.currentSize += uint64(len(value.([]byte)))
+	r.currentSize += valueLen
 	r.updatedAt[key] = time.Now()
-	r.Unlock()
-	return
+	return true
 }
 
 // Expire expires keys which have expired
