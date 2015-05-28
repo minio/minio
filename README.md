@@ -30,6 +30,10 @@ Storage Management:
   - Status: Work in progress.
 ~~~
 
+### How to use Minio?
+
+[![asciicast](https://asciinema.org/a/20702.png)](https://asciinema.org/a/20702)
+
 ### Minio Client (mc) 
 
 ``mc`` provides minimal tools to work with Amazon S3 compatible object storage and filesystems. Go to [Minio Client](https://github.com/minio/mc#minio-client-mc-).
