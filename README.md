@@ -1,18 +1,42 @@
-## Introduction
+## Minio Server (minio) [![Build Status](https://travis-ci.org/minio/minio.svg)](https://travis-ci.org/minio/minio)
 
-Minio is an open source object storage released under [Apache license v2](./LICENSE) . It uses ``Rubberband Erasure`` coding to dynamically protect the data. Our design is inspired by Amazon's S3 for its API and Facebook's Haystack for its immutable data structure.
+``minio`` is a minimal object storage server written in Golang and licensed under [Apache license v2](./LICENSE).
+``minio`` is compatible with Amazon S3 APIs. 
 
-[![GoDoc](https://godoc.org/github.com/minio/minio?status.svg)](https://godoc.org/github.com/minio/minio)  [![Build Status](https://travis-ci.org/minio/minio.svg)](https://travis-ci.org/minio/minio)
+## Roadmap
 
-### Join Community
+~~~
+Storage Backend:
+- Donut: Erasure coded backend.
+  - Status: Standalone mode complete.
+- Memory: In-memory backend.
+  - Status: Complete.
+- Filesystem: Local disk filesystem backend.
+  - Status: Work in progress.
+
+Storage Operations:
+- Collective:
+  - Status: Not started.
+
+Storage Management:
+- WebCLI: 
+  - Status: Work in progress.
+- Authentication:
+  - Status: Work in progress.
+- Admin Console:
+  - Status: Work in progress.
+- User Console: 
+  - Status: Work in progress.
+- Logging: 
+  - Status: Work in progress.
+~~~
+
+### Join The Community
 * Community hangout on Gitter    [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * Ask questions on Quora  [![Quora](http://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Quora_logo.svg/55px-Quora_logo.svg.png)](http://www.quora.com/Minio)
 
 ### Developers
-* [Get Source](./CONTRIBUTING.md)
-* [Build Dependencies](./BUILDDEPS.md)
-* [Development Workflow](./CONTRIBUTING.md#developer-guidelines)
-* [Developer discussions and bugs](https://github.com/minio/minio/issues)
+* [Development Environment](./CONTRIBUTING.md)
 
 ### Download
 
@@ -23,13 +47,6 @@ Minio is an open source object storage released under [Apache license v2](./LICE
 | Name  | Supported |
 | ------------- | ------------- |
 | Linux  | Yes  |
-| Windows | Not yet |
 | Mac OSX | Yes |
+| Windows | Work in progress |
 
-### Supported architectures
-
-| Arch | Supported |
-| ------------- | ------------- |
-| x86-64 | Yes |
-| arm64 | Not yet|
-| i386 | Never |
