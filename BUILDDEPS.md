@@ -1,6 +1,6 @@
 ## Ubuntu (Kylin) 14.04
 ### Build Dependencies
-This installation document assumes Ubuntu 14.04 or later on x86-64 platform.
+This installation document assumes Ubuntu 14.04+ on x86-64 platform.
 
 ##### Install Git, GCC
 ```sh
@@ -16,36 +16,29 @@ $ sudo apt-get install yasm
 ```
 
 ##### Install Go 1.4+
-Download Go 1.4+ from [https://golang.org/dl/](https://golang.org/dl/) and extract it into ``${HOME}/local`` and setup ``${HOME}/mygo`` as your project workspace folder.
-For example:
+
+Download Go 1.4+ from [https://golang.org/dl/](https://golang.org/dl/).
+
 ```sh
-.... Extract and install golang ....
-
 $ wget https://storage.googleapis.com/golang/go1.4.linux-amd64.tar.gz
-$ mkdir -p ${HOME}/local
-$ mkdir -p $HOME/mygo
-$ tar -C ${HOME}/local -xzf go1.4.linux-amd64.tar.gz
+$ mkdir -p ${HOME}/bin/
+$ mkdir -p ${HOME}/go/
+$ tar -C ${HOME}/bin/ -xzf go1.4.linux-amd64.tar.gz
+```
+##### Setup GOROOT and GOPATH
 
-.... Export necessary environment variables ....
+Add the following exports to your ``~/.bashrc``. Environment variable GOROOT specifies the location of your golang binaries
+and GOPATH specifies the location of your project workspace.
 
-$ export PATH=$PATH:${HOME}/local/go/bin
-$ export GOROOT=${HOME}/local/go
-$ export GOPATH=$HOME/mygo
-$ export PATH=$PATH:$GOPATH/bin
-
-.... Add paths to your bashrc ....
-
-$ cat << EOF > ${HOME}/.bashrc
-export PATH=$PATH:${HOME}/local/go/bin
-export GOROOT=${HOME}/local/go
-export GOPATH=$HOME/mygo
-export PATH=$PATH:$GOPATH/bin
-EOF
+```sh
+$ export GOROOT=${HOME}/bin/go
+$ export GOPATH=${HOME}/go
+$ export PATH=$PATH:${HOME}/bin/go/bin:${GOPATH}/bin
 ```
 
-## Mac OSX (Yosemite) 10.10
+## OS X (Yosemite) 10.10
 ### Build Dependencies
-This installation document assumes Mac OSX Yosemite 10.10 or later on x86-64 platform.
+This installation document assumes OS X Yosemite 10.10+ on x86-64 platform.
 
 ##### Install brew
 ```sh
@@ -66,28 +59,22 @@ $ brew install yasm
 ```
 
 ##### Install Go 1.4+
-On MacOSX ``brew.sh`` is the best way to install golang
 
-For example:
+Install golang binaries using `brew`
+
 ```sh
-.... Install golang using `brew` ....
-
 $ brew install go
-$ mkdir -p $HOME/mygo
+$ mkdir -p $HOME/go
+```
 
-.... Export necessary environment variables ....
+##### Setup GOROOT and GOPATH
 
-$ export GOPATH=$HOME/mygo
-$ export PATH=$PATH:$GOPATH/bin
-$ GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
-$ export GOROOT=$(brew --prefix)/Cellar/go/$GOVERSION/libexec
+Add the following exports to your ``~/.bashrc``. Environment variable GOROOT specifies the location of your golang binaries
+and GOPATH specifies the location of your project workspace.
 
-.... Add paths to your bashrc ....
-
-$ cat << EOF > ~/.bashrc
-GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
-export GOPATH=$HOME/mygo
-export PATH=$PATH:$GOPATH/bin
-export GOROOT=$(brew --prefix)/Cellar/go/$GOVERSION/libexec
-EOF
+```sh
+$ export GOPATH=${HOME}/go
+$ export GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
+$ export GOROOT=$(brew --prefix)/Cellar/go/${GOVERSION}/libexec
+$ export PATH=$PATH:${GOPATH}/bin
 ```
