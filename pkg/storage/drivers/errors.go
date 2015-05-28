@@ -18,6 +18,10 @@ package drivers
 
 import "fmt"
 
+// InternalError - generic internal error
+type InternalError struct {
+}
+
 // BackendError - generic disk backend error
 type BackendError struct {
 	Path string
@@ -125,6 +129,11 @@ func EmbedError(bucket, object string, err error) ImplementationError {
 		Object: object,
 		Err:    err,
 	}
+}
+
+// Return string an error formatted as the given text
+func (e InternalError) Error() string {
+	return "Internal error occured"
 }
 
 // Return string an error formatted as the given text
