@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ * Mini Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package donut
+package filesystem
 
 import (
 	"io/ioutil"
@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
+
 	"github.com/minio/minio/pkg/storage/drivers"
 )
 
@@ -33,17 +34,16 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
+	defer removeRoots(c, storageList)
 	create := func() drivers.Driver {
-		var paths []string
-		p, err := ioutil.TempDir(os.TempDir(), "minio-donut-")
+		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
-		storageList = append(storageList, p)
-		paths = append(paths, p)
-		_, _, store := Start(paths)
+		storageList = append(storageList, path)
+		_, _, store := Start(path)
 		return store
 	}
 	drivers.APITestSuite(c, create)
-	removeRoots(c, storageList)
+
 }
 
 func removeRoots(c *C, roots []string) {
