@@ -163,10 +163,6 @@ type BucketResourcesMetadata struct {
 	IsTruncated    bool
 	CommonPrefixes []string
 	Mode           FilterMode
-
-	// TODO
-	Logging      string
-	Notification string
 }
 
 // GetMode - Populate filter mode

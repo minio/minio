@@ -59,7 +59,7 @@ func testCreateBucket(c *check.C, create func() Driver) {
 func testMultipartObjectCreation(c *check.C, create func() Driver) {
 	drivers := create()
 	switch {
-	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
+	case reflect.TypeOf(drivers).String() != "*memory.memoryDriver":
 		return
 	}
 	err := drivers.CreateBucket("bucket", "")
@@ -93,7 +93,7 @@ func testMultipartObjectCreation(c *check.C, create func() Driver) {
 func testMultipartObjectAbort(c *check.C, create func() Driver) {
 	drivers := create()
 	switch {
-	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
+	case reflect.TypeOf(drivers).String() != "*memory.memoryDriver":
 		return
 	}
 	err := drivers.CreateBucket("bucket", "")
@@ -257,13 +257,12 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.CommonPrefixes = prefixes // allocate new everytime
 		resources.Prefix = ""
 		resources.Marker = "newPrefix"
-		resources.Delimiter = "/"
+		resources.Delimiter = ""
 		resources.Maxkeys = 3
 		objects, resources, err = drivers.ListObjects("bucket", resources)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[1].Key, check.Equals, "obj0")
 		c.Assert(objects[2].Key, check.Equals, "obj1")
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
 	}
 	// check ordering of results with prefix
 	{
