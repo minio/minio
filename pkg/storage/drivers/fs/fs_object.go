@@ -266,7 +266,7 @@ func (fs *fsDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string
 	h := md5.New()
 	mw := io.MultiWriter(file, h)
 
-	_, err = io.Copy(mw, data)
+	_, err = io.CopyN(mw, data, size)
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
