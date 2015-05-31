@@ -212,7 +212,7 @@ func (memory *memoryDriver) cleanupMultiparts(bucket, key, uploadID string) {
 	defer memory.lock.Unlock()
 	for i := 1; i <= memory.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
-		memory.multiPartObjects.Delete(objectKey)
+		memory.multiPartObjects.doDelete(objectKey)
 	}
 }
 
