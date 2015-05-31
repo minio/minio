@@ -48,6 +48,7 @@ func APITestSuite(c *check.C, create func() Driver) {
 	testGetDirectoryReturnsObjectNotFound(c, create)
 	testDefaultContentType(c, create)
 	testMultipartObjectCreation(c, create)
+	testMultipartObjectAbort(c, create)
 }
 
 func testCreateBucket(c *check.C, create func() Driver) {
@@ -59,7 +60,7 @@ func testCreateBucket(c *check.C, create func() Driver) {
 func testMultipartObjectCreation(c *check.C, create func() Driver) {
 	drivers := create()
 	switch {
-	case reflect.TypeOf(drivers).String() != "*memory.memoryDriver":
+	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
 		return
 	}
 	err := drivers.CreateBucket("bucket", "")
@@ -68,6 +69,7 @@ func testMultipartObjectCreation(c *check.C, create func() Driver) {
 	c.Assert(err, check.IsNil)
 
 	parts := make(map[int]string)
+	finalHasher := md5.New()
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -76,6 +78,7 @@ func testMultipartObjectCreation(c *check.C, create func() Driver) {
 		}
 
 		hasher := md5.New()
+		finalHasher.Write([]byte(randomString))
 		hasher.Write([]byte(randomString))
 		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
@@ -86,14 +89,16 @@ func testMultipartObjectCreation(c *check.C, create func() Driver) {
 		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
 		parts[i] = calculatedmd5sum
 	}
-	_, err = drivers.CompleteMultipartUpload("bucket", "key", uploadID, parts)
+	finalExpectedmd5SumHex := hex.EncodeToString(finalHasher.Sum(nil))
+	calculatedFinalmd5Sum, err := drivers.CompleteMultipartUpload("bucket", "key", uploadID, parts)
 	c.Assert(err, check.IsNil)
+	c.Assert(calculatedFinalmd5Sum, check.Equals, finalExpectedmd5SumHex)
 }
 
 func testMultipartObjectAbort(c *check.C, create func() Driver) {
 	drivers := create()
 	switch {
-	case reflect.TypeOf(drivers).String() != "*memory.memoryDriver":
+	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
 		return
 	}
 	err := drivers.CreateBucket("bucket", "")
