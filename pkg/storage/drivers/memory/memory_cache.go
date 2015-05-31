@@ -128,7 +128,7 @@ func (r *Cache) Set(key string, value interface{}) bool {
 		// remove random key if only we reach the maxSize threshold
 		for key := range r.items {
 			for (r.currentSize + valueLen) > r.maxSize {
-				r.Delete(key)
+				r.doDelete(key)
 			}
 			break
 		}
@@ -145,13 +145,19 @@ func (r *Cache) Expire() {
 	defer r.Unlock()
 	for key := range r.items {
 		if !r.isValid(key) {
-			r.Delete(key)
+			r.doDelete(key)
 		}
 	}
 }
 
 // Delete deletes a given key if exists
 func (r *Cache) Delete(key string) {
+	r.Lock()
+	defer r.Unlock()
+	r.doDelete(key)
+}
+
+func (r *Cache) doDelete(key string) {
 	if _, ok := r.items[key]; ok {
 		r.currentSize -= uint64(len(r.items[key].([]byte)))
 		delete(r.items, key)
