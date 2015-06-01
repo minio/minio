@@ -24,8 +24,9 @@ import (
 )
 
 type fsDriver struct {
-	root string
-	lock *sync.Mutex
+	root       string
+	lock       *sync.Mutex
+	multiparts *Multiparts
 }
 
 // Start filesystem channel
@@ -35,6 +36,9 @@ func Start(root string) (chan<- string, <-chan error, drivers.Driver) {
 	fs := new(fsDriver)
 	fs.root = root
 	fs.lock = new(sync.Mutex)
+	// internal related to multiparts
+	fs.multiparts = new(Multiparts)
+	fs.multiparts.ActiveSession = make(map[string]*MultipartSession)
 	go start(ctrlChannel, errorChannel, fs)
 	return ctrlChannel, errorChannel, fs
 }
