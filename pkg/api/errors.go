@@ -34,8 +34,8 @@ type ErrorResponse struct {
 	Code      string
 	Message   string
 	Resource  string
-	RequestID string
-	HostID    string
+	RequestID string `xml:"RequestId"`
+	HostID    string `xml:"HostId"`
 }
 
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
