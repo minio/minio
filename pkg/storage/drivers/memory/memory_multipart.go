@@ -208,11 +208,9 @@ func (memory *memoryDriver) cleanupMultipartSession(bucket, key, uploadID string
 }
 
 func (memory *memoryDriver) cleanupMultiparts(bucket, key, uploadID string) {
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
 	for i := 1; i <= memory.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
-		memory.multiPartObjects.doDelete(objectKey)
+		memory.multiPartObjects.Delete(objectKey)
 	}
 }
 
@@ -246,7 +244,7 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 			memory.lock.Unlock()
 			return "", iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
-		obj := object.([]byte)
+		obj := object
 		size += int64(len(obj))
 		calcMD5Bytes := md5.Sum(obj)
 		// complete multi part request header md5sum per part is hex encoded

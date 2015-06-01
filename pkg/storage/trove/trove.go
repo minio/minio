@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-package memory
+// Package trove implements in memory caching methods
+package trove
 
 import (
 	"sync"
 	"time"
 )
 
-var zeroExpiration = time.Duration(0)
+var noExpiration = time.Duration(0)
 
 // Cache holds the required variables to compose an in memory cache system
 // which also provides expiring key mechanism and also maxSize
@@ -31,7 +32,7 @@ type Cache struct {
 	sync.Mutex
 
 	// items hold the cached objects
-	items map[string]interface{}
+	items map[string][]byte
 
 	// updatedAt holds the time that related item's updated at
 	updatedAt map[string]time.Time
@@ -68,7 +69,7 @@ type Stats struct {
 // expiration is used for expiration of a key from cache
 func NewCache(maxSize uint64, expiration time.Duration) *Cache {
 	return &Cache{
-		items:      map[string]interface{}{},
+		items:      make(map[string][]byte),
 		updatedAt:  map[string]time.Time{},
 		expiration: expiration,
 		maxSize:    maxSize,
@@ -103,7 +104,7 @@ func (r *Cache) ExpireObjects(gcInterval time.Duration) {
 }
 
 // Get returns a value of a given key if it exists
-func (r *Cache) Get(key string) (interface{}, bool) {
+func (r *Cache) Get(key string) ([]byte, bool) {
 	r.Lock()
 	defer r.Unlock()
 	value, ok := r.items[key]
@@ -115,10 +116,10 @@ func (r *Cache) Get(key string) (interface{}, bool) {
 }
 
 // Set will persist a value to the cache
-func (r *Cache) Set(key string, value interface{}) bool {
+func (r *Cache) Set(key string, value []byte) bool {
 	r.Lock()
 	defer r.Unlock()
-	valueLen := uint64(len(value.([]byte)))
+	valueLen := uint64(len(value))
 	if r.maxSize > 0 {
 		// check if the size of the object is not bigger than the
 		// capacity of the cache
@@ -159,7 +160,7 @@ func (r *Cache) Delete(key string) {
 
 func (r *Cache) doDelete(key string) {
 	if _, ok := r.items[key]; ok {
-		r.currentSize -= uint64(len(r.items[key].([]byte)))
+		r.currentSize -= uint64(len(r.items[key]))
 		delete(r.items, key)
 		delete(r.updatedAt, key)
 		r.totalExpired++
@@ -174,7 +175,7 @@ func (r *Cache) isValid(key string) bool {
 	if !ok {
 		return false
 	}
-	if r.expiration == zeroExpiration {
+	if r.expiration == noExpiration {
 		return true
 	}
 	return updatedAt.Add(r.expiration).After(time.Now())

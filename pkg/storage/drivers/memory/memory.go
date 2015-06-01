@@ -34,14 +34,15 @@ import (
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/trove"
 )
 
 // memoryDriver - local variables
 type memoryDriver struct {
 	storedBuckets    map[string]storedBucket
 	lock             *sync.RWMutex
-	objects          *Cache
-	multiPartObjects *Cache
+	objects          *trove.Cache
+	multiPartObjects *trove.Cache
 }
 
 type storedBucket struct {
@@ -69,8 +70,8 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	var memory *memoryDriver
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
-	memory.objects = NewCache(maxSize, expiration)
-	memory.multiPartObjects = NewCache(0, time.Duration(0))
+	memory.objects = trove.NewCache(maxSize, expiration)
+	memory.multiPartObjects = trove.NewCache(0, time.Duration(0))
 	memory.lock = new(sync.RWMutex)
 
 	memory.objects.OnExpired = memory.expiredObject
@@ -108,7 +109,7 @@ func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string)
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 	}
-	written, err := io.Copy(w, bytes.NewBuffer(data.([]byte)))
+	written, err := io.Copy(w, bytes.NewBuffer(data))
 	memory.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
@@ -142,7 +143,7 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 		memory.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, errParams)
 	}
-	written, err := io.CopyN(w, bytes.NewBuffer(data.([]byte)[start:]), length)
+	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
 	memory.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
