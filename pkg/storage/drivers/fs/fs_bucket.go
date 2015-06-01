@@ -40,11 +40,19 @@ func (fs *fsDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
 	var metadataList []drivers.BucketMetadata
 	for _, file := range files {
 		if !file.IsDir() {
-			return []drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{Path: fs.root}, nil)
+			// if files found ignore them
+			continue
 		}
+		if file.IsDir() {
+			// if directories found with odd names, skip them too
+			if !drivers.IsValidBucket(file.Name()) {
+				continue
+			}
+		}
+
 		metadata := drivers.BucketMetadata{
 			Name:    file.Name(),
-			Created: file.ModTime(), // TODO - provide real created time
+			Created: file.ModTime(),
 		}
 		metadataList = append(metadataList, metadata)
 	}
