@@ -34,7 +34,6 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
-	defer removeRoots(c, storageList)
 	create := func() drivers.Driver {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
@@ -43,7 +42,7 @@ func (s *MySuite) TestAPISuite(c *C) {
 		return store
 	}
 	drivers.APITestSuite(c, create)
-
+	defer removeRoots(c, storageList)
 }
 
 func removeRoots(c *C, roots []string) {

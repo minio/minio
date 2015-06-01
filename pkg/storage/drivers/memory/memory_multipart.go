@@ -263,6 +263,7 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 	memory.lock.Unlock()
 
 	md5sumSlice := md5.Sum(fullObject.Bytes())
+	// this is needed for final verification inside CreateObject, do not convert this to hex
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
 	etag, err := memory.CreateObject(bucket, key, "", md5sum, size, &fullObject)
 	if err != nil {
