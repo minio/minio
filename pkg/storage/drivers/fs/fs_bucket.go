@@ -97,17 +97,20 @@ func (fs *fsDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, er
 	// get bucket path
 	bucketDir := path.Join(fs.root, bucket)
 	bucketMetadata := drivers.BucketMetadata{}
-
 	fi, err := os.Stat(bucketDir)
 	// check if bucket exists
-	if err == nil {
-		bucketMetadata.Name = fi.Name()
-		bucketMetadata.Created = fi.ModTime()
-		// TODO convert os.FileMode to meaningful ACL's
-		bucketMetadata.ACL = drivers.BucketACL("private")
-		return bucketMetadata, nil
+	if os.IsNotExist(err) {
+		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-	return drivers.BucketMetadata{}, iodine.New(err, nil)
+	if err != nil {
+		return drivers.BucketMetadata{}, iodine.New(err, nil)
+	}
+
+	bucketMetadata.Name = fi.Name()
+	bucketMetadata.Created = fi.ModTime()
+	// TODO convert os.FileMode to meaningful ACL's
+	bucketMetadata.ACL = drivers.BucketACL("private")
+	return bucketMetadata, nil
 }
 
 // aclToPerm - convert acl to filesystem mode
