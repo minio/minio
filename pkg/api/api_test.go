@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/featureflags"
 	"github.com/minio/minio/pkg/storage/drivers"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
+	"github.com/minio/minio/pkg/storage/drivers/fs"
 	"github.com/minio/minio/pkg/storage/drivers/memory"
 	"github.com/minio/minio/pkg/storage/drivers/mocks"
 	"github.com/stretchr/testify/mock"
@@ -70,6 +71,14 @@ var _ = Suite(&MySuite{
 		var roots []string
 		roots = append(roots, root)
 		_, _, driver := donut.Start(roots)
+		return driver, root
+	},
+})
+
+var _ = Suite(&MySuite{
+	initDriver: func() (drivers.Driver, string) {
+		root, _ := ioutil.TempDir(os.TempDir(), "minio-fs-api")
+		_, _, driver := filesystem.Start(root)
 		return driver, root
 	},
 })
@@ -1440,9 +1449,7 @@ func (s *MySuite) TestObjectMultipartAbort(c *C) {
 	default:
 		// Donut doesn't have multipart support yet
 		{
-			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
-
-			} else {
+			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
 				return
 			}
 		}
@@ -1517,7 +1524,7 @@ func (s *MySuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response3.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MySuite) TestBuckeMultipartList(c *C) {
+func (s *MySuite) TestBucketMultipartList(c *C) {
 	switch driver := s.Driver.(type) {
 	case *mocks.Driver:
 		{
@@ -1526,9 +1533,7 @@ func (s *MySuite) TestBuckeMultipartList(c *C) {
 	default:
 		// Donut doesn't have multipart support yet
 		{
-			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
-
-			} else {
+			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
 				return
 			}
 		}
@@ -1601,6 +1606,12 @@ func (s *MySuite) TestBuckeMultipartList(c *C) {
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
+
+	decoder = xml.NewDecoder(response3.Body)
+	newResponse3 := &ListMultipartUploadsResponse{}
+	err = decoder.Decode(newResponse3)
+	c.Assert(err, IsNil)
+	c.Assert(newResponse3.Bucket, Equals, "foo")
 }
 
 func (s *MySuite) TestObjectMultipartList(c *C) {
@@ -1612,9 +1623,7 @@ func (s *MySuite) TestObjectMultipartList(c *C) {
 	default:
 		// Donut doesn't have multipart support yet
 		{
-			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
-
-			} else {
+			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
 				return
 			}
 		}
@@ -1699,9 +1708,7 @@ func (s *MySuite) TestObjectMultipart(c *C) {
 	default:
 		// Donut doesn't have multipart support yet
 		{
-			if reflect.TypeOf(driver).String() == "*memory.memoryDriver" {
-
-			} else {
+			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
 				return
 			}
 		}

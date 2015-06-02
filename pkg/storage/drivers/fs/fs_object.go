@@ -94,7 +94,6 @@ func (fs *fsDriver) GetObject(w io.Writer, bucket string, object string) (int64,
 	if drivers.IsValidObjectName(object) == false {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Bucket: bucket, Object: object}, nil)
 	}
-
 	objectPath := path.Join(fs.root, bucket, object)
 	filestat, err := os.Stat(objectPath)
 	switch err := err.(type) {
