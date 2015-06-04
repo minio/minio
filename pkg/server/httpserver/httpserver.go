@@ -17,9 +17,10 @@
 package httpserver
 
 import (
+	"fmt"
+	"net"
 	"net/http"
-
-	"github.com/minio/minio/pkg/utils/log"
+	"strings"
 )
 
 // Config - http server config
@@ -52,12 +53,35 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 		Handler:        router,
 		MaxHeaderBytes: 1 << 20,
 	}
-	log.Println("Starting HTTP Server on:", config.Address)
+
+	host, port, err := net.SplitHostPort(config.Address)
+	errorChannel <- err
+
+	var hosts []string
+	switch {
+	case host != "":
+		hosts = append(hosts, host)
+	default:
+		addrs, err := net.InterfaceAddrs()
+		errorChannel <- err
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				h := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(h); ip.To4() != nil {
+					hosts = append(hosts, h)
+				}
+			}
+		}
+	}
 
 	switch {
 	default:
+		for _, host := range hosts {
+			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
+		}
 		err = httpServer.ListenAndServe()
 	case config.TLS == true:
+		fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		httpServer.TLSConfig = getDefaultTLSConfig()
 		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	}
