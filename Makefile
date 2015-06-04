@@ -49,7 +49,7 @@ minio: pre-build build-all test-all
 
 install: minio
 	@echo "Installing minio:"
-	@godep go install -a -ldflags "-X main.BuildDate `date -u '+%FT%T.%N%:z'`" github.com/minio/minio
+	@godep go install -a -ldflags "-X main.BuildDate `go run buildscripts/date.go`" github.com/minio/minio
 
 save: restore
 	@godep save ./...
