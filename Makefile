@@ -51,7 +51,7 @@ install: minio
 	@echo "Installing minio:"
 	@godep go install -a -ldflags "-X main.BuildDate `go run buildscripts/date.go`" github.com/minio/minio
 
-save: restore
+save:
 	@godep save ./...
 
 restore:
