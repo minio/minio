@@ -28,7 +28,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/featureflags"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server"
 	"github.com/minio/minio/pkg/server/httpserver"
@@ -113,15 +112,17 @@ EXAMPLES:
 
 var flags = []cli.Flag{
 	cli.StringFlag{
-		Name:  "api-address",
+		Name:  "address",
 		Value: ":9000",
-		Usage: "address for incoming API requests",
+		Usage: "ADDRESS:PORT for object storage access",
 	},
-	cli.StringFlag{
-		Name:  "web-address",
-		Value: ":9001",
-		Usage: "address for incoming Management UI requests",
-	},
+	/*
+		cli.StringFlag{
+			Name:  "address-mgmt",
+			Value: ":9001",
+			Usage: "ADDRESS:PORT for management console access",
+		},
+	*/
 	cli.StringFlag{
 		Name:  "cert",
 		Hide:  true,
@@ -209,8 +210,8 @@ func runMemory(c *cli.Context) {
 		Expiration: expiration,
 	}
 	apiServer := memoryDriver.GetStartServerFunc()
-	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer, webServer}
+	//	webServer := getWebServerConfigFunc(c)
+	servers := []server.StartServerFunc{apiServer} //, webServer}
 	server.StartMinio(servers)
 }
 
@@ -238,8 +239,8 @@ func runDonut(c *cli.Context) {
 		Paths:  paths,
 	}
 	apiServer := donutDriver.GetStartServerFunc()
-	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer, webServer}
+	//	webServer := getWebServerConfigFunc(c)
+	servers := []server.StartServerFunc{apiServer} //, webServer}
 	server.StartMinio(servers)
 }
 
@@ -253,8 +254,8 @@ func runFilesystem(c *cli.Context) {
 		Path:   c.Args()[0],
 	}
 	apiServer := fsDriver.GetStartServerFunc()
-	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer, webServer}
+	//	webServer := getWebServerConfigFunc(c)
+	servers := []server.StartServerFunc{apiServer} //, webServer}
 	server.StartMinio(servers)
 }
 
@@ -266,16 +267,17 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
-		Address:  c.GlobalString("api-address"),
+		Address:  c.GlobalString("address"),
 		TLS:      tls,
 		CertFile: certFile,
 		KeyFile:  keyFile,
 	}
 }
 
+/*
 func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	config := httpserver.Config{
-		Address:  c.GlobalString("web-address"),
+		Address:  c.GlobalString("address-mgmt"),
 		TLS:      false,
 		CertFile: "",
 		KeyFile:  "",
@@ -285,6 +287,7 @@ func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 	}
 	return webDrivers.GetStartServerFunc()
 }
+*/
 
 // Build date
 var BuildDate string
@@ -328,9 +331,6 @@ func getSystemData() map[string]string {
 var Version = mustHashBinarySelf()
 
 func main() {
-	// enable features
-	featureflags.Enable(featureflags.MultipartPutObject)
-
 	// set up iodine
 	iodine.SetGlobalState("minio.version", Version)
 	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))

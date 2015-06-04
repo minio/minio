@@ -208,7 +208,7 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Ignore resources handler is wrapper handler used for API request resource validation
 // Since we do not support all the S3 queries, it is necessary for us to throw back a
-// valid error message indicating such a feature to have been not implemented.
+// valid error message indicating such a feature is not implemented.
 func ignoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }

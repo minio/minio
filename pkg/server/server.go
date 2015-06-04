@@ -32,14 +32,14 @@ import (
 	"github.com/minio/minio/pkg/utils/log"
 )
 
-// MemoryFactory is used to build memory api servers
+// MemoryFactory is used to build memory api server
 type MemoryFactory struct {
 	httpserver.Config
 	MaxMemory  uint64
 	Expiration time.Duration
 }
 
-// GetStartServerFunc builds memory api servers
+// GetStartServerFunc builds memory api server
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := memory.Start(f.MaxMemory, f.Expiration)
@@ -48,13 +48,13 @@ func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	}
 }
 
-// FilesystemFactory is used to build filesystem api servers
+// FilesystemFactory is used to build filesystem api server
 type FilesystemFactory struct {
 	httpserver.Config
 	Path string
 }
 
-// GetStartServerFunc builds memory api servers
+// GetStartServerFunc builds memory api server
 func (f FilesystemFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := fs.Start(f.Path)
@@ -63,12 +63,12 @@ func (f FilesystemFactory) GetStartServerFunc() StartServerFunc {
 	}
 }
 
-// WebFactory is used to build web cli servers
+// WebFactory is used to build web cli server
 type WebFactory struct {
 	httpserver.Config
 }
 
-// GetStartServerFunc builds web cli servers
+// GetStartServerFunc builds web cli server
 func (f WebFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), f.Config)
@@ -76,13 +76,13 @@ func (f WebFactory) GetStartServerFunc() StartServerFunc {
 	}
 }
 
-// DonutFactory is used to build donut api servers
+// DonutFactory is used to build donut api server
 type DonutFactory struct {
 	httpserver.Config
 	Paths []string
 }
 
-// GetStartServerFunc DonutFactory builds donut api servers
+// GetStartServerFunc DonutFactory builds donut api server
 func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := donut.Start(f.Paths)
@@ -94,7 +94,7 @@ func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 // StartServerFunc describes a function that can be used to start a server with StartMinio
 type StartServerFunc func() (chan<- string, <-chan error)
 
-// StartMinio starts minio servers
+// StartMinio starts minio server
 func StartMinio(servers []StartServerFunc) {
 	var ctrlChannels []chan<- string
 	var errChannels []<-chan error

@@ -32,7 +32,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/minio/minio/pkg/featureflags"
 	"github.com/minio/minio/pkg/storage/drivers"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
 	"github.com/minio/minio/pkg/storage/drivers/fs"
@@ -1456,7 +1455,6 @@ func (s *MySuite) TestObjectMultipartAbort(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	featureflags.Enable(featureflags.MultipartPutObject)
 
 	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -1540,7 +1538,6 @@ func (s *MySuite) TestBucketMultipartList(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	featureflags.Enable(featureflags.MultipartPutObject)
 
 	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -1630,7 +1627,6 @@ func (s *MySuite) TestObjectMultipartList(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	featureflags.Enable(featureflags.MultipartPutObject)
 
 	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
@@ -1715,7 +1711,6 @@ func (s *MySuite) TestObjectMultipart(c *C) {
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
-	featureflags.Enable(featureflags.MultipartPutObject)
 
 	httpHandler := HTTPHandler(driver)
 	testServer := httptest.NewServer(httpHandler)
