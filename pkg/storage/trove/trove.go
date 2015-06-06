@@ -127,11 +127,11 @@ func (r *Cache) Set(key string, value []byte) bool {
 			return false
 		}
 		// remove random key if only we reach the maxSize threshold
-		for key := range r.items {
-			for (r.currentSize + valueLen) > r.maxSize {
+		for (r.currentSize + valueLen) > r.maxSize {
+			for key := range r.items {
 				r.doDelete(key)
+				break
 			}
-			break
 		}
 	}
 	r.items[key] = value
