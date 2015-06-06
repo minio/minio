@@ -45,6 +45,11 @@ var flags = []cli.Flag{
 			Usage: "ADDRESS:PORT for management console access",
 		},
 	*/
+	cli.IntFlag{
+		Name:  "conn-limit",
+		Value: 16,
+		Usage: "Set per IP connection limit quota for server: [DEFAULT: 16]",
+	},
 	cli.StringFlag{
 		Name:  "cert",
 		Hide:  true,
@@ -79,10 +84,11 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
-		Address:  c.GlobalString("address"),
-		TLS:      tls,
-		CertFile: certFile,
-		KeyFile:  keyFile,
+		Address:         c.GlobalString("address"),
+		TLS:             tls,
+		CertFile:        certFile,
+		KeyFile:         keyFile,
+		ConnectionLimit: c.GlobalInt("conn-limit"),
 	}
 }
 

@@ -25,10 +25,11 @@ import (
 
 // Config - http server config
 type Config struct {
-	Address  string
-	TLS      bool
-	CertFile string
-	KeyFile  string
+	Address         string
+	TLS             bool
+	CertFile        string
+	KeyFile         string
+	ConnectionLimit int
 }
 
 // Server - http server related

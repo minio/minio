@@ -25,16 +25,31 @@ import (
 	"github.com/minio/minio/pkg/storage/drivers"
 )
 
-// private use
 type minioAPI struct {
 	driver drivers.Driver
 }
 
+// Config api configurable parameters
+type Config struct {
+	ConnectionLimit int
+	driver          drivers.Driver
+}
+
+// GetDriver - get a an existing set driver
+func (c Config) GetDriver() drivers.Driver {
+	return c.driver
+}
+
+// SetDriver - set a new driver
+func (c *Config) SetDriver(driver drivers.Driver) {
+	c.driver = driver
+}
+
 // HTTPHandler - http wrapper handler
-func HTTPHandler(driver drivers.Driver) http.Handler {
+func HTTPHandler(config Config) http.Handler {
 	var mux *router.Router
 	var api = minioAPI{}
-	api.driver = driver
+	api.driver = config.GetDriver()
 
 	mux = router.NewRouter()
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
@@ -50,15 +65,15 @@ func HTTPHandler(driver drivers.Driver) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
-	h := validContentTypeHandler(mux)
-	h = timeValidityHandler(h)
-	h = ignoreResourcesHandler(h)
-	h = validateAuthHeaderHandler(h)
+	handler := validContentTypeHandler(mux)
+	handler = timeValidityHandler(handler)
+	handler = ignoreResourcesHandler(handler)
+	handler = validateAuthHeaderHandler(handler)
 	//	h = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
 	//	h = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
 	//	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
 	//	h = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
-	h = quota.ConnectionLimit(h, 4)
-	h = logging.LogHandler(h)
-	return h
+	handler = quota.ConnectionLimit(handler, config.ConnectionLimit)
+	handler = logging.LogHandler(handler)
+	return handler
 }
