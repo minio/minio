@@ -124,7 +124,7 @@ func setDummyAuthHeader(req *http.Request) {
 }
 
 func setConfig(driver drivers.Driver) Config {
-	conf := Config{ConnectionLimit: 16}
+	conf := Config{RateLimit: 16}
 	conf.SetDriver(driver)
 	return conf
 }

@@ -46,9 +46,9 @@ var flags = []cli.Flag{
 		},
 	*/
 	cli.IntFlag{
-		Name:  "conn-limit",
+		Name:  "ratelimit",
 		Value: 16,
-		Usage: "Set per IP connection limit quota for server: [DEFAULT: 16]",
+		Usage: "Limit for total concurrent requests: [DEFAULT: 16]",
 	},
 	cli.StringFlag{
 		Name:  "cert",
@@ -84,11 +84,11 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 	}
 	tls := (certFile != "" && keyFile != "")
 	return httpserver.Config{
-		Address:         c.GlobalString("address"),
-		TLS:             tls,
-		CertFile:        certFile,
-		KeyFile:         keyFile,
-		ConnectionLimit: c.GlobalInt("conn-limit"),
+		Address:   c.GlobalString("address"),
+		TLS:       tls,
+		CertFile:  certFile,
+		KeyFile:   keyFile,
+		RateLimit: c.GlobalInt("ratelimit"),
 	}
 }
 

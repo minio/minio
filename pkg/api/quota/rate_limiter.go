@@ -18,33 +18,33 @@ package quota
 
 import "net/http"
 
-// requestLimitHandler
-type connLimit struct {
-	handler         http.Handler
-	connectionQueue chan bool
+// rateLimit
+type rateLimit struct {
+	handler   http.Handler
+	rateQueue chan bool
 }
 
-func (c *connLimit) Add() {
-	c.connectionQueue <- true
+func (c *rateLimit) Add() {
+	c.rateQueue <- true // fill in the queue
 	return
 }
 
-func (c *connLimit) Remove() {
-	<-c.connectionQueue
+func (c *rateLimit) Remove() {
+	<-c.rateQueue // invalidate the queue, after the request is served
 	return
 }
 
 // ServeHTTP is an http.Handler ServeHTTP method
-func (c *connLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	c.Add()
-	c.handler.ServeHTTP(w, req)
-	c.Remove()
+func (c *rateLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	c.Add()                     // add
+	c.handler.ServeHTTP(w, req) // serve
+	c.Remove()                  // remove
 }
 
-// ConnectionLimit limits the number of concurrent connections
-func ConnectionLimit(h http.Handler, limit int) http.Handler {
-	return &connLimit{
-		handler:         h,
-		connectionQueue: make(chan bool, limit),
+// RateLimit limits the number of concurrent http requests
+func RateLimit(handle http.Handler, limit int) http.Handler {
+	return &rateLimit{
+		handler:   handle,
+		rateQueue: make(chan bool, limit),
 	}
 }
