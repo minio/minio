@@ -43,7 +43,7 @@ type MemoryFactory struct {
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := memory.Start(f.MaxMemory, f.Expiration)
-		conf := api.Config{ConnectionLimit: f.ConnectionLimit}
+		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
 		return ctrl, status
@@ -60,7 +60,7 @@ type FilesystemFactory struct {
 func (f FilesystemFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := fs.Start(f.Path)
-		conf := api.Config{ConnectionLimit: f.ConnectionLimit}
+		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
 		return ctrl, status
@@ -90,7 +90,7 @@ type DonutFactory struct {
 func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		_, _, driver := donut.Start(f.Paths)
-		conf := api.Config{ConnectionLimit: f.ConnectionLimit}
+		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
 		return ctrl, status

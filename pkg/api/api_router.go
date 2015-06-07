@@ -31,8 +31,8 @@ type minioAPI struct {
 
 // Config api configurable parameters
 type Config struct {
-	ConnectionLimit int
-	driver          drivers.Driver
+	RateLimit int
+	driver    drivers.Driver
 }
 
 // GetDriver - get a an existing set driver
@@ -69,11 +69,12 @@ func HTTPHandler(config Config) http.Handler {
 	handler = timeValidityHandler(handler)
 	handler = ignoreResourcesHandler(handler)
 	handler = validateAuthHeaderHandler(handler)
-	//	h = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
-	//	h = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
-	//	h = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
-	//	h = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
-	handler = quota.ConnectionLimit(handler, config.ConnectionLimit)
+	//	handler = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
+	//	handler = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
+	//	handler = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
+	//	handler = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
+	//      handler = quota.ConnectionLimit(handler, config.ConnectionLimit)
+	handler = quota.RateLimit(handler, config.RateLimit)
 	handler = logging.LogHandler(handler)
 	return handler
 }
