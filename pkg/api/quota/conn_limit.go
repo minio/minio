@@ -16,35 +16,74 @@
 
 package quota
 
-import "net/http"
+import (
+	"net"
+	"net/http"
+	"sync"
+
+	"github.com/minio/minio/pkg/utils/log"
+)
 
 // requestLimitHandler
 type connLimit struct {
-	handler         http.Handler
-	connectionQueue chan bool
+	sync.RWMutex
+	handler     http.Handler
+	connections map[uint32]int
+	limit       int
 }
 
-func (c *connLimit) Add() {
-	c.connectionQueue <- true
+func (c *connLimit) IsLimitExceeded(ip uint32) bool {
+	if c.connections[ip] >= c.limit {
+		return true
+	}
+	return false
+}
+
+func (c *connLimit) GetUsed(ip uint32) int {
+	return c.connections[ip]
+}
+
+func (c *connLimit) Add(ip uint32) {
+	c.Lock()
+	defer c.Unlock()
+	count := c.connections[ip]
+	count = count + 1
+	c.connections[ip] = count
 	return
 }
 
-func (c *connLimit) Remove() {
-	<-c.connectionQueue
-	return
+func (c *connLimit) Remove(ip uint32) {
+	c.Lock()
+	defer c.Unlock()
+	count, _ := c.connections[ip]
+	count = count - 1
+	if count <= 0 {
+		delete(c.connections, ip)
+		return
+	}
+	c.connections[ip] = count
 }
 
 // ServeHTTP is an http.Handler ServeHTTP method
 func (c *connLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	c.Add()
+	host, _, _ := net.SplitHostPort(req.RemoteAddr)
+	longIP := longIP{net.ParseIP(host)}.IptoUint32()
+	if c.IsLimitExceeded(longIP) {
+		hosts, _ := net.LookupAddr(uint32ToIP(longIP).String())
+		log.Debug.Printf("Connection limit reached - Host: %s, Total Connections: %d\n", hosts, c.GetUsed(longIP))
+		writeErrorResponse(w, req, ConnectionLimitExceeded, req.URL.Path)
+		return
+	}
+	c.Add(longIP)
+	defer c.Remove(longIP)
 	c.handler.ServeHTTP(w, req)
-	c.Remove()
 }
 
 // ConnectionLimit limits the number of concurrent connections
 func ConnectionLimit(h http.Handler, limit int) http.Handler {
 	return &connLimit{
-		handler:         h,
-		connectionQueue: make(chan bool, limit),
+		handler:     h,
+		connections: make(map[uint32]int),
+		limit:       limit,
 	}
 }
