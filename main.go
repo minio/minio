@@ -169,7 +169,8 @@ BUILD:
   {{range $key, $value := .ExtraInfo}}
 {{$key}}:
   {{$value}}
-{{end}}`
+{{end}}
+`
 
 func main() {
 	// set up iodine
