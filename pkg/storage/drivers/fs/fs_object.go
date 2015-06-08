@@ -25,8 +25,8 @@ import (
 
 	"crypto/md5"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -154,7 +154,7 @@ func (fs *fsDriver) GetObjectMetadata(bucket, object string) (drivers.ObjectMeta
 	}
 
 	var deserializedMetadata Metadata
-	decoder := gob.NewDecoder(file)
+	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&deserializedMetadata)
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(err, nil)
@@ -280,8 +280,8 @@ func (fs *fsDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string
 		ContentType: contentType,
 		Md5sum:      h.Sum(nil),
 	}
-	// serialize metadata to gob
-	encoder := gob.NewEncoder(file)
+	// serialize metadata to json
+	encoder := json.NewEncoder(file)
 	err = encoder.Encode(metadata)
 
 	md5Sum := hex.EncodeToString(metadata.Md5sum)
