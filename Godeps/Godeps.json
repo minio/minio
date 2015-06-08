@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/dustin/go-humanize",
-			"Rev": "00897f070f09f194c26d65afae734ba4c32404e8"
+			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
 		},
 		{
 			"ImportPath": "github.com/gorilla/context",
-			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
+			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
-			"Rev": "660d31f8602b95058fed6833debf113e85350868"
+			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
 			"ImportPath": "github.com/minio/check",
