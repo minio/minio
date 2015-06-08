@@ -152,13 +152,6 @@ func (r *Router) getRegexpGroup() *routeRegexpGroup {
 	return nil
 }
 
-func (r *Router) buildVars(m map[string]string) map[string]string {
-	if r.parent != nil {
-		m = r.parent.buildVars(m)
-	}
-	return m
-}
-
 // ----------------------------------------------------------------------------
 // Route factories
 // ----------------------------------------------------------------------------
@@ -229,12 +222,6 @@ func (r *Router) Queries(pairs ...string) *Route {
 // See Route.Schemes().
 func (r *Router) Schemes(schemes ...string) *Route {
 	return r.NewRoute().Schemes(schemes...)
-}
-
-// BuildVars registers a new route with a custom function for modifying
-// route variables before building a URL.
-func (r *Router) BuildVarsFunc(f BuildVarsFunc) *Route {
-	return r.NewRoute().BuildVarsFunc(f)
 }
 
 // ----------------------------------------------------------------------------
