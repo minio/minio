@@ -458,7 +458,6 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		return "", iodine.New(err, nil)
 	}
 	defer activeSessionFile.Close()
-	fmt.Println(fs.multiparts.ActiveSession)
 	encoder = json.NewEncoder(activeSessionFile)
 	err = encoder.Encode(fs.multiparts.ActiveSession)
 	if err != nil {

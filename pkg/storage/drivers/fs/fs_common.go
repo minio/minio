@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/minio/minio/pkg/storage/drivers"
@@ -51,6 +52,16 @@ func (p *bucketDir) getAllFiles(object string, fl os.FileInfo, err error) error 
 	}
 	if fl.Mode().IsRegular() {
 		if strings.HasSuffix(object, "$metadata") {
+			return nil
+		}
+		if strings.HasSuffix(object, "$multiparts") {
+			return nil
+		}
+		matched, err := regexp.MatchString("\\$[0-9].*$", object)
+		if err != nil {
+			return nil
+		}
+		if matched {
 			return nil
 		}
 		_p := strings.Split(object, p.root+"/")
