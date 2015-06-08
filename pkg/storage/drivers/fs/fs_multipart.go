@@ -142,21 +142,6 @@ func (fs *fsDriver) NewMultipartUpload(bucket, key, contentType string) (string,
 	if err != nil {
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
-
-	var activeSessionFile *os.File
-	if _, err := os.Stat(bucketPath + "$activeSession"); os.IsNotExist(err) {
-		activeSessionFile, err = os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			return "", iodine.New(err, nil)
-		}
-	} else {
-		activeSessionFile, err = os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY, 0600)
-		if err != nil {
-			return "", iodine.New(err, nil)
-		}
-	}
-	defer activeSessionFile.Close()
-
 	objectPath := path.Join(bucketPath, key)
 	objectDir := path.Dir(objectPath)
 	if _, err := os.Stat(objectDir); os.IsNotExist(err) {
@@ -173,6 +158,20 @@ func (fs *fsDriver) NewMultipartUpload(bucket, key, contentType string) (string,
 			Object: key,
 		}, nil)
 	}
+
+	var activeSessionFile *os.File
+	if _, err := os.Stat(bucketPath + "$activeSession"); os.IsNotExist(err) {
+		activeSessionFile, err = os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+	} else {
+		activeSessionFile, err = os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY, 0600)
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+	}
+	defer activeSessionFile.Close()
 
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
@@ -336,7 +335,7 @@ func (fs *fsDriver) CreateObjectPart(bucket, key, uploadID string, partID int, c
 	}
 	deserializedMultipartSession.Parts = append(deserializedMultipartSession.Parts, &partMetadata)
 	deserializedMultipartSession.TotalParts++
-	fs.multiparts.ActiveSession[uploadID] = &deserializedMultipartSession
+	fs.multiparts.ActiveSession[key] = &deserializedMultipartSession
 
 	sort.Sort(partNumber(deserializedMultipartSession.Parts))
 	encoder := json.NewEncoder(multiPartfile)
@@ -425,7 +424,7 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 	}
 	md5sum := hex.EncodeToString(h.Sum(nil))
 
-	delete(fs.multiparts.ActiveSession, uploadID)
+	delete(fs.multiparts.ActiveSession, key)
 	for partNumber := range parts {
 		err = os.Remove(objectPath + fmt.Sprintf("$%d", partNumber))
 		if err != nil {
@@ -454,11 +453,12 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		return "", iodine.New(err, nil)
 	}
 
-	activeSessionFile, err := os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY, 0600)
+	activeSessionFile, err := os.OpenFile(bucketPath+"$activeSession", os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
 	defer activeSessionFile.Close()
+	fmt.Println(fs.multiparts.ActiveSession)
 	encoder = json.NewEncoder(activeSessionFile)
 	err = encoder.Encode(fs.multiparts.ActiveSession)
 	if err != nil {
@@ -577,7 +577,7 @@ func (fs *fsDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
 	}
 	multiPartfile.Close() // close it right here, since we will delete it subsequently
 
-	delete(fs.multiparts.ActiveSession, uploadID)
+	delete(fs.multiparts.ActiveSession, key)
 	for _, part := range deserializedMultipartSession.Parts {
 		err = os.RemoveAll(objectPath + fmt.Sprintf("$%d", part.PartNumber))
 		if err != nil {
