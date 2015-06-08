@@ -5,8 +5,8 @@ import (
 	"crypto/md5"
 	"crypto/sha512"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -73,7 +73,7 @@ func (fs *fsDriver) ListMultipartUploads(bucket string, resources drivers.Bucket
 	defer activeSessionFile.Close()
 
 	var deserializedActiveSession map[string]*MultipartSession
-	decoder := gob.NewDecoder(activeSessionFile)
+	decoder := json.NewDecoder(activeSessionFile)
 	err = decoder.Decode(&deserializedActiveSession)
 	if err != nil {
 		return drivers.BucketMultipartResourcesMetadata{}, iodine.New(err, nil)
@@ -192,12 +192,12 @@ func (fs *fsDriver) NewMultipartUpload(bucket, key, contentType string) (string,
 	mpartSession.Parts = parts
 	fs.multiparts.ActiveSession[key] = mpartSession
 
-	encoder := gob.NewEncoder(file)
+	encoder := json.NewEncoder(file)
 	err = encoder.Encode(mpartSession)
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
-	encoder = gob.NewEncoder(activeSessionFile)
+	encoder = json.NewEncoder(activeSessionFile)
 	err = encoder.Encode(fs.multiparts.ActiveSession)
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -329,7 +329,7 @@ func (fs *fsDriver) CreateObjectPart(bucket, key, uploadID string, partID int, c
 	defer multiPartfile.Close()
 
 	var deserializedMultipartSession MultipartSession
-	decoder := gob.NewDecoder(multiPartfile)
+	decoder := json.NewDecoder(multiPartfile)
 	err = decoder.Decode(&deserializedMultipartSession)
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -339,7 +339,7 @@ func (fs *fsDriver) CreateObjectPart(bucket, key, uploadID string, partID int, c
 	fs.multiparts.ActiveSession[uploadID] = &deserializedMultipartSession
 
 	sort.Sort(partNumber(deserializedMultipartSession.Parts))
-	encoder := gob.NewEncoder(multiPartfile)
+	encoder := json.NewEncoder(multiPartfile)
 	err = encoder.Encode(&deserializedMultipartSession)
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -447,8 +447,8 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		ContentType: "application/octet-stream",
 		Md5sum:      h.Sum(nil),
 	}
-	// serialize metadata to gob
-	encoder := gob.NewEncoder(file)
+	// serialize metadata to json
+	encoder := json.NewEncoder(file)
 	err = encoder.Encode(metadata)
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -459,7 +459,7 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		return "", iodine.New(err, nil)
 	}
 	defer activeSessionFile.Close()
-	encoder = gob.NewEncoder(activeSessionFile)
+	encoder = json.NewEncoder(activeSessionFile)
 	err = encoder.Encode(fs.multiparts.ActiveSession)
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -514,7 +514,7 @@ func (fs *fsDriver) ListObjectParts(bucket, key string, resources drivers.Object
 	defer multiPartfile.Close()
 
 	var deserializedMultipartSession MultipartSession
-	decoder := gob.NewDecoder(multiPartfile)
+	decoder := json.NewDecoder(multiPartfile)
 	err = decoder.Decode(&deserializedMultipartSession)
 	if err != nil {
 		return drivers.ObjectResourcesMetadata{}, iodine.New(err, nil)
@@ -570,7 +570,7 @@ func (fs *fsDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
 	}
 
 	var deserializedMultipartSession MultipartSession
-	decoder := gob.NewDecoder(multiPartfile)
+	decoder := json.NewDecoder(multiPartfile)
 	err = decoder.Decode(&deserializedMultipartSession)
 	if err != nil {
 		return iodine.New(err, nil)
