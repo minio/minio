@@ -173,10 +173,6 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	// as the minimum limit, they do not seem to enforce it one can successfully
 	// create a 0byte file using a regular putObject() operation
 	//
-	// For example take a look at :-
-	//
-	//   $ mc ls https://s3.amazonaws.com/ferenginar/test.go
-	//
 	// if isMinObjectSize(size) {
 	//      writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
 	//	return
@@ -218,6 +214,9 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+/// Multipart API
+
+// New multipart upload
 func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
@@ -257,6 +256,7 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 	}
 }
 
+// Upload part
 func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
@@ -337,6 +337,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	}
 }
 
+// Abort multipart upload
 func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
@@ -369,6 +370,7 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 	}
 }
 
+// List object parts
 func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
@@ -408,6 +410,7 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 	}
 }
 
+// Complete multipart upload
 func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
@@ -459,4 +462,18 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 	}
+}
+
+/// Delete API
+
+// Delete bucket
+func (server *minioAPI) deleteBucketHandler(w http.ResponseWriter, req *http.Request) {
+	error := getErrorCode(NotImplemented)
+	w.WriteHeader(error.HTTPStatusCode)
+}
+
+// Delete object
+func (server *minioAPI) deleteObjectHandler(w http.ResponseWriter, req *http.Request) {
+	error := getErrorCode(NotImplemented)
+	w.WriteHeader(error.HTTPStatusCode)
 }

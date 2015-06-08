@@ -65,6 +65,12 @@ func HTTPHandler(config Config) http.Handler {
 	mux.HandleFunc("/{bucket}/{object:.*}", api.getObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", api.putObjectHandler).Methods("PUT")
 
+	// not implemented yet
+	mux.HandleFunc("/{bucket}", api.deleteBucketHandler).Methods("DELETE")
+
+	// unsupported API
+	mux.HandleFunc("/{bucket}/{object:.*}", api.deleteObjectHandler).Methods("DELETE")
+
 	handler := validContentTypeHandler(mux)
 	handler = timeValidityHandler(handler)
 	handler = ignoreResourcesHandler(handler)
