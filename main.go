@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/user"
 	"runtime"
@@ -116,7 +117,7 @@ func getBuildDate() string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format(time.RFC1123)
+	return t.Format(http.TimeFormat)
 }
 
 // Tries to get os/arch/platform specific information
