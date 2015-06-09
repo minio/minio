@@ -39,13 +39,12 @@ var flags = []cli.Flag{
 		Value: ":9000",
 		Usage: "ADDRESS:PORT for object storage access",
 	},
-	/*
-		cli.StringFlag{
-			Name:  "address-mgmt",
-			Value: ":9001",
-			Usage: "ADDRESS:PORT for management console access",
-		},
-	*/
+	cli.StringFlag{
+		Name:  "address-mgmt",
+		Hide:  true,
+		Value: ":9001",
+		Usage: "ADDRESS:PORT for management console access",
+	},
 	cli.IntFlag{
 		Name:  "ratelimit",
 		Value: 16,
@@ -53,15 +52,11 @@ var flags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:  "cert",
-		Hide:  true,
-		Value: "",
-		Usage: "cert.pem",
+		Usage: "Provide your domain certificate",
 	},
 	cli.StringFlag{
 		Name:  "key",
-		Hide:  true,
-		Value: "",
-		Usage: "key.pem",
+		Usage: "Provide your domain private key",
 	},
 	cli.BoolFlag{
 		Name:  "debug",
@@ -78,8 +73,8 @@ func init() {
 }
 
 func getAPIServerConfig(c *cli.Context) httpserver.Config {
-	certFile := c.String("cert")
-	keyFile := c.String("key")
+	certFile := c.GlobalString("cert")
+	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
