@@ -74,7 +74,6 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 			}
 		}
 	}
-
 	switch {
 	default:
 		for _, host := range hosts {
@@ -82,7 +81,9 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 		}
 		err = httpServer.ListenAndServe()
 	case config.TLS == true:
-		fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
+		for _, host := range hosts {
+			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
+		}
 		httpServer.TLSConfig = getDefaultTLSConfig()
 		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	}
