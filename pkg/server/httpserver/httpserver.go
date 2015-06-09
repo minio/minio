@@ -84,7 +84,6 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		}
-		httpServer.TLSConfig = getDefaultTLSConfig()
 		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	}
 	errorChannel <- err
