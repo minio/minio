@@ -86,7 +86,7 @@ func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata
 		}
 		content.Key = object.Key
 		content.LastModified = object.Created.Format(iso8601Format)
-		content.ETag = object.Md5
+		content.ETag = "\"" + object.Md5 + "\""
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
 		content.Owner = owner
@@ -152,7 +152,7 @@ func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) Lis
 	for _, part := range objectMetadata.Part {
 		newPart := &Part{}
 		newPart.PartNumber = part.PartNumber
-		newPart.ETag = part.ETag
+		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
 		newPart.LastModified = part.LastModified.Format(iso8601Format)
 		listPartsResponse.Part = append(listPartsResponse.Part, newPart)
