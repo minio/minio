@@ -43,6 +43,7 @@ type memoryDriver struct {
 	lock             *sync.RWMutex
 	objects          *trove.Cache
 	multiPartObjects *trove.Cache
+	maxSize          uint64
 }
 
 type storedBucket struct {
@@ -71,6 +72,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory = new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
 	memory.objects = trove.NewCache(maxSize, expiration)
+	memory.maxSize = maxSize
 	memory.multiPartObjects = trove.NewCache(0, time.Duration(0))
 	memory.lock = new(sync.RWMutex)
 
@@ -204,6 +206,14 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	if size > int64(memory.maxSize) {
+		generic := drivers.GenericObjectError{Bucket: bucket, Object: key}
+		return "", iodine.New(drivers.EntityTooLarge{
+			GenericObjectError: generic,
+			Size:               strconv.FormatInt(size, 10),
+			MaxSize:            strconv.FormatUint(memory.maxSize, 10),
+		}, nil)
+	}
 	md5sum, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
 	// free
 	debug.FreeOSMemory()
