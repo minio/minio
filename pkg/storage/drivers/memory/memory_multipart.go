@@ -244,9 +244,8 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 			memory.lock.Unlock()
 			return "", iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
-		obj := object
-		size += int64(len(obj))
-		calcMD5Bytes := md5.Sum(obj)
+		size += int64(len(object))
+		calcMD5Bytes := md5.Sum(object)
 		// complete multi part request header md5sum per part is hex encoded
 		recvMD5Bytes, err := hex.DecodeString(strings.Trim(recvMD5, "\""))
 		if err != nil {
@@ -255,10 +254,12 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 		if !bytes.Equal(recvMD5Bytes, calcMD5Bytes[:]) {
 			return "", iodine.New(drivers.BadDigest{Md5: recvMD5, Bucket: bucket, Key: getMultipartKey(key, uploadID, i)}, nil)
 		}
-		_, err = io.Copy(&fullObject, bytes.NewBuffer(obj))
+		_, err = io.Copy(&fullObject, bytes.NewBuffer(object))
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}
+		object = nil
+		go debug.FreeOSMemory()
 	}
 	memory.lock.Unlock()
 
@@ -271,6 +272,7 @@ func (memory *memoryDriver) CompleteMultipartUpload(bucket, key, uploadID string
 		// which would in-turn cleanup properly in accordance with S3 Spec
 		return "", iodine.New(err, nil)
 	}
+	fullObject.Reset()
 	memory.cleanupMultiparts(bucket, key, uploadID)
 	memory.cleanupMultipartSession(bucket, key, uploadID)
 	return etag, nil

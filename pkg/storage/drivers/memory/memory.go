@@ -277,18 +277,18 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	if err != io.EOF {
 		return "", iodine.New(err, nil)
 	}
-	go debug.FreeOSMemory()
 	md5SumBytes := hash.Sum(nil)
 	totalLength := len(readBytes)
 
 	memory.lock.Lock()
 	ok := memory.objects.Set(objectKey, readBytes)
+	// setting up for de-allocation
+	readBytes = nil
+	go debug.FreeOSMemory()
 	memory.lock.Unlock()
 	if !ok {
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
-	// setting up for de-allocation
-	readBytes = nil
 
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
