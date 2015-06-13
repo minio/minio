@@ -44,6 +44,7 @@ type memoryDriver struct {
 	objects          *trove.Cache
 	multiPartObjects *trove.Cache
 	maxSize          uint64
+	expiration       time.Duration
 }
 
 type storedBucket struct {
@@ -73,6 +74,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 	memory.storedBuckets = make(map[string]storedBucket)
 	memory.objects = trove.NewCache(maxSize, expiration)
 	memory.maxSize = maxSize
+	memory.expiration = expiration
 	memory.multiPartObjects = trove.NewCache(0, time.Duration(0))
 	memory.lock = new(sync.RWMutex)
 
@@ -517,7 +519,9 @@ func (memory *memoryDriver) expiredObject(a ...interface{}) {
 		delete(storedBucket.objectMetadata, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
-			delete(memory.storedBuckets, bucket)
+			if time.Since(memory.storedBuckets[bucket].bucketMetadata.Created) > memory.expiration {
+				delete(memory.storedBuckets, bucket)
+			}
 		}
 	}
 	debug.FreeOSMemory()
