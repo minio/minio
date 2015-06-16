@@ -32,7 +32,7 @@ Storage Management:
 
 ### How to use Minio?
 
-[![asciicast](https://asciinema.org/a/20702.png)](https://asciinema.org/a/20702)
+[![asciicast](https://asciinema.org/a/21508.png)](https://asciinema.org/a/21508)
 
 ### Minio Client (mc) 
 
