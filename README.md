@@ -30,6 +30,22 @@ Storage Management:
   - Status: Work in progress.
 ~~~
 
+### Install
+
+#### GNU/Linux 
+Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/mc
+~~~
+$ wget https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/minio
+$ chmod +x minio
+$ ./minio mode memory limit 12GB expire 2h
+~~~
+#### OS X
+Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/darwin-amd64/mc
+~~~
+$ wget https://dl.minio.io:9000/updates/2015/Jun/darwin-amd64/minio
+$ chmod +x minio
+$ ./minio mode memory limit 12GB expire 2h
+~~~
 ### How to use Minio?
 
 [![asciicast](https://asciinema.org/a/21508.png)](https://asciinema.org/a/21508)
