@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"os/user"
 	"runtime"
@@ -103,18 +102,6 @@ func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
 }
 */
 
-// Build date
-var BuildDate string
-
-// getBuildDate -
-func getBuildDate() string {
-	t, _ := time.Parse(time.RFC3339Nano, BuildDate)
-	if t.IsZero() {
-		return ""
-	}
-	return t.Format(http.TimeFormat)
-}
-
 // Tries to get os/arch/platform specific information
 // Returns a map of current os/arch/platform/memstats
 func getSystemData() map[string]string {
@@ -141,33 +128,6 @@ func getSystemData() map[string]string {
 	}
 }
 
-// Version is based on MD5SUM of its binary
-var Version = mustHashBinarySelf()
-
-// Help template
-var minioHelpTemplate = `NAME:
-  {{.Name}} - {{.Usage}}
-
-USAGE:
-  {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
-
-COMMANDS:
-  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-  {{end}}{{if .Flags}}
-GLOBAL FLAGS:
-  {{range .Flags}}{{.}}
-  {{end}}{{end}}
-VERSION:
-  {{.Version}}
-  {{if .Compiled}}
-BUILD:
-  {{.Compiled}}{{end}}
-  {{range $key, $value := .ExtraInfo}}
-{{$key}}:
-  {{$value}}
-{{end}}
-`
-
 func main() {
 	// set up iodine
 	iodine.SetGlobalState("minio.version", Version)
@@ -180,7 +140,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "minio"
 	app.Version = Version
-	app.Compiled = getBuildDate()
+	app.Compiled = getVersion()
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
 	app.Flags = flags
@@ -191,6 +151,25 @@ func main() {
 		}
 		return nil
 	}
-	app.CustomAppHelpTemplate = minioHelpTemplate
+	app.CustomAppHelpTemplate = `NAME:
+  {{.Name}} - {{.Usage}}
+
+USAGE:
+  {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
+
+COMMANDS:
+  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .Flags}}
+GLOBAL FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}{{end}}
+VERSION:
+  {{if .Compiled}}
+  {{.Compiled}}{{end}}
+  {{range $key, $value := .ExtraInfo}}
+{{$key}}:
+  {{$value}}
+{{end}}
+`
 	app.RunAndExitOnError()
 }

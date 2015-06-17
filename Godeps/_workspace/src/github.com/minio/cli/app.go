@@ -198,7 +198,6 @@ func (a *App) Run(arguments []string) (err error) {
 // RunAndExitOnError - Another entry point to the cli app, takes care of passing arguments and error handling
 func (a *App) RunAndExitOnError() {
 	if err := a.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

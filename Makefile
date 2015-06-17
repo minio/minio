@@ -31,25 +31,20 @@ cyclo:
 	@echo "Running $@:"
 	@test -z "$$(gocyclo -over 19 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
-pre-build:
-	@echo "Running pre-build:"
-
-build-all: verifiers
-	@echo "Building Libraries:"
-	@godep go generate ./...
-	@godep go build -a ./... # have no stale packages
-
-test-all: build-all
-	@echo "Running Test Suites:"
-	@godep go test -race ./...
-
-test: test-all
-
-minio: pre-build build-all test-all
-
-install: minio
+gomake-all: getdeps verifiers
 	@echo "Installing minio:"
-	@godep go install -a -ldflags "-X main.BuildDate `go run buildscripts/date.go`" github.com/minio/minio
+	@go run make.go install
+
+release: getdeps verifiers
+	@echo "Installing minio:"
+	@go run make.go release
+	@go run make.go install
+
+godepupdate:
+	@for i in $(grep ImportPath Godeps/Godeps.json  | grep -v minio/minio | cut -f2 -d: | sed -e 's/,//' -e 's/^[ \t]*//' -e 's/[ \t]*$//' -e 's/\"//g'); do godep update $i; done
+
+
+install: gomake-all
 
 save:
 	@godep save ./...
@@ -65,3 +60,4 @@ clean:
 	@rm -fv cover.out
 	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv minio
+	@find Godeps -name "*.a" -type f -exec rm -vf {} \+
