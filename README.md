@@ -53,7 +53,7 @@ $ ./minio mode memory limit 12GB expire 2h
 
 ### How to use Minio?
 
-[![asciicast](https://asciinema.org/a/21508.png)](https://asciinema.org/a/21508)
+[![asciicast](https://asciinema.org/a/21575.png)](https://asciinema.org/a/21575)
 
 ### Minio Client (mc) 
 
