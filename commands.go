@@ -2,7 +2,7 @@ package main
 
 import (
 	"os/user"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -164,7 +164,7 @@ func runDonut(c *cli.Context) {
 	// supporting multiple paths
 	var paths []string
 	if strings.TrimSpace(c.Args().First()) == "" {
-		p := path.Join(u.HomeDir, "minio-storage", "donut")
+		p := filepath.Join(u.HomeDir, "minio-storage", "donut")
 		paths = append(paths, p)
 	} else {
 		for _, arg := range c.Args() {

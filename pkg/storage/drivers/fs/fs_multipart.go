@@ -1,3 +1,19 @@
+/*
+ * Mini Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package filesystem
 
 import (
@@ -13,7 +29,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +53,7 @@ type Multiparts struct {
 }
 
 func (fs *fsDriver) loadActiveSessions(bucket string) {
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	if err != nil {
 		return
@@ -112,7 +128,7 @@ func (fs *fsDriver) ListMultipartUploads(bucket string, resources drivers.Bucket
 	if !drivers.IsValidBucket(bucket) {
 		return drivers.BucketMultipartResourcesMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	// check bucket exists
 	if os.IsNotExist(err) {
@@ -207,7 +223,7 @@ func (fs *fsDriver) NewMultipartUpload(bucket, key, contentType string) (string,
 		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
 
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	// check bucket exists
 	if os.IsNotExist(err) {
@@ -216,8 +232,8 @@ func (fs *fsDriver) NewMultipartUpload(bucket, key, contentType string) (string,
 	if err != nil {
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
-	objectPath := path.Join(bucketPath, key)
-	objectDir := path.Dir(objectPath)
+	objectPath := filepath.Join(bucketPath, key)
+	objectDir := filepath.Dir(objectPath)
 	if _, err := os.Stat(objectDir); os.IsNotExist(err) {
 		err = os.MkdirAll(objectDir, 0700)
 		if err != nil {
@@ -318,7 +334,7 @@ func (fs *fsDriver) CreateObjectPart(bucket, key, uploadID string, partID int, c
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
 
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 
 	// check bucket exists
@@ -329,8 +345,8 @@ func (fs *fsDriver) CreateObjectPart(bucket, key, uploadID string, partID int, c
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
 
-	objectPath := path.Join(bucketPath, key)
-	objectDir := path.Dir(objectPath)
+	objectPath := filepath.Join(bucketPath, key)
+	objectDir := filepath.Dir(objectPath)
 	if _, err := os.Stat(objectDir); os.IsNotExist(err) {
 		err = os.MkdirAll(objectDir, 0700)
 		if err != nil {
@@ -400,7 +416,7 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
 	}
 
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	// check bucket exists
 	if os.IsNotExist(err) {
@@ -410,7 +426,7 @@ func (fs *fsDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts 
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
 
-	objectPath := path.Join(bucketPath, key)
+	objectPath := filepath.Join(bucketPath, key)
 	// check if object exists
 	if _, err := os.Stat(objectPath); !os.IsNotExist(err) {
 		return "", iodine.New(drivers.ObjectExists{
@@ -506,7 +522,7 @@ func (fs *fsDriver) ListObjectParts(bucket, key string, resources drivers.Object
 		startPartNumber = objectResourcesMetadata.PartNumberMarker
 	}
 
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	// check bucket exists
 	if os.IsNotExist(err) {
@@ -516,7 +532,7 @@ func (fs *fsDriver) ListObjectParts(bucket, key string, resources drivers.Object
 		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.InternalError{}, nil)
 	}
 
-	objectPath := path.Join(bucketPath, key)
+	objectPath := filepath.Join(bucketPath, key)
 	multiPartfile, err := os.OpenFile(objectPath+"$multiparts", os.O_RDONLY, 0600)
 	if err != nil {
 		return drivers.ObjectResourcesMetadata{}, iodine.New(err, nil)
@@ -563,7 +579,7 @@ func (fs *fsDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
 		return iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
 	}
 
-	bucketPath := path.Join(fs.root, bucket)
+	bucketPath := filepath.Join(fs.root, bucket)
 	_, err := os.Stat(bucketPath)
 	// check bucket exists
 	if os.IsNotExist(err) {
@@ -573,7 +589,7 @@ func (fs *fsDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
 		return iodine.New(drivers.InternalError{}, nil)
 	}
 
-	objectPath := path.Join(bucketPath, key)
+	objectPath := filepath.Join(bucketPath, key)
 	multiPartfile, err := os.OpenFile(objectPath+"$multiparts", os.O_RDWR, 0600)
 	if err != nil {
 		return iodine.New(err, nil)

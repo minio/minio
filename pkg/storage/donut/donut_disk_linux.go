@@ -19,7 +19,7 @@ package donut
 import (
 	"errors"
 	"os"
-	"path"
+	"path/filepath"
 	"syscall"
 
 	"io/ioutil"
@@ -88,12 +88,12 @@ func (d disk) GetFSInfo() map[string]string {
 
 // MakeDir - make a directory inside disk root path
 func (d disk) MakeDir(dirname string) error {
-	return os.MkdirAll(path.Join(d.root, dirname), 0700)
+	return os.MkdirAll(filepath.Join(d.root, dirname), 0700)
 }
 
 // ListDir - list a directory inside disk root path, get only directories
 func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
-	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
+	contents, err := ioutil.ReadDir(filepath.Join(d.root, dirname))
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -109,7 +109,7 @@ func (d disk) ListDir(dirname string) ([]os.FileInfo, error) {
 
 // ListFiles - list a directory inside disk root path, get only files
 func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
-	contents, err := ioutil.ReadDir(path.Join(d.root, dirname))
+	contents, err := ioutil.ReadDir(filepath.Join(d.root, dirname))
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -128,9 +128,9 @@ func (d disk) MakeFile(filename string) (*os.File, error) {
 	if filename == "" {
 		return nil, iodine.New(errors.New("Invalid argument"), nil)
 	}
-	filePath := path.Join(d.root, filename)
+	filePath := filepath.Join(d.root, filename)
 	// Create directories if they don't exist
-	if err := os.MkdirAll(path.Dir(filePath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return nil, iodine.New(err, nil)
 	}
 	dataFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0600)
@@ -145,7 +145,7 @@ func (d disk) OpenFile(filename string) (*os.File, error) {
 	if filename == "" {
 		return nil, iodine.New(errors.New("Invalid argument"), nil)
 	}
-	dataFile, err := os.Open(path.Join(d.root, filename))
+	dataFile, err := os.Open(filepath.Join(d.root, filename))
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}

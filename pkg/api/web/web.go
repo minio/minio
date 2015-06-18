@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"path"
+	"path/filepath"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/api/config"
@@ -52,7 +52,7 @@ func HTTPHandler() http.Handler {
 		log.Fatal(iodine.New(err, nil))
 	}
 
-	api.webPath = path.Join(api.conf.GetConfigPath(), defaultWeb)
+	api.webPath = filepath.Join(api.conf.GetConfigPath(), defaultWeb)
 	mux.Handle("/{polygon:.*}", http.FileServer(http.Dir(api.webPath))).Methods("GET")
 	mux.HandleFunc("/access", api.accessHandler).Methods("POST")
 	return mux
