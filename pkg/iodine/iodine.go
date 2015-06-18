@@ -88,11 +88,8 @@ func GetGlobalState() map[string]string {
 // GetGlobalStateKey - get value for key from globalState struct
 func GetGlobalStateKey(k string) string {
 	globalState.RLock()
-	result, ok := globalState.m[k]
+	result, _ := globalState.m[k]
 	globalState.RUnlock()
-	if !ok {
-		return ""
-	}
 	return result
 }
 
