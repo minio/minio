@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +56,7 @@ func createNodeDiskMap(p string) map[string][]string {
 	nodes := make(map[string][]string)
 	nodes["localhost"] = make([]string, 16)
 	for i := 0; i < len(nodes["localhost"]); i++ {
-		diskPath := path.Join(p, strconv.Itoa(i))
+		diskPath := filepath.Join(p, strconv.Itoa(i))
 		if _, err := os.Stat(diskPath); err != nil {
 			if os.IsNotExist(err) {
 				os.MkdirAll(diskPath, 0700)
@@ -74,7 +74,7 @@ func createNodeDiskMapFromSlice(paths []string) map[string][]string {
 	diskPaths := make([]string, len(paths))
 	nodes := make(map[string][]string)
 	for i, p := range paths {
-		diskPath := path.Join(p, strconv.Itoa(i))
+		diskPath := filepath.Join(p, strconv.Itoa(i))
 		if _, err := os.Stat(diskPath); err != nil {
 			if os.IsNotExist(err) {
 				os.MkdirAll(diskPath, 0700)

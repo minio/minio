@@ -21,7 +21,7 @@ import (
 	"io"
 	"os"
 	"os/user"
-	"path"
+	"path/filepath"
 	"sync"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -49,13 +49,13 @@ func (c *Config) SetupConfig() error {
 		return iodine.New(err, nil)
 	}
 
-	confPath := path.Join(u.HomeDir, ".minio")
+	confPath := filepath.Join(u.HomeDir, ".minio")
 	if err := os.MkdirAll(confPath, 0700); err != nil {
 		return iodine.New(err, nil)
 	}
 
 	c.ConfigPath = confPath
-	c.ConfigFile = path.Join(c.ConfigPath, "config.json")
+	c.ConfigFile = filepath.Join(c.ConfigPath, "config.json")
 	if _, err := os.Stat(c.ConfigFile); os.IsNotExist(err) {
 		_, err = os.Create(c.ConfigFile)
 		if err != nil {

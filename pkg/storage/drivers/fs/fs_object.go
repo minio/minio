@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"crypto/md5"
@@ -47,7 +47,7 @@ func (fs *fsDriver) GetPartialObject(w io.Writer, bucket, object string, start, 
 		return 0, iodine.New(drivers.ObjectNameInvalid{Bucket: bucket, Object: object}, nil)
 	}
 
-	objectPath := path.Join(fs.root, bucket, object)
+	objectPath := filepath.Join(fs.root, bucket, object)
 	filestat, err := os.Stat(objectPath)
 	switch err := err.(type) {
 	case nil:
@@ -94,7 +94,7 @@ func (fs *fsDriver) GetObject(w io.Writer, bucket string, object string) (int64,
 	if drivers.IsValidObjectName(object) == false {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Bucket: bucket, Object: object}, nil)
 	}
-	objectPath := path.Join(fs.root, bucket, object)
+	objectPath := filepath.Join(fs.root, bucket, object)
 	filestat, err := os.Stat(objectPath)
 	switch err := err.(type) {
 	case nil:
@@ -134,7 +134,7 @@ func (fs *fsDriver) GetObjectMetadata(bucket, object string) (drivers.ObjectMeta
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Bucket: bucket, Object: bucket}, nil)
 	}
 
-	// Do not use path.Join() since path.Join strips off any object names with '/', use them as is
+	// Do not use filepath.Join() since filepath.Join strips off any object names with '/', use them as is
 	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
 	objectPath := fs.root + "/" + bucket + "/" + object
 	stat, err := os.Stat(objectPath)
@@ -166,7 +166,7 @@ func (fs *fsDriver) GetObjectMetadata(bucket, object string) (drivers.ObjectMeta
 	}
 	contentType = strings.TrimSpace(contentType)
 
-	etag := bucket + "#" + path.Base(object)
+	etag := bucket + "#" + filepath.Base(object)
 	if len(deserializedMetadata.Md5sum) != 0 {
 		etag = hex.EncodeToString(deserializedMetadata.Md5sum)
 	}
@@ -213,7 +213,7 @@ func (fs *fsDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string
 	}
 
 	// check bucket exists
-	if _, err := os.Stat(path.Join(fs.root, bucket)); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(fs.root, bucket)); os.IsNotExist(err) {
 		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 
@@ -229,8 +229,8 @@ func (fs *fsDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string
 	contentType = strings.TrimSpace(contentType)
 
 	// get object path
-	objectPath := path.Join(fs.root, bucket, key)
-	objectDir := path.Dir(objectPath)
+	objectPath := filepath.Join(fs.root, bucket, key)
+	objectDir := filepath.Dir(objectPath)
 	if _, err := os.Stat(objectDir); os.IsNotExist(err) {
 		err = os.MkdirAll(objectDir, 0700)
 		if err != nil {

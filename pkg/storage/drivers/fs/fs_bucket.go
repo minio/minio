@@ -18,7 +18,6 @@ package filesystem
 
 import (
 	"os"
-	"path"
 	"sort"
 
 	"io/ioutil"
@@ -70,7 +69,7 @@ func (fs *fsDriver) CreateBucket(bucket, acl string) error {
 	}
 
 	// get bucket path
-	bucketDir := path.Join(fs.root, bucket)
+	bucketDir := filepath.Join(fs.root, bucket)
 
 	// check if bucket exists
 	if _, err := os.Stat(bucketDir); err == nil {
@@ -95,7 +94,7 @@ func (fs *fsDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, er
 		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	// get bucket path
-	bucketDir := path.Join(fs.root, bucket)
+	bucketDir := filepath.Join(fs.root, bucket)
 	bucketMetadata := drivers.BucketMetadata{}
 	fi, err := os.Stat(bucketDir)
 	// check if bucket exists
@@ -140,7 +139,7 @@ func (fs *fsDriver) SetBucketMetadata(bucket, acl string) error {
 		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
 	// get bucket path
-	bucketDir := path.Join(fs.root, bucket)
+	bucketDir := filepath.Join(fs.root, bucket)
 	err := os.Chmod(bucketDir, aclToPerm(acl))
 	if err != nil {
 		return iodine.New(err, nil)
@@ -160,7 +159,7 @@ func (fs *fsDriver) ListObjects(bucket string, resources drivers.BucketResources
 		return []drivers.ObjectMetadata{}, resources, iodine.New(drivers.ObjectNameInvalid{Bucket: bucket, Object: resources.Prefix}, nil)
 	}
 
-	rootPrefix := path.Join(fs.root, bucket)
+	rootPrefix := filepath.Join(fs.root, bucket)
 	// check bucket exists
 	if _, err := os.Stat(rootPrefix); os.IsNotExist(err) {
 		return []drivers.ObjectMetadata{}, resources, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)

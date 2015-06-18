@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -151,7 +151,7 @@ func createStackEntry() StackEntry {
 	host, _ := os.Hostname()
 	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
-	_, function = path.Split(function)
+	_, function = filepath.Split(function)
 	file = strings.TrimPrefix(file, gopath) // trim gopath from file
 
 	data := GetGlobalState()
@@ -222,8 +222,8 @@ func (err Error) Error() string {
 
 func init() {
 	_, iodineFile, _, _ := runtime.Caller(0)
-	iodineFile = path.Dir(iodineFile)   // trim iodine.go
-	iodineFile = path.Dir(iodineFile)   // trim iodine
-	iodineFile = path.Dir(iodineFile)   // trim minio
-	gopath = path.Dir(iodineFile) + "/" // trim github.com
+	iodineFile = filepath.Dir(iodineFile)   // trim iodine.go
+	iodineFile = filepath.Dir(iodineFile)   // trim iodine
+	iodineFile = filepath.Dir(iodineFile)   // trim minio
+	gopath = filepath.Dir(iodineFile) + "/" // trim github.com
 }

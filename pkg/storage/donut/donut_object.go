@@ -17,11 +17,10 @@
 package donut
 
 import (
-	"errors"
-	"path"
-
 	"encoding/json"
+	"errors"
 	"io/ioutil"
+	"path/filepath"
 )
 
 // object internal struct
@@ -39,13 +38,13 @@ func NewObject(objectName, p string) (Object, error) {
 	}
 	o := object{}
 	o.name = objectName
-	o.objectPath = path.Join(p, objectName)
+	o.objectPath = filepath.Join(p, objectName)
 	return o, nil
 }
 
 func (o object) GetObjectMetadata() (map[string]string, error) {
 	objectMetadata := make(map[string]string)
-	objectMetadataBytes, err := ioutil.ReadFile(path.Join(o.objectPath, objectMetadataConfig))
+	objectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +57,7 @@ func (o object) GetObjectMetadata() (map[string]string, error) {
 
 func (o object) GetDonutObjectMetadata() (map[string]string, error) {
 	donutObjectMetadata := make(map[string]string)
-	donutObjectMetadataBytes, err := ioutil.ReadFile(path.Join(o.objectPath, donutObjectMetadataConfig))
+	donutObjectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, donutObjectMetadataConfig))
 	if err != nil {
 		return nil, err
 	}

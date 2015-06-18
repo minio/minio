@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -76,13 +76,13 @@ func (b bucket) ListObjects() (map[string]Object, error) {
 		}
 		for _, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
-			bucketPath := path.Join(b.donutName, bucketSlice)
+			bucketPath := filepath.Join(b.donutName, bucketSlice)
 			objects, err := disk.ListDir(bucketPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
 			for _, object := range objects {
-				newObject, err := NewObject(object.Name(), path.Join(disk.GetPath(), bucketPath))
+				newObject, err := NewObject(object.Name(), filepath.Join(disk.GetPath(), bucketPath))
 				if err != nil {
 					return nil, iodine.New(err, nil)
 				}

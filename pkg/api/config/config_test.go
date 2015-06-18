@@ -19,7 +19,7 @@ package config
 import (
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -38,7 +38,7 @@ func (s *MySuite) TestConfig(c *C) {
 	conf.ConfigLock = new(sync.RWMutex)
 	conf.ConfigPath, _ = ioutil.TempDir("/tmp", "minio-test-")
 	defer os.RemoveAll(conf.ConfigPath)
-	conf.ConfigFile = path.Join(conf.ConfigPath, "config.json")
+	conf.ConfigFile = filepath.Join(conf.ConfigPath, "config.json")
 	if _, err := os.Stat(conf.ConfigFile); os.IsNotExist(err) {
 		_, err = os.Create(conf.ConfigFile)
 		if err != nil {

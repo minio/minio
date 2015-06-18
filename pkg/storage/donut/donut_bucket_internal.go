@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -278,7 +278,7 @@ func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, 
 		readers = make([]io.ReadCloser, len(disks))
 		for _, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
-			objectPath := path.Join(b.donutName, bucketSlice, objectName, objectMeta)
+			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
 			objectSlice, err := disk.OpenFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
@@ -302,7 +302,7 @@ func (b bucket) getDiskWriters(objectName, objectMeta string) ([]io.WriteCloser,
 		writers = make([]io.WriteCloser, len(disks))
 		for _, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
-			objectPath := path.Join(b.donutName, bucketSlice, objectName, objectMeta)
+			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
 			objectSlice, err := disk.MakeFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)

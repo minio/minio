@@ -3,7 +3,7 @@ package donut
 import (
 	"encoding/json"
 	"errors"
-	"path"
+	"path/filepath"
 
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -54,7 +54,7 @@ func (d donut) SaveConfig() error {
 			return iodine.New(err, nil)
 		}
 		for _, disk := range disks {
-			donutConfigPath := path.Join(d.name, donutConfig)
+			donutConfigPath := filepath.Join(d.name, donutConfig)
 			donutConfigWriter, err := disk.MakeFile(donutConfigPath)
 			defer donutConfigWriter.Close()
 			if err != nil {

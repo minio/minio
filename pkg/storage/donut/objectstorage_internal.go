@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -40,7 +40,7 @@ func (d donut) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 		}
 		writers = make([]io.WriteCloser, len(disks))
 		for _, disk := range disks {
-			bucketMetaDataWriter, err := disk.MakeFile(path.Join(d.name, bucketMetadataConfig))
+			bucketMetaDataWriter, err := disk.MakeFile(filepath.Join(d.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -59,7 +59,7 @@ func (d donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 		}
 		readers = make([]io.ReadCloser, len(disks))
 		for _, disk := range disks {
-			bucketMetaDataReader, err := disk.OpenFile(path.Join(d.name, bucketMetadataConfig))
+			bucketMetaDataReader, err := disk.OpenFile(filepath.Join(d.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -126,7 +126,7 @@ func (d donut) makeDonutBucket(bucketName, acl string) error {
 		}
 		for _, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, disk.GetOrder())
-			err := disk.MakeDir(path.Join(d.name, bucketSlice))
+			err := disk.MakeDir(filepath.Join(d.name, bucketSlice))
 			if err != nil {
 				return iodine.New(err, nil)
 			}
