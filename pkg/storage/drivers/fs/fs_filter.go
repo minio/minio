@@ -24,7 +24,7 @@ import (
 	"github.com/minio/minio/pkg/storage/drivers"
 )
 
-func (fs *fsDriver) filter(bucket, name string, file os.FileInfo, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+func (fs *fsDriver) filterObjects(bucket, name string, file os.FileInfo, resources drivers.BucketResourcesMetadata) (drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	var err error
 	var metadata drivers.ObjectMetadata
 
