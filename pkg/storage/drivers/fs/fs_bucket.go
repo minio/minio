@@ -192,7 +192,7 @@ func (fs *fsDriver) ListObjects(bucket string, resources drivers.BucketResources
 			break
 		}
 		if name > resources.Marker {
-			metadata, resources, err = fs.filter(bucket, name, p.files[name], resources)
+			metadata, resources, err = fs.filterObjects(bucket, name, p.files[name], resources)
 			if err != nil {
 				return []drivers.ObjectMetadata{}, resources, iodine.New(err, nil)
 			}
