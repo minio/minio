@@ -118,7 +118,7 @@ func (s *MySuite) TearDownTest(c *C) {
 }
 
 func setDummyAuthHeader(req *http.Request) {
-	authDummy := "AWS4-HMAC-SHA256 Credential=AC5NH40NQLTL4DUMMY/20130524/us-east-1/s3/aws4_request, SignedHeaders=date;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class, Signature=98ad721746da40c64f1a55b78f14c238d841ea1380cd77a1b5971af0ece108bd"
+	authDummy := "AWS4-HMAC-SHA256 Credential=AC5NH40NQLTL4D2W92PM/20130524/us-east-1/s3/aws4_request, SignedHeaders=date;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class, Signature=98ad721746da40c64f1a55b78f14c238d841ea1380cd77a1b5971af0ece108bd"
 	req.Header.Set("Authorization", authDummy)
 	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 }
