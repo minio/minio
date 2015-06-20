@@ -130,6 +130,9 @@ func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets returns a list of buckets
 func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error) {
+	if d.donut == nil {
+		return nil, iodine.New(drivers.InternalError{}, nil)
+	}
 	buckets, err := d.donut.ListBuckets()
 	if err != nil {
 		return nil, err
@@ -151,6 +154,9 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 
 // CreateBucket creates a new bucket
 func (d donutDriver) CreateBucket(bucketName, acl string) error {
+	if d.donut == nil {
+		return iodine.New(drivers.InternalError{}, nil)
+	}
 	if !drivers.IsValidBucketACL(acl) {
 		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
@@ -172,6 +178,9 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 
 // GetBucketMetadata retrieves an bucket's metadata
 func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadata, error) {
+	if d.donut == nil {
+		return drivers.BucketMetadata{}, iodine.New(drivers.InternalError{}, nil)
+	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return drivers.BucketMetadata{}, drivers.BucketNameInvalid{Bucket: bucketName}
 	}
@@ -197,8 +206,11 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 
 // SetBucketMetadata sets bucket's metadata
 func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
+	if d.donut == nil {
+		return iodine.New(drivers.InternalError{}, nil)
+	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
-		return drivers.BucketNameInvalid{Bucket: bucketName}
+		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if strings.TrimSpace(acl) == "" {
 		acl = "private"
@@ -214,6 +226,9 @@ func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
 
 // GetObject retrieves an object and writes it to a writer
 func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) (int64, error) {
+	if d.donut == nil {
+		return 0, iodine.New(drivers.InternalError{}, nil)
+	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
@@ -233,6 +248,9 @@ func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) 
 
 // GetPartialObject retrieves an object range and writes it to a writer
 func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string, start, length int64) (int64, error) {
+	if d.donut == nil {
+		return 0, iodine.New(drivers.InternalError{}, nil)
+	}
 	// TODO more efficient get partial object with proper donut support
 	errParams := map[string]string{
 		"bucketName": bucketName,
@@ -283,18 +301,21 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 		"bucketName": bucketName,
 		"objectName": objectName,
 	}
+	if d.donut == nil {
+		return drivers.ObjectMetadata{}, iodine.New(drivers.InternalError{}, errParams)
+	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
-		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
+		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, errParams)
 	}
 	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
-		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
+		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
 	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
-		return drivers.ObjectMetadata{}, drivers.ObjectNotFound{
+		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
 			Object: objectName,
-		}
+		}, errParams)
 	}
 	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
 	if err != nil {
@@ -326,6 +347,9 @@ func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
+	}
+	if d.donut == nil {
+		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.InternalError{}, errParams)
 	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
@@ -374,6 +398,9 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		"bucketName":  bucketName,
 		"objectName":  objectName,
 		"contentType": contentType,
+	}
+	if d.donut == nil {
+		return "", iodine.New(drivers.InternalError{}, errParams)
 	}
 	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
 		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
