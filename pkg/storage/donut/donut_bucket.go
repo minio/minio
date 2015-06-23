@@ -17,7 +17,6 @@
 package donut
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -50,7 +49,7 @@ func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bu
 		"aclType":    aclType,
 	}
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
-		return nil, nil, iodine.New(errors.New("invalid argument"), errParams)
+		return nil, nil, iodine.New(InvalidArgument{}, errParams)
 	}
 	bucketMetadata := make(map[string]string)
 	bucketMetadata["acl"] = aclType
@@ -92,7 +91,7 @@ func (b bucket) ListObjects() (map[string]Object, error) {
 				}
 				objectName, ok := newObjectMetadata["object"]
 				if !ok {
-					return nil, iodine.New(errors.New("object corrupted"), nil)
+					return nil, iodine.New(ObjectCorrupted{Object: object.Name()}, nil)
 				}
 				b.objects[objectName] = newObject
 			}
@@ -121,7 +120,7 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 		return nil, 0, iodine.New(err, nil)
 	}
 	if objectName == "" || writer == nil || len(objectMetadata) == 0 {
-		return nil, 0, iodine.New(errors.New("invalid argument"), nil)
+		return nil, 0, iodine.New(InvalidArgument{}, nil)
 	}
 	size, err = strconv.ParseInt(objectMetadata["size"], 10, 64)
 	if err != nil {
@@ -140,7 +139,7 @@ func (b bucket) GetObject(objectName string) (reader io.ReadCloser, size int64, 
 // PutObject - put a new object
 func (b bucket) PutObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
 	if objectName == "" || objectData == nil {
-		return "", iodine.New(errors.New("invalid argument"), nil)
+		return "", iodine.New(InvalidArgument{}, nil)
 	}
 	writers, err := b.getDiskWriters(b.normalizeObjectName(objectName), "data")
 	if err != nil {

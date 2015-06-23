@@ -18,7 +18,6 @@ package donut
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -111,7 +110,7 @@ func (d donut) makeDonutBucket(bucketName, acl string) error {
 		return iodine.New(err, nil)
 	}
 	if _, ok := d.buckets[bucketName]; ok {
-		return iodine.New(errors.New("bucket exists"), nil)
+		return iodine.New(BucketExists{Bucket: bucketName}, nil)
 	}
 	bucket, bucketMetadata, err := NewBucket(bucketName, acl, d.name, d.nodes)
 	if err != nil {
@@ -169,7 +168,7 @@ func (d donut) getDonutBuckets() error {
 			for _, dir := range dirs {
 				splitDir := strings.Split(dir.Name(), "$")
 				if len(splitDir) < 3 {
-					return iodine.New(errors.New("corrupted backend"), nil)
+					return iodine.New(CorruptedBackend{Backend: dir.Name()}, nil)
 				}
 				bucketName := splitDir[0]
 				// we dont need this NewBucket once we cache from makeDonutBucket()

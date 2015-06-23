@@ -29,8 +29,6 @@ import (
 
 	"io/ioutil"
 
-	"errors"
-
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/storage/donut"
 	"github.com/minio/minio/pkg/storage/drivers"
@@ -430,25 +428,25 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 }
 
 func (d donutDriver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
-	return drivers.BucketMultipartResourcesMetadata{}, iodine.New(errors.New("Not Implemented"), nil)
+	return drivers.BucketMultipartResourcesMetadata{}, iodine.New(drivers.APINotImplemented{API: "ListMultipartUploads"}, nil)
 }
 
 func (d donutDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
-	return "", iodine.New(errors.New("Not Implemented"), nil)
+	return "", iodine.New(drivers.APINotImplemented{API: "NewMultipartUpload"}, nil)
 }
 
 func (d donutDriver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	return "", iodine.New(errors.New("Not Implemented"), nil)
+	return "", iodine.New(drivers.APINotImplemented{API: "CreateObjectPart"}, nil)
 }
 
 func (d donutDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
-	return "", iodine.New(errors.New("Not Implemented"), nil)
+	return "", iodine.New(drivers.APINotImplemented{API: "CompleteMultipartUpload"}, nil)
 }
 
 func (d donutDriver) ListObjectParts(bucket, key string, resources drivers.ObjectResourcesMetadata) (drivers.ObjectResourcesMetadata, error) {
-	return drivers.ObjectResourcesMetadata{}, iodine.New(errors.New("Not Implemented"), nil)
+	return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.APINotImplemented{API: "ListObjectParts"}, nil)
 }
 
 func (d donutDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
-	return iodine.New(errors.New("Not Implemented"), nil)
+	return iodine.New(drivers.APINotImplemented{API: "AbortMultipartUpload"}, nil)
 }

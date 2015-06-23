@@ -17,7 +17,6 @@
 package donut
 
 import (
-	"errors"
 	"strconv"
 
 	encoding "github.com/minio/minio/pkg/erasure"
@@ -39,7 +38,7 @@ func getErasureTechnique(technique string) (encoding.Technique, error) {
 	case technique == "Vandermonde":
 		return encoding.Cauchy, nil
 	default:
-		return encoding.None, iodine.New(errors.New("Invalid erasure technique"), nil)
+		return encoding.None, iodine.New(InvalidErasureTechnique{Technique: technique}, nil)
 	}
 }
 
@@ -70,7 +69,7 @@ func NewEncoder(k, m uint8, technique string) (Encoder, error) {
 // GetEncodedBlockLen - wrapper around erasure function with the same name
 func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
 	if dataLength <= 0 {
-		return 0, iodine.New(errors.New("invalid argument"), nil)
+		return 0, iodine.New(InvalidArgument{}, nil)
 	}
 	return encoding.GetEncodedBlockLen(dataLength, e.k), nil
 }
@@ -78,7 +77,7 @@ func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
 // Encode - erasure code input bytes
 func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 	if data == nil {
-		return nil, iodine.New(errors.New("invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	encodedData, err = e.encoder.Encode(data)
 	if err != nil {

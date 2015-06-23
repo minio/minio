@@ -17,9 +17,9 @@
 package donut
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"io/ioutil"
@@ -37,7 +37,7 @@ type disk struct {
 // NewDisk - instantiate new disk
 func NewDisk(diskPath string, diskOrder int) (Disk, error) {
 	if diskPath == "" || diskOrder < 0 {
-		return nil, iodine.New(errors.New("invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(diskPath, &s)
@@ -61,7 +61,9 @@ func NewDisk(diskPath string, diskOrder int) (Disk, error) {
 		d.filesystem["MountPoint"] = d.root
 		return d, nil
 	}
-	return nil, iodine.New(errors.New("unsupported filesystem"), nil)
+	return nil, iodine.New(UnsupportedFilesystem{
+		Type: strconv.FormatInt(s.Type, 10),
+	}, map[string]string{"Type": strconv.FormatInt(s.Type, 10)})
 }
 
 // GetPath - get root disk path
@@ -126,7 +128,7 @@ func (d disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 // MakeFile - create a file inside disk root path
 func (d disk) MakeFile(filename string) (*os.File, error) {
 	if filename == "" {
-		return nil, iodine.New(errors.New("Invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	filePath := filepath.Join(d.root, filename)
 	// Create directories if they don't exist
@@ -143,7 +145,7 @@ func (d disk) MakeFile(filename string) (*os.File, error) {
 // OpenFile - read a file inside disk root path
 func (d disk) OpenFile(filename string) (*os.File, error) {
 	if filename == "" {
-		return nil, iodine.New(errors.New("Invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	dataFile, err := os.Open(filepath.Join(d.root, filename))
 	if err != nil {

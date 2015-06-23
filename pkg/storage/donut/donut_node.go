@@ -16,11 +16,7 @@
 
 package donut
 
-import (
-	"errors"
-
-	"github.com/minio/minio/pkg/iodine"
-)
+import "github.com/minio/minio/pkg/iodine"
 
 // node struct internal
 type node struct {
@@ -31,7 +27,7 @@ type node struct {
 // NewNode - instantiates a new node
 func NewNode(hostname string) (Node, error) {
 	if hostname == "" {
-		return nil, iodine.New(errors.New("invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	disks := make(map[string]Disk)
 	n := node{
@@ -54,7 +50,7 @@ func (n node) ListDisks() (map[string]Disk, error) {
 // AttachDisk - attach a disk
 func (n node) AttachDisk(disk Disk) error {
 	if disk == nil {
-		return iodine.New(errors.New("Invalid argument"), nil)
+		return iodine.New(InvalidArgument{}, nil)
 	}
 	n.disks[disk.GetPath()] = disk
 	return nil
@@ -68,10 +64,10 @@ func (n node) DetachDisk(disk Disk) error {
 
 // SaveConfig - save node configuration
 func (n node) SaveConfig() error {
-	return errors.New("Not Implemented")
+	return iodine.New(NotImplemented{Function: "SaveConfig"}, nil)
 }
 
 // LoadConfig - load node configuration from saved configs
 func (n node) LoadConfig() error {
-	return errors.New("Not Implemented")
+	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
 }

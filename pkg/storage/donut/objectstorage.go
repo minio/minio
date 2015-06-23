@@ -17,7 +17,6 @@
 package donut
 
 import (
-	"errors"
 	"io"
 	"sort"
 	"strconv"
@@ -29,7 +28,7 @@ import (
 // MakeBucket - make a new bucket
 func (d donut) MakeBucket(bucket, acl string) error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return iodine.New(errors.New("invalid argument"), nil)
+		return iodine.New(InvalidArgument{}, nil)
 	}
 	return d.makeDonutBucket(bucket, acl)
 }
@@ -41,7 +40,7 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 		return nil, iodine.New(err, nil)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return nil, iodine.New(errors.New("bucket does not exist"), nil)
+		return nil, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	metadata, err := d.getDonutBucketMetadata()
 	if err != nil {
@@ -98,7 +97,7 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 		return nil, nil, false, iodine.New(err, errParams)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return nil, nil, false, iodine.New(errors.New("bucket does not exist"), errParams)
+		return nil, nil, false, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
 	objectList, err := d.buckets[bucket].ListObjects()
 	if err != nil {
@@ -165,17 +164,17 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 		"object": object,
 	}
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return "", iodine.New(errors.New("invalid argument"), errParams)
+		return "", iodine.New(InvalidArgument{}, errParams)
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return "", iodine.New(errors.New("invalid argument"), errParams)
+		return "", iodine.New(InvalidArgument{}, errParams)
 	}
 	err := d.getDonutBuckets()
 	if err != nil {
 		return "", iodine.New(err, errParams)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return "", iodine.New(errors.New("bucket does not exist"), nil)
+		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	objectList, err := d.buckets[bucket].ListObjects()
 	if err != nil {
@@ -183,7 +182,7 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 	}
 	for objectName := range objectList {
 		if objectName == object {
-			return "", iodine.New(errors.New("object exists"), nil)
+			return "", iodine.New(ObjectExists{Object: object}, nil)
 		}
 	}
 	md5sum, err := d.buckets[bucket].PutObject(object, reader, expectedMD5Sum, metadata)
@@ -200,17 +199,17 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 		"object": object,
 	}
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return nil, 0, iodine.New(errors.New("invalid argument"), errParams)
+		return nil, 0, iodine.New(InvalidArgument{}, errParams)
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return nil, 0, iodine.New(errors.New("invalid argument"), errParams)
+		return nil, 0, iodine.New(InvalidArgument{}, errParams)
 	}
 	err = d.getDonutBuckets()
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return nil, 0, iodine.New(errors.New("bucket does not exist"), errParams)
+		return nil, 0, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
 	objectList, err := d.buckets[bucket].ListObjects()
 	if err != nil {
@@ -221,7 +220,7 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 			return d.buckets[bucket].GetObject(object)
 		}
 	}
-	return nil, 0, iodine.New(errors.New("object not found"), nil)
+	return nil, 0, iodine.New(ObjectNotFound{Object: object}, nil)
 }
 
 // GetObjectMetadata - get object metadata
@@ -235,7 +234,7 @@ func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, erro
 		return nil, iodine.New(err, errParams)
 	}
 	if _, ok := d.buckets[bucket]; !ok {
-		return nil, iodine.New(errors.New("bucket does not exist"), errParams)
+		return nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
 	objectList, err := d.buckets[bucket].ListObjects()
 	if err != nil {
@@ -243,7 +242,7 @@ func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, erro
 	}
 	donutObject, ok := objectList[object]
 	if !ok {
-		return nil, iodine.New(errors.New("object does not exist"), errParams)
+		return nil, iodine.New(ObjectNotFound{Object: object}, errParams)
 	}
 	return donutObject.GetObjectMetadata()
 }
