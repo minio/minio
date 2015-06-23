@@ -16,6 +16,9 @@
 #
 
 _init() {
+
+    shopt -s extglob
+
     ## Minimum required versions for build dependencies
     GCC_VERSION="4.0"
     CLANG_VERSION="3.5"
@@ -91,6 +94,21 @@ check_golang_env() {
 	echo "GOPATH environment variable missing, please refer to Go installation document"
 	echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
 	exit 1
+    fi
+
+    local go_binary_path=$(which go)
+
+    if [ -z "${go_binary_path}" ] ; then
+        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document"
+        echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
+        exit -1
+    fi
+
+    if [ "$(dirname ${go_binary_path})" != "${GOROOT%%*(/)}/bin" ] ; then
+        echo "The go binary found in your PATH configuration does not belong to the Go installation pointed by your GOROOT environment," \
+            "please refer to Go installation document"
+        echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
+        exit -1
     fi
 }
 
