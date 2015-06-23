@@ -21,7 +21,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -47,17 +46,17 @@ func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 			return iodine.New(err, nil)
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return iodine.New(errors.New("bad digest, md5sum mismatch"), nil)
+			return iodine.New(BadDigest{}, nil)
 		}
 		return nil
 	}
-	return iodine.New(errors.New("invalid argument"), nil)
+	return iodine.New(InvalidArgument{}, nil)
 }
 
 // writeObjectMetadata - write additional object metadata
 func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string]string) error {
 	if len(objectMetadata) == 0 {
-		return iodine.New(errors.New("invalid argument"), nil)
+		return iodine.New(InvalidArgument{}, nil)
 	}
 	objectMetadataWriters, err := b.getDiskWriters(objectName, objectMetadataConfig)
 	if err != nil {
@@ -78,7 +77,7 @@ func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string
 // writeDonutObjectMetadata - write donut related object metadata
 func (b bucket) writeDonutObjectMetadata(objectName string, objectMetadata map[string]string) error {
 	if len(objectMetadata) == 0 {
-		return iodine.New(errors.New("invalid argument"), nil)
+		return iodine.New(InvalidArgument{}, nil)
 	}
 	objectMetadataWriters, err := b.getDiskWriters(objectName, donutObjectMetadataConfig)
 	if err != nil {
@@ -112,12 +111,12 @@ func (b bucket) normalizeObjectName(objectName string) string {
 // getDataAndParity - calculate k, m (data and parity) values from number of disks
 func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error) {
 	if totalWriters <= 1 {
-		return 0, 0, iodine.New(errors.New("invalid argument"), nil)
+		return 0, 0, iodine.New(InvalidArgument{}, nil)
 	}
 	quotient := totalWriters / 2 // not using float or abs to let integer round off to lower value
 	// quotient cannot be bigger than (255 / 2) = 127
 	if quotient > 127 {
-		return 0, 0, iodine.New(errors.New("parity over flow"), nil)
+		return 0, 0, iodine.New(ParityOverflow{}, nil)
 	}
 	remainder := totalWriters % 2 // will be 1 for odd and 0 for even numbers
 	k = uint8(quotient + remainder)
@@ -174,8 +173,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 		}
 		technique, ok := donutObjectMetadata["sys.erasureTechnique"]
 		if !ok {
-			err := errors.New("missing erasure Technique")
-			writer.CloseWithError(iodine.New(err, nil))
+			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
 			return
 		}
 		encoder, err := NewEncoder(uint8(k), uint8(m), technique)
@@ -205,8 +203,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 	}
 	// check if decodedData md5sum matches
 	if !bytes.Equal(expectedMd5sum, hasher.Sum(nil)) {
-		err := errors.New("checksum mismatch")
-		writer.CloseWithError(iodine.New(err, nil))
+		writer.CloseWithError(iodine.New(ChecksumMismatch{}, nil))
 		return
 	}
 	writer.Close()

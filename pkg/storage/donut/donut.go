@@ -16,11 +16,7 @@
 
 package donut
 
-import (
-	"errors"
-
-	"github.com/minio/minio/pkg/iodine"
-)
+import "github.com/minio/minio/pkg/iodine"
 
 // donut struct internal data
 type donut struct {
@@ -73,7 +69,7 @@ func (d donut) attachDonutNode(hostname string, disks []string) error {
 // NewDonut - instantiate a new donut
 func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) {
 	if donutName == "" || len(nodeDiskMap) == 0 {
-		return nil, iodine.New(errors.New("invalid argument"), nil)
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	nodes := make(map[string]Node)
 	buckets := make(map[string]Bucket)
@@ -84,7 +80,7 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 	}
 	for k, v := range nodeDiskMap {
 		if len(v) == 0 {
-			return nil, iodine.New(errors.New("invalid number of disks per node"), nil)
+			return nil, iodine.New(InvalidDisksArgument{}, nil)
 		}
 		err := d.attachDonutNode(k, v)
 		if err != nil {

@@ -2,7 +2,6 @@ package donut
 
 import (
 	"encoding/json"
-	"errors"
 	"path/filepath"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -10,7 +9,7 @@ import (
 
 // Heal - heal a donut and fix bad data blocks
 func (d donut) Heal() error {
-	return errors.New("Not Implemented")
+	return iodine.New(NotImplemented{Function: "Heal"}, nil)
 }
 
 // Info - return info about donut configuration
@@ -33,7 +32,7 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 // AttachNode - attach node
 func (d donut) AttachNode(node Node) error {
 	if node == nil {
-		return iodine.New(errors.New("invalid argument"), nil)
+		return iodine.New(InvalidArgument{}, nil)
 	}
 	d.nodes[node.GetNodeName()] = node
 	return nil
@@ -72,5 +71,5 @@ func (d donut) SaveConfig() error {
 
 // LoadConfig - load configuration
 func (d donut) LoadConfig() error {
-	return errors.New("Not Implemented")
+	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
 }

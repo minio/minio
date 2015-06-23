@@ -18,9 +18,10 @@ package donut
 
 import (
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/minio/minio/pkg/iodine"
 )
 
 // object internal struct
@@ -34,7 +35,7 @@ type object struct {
 // NewObject - instantiate a new object
 func NewObject(objectName, p string) (Object, error) {
 	if objectName == "" {
-		return nil, errors.New("invalid argument")
+		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	o := object{}
 	o.name = objectName
@@ -46,10 +47,10 @@ func (o object) GetObjectMetadata() (map[string]string, error) {
 	objectMetadata := make(map[string]string)
 	objectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	if err := json.Unmarshal(objectMetadataBytes, &objectMetadata); err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	o.objectMetadata = objectMetadata
 	return o.objectMetadata, nil
@@ -59,10 +60,10 @@ func (o object) GetDonutObjectMetadata() (map[string]string, error) {
 	donutObjectMetadata := make(map[string]string)
 	donutObjectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, donutObjectMetadataConfig))
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	if err := json.Unmarshal(donutObjectMetadataBytes, &donutObjectMetadata); err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	o.donutObjectMetadata = donutObjectMetadata
 	return o.donutObjectMetadata, nil
