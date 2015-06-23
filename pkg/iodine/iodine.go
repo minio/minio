@@ -51,7 +51,7 @@ type StackEntry struct {
 	Data map[string]string
 }
 
-var gopath string
+var gopathSource string
 
 var globalState = struct {
 	sync.RWMutex
@@ -152,7 +152,7 @@ func createStackEntry() StackEntry {
 	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
 	_, function = filepath.Split(function)
-	file = strings.TrimPrefix(file, gopath) // trim gopath from file
+	file = strings.TrimPrefix(file, gopathSource) // trim gopathSource from file
 
 	data := GetGlobalState()
 	for k, v := range getSystemData() {
@@ -190,14 +190,15 @@ func getSystemData() map[string]string {
 }
 
 // Annotate an error with a stack entry and returns itself
-//func (err *WrappedError) Annotate(info map[string]string) *WrappedError {
-//	entry := createStackEntry()
-//	for k, v := range info {
-//		entry.Data[k] = v
-//	}
-//	err.Stack = append(err.Stack, entry)
-//	return err
-//}
+//
+//  func (err *WrappedError) Annotate(info map[string]string) *WrappedError {
+//       entry := createStackEntry()
+//       for k, v := range info {
+// 		 entry.Data[k] = v
+//       }
+//       err.Stack = append(err.Stack, entry)
+//       return err
+//  }
 
 // EmitJSON writes JSON output for the error
 func (err Error) EmitJSON() ([]byte, error) {
@@ -222,8 +223,10 @@ func (err Error) Error() string {
 
 func init() {
 	_, iodineFile, _, _ := runtime.Caller(0)
-	iodineFile = filepath.Dir(iodineFile)   // trim iodine.go
-	iodineFile = filepath.Dir(iodineFile)   // trim iodine
-	iodineFile = filepath.Dir(iodineFile)   // trim minio
-	gopath = filepath.Dir(iodineFile) + "/" // trim github.com
+	iodineFile = filepath.Dir(iodineFile)         // trim iodine.go
+	iodineFile = filepath.Dir(iodineFile)         // trim iodine
+	iodineFile = filepath.Dir(iodineFile)         // trim pkg
+	iodineFile = filepath.Dir(iodineFile)         // trim minio
+	iodineFile = filepath.Dir(iodineFile)         // trim minio
+	gopathSource = filepath.Dir(iodineFile) + "/" // trim github.com
 }
