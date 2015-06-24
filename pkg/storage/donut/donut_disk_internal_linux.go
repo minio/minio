@@ -44,7 +44,7 @@ func (d disk) formatBytes(i int64) (result string) {
 
 // fsType2StrinMap - list of filesystems supported by donut
 var fsType2StringMap = map[string]string{
-	"01021994": "TMPFS",
+	"1021994":  "TMPFS",
 	"137d":     "EXT",
 	"4244":     "HFS",
 	"4d44":     "MSDOS",
