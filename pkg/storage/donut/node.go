@@ -27,10 +27,10 @@ type node struct {
 	disks    map[int]disk.Disk
 }
 
-// NewNode - instantiates a new node
-func NewNode(hostname string) (Node, error) {
+// newNode - instantiates a new node
+func newNode(hostname string) (node, error) {
 	if hostname == "" {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return node{}, iodine.New(InvalidArgument{}, nil)
 	}
 	disks := make(map[int]disk.Disk)
 	n := node{
@@ -40,8 +40,8 @@ func NewNode(hostname string) (Node, error) {
 	return n, nil
 }
 
-// GetNodeName - return hostname
-func (n node) GetNodeName() string {
+// GetHostname - return hostname
+func (n node) GetHostname() string {
 	return n.hostname
 }
 

@@ -28,14 +28,13 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/donut/disk"
 )
 
 // donut struct internal data
 type donut struct {
 	name    string
 	buckets map[string]bucket
-	nodes   map[string]Node
+	nodes   map[string]node
 	lock    *sync.RWMutex
 }
 
@@ -54,28 +53,10 @@ const (
 	donutObjectMetadataVersion = "1.0"
 )
 
-// attachDonutNode - wrapper function to instantiate a new node for associated donut
+// attachDonutNode - wrapper function to instantiate a new node for associatedt donut
 // based on the provided configuration
-func (d donut) attachDonutNode(hostname string, disks []string) error {
-	node, err := NewNode(hostname)
-	if err != nil {
-		return iodine.New(err, nil)
-	}
-	donutName := d.name
-	for i, d := range disks {
-		// Order is necessary for maps, keep order number separately
-		newDisk, err := disk.New(d)
-		if err != nil {
-			return iodine.New(err, nil)
-		}
-		if err := newDisk.MakeDir(donutName); err != nil {
-			return iodine.New(err, nil)
-		}
-		if err := node.AttachDisk(newDisk, i); err != nil {
-			return iodine.New(err, nil)
-		}
-	}
-	if err := d.AttachNode(node); err != nil {
+func (dt donut) attachDonutNode(hostname string, disks []string) error {
+	if err := dt.AttachNode(hostname, disks); err != nil {
 		return iodine.New(err, nil)
 	}
 	return nil
@@ -86,7 +67,7 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 	if donutName == "" || len(nodeDiskMap) == 0 {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
-	nodes := make(map[string]Node)
+	nodes := make(map[string]node)
 	buckets := make(map[string]bucket)
 	d := donut{
 		name:    donutName,
@@ -107,27 +88,26 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 }
 
 // MakeBucket - make a new bucket
-func (d donut) MakeBucket(bucket, acl string) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
+func (dt donut) MakeBucket(bucket, acl string) error {
+	dt.lock.Lock()
+	defer dt.lock.Unlock()
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	return d.makeDonutBucket(bucket, acl)
+	return dt.makeDonutBucket(bucket, acl)
 }
 
 // GetBucketMetadata - get bucket metadata
-func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-	err := d.getDonutBuckets()
-	if err != nil {
+func (dt donut) GetBucketMetadata(bucket string) (map[string]string, error) {
+	dt.lock.RLock()
+	defer dt.lock.RUnlock()
+	if err := dt.getDonutBuckets(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	if _, ok := d.buckets[bucket]; !ok {
+	if _, ok := dt.buckets[bucket]; !ok {
 		return nil, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	metadata, err := d.getDonutBucketMetadata()
+	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -135,14 +115,13 @@ func (d donut) GetBucketMetadata(bucket string) (map[string]string, error) {
 }
 
 // SetBucketMetadata - set bucket metadata
-func (d donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	err := d.getDonutBuckets()
-	if err != nil {
+func (dt donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string) error {
+	dt.lock.Lock()
+	defer dt.lock.Unlock()
+	if err := dt.getDonutBuckets(); err != nil {
 		return iodine.New(err, nil)
 	}
-	metadata, err := d.getDonutBucketMetadata()
+	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
 		return iodine.New(err, nil)
 	}
@@ -150,32 +129,30 @@ func (d donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string
 	// TODO ignore rest of the keys for now, only mutable data is "acl"
 	oldBucketMetadata["acl"] = bucketMetadata["acl"]
 	metadata[bucket] = oldBucketMetadata
-	return d.setDonutBucketMetadata(metadata)
+	return dt.setDonutBucketMetadata(metadata)
 }
 
 // ListBuckets - return list of buckets
-func (d donut) ListBuckets() (metadata map[string]map[string]string, err error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-	err = d.getDonutBuckets()
-	if err != nil {
+func (dt donut) ListBuckets() (metadata map[string]map[string]string, err error) {
+	dt.lock.RLock()
+	defer dt.lock.RUnlock()
+	if err := dt.getDonutBuckets(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	dummyMetadata := make(map[string]map[string]string)
-	metadata, err = d.getDonutBucketMetadata()
+	metadata, err = dt.getDonutBucketMetadata()
 	if err != nil {
 		// intentionally left out the error when Donut is empty
 		// but we need to revisit this area in future - since we need
 		// to figure out between acceptable and unacceptable errors
-		return dummyMetadata, nil
+		return make(map[string]map[string]string), nil
 	}
 	return metadata, nil
 }
 
 // ListObjects - return list of objects
-func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
+func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
+	dt.lock.RLock()
+	defer dt.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket":    bucket,
 		"prefix":    prefix,
@@ -183,14 +160,13 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 		"delimiter": delimiter,
 		"maxkeys":   strconv.Itoa(maxkeys),
 	}
-	err := d.getDonutBuckets()
-	if err != nil {
+	if err := dt.getDonutBuckets(); err != nil {
 		return nil, nil, false, iodine.New(err, errParams)
 	}
-	if _, ok := d.buckets[bucket]; !ok {
+	if _, ok := dt.buckets[bucket]; !ok {
 		return nil, nil, false, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	objectList, err := d.buckets[bucket].ListObjects()
+	objectList, err := dt.buckets[bucket].ListObjects()
 	if err != nil {
 		return nil, nil, false, iodine.New(err, errParams)
 	}
@@ -249,9 +225,9 @@ func (d donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int
 }
 
 // PutObject - put object
-func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
+func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error) {
+	dt.lock.Lock()
+	defer dt.lock.Unlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -262,14 +238,13 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 	if object == "" || strings.TrimSpace(object) == "" {
 		return "", iodine.New(InvalidArgument{}, errParams)
 	}
-	err := d.getDonutBuckets()
-	if err != nil {
+	if err := dt.getDonutBuckets(); err != nil {
 		return "", iodine.New(err, errParams)
 	}
-	if _, ok := d.buckets[bucket]; !ok {
+	if _, ok := dt.buckets[bucket]; !ok {
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	objectList, err := d.buckets[bucket].ListObjects()
+	objectList, err := dt.buckets[bucket].ListObjects()
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
@@ -278,7 +253,7 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 			return "", iodine.New(ObjectExists{Object: object}, nil)
 		}
 	}
-	md5sum, err := d.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
+	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
 		return "", iodine.New(err, errParams)
 	}
@@ -286,9 +261,9 @@ func (d donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCl
 }
 
 // GetObject - get object
-func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int64, err error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
+func (dt donut) GetObject(bucket, object string) (reader io.ReadCloser, size int64, err error) {
+	dt.lock.RLock()
+	defer dt.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -299,32 +274,30 @@ func (d donut) GetObject(bucket, object string) (reader io.ReadCloser, size int6
 	if object == "" || strings.TrimSpace(object) == "" {
 		return nil, 0, iodine.New(InvalidArgument{}, errParams)
 	}
-	err = d.getDonutBuckets()
-	if err != nil {
+	if err := dt.getDonutBuckets(); err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
-	if _, ok := d.buckets[bucket]; !ok {
+	if _, ok := dt.buckets[bucket]; !ok {
 		return nil, 0, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	return d.buckets[bucket].ReadObject(object)
+	return dt.buckets[bucket].ReadObject(object)
 }
 
 // GetObjectMetadata - get object metadata
-func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
+func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, error) {
+	dt.lock.RLock()
+	defer dt.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
 	}
-	err := d.getDonutBuckets()
-	if err != nil {
+	if err := dt.getDonutBuckets(); err != nil {
 		return nil, iodine.New(err, errParams)
 	}
-	if _, ok := d.buckets[bucket]; !ok {
+	if _, ok := dt.buckets[bucket]; !ok {
 		return nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	objectList, err := d.buckets[bucket].ListObjects()
+	objectList, err := dt.buckets[bucket].ListObjects()
 	if err != nil {
 		return nil, iodine.New(err, errParams)
 	}
@@ -336,16 +309,16 @@ func (d donut) GetObjectMetadata(bucket, object string) (map[string]string, erro
 }
 
 // getDiskWriters -
-func (d donut) getBucketMetadataWriters() ([]io.WriteCloser, error) {
+func (dt donut) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 	var writers []io.WriteCloser
-	for _, node := range d.nodes {
+	for _, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for order, disk := range disks {
-			bucketMetaDataWriter, err := disk.CreateFile(filepath.Join(d.name, bucketMetadataConfig))
+		for order, d := range disks {
+			bucketMetaDataWriter, err := d.CreateFile(filepath.Join(dt.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -355,16 +328,16 @@ func (d donut) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 	return writers, nil
 }
 
-func (d donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
+func (dt donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
-	for _, node := range d.nodes {
+	for _, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
 		readers = make([]io.ReadCloser, len(disks))
-		for order, disk := range disks {
-			bucketMetaDataReader, err := disk.OpenFile(filepath.Join(d.name, bucketMetadataConfig))
+		for order, d := range disks {
+			bucketMetaDataReader, err := d.OpenFile(filepath.Join(dt.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -375,8 +348,8 @@ func (d donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 }
 
 //
-func (d donut) setDonutBucketMetadata(metadata map[string]map[string]string) error {
-	writers, err := d.getBucketMetadataWriters()
+func (dt donut) setDonutBucketMetadata(metadata map[string]map[string]string) error {
+	writers, err := dt.getBucketMetadataWriters()
 	if err != nil {
 		return iodine.New(err, nil)
 	}
@@ -392,9 +365,9 @@ func (d donut) setDonutBucketMetadata(metadata map[string]map[string]string) err
 	return nil
 }
 
-func (d donut) getDonutBucketMetadata() (map[string]map[string]string, error) {
+func (dt donut) getDonutBucketMetadata() (map[string]map[string]string, error) {
 	metadata := make(map[string]map[string]string)
-	readers, err := d.getBucketMetadataReaders()
+	readers, err := dt.getBucketMetadataReaders()
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -410,41 +383,40 @@ func (d donut) getDonutBucketMetadata() (map[string]map[string]string, error) {
 	return metadata, nil
 }
 
-func (d donut) makeDonutBucket(bucketName, acl string) error {
-	err := d.getDonutBuckets()
-	if err != nil {
+func (dt donut) makeDonutBucket(bucketName, acl string) error {
+	if err := dt.getDonutBuckets(); err != nil {
 		return iodine.New(err, nil)
 	}
-	if _, ok := d.buckets[bucketName]; ok {
+	if _, ok := dt.buckets[bucketName]; ok {
 		return iodine.New(BucketExists{Bucket: bucketName}, nil)
 	}
-	bucket, bucketMetadata, err := newBucket(bucketName, acl, d.name, d.nodes)
+	bucket, bucketMetadata, err := newBucket(bucketName, acl, dt.name, dt.nodes)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	nodeNumber := 0
-	d.buckets[bucketName] = bucket
-	for _, node := range d.nodes {
+	dt.buckets[bucketName] = bucket
+	for _, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
 		for order, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, order)
-			err := disk.MakeDir(filepath.Join(d.name, bucketSlice))
+			err := disk.MakeDir(filepath.Join(dt.name, bucketSlice))
 			if err != nil {
 				return iodine.New(err, nil)
 			}
 		}
 		nodeNumber = nodeNumber + 1
 	}
-	metadata, err := d.getDonutBucketMetadata()
+	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
 		err = iodine.ToError(err)
 		if os.IsNotExist(err) {
 			metadata := make(map[string]map[string]string)
 			metadata[bucketName] = bucketMetadata
-			err = d.setDonutBucketMetadata(metadata)
+			err = dt.setDonutBucketMetadata(metadata)
 			if err != nil {
 				return iodine.New(err, nil)
 			}
@@ -453,21 +425,21 @@ func (d donut) makeDonutBucket(bucketName, acl string) error {
 		return iodine.New(err, nil)
 	}
 	metadata[bucketName] = bucketMetadata
-	err = d.setDonutBucketMetadata(metadata)
+	err = dt.setDonutBucketMetadata(metadata)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	return nil
 }
 
-func (d donut) getDonutBuckets() error {
-	for _, node := range d.nodes {
+func (dt donut) getDonutBuckets() error {
+	for _, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
 		for _, disk := range disks {
-			dirs, err := disk.ListDir(d.name)
+			dirs, err := disk.ListDir(dt.name)
 			if err != nil {
 				return iodine.New(err, nil)
 			}
@@ -477,12 +449,12 @@ func (d donut) getDonutBuckets() error {
 					return iodine.New(CorruptedBackend{Backend: dir.Name()}, nil)
 				}
 				bucketName := splitDir[0]
-				// we dont need this NewBucket once we cache from makeDonutBucket()
-				bucket, _, err := newBucket(bucketName, "private", d.name, d.nodes)
+				// we dont need this once we cache from makeDonutBucket()
+				bucket, _, err := newBucket(bucketName, "private", dt.name, dt.nodes)
 				if err != nil {
 					return iodine.New(err, nil)
 				}
-				d.buckets[bucketName] = bucket
+				dt.buckets[bucketName] = bucket
 			}
 		}
 	}

@@ -41,12 +41,12 @@ type bucket struct {
 	acl       string
 	time      time.Time
 	donutName string
-	nodes     map[string]Node
+	nodes     map[string]node
 	lock      *sync.RWMutex
 }
 
 // newBucket - instantiate a new bucket
-func newBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bucket, map[string]string, error) {
+func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bucket, map[string]string, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"donutName":  donutName,
