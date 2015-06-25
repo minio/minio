@@ -47,7 +47,7 @@ func (o object) GetObjectMetadata() (map[string]string, error) {
 	objectMetadata := make(map[string]string)
 	objectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
 	if err := json.Unmarshal(objectMetadataBytes, &objectMetadata); err != nil {
 		return nil, iodine.New(err, nil)
@@ -60,7 +60,7 @@ func (o object) GetDonutObjectMetadata() (map[string]string, error) {
 	donutObjectMetadata := make(map[string]string)
 	donutObjectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, donutObjectMetadataConfig))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
 	if err := json.Unmarshal(donutObjectMetadataBytes, &donutObjectMetadata); err != nil {
 		return nil, iodine.New(err, nil)
