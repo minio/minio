@@ -32,8 +32,8 @@ type object struct {
 	donutObjectMetadata map[string]string
 }
 
-// NewObject - instantiate a new object
-func NewObject(objectName, p string) (object, error) {
+// newObject - instantiate a new object
+func newObject(objectName, p string) (object, error) {
 	if objectName == "" {
 		return object{}, iodine.New(InvalidArgument{}, nil)
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
+// Disk container for disk parameters
 type Disk struct {
 	path   string
 	fsInfo map[string]string

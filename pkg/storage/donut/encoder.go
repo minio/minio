@@ -42,8 +42,8 @@ func getErasureTechnique(technique string) (encoding.Technique, error) {
 	}
 }
 
-// NewEncoder - instantiate a new encoder
-func NewEncoder(k, m uint8, technique string) (encoder, error) {
+// newEncoder - instantiate a new encoder
+func newEncoder(k, m uint8, technique string) (encoder, error) {
 	errParams := map[string]string{
 		"k":         strconv.FormatUint(uint64(k), 10),
 		"m":         strconv.FormatUint(uint64(m), 10),

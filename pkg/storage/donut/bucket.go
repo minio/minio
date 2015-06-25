@@ -44,8 +44,8 @@ type bucket struct {
 	objects   map[string]object
 }
 
-// NewBucket - instantiate a new bucket
-func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bucket, map[string]string, error) {
+// newBucket - instantiate a new bucket
+func newBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bucket, map[string]string, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"donutName":  donutName,
@@ -84,7 +84,7 @@ func (b bucket) ListObjects() (map[string]object, error) {
 				return nil, iodine.New(err, nil)
 			}
 			for _, object := range objects {
-				newObject, err := NewObject(object.Name(), filepath.Join(disk.GetPath(), bucketPath))
+				newObject, err := newObject(object.Name(), filepath.Join(disk.GetPath(), bucketPath))
 				if err != nil {
 					return nil, iodine.New(err, nil)
 				}
@@ -318,7 +318,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 // writeEncodedData -
 func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, summer hash.Hash) (int, int, error) {
 	chunks := split.Stream(objectData, 10*1024*1024)
-	encoder, err := NewEncoder(k, m, "Cauchy")
+	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
 	}
@@ -367,7 +367,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
 			return
 		}
-		encoder, err := NewEncoder(uint8(k), uint8(m), technique)
+		encoder, err := newEncoder(uint8(k), uint8(m), technique)
 		if err != nil {
 			writer.CloseWithError(iodine.New(err, nil))
 			return

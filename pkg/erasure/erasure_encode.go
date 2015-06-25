@@ -47,8 +47,8 @@ const (
 	SIMDAlign = 32
 )
 
-// ErasureParams is a configuration set for building an encoder. It is created using ValidateParams().
-type ErasureParams struct {
+// Params is a configuration set for building an encoder. It is created using ValidateParams().
+type Params struct {
 	K         uint8
 	M         uint8
 	Technique Technique // cauchy or vandermonde matrix (RS)
@@ -56,18 +56,18 @@ type ErasureParams struct {
 
 // Erasure is an object used to encode and decode data.
 type Erasure struct {
-	params                   *ErasureParams
+	params                   *Params
 	encodeMatrix, encodeTbls *C.uchar
 	decodeMatrix, decodeTbls *C.uchar
 	decodeIndex              *C.uint32_t
 }
 
-// ValidateParams creates an ErasureParams object.
+// ValidateParams creates an Params object.
 //
 // k and m represent the matrix size, which corresponds to the protection level
 // technique is the matrix type. Valid inputs are Cauchy (recommended) or Vandermonde.
 //
-func ValidateParams(k, m uint8, technique Technique) (*ErasureParams, error) {
+func ValidateParams(k, m uint8, technique Technique) (*Params, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be zero")
 	}
@@ -89,7 +89,7 @@ func ValidateParams(k, m uint8, technique Technique) (*ErasureParams, error) {
 		return nil, errors.New("Technique can be either vandermonde or cauchy")
 	}
 
-	return &ErasureParams{
+	return &Params{
 		K:         k,
 		M:         m,
 		Technique: technique,
@@ -97,7 +97,7 @@ func ValidateParams(k, m uint8, technique Technique) (*ErasureParams, error) {
 }
 
 // NewErasure creates an encoder object with a given set of parameters.
-func NewErasure(ep *ErasureParams) *Erasure {
+func NewErasure(ep *Params) *Erasure {
 	var k = C.int(ep.K)
 	var m = C.int(ep.M)
 

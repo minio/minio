@@ -325,7 +325,7 @@ func (d donut) makeDonutBucket(bucketName, acl string) error {
 	if _, ok := d.buckets[bucketName]; ok {
 		return iodine.New(BucketExists{Bucket: bucketName}, nil)
 	}
-	bucket, bucketMetadata, err := NewBucket(bucketName, acl, d.name, d.nodes)
+	bucket, bucketMetadata, err := newBucket(bucketName, acl, d.name, d.nodes)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
@@ -385,7 +385,7 @@ func (d donut) getDonutBuckets() error {
 				}
 				bucketName := splitDir[0]
 				// we dont need this NewBucket once we cache from makeDonutBucket()
-				bucket, _, err := NewBucket(bucketName, "private", d.name, d.nodes)
+				bucket, _, err := newBucket(bucketName, "private", d.name, d.nodes)
 				if err != nil {
 					return iodine.New(err, nil)
 				}
