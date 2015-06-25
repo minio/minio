@@ -38,18 +38,18 @@ type bucket struct {
 	time      time.Time
 	donutName string
 	nodes     map[string]Node
-	objects   map[string]Object
+	objects   map[string]object
 }
 
 // NewBucket - instantiate a new bucket
-func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bucket, map[string]string, error) {
+func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bucket, map[string]string, error) {
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"donutName":  donutName,
 		"aclType":    aclType,
 	}
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
-		return nil, nil, iodine.New(InvalidArgument{}, errParams)
+		return bucket{}, nil, iodine.New(InvalidArgument{}, errParams)
 	}
 	bucketMetadata := make(map[string]string)
 	bucketMetadata["acl"] = aclType
@@ -60,13 +60,13 @@ func NewBucket(bucketName, aclType, donutName string, nodes map[string]Node) (Bu
 	b.acl = aclType
 	b.time = t
 	b.donutName = donutName
-	b.objects = make(map[string]Object)
+	b.objects = make(map[string]object)
 	b.nodes = nodes
 	return b, bucketMetadata, nil
 }
 
 // ListObjects - list all objects
-func (b bucket) ListObjects() (map[string]Object, error) {
+func (b bucket) ListObjects() (map[string]object, error) {
 	nodeSlice := 0
 	for _, node := range b.nodes {
 		disks, err := node.ListDisks()

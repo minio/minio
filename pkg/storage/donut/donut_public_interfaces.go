@@ -16,7 +16,10 @@
 
 package donut
 
-import "io"
+import (
+	"io"
+	"os"
+)
 
 // Collection of Donut specification interfaces
 
@@ -28,16 +31,16 @@ type Donut interface {
 
 // ObjectStorage is a donut object storage interface
 type ObjectStorage interface {
-	// Storage service Operations
+	// Storage service operations
 	GetBucketMetadata(bucket string) (map[string]string, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
 	ListBuckets() (map[string]map[string]string, error)
 	MakeBucket(bucket, acl string) error
 
-	// Bucket Operations
-	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (result []string, prefixes []string, isTruncated bool, err error)
+	// Bucket operations
+	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (objects []string, prefixes []string, isTruncated bool, err error)
 
-	// Object Operations
+	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
 	GetObjectMetadata(bucket, object string) (map[string]string, error)
 	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error)
@@ -54,4 +57,30 @@ type Management interface {
 
 	SaveConfig() error
 	LoadConfig() error
+}
+
+// Node interface for node management
+type Node interface {
+	ListDisks() (map[string]Disk, error)
+	AttachDisk(disk Disk) error
+	DetachDisk(disk Disk) error
+
+	GetNodeName() string
+	SaveConfig() error
+	LoadConfig() error
+}
+
+// Disk interface for disk management
+type Disk interface {
+	MakeDir(dirname string) error
+
+	ListDir(dirname string) ([]os.FileInfo, error)
+	ListFiles(dirname string) ([]os.FileInfo, error)
+
+	MakeFile(path string) (*os.File, error)
+	OpenFile(path string) (*os.File, error)
+
+	GetPath() string
+	GetOrder() int
+	GetFSInfo() map[string]string
 }

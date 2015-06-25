@@ -33,9 +33,9 @@ type object struct {
 }
 
 // NewObject - instantiate a new object
-func NewObject(objectName, p string) (Object, error) {
+func NewObject(objectName, p string) (object, error) {
 	if objectName == "" {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return object{}, iodine.New(InvalidArgument{}, nil)
 	}
 	o := object{}
 	o.name = objectName

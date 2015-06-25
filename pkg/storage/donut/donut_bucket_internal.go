@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/pkg/utils/split"
 )
 
-/// This file contains all the internal functions used by Bucket interface
+/// This file contains all the internal functions
 
 // isMD5SumEqual - returns error if md5sum mismatches, other its `nil`
 func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
@@ -211,7 +211,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 }
 
 // decodeEncodedData -
-func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder Encoder, writer *io.PipeWriter) ([]byte, error) {
+func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder encoder, writer *io.PipeWriter) ([]byte, error) {
 	var curBlockSize int64
 	if blockSize < totalLeft {
 		curBlockSize = blockSize

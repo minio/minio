@@ -21,7 +21,7 @@ import "github.com/minio/minio/pkg/iodine"
 // donut struct internal data
 type donut struct {
 	name    string
-	buckets map[string]Bucket
+	buckets map[string]bucket
 	nodes   map[string]Node
 }
 
@@ -72,7 +72,7 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	nodes := make(map[string]Node)
-	buckets := make(map[string]Bucket)
+	buckets := make(map[string]bucket)
 	d := donut{
 		name:    donutName,
 		nodes:   nodes,
