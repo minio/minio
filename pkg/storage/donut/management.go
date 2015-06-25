@@ -1,3 +1,19 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package donut
 
 import (
@@ -5,17 +21,18 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/disk"
 )
 
 // Heal - heal a donut and fix bad data blocks
-func (d donut) Heal() error {
+func (dt donut) Heal() error {
 	return iodine.New(NotImplemented{Function: "Heal"}, nil)
 }
 
 // Info - return info about donut configuration
-func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
+func (dt donut) Info() (nodeDiskMap map[string][]string, err error) {
 	nodeDiskMap = make(map[string][]string)
-	for nodeName, node := range d.nodes {
+	for nodeName, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
@@ -30,30 +47,46 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 }
 
 // AttachNode - attach node
-func (d donut) AttachNode(node Node) error {
-	if node == nil {
+func (dt donut) AttachNode(hostname string, disks []string) error {
+	if hostname == "" || len(disks) == 0 {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	d.nodes[node.GetNodeName()] = node
+	node, err := newNode(hostname)
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	dt.nodes[hostname] = node
+	for i, d := range disks {
+		newDisk, err := disk.New(d)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if err := newDisk.MakeDir(dt.name); err != nil {
+			return iodine.New(err, nil)
+		}
+		if err := node.AttachDisk(newDisk, i); err != nil {
+			return iodine.New(err, nil)
+		}
+	}
 	return nil
 }
 
 // DetachNode - detach node
-func (d donut) DetachNode(node Node) error {
-	delete(d.nodes, node.GetNodeName())
+func (dt donut) DetachNode(hostname string) error {
+	delete(dt.nodes, hostname)
 	return nil
 }
 
 // SaveConfig - save donut configuration
-func (d donut) SaveConfig() error {
+func (dt donut) SaveConfig() error {
 	nodeDiskMap := make(map[string][]string)
-	for hostname, node := range d.nodes {
+	for hostname, node := range dt.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
 		for order, disk := range disks {
-			donutConfigPath := filepath.Join(d.name, donutConfig)
+			donutConfigPath := filepath.Join(dt.name, donutConfig)
 			donutConfigWriter, err := disk.CreateFile(donutConfigPath)
 			defer donutConfigWriter.Close()
 			if err != nil {
@@ -70,6 +103,6 @@ func (d donut) SaveConfig() error {
 }
 
 // LoadConfig - load configuration
-func (d donut) LoadConfig() error {
+func (dt donut) LoadConfig() error {
 	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
 }

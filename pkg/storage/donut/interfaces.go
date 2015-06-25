@@ -16,11 +16,7 @@
 
 package donut
 
-import (
-	"io"
-
-	"github.com/minio/minio/pkg/storage/donut/disk"
-)
+import "io"
 
 // Collection of Donut specification interfaces
 
@@ -53,20 +49,9 @@ type Management interface {
 	Rebalance() error
 	Info() (map[string][]string, error)
 
-	AttachNode(node Node) error
-	DetachNode(node Node) error
+	AttachNode(hostname string, disks []string) error
+	DetachNode(hostname string) error
 
-	SaveConfig() error
-	LoadConfig() error
-}
-
-// Node interface for node management
-type Node interface {
-	ListDisks() (map[int]disk.Disk, error)
-	AttachDisk(disk disk.Disk, diskOrder int) error
-	DetachDisk(diskOrder int) error
-
-	GetNodeName() string
 	SaveConfig() error
 	LoadConfig() error
 }
