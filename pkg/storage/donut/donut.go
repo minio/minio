@@ -16,7 +16,10 @@
 
 package donut
 
-import "github.com/minio/minio/pkg/iodine"
+import (
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/disk"
+)
 
 // donut struct internal data
 type donut struct {
@@ -47,16 +50,17 @@ func (d donut) attachDonutNode(hostname string, disks []string) error {
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	for i, disk := range disks {
+	donutName := d.name
+	for i, d := range disks {
 		// Order is necessary for maps, keep order number separately
-		newDisk, err := NewDisk(disk, i)
+		newDisk, err := disk.New(d)
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		if err := newDisk.MakeDir(d.name); err != nil {
+		if err := newDisk.MakeDir(donutName); err != nil {
 			return iodine.New(err, nil)
 		}
-		if err := node.AttachDisk(newDisk); err != nil {
+		if err := node.AttachDisk(newDisk, i); err != nil {
 			return iodine.New(err, nil)
 		}
 	}

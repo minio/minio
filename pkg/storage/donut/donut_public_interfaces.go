@@ -18,7 +18,8 @@ package donut
 
 import (
 	"io"
-	"os"
+
+	"github.com/minio/minio/pkg/storage/donut/disk"
 )
 
 // Collection of Donut specification interfaces
@@ -61,26 +62,11 @@ type Management interface {
 
 // Node interface for node management
 type Node interface {
-	ListDisks() (map[string]Disk, error)
-	AttachDisk(disk Disk) error
-	DetachDisk(disk Disk) error
+	ListDisks() (map[int]disk.Disk, error)
+	AttachDisk(disk disk.Disk, diskOrder int) error
+	DetachDisk(diskOrder int) error
 
 	GetNodeName() string
 	SaveConfig() error
 	LoadConfig() error
-}
-
-// Disk interface for disk management
-type Disk interface {
-	MakeDir(dirname string) error
-
-	ListDir(dirname string) ([]os.FileInfo, error)
-	ListFiles(dirname string) ([]os.FileInfo, error)
-
-	MakeFile(path string) (*os.File, error)
-	OpenFile(path string) (*os.File, error)
-
-	GetPath() string
-	GetOrder() int
-	GetFSInfo() map[string]string
 }

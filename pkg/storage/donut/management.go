@@ -21,8 +21,8 @@ func (d donut) Info() (nodeDiskMap map[string][]string, err error) {
 			return nil, iodine.New(err, nil)
 		}
 		diskList := make([]string, len(disks))
-		for diskName, disk := range disks {
-			diskList[disk.GetOrder()] = diskName
+		for diskOrder, disk := range disks {
+			diskList[diskOrder] = disk.GetPath()
 		}
 		nodeDiskMap[nodeName] = diskList
 	}
@@ -52,14 +52,14 @@ func (d donut) SaveConfig() error {
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		for _, disk := range disks {
+		for order, disk := range disks {
 			donutConfigPath := filepath.Join(d.name, donutConfig)
-			donutConfigWriter, err := disk.MakeFile(donutConfigPath)
+			donutConfigWriter, err := disk.CreateFile(donutConfigPath)
 			defer donutConfigWriter.Close()
 			if err != nil {
 				return iodine.New(err, nil)
 			}
-			nodeDiskMap[hostname][disk.GetOrder()] = disk.GetPath()
+			nodeDiskMap[hostname][order] = disk.GetPath()
 			jenc := json.NewEncoder(donutConfigWriter)
 			if err := jenc.Encode(nodeDiskMap); err != nil {
 				return iodine.New(err, nil)

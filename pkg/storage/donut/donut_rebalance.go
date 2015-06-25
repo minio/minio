@@ -22,12 +22,13 @@ import (
 	"strings"
 
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/disk"
 )
 
 // Rebalance -
 func (d donut) Rebalance() error {
 	var totalOffSetLength int
-	var newDisks []Disk
+	var newDisks []disk.Disk
 	var existingDirs []os.FileInfo
 	for _, node := range d.nodes {
 		disks, err := node.ListDisks()

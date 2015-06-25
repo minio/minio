@@ -73,8 +73,8 @@ func (b bucket) ListObjects() (map[string]object, error) {
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			bucketPath := filepath.Join(b.donutName, bucketSlice)
 			objects, err := disk.ListDir(bucketPath)
 			if err != nil {

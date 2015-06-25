@@ -38,12 +38,12 @@ func (d donut) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for _, disk := range disks {
-			bucketMetaDataWriter, err := disk.MakeFile(filepath.Join(d.name, bucketMetadataConfig))
+		for order, disk := range disks {
+			bucketMetaDataWriter, err := disk.CreateFile(filepath.Join(d.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			writers[disk.GetOrder()] = bucketMetaDataWriter
+			writers[order] = bucketMetaDataWriter
 		}
 	}
 	return writers, nil
@@ -57,12 +57,12 @@ func (d donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 			return nil, iodine.New(err, nil)
 		}
 		readers = make([]io.ReadCloser, len(disks))
-		for _, disk := range disks {
+		for order, disk := range disks {
 			bucketMetaDataReader, err := disk.OpenFile(filepath.Join(d.name, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			readers[disk.GetOrder()] = bucketMetaDataReader
+			readers[order] = bucketMetaDataReader
 		}
 	}
 	return readers, nil
@@ -123,8 +123,8 @@ func (d donut) makeDonutBucket(bucketName, acl string) error {
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, order)
 			err := disk.MakeDir(filepath.Join(d.name, bucketSlice))
 			if err != nil {
 				return iodine.New(err, nil)

@@ -273,14 +273,14 @@ func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, 
 			return nil, iodine.New(err, nil)
 		}
 		readers = make([]io.ReadCloser, len(disks))
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
 			objectSlice, err := disk.OpenFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			readers[disk.GetOrder()] = objectSlice
+			readers[order] = objectSlice
 		}
 		nodeSlice = nodeSlice + 1
 	}
@@ -297,14 +297,14 @@ func (b bucket) getDiskWriters(objectName, objectMeta string) ([]io.WriteCloser,
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
-			objectSlice, err := disk.MakeFile(objectPath)
+			objectSlice, err := disk.CreateFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			writers[disk.GetOrder()] = objectSlice
+			writers[order] = objectSlice
 		}
 		nodeSlice = nodeSlice + 1
 	}
