@@ -18,21 +18,212 @@ package donut
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"hash"
 	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/utils/split"
 )
 
-/// This file contains all the internal functions used by Bucket interface
+// internal struct carrying bucket specific information
+type bucket struct {
+	name      string
+	acl       string
+	time      time.Time
+	donutName string
+	nodes     map[string]Node
+	objects   map[string]object
+}
+
+// newBucket - instantiate a new bucket
+func newBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bucket, map[string]string, error) {
+	errParams := map[string]string{
+		"bucketName": bucketName,
+		"donutName":  donutName,
+		"aclType":    aclType,
+	}
+	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
+		return bucket{}, nil, iodine.New(InvalidArgument{}, errParams)
+	}
+	bucketMetadata := make(map[string]string)
+	bucketMetadata["acl"] = aclType
+	t := time.Now().UTC()
+	bucketMetadata["created"] = t.Format(time.RFC3339Nano)
+	b := bucket{}
+	b.name = bucketName
+	b.acl = aclType
+	b.time = t
+	b.donutName = donutName
+	b.objects = make(map[string]object)
+	b.nodes = nodes
+	return b, bucketMetadata, nil
+}
+
+// ListObjects - list all objects
+func (b bucket) ListObjects() (map[string]object, error) {
+	nodeSlice := 0
+	for _, node := range b.nodes {
+		disks, err := node.ListDisks()
+		if err != nil {
+			return nil, iodine.New(err, nil)
+		}
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
+			bucketPath := filepath.Join(b.donutName, bucketSlice)
+			objects, err := disk.ListDir(bucketPath)
+			if err != nil {
+				return nil, iodine.New(err, nil)
+			}
+			for _, object := range objects {
+				newObject, err := newObject(object.Name(), filepath.Join(disk.GetPath(), bucketPath))
+				if err != nil {
+					return nil, iodine.New(err, nil)
+				}
+				newObjectMetadata, err := newObject.GetObjectMetadata()
+				if err != nil {
+					return nil, iodine.New(err, nil)
+				}
+				objectName, ok := newObjectMetadata["object"]
+				if !ok {
+					return nil, iodine.New(ObjectCorrupted{Object: object.Name()}, nil)
+				}
+				b.objects[objectName] = newObject
+			}
+		}
+		nodeSlice = nodeSlice + 1
+	}
+	return b.objects, nil
+}
+
+// ReadObject - open an object to read
+func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64, err error) {
+	reader, writer := io.Pipe()
+	// get list of objects
+	objects, err := b.ListObjects()
+	if err != nil {
+		return nil, 0, iodine.New(err, nil)
+	}
+	// check if object exists
+	object, ok := objects[objectName]
+	if !ok {
+		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
+	}
+	// verify if objectMetadata is readable, before we serve the request
+	objectMetadata, err := object.GetObjectMetadata()
+	if err != nil {
+		return nil, 0, iodine.New(err, nil)
+	}
+	if objectName == "" || writer == nil || len(objectMetadata) == 0 {
+		return nil, 0, iodine.New(InvalidArgument{}, nil)
+	}
+	size, err = strconv.ParseInt(objectMetadata["size"], 10, 64)
+	if err != nil {
+		return nil, 0, iodine.New(err, nil)
+	}
+	// verify if donutObjectMetadata is readable, before we server the request
+	donutObjectMetadata, err := object.GetDonutObjectMetadata()
+	if err != nil {
+		return nil, 0, iodine.New(err, nil)
+	}
+	// read and reply back to GetObject() request in a go-routine
+	go b.readEncodedData(b.normalizeObjectName(objectName), writer, donutObjectMetadata)
+	return reader, size, nil
+}
+
+// WriteObject - write a new object into bucket
+func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
+	if objectName == "" || objectData == nil {
+		return "", iodine.New(InvalidArgument{}, nil)
+	}
+	writers, err := b.getDiskWriters(b.normalizeObjectName(objectName), "data")
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+	summer := md5.New()
+	objectMetadata := make(map[string]string)
+	donutObjectMetadata := make(map[string]string)
+	objectMetadata["version"] = objectMetadataVersion
+	donutObjectMetadata["version"] = donutObjectMetadataVersion
+	size := metadata["contentLength"]
+	sizeInt, err := strconv.ParseInt(size, 10, 64)
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+
+	// if total writers are only '1' do not compute erasure
+	switch len(writers) == 1 {
+	case true:
+		mw := io.MultiWriter(writers[0], summer)
+		totalLength, err := io.CopyN(mw, objectData, sizeInt)
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		donutObjectMetadata["sys.size"] = strconv.FormatInt(totalLength, 10)
+		objectMetadata["size"] = strconv.FormatInt(totalLength, 10)
+	case false:
+		// calculate data and parity dictated by total number of writers
+		k, m, err := b.getDataAndParity(len(writers))
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		// encoded data with k, m and write
+		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, summer)
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		/// donutMetadata section
+		donutObjectMetadata["sys.blockSize"] = strconv.Itoa(10 * 1024 * 1024)
+		donutObjectMetadata["sys.chunkCount"] = strconv.Itoa(chunkCount)
+		donutObjectMetadata["sys.erasureK"] = strconv.FormatUint(uint64(k), 10)
+		donutObjectMetadata["sys.erasureM"] = strconv.FormatUint(uint64(m), 10)
+		donutObjectMetadata["sys.erasureTechnique"] = "Cauchy"
+		donutObjectMetadata["sys.size"] = strconv.Itoa(totalLength)
+		// keep size inside objectMetadata as well for Object API requests
+		objectMetadata["size"] = strconv.Itoa(totalLength)
+	}
+	objectMetadata["bucket"] = b.name
+	objectMetadata["object"] = objectName
+	// store all user provided metadata
+	for k, v := range metadata {
+		objectMetadata[k] = v
+	}
+	dataMd5sum := summer.Sum(nil)
+	objectMetadata["created"] = time.Now().UTC().Format(time.RFC3339Nano)
+
+	// keeping md5sum for the object in two different places
+	// one for object storage and another is for internal use
+	objectMetadata["md5"] = hex.EncodeToString(dataMd5sum)
+	donutObjectMetadata["sys.md5"] = hex.EncodeToString(dataMd5sum)
+
+	// Verify if the written object is equal to what is expected, only if it is requested as such
+	if strings.TrimSpace(expectedMD5Sum) != "" {
+		if err := b.isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), objectMetadata["md5"]); err != nil {
+			return "", iodine.New(err, nil)
+		}
+	}
+	// write donut specific metadata
+	if err := b.writeDonutObjectMetadata(b.normalizeObjectName(objectName), donutObjectMetadata); err != nil {
+		return "", iodine.New(err, nil)
+	}
+	// write object specific metadata
+	if err := b.writeObjectMetadata(b.normalizeObjectName(objectName), objectMetadata); err != nil {
+		return "", iodine.New(err, nil)
+	}
+	// close all writers, when control flow reaches here
+	for _, writer := range writers {
+		writer.Close()
+	}
+	return objectMetadata["md5"], nil
+}
 
 // isMD5SumEqual - returns error if md5sum mismatches, other its `nil`
 func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
@@ -127,7 +318,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 // writeEncodedData -
 func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, summer hash.Hash) (int, int, error) {
 	chunks := split.Stream(objectData, 10*1024*1024)
-	encoder, err := NewEncoder(k, m, "Cauchy")
+	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
 	}
@@ -176,7 +367,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
 			return
 		}
-		encoder, err := NewEncoder(uint8(k), uint8(m), technique)
+		encoder, err := newEncoder(uint8(k), uint8(m), technique)
 		if err != nil {
 			writer.CloseWithError(iodine.New(err, nil))
 			return
@@ -211,7 +402,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 }
 
 // decodeEncodedData -
-func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder Encoder, writer *io.PipeWriter) ([]byte, error) {
+func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadCloser, encoder encoder, writer *io.PipeWriter) ([]byte, error) {
 	var curBlockSize int64
 	if blockSize < totalLeft {
 		curBlockSize = blockSize
@@ -273,14 +464,14 @@ func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, 
 			return nil, iodine.New(err, nil)
 		}
 		readers = make([]io.ReadCloser, len(disks))
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
 			objectSlice, err := disk.OpenFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			readers[disk.GetOrder()] = objectSlice
+			readers[order] = objectSlice
 		}
 		nodeSlice = nodeSlice + 1
 	}
@@ -297,14 +488,14 @@ func (b bucket) getDiskWriters(objectName, objectMeta string) ([]io.WriteCloser,
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for _, disk := range disks {
-			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, disk.GetOrder())
+		for order, disk := range disks {
+			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
-			objectSlice, err := disk.MakeFile(objectPath)
+			objectSlice, err := disk.CreateFile(objectPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			writers[disk.GetOrder()] = objectSlice
+			writers[order] = objectSlice
 		}
 		nodeSlice = nodeSlice + 1
 	}

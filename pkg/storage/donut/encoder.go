@@ -42,8 +42,8 @@ func getErasureTechnique(technique string) (encoding.Technique, error) {
 	}
 }
 
-// NewEncoder - instantiate a new encoder
-func NewEncoder(k, m uint8, technique string) (Encoder, error) {
+// newEncoder - instantiate a new encoder
+func newEncoder(k, m uint8, technique string) (encoder, error) {
 	errParams := map[string]string{
 		"k":         strconv.FormatUint(uint64(k), 10),
 		"m":         strconv.FormatUint(uint64(m), 10),
@@ -52,11 +52,11 @@ func NewEncoder(k, m uint8, technique string) (Encoder, error) {
 	e := encoder{}
 	t, err := getErasureTechnique(technique)
 	if err != nil {
-		return nil, iodine.New(err, errParams)
+		return encoder{}, iodine.New(err, errParams)
 	}
 	params, err := encoding.ValidateParams(k, m, t)
 	if err != nil {
-		return nil, iodine.New(err, errParams)
+		return encoder{}, iodine.New(err, errParams)
 	}
 	e.encoder = encoding.NewErasure(params)
 	e.k = k

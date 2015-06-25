@@ -16,12 +16,15 @@
 
 package donut
 
-import "github.com/minio/minio/pkg/iodine"
+import (
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/disk"
+)
 
 // node struct internal
 type node struct {
 	hostname string
-	disks    map[string]Disk
+	disks    map[int]disk.Disk
 }
 
 // NewNode - instantiates a new node
@@ -29,7 +32,7 @@ func NewNode(hostname string) (Node, error) {
 	if hostname == "" {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
-	disks := make(map[string]Disk)
+	disks := make(map[int]disk.Disk)
 	n := node{
 		hostname: hostname,
 		disks:    disks,
@@ -43,22 +46,22 @@ func (n node) GetNodeName() string {
 }
 
 // ListDisks - return number of disks
-func (n node) ListDisks() (map[string]Disk, error) {
+func (n node) ListDisks() (map[int]disk.Disk, error) {
 	return n.disks, nil
 }
 
 // AttachDisk - attach a disk
-func (n node) AttachDisk(disk Disk) error {
-	if disk == nil {
+func (n node) AttachDisk(disk disk.Disk, diskOrder int) error {
+	if diskOrder < 0 {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	n.disks[disk.GetPath()] = disk
+	n.disks[diskOrder] = disk
 	return nil
 }
 
 // DetachDisk - detach a disk
-func (n node) DetachDisk(disk Disk) error {
-	delete(n.disks, disk.GetPath())
+func (n node) DetachDisk(diskOrder int) error {
+	delete(n.disks, diskOrder)
 	return nil
 }
 

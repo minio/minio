@@ -16,7 +16,11 @@
 
 package donut
 
-import "io"
+import (
+	"io"
+
+	"github.com/minio/minio/pkg/storage/donut/disk"
+)
 
 // Collection of Donut specification interfaces
 
@@ -28,16 +32,16 @@ type Donut interface {
 
 // ObjectStorage is a donut object storage interface
 type ObjectStorage interface {
-	// Storage service Operations
+	// Storage service operations
 	GetBucketMetadata(bucket string) (map[string]string, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
 	ListBuckets() (map[string]map[string]string, error)
 	MakeBucket(bucket, acl string) error
 
-	// Bucket Operations
-	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (result []string, prefixes []string, isTruncated bool, err error)
+	// Bucket operations
+	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (objects []string, prefixes []string, isTruncated bool, err error)
 
-	// Object Operations
+	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
 	GetObjectMetadata(bucket, object string) (map[string]string, error)
 	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error)
@@ -52,6 +56,17 @@ type Management interface {
 	AttachNode(node Node) error
 	DetachNode(node Node) error
 
+	SaveConfig() error
+	LoadConfig() error
+}
+
+// Node interface for node management
+type Node interface {
+	ListDisks() (map[int]disk.Disk, error)
+	AttachDisk(disk disk.Disk, diskOrder int) error
+	DetachDisk(diskOrder int) error
+
+	GetNodeName() string
 	SaveConfig() error
 	LoadConfig() error
 }
