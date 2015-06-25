@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"io/ioutil"
@@ -39,6 +40,7 @@ import (
 type donutDriver struct {
 	donut donut.Donut
 	paths []string
+	lock  *sync.RWMutex
 }
 
 const (
@@ -110,6 +112,7 @@ func Start(paths []string) (chan<- string, <-chan error, drivers.Driver) {
 	s := new(donutDriver)
 	s.donut = d
 	s.paths = paths
+	s.lock = new(sync.RWMutex)
 
 	go start(ctrlChannel, errorChannel, s)
 	return ctrlChannel, errorChannel, s
@@ -128,6 +131,8 @@ func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets returns a list of buckets
 func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	if d.donut == nil {
 		return nil, iodine.New(drivers.InternalError{}, nil)
 	}
@@ -152,6 +157,8 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 
 // CreateBucket creates a new bucket
 func (d donutDriver) CreateBucket(bucketName, acl string) error {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	if d.donut == nil {
 		return iodine.New(drivers.InternalError{}, nil)
 	}
@@ -176,6 +183,8 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 
 // GetBucketMetadata retrieves an bucket's metadata
 func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadata, error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	if d.donut == nil {
 		return drivers.BucketMetadata{}, iodine.New(drivers.InternalError{}, nil)
 	}
@@ -204,6 +213,8 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 
 // SetBucketMetadata sets bucket's metadata
 func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	if d.donut == nil {
 		return iodine.New(drivers.InternalError{}, nil)
 	}
@@ -224,6 +235,8 @@ func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
 
 // GetObject retrieves an object and writes it to a writer
 func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) (int64, error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	if d.donut == nil {
 		return 0, iodine.New(drivers.InternalError{}, nil)
 	}
@@ -246,10 +259,11 @@ func (d donutDriver) GetObject(target io.Writer, bucketName, objectName string) 
 
 // GetPartialObject retrieves an object range and writes it to a writer
 func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string, start, length int64) (int64, error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	if d.donut == nil {
 		return 0, iodine.New(drivers.InternalError{}, nil)
 	}
-	// TODO more efficient get partial object with proper donut support
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"objectName": objectName,
@@ -295,6 +309,9 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 
 // GetObjectMetadata retrieves an object's metadata
 func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.ObjectMetadata, error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+
 	errParams := map[string]string{
 		"bucketName": bucketName,
 		"objectName": objectName,
@@ -343,6 +360,8 @@ func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 
 // ListObjects - returns list of objects
 func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	errParams := map[string]string{
 		"bucketName": bucketName,
 	}
@@ -392,6 +411,8 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 
 // CreateObject creates a new object
 func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedMD5Sum string, size int64, reader io.Reader) (string, error) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	errParams := map[string]string{
 		"bucketName":  bucketName,
 		"objectName":  objectName,
