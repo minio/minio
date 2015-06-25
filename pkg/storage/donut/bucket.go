@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto/md5"
@@ -41,7 +42,7 @@ type bucket struct {
 	time      time.Time
 	donutName string
 	nodes     map[string]Node
-	objects   map[string]object
+	lock      *sync.RWMutex
 }
 
 // newBucket - instantiate a new bucket
@@ -63,14 +64,17 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]Node) (bu
 	b.acl = aclType
 	b.time = t
 	b.donutName = donutName
-	b.objects = make(map[string]object)
 	b.nodes = nodes
+	b.lock = new(sync.RWMutex)
 	return b, bucketMetadata, nil
 }
 
 // ListObjects - list all objects
 func (b bucket) ListObjects() (map[string]object, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
 	nodeSlice := 0
+	objects := make(map[string]object)
 	for _, node := range b.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
@@ -79,12 +83,12 @@ func (b bucket) ListObjects() (map[string]object, error) {
 		for order, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			bucketPath := filepath.Join(b.donutName, bucketSlice)
-			objects, err := disk.ListDir(bucketPath)
+			files, err := disk.ListDir(bucketPath)
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
-			for _, object := range objects {
-				newObject, err := newObject(object.Name(), filepath.Join(disk.GetPath(), bucketPath))
+			for _, file := range files {
+				newObject, err := newObject(file.Name(), filepath.Join(disk.GetPath(), bucketPath))
 				if err != nil {
 					return nil, iodine.New(err, nil)
 				}
@@ -94,18 +98,20 @@ func (b bucket) ListObjects() (map[string]object, error) {
 				}
 				objectName, ok := newObjectMetadata["object"]
 				if !ok {
-					return nil, iodine.New(ObjectCorrupted{Object: object.Name()}, nil)
+					return nil, iodine.New(ObjectCorrupted{Object: newObject.name}, nil)
 				}
-				b.objects[objectName] = newObject
+				objects[objectName] = newObject
 			}
 		}
 		nodeSlice = nodeSlice + 1
 	}
-	return b.objects, nil
+	return objects, nil
 }
 
 // ReadObject - open an object to read
 func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64, err error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
 	reader, writer := io.Pipe()
 	// get list of objects
 	objects, err := b.ListObjects()
@@ -141,6 +147,9 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 
 // WriteObject - write a new object into bucket
 func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if objectName == "" || objectData == nil {
 		return "", iodine.New(InvalidArgument{}, nil)
 	}
