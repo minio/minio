@@ -14,35 +14,11 @@
  * limitations under the License.
  */
 
-package donut
+package disk
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-)
+import "strconv"
 
-/// This file contains all the internal functions used inside Disk interface
-
-// formatBytes - Convert bytes to human readable string. Like a 2 MB, 64.2 KB, 52 B
-func (d disk) formatBytes(i int64) (result string) {
-	switch {
-	case i > (1024 * 1024 * 1024 * 1024):
-		result = fmt.Sprintf("%.02f TB", float64(i)/1024/1024/1024/1024)
-	case i > (1024 * 1024 * 1024):
-		result = fmt.Sprintf("%.02f GB", float64(i)/1024/1024/1024)
-	case i > (1024 * 1024):
-		result = fmt.Sprintf("%.02f MB", float64(i)/1024/1024)
-	case i > 1024:
-		result = fmt.Sprintf("%.02f KB", float64(i)/1024)
-	default:
-		result = fmt.Sprintf("%d B", i)
-	}
-	result = strings.Trim(result, " ")
-	return
-}
-
-// fsType2StrinMap - list of filesystems supported by donut
+// fsType2StringMap - list of filesystems supported by donut on linux
 var fsType2StringMap = map[string]string{
 	"1021994":  "TMPFS",
 	"137d":     "EXT",
@@ -58,7 +34,7 @@ var fsType2StringMap = map[string]string{
 }
 
 // getFSType - get filesystem type
-func (d disk) getFSType(fsType int64) string {
+func getFSType(fsType int64) string {
 	fsTypeHex := strconv.FormatInt(fsType, 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if ok == false {
