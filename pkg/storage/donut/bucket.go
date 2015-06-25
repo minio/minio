@@ -22,6 +22,7 @@ import (
 	"hash"
 	"io"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +43,7 @@ type bucket struct {
 	time      time.Time
 	donutName string
 	nodes     map[string]node
+	objects   map[string]object
 	lock      *sync.RWMutex
 }
 
@@ -65,47 +67,102 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	b.time = t
 	b.donutName = donutName
 	b.nodes = nodes
+	b.objects = make(map[string]object)
 	b.lock = new(sync.RWMutex)
 	return b, bucketMetadata, nil
 }
 
+func (b bucket) getObjectName(fileName, diskPath, bucketPath string) (string, error) {
+	newObject, err := newObject(fileName, filepath.Join(diskPath, bucketPath))
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+	newObjectMetadata, err := newObject.GetObjectMetadata()
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+	objectName, ok := newObjectMetadata["object"]
+	if !ok {
+		return "", iodine.New(ObjectCorrupted{Object: newObject.name}, nil)
+	}
+	b.objects[objectName] = newObject
+	return objectName, nil
+}
+
+func (b bucket) GetObjectMetadata(objectName string) (map[string]string, error) {
+	return b.objects[objectName].GetObjectMetadata()
+}
+
 // ListObjects - list all objects
-func (b bucket) ListObjects() (map[string]object, error) {
+func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
+
+	if maxkeys <= 0 {
+		maxkeys = 1000
+	}
+	var isTruncated bool
 	nodeSlice := 0
-	objects := make(map[string]object)
+	var objects []string
 	for _, node := range b.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, nil, false, iodine.New(err, nil)
 		}
 		for order, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			bucketPath := filepath.Join(b.donutName, bucketSlice)
 			files, err := disk.ListDir(bucketPath)
 			if err != nil {
-				return nil, iodine.New(err, nil)
+				return nil, nil, false, iodine.New(err, nil)
 			}
 			for _, file := range files {
-				newObject, err := newObject(file.Name(), filepath.Join(disk.GetPath(), bucketPath))
+				if len(objects) >= maxkeys {
+					isTruncated = true
+					goto truncated
+				}
+				objectName, err := b.getObjectName(file.Name(), disk.GetPath(), bucketPath)
 				if err != nil {
-					return nil, iodine.New(err, nil)
+					return nil, nil, false, iodine.New(err, nil)
 				}
-				newObjectMetadata, err := newObject.GetObjectMetadata()
-				if err != nil {
-					return nil, iodine.New(err, nil)
+				if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
+					if objectName > marker {
+						objects = appendUniq(objects, objectName)
+					}
 				}
-				objectName, ok := newObjectMetadata["object"]
-				if !ok {
-					return nil, iodine.New(ObjectCorrupted{Object: newObject.name}, nil)
-				}
-				objects[objectName] = newObject
 			}
 		}
 		nodeSlice = nodeSlice + 1
 	}
-	return objects, nil
+
+truncated:
+	{
+		if strings.TrimSpace(prefix) != "" {
+			objects = removePrefix(objects, prefix)
+		}
+		var prefixes []string
+		var filteredObjects []string
+		if strings.TrimSpace(delimiter) != "" {
+			filteredObjects = filterDelimited(objects, delimiter)
+			prefixes = filterNotDelimited(objects, delimiter)
+			prefixes = extractDelimited(prefixes, delimiter)
+			prefixes = uniqueObjects(prefixes)
+		} else {
+			filteredObjects = objects
+		}
+
+		var results []string
+		var commonPrefixes []string
+		for _, objectName := range filteredObjects {
+			results = appendUniq(results, prefix+objectName)
+		}
+		for _, commonPrefix := range prefixes {
+			commonPrefixes = appendUniq(commonPrefixes, prefix+commonPrefix)
+		}
+		sort.Strings(results)
+		sort.Strings(commonPrefixes)
+		return results, commonPrefixes, isTruncated, nil
+	}
 }
 
 // ReadObject - open an object to read
@@ -114,12 +171,12 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 	defer b.lock.RUnlock()
 	reader, writer := io.Pipe()
 	// get list of objects
-	objects, err := b.ListObjects()
+	_, _, _, err = b.ListObjects(objectName, "", "", 1)
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
 	// check if object exists
-	object, ok := objects[objectName]
+	object, ok := b.objects[objectName]
 	if !ok {
 		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
 	}
@@ -149,7 +206,6 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-
 	if objectName == "" || objectData == nil {
 		return "", iodine.New(InvalidArgument{}, nil)
 	}
