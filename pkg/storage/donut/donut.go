@@ -192,7 +192,7 @@ func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadC
 	if _, ok := dt.buckets[bucket]; !ok {
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	objectList, _, _, err := dt.buckets[bucket].ListObjects(object, "", "", 1)
+	objectList, _, _, err := dt.buckets[bucket].ListObjects("", "", "", 1000)
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
@@ -245,7 +245,12 @@ func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, err
 	if _, ok := dt.buckets[bucket]; !ok {
 		return nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	objectList, _, _, err := dt.buckets[bucket].ListObjects(object, "", "", 1)
+	//
+	// there is a potential issue here, if the object comes after the truncated list
+	// below GetObjectMetadata would fail as ObjectNotFound{}
+	//
+	// will fix it when we bring in persistent json into Donut - TODO
+	objectList, _, _, err := dt.buckets[bucket].ListObjects("", "", "", 1000)
 	if err != nil {
 		return nil, iodine.New(err, errParams)
 	}

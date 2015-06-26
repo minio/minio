@@ -117,10 +117,6 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 				return nil, nil, false, iodine.New(err, nil)
 			}
 			for _, file := range files {
-				if len(objects) >= maxkeys {
-					isTruncated = true
-					goto truncated
-				}
 				objectName, err := b.getObjectName(file.Name(), disk.GetPath(), bucketPath)
 				if err != nil {
 					return nil, nil, false, iodine.New(err, nil)
@@ -134,8 +130,6 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 		}
 		nodeSlice = nodeSlice + 1
 	}
-
-truncated:
 	{
 		if strings.TrimSpace(prefix) != "" {
 			objects = removePrefix(objects, prefix)
@@ -150,10 +144,15 @@ truncated:
 		} else {
 			filteredObjects = objects
 		}
-
 		var results []string
 		var commonPrefixes []string
+
+		sort.Strings(filteredObjects)
 		for _, objectName := range filteredObjects {
+			if len(results) >= maxkeys {
+				isTruncated = true
+				break
+			}
 			results = appendUniq(results, prefix+objectName)
 		}
 		for _, commonPrefix := range prefixes {
@@ -417,6 +416,9 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 	if err != nil {
 		writer.CloseWithError(iodine.New(err, nil))
 		return
+	}
+	for _, reader := range readers {
+		defer reader.Close()
 	}
 	hasher := md5.New()
 	mwriter := io.MultiWriter(writer, hasher)
