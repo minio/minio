@@ -187,9 +187,9 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Maxkeys = 5
 		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, i+1)
 		c.Assert(resources.IsTruncated, check.Equals, false)
-		c.Assert(err, check.IsNil)
 	}
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
@@ -198,9 +198,9 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Maxkeys = 5
 		resources.Prefix = ""
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 5)
 		c.Assert(resources.IsTruncated, check.Equals, true)
-		c.Assert(err, check.IsNil)
 	}
 	// check paging with prefix at end returns less objects
 	{
@@ -209,6 +209,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Prefix = "new"
 		resources.Maxkeys = 5
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 2)
 	}
 
@@ -217,6 +218,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[2].Key, check.Equals, "obj0")
@@ -248,6 +250,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[2].Key, check.Equals, "obj0")
@@ -265,6 +268,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Delimiter = ""
 		resources.Maxkeys = 3
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix2")
 		c.Assert(objects[1].Key, check.Equals, "obj0")
 		c.Assert(objects[2].Key, check.Equals, "obj1")
@@ -276,6 +280,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Marker = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(objects[0].Key, check.Equals, "obj0")
 		c.Assert(objects[1].Key, check.Equals, "obj1")
 		c.Assert(objects[2].Key, check.Equals, "obj10")
@@ -288,6 +293,7 @@ func testPaging(c *check.C, create func() Driver) {
 		resources.Marker = ""
 		resources.Maxkeys = 5
 		objects, resources, err = drivers.ListObjects("bucket", resources)
+		c.Assert(err, check.IsNil)
 		c.Assert(objects[0].Key, check.Equals, "newPrefix")
 		c.Assert(objects[1].Key, check.Equals, "newPrefix2")
 	}
@@ -313,8 +319,8 @@ func testObjectOverwriteFails(c *check.C, create func() Driver) {
 
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "object")
-	c.Assert(length, check.Equals, int64(len("one")))
 	c.Assert(err, check.IsNil)
+	c.Assert(length, check.Equals, int64(len("one")))
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "one")
 }
 
@@ -358,9 +364,9 @@ func testPutObjectInSubdir(c *check.C, create func() Driver) {
 
 	var bytesBuffer bytes.Buffer
 	length, err := drivers.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object")
+	c.Assert(err, check.IsNil)
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("hello world"))
 	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, length)
-	c.Assert(err, check.IsNil)
 }
 
 func testListBuckets(c *check.C, create func() Driver) {
@@ -405,8 +411,8 @@ func testListBucketsOrder(c *check.C, create func() Driver) {
 		drivers.CreateBucket("bucket2", "")
 
 		buckets, err := drivers.ListBuckets()
-		c.Assert(len(buckets), check.Equals, 2)
 		c.Assert(err, check.IsNil)
+		c.Assert(len(buckets), check.Equals, 2)
 		c.Assert(buckets[0].Name, check.Equals, "bucket1")
 		c.Assert(buckets[1].Name, check.Equals, "bucket2")
 	}

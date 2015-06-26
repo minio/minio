@@ -93,6 +93,7 @@ func (disk Disk) ListDir(dirname string) ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
+	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, iodine.New(err, nil)
@@ -113,6 +114,7 @@ func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
+	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, iodine.New(err, nil)

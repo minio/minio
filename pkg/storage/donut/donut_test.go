@@ -306,7 +306,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	/// test list of objects
 
 	// test list objects with prefix and delimiter
-	listObjects, prefixes, isTruncated, err := donut.ListObjects("foo", "o", "", "1", 1)
+	listObjects, prefixes, isTruncated, err := donut.ListObjects("foo", "o", "", "1", 10)
 	c.Assert(err, IsNil)
 	c.Assert(isTruncated, Equals, false)
 	c.Assert(prefixes[0], Equals, "obj1")

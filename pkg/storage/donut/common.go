@@ -52,7 +52,7 @@ func filterNotDelimited(objects []string, delim string) []string {
 	return results
 }
 
-func extractDir(objects []string, delim string) []string {
+func extractDelimited(objects []string, delim string) []string {
 	var results []string
 	for _, object := range objects {
 		parts := strings.Split(object, delim)
