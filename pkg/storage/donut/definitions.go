@@ -18,8 +18,8 @@ package donut
 
 import "time"
 
-// objectMetadata object specific metadata per object
-type objectMetadata struct {
+// ObjectMetadata object specific metadata per object
+type ObjectMetadata struct {
 	// version
 	Version string `json:"version"`
 
@@ -37,8 +37,8 @@ type objectMetadata struct {
 	Metadata map[string]string `json:"metadata"`
 }
 
-// donutObjectMetadata container for donut specific internal metadata per object
-type donutObjectMetadata struct {
+// SystemObjectMetadata container for donut system specific metadata per object
+type SystemObjectMetadata struct {
 	// version
 	Version string `json:"version"`
 
@@ -57,14 +57,21 @@ type donutObjectMetadata struct {
 	SHA512Sum string `json:"sys.sha512sum"`
 }
 
-// donutMetadata container for donut level metadata
-type donutMetadata struct {
+// Metadata container for donut metadata
+type Metadata struct {
 	Version string `json:"version"`
 }
 
-// bucketMetadata container for bucket level metadata
-type bucketMetadata struct {
+// AllBuckets container for all buckets
+type AllBuckets struct {
+	Buckets map[string]BucketMetadata
+}
+
+// BucketMetadata container for bucket level metadata
+type BucketMetadata struct {
 	Version  string            `json:"version"`
+	Name     string            `json:"name"`
 	ACL      string            `json:"acl"`
+	Created  time.Time         `json:"created"`
 	Metadata map[string]string `json:"metadata"`
 }

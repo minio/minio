@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"io/ioutil"
 
@@ -141,13 +140,9 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 		return nil, err
 	}
 	for name, metadata := range buckets {
-		created, err := time.Parse(time.RFC3339Nano, metadata["created"])
-		if err != nil {
-			return nil, iodine.New(err, nil)
-		}
 		result := drivers.BucketMetadata{
 			Name:    name,
-			Created: created,
+			Created: metadata.Created,
 		}
 		results = append(results, result)
 	}
@@ -195,18 +190,10 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 	if err != nil {
 		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
 	}
-	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
-	if err != nil {
-		return drivers.BucketMetadata{}, iodine.New(err, nil)
-	}
-	acl, ok := metadata["acl"]
-	if !ok {
-		return drivers.BucketMetadata{}, iodine.New(drivers.BackendCorrupted{}, nil)
-	}
 	bucketMetadata := drivers.BucketMetadata{
 		Name:    bucketName,
-		Created: created,
-		ACL:     drivers.BucketACL(acl),
+		Created: metadata.Created,
+		ACL:     drivers.BucketACL(metadata.ACL),
 	}
 	return bucketMetadata, nil
 }
@@ -332,22 +319,14 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 			Object: objectName,
 		}, errParams)
 	}
-	created, err := time.Parse(time.RFC3339Nano, metadata["created"])
-	if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
-	}
-	size, err := strconv.ParseInt(metadata["size"], 10, 64)
-	if err != nil {
-		return drivers.ObjectMetadata{}, iodine.New(err, errParams)
-	}
 	objectMetadata := drivers.ObjectMetadata{
 		Bucket: bucketName,
 		Key:    objectName,
 
-		ContentType: metadata["contentType"],
-		Created:     created,
-		Md5:         metadata["md5"],
-		Size:        size,
+		ContentType: metadata.Metadata["contentType"],
+		Created:     metadata.Created,
+		Md5:         metadata.MD5Sum,
+		Size:        metadata.Size,
 	}
 	return objectMetadata, nil
 }
@@ -390,18 +369,10 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 		if err != nil {
 			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 		}
-		t, err := time.Parse(time.RFC3339Nano, objectMetadata["created"])
-		if err != nil {
-			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, nil)
-		}
-		size, err := strconv.ParseInt(objectMetadata["size"], 10, 64)
-		if err != nil {
-			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, nil)
-		}
 		metadata := drivers.ObjectMetadata{
 			Key:     objectName,
-			Created: t,
-			Size:    size,
+			Created: objectMetadata.Created,
+			Size:    objectMetadata.Size,
 		}
 		results = append(results, metadata)
 	}

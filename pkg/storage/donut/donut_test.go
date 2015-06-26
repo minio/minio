@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
-	"time"
 
 	. "github.com/minio/check"
 )
@@ -113,7 +112,7 @@ func (s *MySuite) TestMakeBucketAndList(c *C) {
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 1)
-	c.Assert(buckets["foo"]["acl"], Equals, "private")
+	c.Assert(buckets["foo"].ACL, Equals, "private")
 }
 
 // test re-create bucket
@@ -202,9 +201,9 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	objectMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 
-	c.Assert(objectMetadata["contentType"], Equals, metadata["contentType"])
-	c.Assert(objectMetadata["foo"], Equals, metadata["foo"])
-	c.Assert(objectMetadata["hello"], Equals, metadata["hello"])
+	c.Assert(objectMetadata.Metadata["contentType"], Equals, metadata["contentType"])
+	c.Assert(objectMetadata.Metadata["foo"], Equals, metadata["foo"])
+	c.Assert(objectMetadata.Metadata["hello"], Equals, metadata["hello"])
 }
 
 // test create object fails without name
@@ -255,11 +254,9 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 
 	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
-	c.Assert(expectedMd5Sum, Equals, actualMetadata["md5"])
-	c.Assert(strconv.Itoa(len(data)), Equals, actualMetadata["size"])
-	c.Assert("1.0", Equals, actualMetadata["version"])
-	_, err = time.Parse(time.RFC3339Nano, actualMetadata["created"])
-	c.Assert(err, IsNil)
+	c.Assert(expectedMd5Sum, Equals, actualMetadata.MD5Sum)
+	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
+	c.Assert("1.0.0", Equals, actualMetadata.Version)
 }
 
 // test list objects
