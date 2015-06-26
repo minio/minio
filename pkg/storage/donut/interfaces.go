@@ -29,9 +29,9 @@ type Donut interface {
 // ObjectStorage is a donut object storage interface
 type ObjectStorage interface {
 	// Storage service operations
-	GetBucketMetadata(bucket string) (map[string]string, error)
+	GetBucketMetadata(bucket string) (BucketMetadata, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
-	ListBuckets() (map[string]map[string]string, error)
+	ListBuckets() (map[string]BucketMetadata, error)
 	MakeBucket(bucket, acl string) error
 
 	// Bucket operations
@@ -39,7 +39,7 @@ type ObjectStorage interface {
 
 	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
-	GetObjectMetadata(bucket, object string) (map[string]string, error)
+	GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
 	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error)
 }
 

@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -40,17 +39,18 @@ type donut struct {
 
 // config files used inside Donut
 const (
-	// donut object metadata and config
-	donutObjectMetadataConfig = "donutObjectMetadata.json"
-	donutConfig               = "donutMetadata.json"
+	// donut system object metadata
+	sysObjectMetadataConfig = "sysObjectMetadata.json"
+	// donut system config
+	donutConfig = "donutConfig.json"
 
 	// bucket, object metadata
 	bucketMetadataConfig = "bucketMetadata.json"
 	objectMetadataConfig = "objectMetadata.json"
 
 	// versions
-	objectMetadataVersion      = "1.0"
-	donutObjectMetadataVersion = "1.0"
+	objectMetadataVersion       = "1.0.0"
+	systemObjectMetadataVersion = "1.0.0"
 )
 
 // attachDonutNode - wrapper function to instantiate a new node for associatedt donut
@@ -98,24 +98,24 @@ func (dt donut) MakeBucket(bucket, acl string) error {
 }
 
 // GetBucketMetadata - get bucket metadata
-func (dt donut) GetBucketMetadata(bucket string) (map[string]string, error) {
+func (dt donut) GetBucketMetadata(bucketName string) (BucketMetadata, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	if err := dt.listDonutBuckets(); err != nil {
-		return nil, iodine.New(err, nil)
+		return BucketMetadata{}, iodine.New(err, nil)
 	}
-	if _, ok := dt.buckets[bucket]; !ok {
-		return nil, iodine.New(BucketNotFound{Bucket: bucket}, nil)
+	if _, ok := dt.buckets[bucketName]; !ok {
+		return BucketMetadata{}, iodine.New(BucketNotFound{Bucket: bucketName}, nil)
 	}
 	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return BucketMetadata{}, iodine.New(err, nil)
 	}
-	return metadata[bucket], nil
+	return metadata.Buckets[bucketName], nil
 }
 
 // SetBucketMetadata - set bucket metadata
-func (dt donut) SetBucketMetadata(bucket string, bucketMetadata map[string]string) error {
+func (dt donut) SetBucketMetadata(bucketName string, bucketMetadata map[string]string) error {
 	dt.lock.Lock()
 	defer dt.lock.Unlock()
 	if err := dt.listDonutBuckets(); err != nil {
@@ -125,28 +125,31 @@ func (dt donut) SetBucketMetadata(bucket string, bucketMetadata map[string]strin
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	oldBucketMetadata := metadata[bucket]
-	// TODO ignore rest of the keys for now, only mutable data is "acl"
-	oldBucketMetadata["acl"] = bucketMetadata["acl"]
-	metadata[bucket] = oldBucketMetadata
+	oldBucketMetadata := metadata.Buckets[bucketName]
+	acl, ok := bucketMetadata["acl"]
+	if !ok {
+		return iodine.New(InvalidArgument{}, nil)
+	}
+	oldBucketMetadata.ACL = acl
+	metadata.Buckets[bucketName] = oldBucketMetadata
 	return dt.setDonutBucketMetadata(metadata)
 }
 
 // ListBuckets - return list of buckets
-func (dt donut) ListBuckets() (metadata map[string]map[string]string, err error) {
+func (dt donut) ListBuckets() (map[string]BucketMetadata, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	if err := dt.listDonutBuckets(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	metadata, err = dt.getDonutBucketMetadata()
+	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
 		// intentionally left out the error when Donut is empty
 		// but we need to revisit this area in future - since we need
 		// to figure out between acceptable and unacceptable errors
-		return make(map[string]map[string]string), nil
+		return make(map[string]BucketMetadata), nil
 	}
-	return metadata, nil
+	return metadata.Buckets, nil
 }
 
 // ListObjects - return list of objects
@@ -233,7 +236,7 @@ func (dt donut) GetObject(bucket, object string) (reader io.ReadCloser, size int
 }
 
 // GetObjectMetadata - get object metadata
-func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, error) {
+func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	errParams := map[string]string{
@@ -241,10 +244,10 @@ func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, err
 		"object": object,
 	}
 	if err := dt.listDonutBuckets(); err != nil {
-		return nil, iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := dt.buckets[bucket]; !ok {
-		return nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
 	//
 	// there is a potential issue here, if the object comes after the truncated list
@@ -253,26 +256,14 @@ func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, err
 	// will fix it when we bring in persistent json into Donut - TODO
 	objectList, _, _, err := dt.buckets[bucket].ListObjects("", "", "", 1000)
 	if err != nil {
-		return nil, iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	for _, objectName := range objectList {
 		if objectName == object {
-			objectMetadataMap := make(map[string]string)
-			objectMetadata, err := dt.buckets[bucket].GetObjectMetadata(object)
-			if err != nil {
-				return nil, iodine.New(err, nil)
-			}
-			objectMetadataMap["created"] = objectMetadata.Created.Format(time.RFC3339Nano)
-			objectMetadataMap["size"] = strconv.FormatInt(objectMetadata.Size, 10)
-			objectMetadataMap["md5"] = objectMetadata.MD5Sum
-			objectMetadataMap["version"] = objectMetadata.Version
-			for k, v := range objectMetadata.Metadata {
-				objectMetadataMap[k] = v
-			}
-			return objectMetadataMap, nil
+			return dt.buckets[bucket].GetObjectMetadata(object)
 		}
 	}
-	return nil, iodine.New(ObjectNotFound{Object: object}, errParams)
+	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: object}, errParams)
 }
 
 // getDiskWriters -
@@ -315,7 +306,7 @@ func (dt donut) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 }
 
 //
-func (dt donut) setDonutBucketMetadata(metadata map[string]map[string]string) error {
+func (dt donut) setDonutBucketMetadata(metadata *AllBuckets) error {
 	writers, err := dt.getBucketMetadataWriters()
 	if err != nil {
 		return iodine.New(err, nil)
@@ -332,8 +323,8 @@ func (dt donut) setDonutBucketMetadata(metadata map[string]map[string]string) er
 	return nil
 }
 
-func (dt donut) getDonutBucketMetadata() (map[string]map[string]string, error) {
-	metadata := make(map[string]map[string]string)
+func (dt donut) getDonutBucketMetadata() (*AllBuckets, error) {
+	metadata := new(AllBuckets)
 	readers, err := dt.getBucketMetadataReaders()
 	if err != nil {
 		return nil, iodine.New(err, nil)
@@ -343,7 +334,7 @@ func (dt donut) getDonutBucketMetadata() (map[string]map[string]string, error) {
 	}
 	for _, reader := range readers {
 		jenc := json.NewDecoder(reader)
-		if err := jenc.Decode(&metadata); err != nil {
+		if err := jenc.Decode(metadata); err != nil {
 			return nil, iodine.New(err, nil)
 		}
 	}
@@ -380,8 +371,9 @@ func (dt donut) makeDonutBucket(bucketName, acl string) error {
 	metadata, err := dt.getDonutBucketMetadata()
 	if err != nil {
 		if os.IsNotExist(iodine.ToError(err)) {
-			metadata := make(map[string]map[string]string)
-			metadata[bucketName] = bucketMetadata
+			metadata := new(AllBuckets)
+			metadata.Buckets = make(map[string]BucketMetadata)
+			metadata.Buckets[bucketName] = bucketMetadata
 			err = dt.setDonutBucketMetadata(metadata)
 			if err != nil {
 				return iodine.New(err, nil)
@@ -390,7 +382,7 @@ func (dt donut) makeDonutBucket(bucketName, acl string) error {
 		}
 		return iodine.New(err, nil)
 	}
-	metadata[bucketName] = bucketMetadata
+	metadata.Buckets[bucketName] = bucketMetadata
 	err = dt.setDonutBucketMetadata(metadata)
 	if err != nil {
 		return iodine.New(err, nil)

@@ -41,26 +41,26 @@ func newObject(objectName, p string) (object, error) {
 	return o, nil
 }
 
-func (o object) GetObjectMetadata() (*objectMetadata, error) {
-	objectMetadata := new(objectMetadata)
-	objectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
+func (o object) GetObjectMetadata() (ObjectMetadata, error) {
+	objMetadata := ObjectMetadata{}
+	objMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
 	if err != nil {
-		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
+		return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
-	if err := json.Unmarshal(objectMetadataBytes, objectMetadata); err != nil {
-		return nil, iodine.New(err, nil)
+	if err := json.Unmarshal(objMetadataBytes, &objMetadata); err != nil {
+		return ObjectMetadata{}, iodine.New(err, nil)
 	}
-	return objectMetadata, nil
+	return objMetadata, nil
 }
 
-func (o object) GetDonutObjectMetadata() (*donutObjectMetadata, error) {
-	donutObjectMetadata := new(donutObjectMetadata)
-	donutObjectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, donutObjectMetadataConfig))
+func (o object) GetSystemObjectMetadata() (SystemObjectMetadata, error) {
+	sysObjMetadata := SystemObjectMetadata{}
+	sysObjMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, sysObjectMetadataConfig))
 	if err != nil {
-		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
+		return SystemObjectMetadata{}, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
-	if err := json.Unmarshal(donutObjectMetadataBytes, donutObjectMetadata); err != nil {
-		return nil, iodine.New(err, nil)
+	if err := json.Unmarshal(sysObjMetadataBytes, &sysObjMetadata); err != nil {
+		return SystemObjectMetadata{}, iodine.New(err, nil)
 	}
-	return donutObjectMetadata, nil
+	return sysObjMetadata, nil
 }
