@@ -26,10 +26,8 @@ import (
 
 // object internal struct
 type object struct {
-	name                string
-	objectPath          string
-	objectMetadata      map[string]string
-	donutObjectMetadata map[string]string
+	name       string
+	objectPath string
 }
 
 // newObject - instantiate a new object
@@ -43,28 +41,26 @@ func newObject(objectName, p string) (object, error) {
 	return o, nil
 }
 
-func (o object) GetObjectMetadata() (map[string]string, error) {
-	objectMetadata := make(map[string]string)
+func (o object) GetObjectMetadata() (*objectMetadata, error) {
+	objectMetadata := new(objectMetadata)
 	objectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, objectMetadataConfig))
 	if err != nil {
 		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
-	if err := json.Unmarshal(objectMetadataBytes, &objectMetadata); err != nil {
+	if err := json.Unmarshal(objectMetadataBytes, objectMetadata); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	o.objectMetadata = objectMetadata
-	return o.objectMetadata, nil
+	return objectMetadata, nil
 }
 
-func (o object) GetDonutObjectMetadata() (map[string]string, error) {
-	donutObjectMetadata := make(map[string]string)
+func (o object) GetDonutObjectMetadata() (*donutObjectMetadata, error) {
+	donutObjectMetadata := new(donutObjectMetadata)
 	donutObjectMetadataBytes, err := ioutil.ReadFile(filepath.Join(o.objectPath, donutObjectMetadataConfig))
 	if err != nil {
 		return nil, iodine.New(ObjectNotFound{Object: o.name}, nil)
 	}
-	if err := json.Unmarshal(donutObjectMetadataBytes, &donutObjectMetadata); err != nil {
+	if err := json.Unmarshal(donutObjectMetadataBytes, donutObjectMetadata); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	o.donutObjectMetadata = donutObjectMetadata
-	return o.donutObjectMetadata, nil
+	return donutObjectMetadata, nil
 }
