@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -256,7 +257,19 @@ func (dt donut) GetObjectMetadata(bucket, object string) (map[string]string, err
 	}
 	for _, objectName := range objectList {
 		if objectName == object {
-			return dt.buckets[bucket].GetObjectMetadata(object)
+			objectMetadataMap := make(map[string]string)
+			objectMetadata, err := dt.buckets[bucket].GetObjectMetadata(object)
+			if err != nil {
+				return nil, iodine.New(err, nil)
+			}
+			objectMetadataMap["created"] = objectMetadata.Created.Format(time.RFC3339Nano)
+			objectMetadataMap["size"] = strconv.FormatInt(objectMetadata.Size, 10)
+			objectMetadataMap["md5"] = objectMetadata.MD5Sum
+			objectMetadataMap["version"] = objectMetadata.Version
+			for k, v := range objectMetadata.Metadata {
+				objectMetadataMap[k] = v
+			}
+			return objectMetadataMap, nil
 		}
 	}
 	return nil, iodine.New(ObjectNotFound{Object: object}, errParams)

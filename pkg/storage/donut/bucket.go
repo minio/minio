@@ -33,6 +33,7 @@ import (
 	"encoding/json"
 
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/utils/crypto/sha512"
 	"github.com/minio/minio/pkg/utils/split"
 )
 
@@ -72,6 +73,10 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	return b, bucketMetadata, nil
 }
 
+func (b bucket) getBucketName() string {
+	return b.name
+}
+
 func (b bucket) getObjectName(fileName, diskPath, bucketPath string) (string, error) {
 	newObject, err := newObject(fileName, filepath.Join(diskPath, bucketPath))
 	if err != nil {
@@ -81,15 +86,14 @@ func (b bucket) getObjectName(fileName, diskPath, bucketPath string) (string, er
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
-	objectName, ok := newObjectMetadata["object"]
-	if !ok {
+	if newObjectMetadata.Object == "" {
 		return "", iodine.New(ObjectCorrupted{Object: newObject.name}, nil)
 	}
-	b.objects[objectName] = newObject
-	return objectName, nil
+	b.objects[newObjectMetadata.Object] = newObject
+	return newObjectMetadata.Object, nil
 }
 
-func (b bucket) GetObjectMetadata(objectName string) (map[string]string, error) {
+func (b bucket) GetObjectMetadata(objectName string) (*objectMetadata, error) {
 	return b.objects[objectName].GetObjectMetadata()
 }
 
@@ -179,26 +183,14 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 	if !ok {
 		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
 	}
-	// verify if objectMetadata is readable, before we serve the request
-	objectMetadata, err := object.GetObjectMetadata()
-	if err != nil {
-		return nil, 0, iodine.New(err, nil)
-	}
-	if objectName == "" || writer == nil || len(objectMetadata) == 0 {
-		return nil, 0, iodine.New(InvalidArgument{}, nil)
-	}
-	size, err = strconv.ParseInt(objectMetadata["size"], 10, 64)
-	if err != nil {
-		return nil, 0, iodine.New(err, nil)
-	}
 	// verify if donutObjectMetadata is readable, before we server the request
-	donutObjectMetadata, err := object.GetDonutObjectMetadata()
+	donutObjMetadata, err := object.GetDonutObjectMetadata()
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
 	}
 	// read and reply back to GetObject() request in a go-routine
-	go b.readEncodedData(b.normalizeObjectName(objectName), writer, donutObjectMetadata)
-	return reader, size, nil
+	go b.readEncodedData(b.normalizeObjectName(objectName), writer, donutObjMetadata)
+	return reader, donutObjMetadata.Size, nil
 }
 
 // WriteObject - write a new object into bucket
@@ -212,11 +204,13 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
-	summer := md5.New()
-	objectMetadata := make(map[string]string)
-	donutObjectMetadata := make(map[string]string)
-	objectMetadata["version"] = objectMetadataVersion
-	donutObjectMetadata["version"] = donutObjectMetadataVersion
+	sumMD5 := md5.New()
+	sum512 := sha512.New()
+
+	objectMetadata := new(objectMetadata)
+	donutObjectMetadata := new(donutObjectMetadata)
+	objectMetadata.Version = objectMetadataVersion
+	donutObjectMetadata.Version = donutObjectMetadataVersion
 	size := metadata["contentLength"]
 	sizeInt, err := strconv.ParseInt(size, 10, 64)
 	if err != nil {
@@ -226,13 +220,13 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	// if total writers are only '1' do not compute erasure
 	switch len(writers) == 1 {
 	case true:
-		mw := io.MultiWriter(writers[0], summer)
+		mw := io.MultiWriter(writers[0], sumMD5, sum512)
 		totalLength, err := io.CopyN(mw, objectData, sizeInt)
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}
-		donutObjectMetadata["sys.size"] = strconv.FormatInt(totalLength, 10)
-		objectMetadata["size"] = strconv.FormatInt(totalLength, 10)
+		donutObjectMetadata.Size = totalLength
+		objectMetadata.Size = totalLength
 	case false:
 		// calculate data and parity dictated by total number of writers
 		k, m, err := b.getDataAndParity(len(writers))
@@ -240,37 +234,39 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 			return "", iodine.New(err, nil)
 		}
 		// encoded data with k, m and write
-		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, summer)
+		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, sumMD5, sum512)
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}
 		/// donutMetadata section
-		donutObjectMetadata["sys.blockSize"] = strconv.Itoa(10 * 1024 * 1024)
-		donutObjectMetadata["sys.chunkCount"] = strconv.Itoa(chunkCount)
-		donutObjectMetadata["sys.erasureK"] = strconv.FormatUint(uint64(k), 10)
-		donutObjectMetadata["sys.erasureM"] = strconv.FormatUint(uint64(m), 10)
-		donutObjectMetadata["sys.erasureTechnique"] = "Cauchy"
-		donutObjectMetadata["sys.size"] = strconv.Itoa(totalLength)
+		donutObjectMetadata.BlockSize = 10 * 1024 * 1024
+		donutObjectMetadata.ChunkCount = chunkCount
+		donutObjectMetadata.DataDisks = k
+		donutObjectMetadata.ParityDisks = m
+		donutObjectMetadata.ErasureTechnique = "Cauchy"
+		donutObjectMetadata.Size = int64(totalLength)
 		// keep size inside objectMetadata as well for Object API requests
-		objectMetadata["size"] = strconv.Itoa(totalLength)
+		objectMetadata.Size = int64(totalLength)
 	}
-	objectMetadata["bucket"] = b.name
-	objectMetadata["object"] = objectName
-	// store all user provided metadata
-	for k, v := range metadata {
-		objectMetadata[k] = v
-	}
-	dataMd5sum := summer.Sum(nil)
-	objectMetadata["created"] = time.Now().UTC().Format(time.RFC3339Nano)
+	objectMetadata.Bucket = b.getBucketName()
+	objectMetadata.Object = objectName
+	objectMetadata.Metadata = metadata
+	dataMD5sum := sumMD5.Sum(nil)
+	dataSHA512sum := sum512.Sum(nil)
+	objectMetadata.Created = time.Now().UTC()
 
 	// keeping md5sum for the object in two different places
 	// one for object storage and another is for internal use
-	objectMetadata["md5"] = hex.EncodeToString(dataMd5sum)
-	donutObjectMetadata["sys.md5"] = hex.EncodeToString(dataMd5sum)
+	hexMD5Sum := hex.EncodeToString(dataMD5sum)
+	hex512Sum := hex.EncodeToString(dataSHA512sum)
+	objectMetadata.MD5Sum = hexMD5Sum
+	objectMetadata.SHA512Sum = hex512Sum
+	donutObjectMetadata.MD5Sum = hexMD5Sum
+	donutObjectMetadata.SHA512Sum = hex512Sum
 
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
-		if err := b.isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), objectMetadata["md5"]); err != nil {
+		if err := b.isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), objectMetadata.MD5Sum); err != nil {
 			return "", iodine.New(err, nil)
 		}
 	}
@@ -286,7 +282,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	for _, writer := range writers {
 		writer.Close()
 	}
-	return objectMetadata["md5"], nil
+	return objectMetadata.MD5Sum, nil
 }
 
 // isMD5SumEqual - returns error if md5sum mismatches, other its `nil`
@@ -309,8 +305,8 @@ func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 // writeObjectMetadata - write additional object metadata
-func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string]string) error {
-	if len(objectMetadata) == 0 {
+func (b bucket) writeObjectMetadata(objectName string, objectMetadata *objectMetadata) error {
+	if objectMetadata == nil {
 		return iodine.New(InvalidArgument{}, nil)
 	}
 	objectMetadataWriters, err := b.getDiskWriters(objectName, objectMetadataConfig)
@@ -330,20 +326,20 @@ func (b bucket) writeObjectMetadata(objectName string, objectMetadata map[string
 }
 
 // writeDonutObjectMetadata - write donut related object metadata
-func (b bucket) writeDonutObjectMetadata(objectName string, objectMetadata map[string]string) error {
-	if len(objectMetadata) == 0 {
+func (b bucket) writeDonutObjectMetadata(objectName string, donutObjectMetadata *donutObjectMetadata) error {
+	if donutObjectMetadata == nil {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	objectMetadataWriters, err := b.getDiskWriters(objectName, donutObjectMetadataConfig)
+	donutObjectMetadataWriters, err := b.getDiskWriters(objectName, donutObjectMetadataConfig)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	for _, objectMetadataWriter := range objectMetadataWriters {
-		defer objectMetadataWriter.Close()
+	for _, donutObjectMetadataWriter := range donutObjectMetadataWriters {
+		defer donutObjectMetadataWriter.Close()
 	}
-	for _, objectMetadataWriter := range objectMetadataWriters {
-		jenc := json.NewEncoder(objectMetadataWriter)
-		if err := jenc.Encode(objectMetadata); err != nil {
+	for _, donutObjectMetadataWriter := range donutObjectMetadataWriters {
+		jenc := json.NewEncoder(donutObjectMetadataWriter)
+		if err := jenc.Encode(donutObjectMetadata); err != nil {
 			return iodine.New(err, nil)
 		}
 	}
@@ -380,7 +376,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 }
 
 // writeEncodedData -
-func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, summer hash.Hash) (int, int, error) {
+func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum512 hash.Hash) (int, int, error) {
 	chunks := split.Stream(objectData, 10*1024*1024)
 	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
@@ -392,7 +388,8 @@ func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectDat
 		if chunk.Err == nil {
 			totalLength = totalLength + len(chunk.Data)
 			encodedBlocks, _ := encoder.Encode(chunk.Data)
-			summer.Write(chunk.Data)
+			sumMD5.Write(chunk.Data)
+			sum512.Write(chunk.Data)
 			for blockIndex, block := range encodedBlocks {
 				_, err := io.Copy(writers[blockIndex], bytes.NewBuffer(block))
 				if err != nil {
@@ -406,8 +403,8 @@ func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectDat
 }
 
 // readEncodedData -
-func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutObjectMetadata map[string]string) {
-	expectedMd5sum, err := hex.DecodeString(donutObjectMetadata["sys.md5"])
+func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutObjMetadata *donutObjectMetadata) {
+	expectedMd5sum, err := hex.DecodeString(donutObjMetadata.MD5Sum)
 	if err != nil {
 		writer.CloseWithError(iodine.New(err, nil))
 		return
@@ -424,23 +421,18 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 	mwriter := io.MultiWriter(writer, hasher)
 	switch len(readers) == 1 {
 	case false:
-		totalChunks, totalLeft, blockSize, k, m, err := b.donutMetadata2Values(donutObjectMetadata)
-		if err != nil {
-			writer.CloseWithError(iodine.New(err, nil))
-			return
-		}
-		technique, ok := donutObjectMetadata["sys.erasureTechnique"]
-		if !ok {
+		if donutObjMetadata.ErasureTechnique == "" {
 			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
 			return
 		}
-		encoder, err := newEncoder(uint8(k), uint8(m), technique)
+		encoder, err := newEncoder(donutObjMetadata.DataDisks, donutObjMetadata.ParityDisks, donutObjMetadata.ErasureTechnique)
 		if err != nil {
 			writer.CloseWithError(iodine.New(err, nil))
 			return
 		}
-		for i := 0; i < totalChunks; i++ {
-			decodedData, err := b.decodeEncodedData(totalLeft, blockSize, readers, encoder, writer)
+		totalLeft := donutObjMetadata.Size
+		for i := 0; i < donutObjMetadata.ChunkCount; i++ {
+			decodedData, err := b.decodeEncodedData(totalLeft, int64(donutObjMetadata.BlockSize), readers, encoder, writer)
 			if err != nil {
 				writer.CloseWithError(iodine.New(err, nil))
 				return
@@ -450,7 +442,7 @@ func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, donutO
 				writer.CloseWithError(iodine.New(err, nil))
 				return
 			}
-			totalLeft = totalLeft - int64(blockSize)
+			totalLeft = totalLeft - int64(donutObjMetadata.BlockSize)
 		}
 	case true:
 		_, err := io.Copy(writer, readers[0])
@@ -494,31 +486,6 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadC
 		return nil, iodine.New(err, nil)
 	}
 	return decodedData, nil
-}
-
-// donutMetadata2Values -
-func (b bucket) donutMetadata2Values(donutObjectMetadata map[string]string) (totalChunks int, totalLeft, blockSize int64, k, m uint64, err error) {
-	totalChunks, err = strconv.Atoi(donutObjectMetadata["sys.chunkCount"])
-	if err != nil {
-		return 0, 0, 0, 0, 0, iodine.New(err, nil)
-	}
-	totalLeft, err = strconv.ParseInt(donutObjectMetadata["sys.size"], 10, 64)
-	if err != nil {
-		return 0, 0, 0, 0, 0, iodine.New(err, nil)
-	}
-	blockSize, err = strconv.ParseInt(donutObjectMetadata["sys.blockSize"], 10, 64)
-	if err != nil {
-		return 0, 0, 0, 0, 0, iodine.New(err, nil)
-	}
-	k, err = strconv.ParseUint(donutObjectMetadata["sys.erasureK"], 10, 8)
-	if err != nil {
-		return 0, 0, 0, 0, 0, iodine.New(err, nil)
-	}
-	m, err = strconv.ParseUint(donutObjectMetadata["sys.erasureM"], 10, 8)
-	if err != nil {
-		return 0, 0, 0, 0, 0, iodine.New(err, nil)
-	}
-	return totalChunks, totalLeft, blockSize, k, m, nil
 }
 
 // getDiskReaders -
