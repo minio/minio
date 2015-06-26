@@ -10,6 +10,10 @@
 			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
 		},
 		{
+			"ImportPath": "github.com/fatih/structs",
+			"Rev": "c00d27128bb88e9c1adab1a53cda9c72c6d1ff9b"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "50c25fb3b2b3b3cc724e9b6ac75fb44b3bccd0da"
 		},
