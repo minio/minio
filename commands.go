@@ -154,12 +154,61 @@ func runMemory(c *cli.Context) {
 }
 
 func runDonut(c *cli.Context) {
+	var err error
+
 	u, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
+	}
+	var maxMemory uint64
+	maxMemorySet := false
+
+	var expiration time.Duration
+	expirationSet := false
+
+	args := c.Args()
+	for len(args) > 0 {
+		switch args.First() {
+		case "limit":
+			{
+				if maxMemorySet {
+					Fatalln("Limit should be set only once")
+				}
+				args = args.Tail()
+				maxMemory, err = humanize.ParseBytes(args.First())
+				if err != nil {
+					Fatalf("Invalid memory size [%s] passed. Reason: %s\n", args.First(), iodine.New(err, nil))
+				}
+				if maxMemory < 1024*1024*10 {
+					Fatalf("Invalid memory size [%s] passed. Should be greater than 10M\n", args.First())
+				}
+				args = args.Tail()
+				maxMemorySet = true
+			}
+		case "expire":
+			{
+				if expirationSet {
+					Fatalln("Expiration should be set only once")
+				}
+				args = args.Tail()
+				expiration, err = time.ParseDuration(args.First())
+				if err != nil {
+					Fatalf("Invalid expiration time [%s] passed. Reason: %s\n", args.First(), iodine.New(err, nil))
+				}
+				args = args.Tail()
+				expirationSet = true
+			}
+		default:
+			{
+				cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
+			}
+		}
+	}
+	if maxMemorySet == false {
+		Fatalln("Memory limit must be set")
 	}
 	// supporting multiple paths
 	var paths []string
@@ -173,8 +222,10 @@ func runDonut(c *cli.Context) {
 	}
 	apiServerConfig := getAPIServerConfig(c)
 	donutDriver := server.DonutFactory{
-		Config: apiServerConfig,
-		Paths:  paths,
+		Config:     apiServerConfig,
+		Paths:      paths,
+		MaxMemory:  maxMemory,
+		Expiration: expiration,
 	}
 	apiServer := donutDriver.GetStartServerFunc()
 	//	webServer := getWebServerConfigFunc(c)

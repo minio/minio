@@ -377,14 +377,13 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 
 // writeEncodedData -
 func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum512 hash.Hash) (int, int, error) {
-	chunks := split.Stream(objectData, 10*1024*1024)
 	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
 	}
 	chunkCount := 0
 	totalLength := 0
-	for chunk := range chunks {
+	for chunk := range split.Stream(objectData, 10*1024*1024) {
 		if chunk.Err == nil {
 			totalLength = totalLength + len(chunk.Data)
 			encodedBlocks, _ := encoder.Encode(chunk.Data)

@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"math/rand"
-	"reflect"
 	"strconv"
 
 	"time"
@@ -59,10 +58,6 @@ func testCreateBucket(c *check.C, create func() Driver) {
 
 func testMultipartObjectCreation(c *check.C, create func() Driver) {
 	drivers := create()
-	switch {
-	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
-		return
-	}
 	err := drivers.CreateBucket("bucket", "")
 	c.Assert(err, check.IsNil)
 	uploadID, err := drivers.NewMultipartUpload("bucket", "key", "")
@@ -97,10 +92,6 @@ func testMultipartObjectCreation(c *check.C, create func() Driver) {
 
 func testMultipartObjectAbort(c *check.C, create func() Driver) {
 	drivers := create()
-	switch {
-	case reflect.TypeOf(drivers).String() == "*donut.donutDriver":
-		return
-	}
 	err := drivers.CreateBucket("bucket", "")
 	c.Assert(err, check.IsNil)
 	uploadID, err := drivers.NewMultipartUpload("bucket", "key", "")
