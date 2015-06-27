@@ -160,36 +160,36 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
 			if objectName > marker {
-				objects = appendUniq(objects, objectName)
+				objects = AppendU(objects, objectName)
 			}
 		}
 	}
 	if strings.TrimSpace(prefix) != "" {
-		objects = removePrefix(objects, prefix)
+		objects = TrimPrefix(objects, prefix)
 	}
 	var prefixes []string
 	var filteredObjects []string
 	if strings.TrimSpace(delimiter) != "" {
-		filteredObjects = filterDelimited(objects, delimiter)
-		prefixes = filterNotDelimited(objects, delimiter)
-		prefixes = extractDelimited(prefixes, delimiter)
-		prefixes = uniqueObjects(prefixes)
+		filteredObjects = HasNoDelimiter(objects, delimiter)
+		prefixes = HasDelimiter(objects, delimiter)
+		prefixes = SplitDelimiter(prefixes, delimiter)
+		prefixes = SortU(prefixes)
 	} else {
 		filteredObjects = objects
 	}
 	var results []string
 	var commonPrefixes []string
 
+	for _, commonPrefix := range prefixes {
+		commonPrefixes = AppendU(commonPrefixes, prefix+commonPrefix)
+	}
 	sort.Strings(filteredObjects)
 	for _, objectName := range filteredObjects {
 		if len(results) >= maxkeys {
 			isTruncated = true
 			break
 		}
-		results = appendUniq(results, prefix+objectName)
-	}
-	for _, commonPrefix := range prefixes {
-		commonPrefixes = appendUniq(commonPrefixes, prefix+commonPrefix)
+		results = AppendU(results, prefix+objectName)
 	}
 	sort.Strings(results)
 	sort.Strings(commonPrefixes)
