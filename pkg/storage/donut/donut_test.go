@@ -91,10 +91,11 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 
 	c.Assert(donut.MakeBucket("foo", "private"), IsNil)
 	// check if bucket is empty
-	objects, _, istruncated, err := donut.ListObjects("foo", "", "", "", 1)
+	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
 	c.Assert(err, IsNil)
-	c.Assert(objects, IsNil)
-	c.Assert(istruncated, Equals, false)
+	c.Assert(listObjects.Objects, IsNil)
+	c.Assert(listObjects.CommonPrefixes, IsNil)
+	c.Assert(listObjects.IsTruncated, Equals, false)
 }
 
 // test bucket list
@@ -303,23 +304,23 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	/// test list of objects
 
 	// test list objects with prefix and delimiter
-	listObjects, prefixes, isTruncated, err := donut.ListObjects("foo", "o", "", "1", 10)
+	listObjects, err := donut.ListObjects("foo", "o", "", "1", 10)
 	c.Assert(err, IsNil)
-	c.Assert(isTruncated, Equals, false)
-	c.Assert(prefixes[0], Equals, "obj1")
+	c.Assert(listObjects.IsTruncated, Equals, false)
+	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
 
 	// test list objects with only delimiter
-	listObjects, prefixes, isTruncated, err = donut.ListObjects("foo", "", "", "1", 10)
+	listObjects, err = donut.ListObjects("foo", "", "", "1", 10)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects[0], Equals, "obj2")
-	c.Assert(isTruncated, Equals, false)
-	c.Assert(prefixes[0], Equals, "obj1")
+	c.Assert(listObjects.Objects[0], Equals, "obj2")
+	c.Assert(listObjects.IsTruncated, Equals, false)
+	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
 
 	// test list objects with only prefix
-	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 10)
+	listObjects, err = donut.ListObjects("foo", "o", "", "", 10)
 	c.Assert(err, IsNil)
-	c.Assert(isTruncated, Equals, false)
-	c.Assert(listObjects, DeepEquals, []string{"obj1", "obj2"})
+	c.Assert(listObjects.IsTruncated, Equals, false)
+	c.Assert(listObjects.Objects, DeepEquals, []string{"obj1", "obj2"})
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
 	metadata["contentLength"] = strconv.Itoa(len("three"))
@@ -336,8 +337,8 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	c.Assert(readerBuffer3.Bytes(), DeepEquals, []byte("three"))
 
 	// test list objects with maxkeys
-	listObjects, _, isTruncated, err = donut.ListObjects("foo", "o", "", "", 2)
+	listObjects, err = donut.ListObjects("foo", "o", "", "", 2)
 	c.Assert(err, IsNil)
-	c.Assert(isTruncated, Equals, true)
-	c.Assert(len(listObjects), Equals, 2)
+	c.Assert(listObjects.IsTruncated, Equals, true)
+	c.Assert(len(listObjects.Objects), Equals, 2)
 }

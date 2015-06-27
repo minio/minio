@@ -35,7 +35,7 @@ type ObjectStorage interface {
 	MakeBucket(bucket, acl string) error
 
 	// Bucket operations
-	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (objects []string, prefixes []string, isTruncated bool, err error)
+	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (ListObjects, error)
 
 	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
