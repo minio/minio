@@ -42,10 +42,6 @@ type donutDriver struct {
 	lock  *sync.RWMutex
 }
 
-const (
-	blockSize = 10 * 1024 * 1024
-)
-
 // This is a dummy nodeDiskMap which is going to be deprecated soon
 // once the Management API is standardized, this map is useful for now
 // to show multi disk API correctness and parity calculation
@@ -165,11 +161,11 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 			acl = "private"
 		}
 		if err := d.donut.MakeBucket(bucketName, acl); err != nil {
-			err = iodine.ToError(err)
-			if err.Error() == "bucket exists" {
+			switch iodine.ToError(err).(type) {
+			case donut.BucketExists:
 				return iodine.New(drivers.BucketExists{Bucket: bucketName}, nil)
 			}
-			return err
+			return iodine.New(err, nil)
 		}
 		return nil
 	}
@@ -312,7 +308,7 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
-	metadata, additionalMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
+	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
@@ -323,7 +319,7 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 		Bucket: bucketName,
 		Key:    objectName,
 
-		ContentType: additionalMetadata["contentType"],
+		ContentType: metadata.Metadata["contentType"],
 		Created:     metadata.Created,
 		Md5:         metadata.MD5Sum,
 		Size:        metadata.Size,
@@ -365,7 +361,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	}
 	var results []drivers.ObjectMetadata
 	for _, objectName := range actualObjects {
-		objectMetadata, _, err := d.donut.GetObjectMetadata(bucketName, objectName)
+		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 		if err != nil {
 			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 		}

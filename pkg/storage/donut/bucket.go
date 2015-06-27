@@ -36,6 +36,10 @@ import (
 	"github.com/minio/minio/pkg/utils/split"
 )
 
+const (
+	blockSize = 10 * 1024 * 1024
+)
+
 // internal struct carrying bucket specific information
 type bucket struct {
 	name      string
@@ -72,7 +76,7 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	metadata.ACL = aclType
 	metadata.Created = t
 	metadata.Metadata = make(map[string]string)
-	metadata.BucketObjectsMetadata = make(map[string]map[string]string)
+	metadata.BucketObjects = make(map[string]interface{})
 
 	return b, metadata, nil
 }
@@ -153,7 +157,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 	if err != nil {
 		return nil, nil, false, iodine.New(err, nil)
 	}
-	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjectsMetadata {
+	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
 			if objectName > marker {
 				objects = appendUniq(objects, objectName)
@@ -203,7 +207,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 		return nil, 0, iodine.New(err, nil)
 	}
 	// check if object exists
-	if _, ok := bucketMetadata.Buckets[b.getBucketName()].BucketObjectsMetadata[objectName]; !ok {
+	if _, ok := bucketMetadata.Buckets[b.getBucketName()].BucketObjects[objectName]; !ok {
 		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
 	}
 	objMetadata := ObjectMetadata{}
@@ -227,7 +231,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string) (string, error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (string, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
@@ -263,7 +267,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 			return "", iodine.New(err, nil)
 		}
 		/// donutMetadata section
-		objMetadata.BlockSize = 10 * 1024 * 1024
+		objMetadata.BlockSize = blockSize
 		objMetadata.ChunkCount = chunkCount
 		objMetadata.DataDisks = k
 		objMetadata.ParityDisks = m
@@ -284,6 +288,8 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 			return "", iodine.New(err, nil)
 		}
 	}
+
+	objMetadata.Metadata = metadata
 	// write object specific metadata
 	if err := b.writeObjectMetadata(normalizeObjectName(objectName), objMetadata); err != nil {
 		return "", iodine.New(err, nil)

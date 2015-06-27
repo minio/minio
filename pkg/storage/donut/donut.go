@@ -198,14 +198,14 @@ func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadC
 	if err != nil {
 		return "", iodine.New(err, errParams)
 	}
-	if _, ok := bucketMeta.Buckets[bucket].BucketObjectsMetadata[object]; ok {
+	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
 		return "", iodine.New(ObjectExists{Object: object}, errParams)
 	}
-	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum)
+	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
 		return "", iodine.New(err, errParams)
 	}
-	bucketMeta.Buckets[bucket].BucketObjectsMetadata[object] = metadata
+	bucketMeta.Buckets[bucket].BucketObjects[object] = 1
 	if err := dt.setDonutBucketMetadata(bucketMeta); err != nil {
 		return "", iodine.New(err, errParams)
 	}
@@ -236,7 +236,7 @@ func (dt donut) GetObject(bucket, object string) (reader io.ReadCloser, size int
 }
 
 // GetObjectMetadata - get object metadata
-func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, map[string]string, error) {
+func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	errParams := map[string]string{
@@ -244,23 +244,23 @@ func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, map[st
 		"object": object,
 	}
 	if err := dt.listDonutBuckets(); err != nil {
-		return ObjectMetadata{}, nil, iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := dt.buckets[bucket]; !ok {
-		return ObjectMetadata{}, nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
 	bucketMeta, err := dt.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectMetadata{}, nil, iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := bucketMeta.Buckets[bucket].BucketObjectsMetadata[object]; !ok {
-		return ObjectMetadata{}, nil, iodine.New(ObjectNotFound{Object: object}, errParams)
+	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; !ok {
+		return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: object}, errParams)
 	}
 	objectMetadata, err := dt.buckets[bucket].GetObjectMetadata(object)
 	if err != nil {
-		return ObjectMetadata{}, nil, iodine.New(err, nil)
+		return ObjectMetadata{}, iodine.New(err, nil)
 	}
-	return objectMetadata, bucketMeta.Buckets[bucket].BucketObjectsMetadata[object], nil
+	return objectMetadata, nil
 }
 
 // getDiskWriters -

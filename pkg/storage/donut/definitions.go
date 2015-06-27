@@ -39,6 +39,9 @@ type ObjectMetadata struct {
 	// checksums
 	MD5Sum    string `json:"sys.md5sum"`
 	SHA512Sum string `json:"sys.sha512sum"`
+
+	// metadata
+	Metadata map[string]string `json:"metadata"`
 }
 
 // Metadata container for donut metadata
@@ -54,10 +57,10 @@ type AllBuckets struct {
 
 // BucketMetadata container for bucket level metadata
 type BucketMetadata struct {
-	Version               string                       `json:"version"`
-	Name                  string                       `json:"name"`
-	ACL                   string                       `json:"acl"`
-	Created               time.Time                    `json:"created"`
-	Metadata              map[string]string            `json:"metadata"`
-	BucketObjectsMetadata map[string]map[string]string `json:"objectsMetadata"`
+	Version       string                 `json:"version"`
+	Name          string                 `json:"name"`
+	ACL           string                 `json:"acl"`
+	Created       time.Time              `json:"created"`
+	Metadata      map[string]string      `json:"metadata"`
+	BucketObjects map[string]interface{} `json:"objects"`
 }
