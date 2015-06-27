@@ -39,7 +39,7 @@ type ObjectStorage interface {
 
 	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
-	GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
+	GetObjectMetadata(bucket, object string) (ObjectMetadata, map[string]string, error)
 	PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error)
 }
 

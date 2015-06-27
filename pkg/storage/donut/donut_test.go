@@ -198,12 +198,12 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
 
-	objectMetadata, err := donut.GetObjectMetadata("foo", "obj")
+	_, additionalMetadata, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 
-	c.Assert(objectMetadata.Metadata["contentType"], Equals, metadata["contentType"])
-	c.Assert(objectMetadata.Metadata["foo"], Equals, metadata["foo"])
-	c.Assert(objectMetadata.Metadata["hello"], Equals, metadata["hello"])
+	c.Assert(additionalMetadata["contentType"], Equals, metadata["contentType"])
+	c.Assert(additionalMetadata["foo"], Equals, metadata["foo"])
+	c.Assert(additionalMetadata["hello"], Equals, metadata["hello"])
 }
 
 // test create object fails without name
@@ -252,7 +252,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
+	actualMetadata, _, err := donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(expectedMd5Sum, Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)

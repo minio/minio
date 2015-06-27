@@ -18,39 +18,23 @@ package donut
 
 import "time"
 
-// ObjectMetadata object specific metadata per object
+// ObjectMetadata container for object on donut system
 type ObjectMetadata struct {
 	// version
 	Version string `json:"version"`
 
 	// object metadata
-	Size    int64     `json:"size"`
 	Created time.Time `json:"created"`
 	Bucket  string    `json:"bucket"`
 	Object  string    `json:"object"`
-
-	// checksums
-	MD5Sum    string `json:"md5sum"`
-	SHA512Sum string `json:"sha512sum"`
-
-	// additional metadata
-	Metadata map[string]string `json:"metadata"`
-}
-
-// SystemObjectMetadata container for donut system specific metadata per object
-type SystemObjectMetadata struct {
-	// version
-	Version string `json:"version"`
+	Size    int64     `json:"size"`
 
 	// erasure
 	DataDisks        uint8  `json:"sys.erasureK"`
 	ParityDisks      uint8  `json:"sys.erasureM"`
 	ErasureTechnique string `json:"sys.erasureTechnique"`
-
-	// object metadata
-	Size       int64 `json:"sys.size"`
-	BlockSize  int   `json:"sys.blockSize"`
-	ChunkCount int   `json:"sys.chunkCount"`
+	BlockSize        int    `json:"sys.blockSize"`
+	ChunkCount       int    `json:"sys.chunkCount"`
 
 	// checksums
 	MD5Sum    string `json:"sys.md5sum"`
@@ -64,14 +48,16 @@ type Metadata struct {
 
 // AllBuckets container for all buckets
 type AllBuckets struct {
-	Buckets map[string]BucketMetadata
+	Version string                    `json:"version"`
+	Buckets map[string]BucketMetadata `json:"buckets"`
 }
 
 // BucketMetadata container for bucket level metadata
 type BucketMetadata struct {
-	Version  string            `json:"version"`
-	Name     string            `json:"name"`
-	ACL      string            `json:"acl"`
-	Created  time.Time         `json:"created"`
-	Metadata map[string]string `json:"metadata"`
+	Version               string                       `json:"version"`
+	Name                  string                       `json:"name"`
+	ACL                   string                       `json:"acl"`
+	Created               time.Time                    `json:"created"`
+	Metadata              map[string]string            `json:"metadata"`
+	BucketObjectsMetadata map[string]map[string]string `json:"objectsMetadata"`
 }
