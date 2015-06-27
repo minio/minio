@@ -39,8 +39,6 @@ type donut struct {
 
 // config files used inside Donut
 const (
-	// donut system object metadata
-	sysObjectMetadataConfig = "sysObjectMetadata.json"
 	// donut system config
 	donutConfig = "donutConfig.json"
 
@@ -49,8 +47,8 @@ const (
 	objectMetadataConfig = "objectMetadata.json"
 
 	// versions
-	objectMetadataVersion       = "1.0.0"
-	systemObjectMetadataVersion = "1.0.0"
+	objectMetadataVersion = "1.0.0"
+	bucketMetadataVersion = "1.0.0"
 )
 
 // attachDonutNode - wrapper function to instantiate a new node for associatedt donut
@@ -196,17 +194,19 @@ func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadC
 	if _, ok := dt.buckets[bucket]; !ok {
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	objectList, _, _, err := dt.buckets[bucket].ListObjects("", "", "", 1000)
+	bucketMeta, err := dt.getDonutBucketMetadata()
 	if err != nil {
-		return "", iodine.New(err, nil)
+		return "", iodine.New(err, errParams)
 	}
-	for _, objectName := range objectList {
-		if objectName == object {
-			return "", iodine.New(ObjectExists{Object: object}, nil)
-		}
+	if _, ok := bucketMeta.Buckets[bucket].BucketObjectsMetadata[object]; ok {
+		return "", iodine.New(ObjectExists{Object: object}, errParams)
 	}
-	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
+	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum)
 	if err != nil {
+		return "", iodine.New(err, errParams)
+	}
+	bucketMeta.Buckets[bucket].BucketObjectsMetadata[object] = metadata
+	if err := dt.setDonutBucketMetadata(bucketMeta); err != nil {
 		return "", iodine.New(err, errParams)
 	}
 	return md5sum, nil
@@ -236,7 +236,7 @@ func (dt donut) GetObject(bucket, object string) (reader io.ReadCloser, size int
 }
 
 // GetObjectMetadata - get object metadata
-func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, error) {
+func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, map[string]string, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	errParams := map[string]string{
@@ -244,26 +244,23 @@ func (dt donut) GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
 		"object": object,
 	}
 	if err := dt.listDonutBuckets(); err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, nil, iodine.New(err, errParams)
 	}
 	if _, ok := dt.buckets[bucket]; !ok {
-		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectMetadata{}, nil, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	//
-	// there is a potential issue here, if the object comes after the truncated list
-	// below GetObjectMetadata would fail as ObjectNotFound{}
-	//
-	// will fix it when we bring in persistent json into Donut - TODO
-	objectList, _, _, err := dt.buckets[bucket].ListObjects("", "", "", 1000)
+	bucketMeta, err := dt.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, nil, iodine.New(err, errParams)
 	}
-	for _, objectName := range objectList {
-		if objectName == object {
-			return dt.buckets[bucket].GetObjectMetadata(object)
-		}
+	if _, ok := bucketMeta.Buckets[bucket].BucketObjectsMetadata[object]; !ok {
+		return ObjectMetadata{}, nil, iodine.New(ObjectNotFound{Object: object}, errParams)
 	}
-	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: object}, errParams)
+	objectMetadata, err := dt.buckets[bucket].GetObjectMetadata(object)
+	if err != nil {
+		return ObjectMetadata{}, nil, iodine.New(err, nil)
+	}
+	return objectMetadata, bucketMeta.Buckets[bucket].BucketObjectsMetadata[object], nil
 }
 
 // getDiskWriters -
@@ -337,8 +334,9 @@ func (dt donut) getDonutBucketMetadata() (*AllBuckets, error) {
 		if err := jenc.Decode(metadata); err != nil {
 			return nil, iodine.New(err, nil)
 		}
+		return metadata, nil
 	}
-	return metadata, nil
+	return nil, iodine.New(InvalidArgument{}, nil)
 }
 
 func (dt donut) makeDonutBucket(bucketName, acl string) error {

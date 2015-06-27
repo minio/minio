@@ -312,7 +312,7 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
-	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
+	metadata, additionalMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{
 			Bucket: bucketName,
@@ -323,7 +323,7 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 		Bucket: bucketName,
 		Key:    objectName,
 
-		ContentType: metadata.Metadata["contentType"],
+		ContentType: additionalMetadata["contentType"],
 		Created:     metadata.Created,
 		Md5:         metadata.MD5Sum,
 		Size:        metadata.Size,
@@ -365,7 +365,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	}
 	var results []drivers.ObjectMetadata
 	for _, objectName := range actualObjects {
-		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
+		objectMetadata, _, err := d.donut.GetObjectMetadata(bucketName, objectName)
 		if err != nil {
 			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 		}
