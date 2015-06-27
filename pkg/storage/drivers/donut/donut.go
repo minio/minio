@@ -327,12 +327,6 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 	return objectMetadata, nil
 }
 
-type byObjectKey []drivers.ObjectMetadata
-
-func (b byObjectKey) Len() int           { return len(b) }
-func (b byObjectKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b byObjectKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
-
 // ListObjects - returns list of objects
 func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	d.lock.RLock()
@@ -349,30 +343,30 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	if !drivers.IsValidObjectName(resources.Prefix) {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
-	actualObjects, commonPrefixes, isTruncated, err := d.donut.ListObjects(bucketName, resources.Prefix, resources.Marker, resources.Delimiter,
-		resources.Maxkeys)
+	listObjects, err := d.donut.ListObjects(bucketName, resources.Prefix, resources.Marker, resources.Delimiter, resources.Maxkeys)
 	if err != nil {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 	}
-	resources.CommonPrefixes = commonPrefixes
-	resources.IsTruncated = isTruncated
+	resources.CommonPrefixes = listObjects.CommonPrefixes
+	resources.IsTruncated = listObjects.IsTruncated
 	if resources.IsTruncated && resources.IsDelimiterSet() {
-		resources.NextMarker = actualObjects[len(actualObjects)-1]
+		resources.NextMarker = listObjects.Objects[len(listObjects.Objects)-1]
 	}
-	var results []drivers.ObjectMetadata
-	for _, objectName := range actualObjects {
+	// make sure to keep the lexical order same as returned by donut
+	// we do not have to sort here again
+	results := make([]drivers.ObjectMetadata, len(listObjects.Objects))
+	for i, objectName := range listObjects.Objects {
 		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 		if err != nil {
 			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
 		}
 		metadata := drivers.ObjectMetadata{
-			Key:     objectName,
+			Key:     objectMetadata.Object,
 			Created: objectMetadata.Created,
 			Size:    objectMetadata.Size,
 		}
-		results = append(results, metadata)
+		results[i] = metadata
 	}
-	sort.Sort(byObjectKey(results))
 	return results, resources, nil
 }
 

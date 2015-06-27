@@ -151,7 +151,7 @@ func (dt donut) ListBuckets() (map[string]BucketMetadata, error) {
 }
 
 // ListObjects - return list of objects
-func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
+func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys int) (ListObjects, error) {
 	dt.lock.RLock()
 	defer dt.lock.RUnlock()
 	errParams := map[string]string{
@@ -162,16 +162,16 @@ func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys in
 		"maxkeys":   strconv.Itoa(maxkeys),
 	}
 	if err := dt.listDonutBuckets(); err != nil {
-		return nil, nil, false, iodine.New(err, errParams)
+		return ListObjects{}, iodine.New(err, errParams)
 	}
 	if _, ok := dt.buckets[bucket]; !ok {
-		return nil, nil, false, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ListObjects{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	objects, commonPrefixes, isTruncated, err := dt.buckets[bucket].ListObjects(prefix, marker, delimiter, maxkeys)
+	listObjects, err := dt.buckets[bucket].ListObjects(prefix, marker, delimiter, maxkeys)
 	if err != nil {
-		return nil, nil, false, iodine.New(err, errParams)
+		return ListObjects{}, iodine.New(err, errParams)
 	}
-	return objects, commonPrefixes, isTruncated, nil
+	return listObjects, nil
 }
 
 // PutObject - put object

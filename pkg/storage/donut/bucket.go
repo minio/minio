@@ -145,7 +145,7 @@ func (b bucket) getBucketMetadata() (*AllBuckets, error) {
 }
 
 // ListObjects - list all objects
-func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]string, []string, bool, error) {
+func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjects, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	if maxkeys <= 0 {
@@ -155,7 +155,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 	var objects []string
 	bucketMetadata, err := b.getBucketMetadata()
 	if err != nil {
-		return nil, nil, false, iodine.New(err, nil)
+		return ListObjects{}, iodine.New(err, nil)
 	}
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
@@ -193,7 +193,12 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) ([]st
 	}
 	sort.Strings(results)
 	sort.Strings(commonPrefixes)
-	return results, commonPrefixes, isTruncated, nil
+
+	listObjects := ListObjects{}
+	listObjects.Objects = results
+	listObjects.CommonPrefixes = commonPrefixes
+	listObjects.IsTruncated = isTruncated
+	return listObjects, nil
 }
 
 // ReadObject - open an object to read
