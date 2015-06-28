@@ -115,6 +115,39 @@ func (r *Cache) Get(key string) ([]byte, bool) {
 	return value, true
 }
 
+// Append will append new data to an existing key,
+// if key doesn't exist it behaves like Set()
+func (r *Cache) Append(key string, value []byte) bool {
+	r.Lock()
+	defer r.Unlock()
+	valueLen := uint64(len(value))
+	if r.maxSize > 0 {
+		// check if the size of the object is not bigger than the
+		// capacity of the cache
+		if valueLen > r.maxSize {
+			return false
+		}
+		// remove random key if only we reach the maxSize threshold
+		for (r.currentSize + valueLen) > r.maxSize {
+			for randomKey := range r.items {
+				r.doDelete(randomKey)
+				break
+			}
+		}
+	}
+	_, ok := r.items[key]
+	if !ok {
+		r.items[key] = value
+		r.currentSize += valueLen
+		r.updatedAt[key] = time.Now()
+		return true
+	}
+	r.items[key] = append(r.items[key], value...)
+	r.currentSize += valueLen
+	r.updatedAt[key] = time.Now()
+	return true
+}
+
 // Set will persist a value to the cache
 func (r *Cache) Set(key string, value []byte) bool {
 	r.Lock()
@@ -128,8 +161,8 @@ func (r *Cache) Set(key string, value []byte) bool {
 		}
 		// remove random key if only we reach the maxSize threshold
 		for (r.currentSize + valueLen) > r.maxSize {
-			for key := range r.items {
-				r.doDelete(key)
+			for randomKey := range r.items {
+				r.doDelete(randomKey)
 				break
 			}
 		}
