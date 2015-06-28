@@ -69,29 +69,23 @@ type donutDriver struct {
 }
 
 // This is a dummy nodeDiskMap which is going to be deprecated soon
-// once the Management API is standardized, this map is useful for now
-// to show multi disk API correctness and parity calculation
-//
-// Ideally this should be obtained from per node configuration file
-func createNodeDiskMap(p string) map[string][]string {
-	nodes := make(map[string][]string)
-	nodes["localhost"] = make([]string, 16)
-	for i := 0; i < len(nodes["localhost"]); i++ {
-		diskPath := filepath.Join(p, strconv.Itoa(i))
-		if _, err := os.Stat(diskPath); err != nil {
-			if os.IsNotExist(err) {
-				os.MkdirAll(diskPath, 0700)
-			}
-		}
-		nodes["localhost"][i] = diskPath
-	}
-	return nodes
-}
-
-// This is a dummy nodeDiskMap which is going to be deprecated soon
 // once the Management API is standardized, and we have way of adding
 // and removing disks. This is useful for now to take inputs from CLI
-func createNodeDiskMapFromSlice(paths []string) map[string][]string {
+func createNodeDiskMap(paths []string) map[string][]string {
+	if len(paths) == 1 {
+		nodes := make(map[string][]string)
+		nodes["localhost"] = make([]string, 16)
+		for i := 0; i < len(nodes["localhost"]); i++ {
+			diskPath := filepath.Join(paths[0], strconv.Itoa(i))
+			if _, err := os.Stat(diskPath); err != nil {
+				if os.IsNotExist(err) {
+					os.MkdirAll(diskPath, 0700)
+				}
+			}
+			nodes["localhost"][i] = diskPath
+		}
+		return nodes
+	}
 	diskPaths := make([]string, len(paths))
 	nodes := make(map[string][]string)
 	for i, p := range paths {
@@ -105,6 +99,43 @@ func createNodeDiskMapFromSlice(paths []string) map[string][]string {
 	}
 	nodes["localhost"] = diskPaths
 	return nodes
+}
+
+func initialize(d *donutDriver) {
+	// Soon to be user configurable, when Management API is available
+	// we should remove "default" to something which is passed down
+	// from configuration paramters
+	var err error
+	d.donut, err = donut.NewDonut("default", createNodeDiskMap(d.paths))
+	if err != nil {
+		panic(iodine.New(err, nil))
+	}
+	buckets, err := d.donut.ListBuckets()
+	if err != nil {
+		panic(iodine.New(err, nil))
+	}
+	for bucketName, metadata := range buckets {
+		d.lock.RLock()
+		storedBucket := d.storedBuckets[bucketName]
+		d.lock.RUnlock()
+		if len(storedBucket.multiPartSession) == 0 {
+			storedBucket.multiPartSession = make(map[string]multiPartSession)
+		}
+		if len(storedBucket.objectMetadata) == 0 {
+			storedBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
+		}
+		if len(storedBucket.partMetadata) == 0 {
+			storedBucket.partMetadata = make(map[string]drivers.PartMetadata)
+		}
+		storedBucket.bucketMetadata = drivers.BucketMetadata{
+			Name:    metadata.Name,
+			Created: metadata.Created,
+			ACL:     drivers.BucketACL(metadata.ACL),
+		}
+		d.lock.Lock()
+		d.storedBuckets[bucketName] = storedBucket
+		d.lock.Unlock()
+	}
 }
 
 // Start a single disk subsystem
@@ -126,34 +157,17 @@ func Start(paths []string, maxSize uint64, expiration time.Duration) (chan<- str
 	// set up memory expiration
 	driver.objects.ExpireObjects(time.Second * 5)
 
-	// Soon to be user configurable, when Management API is available
-	// we should remove "default" to something which is passed down
-	// from configuration paramters
-	switch {
-	case len(paths) == 1:
-		d, err := donut.NewDonut("default", createNodeDiskMap(paths[0]))
-		if err != nil {
-			err = iodine.New(err, nil)
-			log.Error.Println(err)
-		}
-		driver.donut = d
-	default:
-		d, err := donut.NewDonut("default", createNodeDiskMapFromSlice(paths))
-		if err != nil {
-			err = iodine.New(err, nil)
-			log.Error.Println(err)
-		}
-		driver.donut = d
-	}
 	driver.paths = paths
 	driver.lock = new(sync.RWMutex)
+
+	initialize(driver)
 
 	go start(ctrlChannel, errorChannel, driver)
 	return ctrlChannel, errorChannel, driver
 }
 
 func start(ctrlChannel <-chan string, errorChannel chan<- error, driver *donutDriver) {
-	close(errorChannel)
+	defer close(errorChannel)
 }
 
 func (d donutDriver) expiredObject(a ...interface{}) {
@@ -186,31 +200,8 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 	if d.donut == nil {
 		return nil, iodine.New(drivers.InternalError{}, nil)
 	}
-	buckets, err := d.donut.ListBuckets()
-	if err != nil {
-		return nil, iodine.New(err, nil)
-	}
-	for bucketName, metadata := range buckets {
-		result := drivers.BucketMetadata{
-			Name:    metadata.Name,
-			Created: metadata.Created,
-			ACL:     drivers.BucketACL(metadata.ACL),
-		}
-		d.lock.Lock()
-		storedBucket := d.storedBuckets[bucketName]
-		if len(storedBucket.multiPartSession) == 0 {
-			storedBucket.multiPartSession = make(map[string]multiPartSession)
-		}
-		if len(storedBucket.objectMetadata) == 0 {
-			storedBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
-		}
-		if len(storedBucket.partMetadata) == 0 {
-			storedBucket.partMetadata = make(map[string]drivers.PartMetadata)
-		}
-		storedBucket.bucketMetadata = result
-		d.storedBuckets[bucketName] = storedBucket
-		d.lock.Unlock()
-		results = append(results, result)
+	for _, storedBucket := range d.storedBuckets {
+		results = append(results, storedBucket.bucketMetadata)
 	}
 	sort.Sort(byBucketName(results))
 	return results, nil
@@ -229,7 +220,7 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 	if !drivers.IsValidBucketACL(acl) {
 		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
-	if drivers.IsValidBucket(bucketName) && !strings.Contains(bucketName, ".") {
+	if drivers.IsValidBucket(bucketName) {
 		if strings.TrimSpace(acl) == "" {
 			acl = "private"
 		}
@@ -244,6 +235,15 @@ func (d donutDriver) CreateBucket(bucketName, acl string) error {
 		newBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
 		newBucket.multiPartSession = make(map[string]multiPartSession)
 		newBucket.partMetadata = make(map[string]drivers.PartMetadata)
+		metadata, err := d.donut.GetBucketMetadata(bucketName)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		newBucket.bucketMetadata = drivers.BucketMetadata{
+			Name:    metadata.Name,
+			Created: metadata.Created,
+			ACL:     drivers.BucketACL(metadata.ACL),
+		}
 		d.storedBuckets[bucketName] = newBucket
 		return nil
 	}
@@ -268,7 +268,7 @@ func (d donutDriver) GetBucketMetadata(bucketName string) (drivers.BucketMetadat
 		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
 	}
 	bucketMetadata := drivers.BucketMetadata{
-		Name:    bucketName,
+		Name:    metadata.Name,
 		Created: metadata.Created,
 		ACL:     drivers.BucketACL(metadata.ACL),
 	}
@@ -302,8 +302,6 @@ func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
 
 // GetObject retrieves an object and writes it to a writer
 func (d donutDriver) GetObject(w io.Writer, bucketName, objectName string) (int64, error) {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
 	if d.donut == nil {
 		return 0, iodine.New(drivers.InternalError{}, nil)
 	}
@@ -316,15 +314,24 @@ func (d donutDriver) GetObject(w io.Writer, bucketName, objectName string) (int6
 	if _, ok := d.storedBuckets[bucketName]; ok == false {
 		return 0, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
 	}
+	d.lock.RLock()
+	defer d.lock.RUnlock()
 	objectKey := bucketName + "/" + objectName
 	data, ok := d.objects.Get(objectKey)
 	if !ok {
 		reader, size, err := d.donut.GetObject(bucketName, objectName)
 		if err != nil {
-			return 0, iodine.New(drivers.ObjectNotFound{
-				Bucket: bucketName,
-				Object: objectName,
-			}, nil)
+			switch iodine.ToError(err).(type) {
+			case donut.BucketNotFound:
+				return 0, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
+			case donut.ObjectNotFound:
+				return 0, iodine.New(drivers.ObjectNotFound{
+					Bucket: bucketName,
+					Object: objectName,
+				}, nil)
+			default:
+				return 0, iodine.New(drivers.InternalError{}, nil)
+			}
 		}
 		n, err := io.CopyN(w, reader, size)
 		if err != nil {
@@ -372,10 +379,17 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 	if !ok {
 		reader, size, err := d.donut.GetObject(bucketName, objectName)
 		if err != nil {
-			return 0, iodine.New(drivers.ObjectNotFound{
-				Bucket: bucketName,
-				Object: objectName,
-			}, nil)
+			switch iodine.ToError(err).(type) {
+			case donut.BucketNotFound:
+				return 0, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
+			case donut.ObjectNotFound:
+				return 0, iodine.New(drivers.ObjectNotFound{
+					Bucket: bucketName,
+					Object: objectName,
+				}, nil)
+			default:
+				return 0, iodine.New(drivers.InternalError{}, nil)
+			}
 		}
 		defer reader.Close()
 		if start > size || (start+length-1) > size {
@@ -486,25 +500,32 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 }
 
 type proxyReader struct {
-	io.Reader
-	readBytes []byte
+	reader io.Reader
+	driver donutDriver
+	object string
 }
 
 func (r *proxyReader) Read(p []byte) (n int, err error) {
-	n, err = r.Reader.Read(p)
+	n, err = r.reader.Read(p)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
-		r.readBytes = append(r.readBytes, p[0:n]...)
+		ok := r.driver.objects.Append(r.object, p[0:n])
+		if !ok {
+			return n, io.ErrShortBuffer
+		}
 		return
 	}
 	if err != nil {
 		return
 	}
-	r.readBytes = append(r.readBytes, p[0:n]...)
+	ok := r.driver.objects.Append(r.object, p[0:n])
+	if !ok {
+		return n, io.ErrShortBuffer
+	}
 	return
 }
 
-func newProxyReader(r io.Reader) *proxyReader {
-	return &proxyReader{r, nil}
+func newProxyReader(r io.Reader, d donutDriver, k string) *proxyReader {
+	return &proxyReader{reader: r, driver: d, object: k}
 }
 
 // CreateObject creates a new object
@@ -552,7 +573,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-	newReader := newProxyReader(reader)
+	newReader := newProxyReader(reader, d, objectKey)
 	calculatedMD5Sum, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, newReader, metadata)
 	if err != nil {
 		switch iodine.ToError(err).(type) {
@@ -561,14 +582,9 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		return "", iodine.New(err, errParams)
 	}
-	// get object key
-	ok := d.objects.Set(objectKey, newReader.readBytes)
-	// setting up for de-allocation
-	newReader.readBytes = nil
+	// free up
 	go debug.FreeOSMemory()
-	if !ok {
-		return "", iodine.New(drivers.InternalError{}, nil)
-	}
+
 	objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
 		return "", iodine.New(err, nil)
