@@ -505,7 +505,12 @@ type proxyReader struct {
 	object string
 }
 
+func (r *proxyReader) free(p []byte) {
+	p = nil
+	go debug.FreeOSMemory()
+}
 func (r *proxyReader) Read(p []byte) (n int, err error) {
+	defer r.free(p)
 	n, err = r.reader.Read(p)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		ok := r.driver.objects.Append(r.object, p[0:n])
@@ -582,9 +587,6 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		return "", iodine.New(err, errParams)
 	}
-	// free up
-	go debug.FreeOSMemory()
-
 	objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
 		return "", iodine.New(err, nil)
