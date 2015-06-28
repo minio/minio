@@ -500,9 +500,8 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 }
 
 type proxyReader struct {
-	reader io.Reader
-	driver donutDriver
-	object string
+	reader    io.Reader
+	readBytes []byte
 }
 
 func (r *proxyReader) free(p []byte) {
@@ -513,24 +512,18 @@ func (r *proxyReader) Read(p []byte) (n int, err error) {
 	defer r.free(p)
 	n, err = r.reader.Read(p)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
-		ok := r.driver.objects.Append(r.object, p[0:n])
-		if !ok {
-			return n, io.ErrShortBuffer
-		}
+		r.readBytes = append(r.readBytes, p[0:n]...)
 		return
 	}
 	if err != nil {
 		return
 	}
-	ok := r.driver.objects.Append(r.object, p[0:n])
-	if !ok {
-		return n, io.ErrShortBuffer
-	}
+	r.readBytes = append(r.readBytes, p[0:n]...)
 	return
 }
 
-func newProxyReader(r io.Reader, d donutDriver, k string) *proxyReader {
-	return &proxyReader{reader: r, driver: d, object: k}
+func newProxyReader(r io.Reader) *proxyReader {
+	return &proxyReader{reader: r, readBytes: nil}
 }
 
 // CreateObject creates a new object
@@ -578,7 +571,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-	newReader := newProxyReader(reader, d, objectKey)
+	newReader := newProxyReader(reader)
 	calculatedMD5Sum, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, newReader, metadata)
 	if err != nil {
 		switch iodine.ToError(err).(type) {
@@ -587,6 +580,10 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		return "", iodine.New(err, errParams)
 	}
+	d.objects.Set(objectKey, newReader.readBytes)
+	// free up
+	newReader.readBytes = nil
+	go debug.FreeOSMemory()
 	objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
 		return "", iodine.New(err, nil)
