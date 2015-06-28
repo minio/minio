@@ -321,7 +321,7 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	memory.lock.RLock()
 	if len(memory.storedBuckets) == totalBuckets {
-		memory.lock.RLock()
+		memory.lock.RUnlock()
 		return iodine.New(drivers.TooManyBuckets{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidBucket(bucketName) {

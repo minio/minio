@@ -59,7 +59,7 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		_, _, driver := memory.Start(1000, 3*time.Hour)
+		_, _, driver := memory.Start(10000, 3*time.Hour)
 		return driver, ""
 	},
 })
@@ -69,7 +69,7 @@ var _ = Suite(&MySuite{
 		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
 		var roots []string
 		roots = append(roots, root)
-		_, _, driver := donut.Start(roots)
+		_, _, driver := donut.Start(roots, 10000, 3*time.Hour)
 		return driver, root
 	},
 })
@@ -1451,13 +1451,6 @@ func (s *MySuite) TestObjectMultipartAbort(c *C) {
 		{
 			driver.AssertExpectations(c)
 		}
-	default:
-		// Donut doesn't have multipart support yet
-		{
-			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
-				return
-			}
-		}
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
@@ -1533,13 +1526,6 @@ func (s *MySuite) TestBucketMultipartList(c *C) {
 	case *mocks.Driver:
 		{
 			driver.AssertExpectations(c)
-		}
-	default:
-		// Donut doesn't have multipart support yet
-		{
-			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
-				return
-			}
 		}
 	}
 	driver := s.Driver
@@ -1623,13 +1609,6 @@ func (s *MySuite) TestObjectMultipartList(c *C) {
 		{
 			driver.AssertExpectations(c)
 		}
-	default:
-		// Donut doesn't have multipart support yet
-		{
-			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
-				return
-			}
-		}
 	}
 	driver := s.Driver
 	typedDriver := s.MockDriver
@@ -1706,13 +1685,6 @@ func (s *MySuite) TestObjectMultipart(c *C) {
 	case *mocks.Driver:
 		{
 			driver.AssertExpectations(c)
-		}
-	default:
-		// Donut doesn't have multipart support yet
-		{
-			if reflect.TypeOf(driver).String() == "*donut.donutDriver" {
-				return
-			}
 		}
 	}
 	driver := s.Driver

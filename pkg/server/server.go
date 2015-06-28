@@ -83,13 +83,15 @@ func (f WebFactory) GetStartServerFunc() StartServerFunc {
 // DonutFactory is used to build donut api server
 type DonutFactory struct {
 	httpserver.Config
-	Paths []string
+	Paths      []string
+	MaxMemory  uint64
+	Expiration time.Duration
 }
 
 // GetStartServerFunc DonutFactory builds donut api server
 func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := donut.Start(f.Paths)
+		_, _, driver := donut.Start(f.Paths, f.MaxMemory, f.Expiration)
 		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)

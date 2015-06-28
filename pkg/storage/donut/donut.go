@@ -175,7 +175,7 @@ func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys in
 }
 
 // PutObject - put object
-func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.ReadCloser, metadata map[string]string) (string, error) {
+func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (string, error) {
 	dt.lock.Lock()
 	defer dt.lock.Unlock()
 	errParams := map[string]string{
