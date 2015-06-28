@@ -12,6 +12,15 @@ import (
 	"github.com/minio/minio/pkg/server"
 )
 
+func appendUniq(slice []string, i string) []string {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 var commands = []cli.Command{
 	modeCmd,
 }
@@ -75,14 +84,11 @@ USAGE:
   minio mode {{.Name}} PATH
 
 EXAMPLES:
-  1. Create a donut volume under "/mnt/backup"
-      $ minio mode {{.Name}} /mnt/backup
+  1. Create a donut volume under "/mnt/backup", with a cache limit of 64MB with 1hr expiration
+      $ minio mode {{.Name}} limit 64MB expire 1h paths /mnt/backup
 
-  2. Create a temporary donut volume under "/tmp"
-      $ minio mode {{.Name}} /tmp
-
-  3. Create a donut volume under collection of paths
-      $ minio mode {{.Name}} /mnt/backup2014feb /mnt/backup2014feb
+  2. Create a donut volume under collection of paths, put a cache limit of 512MB
+      $ minio mode {{.Name}} limit 512MB paths ""
 
 `,
 }
@@ -169,6 +175,9 @@ func runDonut(c *cli.Context) {
 	var expiration time.Duration
 	expirationSet := false
 
+	var paths []string
+	pathSet := false
+
 	args := c.Args()
 	for len(args) > 0 {
 		switch args.First() {
@@ -201,6 +210,22 @@ func runDonut(c *cli.Context) {
 				args = args.Tail()
 				expirationSet = true
 			}
+		case "paths":
+			if pathSet {
+				Fatalln("Path should be set only once")
+			}
+			// supporting multiple paths
+			args = args.Tail()
+			if strings.TrimSpace(args.First()) == "" {
+				p := filepath.Join(u.HomeDir, "minio-storage", "donut")
+				paths = appendUniq(paths, p)
+			} else {
+				for _, arg := range args {
+					paths = appendUniq(paths, strings.TrimSpace(arg))
+				}
+			}
+			args = args.Tail()
+			pathSet = true
 		default:
 			{
 				cli.ShowCommandHelpAndExit(c, "donut", 1) // last argument is exit code
@@ -210,15 +235,8 @@ func runDonut(c *cli.Context) {
 	if maxMemorySet == false {
 		Fatalln("Memory limit must be set")
 	}
-	// supporting multiple paths
-	var paths []string
-	if strings.TrimSpace(c.Args().First()) == "" {
-		p := filepath.Join(u.HomeDir, "minio-storage", "donut")
-		paths = append(paths, p)
-	} else {
-		for _, arg := range c.Args() {
-			paths = append(paths, strings.TrimSpace(arg))
-		}
+	if pathSet == false {
+		Fatalln("Path must be set")
 	}
 	apiServerConfig := getAPIServerConfig(c)
 	donutDriver := server.DonutFactory{
