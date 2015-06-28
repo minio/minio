@@ -54,40 +54,66 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-func (d donutDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+func (d donutDriver) NewMultipartUpload(bucketName, objectName, contentType string) (string, error) {
 	d.lock.RLock()
-	if !drivers.IsValidBucket(bucket) {
+	if !drivers.IsValidBucket(bucketName) {
 		d.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObjectName(key) {
+	if !drivers.IsValidObjectName(objectName) {
 		d.lock.RUnlock()
-		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+		return "", iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
-	if _, ok := d.storedBuckets[bucket]; ok == false {
+	d.lock.RUnlock()
+	buckets, err := d.donut.ListBuckets()
+	if err != nil {
+		return "", iodine.New(err, nil)
+	}
+	for bucketName, metadata := range buckets {
+		result := drivers.BucketMetadata{
+			Name:    metadata.Name,
+			Created: metadata.Created,
+			ACL:     drivers.BucketACL(metadata.ACL),
+		}
+		d.lock.Lock()
+		storedBucket := d.storedBuckets[bucketName]
+		storedBucket.bucketMetadata = result
+		if len(storedBucket.multiPartSession) == 0 {
+			storedBucket.multiPartSession = make(map[string]multiPartSession)
+		}
+		if len(storedBucket.objectMetadata) == 0 {
+			storedBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
+		}
+		if len(storedBucket.partMetadata) == 0 {
+			storedBucket.partMetadata = make(map[string]drivers.PartMetadata)
+		}
+		d.storedBuckets[bucketName] = storedBucket
+		d.lock.Unlock()
+	}
+	d.lock.RLock()
+	if _, ok := d.storedBuckets[bucketName]; ok == false {
 		d.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return "", iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
 	}
-	storedBucket := d.storedBuckets[bucket]
-	objectKey := bucket + "/" + key
+	storedBucket := d.storedBuckets[bucketName]
+	objectKey := bucketName + "/" + objectName
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		d.lock.RUnlock()
-		return "", iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
+		return "", iodine.New(drivers.ObjectExists{Bucket: bucketName, Object: objectName}, nil)
 	}
 	d.lock.RUnlock()
 
 	d.lock.Lock()
-	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
+	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucketName + objectName + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
 
-	d.storedBuckets[bucket].multiPartSession[key] = multiPartSession{
+	d.storedBuckets[bucketName].multiPartSession[objectName] = multiPartSession{
 		uploadID:   uploadID,
-		initiated:  time.Now(),
+		initiated:  time.Now().UTC(),
 		totalParts: 0,
 	}
 	d.lock.Unlock()
-
 	return uploadID, nil
 }
 

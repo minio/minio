@@ -188,7 +188,7 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 	}
 	buckets, err := d.donut.ListBuckets()
 	if err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 	for bucketName, metadata := range buckets {
 		result := drivers.BucketMetadata{
@@ -198,6 +198,15 @@ func (d donutDriver) ListBuckets() (results []drivers.BucketMetadata, err error)
 		}
 		d.lock.Lock()
 		storedBucket := d.storedBuckets[bucketName]
+		if len(storedBucket.multiPartSession) == 0 {
+			storedBucket.multiPartSession = make(map[string]multiPartSession)
+		}
+		if len(storedBucket.objectMetadata) == 0 {
+			storedBucket.objectMetadata = make(map[string]drivers.ObjectMetadata)
+		}
+		if len(storedBucket.partMetadata) == 0 {
+			storedBucket.partMetadata = make(map[string]drivers.PartMetadata)
+		}
 		storedBucket.bucketMetadata = result
 		d.storedBuckets[bucketName] = storedBucket
 		d.lock.Unlock()
@@ -407,13 +416,12 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 	if !drivers.IsValidObjectName(objectName) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
-	if _, ok := d.storedBuckets[bucketName]; !ok {
-		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucketName}, nil)
-	}
-	storedBucket := d.storedBuckets[bucketName]
-	objectKey := bucketName + "/" + objectName
-	if object, ok := storedBucket.objectMetadata[objectKey]; ok {
-		return object, nil
+	if _, ok := d.storedBuckets[bucketName]; ok {
+		storedBucket := d.storedBuckets[bucketName]
+		objectKey := bucketName + "/" + objectName
+		if object, ok := storedBucket.objectMetadata[objectKey]; ok {
+			return object, nil
+		}
 	}
 	metadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
 	if err != nil {
