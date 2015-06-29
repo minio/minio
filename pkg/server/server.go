@@ -42,7 +42,7 @@ type MemoryFactory struct {
 // GetStartServerFunc builds memory api server
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := memory.Start(f.MaxMemory, f.Expiration)
+		driver, _ := memory.NewDriver(f.MaxMemory, f.Expiration)
 		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
@@ -59,7 +59,7 @@ type FilesystemFactory struct {
 // GetStartServerFunc builds memory api server
 func (f FilesystemFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := fs.Start(f.Path)
+		driver, _ := fs.NewDriver(f.Path)
 		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
@@ -91,7 +91,10 @@ type DonutFactory struct {
 // GetStartServerFunc DonutFactory builds donut api server
 func (f DonutFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		_, _, driver := donut.Start(f.Paths, f.MaxMemory, f.Expiration)
+		driver, err := donut.NewDriver(f.Paths, f.MaxMemory, f.Expiration)
+		if err != nil {
+			log.Fatalln(err)
+		}
 		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)

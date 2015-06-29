@@ -40,7 +40,8 @@ func (s *MySuite) TestAPISuite(c *C) {
 		c.Check(err, IsNil)
 		storageList = append(storageList, p)
 		paths = append(paths, p)
-		_, _, store := Start(paths, 1000000, 3*time.Hour)
+		store, err := NewDriver(paths, 1000000, 3*time.Hour)
+		c.Check(err, IsNil)
 		return store
 	}
 	drivers.APITestSuite(c, create)

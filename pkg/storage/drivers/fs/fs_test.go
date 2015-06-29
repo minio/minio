@@ -38,7 +38,8 @@ func (s *MySuite) TestAPISuite(c *C) {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
 		c.Check(err, IsNil)
 		storageList = append(storageList, path)
-		_, _, store := Start(path)
+		store, err := NewDriver(path)
+		c.Check(err, IsNil)
 		return store
 	}
 	drivers.APITestSuite(c, create)
