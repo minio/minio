@@ -40,7 +40,7 @@ type ObjectStorage interface {
 	// Object operations
 	GetObject(bucket, object string) (io.ReadCloser, int64, error)
 	GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
-	PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (string, error)
+	PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (ObjectMetadata, error)
 }
 
 // Management is a donut management system interface

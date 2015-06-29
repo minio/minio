@@ -67,7 +67,7 @@ type BucketMetadata struct {
 
 // ListObjects container for list objects response
 type ListObjects struct {
-	Objects        []string `json:"objects"`
-	CommonPrefixes []string `json:"commonPrefixes"`
-	IsTruncated    bool     `json:"isTruncated"`
+	Objects        map[string]ObjectMetadata `json:"objects"`
+	CommonPrefixes []string                  `json:"commonPrefixes"`
+	IsTruncated    bool                      `json:"isTruncated"`
 }

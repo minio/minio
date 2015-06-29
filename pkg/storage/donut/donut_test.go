@@ -93,7 +93,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	// check if bucket is empty
 	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.Objects, IsNil)
+	c.Assert(len(listObjects.Objects), Equals, 0)
 	c.Assert(listObjects.CommonPrefixes, IsNil)
 	c.Assert(listObjects.IsTruncated, Equals, false)
 }
@@ -195,13 +195,9 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	err = donut.MakeBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	objectMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
-	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
-
-	objectMetadata, err := donut.GetObjectMetadata("foo", "obj")
-	c.Assert(err, IsNil)
-
+	c.Assert(objectMetadata.MD5Sum, Equals, expectedMd5Sum)
 	c.Assert(objectMetadata.Metadata["contentType"], Equals, metadata["contentType"])
 	c.Assert(objectMetadata.Metadata["foo"], Equals, metadata["foo"])
 	c.Assert(objectMetadata.Metadata["hello"], Equals, metadata["hello"])
@@ -240,9 +236,9 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 	metadata["contentLength"] = strconv.Itoa(len(data))
 
-	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	actualMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
-	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
+	c.Assert(actualMetadata.MD5Sum, Equals, expectedMd5Sum)
 
 	reader, size, err := donut.GetObject("foo", "obj")
 	c.Assert(err, IsNil)
@@ -253,7 +249,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
+	actualMetadata, err = donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(expectedMd5Sum, Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
@@ -312,7 +308,8 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	// test list objects with only delimiter
 	listObjects, err = donut.ListObjects("foo", "", "", "1", 10)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.Objects[0], Equals, "obj2")
+	_, ok := listObjects.Objects["obj2"]
+	c.Assert(ok, Equals, true)
 	c.Assert(listObjects.IsTruncated, Equals, false)
 	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
 
@@ -320,7 +317,10 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	listObjects, err = donut.ListObjects("foo", "o", "", "", 10)
 	c.Assert(err, IsNil)
 	c.Assert(listObjects.IsTruncated, Equals, false)
-	c.Assert(listObjects.Objects, DeepEquals, []string{"obj1", "obj2"})
+	_, ok1 := listObjects.Objects["obj1"]
+	_, ok2 := listObjects.Objects["obj2"]
+	c.Assert(ok1, Equals, true)
+	c.Assert(ok2, Equals, true)
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
 	metadata["contentLength"] = strconv.Itoa(len("three"))

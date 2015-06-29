@@ -175,7 +175,7 @@ func (dt donut) ListObjects(bucket, prefix, marker, delimiter string, maxkeys in
 }
 
 // PutObject - put object
-func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (string, error) {
+func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (ObjectMetadata, error) {
 	dt.lock.Lock()
 	defer dt.lock.Unlock()
 	errParams := map[string]string{
@@ -183,33 +183,33 @@ func (dt donut) PutObject(bucket, object, expectedMD5Sum string, reader io.Reade
 		"object": object,
 	}
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return "", iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return "", iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
 	}
 	if err := dt.listDonutBuckets(); err != nil {
-		return "", iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := dt.buckets[bucket]; !ok {
-		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
+		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	bucketMeta, err := dt.getDonutBucketMetadata()
 	if err != nil {
-		return "", iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
-		return "", iodine.New(ObjectExists{Object: object}, errParams)
+		return ObjectMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
 	}
-	md5sum, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
+	objMetadata, err := dt.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
 	if err != nil {
-		return "", iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
 	bucketMeta.Buckets[bucket].BucketObjects[object] = 1
 	if err := dt.setDonutBucketMetadata(bucketMeta); err != nil {
-		return "", iodine.New(err, errParams)
+		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	return md5sum, nil
+	return objMetadata, nil
 }
 
 // GetObject - get object

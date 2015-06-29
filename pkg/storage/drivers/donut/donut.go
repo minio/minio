@@ -448,6 +448,12 @@ func (d donutDriver) GetObjectMetadata(bucketName, objectName string) (drivers.O
 	return objectMetadata, nil
 }
 
+type byObjectName []drivers.ObjectMetadata
+
+func (b byObjectName) Len() int           { return len(b) }
+func (b byObjectName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byObjectName) Less(i, j int) bool { return b[i].Key < b[j].Key }
+
 // ListObjects - returns list of objects
 func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
 	d.lock.RLock()
@@ -470,23 +476,18 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	}
 	resources.CommonPrefixes = listObjects.CommonPrefixes
 	resources.IsTruncated = listObjects.IsTruncated
-	if resources.IsTruncated && resources.IsDelimiterSet() {
-		resources.NextMarker = listObjects.Objects[len(listObjects.Objects)-1]
-	}
-	// make sure to keep the lexical order same as returned by donut
-	// we do not have to sort here again
-	results := make([]drivers.ObjectMetadata, len(listObjects.Objects))
-	for i, objectName := range listObjects.Objects {
-		objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
-		if err != nil {
-			return nil, drivers.BucketResourcesMetadata{}, iodine.New(err, errParams)
-		}
+	var results []drivers.ObjectMetadata
+	for _, objMetadata := range listObjects.Objects {
 		metadata := drivers.ObjectMetadata{
-			Key:     objectMetadata.Object,
-			Created: objectMetadata.Created,
-			Size:    objectMetadata.Size,
+			Key:     objMetadata.Object,
+			Created: objMetadata.Created,
+			Size:    objMetadata.Size,
 		}
-		results[i] = metadata
+		results = append(results, metadata)
+	}
+	sort.Sort(byObjectName(results))
+	if resources.IsTruncated && resources.IsDelimiterSet() {
+		resources.NextMarker = results[len(results)-1].Key
 	}
 	return results, resources, nil
 }
@@ -527,6 +528,10 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		"objectName":  objectName,
 		"contentType": contentType,
 	}
+	if d.donut == nil {
+		return "", iodine.New(drivers.InternalError{}, errParams)
+	}
+	// TODO - Should be able to write bigger than cache
 	if size > int64(d.maxSize) {
 		generic := drivers.GenericObjectError{Bucket: bucketName, Object: objectName}
 		return "", iodine.New(drivers.EntityTooLarge{
@@ -534,9 +539,6 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 			Size:               strconv.FormatInt(size, 10),
 			MaxSize:            strconv.FormatUint(d.maxSize, 10),
 		}, nil)
-	}
-	if d.donut == nil {
-		return "", iodine.New(drivers.InternalError{}, errParams)
 	}
 	if !drivers.IsValidBucket(bucketName) {
 		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
@@ -564,7 +566,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
 	newReader := newProxyReader(reader)
-	calculatedMD5Sum, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, newReader, metadata)
+	objMetadata, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, newReader, metadata)
 	if err != nil {
 		switch iodine.ToError(err).(type) {
 		case donut.BadDigest:
@@ -576,20 +578,16 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 	// free up
 	newReader.readBytes = nil
 	go debug.FreeOSMemory()
-	objectMetadata, err := d.donut.GetObjectMetadata(bucketName, objectName)
-	if err != nil {
-		return "", iodine.New(err, nil)
-	}
 	newObject := drivers.ObjectMetadata{
 		Bucket: bucketName,
 		Key:    objectName,
 
-		ContentType: objectMetadata.Metadata["contentType"],
-		Created:     objectMetadata.Created,
-		Md5:         calculatedMD5Sum,
-		Size:        objectMetadata.Size,
+		ContentType: objMetadata.Metadata["contentType"],
+		Created:     objMetadata.Created,
+		Md5:         objMetadata.MD5Sum,
+		Size:        objMetadata.Size,
 	}
 	storedBucket.objectMetadata[objectKey] = newObject
 	d.storedBuckets[bucketName] = storedBucket
-	return calculatedMD5Sum, nil
+	return newObject.Md5, nil
 }
