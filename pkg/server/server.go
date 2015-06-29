@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/httpserver"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
-	fs "github.com/minio/minio/pkg/storage/drivers/fs"
 	"github.com/minio/minio/pkg/storage/drivers/memory"
 	"github.com/minio/minio/pkg/utils/log"
 )
@@ -43,23 +42,6 @@ type MemoryFactory struct {
 func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
 		driver, _ := memory.NewDriver(f.MaxMemory, f.Expiration)
-		conf := api.Config{RateLimit: f.RateLimit}
-		conf.SetDriver(driver)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
-		return ctrl, status
-	}
-}
-
-// FilesystemFactory is used to build filesystem api server
-type FilesystemFactory struct {
-	httpserver.Config
-	Path string
-}
-
-// GetStartServerFunc builds memory api server
-func (f FilesystemFactory) GetStartServerFunc() StartServerFunc {
-	return func() (chan<- string, <-chan error) {
-		driver, _ := fs.NewDriver(f.Path)
 		conf := api.Config{RateLimit: f.RateLimit}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)

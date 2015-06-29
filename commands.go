@@ -27,7 +27,6 @@ var commands = []cli.Command{
 
 var modeCommands = []cli.Command{
 	memoryCmd,
-	fsCmd,
 	donutCmd,
 }
 
@@ -53,23 +52,6 @@ EXAMPLES:
 
   2. Limit maximum memory usage to 4GB with no expiration
       $ minio mode {{.Name}} limit 4GB
-`,
-}
-
-var fsCmd = cli.Command{
-	Name:        "fs",
-	Description: "Path to filesystem volume.",
-	Action:      runFilesystem,
-	CustomHelpTemplate: `NAME:
-  minio mode {{.Name}} - {{.Description}}
-
-USAGE:
-  minio mode {{.Name}} limit SIZE expire TIME
-
-EXAMPLES:
-  1. Export an existing filesystem path
-      $ minio mode {{.Name}} /var/www
-
 `,
 }
 
@@ -246,21 +228,6 @@ func runDonut(c *cli.Context) {
 		Expiration: expiration,
 	}
 	apiServer := donutDriver.GetStartServerFunc()
-	//	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer} //, webServer}
-	server.StartMinio(servers)
-}
-
-func runFilesystem(c *cli.Context) {
-	if len(c.Args()) != 1 {
-		cli.ShowCommandHelpAndExit(c, "fs", 1) // last argument is exit code
-	}
-	apiServerConfig := getAPIServerConfig(c)
-	fsDriver := server.FilesystemFactory{
-		Config: apiServerConfig,
-		Path:   c.Args()[0],
-	}
-	apiServer := fsDriver.GetStartServerFunc()
 	//	webServer := getWebServerConfigFunc(c)
 	servers := []server.StartServerFunc{apiServer} //, webServer}
 	server.StartMinio(servers)
