@@ -212,7 +212,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 		return nil, 0, iodine.New(err, nil)
 	}
 	// read and reply back to GetObject() request in a go-routine
-	go b.readEncodedData(normalizeObjectName(objectName), writer, objMetadata)
+	go b.readObjectData(normalizeObjectName(objectName), writer, objMetadata)
 	return reader, objMetadata.Size, nil
 }
 
@@ -223,7 +223,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	if objectName == "" || objectData == nil {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
-	writers, err := b.getDiskWriters(normalizeObjectName(objectName), "data")
+	writers, err := b.getWriters(normalizeObjectName(objectName), "data")
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
@@ -247,8 +247,8 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
-		// encoded data with k, m and write
-		chunkCount, totalLength, err := b.writeEncodedData(k, m, writers, objectData, sumMD5, sum512)
+		// write encoded data with k, m and writers
+		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, sumMD5, sum512)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
@@ -310,7 +310,7 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 	if objMetadata.Object == "" {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	objMetadataWriters, err := b.getDiskWriters(objectName, objectMetadataConfig)
+	objMetadataWriters, err := b.getWriters(objectName, objectMetadataConfig)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
@@ -332,7 +332,7 @@ func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
 	if objectName == "" {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
-	objMetadataReaders, err := b.getDiskReaders(objectName, objectMetadataConfig)
+	objMetadataReaders, err := b.getReaders(objectName, objectMetadataConfig)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
@@ -378,8 +378,8 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 	return k, m, nil
 }
 
-// writeEncodedData -
-func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum512 hash.Hash) (int, int, error) {
+// writeObjectData -
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum512 hash.Hash) (int, int, error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
@@ -387,16 +387,17 @@ func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectDat
 	chunkCount := 0
 	totalLength := 0
 	for chunk := range split.Stream(objectData, 10*1024*1024) {
-		if chunk.Err == nil {
-			totalLength = totalLength + len(chunk.Data)
-			encodedBlocks, _ := encoder.Encode(chunk.Data)
-			sumMD5.Write(chunk.Data)
-			sum512.Write(chunk.Data)
-			for blockIndex, block := range encodedBlocks {
-				_, err := io.Copy(writers[blockIndex], bytes.NewBuffer(block))
-				if err != nil {
-					return 0, 0, iodine.New(err, nil)
-				}
+		if chunk.Err != nil {
+			return 0, 0, iodine.New(err, nil)
+		}
+		totalLength = totalLength + len(chunk.Data)
+		encodedBlocks, _ := encoder.Encode(chunk.Data)
+		sumMD5.Write(chunk.Data)
+		sum512.Write(chunk.Data)
+		for blockIndex, block := range encodedBlocks {
+			_, err := io.Copy(writers[blockIndex], bytes.NewBuffer(block))
+			if err != nil {
+				return 0, 0, iodine.New(err, nil)
 			}
 		}
 		chunkCount = chunkCount + 1
@@ -404,9 +405,9 @@ func (b bucket) writeEncodedData(k, m uint8, writers []io.WriteCloser, objectDat
 	return chunkCount, totalLength, nil
 }
 
-// readEncodedData -
-func (b bucket) readEncodedData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
-	readers, err := b.getDiskReaders(objectName, "data")
+// readObjectData -
+func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
+	readers, err := b.getReaders(objectName, "data")
 	if err != nil {
 		writer.CloseWithError(iodine.New(err, nil))
 		return
@@ -490,8 +491,8 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadC
 	return decodedData, nil
 }
 
-// getDiskReaders -
-func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, error) {
+// getReaders -
+func (b bucket) getReaders(objectName, objectMeta string) ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
 	nodeSlice := 0
 	for _, node := range b.nodes {
@@ -514,8 +515,8 @@ func (b bucket) getDiskReaders(objectName, objectMeta string) ([]io.ReadCloser, 
 	return readers, nil
 }
 
-// getDiskWriters -
-func (b bucket) getDiskWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
+// getWriters -
+func (b bucket) getWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
 	var writers []io.WriteCloser
 	nodeSlice := 0
 	for _, node := range b.nodes {
