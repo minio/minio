@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package memory
+package cache
 
 import (
 	"testing"

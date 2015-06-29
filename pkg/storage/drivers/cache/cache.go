@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package memory
+package cache
 
 import (
 	"bufio"
@@ -37,8 +37,8 @@ import (
 	"github.com/minio/minio/pkg/storage/trove"
 )
 
-// memoryDriver - local variables
-type memoryDriver struct {
+// cacheDriver - local variables
+type cacheDriver struct {
 	storedBuckets    map[string]storedBucket
 	lock             *sync.RWMutex
 	objects          *trove.Cache
@@ -64,65 +64,65 @@ const (
 	totalBuckets = 100
 )
 
-// NewDriver instantiate a new memory driver
+// NewDriver instantiate a new cache driver
 func NewDriver(maxSize uint64, expiration time.Duration) (drivers.Driver, error) {
-	memory := new(memoryDriver)
-	memory.storedBuckets = make(map[string]storedBucket)
-	memory.objects = trove.NewCache(maxSize, expiration)
-	memory.maxSize = maxSize
-	memory.expiration = expiration
-	memory.multiPartObjects = trove.NewCache(0, time.Duration(0))
-	memory.lock = new(sync.RWMutex)
+	cache := new(cacheDriver)
+	cache.storedBuckets = make(map[string]storedBucket)
+	cache.objects = trove.NewCache(maxSize, expiration)
+	cache.maxSize = maxSize
+	cache.expiration = expiration
+	cache.multiPartObjects = trove.NewCache(0, time.Duration(0))
+	cache.lock = new(sync.RWMutex)
 
-	memory.objects.OnExpired = memory.expiredObject
-	memory.multiPartObjects.OnExpired = memory.expiredPart
+	cache.objects.OnExpired = cache.expiredObject
+	cache.multiPartObjects.OnExpired = cache.expiredPart
 
-	// set up memory expiration
-	memory.objects.ExpireObjects(time.Second * 5)
-	return memory, nil
+	// set up cache expiration
+	cache.objects.ExpireObjects(time.Second * 5)
+	return cache, nil
 }
 
-// GetObject - GET object from memory buffer
-func (memory *memoryDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
-	memory.lock.RLock()
+// GetObject - GET object from cache buffer
+func (cache *cacheDriver) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+	cache.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !drivers.IsValidObjectName(object) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
-		memory.lock.RUnlock()
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	objectKey := bucket + "/" + object
-	data, ok := memory.objects.Get(objectKey)
+	data, ok := cache.objects.Get(objectKey)
 	if !ok {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, nil)
 	}
 	written, err := io.Copy(w, bytes.NewBuffer(data))
-	memory.lock.RUnlock()
+	cache.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
 
-// GetPartialObject - GET object from memory buffer range
-func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+// GetPartialObject - GET object from cache buffer range
+func (cache *cacheDriver) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
 		"start":  strconv.FormatInt(start, 10),
 		"length": strconv.FormatInt(length, 10),
 	}
-	memory.lock.RLock()
+	cache.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, errParams)
 	}
 	if !drivers.IsValidObjectName(object) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: object}, errParams)
 	}
 	if start < 0 {
@@ -132,49 +132,49 @@ func (memory *memoryDriver) GetPartialObject(w io.Writer, bucket, object string,
 		}, errParams)
 	}
 	objectKey := bucket + "/" + object
-	data, ok := memory.objects.Get(objectKey)
+	data, ok := cache.objects.Get(objectKey)
 	if !ok {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return 0, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: object}, errParams)
 	}
 	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
-	memory.lock.RUnlock()
+	cache.lock.RUnlock()
 	return written, iodine.New(err, nil)
 }
 
 // GetBucketMetadata -
-func (memory *memoryDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
-	memory.lock.RLock()
-	defer memory.lock.RUnlock()
+func (cache *cacheDriver) GetBucketMetadata(bucket string) (drivers.BucketMetadata, error) {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
 	if !drivers.IsValidBucket(bucket) {
 		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		return drivers.BucketMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-	return memory.storedBuckets[bucket].bucketMetadata, nil
+	return cache.storedBuckets[bucket].bucketMetadata, nil
 }
 
 // SetBucketMetadata -
-func (memory *memoryDriver) SetBucketMetadata(bucket, acl string) error {
-	memory.lock.RLock()
+func (cache *cacheDriver) SetBucketMetadata(bucket, acl string) error {
+	cache.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
-		memory.lock.RUnlock()
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
+		cache.lock.RUnlock()
 		return iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	if strings.TrimSpace(acl) == "" {
 		acl = "private"
 	}
-	memory.lock.RUnlock()
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
-	storedBucket := memory.storedBuckets[bucket]
+	cache.lock.RUnlock()
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	storedBucket := cache.storedBuckets[bucket]
 	storedBucket.bucketMetadata.ACL = drivers.BucketACL(acl)
-	memory.storedBuckets[bucket] = storedBucket
+	cache.storedBuckets[bucket] = storedBucket
 	return nil
 }
 
@@ -197,44 +197,44 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-func (memory *memoryDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	if size > int64(memory.maxSize) {
+func (cache *cacheDriver) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	if size > int64(cache.maxSize) {
 		generic := drivers.GenericObjectError{Bucket: bucket, Object: key}
 		return "", iodine.New(drivers.EntityTooLarge{
 			GenericObjectError: generic,
 			Size:               strconv.FormatInt(size, 10),
-			MaxSize:            strconv.FormatUint(memory.maxSize, 10),
+			MaxSize:            strconv.FormatUint(cache.maxSize, 10),
 		}, nil)
 	}
-	md5sum, err := memory.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	md5sum, err := cache.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
 	// free
 	debug.FreeOSMemory()
 	return md5sum, iodine.New(err, nil)
 }
 
-// createObject - PUT object to memory buffer
-func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	memory.lock.RLock()
+// createObject - PUT object to cache buffer
+func (cache *cacheDriver) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	cache.lock.RLock()
 	if !drivers.IsValidBucket(bucket) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !drivers.IsValidObjectName(key) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
-		memory.lock.RUnlock()
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
+		cache.lock.RUnlock()
 		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := memory.storedBuckets[bucket]
+	storedBucket := cache.storedBuckets[bucket]
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return "", iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
-	memory.lock.RUnlock()
+	cache.lock.RUnlock()
 
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -272,12 +272,12 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 	md5SumBytes := hash.Sum(nil)
 	totalLength := len(readBytes)
 
-	memory.lock.Lock()
-	ok := memory.objects.Set(objectKey, readBytes)
+	cache.lock.Lock()
+	ok := cache.objects.Set(objectKey, readBytes)
 	// setting up for de-allocation
 	readBytes = nil
 	go debug.FreeOSMemory()
-	memory.lock.Unlock()
+	cache.lock.Unlock()
 	if !ok {
 		return "", iodine.New(drivers.InternalError{}, nil)
 	}
@@ -300,33 +300,33 @@ func (memory *memoryDriver) createObject(bucket, key, contentType, expectedMD5Su
 		Size:        int64(totalLength),
 	}
 
-	memory.lock.Lock()
+	cache.lock.Lock()
 	storedBucket.objectMetadata[objectKey] = newObject
-	memory.storedBuckets[bucket] = storedBucket
-	memory.lock.Unlock()
+	cache.storedBuckets[bucket] = storedBucket
+	cache.lock.Unlock()
 	return newObject.Md5, nil
 }
 
-// CreateBucket - create bucket in memory
-func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
-	memory.lock.RLock()
-	if len(memory.storedBuckets) == totalBuckets {
-		memory.lock.RUnlock()
+// CreateBucket - create bucket in cache
+func (cache *cacheDriver) CreateBucket(bucketName, acl string) error {
+	cache.lock.RLock()
+	if len(cache.storedBuckets) == totalBuckets {
+		cache.lock.RUnlock()
 		return iodine.New(drivers.TooManyBuckets{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidBucket(bucketName) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidBucketACL(acl) {
-		memory.lock.RUnlock()
+		cache.lock.RUnlock()
 		return iodine.New(drivers.InvalidACL{ACL: acl}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucketName]; ok == true {
-		memory.lock.RUnlock()
+	if _, ok := cache.storedBuckets[bucketName]; ok == true {
+		cache.lock.RUnlock()
 		return iodine.New(drivers.BucketExists{Bucket: bucketName}, nil)
 	}
-	memory.lock.RUnlock()
+	cache.lock.RUnlock()
 
 	if strings.TrimSpace(acl) == "" {
 		// default is private
@@ -340,9 +340,9 @@ func (memory *memoryDriver) CreateBucket(bucketName, acl string) error {
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
 	newBucket.bucketMetadata.ACL = drivers.BucketACL(acl)
-	memory.lock.Lock()
-	defer memory.lock.Unlock()
-	memory.storedBuckets[bucketName] = newBucket
+	cache.lock.Lock()
+	cache.storedBuckets[bucketName] = newBucket
+	cache.lock.Unlock()
 	return nil
 }
 
@@ -364,7 +364,7 @@ func appendUniq(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delim string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
+func (cache *cacheDriver) filterDelimiterPrefix(keys []string, key, delim string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
 	switch true {
 	case key == r.Prefix:
 		keys = appendUniq(keys, key)
@@ -377,7 +377,7 @@ func (memory *memoryDriver) filterDelimiterPrefix(keys []string, key, delim stri
 	return keys, r
 }
 
-func (memory *memoryDriver) listObjects(keys []string, key string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
+func (cache *cacheDriver) listObjects(keys []string, key string, r drivers.BucketResourcesMetadata) ([]string, drivers.BucketResourcesMetadata) {
 	switch true {
 	// Prefix absent, delimit object key based on delimiter
 	case r.IsDelimiterSet():
@@ -393,7 +393,7 @@ func (memory *memoryDriver) listObjects(keys []string, key string, r drivers.Buc
 		if strings.HasPrefix(key, r.Prefix) {
 			trimmedName := strings.TrimPrefix(key, r.Prefix)
 			delim := delimiter(trimmedName, r.Delimiter)
-			keys, r = memory.filterDelimiterPrefix(keys, key, delim, r)
+			keys, r = cache.filterDelimiterPrefix(keys, key, delim, r)
 		}
 	// Prefix present, nothing to delimit
 	case r.IsPrefixSet():
@@ -405,26 +405,26 @@ func (memory *memoryDriver) listObjects(keys []string, key string, r drivers.Buc
 	return keys, r
 }
 
-// ListObjects - list objects from memory
-func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
-	memory.lock.RLock()
-	defer memory.lock.RUnlock()
+// ListObjects - list objects from cache
+func (cache *cacheDriver) ListObjects(bucket string, resources drivers.BucketResourcesMetadata) ([]drivers.ObjectMetadata, drivers.BucketResourcesMetadata, error) {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
 	if !drivers.IsValidBucket(bucket) {
 		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !drivers.IsValidObjectName(resources.Prefix) {
 		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		return nil, drivers.BucketResourcesMetadata{IsTruncated: false}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
 	var results []drivers.ObjectMetadata
 	var keys []string
-	storedBucket := memory.storedBuckets[bucket]
+	storedBucket := cache.storedBuckets[bucket]
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			keys, resources = memory.listObjects(keys, key, resources)
+			keys, resources = cache.listObjects(keys, key, resources)
 		}
 	}
 	var newKeys []string
@@ -453,34 +453,29 @@ func (memory *memoryDriver) ListObjects(bucket string, resources drivers.BucketR
 	return results, resources, nil
 }
 
-// ByBucketName is a type for sorting bucket metadata by bucket name
-type ByBucketName []drivers.BucketMetadata
+// byBucketName is a type for sorting bucket metadata by bucket name
+type byBucketName []drivers.BucketMetadata
 
-// Len of bucket name
-func (b ByBucketName) Len() int { return len(b) }
+func (b byBucketName) Len() int           { return len(b) }
+func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
-// Swap bucket i, j
-func (b ByBucketName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-
-// Less
-func (b ByBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
-
-// ListBuckets - List buckets from memory
-func (memory *memoryDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
-	memory.lock.RLock()
-	defer memory.lock.RUnlock()
+// ListBuckets - List buckets from cache
+func (cache *cacheDriver) ListBuckets() ([]drivers.BucketMetadata, error) {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
 	var results []drivers.BucketMetadata
-	for _, bucket := range memory.storedBuckets {
+	for _, bucket := range cache.storedBuckets {
 		results = append(results, bucket.bucketMetadata)
 	}
-	sort.Sort(ByBucketName(results))
+	sort.Sort(byBucketName(results))
 	return results, nil
 }
 
-// GetObjectMetadata - get object metadata from memory
-func (memory *memoryDriver) GetObjectMetadata(bucket, key string) (drivers.ObjectMetadata, error) {
-	memory.lock.RLock()
-	defer memory.lock.RUnlock()
+// GetObjectMetadata - get object metadata from cache
+func (cache *cacheDriver) GetObjectMetadata(bucket, key string) (drivers.ObjectMetadata, error) {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
 	// check if bucket exists
 	if !drivers.IsValidBucket(bucket) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
@@ -488,10 +483,10 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key string) (drivers.Objec
 	if !drivers.IsValidObjectName(key) {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := memory.storedBuckets[bucket]; ok == false {
+	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		return drivers.ObjectMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := memory.storedBuckets[bucket]
+	storedBucket := cache.storedBuckets[bucket]
 	objectKey := bucket + "/" + key
 	if object, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		return object, nil
@@ -499,18 +494,18 @@ func (memory *memoryDriver) GetObjectMetadata(bucket, key string) (drivers.Objec
 	return drivers.ObjectMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
 }
 
-func (memory *memoryDriver) expiredObject(a ...interface{}) {
-	cacheStats := memory.objects.Stats()
+func (cache *cacheDriver) expiredObject(a ...interface{}) {
+	cacheStats := cache.objects.Stats()
 	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalExpirations: %d",
 		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)
 	key := a[0].(string)
 	// loop through all buckets
-	for bucket, storedBucket := range memory.storedBuckets {
+	for bucket, storedBucket := range cache.storedBuckets {
 		delete(storedBucket.objectMetadata, key)
 		// remove bucket if no objects found anymore
 		if len(storedBucket.objectMetadata) == 0 {
-			if time.Since(memory.storedBuckets[bucket].bucketMetadata.Created) > memory.expiration {
-				delete(memory.storedBuckets, bucket)
+			if time.Since(cache.storedBuckets[bucket].bucketMetadata.Created) > cache.expiration {
+				delete(cache.storedBuckets, bucket)
 			}
 		}
 	}
