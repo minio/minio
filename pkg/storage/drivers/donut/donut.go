@@ -101,18 +101,18 @@ func createNodeDiskMap(paths []string) map[string][]string {
 	return nodes
 }
 
-func initialize(d *donutDriver) {
+func initialize(d *donutDriver) error {
 	// Soon to be user configurable, when Management API is available
 	// we should remove "default" to something which is passed down
 	// from configuration paramters
 	var err error
 	d.donut, err = donut.NewDonut("default", createNodeDiskMap(d.paths))
 	if err != nil {
-		panic(iodine.New(err, nil))
+		return iodine.New(err, nil)
 	}
 	buckets, err := d.donut.ListBuckets()
 	if err != nil {
-		panic(iodine.New(err, nil))
+		return iodine.New(err, nil)
 	}
 	for bucketName, metadata := range buckets {
 		d.lock.RLock()
@@ -136,13 +136,11 @@ func initialize(d *donutDriver) {
 		d.storedBuckets[bucketName] = storedBucket
 		d.lock.Unlock()
 	}
+	return nil
 }
 
-// Start a single disk subsystem
-func Start(paths []string, maxSize uint64, expiration time.Duration) (chan<- string, <-chan error, drivers.Driver) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
-
+// NewDriver instantiate a donut driver
+func NewDriver(paths []string, maxSize uint64, expiration time.Duration) (drivers.Driver, error) {
 	driver := new(donutDriver)
 	driver.storedBuckets = make(map[string]storedBucket)
 	driver.objects = trove.NewCache(maxSize, expiration)
@@ -160,14 +158,8 @@ func Start(paths []string, maxSize uint64, expiration time.Duration) (chan<- str
 	driver.paths = paths
 	driver.lock = new(sync.RWMutex)
 
-	initialize(driver)
-
-	go start(ctrlChannel, errorChannel, driver)
-	return ctrlChannel, errorChannel, driver
-}
-
-func start(ctrlChannel <-chan string, errorChannel chan<- error, driver *donutDriver) {
-	defer close(errorChannel)
+	err := initialize(driver)
+	return driver, err
 }
 
 func (d donutDriver) expiredObject(a ...interface{}) {

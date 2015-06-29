@@ -44,10 +44,10 @@ func Start(handler http.Handler, config Config) (chan<- string, <-chan error, *S
 	return ctrlChannel, errorChannel, &server
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error,
-	router http.Handler, config Config, server *Server) {
-	var err error
+func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, config Config, server *Server) {
+	defer close(errorChannel)
 
+	var err error
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           config.Address,
@@ -56,7 +56,10 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 	}
 
 	host, port, err := net.SplitHostPort(config.Address)
-	errorChannel <- err
+	if err != nil {
+		errorChannel <- err
+		return
+	}
 
 	var hosts []string
 	switch {
@@ -67,9 +70,9 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 		errorChannel <- err
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
-				h := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(h); ip.To4() != nil {
-					hosts = append(hosts, h)
+				host := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(host); ip.To4() != nil {
+					hosts = append(hosts, host)
 				}
 			}
 		}
@@ -86,6 +89,8 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error,
 		}
 		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	}
-	errorChannel <- err
-	close(errorChannel)
+	if err != nil {
+		errorChannel <- err
+	}
+
 }

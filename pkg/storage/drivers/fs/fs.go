@@ -29,22 +29,14 @@ type fsDriver struct {
 	multiparts *Multiparts
 }
 
-// Start filesystem channel
-func Start(root string) (chan<- string, <-chan error, drivers.Driver) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
+// NewDriver instantiate a new filesystem driver
+func NewDriver(root string) (drivers.Driver, error) {
 	fs := new(fsDriver)
 	fs.root = root
 	fs.lock = new(sync.Mutex)
 	// internal related to multiparts
 	fs.multiparts = new(Multiparts)
 	fs.multiparts.ActiveSession = make(map[string]*MultipartSession)
-	go start(ctrlChannel, errorChannel, fs)
-	return ctrlChannel, errorChannel, fs
-}
-
-func start(ctrlChannel <-chan string, errorChannel chan<- error, fs *fsDriver) {
 	err := os.MkdirAll(fs.root, 0700)
-	errorChannel <- err
-	close(errorChannel)
+	return fs, err
 }

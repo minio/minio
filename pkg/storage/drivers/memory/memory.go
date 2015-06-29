@@ -64,13 +64,9 @@ const (
 	totalBuckets = 100
 )
 
-// Start memory object server
-func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan error, drivers.Driver) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
-
-	var memory *memoryDriver
-	memory = new(memoryDriver)
+// NewDriver instantiate a new memory driver
+func NewDriver(maxSize uint64, expiration time.Duration) (drivers.Driver, error) {
+	memory := new(memoryDriver)
 	memory.storedBuckets = make(map[string]storedBucket)
 	memory.objects = trove.NewCache(maxSize, expiration)
 	memory.maxSize = maxSize
@@ -83,13 +79,7 @@ func Start(maxSize uint64, expiration time.Duration) (chan<- string, <-chan erro
 
 	// set up memory expiration
 	memory.objects.ExpireObjects(time.Second * 5)
-
-	go start(ctrlChannel, errorChannel)
-	return ctrlChannel, errorChannel, memory
-}
-
-func start(ctrlChannel <-chan string, errorChannel chan<- error) {
-	close(errorChannel)
+	return memory, nil
 }
 
 // GetObject - GET object from memory buffer

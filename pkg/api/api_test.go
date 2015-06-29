@@ -59,7 +59,7 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		_, _, driver := memory.Start(10000, 3*time.Hour)
+		driver, _ := memory.NewDriver(10000, 3*time.Hour)
 		return driver, ""
 	},
 })
@@ -69,7 +69,7 @@ var _ = Suite(&MySuite{
 		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
 		var roots []string
 		roots = append(roots, root)
-		_, _, driver := donut.Start(roots, 10000, 3*time.Hour)
+		driver, _ := donut.NewDriver(roots, 10000, 3*time.Hour)
 		return driver, root
 	},
 })
@@ -77,7 +77,7 @@ var _ = Suite(&MySuite{
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
 		root, _ := ioutil.TempDir(os.TempDir(), "minio-fs-api")
-		_, _, driver := filesystem.Start(root)
+		driver, _ := filesystem.NewDriver(root)
 		return driver, root
 	},
 })
