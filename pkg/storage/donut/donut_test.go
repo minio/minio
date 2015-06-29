@@ -195,13 +195,9 @@ func (s *MySuite) TestNewObjectMetadata(c *C) {
 	err = donut.MakeBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	objectMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
-	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
-
-	objectMetadata, err := donut.GetObjectMetadata("foo", "obj")
-	c.Assert(err, IsNil)
-
+	c.Assert(objectMetadata.MD5Sum, Equals, expectedMd5Sum)
 	c.Assert(objectMetadata.Metadata["contentType"], Equals, metadata["contentType"])
 	c.Assert(objectMetadata.Metadata["foo"], Equals, metadata["foo"])
 	c.Assert(objectMetadata.Metadata["hello"], Equals, metadata["hello"])
@@ -240,9 +236,9 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 	metadata["contentLength"] = strconv.Itoa(len(data))
 
-	calculatedMd5Sum, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	actualMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
 	c.Assert(err, IsNil)
-	c.Assert(calculatedMd5Sum, Equals, expectedMd5Sum)
+	c.Assert(actualMetadata.MD5Sum, Equals, expectedMd5Sum)
 
 	reader, size, err := donut.GetObject("foo", "obj")
 	c.Assert(err, IsNil)
@@ -253,7 +249,7 @@ func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err := donut.GetObjectMetadata("foo", "obj")
+	actualMetadata, err = donut.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(expectedMd5Sum, Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
