@@ -1,5 +1,5 @@
 /*
- * Mini Object Storage, (C) 2015 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package filesystem
+package cache
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
+	"time"
 
 	. "github.com/minio/check"
-
 	"github.com/minio/minio/pkg/storage/drivers"
 )
 
@@ -33,22 +31,10 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
-	var storageList []string
 	create := func() drivers.Driver {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-fs-")
-		c.Check(err, IsNil)
-		storageList = append(storageList, path)
-		store, err := NewDriver(path)
+		store, err := NewDriver(1000000, 3*time.Hour)
 		c.Check(err, IsNil)
 		return store
 	}
 	drivers.APITestSuite(c, create)
-	defer removeRoots(c, storageList)
-}
-
-func removeRoots(c *C, roots []string) {
-	for _, root := range roots {
-		err := os.RemoveAll(root)
-		c.Check(err, IsNil)
-	}
 }
