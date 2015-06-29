@@ -27,27 +27,8 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/httpserver"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
-	"github.com/minio/minio/pkg/storage/drivers/memory"
 	"github.com/minio/minio/pkg/utils/log"
 )
-
-// MemoryFactory is used to build memory api server
-type MemoryFactory struct {
-	httpserver.Config
-	MaxMemory  uint64
-	Expiration time.Duration
-}
-
-// GetStartServerFunc builds memory api server
-func (f MemoryFactory) GetStartServerFunc() StartServerFunc {
-	return func() (chan<- string, <-chan error) {
-		driver, _ := memory.NewDriver(f.MaxMemory, f.Expiration)
-		conf := api.Config{RateLimit: f.RateLimit}
-		conf.SetDriver(driver)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
-		return ctrl, status
-	}
-}
 
 // WebFactory is used to build web cli server
 type WebFactory struct {

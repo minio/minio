@@ -33,8 +33,8 @@ import (
 	"net/http/httptest"
 
 	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/drivers/cache"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
-	"github.com/minio/minio/pkg/storage/drivers/memory"
 	"github.com/minio/minio/pkg/storage/drivers/mocks"
 	"github.com/stretchr/testify/mock"
 
@@ -58,7 +58,7 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		driver, _ := memory.NewDriver(10000, 3*time.Hour)
+		driver, _ := cache.NewDriver(10000, 3*time.Hour)
 		return driver, ""
 	},
 })
