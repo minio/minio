@@ -93,7 +93,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	// check if bucket is empty
 	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.Objects, IsNil)
+	c.Assert(len(listObjects.Objects), Equals, 0)
 	c.Assert(listObjects.CommonPrefixes, IsNil)
 	c.Assert(listObjects.IsTruncated, Equals, false)
 }
@@ -312,7 +312,8 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	// test list objects with only delimiter
 	listObjects, err = donut.ListObjects("foo", "", "", "1", 10)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.Objects[0], Equals, "obj2")
+	_, ok := listObjects.Objects["obj2"]
+	c.Assert(ok, Equals, true)
 	c.Assert(listObjects.IsTruncated, Equals, false)
 	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
 
@@ -320,7 +321,10 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	listObjects, err = donut.ListObjects("foo", "o", "", "", 10)
 	c.Assert(err, IsNil)
 	c.Assert(listObjects.IsTruncated, Equals, false)
-	c.Assert(listObjects.Objects, DeepEquals, []string{"obj1", "obj2"})
+	_, ok1 := listObjects.Objects["obj1"]
+	_, ok2 := listObjects.Objects["obj2"]
+	c.Assert(ok1, Equals, true)
+	c.Assert(ok2, Equals, true)
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
 	metadata["contentLength"] = strconv.Itoa(len("three"))

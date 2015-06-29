@@ -84,28 +84,6 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 func (b bucket) getBucketName() string {
 	return b.name
 }
-
-func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, error) {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-	metadataReaders, err := b.getDiskReaders(normalizeObjectName(objectName), objectMetadataConfig)
-	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, nil)
-	}
-	for _, metadataReader := range metadataReaders {
-		defer metadataReader.Close()
-	}
-	objMetadata := ObjectMetadata{}
-	for _, metadataReader := range metadataReaders {
-		jdec := json.NewDecoder(metadataReader)
-		if err := jdec.Decode(&objMetadata); err != nil {
-			return ObjectMetadata{}, iodine.New(err, nil)
-		}
-		return objMetadata, nil
-	}
-	return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
-}
-
 func (b bucket) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
 	for _, node := range b.nodes {
@@ -142,6 +120,13 @@ func (b bucket) getBucketMetadata() (*AllBuckets, error) {
 		return metadata, nil
 	}
 	return nil, iodine.New(InvalidArgument{}, nil)
+}
+
+// GetObjectMetadata - get metadata for an object
+func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	return b.readObjectMetadata(objectName)
 }
 
 // ListObjects - list all objects
@@ -191,13 +176,20 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 		}
 		results = AppendU(results, prefix+objectName)
 	}
-	sort.Strings(results)
 	sort.Strings(commonPrefixes)
 
 	listObjects := ListObjects{}
-	listObjects.Objects = results
+	listObjects.Objects = make(map[string]ObjectMetadata)
 	listObjects.CommonPrefixes = commonPrefixes
 	listObjects.IsTruncated = isTruncated
+
+	for _, objectName := range results {
+		objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
+		if err != nil {
+			return ListObjects{}, iodine.New(err, nil)
+		}
+		listObjects.Objects[objectName] = objMetadata
+	}
 	return listObjects, nil
 }
 
@@ -215,20 +207,9 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 	if _, ok := bucketMetadata.Buckets[b.getBucketName()].BucketObjects[objectName]; !ok {
 		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
 	}
-	objMetadata := ObjectMetadata{}
-	metadataReaders, err := b.getDiskReaders(normalizeObjectName(objectName), objectMetadataConfig)
+	objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
 	if err != nil {
 		return nil, 0, iodine.New(err, nil)
-	}
-	for _, metadataReader := range metadataReaders {
-		defer metadataReader.Close()
-	}
-	for _, metadataReader := range metadataReaders {
-		jdec := json.NewDecoder(metadataReader)
-		if err := jdec.Decode(&objMetadata); err != nil {
-			return nil, 0, iodine.New(err, nil)
-		}
-		break
 	}
 	// read and reply back to GetObject() request in a go-routine
 	go b.readEncodedData(normalizeObjectName(objectName), writer, objMetadata)
@@ -344,6 +325,29 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata *ObjectMetada
 		}
 	}
 	return nil
+}
+
+// readObjectMetadata - read object metadata
+func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
+	objMetadata := ObjectMetadata{}
+	if objectName == "" {
+		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
+	}
+	objMetadataReaders, err := b.getDiskReaders(objectName, objectMetadataConfig)
+	if err != nil {
+		return ObjectMetadata{}, iodine.New(err, nil)
+	}
+	for _, objMetadataReader := range objMetadataReaders {
+		defer objMetadataReader.Close()
+	}
+	for _, objMetadataReader := range objMetadataReaders {
+		jdec := json.NewDecoder(objMetadataReader)
+		if err := jdec.Decode(&objMetadata); err != nil {
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		break
+	}
+	return objMetadata, nil
 }
 
 // TODO - This a temporary normalization of objectNames, need to find a better way
