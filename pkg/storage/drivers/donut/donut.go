@@ -274,7 +274,7 @@ func (d donutDriver) SetBucketMetadata(bucketName, acl string) error {
 	if d.donut == nil {
 		return iodine.New(drivers.InternalError{}, nil)
 	}
-	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+	if !drivers.IsValidBucket(bucketName) {
 		return iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if strings.TrimSpace(acl) == "" {
@@ -297,10 +297,10 @@ func (d donutDriver) GetObject(w io.Writer, bucketName, objectName string) (int6
 	if d.donut == nil {
 		return 0, iodine.New(drivers.InternalError{}, nil)
 	}
-	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+	if !drivers.IsValidBucket(bucketName) {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
-	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, nil)
 	}
 	if _, ok := d.storedBuckets[bucketName]; ok == false {
@@ -357,10 +357,10 @@ func (d donutDriver) GetPartialObject(w io.Writer, bucketName, objectName string
 		"start":      strconv.FormatInt(start, 10),
 		"length":     strconv.FormatInt(length, 10),
 	}
-	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+	if !drivers.IsValidBucket(bucketName) {
 		return 0, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, errParams)
 	}
-	if !drivers.IsValidObjectName(objectName) || strings.TrimSpace(objectName) == "" {
+	if !drivers.IsValidObjectName(objectName) {
 		return 0, iodine.New(drivers.ObjectNameInvalid{Object: objectName}, errParams)
 	}
 	if start < 0 {
@@ -470,7 +470,7 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	if d.donut == nil {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.InternalError{}, errParams)
 	}
-	if !drivers.IsValidBucket(bucketName) || strings.Contains(bucketName, ".") {
+	if !drivers.IsValidBucket(bucketName) {
 		return nil, drivers.BucketResourcesMetadata{}, iodine.New(drivers.BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if !drivers.IsValidObjectName(resources.Prefix) {
