@@ -33,29 +33,35 @@ type Config struct {
 }
 
 // Server - http server related
-type Server struct{}
-
-// Start http server
-func Start(handler http.Handler, config Config) (chan<- string, <-chan error, *Server) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
-	server := Server{}
-	go start(ctrlChannel, errorChannel, handler, config, &server)
-	return ctrlChannel, errorChannel, &server
+type Server struct {
+	config  Config
+	handler http.Handler
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Handler, config Config, server *Server) {
+// Start http server
+func Start(handler http.Handler, config Config) (chan<- string, <-chan error, Server) {
+	ctrlChannel := make(chan string)
+	errorChannel := make(chan error)
+	server := Server{
+		config:  config,
+		handler: handler,
+	}
+	go start(ctrlChannel, errorChannel, server)
+	return ctrlChannel, errorChannel, server
+}
+
+func start(ctrlChannel <-chan string, errorChannel chan<- error, server Server) {
 	defer close(errorChannel)
 
 	var err error
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:           config.Address,
-		Handler:        router,
+		Addr:           server.config.Address,
+		Handler:        server.handler,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	host, port, err := net.SplitHostPort(config.Address)
+	host, port, err := net.SplitHostPort(server.config.Address)
 	if err != nil {
 		errorChannel <- err
 		return
@@ -67,7 +73,10 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Han
 		hosts = append(hosts, host)
 	default:
 		addrs, err := net.InterfaceAddrs()
-		errorChannel <- err
+		if err != nil {
+			errorChannel <- err
+			return
+		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
 				host := strings.Split(addr.String(), "/")[0]
@@ -83,11 +92,11 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, router http.Han
 			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
 		}
 		err = httpServer.ListenAndServe()
-	case config.TLS == true:
+	case server.config.TLS == true:
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		}
-		err = httpServer.ListenAndServeTLS(config.CertFile, config.KeyFile)
+		err = httpServer.ListenAndServeTLS(server.config.CertFile, server.config.KeyFile)
 	}
 	if err != nil {
 		errorChannel <- err
