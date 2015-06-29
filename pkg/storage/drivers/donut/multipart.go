@@ -193,6 +193,7 @@ func (d donutDriver) createObjectPart(bucketName, objectName, uploadID string, p
 	d.lock.Unlock()
 	// setting up for de-allocation
 	readBytes = nil
+	go debug.FreeOSMemory()
 
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
@@ -258,6 +259,7 @@ func (d donutDriver) CompleteMultipartUpload(bucketName, objectName, uploadID st
 
 	d.lock.Lock()
 	var size int64
+	fullHasher := md5.New()
 	var fullObject bytes.Buffer
 	for i := 1; i <= len(parts); i++ {
 		recvMD5 := parts[i]
@@ -280,7 +282,8 @@ func (d donutDriver) CompleteMultipartUpload(bucketName, objectName, uploadID st
 				Key:    getMultipartKey(objectName, uploadID, i),
 			}, nil)
 		}
-		_, err = io.Copy(&fullObject, bytes.NewBuffer(object))
+		mw := io.MultiWriter(&fullObject, fullHasher)
+		_, err = io.Copy(mw, bytes.NewReader(object))
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}
@@ -289,9 +292,9 @@ func (d donutDriver) CompleteMultipartUpload(bucketName, objectName, uploadID st
 	}
 	d.lock.Unlock()
 
-	md5sumSlice := md5.Sum(fullObject.Bytes())
+	md5sumSlice := fullHasher.Sum(nil)
 	// this is needed for final verification inside CreateObject, do not convert this to hex
-	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
+	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice)
 	etag, err := d.CreateObject(bucketName, objectName, "", md5sum, size, &fullObject)
 	if err != nil {
 		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
@@ -299,6 +302,8 @@ func (d donutDriver) CompleteMultipartUpload(bucketName, objectName, uploadID st
 		return "", iodine.New(err, nil)
 	}
 	fullObject.Reset()
+	go debug.FreeOSMemory()
+
 	d.cleanupMultiparts(bucketName, objectName, uploadID)
 	d.cleanupMultipartSession(bucketName, objectName, uploadID)
 	return etag, nil
@@ -421,5 +426,5 @@ func (d donutDriver) expiredPart(a ...interface{}) {
 	for _, storedBucket := range d.storedBuckets {
 		delete(storedBucket.partMetadata, key)
 	}
-	debug.FreeOSMemory()
+	go debug.FreeOSMemory()
 }

@@ -325,10 +325,16 @@ func (d donutDriver) GetObject(w io.Writer, bucketName, objectName string) (int6
 				return 0, iodine.New(drivers.InternalError{}, nil)
 			}
 		}
-		n, err := io.CopyN(w, reader, size)
+		pw := newProxyWriter(w)
+		n, err := io.CopyN(pw, reader, size)
 		if err != nil {
 			return 0, iodine.New(err, nil)
 		}
+		// Save in memory for future reads
+		d.objects.Set(objectKey, pw.writtenBytes)
+		// free up
+		pw.writtenBytes = nil
+		go debug.FreeOSMemory()
 		return n, nil
 	}
 	written, err := io.Copy(w, bytes.NewBuffer(data))
@@ -492,31 +498,22 @@ func (d donutDriver) ListObjects(bucketName string, resources drivers.BucketReso
 	return results, resources, nil
 }
 
-type proxyReader struct {
-	reader    io.Reader
-	readBytes []byte
+type proxyWriter struct {
+	writer       io.Writer
+	writtenBytes []byte
 }
 
-func (r *proxyReader) free(p []byte) {
-	p = nil
-	go debug.FreeOSMemory()
-}
-func (r *proxyReader) Read(p []byte) (n int, err error) {
-	defer r.free(p)
-	n, err = r.reader.Read(p)
-	if err == io.EOF || err == io.ErrUnexpectedEOF {
-		r.readBytes = append(r.readBytes, p[0:n]...)
-		return
-	}
+func (r *proxyWriter) Write(p []byte) (n int, err error) {
+	n, err = r.writer.Write(p)
 	if err != nil {
 		return
 	}
-	r.readBytes = append(r.readBytes, p[0:n]...)
+	r.writtenBytes = append(r.writtenBytes, p[0:n]...)
 	return
 }
 
-func newProxyReader(r io.Reader) *proxyReader {
-	return &proxyReader{reader: r, readBytes: nil}
+func newProxyWriter(w io.Writer) *proxyWriter {
+	return &proxyWriter{writer: w, writtenBytes: nil}
 }
 
 // CreateObject creates a new object
@@ -565,8 +562,7 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
-	newReader := newProxyReader(reader)
-	objMetadata, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, newReader, metadata)
+	objMetadata, err := d.donut.PutObject(bucketName, objectName, expectedMD5Sum, reader, metadata)
 	if err != nil {
 		switch iodine.ToError(err).(type) {
 		case donut.BadDigest:
@@ -574,10 +570,6 @@ func (d donutDriver) CreateObject(bucketName, objectName, contentType, expectedM
 		}
 		return "", iodine.New(err, errParams)
 	}
-	d.objects.Set(objectKey, newReader.readBytes)
-	// free up
-	newReader.readBytes = nil
-	go debug.FreeOSMemory()
 	newObject := drivers.ObjectMetadata{
 		Bucket: bucketName,
 		Key:    objectName,
