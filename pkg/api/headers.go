@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/donut"
 )
 
 // No encoder interface exists, so we create one.
@@ -62,7 +62,7 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
+func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata) {
 	lastModified := metadata.Created.Format(http.TimeFormat)
 	// common headers
 	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
@@ -72,7 +72,7 @@ func setObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata) {
 }
 
 // Write range object header
-func setRangeObjectHeaders(w http.ResponseWriter, metadata drivers.ObjectMetadata, contentRange *httpRange) {
+func setRangeObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, contentRange *httpRange) {
 	// set common headers
 	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
 	// set object headers

@@ -26,8 +26,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/api"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/server/httpserver"
 )
 
 var globalDebugFlag = false
@@ -78,7 +78,7 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
-	return httpserver.Config{
+	return api.Config{
 		Address:   c.GlobalString("address"),
 		TLS:       tls,
 		CertFile:  certFile,
@@ -86,21 +86,6 @@ func getAPIServerConfig(c *cli.Context) httpserver.Config {
 		RateLimit: c.GlobalInt("ratelimit"),
 	}
 }
-
-/*
-func getWebServerConfigFunc(c *cli.Context) server.StartServerFunc {
-	config := httpserver.Config{
-		Address:  c.GlobalString("address-mgmt"),
-		TLS:      false,
-		CertFile: "",
-		KeyFile:  "",
-	}
-	webDrivers := server.WebFactory{
-		Config: config,
-	}
-	return webDrivers.GetStartServerFunc()
-}
-*/
 
 // Tries to get os/arch/platform specific information
 // Returns a map of current os/arch/platform/memstats

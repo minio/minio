@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cache
+package donut
 
 import (
 	"bytes"
@@ -32,28 +32,27 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/drivers"
 )
 
-func (cache *cacheDriver) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+func (cache donut) NewMultipartUpload(bucket, key, contentType string) (string, error) {
 	cache.lock.RLock()
-	if !drivers.IsValidBucket(bucket) {
+	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObjectName(key) {
+	if !IsValidObjectName(key) {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.ObjectExists{Bucket: bucket, Object: key}, nil)
+		return "", iodine.New(ObjectExists{Bucket: bucket, Object: key}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -72,12 +71,12 @@ func (cache *cacheDriver) NewMultipartUpload(bucket, key, contentType string) (s
 	return uploadID, nil
 }
 
-func (cache *cacheDriver) AbortMultipartUpload(bucket, key, uploadID string) error {
+func (cache donut) AbortMultipartUpload(bucket, key, uploadID string) error {
 	cache.lock.RLock()
 	storedBucket := cache.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
 		cache.lock.RUnlock()
-		return iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+		return iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -90,13 +89,13 @@ func getMultipartKey(key string, uploadID string, partNumber int) string {
 	return key + "?uploadId=" + uploadID + "&partNumber=" + strconv.Itoa(partNumber)
 }
 
-func (cache *cacheDriver) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache donut) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	// Verify upload id
 	cache.lock.RLock()
 	storedBucket := cache.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+		return "", iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -110,19 +109,19 @@ func (cache *cacheDriver) CreateObjectPart(bucket, key, uploadID string, partID 
 }
 
 // createObject - PUT object to cache buffer
-func (cache *cacheDriver) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache donut) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	cache.lock.RLock()
-	if !drivers.IsValidBucket(bucket) {
+	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObjectName(key) {
+	if !IsValidObjectName(key) {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	// get object key
@@ -141,7 +140,7 @@ func (cache *cacheDriver) createObjectPart(bucket, key, uploadID string, partID 
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
-			return "", iodine.New(drivers.InvalidDigest{Md5: expectedMD5Sum}, nil)
+			return "", iodine.New(InvalidDigest{Md5: expectedMD5Sum}, nil)
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -180,10 +179,10 @@ func (cache *cacheDriver) createObjectPart(bucket, key, uploadID string, partID 
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			return "", iodine.New(drivers.BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
+			return "", iodine.New(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
 		}
 	}
-	newPart := drivers.PartMetadata{
+	newPart := PartMetadata{
 		PartNumber:   partID,
 		LastModified: time.Now().UTC(),
 		ETag:         md5Sum,
@@ -201,36 +200,36 @@ func (cache *cacheDriver) createObjectPart(bucket, key, uploadID string, partID 
 	return md5Sum, nil
 }
 
-func (cache *cacheDriver) cleanupMultipartSession(bucket, key, uploadID string) {
+func (cache donut) cleanupMultipartSession(bucket, key, uploadID string) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	delete(cache.storedBuckets[bucket].multiPartSession, key)
 }
 
-func (cache *cacheDriver) cleanupMultiparts(bucket, key, uploadID string) {
+func (cache donut) cleanupMultiparts(bucket, key, uploadID string) {
 	for i := 1; i <= cache.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
 		cache.multiPartObjects.Delete(objectKey)
 	}
 }
 
-func (cache *cacheDriver) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
-	if !drivers.IsValidBucket(bucket) {
-		return "", iodine.New(drivers.BucketNameInvalid{Bucket: bucket}, nil)
+func (cache donut) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
+	if !IsValidBucket(bucket) {
+		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !drivers.IsValidObjectName(key) {
-		return "", iodine.New(drivers.ObjectNameInvalid{Object: key}, nil)
+	if !IsValidObjectName(key) {
+		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	// Verify upload id
 	cache.lock.RLock()
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
 		cache.lock.RUnlock()
-		return "", iodine.New(drivers.InvalidUploadID{UploadID: uploadID}, nil)
+		return "", iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -249,10 +248,10 @@ func (cache *cacheDriver) CompleteMultipartUpload(bucket, key, uploadID string, 
 		// complete multi part request header md5sum per part is hex encoded
 		recvMD5Bytes, err := hex.DecodeString(strings.Trim(recvMD5, "\""))
 		if err != nil {
-			return "", iodine.New(drivers.InvalidDigest{Md5: recvMD5}, nil)
+			return "", iodine.New(InvalidDigest{Md5: recvMD5}, nil)
 		}
 		if !bytes.Equal(recvMD5Bytes, calcMD5Bytes[:]) {
-			return "", iodine.New(drivers.BadDigest{Md5: recvMD5, Bucket: bucket, Key: getMultipartKey(key, uploadID, i)}, nil)
+			return "", iodine.New(BadDigest{Md5: recvMD5, Bucket: bucket, Key: getMultipartKey(key, uploadID, i)}, nil)
 		}
 		_, err = io.Copy(&fullObject, bytes.NewBuffer(object))
 		if err != nil {
@@ -279,21 +278,21 @@ func (cache *cacheDriver) CompleteMultipartUpload(bucket, key, uploadID string, 
 }
 
 // byKey is a sortable interface for UploadMetadata slice
-type byKey []*drivers.UploadMetadata
+type byKey []*UploadMetadata
 
 func (a byKey) Len() int           { return len(a) }
 func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
-func (cache *cacheDriver) ListMultipartUploads(bucket string, resources drivers.BucketMultipartResourcesMetadata) (drivers.BucketMultipartResourcesMetadata, error) {
+func (cache donut) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
 	// TODO handle delimiter
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		return drivers.BucketMultipartResourcesMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
-	var uploads []*drivers.UploadMetadata
+	var uploads []*UploadMetadata
 
 	for key, session := range storedBucket.multiPartSession {
 		if strings.HasPrefix(key, resources.Prefix) {
@@ -309,7 +308,7 @@ func (cache *cacheDriver) ListMultipartUploads(bucket string, resources drivers.
 			switch {
 			case resources.KeyMarker != "" && resources.UploadIDMarker == "":
 				if key > resources.KeyMarker {
-					upload := new(drivers.UploadMetadata)
+					upload := new(UploadMetadata)
 					upload.Key = key
 					upload.UploadID = session.uploadID
 					upload.Initiated = session.initiated
@@ -318,7 +317,7 @@ func (cache *cacheDriver) ListMultipartUploads(bucket string, resources drivers.
 			case resources.KeyMarker != "" && resources.UploadIDMarker != "":
 				if session.uploadID > resources.UploadIDMarker {
 					if key >= resources.KeyMarker {
-						upload := new(drivers.UploadMetadata)
+						upload := new(UploadMetadata)
 						upload.Key = key
 						upload.UploadID = session.uploadID
 						upload.Initiated = session.initiated
@@ -326,7 +325,7 @@ func (cache *cacheDriver) ListMultipartUploads(bucket string, resources drivers.
 					}
 				}
 			default:
-				upload := new(drivers.UploadMetadata)
+				upload := new(UploadMetadata)
 				upload.Key = key
 				upload.UploadID = session.uploadID
 				upload.Initiated = session.initiated
@@ -340,30 +339,30 @@ func (cache *cacheDriver) ListMultipartUploads(bucket string, resources drivers.
 }
 
 // partNumber is a sortable interface for Part slice
-type partNumber []*drivers.PartMetadata
+type partNumber []*PartMetadata
 
 func (a partNumber) Len() int           { return len(a) }
 func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-func (cache *cacheDriver) ListObjectParts(bucket, key string, resources drivers.ObjectResourcesMetadata) (drivers.ObjectResourcesMetadata, error) {
+func (cache donut) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
 	// Verify upload id
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.BucketNotFound{Bucket: bucket}, nil)
+		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	if _, ok := storedBucket.multiPartSession[key]; ok == false {
-		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.ObjectNotFound{Bucket: bucket, Object: key}, nil)
+		return ObjectResourcesMetadata{}, iodine.New(ObjectNotFound{Bucket: bucket, Object: key}, nil)
 	}
 	if storedBucket.multiPartSession[key].uploadID != resources.UploadID {
-		return drivers.ObjectResourcesMetadata{}, iodine.New(drivers.InvalidUploadID{UploadID: resources.UploadID}, nil)
+		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, nil)
 	}
 	objectResourcesMetadata := resources
 	objectResourcesMetadata.Bucket = bucket
 	objectResourcesMetadata.Key = key
-	var parts []*drivers.PartMetadata
+	var parts []*PartMetadata
 	var startPartNumber int
 	switch {
 	case objectResourcesMetadata.PartNumberMarker == 0:
@@ -381,7 +380,7 @@ func (cache *cacheDriver) ListObjectParts(bucket, key string, resources drivers.
 		}
 		part, ok := storedBucket.partMetadata[bucket+"/"+getMultipartKey(key, resources.UploadID, i)]
 		if !ok {
-			return drivers.ObjectResourcesMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+			return ObjectResourcesMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
 		parts = append(parts, &part)
 	}
@@ -390,7 +389,7 @@ func (cache *cacheDriver) ListObjectParts(bucket, key string, resources drivers.
 	return objectResourcesMetadata, nil
 }
 
-func (cache *cacheDriver) expiredPart(a ...interface{}) {
+func (cache donut) expiredPart(a ...interface{}) {
 	key := a[0].(string)
 	// loop through all buckets
 	for _, storedBucket := range cache.storedBuckets {

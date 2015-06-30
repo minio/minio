@@ -4,7 +4,7 @@ import (
 	"os/user"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/server"
+	"github.com/minio/minio/pkg/api"
 )
 
 func removeDuplicates(slice []string) []string {
@@ -67,13 +67,9 @@ func runServer(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
 	}
 	apiServerConfig := getAPIServerConfig(c)
-	s := server.Factory{
-		Config: apiServerConfig,
+	if err := api.Start(apiServerConfig); err != nil {
+		Fatalln(err)
 	}
-	apiServer := s.GetStartServerFunc()
-	//	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer} //, webServer}
-	server.StartMinio(servers)
 }
 
 func runController(c *cli.Context) {
@@ -84,12 +80,4 @@ func runController(c *cli.Context) {
 	if len(c.Args()) < 1 {
 		cli.ShowCommandHelpAndExit(c, "control", 1) // last argument is exit code
 	}
-	apiServerConfig := getAPIServerConfig(c)
-	s := server.Factory{
-		Config: apiServerConfig,
-	}
-	apiServer := s.GetStartServerFunc()
-	//	webServer := getWebServerConfigFunc(c)
-	servers := []server.StartServerFunc{apiServer} //, webServer}
-	server.StartMinio(servers)
 }

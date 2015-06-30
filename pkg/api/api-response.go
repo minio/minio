@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/donut"
 )
 
 // Reply date format
@@ -34,7 +34,7 @@ const (
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateListBucketsResponse(buckets []drivers.BucketMetadata) ListBucketsResponse {
+func generateListBucketsResponse(buckets []donut.BucketMetadata) ListBucketsResponse {
 	var listbuckets []*Bucket
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
@@ -70,7 +70,7 @@ func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateListObjectsResponse(bucket string, objects []drivers.ObjectMetadata, bucketResources drivers.BucketResourcesMetadata) ListObjectsResponse {
+func generateListObjectsResponse(bucket string, objects []donut.ObjectMetadata, bucketResources donut.BucketResourcesMetadata) ListObjectsResponse {
 	var contents []*Object
 	var prefixes []*CommonPrefix
 	var owner = Owner{}
@@ -131,7 +131,7 @@ func generateCompleteMultpartUploadResult(bucket, key, location, etag string) Co
 }
 
 // generateListPartsResult
-func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) ListPartsResponse {
+func generateListPartsResult(objectMetadata donut.ObjectResourcesMetadata) ListPartsResponse {
 	// TODO - support EncodingType in xml decoding
 	listPartsResponse := ListPartsResponse{}
 	listPartsResponse.Bucket = objectMetadata.Bucket
@@ -161,7 +161,7 @@ func generateListPartsResult(objectMetadata drivers.ObjectResourcesMetadata) Lis
 }
 
 // generateListMultipartUploadsResult
-func generateListMultipartUploadsResult(bucket string, metadata drivers.BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
+func generateListMultipartUploadsResult(bucket string, metadata donut.BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
 	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
 	listMultipartUploadsResponse.Bucket = bucket
 	listMultipartUploadsResponse.Delimiter = metadata.Delimiter

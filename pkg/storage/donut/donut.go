@@ -25,8 +25,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/trove"
 )
 
 // donut struct internal data
@@ -35,6 +37,32 @@ type donut struct {
 	buckets map[string]bucket
 	nodes   map[string]node
 	lock    *sync.RWMutex
+	cache   cache
+}
+
+// cache - local variables
+type cache struct {
+	storedBuckets    map[string]storedBucket
+	lock             *sync.RWMutex
+	objects          *trove.Cache
+	multiPartObjects *trove.Cache
+	maxSize          uint64
+	expiration       time.Duration
+}
+
+// storedBucket saved bucket
+type storedBucket struct {
+	bucketMetadata   BucketMetadata
+	objectMetadata   map[string]ObjectMetadata
+	partMetadata     map[string]PartMetadata
+	multiPartSession map[string]multiPartSession
+}
+
+// multiPartSession multipart session
+type multiPartSession struct {
+	totalParts int
+	uploadID   string
+	initiated  time.Time
 }
 
 // config files used inside Donut
@@ -82,6 +110,15 @@ func NewDonut(donutName string, nodeDiskMap map[string][]string) (Donut, error) 
 			return nil, iodine.New(err, nil)
 		}
 	}
+	d.cache.storedBuckets = make(map[string]storedBucket)
+	d.cache.objects = trove.NewCache(maxSize, expiration)
+	d.cache.multiPartObjects = trove.NewCache(0, time.Duration(0))
+
+	d.cache.objects.OnExpired = d.expiredObject
+	d.cache.multiPartObjects.OnExpired = d.expiredPart
+
+	// set up cache expiration
+	d.cache.objects.ExpireObjects(time.Second * 5)
 	return d, nil
 }
 

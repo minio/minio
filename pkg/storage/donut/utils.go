@@ -1,52 +1,11 @@
-/*
- * Minimalist Object Storage, (C) 2015 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package drivers
+package donut
 
 import (
-	"io"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
-
-// Driver - generic API interface for various drivers - donut, file, memory
-type Driver interface {
-	// Bucket Operations
-	ListBuckets() ([]BucketMetadata, error)
-	CreateBucket(bucket, acl string) error
-	GetBucketMetadata(bucket string) (BucketMetadata, error)
-	SetBucketMetadata(bucket, acl string) error
-
-	// Object Operations
-	GetObject(w io.Writer, bucket, object string) (int64, error)
-	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
-	GetObjectMetadata(bucket, key string) (ObjectMetadata, error)
-	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
-	CreateObject(bucket, key, contentType, md5sum string, size int64, data io.Reader) (string, error)
-
-	// Object Multipart Operations
-	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error)
-	NewMultipartUpload(bucket, key, contentType string) (string, error)
-	AbortMultipartUpload(bucket, key, UploadID string) error
-	CreateObjectPart(bucket, key, uploadID string, partID int, contentType string, md5sum string, size int64, data io.Reader) (string, error)
-	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error)
-	ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error)
-}
 
 // BucketACL - bucket level access control
 type BucketACL string

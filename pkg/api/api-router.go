@@ -20,7 +20,7 @@ import router "github.com/gorilla/mux"
 
 type minioAPI struct{}
 
-// Handler - api wrapper handler
+// New api
 func New(config Config) API {
 	var api = minioAPI{}
 
