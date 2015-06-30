@@ -58,17 +58,11 @@ var _ = Suite(&MySuite{
 
 var _ = Suite(&MySuite{
 	initDriver: func() (drivers.Driver, string) {
-		driver, _ := cache.NewDriver(10000, 3*time.Hour)
-		return driver, ""
-	},
-})
-
-var _ = Suite(&MySuite{
-	initDriver: func() (drivers.Driver, string) {
 		root, _ := ioutil.TempDir(os.TempDir(), "minio-api")
 		var roots []string
 		roots = append(roots, root)
-		driver, _ := donut.NewDriver(roots, 10000, 3*time.Hour)
+		driver, _ := donut.NewDriver(roots)
+		driver, _ = cache.NewDriver(10000, 3*time.Hour, driver)
 		return driver, root
 	},
 })

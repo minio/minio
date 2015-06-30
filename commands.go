@@ -135,7 +135,7 @@ func runDonut(c *cli.Context) {
 		Fatalln("Path must be set")
 	}
 	apiServerConfig := getAPIServerConfig(c)
-	donutDriver := server.DonutFactory{
+	donutDriver := server.Factory{
 		Config:     apiServerConfig,
 		Paths:      paths,
 		MaxMemory:  maxMemory,
