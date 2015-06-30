@@ -16,42 +16,15 @@
 
 package api
 
-import (
-	"net/http"
+import router "github.com/gorilla/mux"
 
-	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/api/logging"
-	"github.com/minio/minio/pkg/api/quota"
-	"github.com/minio/minio/pkg/storage/drivers"
-)
+type minioAPI struct{}
 
-type minioAPI struct {
-	driver drivers.Driver
-}
-
-// Config api configurable parameters
-type Config struct {
-	RateLimit int
-	driver    drivers.Driver
-}
-
-// GetDriver - get a an existing set driver
-func (c Config) GetDriver() drivers.Driver {
-	return c.driver
-}
-
-// SetDriver - set a new driver
-func (c *Config) SetDriver(driver drivers.Driver) {
-	c.driver = driver
-}
-
-// HTTPHandler - http wrapper handler
-func HTTPHandler(config Config) http.Handler {
-	var mux *router.Router
+// Handler - api wrapper handler
+func New(config Config) API {
 	var api = minioAPI{}
-	api.driver = config.GetDriver()
 
-	mux = router.NewRouter()
+	mux := router.NewRouter()
 	mux.HandleFunc("/", api.listBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.listObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", api.putBucketHandler).Methods("PUT")
@@ -75,12 +48,7 @@ func HTTPHandler(config Config) http.Handler {
 	handler = timeValidityHandler(handler)
 	handler = ignoreResourcesHandler(handler)
 	handler = validateAuthHeaderHandler(handler)
-	//	handler = quota.BandwidthCap(h, 25*1024*1024, time.Duration(30*time.Minute))
-	//	handler = quota.BandwidthCap(h, 100*1024*1024, time.Duration(24*time.Hour))
-	//	handler = quota.RequestLimit(h, 100, time.Duration(30*time.Minute))
-	//	handler = quota.RequestLimit(h, 1000, time.Duration(24*time.Hour))
-	//      handler = quota.ConnectionLimit(handler, config.ConnectionLimit)
-	handler = quota.RateLimit(handler, config.RateLimit)
-	handler = logging.LogHandler(handler)
-	return handler
+	handler = rateLimitHandler(handler, config.RateLimit)
+	handler = loggingHandler(handler)
+	return API{config, handler}
 }

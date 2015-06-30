@@ -98,7 +98,7 @@ func stripAuth(r *http.Request) (*auth, error) {
 	return a, nil
 }
 
-func getDate(req *http.Request) (time.Time, error) {
+func parseDate(req *http.Request) (time.Time, error) {
 	amzDate := req.Header.Get("X-Amz-Date")
 	switch {
 	case amzDate != "":
@@ -154,7 +154,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
 			return
 		}
-		date, err := getDate(r)
+		date, err := parseDate(r)
 		if err != nil {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
 			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package httpserver
+package api
 
 import (
 	"fmt"
@@ -32,38 +32,27 @@ type Config struct {
 	RateLimit int
 }
 
-// Server - http server related
-type Server struct {
-	config  Config
-	handler http.Handler
-}
-
 // Start http server
-func Start(handler http.Handler, config Config) (chan<- string, <-chan error, Server) {
-	ctrlChannel := make(chan string)
-	errorChannel := make(chan error)
-	server := Server{
-		config:  config,
-		handler: handler,
-	}
-	go start(ctrlChannel, errorChannel, server)
-	return ctrlChannel, errorChannel, server
+func Start(a API) <-chan error {
+	errCh := make(chan error)
+	go start(errCh, a)
+	return errCh
 }
 
-func start(ctrlChannel <-chan string, errorChannel chan<- error, server Server) {
-	defer close(errorChannel)
+func start(errCh chan error, a API) {
+	defer close(errCh)
 
 	var err error
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:           server.config.Address,
-		Handler:        server.handler,
+		Addr:           a.config.Address,
+		Handler:        a.handler,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	host, port, err := net.SplitHostPort(server.config.Address)
+	host, port, err := net.SplitHostPort(a.config.Address)
 	if err != nil {
-		errorChannel <- err
+		errCh <- err
 		return
 	}
 
@@ -74,7 +63,7 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, server Server) 
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			errorChannel <- err
+			errCh <- err
 			return
 		}
 		for _, addr := range addrs {
@@ -92,14 +81,31 @@ func start(ctrlChannel <-chan string, errorChannel chan<- error, server Server) 
 			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
 		}
 		err = httpServer.ListenAndServe()
-	case server.config.TLS == true:
+	case a.config.TLS == true:
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		}
-		err = httpServer.ListenAndServeTLS(server.config.CertFile, server.config.KeyFile)
+		err = httpServer.ListenAndServeTLS(a.config.CertFile, a.config.KeyFile)
 	}
 	if err != nil {
-		errorChannel <- err
+		errCh <- err
 	}
+	errCh <- nil
+	return
+}
 
+// API is used to build api server
+type API struct {
+	config  Config
+	handler http.Handler
+}
+
+// StartServer APIFactory builds api server
+func StartServer(conf Config) error {
+	for err := range Start(New(conf)) {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -25,7 +25,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/drivers"
 	"github.com/minio/minio/pkg/utils/log"
 )
 
@@ -48,47 +47,8 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+	log.Println(bucket, object)
 
-	metadata, err := server.driver.GetObjectMetadata(bucket, object)
-	switch iodine.ToError(err).(type) {
-	case nil: // success
-		{
-			httpRange, err := getRequestedRange(req, metadata.Size)
-			if err != nil {
-				writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
-				return
-			}
-			switch httpRange.start == 0 && httpRange.length == 0 {
-			case true:
-				setObjectHeaders(w, metadata)
-				if _, err := server.driver.GetObject(w, bucket, object); err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
-					log.Error.Println(iodine.New(err, nil))
-				}
-			case false:
-				metadata.Size = httpRange.length
-				setRangeObjectHeaders(w, metadata, httpRange)
-				w.WriteHeader(http.StatusPartialContent)
-				if _, err := server.driver.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length); err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
-					log.Error.Println(iodine.New(err, nil))
-				}
-			}
-		}
-	case drivers.ObjectNotFound:
-		{
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-		}
-	case drivers.ObjectNameInvalid:
-		{
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
 }
 
 // HEAD Object
@@ -105,34 +65,7 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-
-	metadata, err := server.driver.GetObjectMetadata(bucket, object)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			setObjectHeaders(w, metadata)
-			w.WriteHeader(http.StatusOK)
-		}
-	case drivers.ObjectNotFound:
-		{
-			error := getErrorCode(NoSuchKey)
-			w.Header().Set("Server", "Minio")
-			w.WriteHeader(error.HTTPStatusCode)
-		}
-	case drivers.ObjectNameInvalid:
-		{
-			error := getErrorCode(NoSuchKey)
-			w.Header().Set("Server", "Minio")
-			w.WriteHeader(error.HTTPStatusCode)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			error := getErrorCode(InternalError)
-			w.Header().Set("Server", "Minio")
-			w.WriteHeader(error.HTTPStatusCode)
-		}
-	}
+	log.Println(bucket, object)
 }
 
 // PUT Object
@@ -182,36 +115,7 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
 		return
 	}
-	calculatedMD5, err := server.driver.CreateObject(bucket, object, "", md5, sizeInt64, req.Body)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			w.Header().Set("ETag", calculatedMD5)
-			writeSuccessResponse(w, acceptsContentType)
-
-		}
-	case drivers.ObjectExists:
-		{
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BadDigest:
-		{
-			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-		}
-	case drivers.EntityTooLarge:
-		{
-			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
-		}
-	case drivers.InvalidDigest:
-		{
-			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
+	log.Println(bucket, object, sizeInt64)
 }
 
 /// Multipart API
@@ -233,27 +137,7 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
-	uploadID, err := server.driver.NewMultipartUpload(bucket, object, "")
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
-			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-			// write body
-			w.Write(encodedSuccessResponse)
-		}
-	case drivers.ObjectExists:
-		{
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
+	log.Println(bucket, object)
 }
 
 // Upload part
@@ -293,6 +177,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
+	log.Println(bucket, object, sizeInt64)
 
 	uploadID := req.URL.Query().Get("uploadId")
 	partIDString := req.URL.Query().Get("partNumber")
@@ -301,40 +186,7 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
 	}
-	calculatedMD5, err := server.driver.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			w.Header().Set("ETag", calculatedMD5)
-			writeSuccessResponse(w, acceptsContentType)
-
-		}
-	case drivers.InvalidUploadID:
-		{
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-		}
-	case drivers.ObjectExists:
-		{
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-		}
-	case drivers.BadDigest:
-		{
-			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-		}
-	case drivers.EntityTooLarge:
-		{
-			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
-		}
-	case drivers.InvalidDigest:
-		{
-			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
+	log.Println(uploadID, partID)
 }
 
 // Abort multipart upload
@@ -349,25 +201,8 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
-
-	err := server.driver.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
-			w.WriteHeader(http.StatusNoContent)
-		}
-	case drivers.InvalidUploadID:
-		{
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
+	//objectResourcesMetadata := getObjectResources(req.URL.Query())
+	log.Println(bucket, object)
 }
 
 // List object parts
@@ -386,28 +221,7 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-
-	objectResourcesMetadata, err := server.driver.ListObjectParts(bucket, object, objectResourcesMetadata)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			response := generateListPartsResult(objectResourcesMetadata)
-			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-			// write body
-			w.Write(encodedSuccessResponse)
-		}
-	case drivers.InvalidUploadID:
-		{
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
+	log.Println(bucket, object)
 }
 
 // Complete multipart upload
@@ -434,34 +248,15 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
+	log.Println(bucket, object)
+
+	//objectResourcesMetadata := getObjectResources(req.URL.Query())
 
 	partMap := make(map[int]string)
 	for _, part := range parts.Part {
 		partMap[part.PartNumber] = part.ETag
 	}
 
-	etag, err := server.driver.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, partMap)
-	switch iodine.ToError(err).(type) {
-	case nil:
-		{
-			response := generateCompleteMultpartUploadResult(bucket, object, "", etag)
-			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-			// write headers
-			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-			// write body
-			w.Write(encodedSuccessResponse)
-		}
-	case drivers.InvalidUploadID:
-		{
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-		}
-	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
-	}
 }
 
 /// Delete API

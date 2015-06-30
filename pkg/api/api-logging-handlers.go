@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package logging
+package api
 
 import (
 	"bytes"
@@ -31,12 +31,12 @@ import (
 )
 
 type logHandler struct {
-	http.Handler
-	Logger chan<- []byte
+	handler http.Handler
+	logger  chan<- []byte
 }
 
-// LogMessage is a serializable json log message
-type LogMessage struct {
+// logMessage is a serializable json log message
+type logMessage struct {
 	StartTime     time.Time
 	Duration      time.Duration
 	StatusMessage string // human readable http status message
@@ -49,38 +49,38 @@ type LogMessage struct {
 	}
 }
 
-// LogWriter is used to capture status for log messages
-type LogWriter struct {
-	ResponseWriter http.ResponseWriter
-	LogMessage     *LogMessage
+// logWriter is used to capture status for log messages
+type logWriter struct {
+	responseWriter http.ResponseWriter
+	logMessage     *logMessage
 }
 
 // WriteHeader writes headers and stores status in LogMessage
-func (w *LogWriter) WriteHeader(status int) {
-	w.LogMessage.StatusMessage = http.StatusText(status)
-	w.ResponseWriter.WriteHeader(status)
+func (w *logWriter) WriteHeader(status int) {
+	w.logMessage.StatusMessage = http.StatusText(status)
+	w.responseWriter.WriteHeader(status)
 }
 
 // Header Dummy wrapper for LogWriter
-func (w *LogWriter) Header() http.Header {
-	return w.ResponseWriter.Header()
+func (w *logWriter) Header() http.Header {
+	return w.responseWriter.Header()
 }
 
 // Write Dummy wrapper for LogWriter
-func (w *LogWriter) Write(data []byte) (int, error) {
-	return w.ResponseWriter.Write(data)
+func (w *logWriter) Write(data []byte) (int, error) {
+	return w.responseWriter.Write(data)
 }
 
 func (h *logHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	logMessage := &LogMessage{
+	logMessage := &logMessage{
 		StartTime: time.Now().UTC(),
 	}
-	logWriter := &LogWriter{ResponseWriter: w, LogMessage: logMessage}
-	h.Handler.ServeHTTP(logWriter, req)
-	h.Logger <- getLogMessage(logMessage, w, req)
+	logWriter := &logWriter{responseWriter: w, logMessage: logMessage}
+	h.handler.ServeHTTP(logWriter, req)
+	h.logger <- getLogMessage(logMessage, w, req)
 }
 
-func getLogMessage(logMessage *LogMessage, w http.ResponseWriter, req *http.Request) []byte {
+func getLogMessage(logMessage *logMessage, w http.ResponseWriter, req *http.Request) []byte {
 	// store lower level details
 	logMessage.HTTP.ResponseHeaders = w.Header()
 	logMessage.HTTP.Request = req
@@ -94,14 +94,14 @@ func getLogMessage(logMessage *LogMessage, w http.ResponseWriter, req *http.Requ
 	return js
 }
 
-// LogHandler logs requests
-func LogHandler(h http.Handler) http.Handler {
-	logger, _ := FileLogger("access.log")
-	return &logHandler{Handler: h, Logger: logger}
+// loggingHandler logs requests
+func loggingHandler(h http.Handler) http.Handler {
+	logger, _ := fileLogger("access.log")
+	return &logHandler{handler: h, logger: logger}
 }
 
-// FileLogger returns a channel that is used to write to the logger
-func FileLogger(filename string) (chan<- []byte, error) {
+// fileLogger returns a channel that is used to write to the logger
+func fileLogger(filename string) (chan<- []byte, error) {
 	ch := make(chan []byte)
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {

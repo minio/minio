@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package quota
+package api
 
 import "net/http"
 
@@ -24,26 +24,26 @@ type rateLimit struct {
 	rateQueue chan bool
 }
 
-func (c *rateLimit) Add() {
+func (c rateLimit) Add() {
 	c.rateQueue <- true // fill in the queue
 	return
 }
 
-func (c *rateLimit) Remove() {
+func (c rateLimit) Remove() {
 	<-c.rateQueue // invalidate the queue, after the request is served
 	return
 }
 
 // ServeHTTP is an http.Handler ServeHTTP method
-func (c *rateLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (c rateLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c.Add()                     // add
 	c.handler.ServeHTTP(w, req) // serve
 	c.Remove()                  // remove
 }
 
-// RateLimit limits the number of concurrent http requests
-func RateLimit(handle http.Handler, limit int) http.Handler {
-	return &rateLimit{
+// rateLimitHandler limits the number of concurrent http requests
+func rateLimitHandler(handle http.Handler, limit int) http.Handler {
+	return rateLimit{
 		handler:   handle,
 		rateQueue: make(chan bool, limit),
 	}
