@@ -26,6 +26,8 @@ import (
 	"github.com/minio/minio/pkg/api/web"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/httpserver"
+	"github.com/minio/minio/pkg/storage/drivers"
+	"github.com/minio/minio/pkg/storage/drivers/cache"
 	"github.com/minio/minio/pkg/storage/drivers/donut"
 	"github.com/minio/minio/pkg/utils/log"
 )
@@ -43,22 +45,30 @@ func (f WebFactory) GetStartServerFunc() StartServerFunc {
 	}
 }
 
-// DonutFactory is used to build donut api server
-type DonutFactory struct {
+// Factory is used to build api server
+type Factory struct {
 	httpserver.Config
 	Paths      []string
 	MaxMemory  uint64
 	Expiration time.Duration
 }
 
-// GetStartServerFunc DonutFactory builds donut api server
-func (f DonutFactory) GetStartServerFunc() StartServerFunc {
+// GetStartServerFunc Factory builds api server
+func (f Factory) GetStartServerFunc() StartServerFunc {
 	return func() (chan<- string, <-chan error) {
-		driver, err := donut.NewDriver(f.Paths, f.MaxMemory, f.Expiration)
-		if err != nil {
-			log.Fatalln(err)
-		}
 		conf := api.Config{RateLimit: f.RateLimit}
+		var driver drivers.Driver
+		var err error
+		if len(f.Paths) != 0 {
+			driver, err = donut.NewDriver(f.Paths)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			driver, err = cache.NewDriver(f.MaxMemory, f.Expiration, driver)
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
 		conf.SetDriver(driver)
 		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
 		return ctrl, status

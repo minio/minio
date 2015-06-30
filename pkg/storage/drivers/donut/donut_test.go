@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/storage/drivers"
@@ -40,7 +39,7 @@ func (s *MySuite) TestAPISuite(c *C) {
 		c.Check(err, IsNil)
 		storageList = append(storageList, p)
 		paths = append(paths, p)
-		store, err := NewDriver(paths, 1000000, 3*time.Hour)
+		store, err := NewDriver(paths)
 		c.Check(err, IsNil)
 		return store
 	}
