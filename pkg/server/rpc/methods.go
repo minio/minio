@@ -16,7 +16,12 @@
 
 package rpc
 
-import "net/http"
+import (
+	"net/http"
+	"os"
+	"runtime"
+	"time"
+)
 
 // HelloArgs - hello args
 type HelloArgs struct {
@@ -28,11 +33,78 @@ type HelloReply struct {
 	Message string
 }
 
-// HelloService -
+// HelloService - hello service
 type HelloService struct{}
 
-// Say -
+// Say method
 func (h *HelloService) Say(r *http.Request, args *HelloArgs, reply *HelloReply) error {
 	reply.Message = "Hello, " + args.Who + "!"
 	return nil
+}
+
+// Args basic json RPC params
+type Args struct {
+	Request string
+}
+
+// VersionReply version reply
+type VersionReply struct {
+	Version   string `json:"version"`
+	BuildDate string `json:"build-date"`
+}
+
+// VersionService -
+type VersionService struct{}
+
+func getVersion() string {
+	return "0.0.1"
+}
+func getBuildDate() string {
+	return time.Now().UTC().Format(http.TimeFormat)
+}
+
+func setVersionReply(reply *VersionReply) {
+	reply.Version = getVersion()
+	reply.BuildDate = getBuildDate()
+	return
+}
+
+// Get method
+func (v *VersionService) Get(r *http.Request, args *Args, reply *VersionReply) error {
+	setVersionReply(reply)
+	return nil
+}
+
+// GetSysInfoService -
+type GetSysInfoService struct{}
+
+// GetSysInfoReply -
+type GetSysInfoReply struct {
+	Hostname  string           `json:"hostname"`
+	SysARCH   string           `json:"sys.arch"`
+	SysOS     string           `json:"sys.os"`
+	SysCPUS   int              `json:"sys.ncpus"`
+	Routines  int              `json:"goroutines"`
+	GOVersion string           `json:"goversion"`
+	MemStats  runtime.MemStats `json:"memstats"`
+}
+
+func setSysInfoReply(sis *GetSysInfoReply) error {
+	sis.SysARCH = runtime.GOARCH
+	sis.SysOS = runtime.GOOS
+	sis.SysCPUS = runtime.NumCPU()
+	sis.Routines = runtime.NumGoroutine()
+	sis.GOVersion = runtime.Version()
+	sis.Hostname, _ = os.Hostname()
+
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	sis.MemStats = memStats
+
+	return nil
+}
+
+// Get method
+func (s *GetSysInfoService) Get(r *http.Request, args *Args, reply *GetSysInfoReply) error {
+	return setSysInfoReply(reply)
 }

@@ -112,6 +112,8 @@ func RPCHandler() http.Handler {
 	s := rpc.NewServer()
 	s.RegisterJSONCodec()
 	s.RegisterService(new(rpc.HelloService), "")
+	s.RegisterService(new(rpc.VersionService), "")
+	s.RegisterService(new(rpc.GetSysInfoService), "")
 	// add more services here
 	return registerRPC(router.NewRouter(), s)
 }
