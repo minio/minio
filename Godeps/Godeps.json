@@ -22,6 +22,10 @@
 			"Rev": "e444e69cbd2e2e3e0749a2f3c717cec491552bbf"
 		},
 		{
+			"ImportPath": "github.com/gorilla/rpc/v2",
+			"Rev": "f6dbf92d77c723632269bf29154cc91f2507693b"
+		},
+		{
 			"ImportPath": "github.com/minio/check",
 			"Rev": "67f8c16c6c27bb03c82e41c2be533ace00035ab4"
 		},
@@ -29,18 +33,6 @@
 			"ImportPath": "github.com/minio/cli",
 			"Comment": "1.2.0-112-g823349c",
 			"Rev": "823349ce91e76834a4af0119d5bbc58fd4d2c6b0"
-		},
-		{
-			"ImportPath": "github.com/stretchr/objx",
-			"Rev": "cbeaeb16a013161a98496fad62933b1d21786672"
-		},
-		{
-			"ImportPath": "github.com/stretchr/testify/assert",
-			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
-		},
-		{
-			"ImportPath": "github.com/stretchr/testify/mock",
-			"Rev": "e4ec8152c15fc46bd5056ce65997a07c7d415325"
 		}
 	]
 }
