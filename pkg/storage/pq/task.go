@@ -18,7 +18,7 @@ package pq
 
 // Task container for any generic tasks
 type Task struct {
-	job      func() error
+	job      func() <-chan error
 	priority int
 }
 
@@ -34,5 +34,5 @@ func (t Task) UpdatePriority(p int) {
 
 // Execute execute current task
 func (t Task) Execute() error {
-	return t.job()
+	return <-t.job()
 }

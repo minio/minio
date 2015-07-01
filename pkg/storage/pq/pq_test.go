@@ -30,24 +30,44 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func helloTask1() error {
-	fmt.Println("Hello task1")
-	return nil
+func helloTask1() <-chan error {
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		println("Hello task1")
+		errCh <- nil
+	}()
+	return errCh
 }
 
-func helloTask2() error {
-	fmt.Println("Hello task2")
-	return nil
+func helloTask2() <-chan error {
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		println("Hello task2")
+		errCh <- nil
+	}()
+	return errCh
 }
 
-func newJob1() error {
-	fmt.Println("New Job1")
-	return nil
+func newJob1() <-chan error {
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		println("New Job1")
+		errCh <- nil
+	}()
+	return errCh
 }
 
-func newJob2() error {
-	fmt.Println("New Job2")
-	return nil
+func newJob2() <-chan error {
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		println("New Job2")
+		errCh <- nil
+	}()
+	return errCh
 }
 
 func (s *MySuite) TestPQ(c *C) {
