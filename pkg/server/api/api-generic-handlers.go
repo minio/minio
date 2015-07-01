@@ -19,10 +19,13 @@ package api
 import (
 	"errors"
 	"net/http"
+	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/server/config"
+	"github.com/minio/minio/pkg/quick"
 	"github.com/minio/minio/pkg/utils/crypto/keys"
 )
 
@@ -179,18 +182,48 @@ func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 	return validateAuthHandler{h}
 }
 
+// User context
+type User struct {
+	Version   string
+	Name      string
+	AccessKey string
+	SecretKey string
+}
+
+func getConfigFile() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	confPath := filepath.Join(u.HomeDir, ".minio")
+	if err := os.MkdirAll(confPath, 0700); err != nil {
+		return ""
+	}
+	return filepath.Join(confPath, "config.json")
+}
+
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	_, err := stripAuth(r)
 	switch err.(type) {
 	case nil:
-		var conf = config.Config{}
-		if err := conf.SetupConfig(); err != nil {
+		users := make(map[string]User)
+		configFile := getConfigFile()
+		if configFile == "" {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
-		if err := conf.ReadConfig(); err != nil {
+		qconf, err := quick.New(&users)
+		if err != nil {
+			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			return
+		}
+		if err := qconf.Save(configFile); err != nil {
+			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			return
+		}
+		if err := qconf.Load(configFile); err != nil {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
