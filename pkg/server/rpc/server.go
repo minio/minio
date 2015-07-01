@@ -17,14 +17,35 @@
 package rpc
 
 import (
+	"net/http"
+
 	"github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json"
 )
 
-// HelloServiceHandler -
-func HelloServiceHandler() *rpc.Server {
-	s := rpc.NewServer()
-	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(HelloService), "")
+// Server rpc server container
+type Server struct {
+	RPCServer *rpc.Server
+}
+
+// RegisterJSONCodec - register standard json codec
+func (s Server) RegisterJSONCodec() {
+	s.RPCServer.RegisterCodec(json.NewCodec(), "application/json")
+}
+
+// RegisterService - register new services
+func (s Server) RegisterService(recv interface{}, name string) {
+	s.RPCServer.RegisterService(recv, name)
+}
+
+// NewServer - provide a new instance of RPC server
+func NewServer() *Server {
+	s := &Server{}
+	s.RPCServer = rpc.NewServer()
 	return s
+}
+
+// ServeHTTP wrapper method for http.Handler interface
+func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.RPCServer.ServeHTTP(w, r)
 }

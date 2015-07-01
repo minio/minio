@@ -20,11 +20,11 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	jsonRPC "github.com/gorilla/rpc/v2"
 	"github.com/minio/minio/pkg/server/api"
 	"github.com/minio/minio/pkg/server/rpc"
 )
 
+// registerAPI - register all the object API handlers to their respective paths
 func registerAPI(mux *router.Router) http.Handler {
 	api := api.MinioAPI{}
 
@@ -50,28 +50,68 @@ func registerAPI(mux *router.Router) http.Handler {
 	return mux
 }
 
-func registerOthers(mux http.Handler, conf api.Config) http.Handler {
-	mux = api.ValidContentTypeHandler(mux)
-	mux = api.TimeValidityHandler(mux)
-	mux = api.IgnoreResourcesHandler(mux)
-	mux = api.ValidateAuthHeaderHandler(mux)
+// add a handlerFunc typedef
+type handlerFunc func(http.Handler) http.Handler
+
+// chain struct to hold handlers
+type chain struct {
+	handlers []handlerFunc
+}
+
+// loop through handlers and return a final one
+func (c chain) final(mux http.Handler) http.Handler {
+	var f http.Handler
+	if mux != nil {
+		f = mux
+	} else {
+		f = http.DefaultServeMux
+	}
+	for _, handler := range c.handlers {
+		f = handler(f)
+	}
+	return f
+}
+
+// registerChain - register an array of handlers in a chain of style -> handler(handler(handler(handler...)))
+func registerChain(handlers ...handlerFunc) chain {
+	ch := chain{}
+	ch.handlers = append(ch.handlers, handlers...)
+	return ch
+}
+
+// registerOtherMiddleware register all available middleware
+func registerOtherMiddleware(mux http.Handler, conf api.Config) http.Handler {
+	ch := registerChain(
+		api.ValidContentTypeHandler,
+		api.TimeValidityHandler,
+		api.IgnoreResourcesHandler,
+		api.ValidateAuthHeaderHandler,
+		api.LoggingHandler,
+		// Add new middleware here
+	)
+
+	mux = ch.final(mux)
 	mux = api.RateLimitHandler(mux, conf.RateLimit)
-	mux = api.LoggingHandler(mux)
 	return mux
 }
 
-func registerRPC(mux *router.Router, r *jsonRPC.Server) http.Handler {
-	mux.Handle("/rpc", r)
+// registerRPC - register rpc handlers
+func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
+	mux.Handle("/rpc", s)
 	return mux
 }
 
 // APIHandler api handler
 func APIHandler(conf api.Config) http.Handler {
 	mux := router.NewRouter()
-	return registerOthers(registerAPI(mux), conf)
+	return registerOtherMiddleware(registerAPI(mux), conf)
 }
 
 // RPCHandler rpc handler
 func RPCHandler() http.Handler {
-	return registerRPC(router.NewRouter(), rpc.HelloServiceHandler())
+	s := rpc.NewServer()
+	s.RegisterJSONCodec()
+	s.RegisterService(new(rpc.HelloService), "")
+	// add more services here
+	return registerRPC(router.NewRouter(), s)
 }

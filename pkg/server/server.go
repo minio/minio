@@ -28,7 +28,6 @@ import (
 func startAPI(errCh chan error, conf api.Config) {
 	defer close(errCh)
 
-	var err error
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           conf.Address,
@@ -66,37 +65,26 @@ func startAPI(errCh chan error, conf api.Config) {
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
 		}
-		err = httpServer.ListenAndServe()
+		errCh <- httpServer.ListenAndServe()
 	case conf.TLS == true:
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		}
-		err = httpServer.ListenAndServeTLS(conf.CertFile, conf.KeyFile)
+		errCh <- httpServer.ListenAndServeTLS(conf.CertFile, conf.KeyFile)
 	}
-	if err != nil {
-		errCh <- err
-	}
-	errCh <- nil
-	return
 }
 
 func startRPC(errCh chan error) {
 	defer close(errCh)
 
 	rpcHandler := RPCHandler()
-	var err error
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:           "127.0.0.1:9001",
+		Addr:           "127.0.0.1:9001", // TODO make this configurable
 		Handler:        rpcHandler,
 		MaxHeaderBytes: 1 << 20,
 	}
-	err = httpServer.ListenAndServe()
-	if err != nil {
-		errCh <- err
-	}
-	errCh <- nil
-	return
+	errCh <- httpServer.ListenAndServe()
 }
 
 // StartServices starts basic services for a server
@@ -109,13 +97,8 @@ func StartServices(conf api.Config) error {
 
 	select {
 	case err := <-apiErrCh:
-		if err != nil {
-			return err
-		}
+		return err
 	case err := <-rpcErrCh:
-		if err != nil {
-			return err
-		}
+		return err
 	}
-	return nil
 }
