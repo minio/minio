@@ -26,7 +26,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/api"
 	"github.com/minio/minio/pkg/iodine"
 )
 
@@ -68,22 +67,6 @@ func init() {
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
-	}
-}
-
-func getAPIServerConfig(c *cli.Context) api.Config {
-	certFile := c.GlobalString("cert")
-	keyFile := c.GlobalString("key")
-	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
-		Fatalln("Both certificate and key are required to enable https.")
-	}
-	tls := (certFile != "" && keyFile != "")
-	return api.Config{
-		Address:   c.GlobalString("address"),
-		TLS:       tls,
-		CertFile:  certFile,
-		KeyFile:   keyFile,
-		RateLimit: c.GlobalInt("ratelimit"),
 	}
 }
 

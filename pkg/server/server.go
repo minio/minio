@@ -14,43 +14,29 @@
  * limitations under the License.
  */
 
-package api
+package server
 
 import (
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/minio/minio/pkg/server/api"
 )
 
-// Config - http server config
-type Config struct {
-	Address   string
-	TLS       bool
-	CertFile  string
-	KeyFile   string
-	RateLimit int
-}
-
-// Start http server
-func Start(a API) <-chan error {
-	errCh := make(chan error)
-	go start(errCh, a)
-	return errCh
-}
-
-func start(errCh chan error, a API) {
+func startAPI(errCh chan error, conf api.Config) {
 	defer close(errCh)
 
 	var err error
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:           a.config.Address,
-		Handler:        a.handler,
+		Addr:           conf.Address,
+		Handler:        APIHandler(conf),
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	host, port, err := net.SplitHostPort(a.config.Address)
+	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
 		errCh <- err
 		return
@@ -81,11 +67,11 @@ func start(errCh chan error, a API) {
 			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
 		}
 		err = httpServer.ListenAndServe()
-	case a.config.TLS == true:
+	case conf.TLS == true:
 		for _, host := range hosts {
 			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
 		}
-		err = httpServer.ListenAndServeTLS(a.config.CertFile, a.config.KeyFile)
+		err = httpServer.ListenAndServeTLS(conf.CertFile, conf.KeyFile)
 	}
 	if err != nil {
 		errCh <- err
@@ -94,15 +80,39 @@ func start(errCh chan error, a API) {
 	return
 }
 
-// API is used to build api server
-type API struct {
-	config  Config
-	handler http.Handler
+func startRPC(errCh chan error) {
+	defer close(errCh)
+
+	rpcHandler := RPCHandler()
+	var err error
+	// Minio server config
+	httpServer := &http.Server{
+		Addr:           "127.0.0.1:9001",
+		Handler:        rpcHandler,
+		MaxHeaderBytes: 1 << 20,
+	}
+	err = httpServer.ListenAndServe()
+	if err != nil {
+		errCh <- err
+	}
+	errCh <- nil
+	return
 }
 
-// StartServer APIFactory builds api server
-func StartServer(conf Config) error {
-	for err := range Start(New(conf)) {
+// StartServices starts basic services for a server
+func StartServices(conf api.Config) error {
+	apiErrCh := make(chan error)
+	rpcErrCh := make(chan error)
+
+	go startAPI(apiErrCh, conf)
+	go startRPC(rpcErrCh)
+
+	select {
+	case err := <-apiErrCh:
+		if err != nil {
+			return err
+		}
+	case err := <-rpcErrCh:
 		if err != nil {
 			return err
 		}

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/api/config"
+	"github.com/minio/minio/pkg/server/config"
 	"github.com/minio/minio/pkg/utils/crypto/keys"
 )
 
@@ -128,7 +128,8 @@ func parseDate(req *http.Request) (time.Time, error) {
 	return time.Time{}, errors.New("invalid request")
 }
 
-func validContentTypeHandler(h http.Handler) http.Handler {
+// ValidContentTypeHandler -
+func ValidContentTypeHandler(h http.Handler) http.Handler {
 	return contentTypeHandler{h}
 }
 
@@ -141,7 +142,8 @@ func (h contentTypeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func timeValidityHandler(h http.Handler) http.Handler {
+// TimeValidityHandler -
+func TimeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
 }
 
@@ -170,9 +172,10 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
+// ValidateAuthHeaderHandler -
 // validate auth header handler is wrapper handler used for API request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
-func validateAuthHeaderHandler(h http.Handler) http.Handler {
+func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 	return validateAuthHandler{h}
 }
 
@@ -206,10 +209,11 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// IgnoreResourcesHandler -
 // Ignore resources handler is wrapper handler used for API request resource validation
 // Since we do not support all the S3 queries, it is necessary for us to throw back a
 // valid error message indicating such a feature is not implemented.
-func ignoreResourcesHandler(h http.Handler) http.Handler {
+func IgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 

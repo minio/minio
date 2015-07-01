@@ -41,8 +41,8 @@ func (c rateLimit) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c.Remove()                  // remove
 }
 
-// rateLimitHandler limits the number of concurrent http requests
-func rateLimitHandler(handle http.Handler, limit int) http.Handler {
+// RateLimitHandler limits the number of concurrent http requests
+func RateLimitHandler(handle http.Handler, limit int) http.Handler {
 	return rateLimit{
 		handler:   handle,
 		rateQueue: make(chan bool, limit),

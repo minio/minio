@@ -18,6 +18,15 @@ package api
 
 import "encoding/xml"
 
+// Config - http server config
+type Config struct {
+	Address   string
+	TLS       bool
+	CertFile  string
+	KeyFile   string
+	RateLimit int
+}
+
 // Limit number of objects in a given response
 const (
 	maxObjectList = 1000

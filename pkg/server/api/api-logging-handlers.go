@@ -94,8 +94,8 @@ func getLogMessage(logMessage *logMessage, w http.ResponseWriter, req *http.Requ
 	return js
 }
 
-// loggingHandler logs requests
-func loggingHandler(h http.Handler) http.Handler {
+// LoggingHandler logs requests
+func LoggingHandler(h http.Handler) http.Handler {
 	logger, _ := fileLogger("access.log")
 	return &logHandler{handler: h, logger: logger}
 }

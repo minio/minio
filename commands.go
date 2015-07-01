@@ -4,7 +4,8 @@ import (
 	"os/user"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/api"
+	"github.com/minio/minio/pkg/server"
+	"github.com/minio/minio/pkg/server/api"
 )
 
 func removeDuplicates(slice []string) []string {
@@ -58,16 +59,29 @@ EXAMPLES:
 `,
 }
 
+func getAPIServerConfig(c *cli.Context) api.Config {
+	certFile := c.GlobalString("cert")
+	keyFile := c.GlobalString("key")
+	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
+		Fatalln("Both certificate and key are required to enable https.")
+	}
+	tls := (certFile != "" && keyFile != "")
+	return api.Config{
+		Address:   c.GlobalString("address"),
+		TLS:       tls,
+		CertFile:  certFile,
+		KeyFile:   keyFile,
+		RateLimit: c.GlobalInt("ratelimit"),
+	}
+}
+
 func runServer(c *cli.Context) {
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
-	if len(c.Args()) < 1 {
-		cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
-	}
 	apiServerConfig := getAPIServerConfig(c)
-	if err := api.StartServer(apiServerConfig); err != nil {
+	if err := server.StartServices(apiServerConfig); err != nil {
 		Fatalln(err)
 	}
 }

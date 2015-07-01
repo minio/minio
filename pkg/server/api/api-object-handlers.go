@@ -32,14 +32,14 @@ const (
 	maxPartsList = 1000
 )
 
-// GET Object
+// GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// verify if this operation is allowed
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -51,13 +51,13 @@ func (server *minioAPI) getObjectHandler(w http.ResponseWriter, req *http.Reques
 
 }
 
-// HEAD Object
+// HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// verify if this operation is allowed
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -68,13 +68,13 @@ func (server *minioAPI) headObjectHandler(w http.ResponseWriter, req *http.Reque
 	log.Println(bucket, object)
 }
 
-// PUT Object
+// PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// verify if this operation is allowed
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -120,11 +120,11 @@ func (server *minioAPI) putObjectHandler(w http.ResponseWriter, req *http.Reques
 
 /// Multipart API
 
-// New multipart upload
-func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+// NewMultipartUploadHandler - New multipart upload
+func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -140,11 +140,11 @@ func (server *minioAPI) newMultipartUploadHandler(w http.ResponseWriter, req *ht
 	log.Println(bucket, object)
 }
 
-// Upload part
-func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Request) {
+// PutObjectPartHandler - Upload part
+func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -189,11 +189,11 @@ func (server *minioAPI) putObjectPartHandler(w http.ResponseWriter, req *http.Re
 	log.Println(uploadID, partID)
 }
 
-// Abort multipart upload
-func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+// AbortMultipartUploadHandler - Abort multipart upload
+func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -205,11 +205,11 @@ func (server *minioAPI) abortMultipartUploadHandler(w http.ResponseWriter, req *
 	log.Println(bucket, object)
 }
 
-// List object parts
-func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+// ListObjectPartsHandler - List object parts
+func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -224,11 +224,11 @@ func (server *minioAPI) listObjectPartsHandler(w http.ResponseWriter, req *http.
 	log.Println(bucket, object)
 }
 
-// Complete multipart upload
-func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+// CompleteMultipartUploadHandler - Complete multipart upload
+func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// handle ACL's here at bucket level
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
@@ -261,14 +261,14 @@ func (server *minioAPI) completeMultipartUploadHandler(w http.ResponseWriter, re
 
 /// Delete API
 
-// Delete bucket
-func (server *minioAPI) deleteBucketHandler(w http.ResponseWriter, req *http.Request) {
+// DeleteBucketHandler - Delete bucket
+func (api MinioAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(NotImplemented)
 	w.WriteHeader(error.HTTPStatusCode)
 }
 
-// Delete object
-func (server *minioAPI) deleteObjectHandler(w http.ResponseWriter, req *http.Request) {
+// DeleteObjectHandler - Delete object
+func (api MinioAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(NotImplemented)
 	w.WriteHeader(error.HTTPStatusCode)
 }

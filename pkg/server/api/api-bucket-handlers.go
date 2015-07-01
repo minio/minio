@@ -23,21 +23,24 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func (server *minioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
+// MinioAPI -
+type MinioAPI struct{}
+
+func (api MinioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	log.Println(bucket)
 	return true
 }
 
-// GET Bucket (List Multipart uploads)
+// ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
 // -------------------------
 // This operation lists in-progress multipart uploads. An in-progress
 // multipart upload is a multipart upload that has been initiated,
 // using the Initiate Multipart Upload request, but has not yet been completed or aborted.
 // This operation returns at most 1,000 multipart uploads in the response.
 //
-func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	log.Println(acceptsContentType)
 
@@ -51,21 +54,21 @@ func (server *minioAPI) listMultipartUploadsHandler(w http.ResponseWriter, req *
 	log.Println(bucket)
 }
 
-// GET Bucket (List Objects)
+// ListObjectsHandler - GET Bucket (List Objects)
 // -------------------------
 // This implementation of the GET operation returns some or all (up to 1000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
-func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// verify if bucket allows this operation
-	if !server.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
 
 	if isRequestUploads(req.URL.Query()) {
-		server.listMultipartUploadsHandler(w, req)
+		api.ListMultipartUploadsHandler(w, req)
 		return
 	}
 
@@ -80,11 +83,11 @@ func (server *minioAPI) listObjectsHandler(w http.ResponseWriter, req *http.Requ
 
 }
 
-// GET Service
+// ListBucketsHandler - GET Service
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
-func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot list buckets
@@ -95,10 +98,10 @@ func (server *minioAPI) listBucketsHandler(w http.ResponseWriter, req *http.Requ
 	log.Println(acceptsContentType)
 }
 
-// PUT Bucket
+// PutBucketHandler - PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
-func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot create a bucket
@@ -107,7 +110,7 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	//	return
 	// }
 	if isRequestBucketACL(req.URL.Query()) {
-		server.putBucketACLHandler(w, req)
+		api.PutBucketACLHandler(w, req)
 		return
 	}
 	// read from 'x-amz-acl'
@@ -122,10 +125,10 @@ func (server *minioAPI) putBucketHandler(w http.ResponseWriter, req *http.Reques
 	log.Println(bucket)
 }
 
-// PUT Bucket ACL
+// PutBucketACLHandler - PUT Bucket ACL
 // ----------
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
-func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
@@ -139,13 +142,13 @@ func (server *minioAPI) putBucketACLHandler(w http.ResponseWriter, req *http.Req
 	log.Println(bucket)
 }
 
-// HEAD Bucket
+// HeadBucketHandler - HEAD Bucket
 // ----------
 // This operation is useful to determine if a bucket exists.
 // The operation returns a 200 OK if the bucket exists and you
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
-func (server *minioAPI) headBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api MinioAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	log.Println(acceptsContentType)
 
