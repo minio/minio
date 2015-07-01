@@ -17,7 +17,6 @@
 package donut
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
@@ -419,63 +418,47 @@ func (cache Cache) CreateBucket(bucketName, acl string) error {
 	return nil
 }
 
-func delimiter(object, delimiter string) string {
-	readBuffer := bytes.NewBufferString(object)
-	reader := bufio.NewReader(readBuffer)
-	stringReader := strings.NewReader(delimiter)
-	delimited, _ := stringReader.ReadByte()
-	delimitedStr, _ := reader.ReadString(delimited)
-	return delimitedStr
-}
-
-func appendUniq(slice []string, i string) []string {
-	for _, ele := range slice {
-		if ele == i {
-			return slice
-		}
-	}
-	return append(slice, i)
-}
-
-func (cache Cache) filterDelimiterPrefix(keys []string, key, delim string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
+func (cache Cache) filterDelimiterPrefix(keys []string, key, prefix, delim string) ([]string, []string) {
+	var commonPrefixes []string
 	switch true {
-	case key == r.Prefix:
-		keys = appendUniq(keys, key)
+	case key == prefix:
+		keys = append(keys, key)
 	// delim - requires r.Prefix as it was trimmed off earlier
-	case key == r.Prefix+delim:
-		keys = appendUniq(keys, key)
+	case key == prefix+delim:
+		keys = append(keys, key)
 	case delim != "":
-		r.CommonPrefixes = appendUniq(r.CommonPrefixes, r.Prefix+delim)
+		commonPrefixes = append(commonPrefixes, prefix+delim)
 	}
-	return keys, r
+	return RemoveDuplicates(keys), RemoveDuplicates(commonPrefixes)
 }
 
-func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
+func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetadata) ([]string, []string) {
+	var commonPrefixes []string
 	switch true {
 	// Prefix absent, delimit object key based on delimiter
 	case r.IsDelimiterSet():
-		delim := delimiter(key, r.Delimiter)
+		delim := Delimiter(key, r.Delimiter)
 		switch true {
 		case delim == "" || delim == key:
-			keys = appendUniq(keys, key)
+			keys = append(keys, key)
 		case delim != "":
-			r.CommonPrefixes = appendUniq(r.CommonPrefixes, delim)
+			commonPrefixes = append(commonPrefixes, delim)
 		}
 	// Prefix present, delimit object key with prefix key based on delimiter
 	case r.IsDelimiterPrefixSet():
 		if strings.HasPrefix(key, r.Prefix) {
 			trimmedName := strings.TrimPrefix(key, r.Prefix)
-			delim := delimiter(trimmedName, r.Delimiter)
-			keys, r = cache.filterDelimiterPrefix(keys, key, delim, r)
+			delim := Delimiter(trimmedName, r.Delimiter)
+			keys, commonPrefixes = cache.filterDelimiterPrefix(keys, key, r.Prefix, delim)
 		}
 	// Prefix present, nothing to delimit
 	case r.IsPrefixSet():
-		keys = appendUniq(keys, key)
+		keys = append(keys, key)
 	// Prefix and delimiter absent
 	case r.IsDefault():
-		keys = appendUniq(keys, key)
+		keys = append(keys, key)
 	}
-	return keys, r
+	return RemoveDuplicates(keys), RemoveDuplicates(commonPrefixes)
 }
 
 // ListObjects - list objects from cache
@@ -493,11 +476,12 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 	}
 	var results []ObjectMetadata
 	var keys []string
+	var commonPrefixes []string
 	storedBucket := cache.storedBuckets[bucket]
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			keys, resources = cache.listObjects(keys, key, resources)
+			keys, commonPrefixes = cache.listObjects(keys, key, resources)
 		}
 	}
 	var newKeys []string
@@ -505,12 +489,13 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 	case resources.Marker != "":
 		for _, key := range keys {
 			if key > resources.Marker {
-				newKeys = appendUniq(newKeys, key)
+				newKeys = append(newKeys, key)
 			}
 		}
 	default:
 		newKeys = keys
 	}
+	newKeys = RemoveDuplicates(newKeys)
 	sort.Strings(newKeys)
 	for _, key := range newKeys {
 		if len(results) == resources.Maxkeys {
@@ -523,6 +508,7 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 		object := storedBucket.objectMetadata[bucket+"/"+key]
 		results = append(results, object)
 	}
+	resources.CommonPrefixes = commonPrefixes
 	return results, resources, nil
 }
 

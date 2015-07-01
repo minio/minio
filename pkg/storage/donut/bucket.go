@@ -145,7 +145,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
 			if objectName > marker {
-				objects = AppendU(objects, objectName)
+				objects = append(objects, objectName)
 			}
 		}
 	}
@@ -166,16 +166,19 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	var commonPrefixes []string
 
 	for _, commonPrefix := range prefixes {
-		commonPrefixes = AppendU(commonPrefixes, prefix+commonPrefix)
+		commonPrefixes = append(commonPrefixes, prefix+commonPrefix)
 	}
+	filteredObjects = RemoveDuplicates(filteredObjects)
 	sort.Strings(filteredObjects)
 	for _, objectName := range filteredObjects {
 		if len(results) >= maxkeys {
 			isTruncated = true
 			break
 		}
-		results = AppendU(results, prefix+objectName)
+		results = append(results, prefix+objectName)
 	}
+	results = RemoveDuplicates(results)
+	commonPrefixes = RemoveDuplicates(commonPrefixes)
 	sort.Strings(commonPrefixes)
 
 	listObjects := ListObjects{}

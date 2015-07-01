@@ -94,7 +94,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
 	c.Assert(err, IsNil)
 	c.Assert(len(listObjects.Objects), Equals, 0)
-	c.Assert(listObjects.CommonPrefixes, IsNil)
+	c.Assert(listObjects.CommonPrefixes, DeepEquals, []string{})
 	c.Assert(listObjects.IsTruncated, Equals, false)
 }
 

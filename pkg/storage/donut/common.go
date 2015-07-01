@@ -17,18 +17,33 @@
 package donut
 
 import (
+	"bufio"
+	"bytes"
 	"sort"
 	"strings"
 )
 
-// AppendU append to an input slice if the element is unique and provides a new slice
-func AppendU(slice []string, i string) []string {
-	for _, ele := range slice {
-		if ele == i {
-			return slice
+// Delimiter delims the string at delimiter
+func Delimiter(object, delimiter string) string {
+	readBuffer := bytes.NewBufferString(object)
+	reader := bufio.NewReader(readBuffer)
+	stringReader := strings.NewReader(delimiter)
+	delimited, _ := stringReader.ReadByte()
+	delimitedStr, _ := reader.ReadString(delimited)
+	return delimitedStr
+}
+
+// RemoveDuplicates removes duplicate elements from a slice
+func RemoveDuplicates(slice []string) []string {
+	newSlice := []string{}
+	seen := make(map[string]struct{})
+	for _, val := range slice {
+		if _, ok := seen[val]; !ok {
+			newSlice = append(newSlice, val)
+			seen[val] = struct{}{} // avoiding byte allocation
 		}
 	}
-	return append(slice, i)
+	return newSlice
 }
 
 // TrimPrefix trims off a prefix string from all the elements in a given slice
