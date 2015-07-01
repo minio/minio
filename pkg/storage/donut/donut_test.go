@@ -89,7 +89,7 @@ func (s *MySuite) TestEmptyBucket(c *C) {
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 
-	c.Assert(donut.MakeBucket("foo", "private"), IsNil)
+	c.Assert(donut.MakeBucket("foo", BucketACL("private")), IsNil)
 	// check if bucket is empty
 	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
 	c.Assert(err, IsNil)
@@ -106,14 +106,14 @@ func (s *MySuite) TestMakeBucketAndList(c *C) {
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 	// create bucket
-	err = donut.MakeBucket("foo", "private")
+	err = donut.MakeBucket("foo", BucketACL("private"))
 	c.Assert(err, IsNil)
 
 	// check bucket exists
 	buckets, err := donut.ListBuckets()
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 1)
-	c.Assert(buckets["foo"].ACL, Equals, "private")
+	c.Assert(buckets["foo"].ACL, Equals, BucketACL("private"))
 }
 
 // test re-create bucket
@@ -123,10 +123,10 @@ func (s *MySuite) TestMakeBucketWithSameNameFails(c *C) {
 	defer os.RemoveAll(root)
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
-	err = donut.MakeBucket("foo", "private")
+	err = donut.MakeBucket("foo", BucketACL("private"))
 	c.Assert(err, IsNil)
 
-	err = donut.MakeBucket("foo", "private")
+	err = donut.MakeBucket("foo", BucketACL("private"))
 	c.Assert(err, Not(IsNil))
 }
 
@@ -138,10 +138,10 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 	// add a second bucket
-	err = donut.MakeBucket("foo", "private")
+	err = donut.MakeBucket("foo", BucketACL("private"))
 	c.Assert(err, IsNil)
 
-	err = donut.MakeBucket("bar", "private")
+	err = donut.MakeBucket("bar", BucketACL("private"))
 	c.Assert(err, IsNil)
 
 	buckets, err := donut.ListBuckets()
@@ -152,7 +152,7 @@ func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
 	_, ok = buckets["bar"]
 	c.Assert(ok, Equals, true)
 
-	err = donut.MakeBucket("foobar", "private")
+	err = donut.MakeBucket("foobar", BucketACL("private"))
 	c.Assert(err, IsNil)
 
 	buckets, err = donut.ListBuckets()
@@ -264,7 +264,7 @@ func (s *MySuite) TestMultipleNewObjects(c *C) {
 	donut, err := NewDonut("test", createTestNodeDiskMap(root))
 	c.Assert(err, IsNil)
 
-	c.Assert(donut.MakeBucket("foo", "private"), IsNil)
+	c.Assert(donut.MakeBucket("foo", BucketACL("private")), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
 	metadata := make(map[string]string)

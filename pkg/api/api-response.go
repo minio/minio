@@ -81,12 +81,12 @@ func generateListObjectsResponse(bucket string, objects []donut.ObjectMetadata, 
 
 	for _, object := range objects {
 		var content = &Object{}
-		if object.Key == "" {
+		if object.Object == "" {
 			continue
 		}
-		content.Key = object.Key
+		content.Key = object.Object
 		content.LastModified = object.Created.Format(iso8601Format)
-		content.ETag = "\"" + object.Md5 + "\""
+		content.ETag = "\"" + object.MD5Sum + "\""
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
 		content.Owner = owner

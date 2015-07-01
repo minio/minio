@@ -36,24 +36,6 @@ func (b BucketACL) IsPublicReadWrite() bool {
 	return b == BucketACL("public-read-write")
 }
 
-// BucketMetadata - name and create date
-type BucketMetadata struct {
-	Name    string
-	Created time.Time
-	ACL     BucketACL
-}
-
-// ObjectMetadata - object key and its relevant metadata
-type ObjectMetadata struct {
-	Bucket string
-	Key    string
-
-	ContentType string
-	Created     time.Time
-	Md5         string
-	Size        int64
-}
-
 // FilterMode type
 type FilterMode int
 

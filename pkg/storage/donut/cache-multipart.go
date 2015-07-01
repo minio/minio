@@ -34,7 +34,8 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-func (cache donut) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+// NewMultipartUpload -
+func (cache Cache) NewMultipartUpload(bucket, key, contentType string) (string, error) {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
@@ -52,7 +53,7 @@ func (cache donut) NewMultipartUpload(bucket, key, contentType string) (string, 
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		cache.lock.RUnlock()
-		return "", iodine.New(ObjectExists{Bucket: bucket, Object: key}, nil)
+		return "", iodine.New(ObjectExists{Object: key}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -71,7 +72,8 @@ func (cache donut) NewMultipartUpload(bucket, key, contentType string) (string, 
 	return uploadID, nil
 }
 
-func (cache donut) AbortMultipartUpload(bucket, key, uploadID string) error {
+// AbortMultipartUpload -
+func (cache Cache) AbortMultipartUpload(bucket, key, uploadID string) error {
 	cache.lock.RLock()
 	storedBucket := cache.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
@@ -89,7 +91,8 @@ func getMultipartKey(key string, uploadID string, partNumber int) string {
 	return key + "?uploadId=" + uploadID + "&partNumber=" + strconv.Itoa(partNumber)
 }
 
-func (cache donut) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+// CreateObjectPart -
+func (cache Cache) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	// Verify upload id
 	cache.lock.RLock()
 	storedBucket := cache.storedBuckets[bucket]
@@ -109,7 +112,7 @@ func (cache donut) CreateObjectPart(bucket, key, uploadID string, partID int, co
 }
 
 // createObject - PUT object to cache buffer
-func (cache donut) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache Cache) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
@@ -179,7 +182,7 @@ func (cache donut) createObjectPart(bucket, key, uploadID string, partID int, co
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			return "", iodine.New(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
+			return "", iodine.New(BadDigest{}, nil)
 		}
 	}
 	newPart := PartMetadata{
@@ -200,20 +203,21 @@ func (cache donut) createObjectPart(bucket, key, uploadID string, partID int, co
 	return md5Sum, nil
 }
 
-func (cache donut) cleanupMultipartSession(bucket, key, uploadID string) {
+func (cache Cache) cleanupMultipartSession(bucket, key, uploadID string) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	delete(cache.storedBuckets[bucket].multiPartSession, key)
 }
 
-func (cache donut) cleanupMultiparts(bucket, key, uploadID string) {
+func (cache Cache) cleanupMultiparts(bucket, key, uploadID string) {
 	for i := 1; i <= cache.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
 		cache.multiPartObjects.Delete(objectKey)
 	}
 }
 
-func (cache donut) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
+// CompleteMultipartUpload -
+func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
@@ -251,7 +255,7 @@ func (cache donut) CompleteMultipartUpload(bucket, key, uploadID string, parts m
 			return "", iodine.New(InvalidDigest{Md5: recvMD5}, nil)
 		}
 		if !bytes.Equal(recvMD5Bytes, calcMD5Bytes[:]) {
-			return "", iodine.New(BadDigest{Md5: recvMD5, Bucket: bucket, Key: getMultipartKey(key, uploadID, i)}, nil)
+			return "", iodine.New(BadDigest{}, nil)
 		}
 		_, err = io.Copy(&fullObject, bytes.NewBuffer(object))
 		if err != nil {
@@ -284,7 +288,8 @@ func (a byKey) Len() int           { return len(a) }
 func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
-func (cache donut) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
+// ListMultipartUploads -
+func (cache Cache) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
 	// TODO handle delimiter
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
@@ -345,7 +350,8 @@ func (a partNumber) Len() int           { return len(a) }
 func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-func (cache donut) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
+// ListObjectParts -
+func (cache Cache) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
 	// Verify upload id
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
@@ -354,7 +360,7 @@ func (cache donut) ListObjectParts(bucket, key string, resources ObjectResources
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	if _, ok := storedBucket.multiPartSession[key]; ok == false {
-		return ObjectResourcesMetadata{}, iodine.New(ObjectNotFound{Bucket: bucket, Object: key}, nil)
+		return ObjectResourcesMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 	}
 	if storedBucket.multiPartSession[key].uploadID != resources.UploadID {
 		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, nil)
@@ -389,7 +395,7 @@ func (cache donut) ListObjectParts(bucket, key string, resources ObjectResources
 	return objectResourcesMetadata, nil
 }
 
-func (cache donut) expiredPart(a ...interface{}) {
+func (cache Cache) expiredPart(a ...interface{}) {
 	key := a[0].(string)
 	// loop through all buckets
 	for _, storedBucket := range cache.storedBuckets {

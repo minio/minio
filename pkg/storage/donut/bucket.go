@@ -73,7 +73,7 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	metadata := BucketMetadata{}
 	metadata.Version = bucketMetadataVersion
 	metadata.Name = bucketName
-	metadata.ACL = aclType
+	metadata.ACL = BucketACL(aclType)
 	metadata.Created = t
 	metadata.Metadata = make(map[string]string)
 	metadata.BucketObjects = make(map[string]interface{})

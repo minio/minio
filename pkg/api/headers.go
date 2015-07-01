@@ -65,16 +65,16 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata) {
 	lastModified := metadata.Created.Format(http.TimeFormat)
 	// common headers
-	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
+	setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
 	// object related headers
-	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	w.Header().Set("ETag", "\""+metadata.MD5Sum+"\"")
 	w.Header().Set("Last-Modified", lastModified)
 }
 
 // Write range object header
 func setRangeObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, contentRange *httpRange) {
 	// set common headers
-	setCommonHeaders(w, metadata.ContentType, int(metadata.Size))
+	setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
 	// set object headers
 	setObjectHeaders(w, metadata)
 	// set content range

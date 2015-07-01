@@ -24,20 +24,49 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut/trove"
 )
 
 // total Number of buckets allowed
 const (
 	totalBuckets = 100
 )
+
+// Cache - local variables
+type Cache struct {
+	storedBuckets    map[string]storedBucket
+	lock             *sync.RWMutex
+	objects          *trove.Cache
+	multiPartObjects *trove.Cache
+	maxSize          uint64
+	expiration       time.Duration
+	donut            Donut
+}
+
+// storedBucket saved bucket
+type storedBucket struct {
+	bucketMetadata   BucketMetadata
+	objectMetadata   map[string]ObjectMetadata
+	partMetadata     map[string]PartMetadata
+	multiPartSession map[string]multiPartSession
+}
+
+// multiPartSession multipart session
+type multiPartSession struct {
+	totalParts int
+	uploadID   string
+	initiated  time.Time
+}
 
 type proxyWriter struct {
 	writer       io.Writer
@@ -57,8 +86,23 @@ func newProxyWriter(w io.Writer) *proxyWriter {
 	return &proxyWriter{writer: w, writtenBytes: nil}
 }
 
+// NewCache new cache
+func NewCache(maxSize uint64, expiration time.Duration, donutName string, nodeDiskMap map[string][]string) Cache {
+	c := Cache{}
+	c.storedBuckets = make(map[string]storedBucket)
+	c.objects = trove.NewCache(maxSize, expiration)
+	c.multiPartObjects = trove.NewCache(0, time.Duration(0))
+	c.objects.OnExpired = c.expiredObject
+	c.multiPartObjects.OnExpired = c.expiredPart
+
+	// set up cache expiration
+	c.objects.ExpireObjects(time.Second * 5)
+	c.donut, _ = NewDonut(donutName, nodeDiskMap)
+	return c
+}
+
 // GetObject - GET object from cache buffer
-func (cache donut) GetObject(w io.Writer, bucket string, object string) (int64, error) {
+func (cache Cache) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if !IsValidBucket(bucket) {
@@ -73,10 +117,18 @@ func (cache donut) GetObject(w io.Writer, bucket string, object string) (int64, 
 	objectKey := bucket + "/" + object
 	data, ok := cache.objects.Get(objectKey)
 	if !ok {
-		if cache.driver != nil {
-			return cache.driver.GetObject(w, bucket, object)
+		if cache.donut != nil {
+			reader, size, err := cache.donut.GetObject(bucket, object)
+			if err != nil {
+				return 0, iodine.New(err, nil)
+			}
+			written, err := io.CopyN(w, reader, size)
+			if err != nil {
+				return 0, iodine.New(err, nil)
+			}
+			return written, nil
 		}
-		return 0, iodine.New(ObjectNotFound{Bucket: bucket, Object: object}, nil)
+		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
 	}
 	written, err := io.Copy(w, bytes.NewBuffer(data))
 	if err != nil {
@@ -86,7 +138,7 @@ func (cache donut) GetObject(w io.Writer, bucket string, object string) (int64, 
 }
 
 // GetPartialObject - GET object from cache buffer range
-func (cache donut) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+func (cache Cache) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -110,10 +162,21 @@ func (cache donut) GetPartialObject(w io.Writer, bucket, object string, start, l
 	objectKey := bucket + "/" + object
 	data, ok := cache.objects.Get(objectKey)
 	if !ok {
-		if cache.driver != nil {
-			return cache.driver.GetPartialObject(w, bucket, object, start, length)
+		if cache.donut != nil {
+			reader, _, err := cache.donut.GetObject(bucket, object)
+			if err != nil {
+				return 0, iodine.New(err, nil)
+			}
+			if _, err := io.CopyN(ioutil.Discard, reader, start); err != nil {
+				return 0, iodine.New(err, nil)
+			}
+			written, err := io.CopyN(w, reader, length)
+			if err != nil {
+				return 0, iodine.New(err, nil)
+			}
+			return written, nil
 		}
-		return 0, iodine.New(ObjectNotFound{Bucket: bucket, Object: object}, nil)
+		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
 	}
 	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
 	if err != nil {
@@ -123,18 +186,18 @@ func (cache donut) GetPartialObject(w io.Writer, bucket, object string, start, l
 }
 
 // GetBucketMetadata -
-func (cache donut) GetBucketMetadata(bucket string) (BucketMetadata, error) {
+func (cache Cache) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
 		return BucketMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		if cache.driver == nil {
+		if cache.donut == nil {
 			cache.lock.RUnlock()
 			return BucketMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 		}
-		bucketMetadata, err := cache.driver.GetBucketMetadata(bucket)
+		bucketMetadata, err := cache.donut.GetBucketMetadata(bucket)
 		if err != nil {
 			cache.lock.RUnlock()
 			return BucketMetadata{}, iodine.New(err, nil)
@@ -151,7 +214,7 @@ func (cache donut) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 }
 
 // SetBucketMetadata -
-func (cache donut) SetBucketMetadata(bucket, acl string) error {
+func (cache Cache) SetBucketMetadata(bucket, acl string) error {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
@@ -166,8 +229,10 @@ func (cache donut) SetBucketMetadata(bucket, acl string) error {
 	}
 	cache.lock.RUnlock()
 	cache.lock.Lock()
-	if cache.driver != nil {
-		if err := cache.driver.SetBucketMetadata(bucket, acl); err != nil {
+	m := make(map[string]string)
+	m["acl"] = acl
+	if cache.donut != nil {
+		if err := cache.donut.SetBucketMetadata(bucket, m); err != nil {
 			return iodine.New(err, nil)
 		}
 	}
@@ -197,7 +262,8 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-func (cache donut) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+// CreateObject -
+func (cache Cache) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	if size > int64(cache.maxSize) {
 		generic := GenericObjectError{Bucket: bucket, Object: key}
 		return "", iodine.New(EntityTooLarge{
@@ -213,7 +279,7 @@ func (cache donut) CreateObject(bucket, key, contentType, expectedMD5Sum string,
 }
 
 // createObject - PUT object to cache buffer
-func (cache donut) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
@@ -232,7 +298,7 @@ func (cache donut) createObject(bucket, key, contentType, expectedMD5Sum string,
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		cache.lock.RUnlock()
-		return "", iodine.New(ObjectExists{Bucket: bucket, Object: key}, nil)
+		return "", iodine.New(ObjectExists{Object: key}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -286,29 +352,31 @@ func (cache donut) createObject(bucket, key, contentType, expectedMD5Sum string,
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			return "", iodine.New(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Key: key}, nil)
+			return "", iodine.New(BadDigest{}, nil)
 		}
 	}
 
+	m := make(map[string]string)
+	m["contentType"] = contentType
 	newObject := ObjectMetadata{
 		Bucket: bucket,
-		Key:    key,
+		Object: key,
 
-		ContentType: contentType,
-		Created:     time.Now().UTC(),
-		Md5:         md5Sum,
-		Size:        int64(totalLength),
+		Metadata: m,
+		Created:  time.Now().UTC(),
+		MD5Sum:   md5Sum,
+		Size:     int64(totalLength),
 	}
 
 	cache.lock.Lock()
 	storedBucket.objectMetadata[objectKey] = newObject
 	cache.storedBuckets[bucket] = storedBucket
 	cache.lock.Unlock()
-	return newObject.Md5, nil
+	return newObject.MD5Sum, nil
 }
 
 // CreateBucket - create bucket in cache
-func (cache donut) CreateBucket(bucketName, acl string) error {
+func (cache Cache) CreateBucket(bucketName, acl string) error {
 	cache.lock.RLock()
 	if len(cache.storedBuckets) == totalBuckets {
 		cache.lock.RUnlock()
@@ -332,8 +400,8 @@ func (cache donut) CreateBucket(bucketName, acl string) error {
 		// default is private
 		acl = "private"
 	}
-	if cache.driver != nil {
-		if err := cache.driver.CreateBucket(bucketName, acl); err != nil {
+	if cache.donut != nil {
+		if err := cache.donut.MakeBucket(bucketName, BucketACL(acl)); err != nil {
 			return iodine.New(err, nil)
 		}
 	}
@@ -369,7 +437,7 @@ func appendUniq(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func (cache donut) filterDelimiterPrefix(keys []string, key, delim string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
+func (cache Cache) filterDelimiterPrefix(keys []string, key, delim string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
 	switch true {
 	case key == r.Prefix:
 		keys = appendUniq(keys, key)
@@ -382,7 +450,7 @@ func (cache donut) filterDelimiterPrefix(keys []string, key, delim string, r Buc
 	return keys, r
 }
 
-func (cache donut) listObjects(keys []string, key string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
+func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetadata) ([]string, BucketResourcesMetadata) {
 	switch true {
 	// Prefix absent, delimit object key based on delimiter
 	case r.IsDelimiterSet():
@@ -411,7 +479,7 @@ func (cache donut) listObjects(keys []string, key string, r BucketResourcesMetad
 }
 
 // ListObjects - list objects from cache
-func (cache donut) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
+func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	if !IsValidBucket(bucket) {
@@ -448,7 +516,7 @@ func (cache donut) ListObjects(bucket string, resources BucketResourcesMetadata)
 		if len(results) == resources.Maxkeys {
 			resources.IsTruncated = true
 			if resources.IsTruncated && resources.IsDelimiterSet() {
-				resources.NextMarker = results[len(results)-1].Key
+				resources.NextMarker = results[len(results)-1].Object
 			}
 			return results, resources, nil
 		}
@@ -466,7 +534,7 @@ func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from cache
-func (cache donut) ListBuckets() ([]BucketMetadata, error) {
+func (cache Cache) ListBuckets() ([]BucketMetadata, error) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 	var results []BucketMetadata
@@ -478,7 +546,7 @@ func (cache donut) ListBuckets() ([]BucketMetadata, error) {
 }
 
 // GetObjectMetadata - get object metadata from cache
-func (cache donut) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
+func (cache Cache) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 	cache.lock.RLock()
 	// check if bucket exists
 	if !IsValidBucket(bucket) {
@@ -499,8 +567,8 @@ func (cache donut) GetObjectMetadata(bucket, key string) (ObjectMetadata, error)
 		cache.lock.RUnlock()
 		return objMetadata, nil
 	}
-	if cache.driver != nil {
-		objMetadata, err := cache.driver.GetObjectMetadata(bucket, key)
+	if cache.donut != nil {
+		objMetadata, err := cache.donut.GetObjectMetadata(bucket, key)
 		cache.lock.RUnlock()
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
@@ -512,10 +580,10 @@ func (cache donut) GetObjectMetadata(bucket, key string) (ObjectMetadata, error)
 		return objMetadata, nil
 	}
 	cache.lock.RUnlock()
-	return ObjectMetadata{}, iodine.New(ObjectNotFound{Bucket: bucket, Object: key}, nil)
+	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 }
 
-func (cache donut) expiredObject(a ...interface{}) {
+func (cache Cache) expiredObject(a ...interface{}) {
 	cacheStats := cache.objects.Stats()
 	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalExpirations: %d",
 		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)

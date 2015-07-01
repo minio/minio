@@ -59,7 +59,7 @@ type AllBuckets struct {
 type BucketMetadata struct {
 	Version       string                 `json:"version"`
 	Name          string                 `json:"name"`
-	ACL           string                 `json:"acl"`
+	ACL           BucketACL              `json:"acl"`
 	Created       time.Time              `json:"created"`
 	Metadata      map[string]string      `json:"metadata"`
 	BucketObjects map[string]interface{} `json:"objects"`

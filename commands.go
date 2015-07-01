@@ -67,7 +67,7 @@ func runServer(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
 	}
 	apiServerConfig := getAPIServerConfig(c)
-	if err := api.Start(apiServerConfig); err != nil {
+	if err := api.StartServer(apiServerConfig); err != nil {
 		Fatalln(err)
 	}
 }

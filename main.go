@@ -71,7 +71,7 @@ func init() {
 	}
 }
 
-func getAPIServerConfig(c *cli.Context) httpserver.Config {
+func getAPIServerConfig(c *cli.Context) api.Config {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
