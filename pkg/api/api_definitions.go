@@ -25,7 +25,7 @@ const (
 
 // ListObjectsResponse - format for list objects response
 type ListObjectsResponse struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListBucketResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
 
 	CommonPrefixes []*CommonPrefix
 	Contents       []*Object
@@ -55,7 +55,7 @@ type ListObjectsResponse struct {
 
 // ListPartsResponse - format for list parts response
 type ListPartsResponse struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListPartsResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
 
 	Bucket   string
 	Key      string
@@ -78,7 +78,7 @@ type ListPartsResponse struct {
 
 // ListMultipartUploadsResponse - format for list multipart uploads response
 type ListMultipartUploadsResponse struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListMultipartUploadsResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
 
 	Bucket             string
 	KeyMarker          string
@@ -96,7 +96,7 @@ type ListMultipartUploadsResponse struct {
 
 // ListBucketsResponse - format for list buckets response
 type ListBucketsResponse struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 ListAllMyBucketsResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
 	// Container for one or more buckets.
 	Buckets struct {
 		Bucket []*Bucket
@@ -157,7 +157,7 @@ type Owner struct {
 
 // InitiateMultipartUploadResult container for InitiateMultiPartUpload response, provides uploadID to start MultiPart upload
 type InitiateMultipartUploadResult struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 InitiateMultipartUploadResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ InitiateMultipartUploadResult" json:"-"`
 
 	Bucket   string
 	Key      string
@@ -178,7 +178,7 @@ type CompleteMultipartUpload struct {
 
 // CompleteMultipartUploadResult container for completed multipart upload response
 type CompleteMultipartUploadResult struct {
-	XMLName xml.Name `xml:"http://doc.s3.amazonaws.com/2006-03-01 CompleteMultipartUploadResult" json:"-"`
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUploadResult" json:"-"`
 
 	Location string
 	Bucket   string
