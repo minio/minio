@@ -31,7 +31,7 @@ func startAPI(errCh chan error, conf api.Config) {
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           conf.Address,
-		Handler:        APIHandler(conf),
+		Handler:        getAPIHandler(conf),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -77,14 +77,17 @@ func startAPI(errCh chan error, conf api.Config) {
 func startRPC(errCh chan error) {
 	defer close(errCh)
 
-	rpcHandler := RPCHandler()
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           "127.0.0.1:9001", // TODO make this configurable
-		Handler:        rpcHandler,
+		Handler:        getRPCHandler(),
 		MaxHeaderBytes: 1 << 20,
 	}
 	errCh <- httpServer.ListenAndServe()
+}
+
+func startTM(errCh chan error) {
+	defer close(errCh)
 }
 
 // StartServices starts basic services for a server

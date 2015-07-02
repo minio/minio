@@ -29,7 +29,7 @@ lint:
 
 cyclo:
 	@echo "Running $@:"
-	@test -z "$$(gocyclo -over 19 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
+	@test -z "$$(gocyclo -over 25 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
 gomake-all: getdeps verifiers
 	@echo "Installing minio:"

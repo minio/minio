@@ -101,14 +101,14 @@ func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
 	return mux
 }
 
-// APIHandler api handler
-func APIHandler(conf api.Config) http.Handler {
+// getAPIHandler api handler
+func getAPIHandler(conf api.Config) http.Handler {
 	mux := router.NewRouter()
 	return registerOtherMiddleware(registerAPI(mux), conf)
 }
 
-// RPCHandler rpc handler
-func RPCHandler() http.Handler {
+// getRPCHandler rpc handler
+func getRPCHandler() http.Handler {
 	s := rpc.NewServer()
 	s.RegisterJSONCodec()
 	s.RegisterService(new(rpc.HelloService), "")

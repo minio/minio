@@ -467,48 +467,6 @@ func (cache Cache) MakeBucket(bucketName, acl string) error {
 	return nil
 }
 
-func (cache Cache) filterDelimiterPrefix(keys []string, commonPrefixes []string, key, prefix, delim string) ([]string, []string) {
-	switch true {
-	case key == prefix:
-		keys = append(keys, key)
-	// delim - requires r.Prefix as it was trimmed off earlier
-	case key == prefix+delim:
-		keys = append(keys, key)
-		fallthrough
-	case delim != "":
-		commonPrefixes = append(commonPrefixes, prefix+delim)
-	}
-	return keys, commonPrefixes
-}
-
-func (cache Cache) listObjects(keys []string, commonPrefixes []string, key string, r BucketResourcesMetadata) ([]string, []string) {
-	switch true {
-	// Prefix absent, delimit object key based on delimiter
-	case r.IsDelimiterSet():
-		delim := Delimiter(key, r.Delimiter)
-		switch true {
-		case delim == "" || delim == key:
-			keys = append(keys, key)
-		case delim != "":
-			commonPrefixes = append(commonPrefixes, delim)
-		}
-	// Prefix present, delimit object key with prefix key based on delimiter
-	case r.IsDelimiterPrefixSet():
-		if strings.HasPrefix(key, r.Prefix) {
-			trimmedName := strings.TrimPrefix(key, r.Prefix)
-			delim := Delimiter(trimmedName, r.Delimiter)
-			keys, commonPrefixes = cache.filterDelimiterPrefix(keys, commonPrefixes, key, r.Prefix, delim)
-		}
-	// Prefix present, nothing to delimit
-	case r.IsPrefixSet():
-		keys = append(keys, key)
-	// Prefix and delimiter absent
-	case r.IsDefault():
-		keys = append(keys, key)
-	}
-	return keys, commonPrefixes
-}
-
 // ListObjects - list objects from cache
 func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
 	cache.lock.RLock()
@@ -524,27 +482,62 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 	}
 	var results []ObjectMetadata
 	var keys []string
+	if cache.donut != nil {
+		listObjects, err := cache.donut.ListObjects(
+			bucket,
+			resources.Prefix,
+			resources.Marker,
+			resources.Delimiter,
+			resources.Maxkeys,
+		)
+		if err != nil {
+			return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(err, nil)
+		}
+		resources.CommonPrefixes = listObjects.CommonPrefixes
+		resources.IsTruncated = listObjects.IsTruncated
+		if resources.IsTruncated && resources.IsDelimiterSet() {
+			resources.NextMarker = results[len(results)-1].Object
+		}
+		for key := range listObjects.Objects {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			results = append(results, listObjects.Objects[key])
+		}
+		return results, resources, nil
+	}
 	storedBucket := cache.storedBuckets[bucket]
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			keys, resources.CommonPrefixes = cache.listObjects(keys, resources.CommonPrefixes, key, resources)
-		}
-	}
-	var newKeys []string
-	switch {
-	case resources.Marker != "":
-		for _, key := range keys {
-			if key > resources.Marker {
-				newKeys = append(newKeys, key)
+			if strings.HasPrefix(key, resources.Prefix) {
+				if key > resources.Marker {
+					keys = append(keys, key)
+				}
 			}
 		}
-	default:
-		newKeys = keys
 	}
-	newKeys = RemoveDuplicates(newKeys)
-	sort.Strings(newKeys)
-	for _, key := range newKeys {
+	if strings.TrimSpace(resources.Prefix) != "" {
+		keys = TrimPrefix(keys, resources.Prefix)
+	}
+	var prefixes []string
+	var filteredKeys []string
+	if strings.TrimSpace(resources.Delimiter) != "" {
+		filteredKeys = HasNoDelimiter(keys, resources.Delimiter)
+		prefixes = HasDelimiter(keys, resources.Delimiter)
+		prefixes = SplitDelimiter(prefixes, resources.Delimiter)
+		prefixes = SortU(prefixes)
+	} else {
+		filteredKeys = keys
+	}
+	for _, commonPrefix := range prefixes {
+		resources.CommonPrefixes = append(resources.CommonPrefixes, resources.Prefix+commonPrefix)
+	}
+	filteredKeys = RemoveDuplicates(filteredKeys)
+	sort.Strings(filteredKeys)
+
+	for _, key := range filteredKeys {
 		if len(results) == resources.Maxkeys {
 			resources.IsTruncated = true
 			if resources.IsTruncated && resources.IsDelimiterSet() {
@@ -552,10 +545,11 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 			}
 			return results, resources, nil
 		}
-		object := storedBucket.objectMetadata[bucket+"/"+key]
+		object := storedBucket.objectMetadata[bucket+"/"+resources.Prefix+key]
 		results = append(results, object)
 	}
 	resources.CommonPrefixes = RemoveDuplicates(resources.CommonPrefixes)
+	sort.Strings(resources.CommonPrefixes)
 	return results, resources, nil
 }
 
