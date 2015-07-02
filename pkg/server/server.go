@@ -25,13 +25,13 @@ import (
 	"github.com/minio/minio/pkg/server/api"
 )
 
-func startAPI(errCh chan error, conf api.Config) {
+func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 	defer close(errCh)
 
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           conf.Address,
-		Handler:        getAPIHandler(conf),
+		Handler:        apiHandler,
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -74,20 +74,24 @@ func startAPI(errCh chan error, conf api.Config) {
 	}
 }
 
-func startRPC(errCh chan error) {
+func startRPC(errCh chan error, rpcHandler http.Handler) {
 	defer close(errCh)
 
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           "127.0.0.1:9001", // TODO make this configurable
-		Handler:        getRPCHandler(),
+		Handler:        rpcHandler,
 		MaxHeaderBytes: 1 << 20,
 	}
 	errCh <- httpServer.ListenAndServe()
 }
 
-func startTM(errCh chan error) {
-	defer close(errCh)
+func startTM(a api.Minio) {
+	for {
+		for op := range a.OP {
+			close(op.ProceedCh)
+		}
+	}
 }
 
 // StartServices starts basic services for a server
@@ -95,8 +99,11 @@ func StartServices(conf api.Config) error {
 	apiErrCh := make(chan error)
 	rpcErrCh := make(chan error)
 
-	go startAPI(apiErrCh, conf)
-	go startRPC(rpcErrCh)
+	apiHandler, minioAPI := getAPIHandler(conf)
+	go startAPI(apiErrCh, conf, apiHandler)
+	rpcHandler := getRPCHandler()
+	go startRPC(rpcErrCh, rpcHandler)
+	go startTM(minioAPI)
 
 	select {
 	case err := <-apiErrCh:

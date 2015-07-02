@@ -24,28 +24,31 @@ import (
 	"github.com/minio/minio/pkg/server/rpc"
 )
 
-// registerAPI - register all the object API handlers to their respective paths
-func registerAPI(mux *router.Router) http.Handler {
-	api := api.MinioAPI{}
+func getAPI() api.Minio {
+	a := api.New()
+	return a
+}
 
-	mux.HandleFunc("/", api.ListBucketsHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}", api.ListObjectsHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}", api.PutBucketHandler).Methods("PUT")
-	mux.HandleFunc("/{bucket}", api.HeadBucketHandler).Methods("HEAD")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.HeadObjectHandler).Methods("HEAD")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}").Methods("GET")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("POST")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.NewMultipartUploadHandler).Methods("POST")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("DELETE")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.GetObjectHandler).Methods("GET")
-	mux.HandleFunc("/{bucket}/{object:.*}", api.PutObjectHandler).Methods("PUT")
+// registerAPI - register all the object API handlers to their respective paths
+func registerAPI(mux *router.Router, a api.Minio) http.Handler {
+	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")
+	mux.HandleFunc("/{bucket}", a.HeadBucketHandler).Methods("HEAD")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.HeadObjectHandler).Methods("HEAD")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}").Methods("GET")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("POST")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.NewMultipartUploadHandler).Methods("POST")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("DELETE")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.GetObjectHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.PutObjectHandler).Methods("PUT")
 
 	// not implemented yet
-	mux.HandleFunc("/{bucket}", api.DeleteBucketHandler).Methods("DELETE")
+	mux.HandleFunc("/{bucket}", a.DeleteBucketHandler).Methods("DELETE")
 
 	// unsupported API
-	mux.HandleFunc("/{bucket}/{object:.*}", api.DeleteObjectHandler).Methods("DELETE")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 
 	return mux
 }
@@ -102,9 +105,12 @@ func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
 }
 
 // getAPIHandler api handler
-func getAPIHandler(conf api.Config) http.Handler {
+func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 	mux := router.NewRouter()
-	return registerOtherMiddleware(registerAPI(mux), conf)
+	minioAPI := getAPI()
+	apiHandler := registerAPI(mux, minioAPI)
+	apiHandler = registerOtherMiddleware(apiHandler, conf)
+	return apiHandler, minioAPI
 }
 
 // getRPCHandler rpc handler

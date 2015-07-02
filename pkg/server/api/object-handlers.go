@@ -36,8 +36,19 @@ const (
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -54,8 +65,19 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -71,8 +93,19 @@ func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) 
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -121,8 +154,19 @@ func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 /// Multipart API
 
 // NewMultipartUploadHandler - New multipart upload
-func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -141,8 +185,19 @@ func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.R
 }
 
 // PutObjectPartHandler - Upload part
-func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -190,8 +245,19 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -206,8 +272,19 @@ func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http
 }
 
 // ListObjectPartsHandler - List object parts
-func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -225,8 +302,19 @@ func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
+
+	op := Operation{}
+	op.ProceedCh = make(chan struct{})
+	api.OP <- op
+	// block until Ticket master gives us a go
+	<-op.ProceedCh
+	{
+		// do you operation
+	}
+	log.Println(acceptsContentType)
+
 	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -262,13 +350,13 @@ func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *h
 /// Delete API
 
 // DeleteBucketHandler - Delete bucket
-func (api MinioAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(NotImplemented)
 	w.WriteHeader(error.HTTPStatusCode)
 }
 
 // DeleteObjectHandler - Delete object
-func (api MinioAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api Minio) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(NotImplemented)
 	w.WriteHeader(error.HTTPStatusCode)
 }
