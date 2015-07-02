@@ -217,23 +217,23 @@ func (cache Cache) cleanupMultiparts(bucket, key, uploadID string) {
 }
 
 // CompleteMultipartUpload -
-func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (string, error) {
+func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
 	if !IsValidBucket(bucket) {
-		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
-		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
+		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	// Verify upload id
 	cache.lock.RLock()
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		cache.lock.RUnlock()
-		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
+		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
 		cache.lock.RUnlock()
-		return "", iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
+		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -245,21 +245,21 @@ func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts m
 		object, ok := cache.multiPartObjects.Get(bucket + "/" + getMultipartKey(key, uploadID, i))
 		if ok == false {
 			cache.lock.Unlock()
-			return "", iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
 		size += int64(len(object))
 		calcMD5Bytes := md5.Sum(object)
 		// complete multi part request header md5sum per part is hex encoded
 		recvMD5Bytes, err := hex.DecodeString(strings.Trim(recvMD5, "\""))
 		if err != nil {
-			return "", iodine.New(InvalidDigest{Md5: recvMD5}, nil)
+			return ObjectMetadata{}, iodine.New(InvalidDigest{Md5: recvMD5}, nil)
 		}
 		if !bytes.Equal(recvMD5Bytes, calcMD5Bytes[:]) {
-			return "", iodine.New(BadDigest{}, nil)
+			return ObjectMetadata{}, iodine.New(BadDigest{}, nil)
 		}
 		_, err = io.Copy(&fullObject, bytes.NewBuffer(object))
 		if err != nil {
-			return "", iodine.New(err, nil)
+			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		object = nil
 		go debug.FreeOSMemory()
@@ -269,16 +269,16 @@ func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts m
 	md5sumSlice := md5.Sum(fullObject.Bytes())
 	// this is needed for final verification inside CreateObject, do not convert this to hex
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
-	etag, err := cache.CreateObject(bucket, key, "", md5sum, size, &fullObject)
+	objectMetadata, err := cache.CreateObject(bucket, key, "", md5sum, size, &fullObject)
 	if err != nil {
 		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
 		// which would in-turn cleanup properly in accordance with S3 Spec
-		return "", iodine.New(err, nil)
+		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	fullObject.Reset()
 	cache.cleanupMultiparts(bucket, key, uploadID)
 	cache.cleanupMultipartSession(bucket, key, uploadID)
-	return etag, nil
+	return objectMetadata, nil
 }
 
 // byKey is a sortable interface for UploadMetadata slice

@@ -93,6 +93,9 @@ func NewCache(maxSize uint64, expiration time.Duration, donutName string, nodeDi
 	c.multiPartObjects = trove.NewCache(0, time.Duration(0))
 	c.objects.OnExpired = c.expiredObject
 	c.multiPartObjects.OnExpired = c.expiredPart
+	c.lock = new(sync.RWMutex)
+	c.maxSize = maxSize
+	c.expiration = expiration
 
 	// set up cache expiration
 	c.objects.ExpireObjects(time.Second * 5)
@@ -262,42 +265,42 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 // CreateObject -
-func (cache Cache) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache Cache) CreateObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
 	if size > int64(cache.maxSize) {
 		generic := GenericObjectError{Bucket: bucket, Object: key}
-		return "", iodine.New(EntityTooLarge{
+		return ObjectMetadata{}, iodine.New(EntityTooLarge{
 			GenericObjectError: generic,
 			Size:               strconv.FormatInt(size, 10),
 			MaxSize:            strconv.FormatUint(cache.maxSize, 10),
 		}, nil)
 	}
-	md5sum, err := cache.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	objectMetadata, err := cache.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
 	// free
 	debug.FreeOSMemory()
-	return md5sum, iodine.New(err, nil)
+	return objectMetadata, iodine.New(err, nil)
 }
 
 // createObject - PUT object to cache buffer
-func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
 	cache.lock.RLock()
 	if !IsValidBucket(bucket) {
 		cache.lock.RUnlock()
-		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
 		cache.lock.RUnlock()
-		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
+		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
 		cache.lock.RUnlock()
-		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
+		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := cache.storedBuckets[bucket]
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		cache.lock.RUnlock()
-		return "", iodine.New(ObjectExists{Object: key}, nil)
+		return ObjectMetadata{}, iodine.New(ObjectExists{Object: key}, nil)
 	}
 	cache.lock.RUnlock()
 
@@ -309,7 +312,7 @@ func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string,
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
-			return "", iodine.New(InvalidDigest{Md5: expectedMD5Sum}, nil)
+			return ObjectMetadata{}, iodine.New(InvalidDigest{Md5: expectedMD5Sum}, nil)
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -332,7 +335,7 @@ func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string,
 		readBytes = append(readBytes, byteBuffer[0:length]...)
 	}
 	if err != io.EOF {
-		return "", iodine.New(err, nil)
+		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	md5SumBytes := hash.Sum(nil)
 	totalLength := len(readBytes)
@@ -344,14 +347,14 @@ func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string,
 	go debug.FreeOSMemory()
 	cache.lock.Unlock()
 	if !ok {
-		return "", iodine.New(InternalError{}, nil)
+		return ObjectMetadata{}, iodine.New(InternalError{}, nil)
 	}
 
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			return "", iodine.New(BadDigest{}, nil)
+			return ObjectMetadata{}, iodine.New(BadDigest{}, nil)
 		}
 	}
 
@@ -371,11 +374,11 @@ func (cache Cache) createObject(bucket, key, contentType, expectedMD5Sum string,
 	storedBucket.objectMetadata[objectKey] = newObject
 	cache.storedBuckets[bucket] = storedBucket
 	cache.lock.Unlock()
-	return newObject.MD5Sum, nil
+	return newObject, nil
 }
 
-// CreateBucket - create bucket in cache
-func (cache Cache) CreateBucket(bucketName, acl string) error {
+// MakeBucket - create bucket in cache
+func (cache Cache) MakeBucket(bucketName, acl string) error {
 	cache.lock.RLock()
 	if len(cache.storedBuckets) == totalBuckets {
 		cache.lock.RUnlock()
@@ -418,22 +421,21 @@ func (cache Cache) CreateBucket(bucketName, acl string) error {
 	return nil
 }
 
-func (cache Cache) filterDelimiterPrefix(keys []string, key, prefix, delim string) ([]string, []string) {
-	var commonPrefixes []string
+func (cache Cache) filterDelimiterPrefix(keys []string, commonPrefixes []string, key, prefix, delim string) ([]string, []string) {
 	switch true {
 	case key == prefix:
 		keys = append(keys, key)
 	// delim - requires r.Prefix as it was trimmed off earlier
 	case key == prefix+delim:
 		keys = append(keys, key)
+		fallthrough
 	case delim != "":
 		commonPrefixes = append(commonPrefixes, prefix+delim)
 	}
-	return RemoveDuplicates(keys), RemoveDuplicates(commonPrefixes)
+	return keys, commonPrefixes
 }
 
-func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetadata) ([]string, []string) {
-	var commonPrefixes []string
+func (cache Cache) listObjects(keys []string, commonPrefixes []string, key string, r BucketResourcesMetadata) ([]string, []string) {
 	switch true {
 	// Prefix absent, delimit object key based on delimiter
 	case r.IsDelimiterSet():
@@ -449,7 +451,7 @@ func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetad
 		if strings.HasPrefix(key, r.Prefix) {
 			trimmedName := strings.TrimPrefix(key, r.Prefix)
 			delim := Delimiter(trimmedName, r.Delimiter)
-			keys, commonPrefixes = cache.filterDelimiterPrefix(keys, key, r.Prefix, delim)
+			keys, commonPrefixes = cache.filterDelimiterPrefix(keys, commonPrefixes, key, r.Prefix, delim)
 		}
 	// Prefix present, nothing to delimit
 	case r.IsPrefixSet():
@@ -458,7 +460,7 @@ func (cache Cache) listObjects(keys []string, key string, r BucketResourcesMetad
 	case r.IsDefault():
 		keys = append(keys, key)
 	}
-	return RemoveDuplicates(keys), RemoveDuplicates(commonPrefixes)
+	return keys, commonPrefixes
 }
 
 // ListObjects - list objects from cache
@@ -468,7 +470,7 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 	if !IsValidBucket(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if !IsValidObjectName(resources.Prefix) {
+	if !IsValidPrefix(resources.Prefix) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
 	if _, ok := cache.storedBuckets[bucket]; ok == false {
@@ -476,12 +478,11 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 	}
 	var results []ObjectMetadata
 	var keys []string
-	var commonPrefixes []string
 	storedBucket := cache.storedBuckets[bucket]
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
-			keys, commonPrefixes = cache.listObjects(keys, key, resources)
+			keys, resources.CommonPrefixes = cache.listObjects(keys, resources.CommonPrefixes, key, resources)
 		}
 	}
 	var newKeys []string
@@ -508,7 +509,7 @@ func (cache Cache) ListObjects(bucket string, resources BucketResourcesMetadata)
 		object := storedBucket.objectMetadata[bucket+"/"+key]
 		results = append(results, object)
 	}
-	resources.CommonPrefixes = commonPrefixes
+	resources.CommonPrefixes = RemoveDuplicates(resources.CommonPrefixes)
 	return results, resources, nil
 }
 

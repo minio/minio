@@ -19,20 +19,23 @@ package donut
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	. "github.com/minio/check"
 )
 
 func Test(t *testing.T) { TestingT(t) }
 
-type MySuite struct{}
+type MySuite struct {
+	root string
+}
 
 var _ = Suite(&MySuite{})
 
@@ -52,293 +55,224 @@ func createTestNodeDiskMap(p string) map[string][]string {
 	return nodes
 }
 
-// test empty donut
-func (s *MySuite) TestEmptyDonut(c *C) {
+var d Cache
+
+func (s *MySuite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "donut-")
 	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
+	s.root = root
+	d = NewCache(100000, time.Duration(1*time.Hour), "test", createTestNodeDiskMap(root))
+	buckets, err := d.ListBuckets()
 	c.Assert(err, IsNil)
+	c.Assert(len(buckets), Equals, 0)
+}
 
-	// check donut is empty
-	metadata, err := donut.ListBuckets()
-	c.Assert(err, IsNil)
-	c.Assert(len(metadata), Equals, 0)
+func (s *MySuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.root)
 }
 
 // test make bucket without name
 func (s *MySuite) TestBucketWithoutNameFails(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
 	// fail to create new bucket without a name
-	err = donut.MakeBucket("", "private")
+	err := d.MakeBucket("", "private")
 	c.Assert(err, Not(IsNil))
 
-	err = donut.MakeBucket(" ", "private")
+	err = d.MakeBucket(" ", "private")
 	c.Assert(err, Not(IsNil))
 }
 
 // test empty bucket
 func (s *MySuite) TestEmptyBucket(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-
-	c.Assert(donut.MakeBucket("foo", BucketACL("private")), IsNil)
+	c.Assert(d.MakeBucket("foo1", "private"), IsNil)
 	// check if bucket is empty
-	listObjects, err := donut.ListObjects("foo", "", "", "", 1)
+	var resources BucketResourcesMetadata
+	resources.Maxkeys = 1
+	objectsMetadata, resources, err := d.ListObjects("foo1", resources)
 	c.Assert(err, IsNil)
-	c.Assert(len(listObjects.Objects), Equals, 0)
-	c.Assert(listObjects.CommonPrefixes, DeepEquals, []string{})
-	c.Assert(listObjects.IsTruncated, Equals, false)
+	c.Assert(len(objectsMetadata), Equals, 0)
+	c.Assert(resources.CommonPrefixes, DeepEquals, []string{})
+	c.Assert(resources.IsTruncated, Equals, false)
 }
 
 // test bucket list
 func (s *MySuite) TestMakeBucketAndList(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
 	// create bucket
-	err = donut.MakeBucket("foo", BucketACL("private"))
+	err := d.MakeBucket("foo2", "private")
 	c.Assert(err, IsNil)
 
 	// check bucket exists
-	buckets, err := donut.ListBuckets()
+	buckets, err := d.ListBuckets()
 	c.Assert(err, IsNil)
-	c.Assert(len(buckets), Equals, 1)
-	c.Assert(buckets["foo"].ACL, Equals, BucketACL("private"))
+	c.Assert(len(buckets), Equals, 5)
+	c.Assert(buckets[0].ACL, Equals, BucketACL("private"))
 }
 
 // test re-create bucket
 func (s *MySuite) TestMakeBucketWithSameNameFails(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-	err = donut.MakeBucket("foo", BucketACL("private"))
+	err := d.MakeBucket("foo3", "private")
 	c.Assert(err, IsNil)
 
-	err = donut.MakeBucket("foo", BucketACL("private"))
+	err = d.MakeBucket("foo3", "private")
 	c.Assert(err, Not(IsNil))
 }
 
 // test make multiple buckets
 func (s *MySuite) TestCreateMultipleBucketsAndList(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
 	// add a second bucket
-	err = donut.MakeBucket("foo", BucketACL("private"))
+	err := d.MakeBucket("foo4", "private")
 	c.Assert(err, IsNil)
 
-	err = donut.MakeBucket("bar", BucketACL("private"))
+	err = d.MakeBucket("bar1", "private")
 	c.Assert(err, IsNil)
 
-	buckets, err := donut.ListBuckets()
+	buckets, err := d.ListBuckets()
 	c.Assert(err, IsNil)
 
-	_, ok := buckets["foo"]
-	c.Assert(ok, Equals, true)
-	_, ok = buckets["bar"]
-	c.Assert(ok, Equals, true)
+	c.Assert(len(buckets), Equals, 2)
+	c.Assert(buckets[0].Name, Equals, "bar1")
+	c.Assert(buckets[1].Name, Equals, "foo4")
 
-	err = donut.MakeBucket("foobar", BucketACL("private"))
+	err = d.MakeBucket("foobar1", "private")
 	c.Assert(err, IsNil)
 
-	buckets, err = donut.ListBuckets()
+	buckets, err = d.ListBuckets()
 	c.Assert(err, IsNil)
-	_, ok = buckets["foobar"]
-	c.Assert(ok, Equals, true)
+
+	c.Assert(len(buckets), Equals, 3)
+	c.Assert(buckets[2].Name, Equals, "foobar1")
 }
 
 // test object create without bucket
 func (s *MySuite) TestNewObjectFailsWithoutBucket(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-	_, err = donut.PutObject("foo", "obj", "", nil, nil)
+	_, err := d.CreateObject("unknown", "obj", "", "", 0, nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test create object metadata
 func (s *MySuite) TestNewObjectMetadata(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-
-	metadata := make(map[string]string)
-	metadata["contentType"] = "application/json"
-	metadata["foo"] = "value1"
-	metadata["hello"] = "world"
-
 	data := "Hello World"
 	hasher := md5.New()
 	hasher.Write([]byte(data))
-	expectedMd5Sum := hex.EncodeToString(hasher.Sum(nil))
+	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
-	metadata["contentLength"] = strconv.Itoa(len(data))
 
-	err = donut.MakeBucket("foo", "private")
+	err := d.MakeBucket("foo6", "private")
 	c.Assert(err, IsNil)
 
-	objectMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	objectMetadata, err := d.CreateObject("foo6", "obj", "application/json", expectedMd5Sum, int64(len(data)), reader)
 	c.Assert(err, IsNil)
-	c.Assert(objectMetadata.MD5Sum, Equals, expectedMd5Sum)
-	c.Assert(objectMetadata.Metadata["contentType"], Equals, metadata["contentType"])
-	c.Assert(objectMetadata.Metadata["foo"], Equals, metadata["foo"])
-	c.Assert(objectMetadata.Metadata["hello"], Equals, metadata["hello"])
+	c.Assert(objectMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
+	c.Assert(objectMetadata.Metadata["contentType"], Equals, "application/json")
 }
 
 // test create object fails without name
 func (s *MySuite) TestNewObjectFailsWithEmptyName(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-
-	_, err = donut.PutObject("foo", "", "", nil, nil)
+	_, err := d.CreateObject("foo", "", "", "", 0, nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test create object
 func (s *MySuite) TestNewObjectCanBeWritten(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
+	err := d.MakeBucket("foo", "private")
 	c.Assert(err, IsNil)
 
-	err = donut.MakeBucket("foo", "private")
-	c.Assert(err, IsNil)
-
-	metadata := make(map[string]string)
-	metadata["contentType"] = "application/octet-stream"
 	data := "Hello World"
 
 	hasher := md5.New()
 	hasher.Write([]byte(data))
-	expectedMd5Sum := hex.EncodeToString(hasher.Sum(nil))
+	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
-	metadata["contentLength"] = strconv.Itoa(len(data))
 
-	actualMetadata, err := donut.PutObject("foo", "obj", expectedMd5Sum, reader, metadata)
+	actualMetadata, err := d.CreateObject("foo", "obj", "application/octet-stream", expectedMd5Sum, int64(len(data)), reader)
 	c.Assert(err, IsNil)
-	c.Assert(actualMetadata.MD5Sum, Equals, expectedMd5Sum)
+	c.Assert(actualMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 
-	reader, size, err := donut.GetObject("foo", "obj")
+	var buffer bytes.Buffer
+	size, err := d.GetObject(&buffer, "foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len(data)))
+	c.Assert(buffer.Bytes(), DeepEquals, []byte(data))
 
-	var actualData bytes.Buffer
-	_, err = io.Copy(&actualData, reader)
+	actualMetadata, err = d.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
-	c.Assert(actualData.Bytes(), DeepEquals, []byte(data))
-
-	actualMetadata, err = donut.GetObjectMetadata("foo", "obj")
-	c.Assert(err, IsNil)
-	c.Assert(expectedMd5Sum, Equals, actualMetadata.MD5Sum)
+	c.Assert(hex.EncodeToString(hasher.Sum(nil)), Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
-	c.Assert("1.0.0", Equals, actualMetadata.Version)
 }
 
 // test list objects
 func (s *MySuite) TestMultipleNewObjects(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "donut-")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(root)
-	donut, err := NewDonut("test", createTestNodeDiskMap(root))
-	c.Assert(err, IsNil)
-
-	c.Assert(donut.MakeBucket("foo", BucketACL("private")), IsNil)
+	c.Assert(d.MakeBucket("foo5", "private"), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
-	metadata := make(map[string]string)
-	metadata["contentLength"] = strconv.Itoa(len("one"))
 
-	_, err = donut.PutObject("foo", "obj1", "", one, metadata)
+	_, err := d.CreateObject("foo5", "obj1", "", "", int64(len("one")), one)
 	c.Assert(err, IsNil)
 
 	two := ioutil.NopCloser(bytes.NewReader([]byte("two")))
-
-	metadata["contentLength"] = strconv.Itoa(len("two"))
-	_, err = donut.PutObject("foo", "obj2", "", two, metadata)
+	_, err = d.CreateObject("foo5", "obj2", "", "", int64(len("two")), two)
 	c.Assert(err, IsNil)
 
-	obj1, size, err := donut.GetObject("foo", "obj1")
+	var buffer1 bytes.Buffer
+	size, err := d.GetObject(&buffer1, "foo5", "obj1")
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("one"))))
+	c.Assert(buffer1.Bytes(), DeepEquals, []byte("one"))
 
-	var readerBuffer1 bytes.Buffer
-	_, err = io.CopyN(&readerBuffer1, obj1, size)
-	c.Assert(err, IsNil)
-	c.Assert(readerBuffer1.Bytes(), DeepEquals, []byte("one"))
-
-	obj2, size, err := donut.GetObject("foo", "obj2")
+	var buffer2 bytes.Buffer
+	size, err = d.GetObject(&buffer2, "foo5", "obj2")
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("two"))))
 
-	var readerBuffer2 bytes.Buffer
-	_, err = io.CopyN(&readerBuffer2, obj2, size)
-	c.Assert(err, IsNil)
-	c.Assert(readerBuffer2.Bytes(), DeepEquals, []byte("two"))
+	c.Assert(buffer2.Bytes(), DeepEquals, []byte("two"))
 
 	/// test list of objects
 
 	// test list objects with prefix and delimiter
-	listObjects, err := donut.ListObjects("foo", "o", "", "1", 10)
+	var resources BucketResourcesMetadata
+	resources.Prefix = "o"
+	resources.Delimiter = "1"
+	resources.Maxkeys = 10
+	objectsMetadata, resources, err := d.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.IsTruncated, Equals, false)
-	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
+	c.Assert(resources.IsTruncated, Equals, false)
+	c.Assert(resources.CommonPrefixes[0], Equals, "obj1")
 
 	// test list objects with only delimiter
-	listObjects, err = donut.ListObjects("foo", "", "", "1", 10)
+	resources.Prefix = ""
+	resources.Delimiter = "1"
+	resources.Maxkeys = 10
+	objectsMetadata, resources, err = d.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
-	_, ok := listObjects.Objects["obj2"]
-	c.Assert(ok, Equals, true)
-	c.Assert(listObjects.IsTruncated, Equals, false)
-	c.Assert(listObjects.CommonPrefixes[0], Equals, "obj1")
+	c.Assert(objectsMetadata[0].Object, Equals, "obj1")
+	c.Assert(resources.IsTruncated, Equals, false)
+	c.Assert(resources.CommonPrefixes[0], Equals, "obj1")
 
 	// test list objects with only prefix
-	listObjects, err = donut.ListObjects("foo", "o", "", "", 10)
+	resources.Prefix = "o"
+	resources.Delimiter = ""
+	resources.Maxkeys = 10
+	objectsMetadata, resources, err = d.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.IsTruncated, Equals, false)
-	_, ok1 := listObjects.Objects["obj1"]
-	_, ok2 := listObjects.Objects["obj2"]
-	c.Assert(ok1, Equals, true)
-	c.Assert(ok2, Equals, true)
+	c.Assert(resources.IsTruncated, Equals, false)
+	c.Assert(objectsMetadata[0].Object, Equals, "obj1")
+	c.Assert(objectsMetadata[1].Object, Equals, "obj2")
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
-	metadata["contentLength"] = strconv.Itoa(len("three"))
-	_, err = donut.PutObject("foo", "obj3", "", three, metadata)
+	_, err = d.CreateObject("foo5", "obj3", "", "", int64(len("three")), three)
 	c.Assert(err, IsNil)
 
-	obj3, size, err := donut.GetObject("foo", "obj3")
+	var buffer bytes.Buffer
+	size, err = d.GetObject(&buffer, "foo5", "obj3")
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("three"))))
-
-	var readerBuffer3 bytes.Buffer
-	_, err = io.CopyN(&readerBuffer3, obj3, size)
-	c.Assert(err, IsNil)
-	c.Assert(readerBuffer3.Bytes(), DeepEquals, []byte("three"))
+	c.Assert(buffer.Bytes(), DeepEquals, []byte("three"))
 
 	// test list objects with maxkeys
-	listObjects, err = donut.ListObjects("foo", "o", "", "", 2)
+	resources.Prefix = "o"
+	resources.Delimiter = ""
+	resources.Maxkeys = 2
+	objectsMetadata, resources, err = d.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
-	c.Assert(listObjects.IsTruncated, Equals, true)
-	c.Assert(len(listObjects.Objects), Equals, 2)
+	c.Assert(resources.IsTruncated, Equals, true)
+	c.Assert(len(objectsMetadata), Equals, 2)
 }

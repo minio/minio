@@ -181,7 +181,7 @@ func IsValidBucket(bucket string) bool {
 //   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func IsValidObjectName(object string) bool {
 	if strings.TrimSpace(object) == "" {
-		return true
+		return false
 	}
 	if len(object) > 1024 || len(object) == 0 {
 		return false
@@ -190,4 +190,12 @@ func IsValidObjectName(object string) bool {
 		return false
 	}
 	return true
+}
+
+// IsValidPrefix - verify prefix name is correct, an empty prefix is valid
+func IsValidPrefix(prefix string) bool {
+	if strings.TrimSpace(prefix) == "" {
+		return true
+	}
+	return IsValidObjectName(prefix)
 }
