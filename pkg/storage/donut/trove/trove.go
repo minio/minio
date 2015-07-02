@@ -115,6 +115,17 @@ func (r *Cache) Get(key string) ([]byte, bool) {
 	return value, true
 }
 
+// Len returns length of the value of a given key, returns zero if key doesn't exist
+func (r *Cache) Len(key string) int {
+	r.Lock()
+	defer r.Unlock()
+	_, ok := r.items[key]
+	if !ok {
+		return 0
+	}
+	return len(r.items[key])
+}
+
 // Append will append new data to an existing key,
 // if key doesn't exist it behaves like Set()
 func (r *Cache) Append(key string, value []byte) bool {
