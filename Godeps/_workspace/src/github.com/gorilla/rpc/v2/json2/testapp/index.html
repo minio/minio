@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+  <link href="//cdn.jsdelivr.net/foundation/4.1.2/css/foundation.min.css" rel='stylesheet' type='text/css'>
+  <link href="//fonts.googleapis.com/css?family=Inconsolata" rel='stylesheet' type='text/css'>
+  <script src="jquery.jsonrpc.js"></script>
+  <script src="counter.js"></script>
+  <title>Counter</title>
+  <style>
+	body {
+	font-family: 'Inconsolata', sans-serif;
+	}
+  </style>
+</head>
+
+<body style="padding:20px">
+  <div class="row">
+	<div class="large-1 columns"><a id="incr" href="#" class="small secondary button">Incr</a></div>
+	<div class="large-1 columns"><a id="get" href="#" class="small button">Get&nbsp</a></div>
+	<div class="large-1 columns"><a id="nan" href="#" class="small button">Nan&nbsp</a></div>
+	<div class="large-9 columns"></div>
+  </div>
+  <div class="row">
+    <div class="large-12 columns panel">
+	  <ul id="output" style="height:600px;overflow:scroll;list-style-type:none;">
+	  </ul>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -17,113 +17,100 @@
 package server
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
-	"time"
+	"net"
+	"net/http"
+	"strings"
 
-	"github.com/minio/minio/pkg/api"
-	"github.com/minio/minio/pkg/api/web"
-	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/server/httpserver"
-	"github.com/minio/minio/pkg/storage/drivers"
-	"github.com/minio/minio/pkg/storage/drivers/cache"
-	"github.com/minio/minio/pkg/storage/drivers/donut"
-	"github.com/minio/minio/pkg/utils/log"
+	"github.com/minio/minio/pkg/server/api"
 )
 
-// WebFactory is used to build web cli server
-type WebFactory struct {
-	httpserver.Config
-}
+// Start API listener
+func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
+	defer close(errCh)
 
-// GetStartServerFunc builds web cli server
-func (f WebFactory) GetStartServerFunc() StartServerFunc {
-	return func() (chan<- string, <-chan error) {
-		ctrl, status, _ := httpserver.Start(web.HTTPHandler(), f.Config)
-		return ctrl, status
+	// Minio server config
+	httpServer := &http.Server{
+		Addr:           conf.Address,
+		Handler:        apiHandler,
+		MaxHeaderBytes: 1 << 20,
 	}
-}
 
-// Factory is used to build api server
-type Factory struct {
-	httpserver.Config
-	Paths      []string
-	MaxMemory  uint64
-	Expiration time.Duration
-}
+	host, port, err := net.SplitHostPort(conf.Address)
+	if err != nil {
+		errCh <- err
+		return
+	}
 
-// GetStartServerFunc Factory builds api server
-func (f Factory) GetStartServerFunc() StartServerFunc {
-	return func() (chan<- string, <-chan error) {
-		conf := api.Config{RateLimit: f.RateLimit}
-		var driver drivers.Driver
-		var err error
-		if len(f.Paths) != 0 {
-			driver, err = donut.NewDriver(f.Paths)
-			if err != nil {
-				log.Fatalln(err)
-			}
-			driver, err = cache.NewDriver(f.MaxMemory, f.Expiration, driver)
-			if err != nil {
-				log.Fatalln(err)
-			}
+	var hosts []string
+	switch {
+	case host != "":
+		hosts = append(hosts, host)
+	default:
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			errCh <- err
+			return
 		}
-		conf.SetDriver(driver)
-		ctrl, status, _ := httpserver.Start(api.HTTPHandler(conf), f.Config)
-		return ctrl, status
-	}
-}
-
-// StartServerFunc describes a function that can be used to start a server with StartMinio
-type StartServerFunc func() (chan<- string, <-chan error)
-
-// StartMinio starts minio server
-func StartMinio(servers []StartServerFunc) {
-	var ctrlChannels []chan<- string
-	var errChannels []<-chan error
-	for _, server := range servers {
-		ctrlChannel, errChannel := server()
-		ctrlChannels = append(ctrlChannels, ctrlChannel)
-		errChannels = append(errChannels, errChannel)
-	}
-	cases := createSelectCases(errChannels)
-	for len(cases) > 0 {
-		chosen, value, recvOk := reflect.Select(cases)
-		switch recvOk {
-		case true:
-			// Status Message Received
-			switch true {
-			case value.Interface() != nil:
-				// For any error received cleanup all existing channels and fail
-				for _, ch := range ctrlChannels {
-					close(ch)
-				}
-				msg := fmt.Sprintf("%q", value.Interface())
-				log.Fatal(iodine.New(errors.New(msg), nil))
-			}
-		case false:
-			// Channel closed, remove from list
-			var aliveStatusChans []<-chan error
-			for i, ch := range errChannels {
-				if i != chosen {
-					aliveStatusChans = append(aliveStatusChans, ch)
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				host := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(host); ip.To4() != nil {
+					hosts = append(hosts, host)
 				}
 			}
-			// create new select cases without defunct channel
-			errChannels = aliveStatusChans
-			cases = createSelectCases(errChannels)
+		}
+	}
+	switch {
+	default:
+		for _, host := range hosts {
+			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
+		}
+		errCh <- httpServer.ListenAndServe()
+	case conf.TLS == true:
+		for _, host := range hosts {
+			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
+		}
+		errCh <- httpServer.ListenAndServeTLS(conf.CertFile, conf.KeyFile)
+	}
+}
+
+// Start RPC listener
+func startRPC(errCh chan error, rpcHandler http.Handler) {
+	defer close(errCh)
+
+	// Minio server config
+	httpServer := &http.Server{
+		Addr:           "127.0.0.1:9001", // TODO make this configurable
+		Handler:        rpcHandler,
+		MaxHeaderBytes: 1 << 20,
+	}
+	errCh <- httpServer.ListenAndServe()
+}
+
+// Start ticket master
+func startTM(a api.Minio) {
+	for {
+		for op := range a.OP {
+			op.ProceedCh <- struct{}{}
 		}
 	}
 }
 
-func createSelectCases(channels []<-chan error) []reflect.SelectCase {
-	cases := make([]reflect.SelectCase, len(channels))
-	for i, ch := range channels {
-		cases[i] = reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ch),
-		}
+// StartServices starts basic services for a server
+func StartServices(conf api.Config) error {
+	apiErrCh := make(chan error)
+	rpcErrCh := make(chan error)
+
+	apiHandler, minioAPI := getAPIHandler(conf)
+	go startAPI(apiErrCh, conf, apiHandler)
+	go startRPC(rpcErrCh, getRPCHandler())
+	go startTM(minioAPI)
+
+	select {
+	case err := <-apiErrCh:
+		return err
+	case err := <-rpcErrCh:
+		return err
 	}
-	return cases
 }
