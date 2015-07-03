@@ -19,9 +19,30 @@ package donut
 import (
 	"bufio"
 	"bytes"
+	"io"
 	"sort"
 	"strings"
 )
+
+// ProxyWriter implements io.Writer to trap written bytes
+type ProxyWriter struct {
+	writer       io.Writer
+	writtenBytes []byte
+}
+
+func (r *ProxyWriter) Write(p []byte) (n int, err error) {
+	n, err = r.writer.Write(p)
+	if err != nil {
+		return
+	}
+	r.writtenBytes = append(r.writtenBytes, p[0:n]...)
+	return
+}
+
+// NewProxyWriter - wrap around a given writer with ProxyWriter
+func NewProxyWriter(w io.Writer) *ProxyWriter {
+	return &ProxyWriter{writer: w, writtenBytes: nil}
+}
 
 // Delimiter delims the string at delimiter
 func Delimiter(object, delimiter string) string {

@@ -35,55 +35,55 @@ import (
 )
 
 // NewMultipartUpload -
-func (cache Cache) NewMultipartUpload(bucket, key, contentType string) (string, error) {
-	cache.lock.RLock()
+func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+	donut.lock.RLock()
 	if !IsValidBucket(bucket) {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		cache.lock.RUnlock()
+	if _, ok := donut.storedBuckets[bucket]; ok == false {
+		donut.lock.RUnlock()
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := cache.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets[bucket]
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(ObjectExists{Object: key}, nil)
 	}
-	cache.lock.RUnlock()
+	donut.lock.RUnlock()
 
-	cache.lock.Lock()
+	donut.lock.Lock()
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
 
-	cache.storedBuckets[bucket].multiPartSession[key] = multiPartSession{
+	donut.storedBuckets[bucket].multiPartSession[key] = multiPartSession{
 		uploadID:   uploadID,
 		initiated:  time.Now(),
 		totalParts: 0,
 	}
-	cache.lock.Unlock()
+	donut.lock.Unlock()
 
 	return uploadID, nil
 }
 
 // AbortMultipartUpload -
-func (cache Cache) AbortMultipartUpload(bucket, key, uploadID string) error {
-	cache.lock.RLock()
-	storedBucket := cache.storedBuckets[bucket]
+func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
+	donut.lock.RLock()
+	storedBucket := donut.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
-	cache.lock.RUnlock()
+	donut.lock.RUnlock()
 
-	cache.cleanupMultiparts(bucket, key, uploadID)
-	cache.cleanupMultipartSession(bucket, key, uploadID)
+	donut.cleanupMultiparts(bucket, key, uploadID)
+	donut.cleanupMultipartSession(bucket, key, uploadID)
 	return nil
 }
 
@@ -92,17 +92,17 @@ func getMultipartKey(key string, uploadID string, partNumber int) string {
 }
 
 // CreateObjectPart -
-func (cache Cache) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	// Verify upload id
-	cache.lock.RLock()
-	storedBucket := cache.storedBuckets[bucket]
+	donut.lock.RLock()
+	storedBucket := donut.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
-	cache.lock.RUnlock()
+	donut.lock.RUnlock()
 
-	etag, err := cache.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data)
+	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data)
 	if err != nil {
 		return "", iodine.New(err, nil)
 	}
@@ -112,28 +112,28 @@ func (cache Cache) CreateObjectPart(bucket, key, uploadID string, partID int, co
 }
 
 // createObject - PUT object to cache buffer
-func (cache Cache) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
-	cache.lock.RLock()
+func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+	donut.lock.RLock()
 	if !IsValidBucket(bucket) {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		cache.lock.RUnlock()
+	if _, ok := donut.storedBuckets[bucket]; ok == false {
+		donut.lock.RUnlock()
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := cache.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets[bucket]
 	// get object key
 	partKey := bucket + "/" + getMultipartKey(key, uploadID, partID)
 	if _, ok := storedBucket.partMetadata[partKey]; ok == true {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return storedBucket.partMetadata[partKey].ETag, nil
 	}
-	cache.lock.RUnlock()
+	donut.lock.RUnlock()
 
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -172,9 +172,9 @@ func (cache Cache) createObjectPart(bucket, key, uploadID string, partID int, co
 	md5SumBytes := hash.Sum(nil)
 	totalLength := int64(len(readBytes))
 
-	cache.lock.Lock()
-	cache.multiPartObjects.Set(partKey, readBytes)
-	cache.lock.Unlock()
+	donut.lock.Lock()
+	donut.multiPartObjects.Set(partKey, readBytes)
+	donut.lock.Unlock()
 	// setting up for de-allocation
 	readBytes = nil
 
@@ -192,32 +192,32 @@ func (cache Cache) createObjectPart(bucket, key, uploadID string, partID int, co
 		Size:         totalLength,
 	}
 
-	cache.lock.Lock()
+	donut.lock.Lock()
 	storedBucket.partMetadata[partKey] = newPart
 	multiPartSession := storedBucket.multiPartSession[key]
 	multiPartSession.totalParts++
 	storedBucket.multiPartSession[key] = multiPartSession
-	cache.storedBuckets[bucket] = storedBucket
-	cache.lock.Unlock()
+	donut.storedBuckets[bucket] = storedBucket
+	donut.lock.Unlock()
 
 	return md5Sum, nil
 }
 
-func (cache Cache) cleanupMultipartSession(bucket, key, uploadID string) {
-	cache.lock.Lock()
-	defer cache.lock.Unlock()
-	delete(cache.storedBuckets[bucket].multiPartSession, key)
+func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
+	delete(donut.storedBuckets[bucket].multiPartSession, key)
 }
 
-func (cache Cache) cleanupMultiparts(bucket, key, uploadID string) {
-	for i := 1; i <= cache.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
+func (donut API) cleanupMultiparts(bucket, key, uploadID string) {
+	for i := 1; i <= donut.storedBuckets[bucket].multiPartSession[key].totalParts; i++ {
 		objectKey := bucket + "/" + getMultipartKey(key, uploadID, i)
-		cache.multiPartObjects.Delete(objectKey)
+		donut.multiPartObjects.Delete(objectKey)
 	}
 }
 
 // CompleteMultipartUpload -
-func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
+func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
 	if !IsValidBucket(bucket) {
 		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
@@ -225,26 +225,26 @@ func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts m
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	// Verify upload id
-	cache.lock.RLock()
-	if _, ok := cache.storedBuckets[bucket]; ok == false {
-		cache.lock.RUnlock()
+	donut.lock.RLock()
+	if _, ok := donut.storedBuckets[bucket]; ok == false {
+		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := cache.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets[bucket]
 	if storedBucket.multiPartSession[key].uploadID != uploadID {
-		cache.lock.RUnlock()
+		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
-	cache.lock.RUnlock()
+	donut.lock.RUnlock()
 
-	cache.lock.Lock()
+	donut.lock.Lock()
 	var size int64
 	var fullObject bytes.Buffer
 	for i := 1; i <= len(parts); i++ {
 		recvMD5 := parts[i]
-		object, ok := cache.multiPartObjects.Get(bucket + "/" + getMultipartKey(key, uploadID, i))
+		object, ok := donut.multiPartObjects.Get(bucket + "/" + getMultipartKey(key, uploadID, i))
 		if ok == false {
-			cache.lock.Unlock()
+			donut.lock.Unlock()
 			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
 		}
 		size += int64(len(object))
@@ -264,20 +264,20 @@ func (cache Cache) CompleteMultipartUpload(bucket, key, uploadID string, parts m
 		object = nil
 		go debug.FreeOSMemory()
 	}
-	cache.lock.Unlock()
+	donut.lock.Unlock()
 
 	md5sumSlice := md5.Sum(fullObject.Bytes())
 	// this is needed for final verification inside CreateObject, do not convert this to hex
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
-	objectMetadata, err := cache.CreateObject(bucket, key, "", md5sum, size, &fullObject)
+	objectMetadata, err := donut.CreateObject(bucket, key, md5sum, size, &fullObject, nil)
 	if err != nil {
 		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
 		// which would in-turn cleanup properly in accordance with S3 Spec
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	fullObject.Reset()
-	cache.cleanupMultiparts(bucket, key, uploadID)
-	cache.cleanupMultipartSession(bucket, key, uploadID)
+	donut.cleanupMultiparts(bucket, key, uploadID)
+	donut.cleanupMultipartSession(bucket, key, uploadID)
 	return objectMetadata, nil
 }
 
@@ -289,14 +289,14 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads -
-func (cache Cache) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
+func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
 	// TODO handle delimiter
-	cache.lock.RLock()
-	defer cache.lock.RUnlock()
-	if _, ok := cache.storedBuckets[bucket]; ok == false {
+	donut.lock.RLock()
+	defer donut.lock.RUnlock()
+	if _, ok := donut.storedBuckets[bucket]; ok == false {
 		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := cache.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets[bucket]
 	var uploads []*UploadMetadata
 
 	for key, session := range storedBucket.multiPartSession {
@@ -351,14 +351,14 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // ListObjectParts -
-func (cache Cache) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
+func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
 	// Verify upload id
-	cache.lock.RLock()
-	defer cache.lock.RUnlock()
-	if _, ok := cache.storedBuckets[bucket]; ok == false {
+	donut.lock.RLock()
+	defer donut.lock.RUnlock()
+	if _, ok := donut.storedBuckets[bucket]; ok == false {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := cache.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets[bucket]
 	if _, ok := storedBucket.multiPartSession[key]; ok == false {
 		return ObjectResourcesMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 	}
@@ -395,10 +395,10 @@ func (cache Cache) ListObjectParts(bucket, key string, resources ObjectResources
 	return objectResourcesMetadata, nil
 }
 
-func (cache Cache) expiredPart(a ...interface{}) {
+func (donut API) expiredPart(a ...interface{}) {
 	key := a[0].(string)
 	// loop through all buckets
-	for _, storedBucket := range cache.storedBuckets {
+	for _, storedBucket := range donut.storedBuckets {
 		delete(storedBucket.partMetadata, key)
 	}
 	debug.FreeOSMemory()

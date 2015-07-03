@@ -16,6 +16,8 @@
 
 package api
 
+import "github.com/minio/minio/pkg/storage/donut"
+
 // Operation container for individual operations read by Ticket Master
 type Operation struct {
 	ProceedCh chan struct{}
@@ -23,10 +25,16 @@ type Operation struct {
 
 // Minio container for API and also carries OP (operation) channel
 type Minio struct {
-	OP chan Operation
+	OP    chan Operation
+	Donut donut.Interface
 }
 
 // New instantiate a new minio API
 func New() Minio {
-	return Minio{OP: make(chan Operation)}
+	// ignore errors for now
+	d, _ := donut.LoadDonut()
+	return Minio{
+		OP:    make(chan Operation),
+		Donut: d,
+	}
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/pkg/server/api"
 )
 
+// Start API listener
 func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 	defer close(errCh)
 
@@ -74,6 +75,7 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 	}
 }
 
+// Start RPC listener
 func startRPC(errCh chan error, rpcHandler http.Handler) {
 	defer close(errCh)
 
@@ -86,10 +88,11 @@ func startRPC(errCh chan error, rpcHandler http.Handler) {
 	errCh <- httpServer.ListenAndServe()
 }
 
+// Start ticket master
 func startTM(a api.Minio) {
 	for {
 		for op := range a.OP {
-			close(op.ProceedCh)
+			op.ProceedCh <- struct{}{}
 		}
 	}
 }
@@ -101,8 +104,7 @@ func StartServices(conf api.Config) error {
 
 	apiHandler, minioAPI := getAPIHandler(conf)
 	go startAPI(apiErrCh, conf, apiHandler)
-	rpcHandler := getRPCHandler()
-	go startRPC(rpcErrCh, rpcHandler)
+	go startRPC(rpcErrCh, getRPCHandler())
 	go startTM(minioAPI)
 
 	select {

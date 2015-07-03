@@ -8,18 +8,6 @@ import (
 	"github.com/minio/minio/pkg/server/api"
 )
 
-func removeDuplicates(slice []string) []string {
-	newSlice := []string{}
-	seen := make(map[string]struct{})
-	for _, val := range slice {
-		if _, ok := seen[val]; !ok {
-			newSlice = append(newSlice, val)
-			seen[val] = struct{}{}
-		}
-	}
-	return newSlice
-}
-
 var commands = []cli.Command{
 	serverCmd,
 	controlCmd,

@@ -20,8 +20,8 @@ import "io"
 
 // Collection of Donut specification interfaces
 
-// Donut is a collection of object storage and management interface
-type Donut interface {
+// Interface is a collection of object storage and management interface
+type Interface interface {
 	ObjectStorage
 	Management
 }
@@ -31,16 +31,29 @@ type ObjectStorage interface {
 	// Storage service operations
 	GetBucketMetadata(bucket string) (BucketMetadata, error)
 	SetBucketMetadata(bucket string, metadata map[string]string) error
-	ListBuckets() (map[string]BucketMetadata, error)
-	MakeBucket(bucket string, acl BucketACL) error
+	ListBuckets() ([]BucketMetadata, error)
+	MakeBucket(bucket string, ACL string) error
 
 	// Bucket operations
-	ListObjects(bucket, prefix, marker, delim string, maxKeys int) (ListObjects, error)
+	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
 
 	// Object operations
-	GetObject(bucket, object string) (io.ReadCloser, int64, error)
+	GetObject(w io.Writer, bucket, object string) (int64, error)
+	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
 	GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
-	PutObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (ObjectMetadata, error)
+	CreateObject(bucket, object, expectedMD5Sum string, size int64, reader io.Reader, metadata map[string]string) (ObjectMetadata, error)
+
+	Multipart
+}
+
+// Multipart API
+type Multipart interface {
+	NewMultipartUpload(bucket, key, contentType string) (string, error)
+	AbortMultipartUpload(bucket, key, uploadID string) error
+	CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error)
+	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error)
+	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error)
+	ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error)
 }
 
 // Management is a donut management system interface

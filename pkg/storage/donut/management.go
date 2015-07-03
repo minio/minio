@@ -25,14 +25,14 @@ import (
 )
 
 // Heal - heal a donut and fix bad data blocks
-func (dt donut) Heal() error {
+func (donut API) Heal() error {
 	return iodine.New(NotImplemented{Function: "Heal"}, nil)
 }
 
 // Info - return info about donut configuration
-func (dt donut) Info() (nodeDiskMap map[string][]string, err error) {
+func (donut API) Info() (nodeDiskMap map[string][]string, err error) {
 	nodeDiskMap = make(map[string][]string)
-	for nodeName, node := range dt.nodes {
+	for nodeName, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
@@ -47,7 +47,7 @@ func (dt donut) Info() (nodeDiskMap map[string][]string, err error) {
 }
 
 // AttachNode - attach node
-func (dt donut) AttachNode(hostname string, disks []string) error {
+func (donut API) AttachNode(hostname string, disks []string) error {
 	if hostname == "" || len(disks) == 0 {
 		return iodine.New(InvalidArgument{}, nil)
 	}
@@ -55,13 +55,13 @@ func (dt donut) AttachNode(hostname string, disks []string) error {
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	dt.nodes[hostname] = node
+	donut.nodes[hostname] = node
 	for i, d := range disks {
 		newDisk, err := disk.New(d)
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		if err := newDisk.MakeDir(dt.name); err != nil {
+		if err := newDisk.MakeDir(donut.config.DonutName); err != nil {
 			return iodine.New(err, nil)
 		}
 		if err := node.AttachDisk(newDisk, i); err != nil {
@@ -72,21 +72,21 @@ func (dt donut) AttachNode(hostname string, disks []string) error {
 }
 
 // DetachNode - detach node
-func (dt donut) DetachNode(hostname string) error {
-	delete(dt.nodes, hostname)
+func (donut API) DetachNode(hostname string) error {
+	delete(donut.nodes, hostname)
 	return nil
 }
 
 // SaveConfig - save donut configuration
-func (dt donut) SaveConfig() error {
+func (donut API) SaveConfig() error {
 	nodeDiskMap := make(map[string][]string)
-	for hostname, node := range dt.nodes {
+	for hostname, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
 		for order, disk := range disks {
-			donutConfigPath := filepath.Join(dt.name, donutConfig)
+			donutConfigPath := filepath.Join(donut.config.DonutName, donutConfig)
 			donutConfigWriter, err := disk.CreateFile(donutConfigPath)
 			defer donutConfigWriter.Close()
 			if err != nil {
@@ -103,6 +103,6 @@ func (dt donut) SaveConfig() error {
 }
 
 // LoadConfig - load configuration
-func (dt donut) LoadConfig() error {
+func (donut API) LoadConfig() error {
 	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
 }

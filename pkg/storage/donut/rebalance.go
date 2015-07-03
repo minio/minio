@@ -26,11 +26,11 @@ import (
 )
 
 // Rebalance -
-func (d donut) Rebalance() error {
+func (donut API) Rebalance() error {
 	var totalOffSetLength int
 	var newDisks []disk.Disk
 	var existingDirs []os.FileInfo
-	for _, node := range d.nodes {
+	for _, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
@@ -38,7 +38,7 @@ func (d donut) Rebalance() error {
 		totalOffSetLength = len(disks)
 		fmt.Println(totalOffSetLength)
 		for _, disk := range disks {
-			dirs, err := disk.ListDir(d.name)
+			dirs, err := disk.ListDir(donut.config.DonutName)
 			if err != nil {
 				return iodine.New(err, nil)
 			}

@@ -57,6 +57,7 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 		"donutName":  donutName,
 		"aclType":    aclType,
 	}
+
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
 		return bucket{}, BucketMetadata{}, iodine.New(InvalidArgument{}, errParams)
 	}
@@ -130,7 +131,7 @@ func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, error) {
 }
 
 // ListObjects - list all objects
-func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjects, error) {
+func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	if maxkeys <= 0 {
@@ -140,7 +141,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	var objects []string
 	bucketMetadata, err := b.getBucketMetadata()
 	if err != nil {
-		return ListObjects{}, iodine.New(err, nil)
+		return ListObjectsResults{}, iodine.New(err, nil)
 	}
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
@@ -181,7 +182,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	commonPrefixes = RemoveDuplicates(commonPrefixes)
 	sort.Strings(commonPrefixes)
 
-	listObjects := ListObjects{}
+	listObjects := ListObjectsResults{}
 	listObjects.Objects = make(map[string]ObjectMetadata)
 	listObjects.CommonPrefixes = commonPrefixes
 	listObjects.IsTruncated = isTruncated
@@ -189,7 +190,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	for _, objectName := range results {
 		objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
 		if err != nil {
-			return ListObjects{}, iodine.New(err, nil)
+			return ListObjectsResults{}, iodine.New(err, nil)
 		}
 		listObjects.Objects[objectName] = objMetadata
 	}

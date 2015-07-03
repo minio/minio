@@ -17,16 +17,51 @@
 package api
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/storage/donut"
+	"github.com/minio/minio/pkg/utils/log"
 )
 
 func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
+
+	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket)
+	switch iodine.ToError(err).(type) {
+	case donut.BucketNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			return false
+		}
+	case donut.BucketNameInvalid:
+		{
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			return false
+		}
+	case nil:
+		if _, err := stripAuth(req); err != nil {
+			if bucketMetadata.ACL.IsPrivate() {
+				return true
+				//uncomment this when we have webcli
+				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				//return false
+			}
+			if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
+				return true
+				//uncomment this when we have webcli
+				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				//return false
+			}
+		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
 	return true
 }
 
@@ -38,18 +73,16 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 // This operation returns at most 1,000 multipart uploads in the response.
 //
 func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
-	acceptsContentType := getContentType(req)
-
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
+	// Ticket master block
 	{
-		// do you operation
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until ticket master gives us a go
+		<-op.ProceedCh
 	}
-	log.Println(acceptsContentType)
 
+	acceptsContentType := getContentType(req)
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads == 0 {
 		resources.MaxUploads = maxObjectList
@@ -57,7 +90,29 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
+
+	resources, err := api.Donut.ListMultipartUploads(bucket, resources)
+	switch iodine.ToError(err).(type) {
+	case nil: // success
+		{
+			// generate response
+			response := generateListMultipartUploadsResult(bucket, resources)
+			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+			// write headers
+			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+			// write body
+			w.Write(encodedSuccessResponse)
+		}
+	case donut.BucketNotFound:
+		{
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		}
+	default:
+		{
+			log.Error.Println(iodine.New(err, nil))
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
+	}
 }
 
 // ListObjectsHandler - GET Bucket (List Objects)
@@ -67,18 +122,16 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 // criteria to return a subset of the objects in a bucket.
 //
 func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	acceptsContentType := getContentType(req)
-
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
+	// Ticket master block
 	{
-		// do you operation
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
 	}
-	log.Println(acceptsContentType)
 
+	acceptsContentType := getContentType(req)
 	// verify if bucket allows this operation
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
@@ -96,8 +149,25 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
 
+	objects, resources, err := api.Donut.ListObjects(bucket, resources)
+	switch iodine.ToError(err).(type) {
+	case nil:
+		// generate response
+		response := generateListObjectsResponse(bucket, objects, resources)
+		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		// write headers
+		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+		// write body
+		w.Write(encodedSuccessResponse)
+	case donut.ObjectNotFound:
+		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+	case donut.ObjectNameInvalid:
+		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+	default:
+		log.Error.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
 }
 
 // ListBucketsHandler - GET Service
@@ -105,6 +175,15 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
+	// Ticket master block
+	{
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
+	}
+
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot list buckets
@@ -112,21 +191,36 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	//	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 	//	return
 	// }
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
-	{
-		// do you operation
+
+	buckets, err := api.Donut.ListBuckets()
+	switch iodine.ToError(err).(type) {
+	case nil:
+		// generate response
+		response := generateListBucketsResponse(buckets)
+		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		// write headers
+		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+		// write response
+		w.Write(encodedSuccessResponse)
+	default:
+		log.Error.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
-	log.Println(acceptsContentType)
 }
 
 // PutBucketHandler - PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
+	// Ticket master block
+	{
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
+	}
+
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot create a bucket
@@ -134,15 +228,6 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// 	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 	//	return
 	// }
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
-	{
-		// do you operation
-	}
-	log.Println(acceptsContentType)
 
 	if isRequestBucketACL(req.URL.Query()) {
 		api.PutBucketACLHandler(w, req)
@@ -157,24 +242,39 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
+
+	err := api.Donut.MakeBucket(bucket, getACLTypeString(aclType))
+	switch iodine.ToError(err).(type) {
+	case nil:
+		// Make sure to add Location information here only for bucket
+		w.Header().Set("Location", "/"+bucket)
+		writeSuccessResponse(w, acceptsContentType)
+	case donut.TooManyBuckets:
+		writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
+	case donut.BucketNameInvalid:
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+	case donut.BucketExists:
+		writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
+	default:
+		log.Error.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
 }
 
 // PutBucketACLHandler - PUT Bucket ACL
 // ----------
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
 func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
-	acceptsContentType := getContentType(req)
-
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
+	// Ticket master block
 	{
-		// do you operation
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
 	}
-	log.Println(acceptsContentType)
+
+	acceptsContentType := getContentType(req)
 
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
@@ -185,7 +285,19 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
+
+	err := api.Donut.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)})
+	switch iodine.ToError(err).(type) {
+	case nil:
+		writeSuccessResponse(w, acceptsContentType)
+	case donut.BucketNameInvalid:
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+	case donut.BucketNotFound:
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+	default:
+		log.Error.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	}
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -195,19 +307,33 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
-	acceptsContentType := getContentType(req)
-
-	op := Operation{}
-	op.ProceedCh = make(chan struct{})
-	api.OP <- op
-	// block until Ticket master gives us a go
-	<-op.ProceedCh
+	// Ticket master block
 	{
-		// do you operation
+		op := Operation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
 	}
-	log.Println(acceptsContentType)
+
+	acceptsContentType := getContentType(req)
 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-	log.Println(bucket)
+
+	_, err := api.Donut.GetBucketMetadata(bucket)
+	switch iodine.ToError(err).(type) {
+	case nil:
+		writeSuccessResponse(w, acceptsContentType)
+	case donut.BucketNotFound:
+		error := getErrorCode(NoSuchBucket)
+		w.WriteHeader(error.HTTPStatusCode)
+	case donut.BucketNameInvalid:
+		error := getErrorCode(InvalidBucketName)
+		w.WriteHeader(error.HTTPStatusCode)
+	default:
+		log.Error.Println(iodine.New(err, nil))
+		error := getErrorCode(InternalError)
+		w.WriteHeader(error.HTTPStatusCode)
+	}
 }

@@ -24,9 +24,9 @@ import (
 	"github.com/minio/minio/pkg/server/rpc"
 )
 
+// Get api
 func getAPI() api.Minio {
-	a := api.New()
-	return a
+	return api.New()
 }
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -82,15 +82,15 @@ func registerChain(handlers ...handlerFunc) chain {
 	return ch
 }
 
-// registerOtherMiddleware register all available middleware
-func registerOtherMiddleware(mux http.Handler, conf api.Config) http.Handler {
+// registerCustomMiddleware register all available custom middleware
+func registerCustomMiddleware(mux http.Handler, conf api.Config) http.Handler {
 	ch := registerChain(
 		api.ValidContentTypeHandler,
 		api.TimeValidityHandler,
 		api.IgnoreResourcesHandler,
 		api.ValidateAuthHeaderHandler,
 		api.LoggingHandler,
-		// Add new middleware here
+		// Add new your new middleware here
 	)
 
 	mux = ch.final(mux)
@@ -109,7 +109,7 @@ func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 	mux := router.NewRouter()
 	minioAPI := getAPI()
 	apiHandler := registerAPI(mux, minioAPI)
-	apiHandler = registerOtherMiddleware(apiHandler, conf)
+	apiHandler = registerCustomMiddleware(apiHandler, conf)
 	return apiHandler, minioAPI
 }
 
@@ -120,6 +120,6 @@ func getRPCHandler() http.Handler {
 	s.RegisterService(new(rpc.HelloService), "")
 	s.RegisterService(new(rpc.VersionService), "")
 	s.RegisterService(new(rpc.GetSysInfoService), "")
-	// add more services here
+	// Add new services here
 	return registerRPC(router.NewRouter(), s)
 }
