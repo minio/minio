@@ -24,8 +24,8 @@ import (
 	"encoding/xml"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/donut"
 	"github.com/minio/minio/pkg/utils/log"
 )
 
@@ -48,8 +48,6 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -85,6 +83,10 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 		}
+	case donut.BucketNameInvalid:
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+	case donut.BucketNotFound:
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	case donut.ObjectNotFound:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	case donut.ObjectNameInvalid:
@@ -109,8 +111,6 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -125,6 +125,14 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case nil:
 		setObjectHeaders(w, metadata)
 		w.WriteHeader(http.StatusOK)
+	case donut.BucketNameInvalid:
+		error := getErrorCode(InvalidBucketName)
+		w.Header().Set("Server", "Minio")
+		w.WriteHeader(error.HTTPStatusCode)
+	case donut.BucketNotFound:
+		error := getErrorCode(NoSuchBucket)
+		w.Header().Set("Server", "Minio")
+		w.WriteHeader(error.HTTPStatusCode)
 	case donut.ObjectNotFound:
 		error := getErrorCode(NoSuchKey)
 		w.Header().Set("Server", "Minio")
@@ -155,7 +163,6 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	acceptsContentType := getContentType(req)
-	// verify if this operation is allowed
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -203,6 +210,10 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case nil:
 		w.Header().Set("ETag", metadata.MD5Sum)
 		writeSuccessResponse(w, acceptsContentType)
+	case donut.BucketNotFound:
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+	case donut.BucketNameInvalid:
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	case donut.ObjectExists:
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	case donut.BadDigest:
@@ -231,8 +242,6 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -278,8 +287,6 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -355,8 +362,6 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -392,8 +397,6 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -438,8 +441,6 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 	}
 
 	acceptsContentType := getContentType(req)
-
-	// handle ACL's here at bucket level
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}

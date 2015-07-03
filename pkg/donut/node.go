@@ -17,8 +17,8 @@
 package donut
 
 import (
+	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/donut/disk"
 )
 
 // node struct internal

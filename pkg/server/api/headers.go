@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/minio/minio/pkg/storage/donut"
+	"github.com/minio/minio/pkg/donut"
 )
 
 // No encoder interface exists, so we create one.

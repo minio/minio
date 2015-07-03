@@ -9,32 +9,25 @@
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or impliedisk.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 
-package api
+package disk
 
-import "github.com/minio/minio/pkg/donut"
+// InvalidArgument invalid argument
+type InvalidArgument struct{}
 
-// Operation container for individual operations read by Ticket Master
-type Operation struct {
-	ProceedCh chan struct{}
+func (e InvalidArgument) Error() string {
+	return "Invalid argument"
 }
 
-// Minio container for API and also carries OP (operation) channel
-type Minio struct {
-	OP    chan Operation
-	Donut donut.Interface
+// UnsupportedFilesystem unsupported filesystem type
+type UnsupportedFilesystem struct {
+	Type string
 }
 
-// New instantiate a new minio API
-func New() Minio {
-	// ignore errors for now
-	d, _ := donut.LoadDonut()
-	return Minio{
-		OP:    make(chan Operation),
-		Donut: d,
-	}
+func (e UnsupportedFilesystem) Error() string {
+	return "Unsupported filesystem: " + e.Type
 }

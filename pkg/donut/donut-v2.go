@@ -32,9 +32,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/donut/trove"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/quick"
-	"github.com/minio/minio/pkg/storage/donut/trove"
 )
 
 // total Number of buckets allowed
@@ -397,9 +397,9 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			break
 		}
 		hash.Write(byteBuffer[0:length])
-		donut.lock.Lock()
+		//donut.lock.Lock()
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
-		donut.lock.Unlock()
+		//donut.lock.Unlock()
 		if !ok {
 			return ObjectMetadata{}, iodine.New(InternalError{}, nil)
 		}
@@ -431,10 +431,10 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		Size:     int64(totalLength),
 	}
 
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	storedBucket.objectMetadata[objectKey] = newObject
 	donut.storedBuckets[bucket] = storedBucket
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 	return newObject, nil
 }
 
@@ -476,9 +476,9 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
 	newBucket.bucketMetadata.ACL = BucketACL(acl)
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	donut.storedBuckets[bucketName] = newBucket
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 	return nil
 }
 

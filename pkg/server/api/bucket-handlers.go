@@ -20,8 +20,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/storage/donut"
 	"github.com/minio/minio/pkg/utils/log"
 )
 
@@ -83,6 +83,10 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 	}
 
 	acceptsContentType := getContentType(req)
+	if !api.isValidOp(w, req, acceptsContentType) {
+		return
+	}
+
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads == 0 {
 		resources.MaxUploads = maxObjectList
@@ -132,7 +136,6 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	acceptsContentType := getContentType(req)
-	// verify if bucket allows this operation
 	if !api.isValidOp(w, req, acceptsContentType) {
 		return
 	}
@@ -160,6 +163,10 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 		// write body
 		w.Write(encodedSuccessResponse)
+	case donut.BucketNameInvalid:
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+	case donut.BucketNotFound:
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	case donut.ObjectNotFound:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	case donut.ObjectNameInvalid:

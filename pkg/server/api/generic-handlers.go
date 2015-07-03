@@ -199,7 +199,7 @@ func getConfigFile() string {
 	if err := os.MkdirAll(confPath, 0700); err != nil {
 		return ""
 	}
-	return filepath.Join(confPath, "config.json")
+	return filepath.Join(confPath, "users.json")
 }
 
 // validate auth header handler ServeHTTP() wrapper

@@ -57,7 +57,7 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 	}
 	donut.lock.RUnlock()
 
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
@@ -67,7 +67,7 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 		initiated:  time.Now(),
 		totalParts: 0,
 	}
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 
 	return uploadID, nil
 }
@@ -172,9 +172,9 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 	md5SumBytes := hash.Sum(nil)
 	totalLength := int64(len(readBytes))
 
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	donut.multiPartObjects.Set(partKey, readBytes)
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 	// setting up for de-allocation
 	readBytes = nil
 
@@ -192,20 +192,20 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		Size:         totalLength,
 	}
 
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	storedBucket.partMetadata[partKey] = newPart
 	multiPartSession := storedBucket.multiPartSession[key]
 	multiPartSession.totalParts++
 	storedBucket.multiPartSession[key] = multiPartSession
 	donut.storedBuckets[bucket] = storedBucket
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 
 	return md5Sum, nil
 }
 
 func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
-	donut.lock.Lock()
-	defer donut.lock.Unlock()
+	//	donut.lock.Lock()
+	//	defer donut.lock.Unlock()
 	delete(donut.storedBuckets[bucket].multiPartSession, key)
 }
 
@@ -237,7 +237,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 	}
 	donut.lock.RUnlock()
 
-	donut.lock.Lock()
+	//donut.lock.Lock()
 	var size int64
 	var fullObject bytes.Buffer
 	for i := 1; i <= len(parts); i++ {
@@ -264,7 +264,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 		object = nil
 		go debug.FreeOSMemory()
 	}
-	donut.lock.Unlock()
+	//donut.lock.Unlock()
 
 	md5sumSlice := md5.Sum(fullObject.Bytes())
 	// this is needed for final verification inside CreateObject, do not convert this to hex

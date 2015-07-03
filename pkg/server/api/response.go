@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/minio/minio/pkg/storage/donut"
+	"github.com/minio/minio/pkg/donut"
 )
 
 // Reply date format
