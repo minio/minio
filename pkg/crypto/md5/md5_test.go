@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
-	"github.com/minio/minio/pkg/utils/crypto/md5"
+	"github.com/minio/minio/pkg/crypto/md5"
 )
 
 func Test(t *testing.T) { TestingT(t) }

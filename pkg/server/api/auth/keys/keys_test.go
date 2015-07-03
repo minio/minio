@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
-	"github.com/minio/minio/pkg/utils/crypto/keys"
+	"github.com/minio/minio/pkg/server/api/auth/keys"
 )
 
 func Test(t *testing.T) { TestingT(t) }

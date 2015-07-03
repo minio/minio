@@ -31,9 +31,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
+	"github.com/minio/minio/pkg/crypto/sha512"
+	"github.com/minio/minio/pkg/donut/split"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/utils/crypto/sha512"
-	"github.com/minio/minio/pkg/utils/split"
 )
 
 const (

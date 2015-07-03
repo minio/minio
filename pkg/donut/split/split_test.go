@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
-	"github.com/minio/minio/pkg/utils/split"
+	"github.com/minio/minio/pkg/donut/split"
 )
 
 type MySuite struct{}

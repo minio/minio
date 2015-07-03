@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/quick"
-	"github.com/minio/minio/pkg/utils/crypto/keys"
+	"github.com/minio/minio/pkg/server/api/auth/keys"
 )
 
 type contentTypeHandler struct {
