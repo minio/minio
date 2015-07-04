@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2014 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
-	"github.com/minio/minio/pkg/utils/cpu"
+	"github.com/minio/minio/pkg/cpu"
 )
 
 func Test(t *testing.T) { TestingT(t) }
