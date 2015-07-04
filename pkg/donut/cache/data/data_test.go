@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package trove
+package data
 
 import (
 	"testing"

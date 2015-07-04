@@ -1,9 +1,24 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package donut
 
 import (
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -36,93 +51,6 @@ func (b BucketACL) IsPublicReadWrite() bool {
 	return b == BucketACL("public-read-write")
 }
 
-// FilterMode type
-type FilterMode int
-
-// FilterMode list
-const (
-	DelimiterPrefixMode FilterMode = iota
-	DelimiterMode
-	PrefixMode
-	DefaultMode
-)
-
-// PartMetadata - various types of individual part resources
-type PartMetadata struct {
-	PartNumber   int
-	LastModified time.Time
-	ETag         string
-	Size         int64
-}
-
-// ObjectResourcesMetadata - various types of object resources
-type ObjectResourcesMetadata struct {
-	Bucket               string
-	EncodingType         string
-	Key                  string
-	UploadID             string
-	StorageClass         string
-	PartNumberMarker     int
-	NextPartNumberMarker int
-	MaxParts             int
-	IsTruncated          bool
-
-	Part []*PartMetadata
-}
-
-// UploadMetadata container capturing metadata on in progress multipart upload in a given bucket
-type UploadMetadata struct {
-	Key          string
-	UploadID     string
-	StorageClass string
-	Initiated    time.Time
-}
-
-// BucketMultipartResourcesMetadata - various types of bucket resources for inprogress multipart uploads
-type BucketMultipartResourcesMetadata struct {
-	KeyMarker          string
-	UploadIDMarker     string
-	NextKeyMarker      string
-	NextUploadIDMarker string
-	EncodingType       string
-	MaxUploads         int
-	IsTruncated        bool
-	Upload             []*UploadMetadata
-	Prefix             string
-	Delimiter          string
-	CommonPrefixes     []string
-}
-
-// BucketResourcesMetadata - various types of bucket resources
-type BucketResourcesMetadata struct {
-	Prefix         string
-	Marker         string
-	NextMarker     string
-	Maxkeys        int
-	EncodingType   string
-	Delimiter      string
-	IsTruncated    bool
-	CommonPrefixes []string
-	Mode           FilterMode
-}
-
-// GetMode - Populate filter mode
-func GetMode(resources BucketResourcesMetadata) FilterMode {
-	var f FilterMode
-	switch true {
-	case resources.Delimiter != "" && resources.Prefix != "":
-		f = DelimiterPrefixMode
-	case resources.Delimiter != "" && resources.Prefix == "":
-		f = DelimiterMode
-	case resources.Delimiter == "" && resources.Prefix != "":
-		f = PrefixMode
-	case resources.Delimiter == "" && resources.Prefix == "":
-		f = DefaultMode
-	}
-
-	return f
-}
-
 // IsValidBucketACL - is provided acl string supported
 func IsValidBucketACL(acl string) bool {
 	switch acl {
@@ -138,26 +66,6 @@ func IsValidBucketACL(acl string) bool {
 	default:
 		return false
 	}
-}
-
-// IsDelimiterPrefixSet Delimiter and Prefix set
-func (b BucketResourcesMetadata) IsDelimiterPrefixSet() bool {
-	return b.Mode == DelimiterPrefixMode
-}
-
-// IsDelimiterSet Delimiter set
-func (b BucketResourcesMetadata) IsDelimiterSet() bool {
-	return b.Mode == DelimiterMode
-}
-
-// IsPrefixSet Prefix set
-func (b BucketResourcesMetadata) IsPrefixSet() bool {
-	return b.Mode == PrefixMode
-}
-
-// IsDefault No query values
-func (b BucketResourcesMetadata) IsDefault() bool {
-	return b.Mode == DefaultMode
 }
 
 // IsValidBucket - verify bucket name in accordance with

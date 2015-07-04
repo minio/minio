@@ -32,7 +32,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/pkg/donut/trove"
+	"github.com/minio/minio/pkg/donut/cache/data"
+	"github.com/minio/minio/pkg/donut/cache/metadata"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -55,9 +56,9 @@ type Config struct {
 type API struct {
 	config           *Config
 	lock             *sync.Mutex
-	objects          *trove.Cache
-	multiPartObjects *trove.Cache
-	storedBuckets    map[string]storedBucket
+	objects          *data.Cache
+	multiPartObjects *data.Cache
+	storedBuckets    *metadata.Cache
 	nodes            map[string]node
 	buckets          map[string]bucket
 }
@@ -67,14 +68,7 @@ type storedBucket struct {
 	bucketMetadata   BucketMetadata
 	objectMetadata   map[string]ObjectMetadata
 	partMetadata     map[string]PartMetadata
-	multiPartSession map[string]multiPartSession
-}
-
-// multiPartSession multipart session
-type multiPartSession struct {
-	totalParts int
-	uploadID   string
-	initiated  time.Time
+	multiPartSession map[string]MultiPartSession
 }
 
 // New instantiate a new donut
@@ -83,11 +77,11 @@ func New(c *Config) (Interface, error) {
 		return nil, iodine.New(err, nil)
 	}
 	a := API{config: c}
-	a.storedBuckets = make(map[string]storedBucket)
+	a.storedBuckets = metadata.NewCache()
 	a.nodes = make(map[string]node)
 	a.buckets = make(map[string]bucket)
-	a.objects = trove.NewCache(a.config.MaxSize, a.config.Expiration)
-	a.multiPartObjects = trove.NewCache(0, time.Duration(0))
+	a.objects = data.NewCache(a.config.MaxSize, a.config.Expiration)
+	a.multiPartObjects = data.NewCache(0, time.Duration(0))
 	a.objects.OnExpired = a.expiredObject
 	a.multiPartObjects.OnExpired = a.expiredPart
 	a.lock = new(sync.Mutex)
@@ -111,9 +105,7 @@ func New(c *Config) (Interface, error) {
 			return nil, iodine.New(err, nil)
 		}
 		for k, v := range buckets {
-			storedBucket := a.storedBuckets[k]
-			storedBucket.bucketMetadata = v
-			a.storedBuckets[k] = storedBucket
+			a.storedBuckets.Set(k, v)
 		}
 	}
 	return a, nil
@@ -129,7 +121,7 @@ func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, er
 	if !IsValidObjectName(object) {
 		return 0, iodine.New(ObjectNameInvalid{Object: object}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		return 0, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	objectKey := bucket + "/" + object
@@ -226,19 +218,19 @@ func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 	if !IsValidBucket(bucket) {
 		return BucketMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		if len(donut.config.NodeDiskMap) > 0 {
 			bucketMetadata, err := donut.getBucketMetadata(bucket)
 			if err != nil {
 				return BucketMetadata{}, iodine.New(err, nil)
 			}
-			storedBucket := donut.storedBuckets[bucket]
+			storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 			storedBucket.bucketMetadata = bucketMetadata
-			donut.storedBuckets[bucket] = storedBucket
+			donut.storedBuckets.Set(bucket, storedBucket)
 		}
 		return BucketMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	return donut.storedBuckets[bucket].bucketMetadata, nil
+	return donut.storedBuckets.Get(bucket).(storedBucket).bucketMetadata, nil
 }
 
 // SetBucketMetadata -
@@ -248,7 +240,7 @@ func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) er
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		return iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -256,9 +248,9 @@ func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) er
 			return iodine.New(err, nil)
 		}
 	}
-	storedBucket := donut.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	storedBucket.bucketMetadata.ACL = BucketACL(metadata["acl"])
-	donut.storedBuckets[bucket] = storedBucket
+	donut.storedBuckets.Set(bucket, storedBucket)
 	return nil
 }
 
@@ -308,10 +300,10 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	if !IsValidObjectName(key) {
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := donut.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
@@ -337,7 +329,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		storedBucket.objectMetadata[objectKey] = objMetadata
-		donut.storedBuckets[bucket] = storedBucket
+		donut.storedBuckets.Set(bucket, storedBucket)
 		return objMetadata, nil
 	}
 	// calculate md5
@@ -388,7 +380,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	}
 
 	storedBucket.objectMetadata[objectKey] = newObject
-	donut.storedBuckets[bucket] = storedBucket
+	donut.storedBuckets.Set(bucket, storedBucket)
 	return newObject, nil
 }
 
@@ -396,7 +388,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 func (donut API) MakeBucket(bucketName, acl string) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	if len(donut.storedBuckets) == totalBuckets {
+	if donut.storedBuckets.Stats().Items == totalBuckets {
 		return iodine.New(TooManyBuckets{Bucket: bucketName}, nil)
 	}
 	if !IsValidBucket(bucketName) {
@@ -405,7 +397,7 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 	if !IsValidBucketACL(acl) {
 		return iodine.New(InvalidACL{ACL: acl}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucketName]; ok == true {
+	if donut.storedBuckets.Exists(bucketName) {
 		return iodine.New(BucketExists{Bucket: bucketName}, nil)
 	}
 
@@ -420,13 +412,13 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 	}
 	var newBucket = storedBucket{}
 	newBucket.objectMetadata = make(map[string]ObjectMetadata)
-	newBucket.multiPartSession = make(map[string]multiPartSession)
+	newBucket.multiPartSession = make(map[string]MultiPartSession)
 	newBucket.partMetadata = make(map[string]PartMetadata)
 	newBucket.bucketMetadata = BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
 	newBucket.bucketMetadata.ACL = BucketACL(acl)
-	donut.storedBuckets[bucketName] = newBucket
+	donut.storedBuckets.Set(bucketName, newBucket)
 	return nil
 }
 
@@ -440,7 +432,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) (
 	if !IsValidPrefix(resources.Prefix) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(ObjectNameInvalid{Object: resources.Prefix}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	var results []ObjectMetadata
@@ -458,7 +450,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) (
 		}
 		resources.CommonPrefixes = listObjects.CommonPrefixes
 		resources.IsTruncated = listObjects.IsTruncated
-		if resources.IsTruncated && resources.IsDelimiterSet() {
+		if resources.IsTruncated && resources.Delimiter != "" {
 			resources.NextMarker = results[len(results)-1].Object
 		}
 		for key := range listObjects.Objects {
@@ -470,7 +462,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) (
 		}
 		return results, resources, nil
 	}
-	storedBucket := donut.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	for key := range storedBucket.objectMetadata {
 		if strings.HasPrefix(key, bucket+"/") {
 			key = key[len(bucket)+1:]
@@ -503,7 +495,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) (
 	for _, key := range filteredKeys {
 		if len(results) == resources.Maxkeys {
 			resources.IsTruncated = true
-			if resources.IsTruncated && resources.IsDelimiterSet() {
+			if resources.IsTruncated && resources.Delimiter != "" {
 				resources.NextMarker = results[len(results)-1].Object
 			}
 			return results, resources, nil
@@ -528,8 +520,19 @@ func (donut API) ListBuckets() ([]BucketMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 	var results []BucketMetadata
-	for _, bucket := range donut.storedBuckets {
-		results = append(results, bucket.bucketMetadata)
+	if len(donut.config.NodeDiskMap) > 0 {
+		buckets, err := donut.listBuckets()
+		if err != nil {
+			return nil, iodine.New(err, nil)
+		}
+		for _, bucketMetadata := range buckets {
+			results = append(results, bucketMetadata)
+		}
+		sort.Sort(byBucketName(results))
+		return results, nil
+	}
+	for _, bucket := range donut.storedBuckets.GetAll() {
+		results = append(results, bucket.(storedBucket).bucketMetadata)
 	}
 	sort.Sort(byBucketName(results))
 	return results, nil
@@ -546,10 +549,10 @@ func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 	if !IsValidObjectName(key) {
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
-	if _, ok := donut.storedBuckets[bucket]; ok == false {
+	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	storedBucket := donut.storedBuckets[bucket]
+	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	objectKey := bucket + "/" + key
 	if objMetadata, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		return objMetadata, nil
@@ -561,6 +564,7 @@ func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 		}
 		// update
 		storedBucket.objectMetadata[objectKey] = objMetadata
+		donut.storedBuckets.Set(bucket, storedBucket)
 		return objMetadata, nil
 	}
 	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
@@ -572,8 +576,8 @@ func (donut API) expiredObject(a ...interface{}) {
 		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)
 	key := a[0].(string)
 	// loop through all buckets
-	for _, storedBucket := range donut.storedBuckets {
-		delete(storedBucket.objectMetadata, key)
+	for _, bucket := range donut.storedBuckets.GetAll() {
+		delete(bucket.(storedBucket).objectMetadata, key)
 	}
 	debug.FreeOSMemory()
 }
