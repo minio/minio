@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package trove implements in memory caching methods
-package trove
+// Package data implements in memory caching methods for data
+package data
 
 import (
 	"sync"

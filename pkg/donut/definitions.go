@@ -71,3 +71,68 @@ type ListObjectsResults struct {
 	CommonPrefixes []string                  `json:"commonPrefixes"`
 	IsTruncated    bool                      `json:"isTruncated"`
 }
+
+// MultiPartSession multipart session
+type MultiPartSession struct {
+	totalParts int
+	uploadID   string
+	initiated  time.Time
+}
+
+// PartMetadata - various types of individual part resources
+type PartMetadata struct {
+	PartNumber   int
+	LastModified time.Time
+	ETag         string
+	Size         int64
+}
+
+// ObjectResourcesMetadata - various types of object resources
+type ObjectResourcesMetadata struct {
+	Bucket               string
+	EncodingType         string
+	Key                  string
+	UploadID             string
+	StorageClass         string
+	PartNumberMarker     int
+	NextPartNumberMarker int
+	MaxParts             int
+	IsTruncated          bool
+
+	Part []*PartMetadata
+}
+
+// UploadMetadata container capturing metadata on in progress multipart upload in a given bucket
+type UploadMetadata struct {
+	Key          string
+	UploadID     string
+	StorageClass string
+	Initiated    time.Time
+}
+
+// BucketMultipartResourcesMetadata - various types of bucket resources for inprogress multipart uploads
+type BucketMultipartResourcesMetadata struct {
+	KeyMarker          string
+	UploadIDMarker     string
+	NextKeyMarker      string
+	NextUploadIDMarker string
+	EncodingType       string
+	MaxUploads         int
+	IsTruncated        bool
+	Upload             []*UploadMetadata
+	Prefix             string
+	Delimiter          string
+	CommonPrefixes     []string
+}
+
+// BucketResourcesMetadata - various types of bucket resources
+type BucketResourcesMetadata struct {
+	Prefix         string
+	Marker         string
+	NextMarker     string
+	Maxkeys        int
+	EncodingType   string
+	Delimiter      string
+	IsTruncated    bool
+	CommonPrefixes []string
+}
