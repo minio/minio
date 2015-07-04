@@ -3,7 +3,9 @@
 //
 // Example
 //
-// ``cpu.HasSSE41()`` returns true for SSE4.1 instruction support, false otherwise
+// ``cpu.HasSSE3()`` returns true for SSE3 instruction support, false otherwise
+//
+// ``cpu.HasSSE42()`` returns true for SSE4.2 instruction support, false otherwise
 //
 // ``cpu.HasAVX()`` returns true for AVX instruction support, false otherwise
 //

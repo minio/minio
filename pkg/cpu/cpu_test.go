@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2014 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	. "github.com/minio/check"
-	"github.com/minio/minio/pkg/utils/cpu"
+	"github.com/minio/minio/pkg/cpu"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -50,8 +50,8 @@ func hasCPUFeatureFromOS(feature string) (bool, error) {
 
 func (s *MySuite) TestHasSSE41(c *C) {
 	if runtime.GOOS == "linux" {
-		var flag = cpu.HasSSE41()
-		osCheck, err := hasCPUFeatureFromOS("sse4_1")
+		var flag = cpu.HasSSE42()
+		osCheck, err := hasCPUFeatureFromOS("sse4_2")
 		c.Assert(err, IsNil)
 		c.Check(flag, Equals, osCheck)
 	}

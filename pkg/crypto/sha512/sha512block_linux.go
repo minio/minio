@@ -34,7 +34,7 @@ import (
 	"unsafe"
 )
 
-func blockSSE(dig *digest, p []byte) {
+func blockSSE3(dig *digest, p []byte) {
 	C.sha512_transform_ssse3(unsafe.Pointer(&p[0]), unsafe.Pointer(&dig.h[0]), (C.uint64_t)(len(p)/chunk))
 }
 
