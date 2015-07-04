@@ -47,7 +47,7 @@ type bucket struct {
 	time      time.Time
 	donutName string
 	nodes     map[string]node
-	lock      *sync.RWMutex
+	lock      *sync.Mutex
 }
 
 // newBucket - instantiate a new bucket
@@ -69,7 +69,7 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	b.time = t
 	b.donutName = donutName
 	b.nodes = nodes
-	b.lock = new(sync.RWMutex)
+	b.lock = new(sync.Mutex)
 
 	metadata := BucketMetadata{}
 	metadata.Version = bucketMetadataVersion
@@ -125,15 +125,15 @@ func (b bucket) getBucketMetadata() (*AllBuckets, error) {
 
 // GetObjectMetadata - get metadata for an object
 func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, error) {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	return b.readObjectMetadata(objectName)
 }
 
 // ListObjects - list all objects
 func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, error) {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	if maxkeys <= 0 {
 		maxkeys = 1000
 	}
@@ -199,8 +199,8 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 
 // ReadObject - open an object to read
 func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64, err error) {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	reader, writer := io.Pipe()
 	// get list of objects
 	bucketMetadata, err := b.getBucketMetadata()

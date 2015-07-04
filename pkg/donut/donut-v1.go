@@ -44,8 +44,6 @@ const (
 
 // makeBucket - make a new bucket
 func (donut API) makeBucket(bucket string, acl BucketACL) error {
-	donut.lock.Lock()
-	defer donut.lock.Unlock()
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return iodine.New(InvalidArgument{}, nil)
 	}
@@ -54,8 +52,6 @@ func (donut API) makeBucket(bucket string, acl BucketACL) error {
 
 // getBucketMetadata - get bucket metadata
 func (donut API) getBucketMetadata(bucketName string) (BucketMetadata, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
 	if err := donut.listDonutBuckets(); err != nil {
 		return BucketMetadata{}, iodine.New(err, nil)
 	}
@@ -71,8 +67,6 @@ func (donut API) getBucketMetadata(bucketName string) (BucketMetadata, error) {
 
 // setBucketMetadata - set bucket metadata
 func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]string) error {
-	donut.lock.Lock()
-	defer donut.lock.Unlock()
 	if err := donut.listDonutBuckets(); err != nil {
 		return iodine.New(err, nil)
 	}
@@ -92,8 +86,6 @@ func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]
 
 // listBuckets - return list of buckets
 func (donut API) listBuckets() (map[string]BucketMetadata, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
 	if err := donut.listDonutBuckets(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -109,8 +101,6 @@ func (donut API) listBuckets() (map[string]BucketMetadata, error) {
 
 // listObjects - return list of objects
 func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket":    bucket,
 		"prefix":    prefix,
@@ -133,8 +123,6 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 
 // putObject - put object
 func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (ObjectMetadata, error) {
-	donut.lock.Lock()
-	defer donut.lock.Unlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -171,8 +159,6 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 
 // getObject - get object
 func (donut API) getObject(bucket, object string) (reader io.ReadCloser, size int64, err error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -194,8 +180,6 @@ func (donut API) getObject(bucket, object string) (reader io.ReadCloser, size in
 
 // getObjectMetadata - get object metadata
 func (donut API) getObjectMetadata(bucket, object string) (ObjectMetadata, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
