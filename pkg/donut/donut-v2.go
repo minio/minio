@@ -54,7 +54,7 @@ type Config struct {
 // API - local variables
 type API struct {
 	config           *Config
-	lock             *sync.RWMutex
+	lock             *sync.Mutex
 	objects          *trove.Cache
 	multiPartObjects *trove.Cache
 	storedBuckets    map[string]storedBucket
@@ -90,7 +90,7 @@ func New(c *Config) (Interface, error) {
 	a.multiPartObjects = trove.NewCache(0, time.Duration(0))
 	a.objects.OnExpired = a.expiredObject
 	a.multiPartObjects.OnExpired = a.expiredPart
-	a.lock = new(sync.RWMutex)
+	a.lock = new(sync.Mutex)
 
 	// set up cache expiration
 	a.objects.ExpireObjects(time.Second * 5)
@@ -121,17 +121,15 @@ func New(c *Config) (Interface, error) {
 
 // GetObject - GET object from cache buffer
 func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, error) {
-	donut.lock.RLock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return 0, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(object) {
-		donut.lock.RUnlock()
 		return 0, iodine.New(ObjectNameInvalid{Object: object}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucket]; ok == false {
-		donut.lock.RUnlock()
 		return 0, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	objectKey := bucket + "/" + object
@@ -140,60 +138,49 @@ func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, er
 		if len(donut.config.NodeDiskMap) > 0 {
 			reader, size, err := donut.getObject(bucket, object)
 			if err != nil {
-				donut.lock.RUnlock()
 				return 0, iodine.New(err, nil)
 			}
 			// new proxy writer to capture data read from disk
 			pw := NewProxyWriter(w)
 			written, err := io.CopyN(pw, reader, size)
 			if err != nil {
-				donut.lock.RUnlock()
 				return 0, iodine.New(err, nil)
 			}
-			donut.lock.RUnlock()
 			/// cache object read from disk
-			{
-				donut.lock.Lock()
-				ok := donut.objects.Set(objectKey, pw.writtenBytes)
-				donut.lock.Unlock()
-				pw.writtenBytes = nil
-				go debug.FreeOSMemory()
-				if !ok {
-					return 0, iodine.New(InternalError{}, nil)
-				}
+			ok := donut.objects.Set(objectKey, pw.writtenBytes)
+			pw.writtenBytes = nil
+			go debug.FreeOSMemory()
+			if !ok {
+				return 0, iodine.New(InternalError{}, nil)
 			}
 			return written, nil
 		}
-		donut.lock.RUnlock()
 		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
 	}
 	written, err := io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
 	if err != nil {
 		return 0, iodine.New(err, nil)
 	}
-	donut.lock.RUnlock()
 	return written, nil
 }
 
 // GetPartialObject - GET object from cache buffer range
 func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
 		"start":  strconv.FormatInt(start, 10),
 		"length": strconv.FormatInt(length, 10),
 	}
-	donut.lock.RLock()
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return 0, iodine.New(BucketNameInvalid{Bucket: bucket}, errParams)
 	}
 	if !IsValidObjectName(object) {
-		donut.lock.RUnlock()
 		return 0, iodine.New(ObjectNameInvalid{Object: object}, errParams)
 	}
 	if start < 0 {
-		donut.lock.RUnlock()
 		return 0, iodine.New(InvalidRange{
 			Start:  start,
 			Length: length,
@@ -205,96 +192,73 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 		if len(donut.config.NodeDiskMap) > 0 {
 			reader, _, err := donut.getObject(bucket, object)
 			if err != nil {
-				donut.lock.RUnlock()
 				return 0, iodine.New(err, nil)
 			}
 			if _, err := io.CopyN(ioutil.Discard, reader, start); err != nil {
-				donut.lock.RUnlock()
 				return 0, iodine.New(err, nil)
 			}
 			pw := NewProxyWriter(w)
 			written, err := io.CopyN(w, reader, length)
 			if err != nil {
-				donut.lock.RUnlock()
 				return 0, iodine.New(err, nil)
 			}
-			donut.lock.RUnlock()
-			{
-				donut.lock.Lock()
-				ok := donut.objects.Set(objectKey, pw.writtenBytes)
-				donut.lock.Unlock()
-				pw.writtenBytes = nil
-				go debug.FreeOSMemory()
-				if !ok {
-					return 0, iodine.New(InternalError{}, nil)
-				}
+			ok := donut.objects.Set(objectKey, pw.writtenBytes)
+			pw.writtenBytes = nil
+			go debug.FreeOSMemory()
+			if !ok {
+				return 0, iodine.New(InternalError{}, nil)
 			}
 			return written, nil
 		}
-		donut.lock.RUnlock()
 		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
 	}
 	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
 	if err != nil {
 		return 0, iodine.New(err, nil)
 	}
-	donut.lock.RUnlock()
 	return written, nil
 }
 
 // GetBucketMetadata -
 func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
-	donut.lock.RLock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return BucketMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucket]; ok == false {
 		if len(donut.config.NodeDiskMap) > 0 {
 			bucketMetadata, err := donut.getBucketMetadata(bucket)
 			if err != nil {
-				donut.lock.RUnlock()
 				return BucketMetadata{}, iodine.New(err, nil)
 			}
 			storedBucket := donut.storedBuckets[bucket]
-			donut.lock.RUnlock()
-			{
-				donut.lock.Lock()
-				storedBucket.bucketMetadata = bucketMetadata
-				donut.storedBuckets[bucket] = storedBucket
-				donut.lock.Unlock()
-			}
+			storedBucket.bucketMetadata = bucketMetadata
+			donut.storedBuckets[bucket] = storedBucket
 		}
 		return BucketMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	donut.lock.RUnlock()
 	return donut.storedBuckets[bucket].bucketMetadata, nil
 }
 
 // SetBucketMetadata -
 func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) error {
-	donut.lock.RLock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucket]; ok == false {
-		donut.lock.RUnlock()
 		return iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
-	donut.lock.RUnlock()
-	donut.lock.Lock()
-	{
-		if len(donut.config.NodeDiskMap) > 0 {
-			if err := donut.setBucketMetadata(bucket, metadata); err != nil {
-				return iodine.New(err, nil)
-			}
+	if len(donut.config.NodeDiskMap) > 0 {
+		if err := donut.setBucketMetadata(bucket, metadata); err != nil {
+			return iodine.New(err, nil)
 		}
-		storedBucket := donut.storedBuckets[bucket]
-		storedBucket.bucketMetadata.ACL = BucketACL(metadata["acl"])
-		donut.storedBuckets[bucket] = storedBucket
 	}
-	donut.lock.Unlock()
+	storedBucket := donut.storedBuckets[bucket]
+	storedBucket.bucketMetadata.ACL = BucketACL(metadata["acl"])
+	donut.storedBuckets[bucket] = storedBucket
 	return nil
 }
 
@@ -328,7 +292,9 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 		}, nil)
 	}
 	contentType := metadata["contentType"]
+	donut.lock.Lock()
 	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	donut.lock.Unlock()
 	// free
 	debug.FreeOSMemory()
 	return objectMetadata, iodine.New(err, nil)
@@ -336,27 +302,21 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 
 // createObject - PUT object to cache buffer
 func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
-	donut.lock.RLock()
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucket]; ok == false {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := donut.storedBuckets[bucket]
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(ObjectExists{Object: key}, nil)
 	}
-	donut.lock.RUnlock()
 
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -376,10 +336,8 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
-		donut.lock.Lock()
 		storedBucket.objectMetadata[objectKey] = objMetadata
 		donut.storedBuckets[bucket] = storedBucket
-		donut.lock.Unlock()
 		return objMetadata, nil
 	}
 	// calculate md5
@@ -397,9 +355,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			break
 		}
 		hash.Write(byteBuffer[0:length])
-		//donut.lock.Lock()
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
-		//donut.lock.Unlock()
 		if !ok {
 			return ObjectMetadata{}, iodine.New(InternalError{}, nil)
 		}
@@ -431,33 +387,27 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		Size:     int64(totalLength),
 	}
 
-	//donut.lock.Lock()
 	storedBucket.objectMetadata[objectKey] = newObject
 	donut.storedBuckets[bucket] = storedBucket
-	//donut.lock.Unlock()
 	return newObject, nil
 }
 
 // MakeBucket - create bucket in cache
 func (donut API) MakeBucket(bucketName, acl string) error {
-	donut.lock.RLock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	if len(donut.storedBuckets) == totalBuckets {
-		donut.lock.RUnlock()
 		return iodine.New(TooManyBuckets{Bucket: bucketName}, nil)
 	}
 	if !IsValidBucket(bucketName) {
-		donut.lock.RUnlock()
 		return iodine.New(BucketNameInvalid{Bucket: bucketName}, nil)
 	}
 	if !IsValidBucketACL(acl) {
-		donut.lock.RUnlock()
 		return iodine.New(InvalidACL{ACL: acl}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucketName]; ok == true {
-		donut.lock.RUnlock()
 		return iodine.New(BucketExists{Bucket: bucketName}, nil)
 	}
-	donut.lock.RUnlock()
 
 	if strings.TrimSpace(acl) == "" {
 		// default is private
@@ -476,16 +426,14 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
 	newBucket.bucketMetadata.ACL = BucketACL(acl)
-	//donut.lock.Lock()
 	donut.storedBuckets[bucketName] = newBucket
-	//donut.lock.Unlock()
 	return nil
 }
 
 // ListObjects - list objects from cache
 func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	if !IsValidBucket(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
@@ -577,8 +525,8 @@ func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from cache
 func (donut API) ListBuckets() ([]BucketMetadata, error) {
-	donut.lock.RLock()
-	defer donut.lock.RUnlock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	var results []BucketMetadata
 	for _, bucket := range donut.storedBuckets {
 		results = append(results, bucket.bucketMetadata)
@@ -589,39 +537,32 @@ func (donut API) ListBuckets() ([]BucketMetadata, error) {
 
 // GetObjectMetadata - get object metadata from cache
 func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
-	donut.lock.RLock()
+	donut.lock.Lock()
+	defer donut.lock.Unlock()
 	// check if bucket exists
 	if !IsValidBucket(bucket) {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
 	if !IsValidObjectName(key) {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
 	if _, ok := donut.storedBuckets[bucket]; ok == false {
-		donut.lock.RUnlock()
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := donut.storedBuckets[bucket]
 	objectKey := bucket + "/" + key
 	if objMetadata, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		donut.lock.RUnlock()
 		return objMetadata, nil
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		objMetadata, err := donut.getObjectMetadata(bucket, key)
-		donut.lock.RUnlock()
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		// update
-		donut.lock.Lock()
 		storedBucket.objectMetadata[objectKey] = objMetadata
-		donut.lock.Unlock()
 		return objMetadata, nil
 	}
-	donut.lock.RUnlock()
 	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 }
 
