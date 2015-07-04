@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2014 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,24 @@
 
 package cpu
 
-// int has_sse41 (void);
-// int has_avx (void);
-// int has_avx2 (void);
-import "C"
+// cpuid, cpuidex
+func cpuid(op uint32) (eax, ebx, ecx, edx uint32)
+func cpuidex(op, op2 uint32) (eax, ebx, ecx, edx uint32)
 
 // HasSSE41 - CPUID instruction verification wrapper for SSE41 extensions
 func HasSSE41() bool {
-	return int(C.has_sse41()) == 1
+	_, _, c, _ := cpuid(1)
+	return ((c & (1 << 19)) != 0)
 }
 
 // HasAVX - CPUID instruction verification wrapper for AVX extensions
 func HasAVX() bool {
-	return int(C.has_avx()) == 1
+	_, _, c, _ := cpuid(1)
+	return ((c & (1 << 28)) != 0)
 }
 
 // HasAVX2 - CPUID instruction verification wrapper for AVX2 extensions
 func HasAVX2() bool {
-	return int(C.has_avx2()) == 1
+	_, b, _, _ := cpuidex(7, 0)
+	return ((b & (1 << 5)) != 0)
 }
