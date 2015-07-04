@@ -32,7 +32,7 @@ package sha256
 import "C"
 import "unsafe"
 
-func blockSSE(dig *digest, p []byte) {
+func blockSSE3(dig *digest, p []byte) {
 	C.sha256_transform_ssse3((*C.char)(unsafe.Pointer(&p[0])), (*C.uint32_t)(unsafe.Pointer(&dig.h[0])), (C.ulong)(len(p)/64))
 }
 

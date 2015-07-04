@@ -14,7 +14,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/minio/minio/pkg/utils/cpu"
+	"github.com/minio/minio/pkg/cpu"
 )
 
 // The size of a SHA1 checksum in bytes.
@@ -60,7 +60,7 @@ func New() hash.Hash {
 
 func block(dig *digest, p []byte) {
 	switch true {
-	case cpu.HasSSE41() == true:
+	case cpu.HasSSE3() == true:
 		blockSSE3(dig, p)
 	default:
 		blockGeneric(dig, p)
