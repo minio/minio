@@ -28,6 +28,7 @@ type logLevel int
 
 const (
 	levelUnknown logLevel = iota
+	levelPrint
 	levelDebug
 	levelInfo
 	levelError
@@ -64,6 +65,13 @@ var (
 	Debugln = func(a ...interface{}) { privatePrintln(levelDebug, a...) }
 	// Debugf prints a debug message with formatting
 	Debugf = func(f string, a ...interface{}) { privatePrintf(levelDebug, f, a...) }
+
+	// Print prints a debug message
+	Print = func(a ...interface{}) { privatePrint(levelPrint, a...) }
+	// Println prints a debug message with a new line
+	Println = func(a ...interface{}) { privatePrintln(levelPrint, a...) }
+	// Printf prints a debug message with formatting
+	Printf = func(f string, a ...interface{}) { privatePrintf(levelPrint, f, a...) }
 )
 
 var (

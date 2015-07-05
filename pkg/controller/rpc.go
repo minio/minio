@@ -1,0 +1,66 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package controller
+
+import (
+	"bytes"
+	"net/http"
+
+	"github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/pkg/iodine"
+)
+
+// RPCOps RPC operation
+type RPCOps struct {
+	Method  string
+	Request interface{}
+}
+
+// RPCRequest rpc client request
+type RPCRequest struct {
+	req       *http.Request
+	transport http.RoundTripper
+}
+
+// NewRequest initiate a new client RPC request
+func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest, error) {
+	params, err := json.EncodeClientRequest(op.Method, op.Request)
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(params))
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	rpcReq := &RPCRequest{}
+	rpcReq.req = req
+	rpcReq.req.Header.Set("Content-Type", "application/json")
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	rpcReq.transport = transport
+	return rpcReq, nil
+}
+
+// Do - make a http connection
+func (r RPCRequest) Do() (*http.Response, error) {
+	resp, err := r.transport.RoundTrip(r.req)
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	return resp, nil
+}
