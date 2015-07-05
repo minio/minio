@@ -18,6 +18,7 @@
 package data
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
@@ -32,16 +33,10 @@ type Cache struct {
 	sync.Mutex
 
 	// items hold the cached objects
-	items map[string][]byte
+	items *list.List
 
-	// updatedAt holds the time that related item's updated at
-	updatedAt map[string]time.Time
-
-	// expiration is a duration for a cache key to expire
-	expiration time.Duration
-
-	// stopExpireTimer channel to quit the timer thread
-	stopExpireTimer chan struct{}
+	// reverseItems holds the time that related item's updated at
+	reverseItems map[string]*list.Element
 
 	// maxSize is a total size for overall cache
 	maxSize uint64
@@ -49,30 +44,34 @@ type Cache struct {
 	// currentSize is a current size in memory
 	currentSize uint64
 
-	// OnExpired - callback function for eviction
-	OnExpired func(a ...interface{})
+	// OnEvicted - callback function for eviction
+	OnEvicted func(a ...interface{})
 
-	// totalExpired counter to keep track of total expirations
-	totalExpired uint64
+	// totalEvicted counter to keep track of total expirations
+	totalEvicted int
 }
 
 // Stats current cache statistics
 type Stats struct {
 	Bytes   uint64
-	Items   uint64
-	Expired uint64
+	Items   int
+	Evicted int
+}
+
+type element struct {
+	key   string
+	value []byte
 }
 
 // NewCache creates an inmemory cache
 //
 // maxSize is used for expiring objects before we run out of memory
 // expiration is used for expiration of a key from cache
-func NewCache(maxSize uint64, expiration time.Duration) *Cache {
+func NewCache(maxSize uint64) *Cache {
 	return &Cache{
-		items:      make(map[string][]byte),
-		updatedAt:  map[string]time.Time{},
-		expiration: expiration,
-		maxSize:    maxSize,
+		items:        list.New(),
+		reverseItems: make(map[string]*list.Element),
+		maxSize:      maxSize,
 	}
 }
 
@@ -80,50 +79,32 @@ func NewCache(maxSize uint64, expiration time.Duration) *Cache {
 func (r *Cache) Stats() Stats {
 	return Stats{
 		Bytes:   r.currentSize,
-		Items:   uint64(len(r.items)),
-		Expired: r.totalExpired,
+		Items:   r.items.Len(),
+		Evicted: r.totalEvicted,
 	}
-}
-
-// ExpireObjects expire objects in go routine
-func (r *Cache) ExpireObjects(gcInterval time.Duration) {
-	r.stopExpireTimer = make(chan struct{})
-	ticker := time.NewTicker(gcInterval)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				r.Expire()
-			case <-r.stopExpireTimer:
-				ticker.Stop()
-				return
-			}
-
-		}
-	}()
 }
 
 // Get returns a value of a given key if it exists
 func (r *Cache) Get(key string) ([]byte, bool) {
 	r.Lock()
 	defer r.Unlock()
-	value, ok := r.items[key]
-	if !ok {
+	ele, hit := r.reverseItems[key]
+	if !hit {
 		return nil, false
 	}
-	r.updatedAt[key] = time.Now()
-	return value, true
+	r.items.MoveToFront(ele)
+	return ele.Value.(*element).value, true
 }
 
 // Len returns length of the value of a given key, returns zero if key doesn't exist
 func (r *Cache) Len(key string) int {
 	r.Lock()
 	defer r.Unlock()
-	_, ok := r.items[key]
+	_, ok := r.reverseItems[key]
 	if !ok {
 		return 0
 	}
-	return len(r.items[key])
+	return len(r.reverseItems[key].Value.(*element).value)
 }
 
 // Append will append new data to an existing key,
@@ -140,22 +121,20 @@ func (r *Cache) Append(key string, value []byte) bool {
 		}
 		// remove random key if only we reach the maxSize threshold
 		for (r.currentSize + valueLen) > r.maxSize {
-			for randomKey := range r.items {
-				r.doDelete(randomKey)
-				break
-			}
+			r.doDeleteOldest()
+			break
 		}
 	}
-	_, ok := r.items[key]
-	if !ok {
-		r.items[key] = value
+	ele, hit := r.reverseItems[key]
+	if !hit {
+		ele := r.items.PushFront(&element{key, value})
 		r.currentSize += valueLen
-		r.updatedAt[key] = time.Now()
+		r.reverseItems[key] = ele
 		return true
 	}
-	r.items[key] = append(r.items[key], value...)
+	r.items.MoveToFront(ele)
 	r.currentSize += valueLen
-	r.updatedAt[key] = time.Now()
+	ele.Value.(*element).value = append(ele.Value.(*element).value, value...)
 	return true
 }
 
@@ -172,55 +151,46 @@ func (r *Cache) Set(key string, value []byte) bool {
 		}
 		// remove random key if only we reach the maxSize threshold
 		for (r.currentSize + valueLen) > r.maxSize {
-			for randomKey := range r.items {
-				r.doDelete(randomKey)
-				break
-			}
+			r.doDeleteOldest()
 		}
 	}
-	r.items[key] = value
+	if _, hit := r.reverseItems[key]; hit {
+		return false
+	}
+	ele := r.items.PushFront(&element{key, value})
 	r.currentSize += valueLen
-	r.updatedAt[key] = time.Now()
+	r.reverseItems[key] = ele
 	return true
-}
-
-// Expire expires keys which have expired
-func (r *Cache) Expire() {
-	r.Lock()
-	defer r.Unlock()
-	for key := range r.items {
-		if !r.isValid(key) {
-			r.doDelete(key)
-		}
-	}
 }
 
 // Delete deletes a given key if exists
 func (r *Cache) Delete(key string) {
 	r.Lock()
 	defer r.Unlock()
-	r.doDelete(key)
-}
-
-func (r *Cache) doDelete(key string) {
-	if _, ok := r.items[key]; ok {
-		r.currentSize -= uint64(len(r.items[key]))
-		delete(r.items, key)
-		delete(r.updatedAt, key)
-		r.totalExpired++
-		if r.OnExpired != nil {
-			r.OnExpired(key)
+	ele, ok := r.reverseItems[key]
+	if !ok {
+		return
+	}
+	if ele != nil {
+		r.currentSize -= uint64(len(r.reverseItems[key].Value.(*element).value))
+		r.items.Remove(ele)
+		delete(r.reverseItems, key)
+		r.totalEvicted++
+		if r.OnEvicted != nil {
+			r.OnEvicted(key)
 		}
 	}
 }
 
-func (r *Cache) isValid(key string) bool {
-	updatedAt, ok := r.updatedAt[key]
-	if !ok {
-		return false
+func (r *Cache) doDeleteOldest() {
+	ele := r.items.Back()
+	if ele != nil {
+		r.currentSize -= uint64(len(r.reverseItems[ele.Value.(*element).key].Value.(*element).value))
+		delete(r.reverseItems, ele.Value.(*element).key)
+		r.items.Remove(ele)
+		r.totalEvicted++
+		if r.OnEvicted != nil {
+			r.OnEvicted(ele.Value.(*element).key)
+		}
 	}
-	if r.expiration == noExpiration {
-		return true
-	}
-	return updatedAt.Add(r.expiration).After(time.Now())
 }

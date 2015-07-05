@@ -29,7 +29,7 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestCache(c *C) {
-	cache := NewCache(1000, 0)
+	cache := NewCache(1000)
 	data := []byte("Hello, world!")
 	ok := cache.Set("filename", data)
 
