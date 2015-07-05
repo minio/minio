@@ -80,14 +80,11 @@ func New(c *Config) (Interface, error) {
 	a.storedBuckets = metadata.NewCache()
 	a.nodes = make(map[string]node)
 	a.buckets = make(map[string]bucket)
-	a.objects = data.NewCache(a.config.MaxSize, a.config.Expiration)
-	a.multiPartObjects = data.NewCache(0, time.Duration(0))
-	a.objects.OnExpired = a.expiredObject
-	a.multiPartObjects.OnExpired = a.expiredPart
+	a.objects = data.NewCache(a.config.MaxSize)
+	a.multiPartObjects = data.NewCache(0)
+	a.objects.OnEvicted = a.evictedObject
+	a.multiPartObjects.OnEvicted = a.evictedPart
 	a.lock = new(sync.Mutex)
-
-	// set up cache expiration
-	a.objects.ExpireObjects(time.Second * 5)
 
 	if len(a.config.NodeDiskMap) > 0 {
 		for k, v := range a.config.NodeDiskMap {
@@ -570,10 +567,10 @@ func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 }
 
-func (donut API) expiredObject(a ...interface{}) {
+func (donut API) evictedObject(a ...interface{}) {
 	cacheStats := donut.objects.Stats()
-	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalExpirations: %d",
-		cacheStats.Bytes, cacheStats.Items, cacheStats.Expired)
+	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalEvicted: %d",
+		cacheStats.Bytes, cacheStats.Items, cacheStats.Evicted)
 	key := a[0].(string)
 	// loop through all buckets
 	for _, bucket := range donut.storedBuckets.GetAll() {

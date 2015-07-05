@@ -376,7 +376,7 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 	return objectResourcesMetadata, nil
 }
 
-func (donut API) expiredPart(a ...interface{}) {
+func (donut API) evictedPart(a ...interface{}) {
 	key := a[0].(string)
 	// loop through all buckets
 	buckets := donut.storedBuckets.GetAll()
