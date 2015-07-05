@@ -10,7 +10,7 @@ import (
 
 var commands = []cli.Command{
 	serverCmd,
-	controlCmd,
+	controllerCmd,
 }
 
 var serverCmd = cli.Command{
@@ -25,13 +25,13 @@ USAGE:
 
 EXAMPLES:
   1. Start in server mode
-      $ minio server
+      $ minio {{.Name}}
 
 `,
 }
 
-var controlCmd = cli.Command{
-	Name:        "control",
+var controllerCmd = cli.Command{
+	Name:        "controller",
 	Description: "Control mode",
 	Action:      runController,
 	CustomHelpTemplate: `NAME:
@@ -42,12 +42,12 @@ USAGE:
 
 EXAMPLES:
   1. Start in controller mode
-      $ minio control
+      $ minio {{.Name}}
 
 `,
 }
 
-func getAPIServerConfig(c *cli.Context) api.Config {
+func getServerConfig(c *cli.Context) api.Config {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
@@ -68,7 +68,7 @@ func runServer(c *cli.Context) {
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
-	apiServerConfig := getAPIServerConfig(c)
+	apiServerConfig := getServerConfig(c)
 	if err := server.StartServices(apiServerConfig); err != nil {
 		Fatalln(err)
 	}
@@ -78,8 +78,5 @@ func runController(c *cli.Context) {
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
-	}
-	if len(c.Args()) < 1 {
-		cli.ShowCommandHelpAndExit(c, "control", 1) // last argument is exit code
 	}
 }
