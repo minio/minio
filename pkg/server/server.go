@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/api"
 )
 
@@ -38,7 +39,7 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 
 	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
-		errCh <- err
+		errCh <- iodine.New(err, nil)
 		return
 	}
 
@@ -49,7 +50,7 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			errCh <- err
+			errCh <- iodine.New(err, nil)
 			return
 		}
 		for _, addr := range addrs {
@@ -109,8 +110,8 @@ func StartServices(conf api.Config) error {
 
 	select {
 	case err := <-apiErrCh:
-		return err
+		return iodine.New(err, nil)
 	case err := <-rpcErrCh:
-		return err
+		return iodine.New(err, nil)
 	}
 }
