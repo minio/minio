@@ -117,9 +117,9 @@ func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 func getRPCHandler() http.Handler {
 	s := rpc.NewServer()
 	s.RegisterJSONCodec()
-	s.RegisterService(new(rpc.VersionService), "")
-	s.RegisterService(new(rpc.GetSysInfoService), "")
-	s.RegisterService(new(rpc.GetDiskInfoService), "")
+	s.RegisterService(new(rpc.VersionService), "Version")
+	s.RegisterService(new(rpc.SysInfoService), "SysInfo")
+	s.RegisterService(new(rpc.DiskInfoService), "DiskInfo")
 	// Add new services here
 	return registerRPC(router.NewRouter(), s)
 }

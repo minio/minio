@@ -24,17 +24,17 @@ import (
 	"github.com/minio/minio/pkg/utils/scsi"
 )
 
-// GetDiskInfoService disk info service
-type GetDiskInfoService struct{}
+// DiskInfoService disk info service
+type DiskInfoService struct{}
 
-// GetDiskInfoReply disk info reply for disk info service
-type GetDiskInfoReply struct {
+// DiskInfoReply disk info reply for disk info service
+type DiskInfoReply struct {
 	Hostname       string                     `json:"hostname"`
 	Disks          []string                   `json:"disks"`
 	DiskAttributes map[string]scsi.Attributes `json:"disk-attrs"`
 }
 
-func setDiskInfoReply(sis *GetDiskInfoReply) error {
+func setDiskInfoReply(sis *DiskInfoReply) error {
 	var err error
 	sis.Hostname, err = os.Hostname()
 	if err != nil {
@@ -53,6 +53,6 @@ func setDiskInfoReply(sis *GetDiskInfoReply) error {
 }
 
 // Get method
-func (s *GetDiskInfoService) Get(r *http.Request, args *Args, reply *GetDiskInfoReply) error {
+func (s *DiskInfoService) Get(r *http.Request, args *Args, reply *DiskInfoReply) error {
 	return setDiskInfoReply(reply)
 }
