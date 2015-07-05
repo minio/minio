@@ -24,11 +24,11 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// GetSysInfoService -
-type GetSysInfoService struct{}
+// SysInfoService -
+type SysInfoService struct{}
 
-// GetSysInfoReply -
-type GetSysInfoReply struct {
+// SysInfoReply -
+type SysInfoReply struct {
 	Hostname  string           `json:"hostname"`
 	SysARCH   string           `json:"sys.arch"`
 	SysOS     string           `json:"sys.os"`
@@ -38,7 +38,7 @@ type GetSysInfoReply struct {
 	MemStats  runtime.MemStats `json:"memstats"`
 }
 
-func setSysInfoReply(sis *GetSysInfoReply) error {
+func setSysInfoReply(sis *SysInfoReply) error {
 	sis.SysARCH = runtime.GOARCH
 	sis.SysOS = runtime.GOOS
 	sis.SysCPUS = runtime.NumCPU()
@@ -59,6 +59,6 @@ func setSysInfoReply(sis *GetSysInfoReply) error {
 }
 
 // Get method
-func (s *GetSysInfoService) Get(r *http.Request, args *Args, reply *GetSysInfoReply) error {
+func (s *SysInfoService) Get(r *http.Request, args *Args, reply *SysInfoReply) error {
 	return setSysInfoReply(reply)
 }
