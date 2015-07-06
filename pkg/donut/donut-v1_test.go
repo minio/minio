@@ -62,11 +62,15 @@ func (s *MyDonutSuite) SetUpSuite(c *C) {
 	s.root = root
 
 	conf := new(Config)
+	conf.Version = "0.0.1"
 	conf.DonutName = "test"
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
+	customConfigPath = filepath.Join(root, "donut.json")
+	err = SaveConfig(conf)
+	c.Assert(err, IsNil)
 
-	dd, err = New(conf)
+	dd, err = New()
 	c.Assert(err, IsNil)
 
 	// testing empty donut

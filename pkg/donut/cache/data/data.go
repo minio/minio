@@ -75,8 +75,18 @@ func NewCache(maxSize uint64) *Cache {
 	}
 }
 
+// SetMaxSize set a new max size
+func (r *Cache) SetMaxSize(maxSize uint64) {
+	r.Lock()
+	defer r.Unlock()
+	r.maxSize = maxSize
+	return
+}
+
 // Stats get current cache statistics
 func (r *Cache) Stats() Stats {
+	r.Lock()
+	defer r.Unlock()
 	return Stats{
 		Bytes:   r.currentSize,
 		Items:   r.items.Len(),

@@ -36,14 +36,8 @@ var _ = Suite(&MyCacheSuite{})
 var dc Interface
 
 func (s *MyCacheSuite) SetUpSuite(c *C) {
-	// test only cache
-	conf := new(Config)
-	conf.DonutName = ""
-	conf.NodeDiskMap = nil
-	conf.MaxSize = 100000
-
 	var err error
-	dc, err = New(conf)
+	dc, err = New()
 	c.Assert(err, IsNil)
 
 	// testing empty cache
