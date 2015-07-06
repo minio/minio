@@ -47,7 +47,6 @@ const (
 type Config struct {
 	Version     string              `json:"version"`
 	MaxSize     uint64              `json:"max-size"`
-	Expiration  time.Duration       `json:"expiration"`
 	DonutName   string              `json:"donut-name"`
 	NodeDiskMap map[string][]string `json:"node-disk-map"`
 }
@@ -67,7 +66,7 @@ type API struct {
 type storedBucket struct {
 	bucketMetadata   BucketMetadata
 	objectMetadata   map[string]ObjectMetadata
-	partMetadata     map[string]PartMetadata
+	partMetadata     map[int]PartMetadata
 	multiPartSession map[string]MultiPartSession
 }
 
@@ -270,7 +269,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 	return iodine.New(errors.New("invalid argument"), nil)
 }
 
-// CreateObject -
+// CreateObject - create an object
 func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string) (ObjectMetadata, error) {
 	if size > int64(donut.config.MaxSize) {
 		generic := GenericObjectError{Bucket: bucket, Object: key}
@@ -410,7 +409,7 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 	var newBucket = storedBucket{}
 	newBucket.objectMetadata = make(map[string]ObjectMetadata)
 	newBucket.multiPartSession = make(map[string]MultiPartSession)
-	newBucket.partMetadata = make(map[string]PartMetadata)
+	newBucket.partMetadata = make(map[int]PartMetadata)
 	newBucket.bucketMetadata = BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
@@ -567,6 +566,7 @@ func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 	return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 }
 
+// evictedObject callback function called when an item is evicted from memory
 func (donut API) evictedObject(a ...interface{}) {
 	cacheStats := donut.objects.Stats()
 	log.Printf("CurrentSize: %d, CurrentItems: %d, TotalEvicted: %d",
