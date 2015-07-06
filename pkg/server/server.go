@@ -25,12 +25,17 @@ import (
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/api"
+	"github.com/minio/minio/pkg/server/nimble"
 )
 
-// Start API listener
-func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
+// startServices start all services
+func startServices(errCh chan error, servers ...*http.Server) {
 	defer close(errCh)
+	errCh <- nimble.ListenAndServe(servers...)
+}
 
+// getAPI server instance
+func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error) {
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           conf.Address,
@@ -48,14 +53,13 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 		config.Certificates = make([]tls.Certificate, 1)
 		config.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
-			errCh <- iodine.New(err, nil)
+			return nil, iodine.New(err, nil)
 		}
 	}
 
 	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
-		errCh <- iodine.New(err, nil)
-		return
+		return nil, iodine.New(err, nil)
 	}
 
 	var hosts []string
@@ -65,8 +69,7 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			errCh <- iodine.New(err, nil)
-			return
+			return nil, iodine.New(err, nil)
 		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
@@ -86,20 +89,18 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 		}
 
 	}
-	errCh <- httpServer.ListenAndServe()
+	return httpServer, nil
 }
 
-// Start RPC listener
-func startRPC(errCh chan error, rpcHandler http.Handler) {
-	defer close(errCh)
-
+// getRPCServer instance
+func getRPCServer(rpcHandler http.Handler) *http.Server {
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           "127.0.0.1:9001", // TODO make this configurable
 		Handler:        rpcHandler,
 		MaxHeaderBytes: 1 << 20,
 	}
-	errCh <- httpServer.ListenAndServe()
+	return httpServer
 }
 
 // Start ticket master
@@ -113,18 +114,18 @@ func startTM(a api.Minio) {
 
 // StartServices starts basic services for a server
 func StartServices(conf api.Config, doneCh chan struct{}) error {
-	apiErrCh := make(chan error)
-	rpcErrCh := make(chan error)
-
+	errCh := make(chan error)
 	apiHandler, minioAPI := getAPIHandler(conf)
-	go startAPI(apiErrCh, conf, apiHandler)
-	go startRPC(rpcErrCh, getRPCHandler())
+	apiServer, err := getAPIServer(conf, apiHandler)
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	rpcServer := getRPCServer(getRPCHandler())
+	go startServices(errCh, apiServer, rpcServer)
 	go startTM(minioAPI)
 
 	select {
-	case err := <-apiErrCh:
-		return iodine.New(err, nil)
-	case err := <-rpcErrCh:
+	case err := <-errCh:
 		return iodine.New(err, nil)
 	case <-doneCh:
 		return nil
