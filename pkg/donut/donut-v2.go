@@ -113,7 +113,12 @@ func New() (Interface, error) {
 			return nil, iodine.New(err, nil)
 		}
 		for k, v := range buckets {
-			a.storedBuckets.Set(k, v)
+			var newBucket = storedBucket{}
+			newBucket.objectMetadata = make(map[string]ObjectMetadata)
+			newBucket.multiPartSession = make(map[string]MultiPartSession)
+			newBucket.partMetadata = make(map[int]PartMetadata)
+			newBucket.bucketMetadata = v
+			a.storedBuckets.Set(k, newBucket)
 		}
 	}
 	return a, nil

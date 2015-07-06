@@ -25,7 +25,7 @@ type app struct {
 	errors    chan error
 }
 
-func newApp(servers []*http.Server) *app {
+func newApp(servers ...*http.Server) *app {
 	return &app{
 		servers:   servers,
 		net:       &nimbleNet{},
@@ -64,7 +64,7 @@ func (a *app) wait() {
 		go func(s httpdown.Server) {
 			defer wg.Done()
 			if err := s.Wait(); err != nil {
-				a.errors <- err
+				a.errors <- iodine.New(err, nil)
 			}
 		}(s)
 	}
@@ -76,7 +76,7 @@ func (a *app) term(wg *sync.WaitGroup) {
 		go func(s httpdown.Server) {
 			defer wg.Done()
 			if err := s.Stop(); err != nil {
-				a.errors <- err
+				a.errors <- iodine.New(err, nil)
 			}
 		}(s)
 	}
@@ -84,7 +84,7 @@ func (a *app) term(wg *sync.WaitGroup) {
 
 func (a *app) signalHandler(wg *sync.WaitGroup) {
 	ch := make(chan os.Signal, 10)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
+	signal.Notify(ch, syscall.SIGTERM, os.Interrupt)
 	for {
 		sig := <-ch
 		switch sig {
@@ -94,7 +94,7 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 			signal.Stop(ch)
 			a.term(wg)
 			return
-		case syscall.SIGUSR2:
+		case os.Interrupt:
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
@@ -107,9 +107,7 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 // ListenAndServe will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGHUP).
 func ListenAndServe(servers ...*http.Server) error {
-	ppid := os.Getppid()
-
-	a := newApp(servers)
+	a := newApp(servers...)
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
@@ -118,13 +116,6 @@ func ListenAndServe(servers ...*http.Server) error {
 
 	// Start serving.
 	a.serve()
-
-	// Close the parent if we inherited and it wasn't init that started us.
-	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
-		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
-			return iodine.New(err, nil)
-		}
-	}
 
 	waitDone := make(chan struct{})
 	go func() {
