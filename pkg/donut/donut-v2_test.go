@@ -45,7 +45,6 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	s.root = root
 
 	customConfigPath = filepath.Join(root, "donut.json")
-	var err error
 	dc, err = New()
 	c.Assert(err, IsNil)
 
@@ -55,7 +54,7 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	c.Assert(len(buckets), Equals, 0)
 }
 
-func (s *MyDonutSuite) TearDownSuite(c *C) {
+func (s *MyCacheSuite) TearDownSuite(c *C) {
 	os.RemoveAll(s.root)
 }
 

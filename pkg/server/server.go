@@ -21,18 +21,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/api"
 	"github.com/minio/minio/pkg/server/nimble"
 )
-
-// startServices start all services
-func startServices(errCh chan error, servers ...*http.Server) {
-	defer close(errCh)
-	errCh <- nimble.ListenAndServe(servers...)
-}
 
 // getAPI server instance
 func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error) {
@@ -83,9 +78,9 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error
 
 	for _, host := range hosts {
 		if conf.TLS {
-			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
+			fmt.Printf("Starting minio server on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
 		} else {
-			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
+			fmt.Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
 		}
 
 	}
@@ -113,21 +108,18 @@ func startTM(a api.Minio) {
 }
 
 // StartServices starts basic services for a server
-func StartServices(conf api.Config, doneCh chan struct{}) error {
-	errCh := make(chan error)
+func StartServices(conf api.Config) error {
 	apiHandler, minioAPI := getAPIHandler(conf)
 	apiServer, err := getAPIServer(conf, apiHandler)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	rpcServer := getRPCServer(getRPCHandler())
-	go startServices(errCh, apiServer, rpcServer)
+	// start ticket master
 	go startTM(minioAPI)
 
-	select {
-	case err := <-errCh:
+	if err := nimble.ListenAndServe(apiServer, rpcServer); err != nil {
 		return iodine.New(err, nil)
-	case <-doneCh:
-		return nil
 	}
+	return nil
 }

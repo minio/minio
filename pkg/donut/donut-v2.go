@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"reflect"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -124,29 +123,10 @@ func New() (Interface, error) {
 	return a, nil
 }
 
-// updateConfig loads new config everytime
-func (donut API) updateConfig() {
-	// on error loading config's just return do not modify
-	conf, err := LoadConfig()
-	if err != nil {
-		return
-	}
-	if reflect.DeepEqual(donut.config, conf) {
-		return
-	}
-	if conf.MaxSize == donut.config.MaxSize {
-		return
-	}
-	donut.config = conf
-	donut.objects.SetMaxSize(conf.MaxSize)
-}
-
 // GetObject - GET object from cache buffer
 func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return 0, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -193,8 +173,6 @@ func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, er
 func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	errParams := map[string]string{
 		"bucket": bucket,
@@ -251,8 +229,6 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return BucketMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -276,8 +252,6 @@ func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -319,8 +293,6 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string) (ObjectMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	contentType := metadata["contentType"]
 	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
@@ -434,8 +406,6 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 func (donut API) MakeBucket(bucketName, acl string) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if donut.storedBuckets.Stats().Items == totalBuckets {
 		return iodine.New(TooManyBuckets{Bucket: bucketName}, nil)
@@ -475,8 +445,6 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -571,8 +539,6 @@ func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 func (donut API) ListBuckets() ([]BucketMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	var results []BucketMetadata
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -597,8 +563,6 @@ func (donut API) ListBuckets() ([]BucketMetadata, error) {
 func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	// check if bucket exists
 	if !IsValidBucket(bucket) {

@@ -1,6 +1,8 @@
-// Based on https://github.com/facebookgo/grace and https://github.com/facebookgo/httpdown
+// Package nimble provides easy to use graceful restart for a set of HTTP services
 //
-// Modified for Minio's internal use
+// This package originally from https://github.com/facebookgo/grace
+//
+// Re-licensing with Apache License 2.0, with code modifications
 package nimble
 
 import (
@@ -16,6 +18,11 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
+var (
+	inheritedListeners = os.Getenv("LISTEN_FDS")
+	ppid               = os.Getppid()
+)
+
 // An app contains one or more servers and associated configuration.
 type app struct {
 	servers   []*http.Server
@@ -25,7 +32,7 @@ type app struct {
 	errors    chan error
 }
 
-func newApp(servers ...*http.Server) *app {
+func newApp(servers []*http.Server) *app {
 	return &app{
 		servers:   servers,
 		net:       &nimbleNet{},
@@ -84,7 +91,7 @@ func (a *app) term(wg *sync.WaitGroup) {
 
 func (a *app) signalHandler(wg *sync.WaitGroup) {
 	ch := make(chan os.Signal, 10)
-	signal.Notify(ch, syscall.SIGTERM, os.Interrupt)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2, syscall.SIGHUP)
 	for {
 		sig := <-ch
 		switch sig {
@@ -94,7 +101,9 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 			signal.Stop(ch)
 			a.term(wg)
 			return
-		case os.Interrupt:
+		case syscall.SIGUSR2:
+			fallthrough
+		case syscall.SIGHUP:
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
@@ -105,9 +114,9 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 }
 
 // ListenAndServe will serve the given http.Servers and will monitor for signals
-// allowing for graceful termination (SIGTERM) or restart (SIGHUP).
+// allowing for graceful termination (SIGTERM) or restart (SIGUSR2/SIGHUP).
 func ListenAndServe(servers ...*http.Server) error {
-	a := newApp(servers...)
+	a := newApp(servers)
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
@@ -117,13 +126,17 @@ func ListenAndServe(servers ...*http.Server) error {
 	// Start serving.
 	a.serve()
 
-	waitDone := make(chan struct{})
+	// Close the parent if we inherited and it wasn't init that started us.
+	if inheritedListeners != "" && ppid != 1 {
+		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
+			return iodine.New(err, nil)
+		}
+	}
+
+	waitdone := make(chan struct{})
 	go func() {
-		defer close(waitDone)
+		defer close(waitdone)
 		a.wait()
-		// do not use closing a channel as a way of communicating over
-		// channel send an appropriate message
-		waitDone <- struct{}{}
 	}()
 
 	select {
@@ -132,7 +145,7 @@ func ListenAndServe(servers ...*http.Server) error {
 			panic("unexpected nil error")
 		}
 		return iodine.New(err, nil)
-	case <-waitDone:
+	case <-waitdone:
 		return nil
 	}
 }

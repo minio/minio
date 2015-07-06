@@ -10,6 +10,18 @@
 			"Rev": "8cc1aaa2d955ee82833337cfb10babc42be6bce6"
 		},
 		{
+			"ImportPath": "github.com/facebookgo/clock",
+			"Rev": "600d898af40aa09a7a93ecb9265d87b0504b6f03"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/httpdown",
+			"Rev": "3d94c3159d8ba15fa8e9499134ccc0d8acf6adb7"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/stats",
+			"Rev": "31fb71caf5a4f04c9f8bb3fa8e7c2597ba6eb50a"
+		},
+		{
 			"ImportPath": "github.com/fatih/structs",
 			"Rev": "c00d27128bb88e9c1adab1a53cda9c72c6d1ff9b"
 		},

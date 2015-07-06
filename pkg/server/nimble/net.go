@@ -1,11 +1,3 @@
-// Package gracenet provides a family of Listen functions that either open a
-// fresh connection or provide an inherited connection from when the process
-// was started. The behave like their counterparts in the net pacakge, but
-// transparently provide support for graceful restarts without dropping
-// connections. This is provided in a systemd socket activation compatible form
-// to allow using socket activation.
-//
-// BUG: Doesn't handle closing of listeners.
 package nimble
 
 import (
@@ -20,9 +12,21 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
+// This package originally from https://github.com/facebookgo/grace
+//
+// Re-licensing with Apache License 2.0, with code modifications
+
+// This package provides a family of Listen functions that either open a
+// fresh connection or provide an inherited connection from when the process
+// was started. This behaves like their counterparts in the net pacakge, but
+// transparently provide support for graceful restarts without dropping
+// connections. This is provided in a systemd socket activation compatible form
+// to allow using socket activation.
+//
+
 const (
 	// Used to indicate a graceful restart in the new process.
-	envCountKey       = "LISTEN_FDS"
+	envCountKey       = "LISTEN_FDS" // similar to systemd SDS_LISTEN_FDS
 	envCountKeyPrefix = envCountKey + "="
 )
 
@@ -30,18 +34,13 @@ const (
 // it at startup.
 var originalWD, _ = os.Getwd()
 
-// Net provides the family of Listen functions and maintains the associated
-// state. Typically you will have only once instance of Net per application.
+// nimbleNet provides the family of Listen functions and maintains the associated
+// state. Typically you will have only once instance of nimbleNet per application.
 type nimbleNet struct {
 	inherited   []net.Listener
 	active      []net.Listener
 	mutex       sync.Mutex
 	inheritOnce sync.Once
-}
-
-// fileListener using this to extract underlying file descriptor from net.Listener
-type fileListener interface {
-	File() (*os.File, error)
 }
 
 func (n *nimbleNet) inherit() error {
@@ -59,7 +58,6 @@ func (n *nimbleNet) inherit() error {
 			return
 		}
 
-		// In normal operations if we are inheriting, the listeners will begin at fd 3.
 		fdStart := 3
 		for i := fdStart; i < fdStart+count; i++ {
 			file := os.NewFile(uintptr(i), "listener")
@@ -139,7 +137,7 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 // the matching network and address, or creates a new one using net.ListenUnix.
 func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, error) {
 	if err := n.inherit(); err != nil {
-		return nil, err
+		return nil, iodine.New(err, nil)
 	}
 
 	n.mutex.Lock()
@@ -170,28 +168,30 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 func (n *nimbleNet) activeListeners() ([]net.Listener, error) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
-	listeners := make([]net.Listener, len(n.active))
-	copy(listeners, n.active)
-	return listeners, nil
+	ls := make([]net.Listener, len(n.active))
+	copy(ls, n.active)
+	return ls, nil
 }
 
 func isSameAddr(a1, a2 net.Addr) bool {
 	if a1.Network() != a2.Network() {
 		return false
 	}
-	if a1.String() == a2.String() {
+	a1s := a1.String()
+	a2s := a2.String()
+	if a1s == a2s {
 		return true
 	}
+
 	// This allows for ipv6 vs ipv4 local addresses to compare as equal. This
 	// scenario is common when listening on localhost.
-	a1host, a1port, _ := net.SplitHostPort(a1.String())
-	a2host, a2port, _ := net.SplitHostPort(a2.String())
-	if a1host == a2host {
-		if a1port == a2port {
-			return true
-		}
-	}
-	return false
+	const ipv6prefix = "[::]"
+	a1s = strings.TrimPrefix(a1s, ipv6prefix)
+	a2s = strings.TrimPrefix(a2s, ipv6prefix)
+	const ipv4prefix = "0.0.0.0"
+	a1s = strings.TrimPrefix(a1s, ipv4prefix)
+	a2s = strings.TrimPrefix(a2s, ipv4prefix)
+	return a1s == a2s
 }
 
 // StartProcess starts a new process passing it the active listeners. It
@@ -231,18 +231,18 @@ func (n *nimbleNet) StartProcess() (int, error) {
 	}
 	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(listeners)))
 
-	inheritedFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
-	process, err := os.StartProcess(
-		argv0,
-		os.Args,
-		&os.ProcAttr{
-			Dir:   originalWD,
-			Env:   env,
-			Files: inheritedFiles,
-		},
-	)
+	allFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
+	process, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
+		Dir:   originalWD,
+		Env:   env,
+		Files: allFiles,
+	})
 	if err != nil {
 		return 0, iodine.New(err, nil)
 	}
 	return process.Pid, nil
+}
+
+type fileListener interface {
+	File() (*os.File, error)
 }
