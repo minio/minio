@@ -34,11 +34,19 @@ func getDonutConfigPath() (string, error) {
 	return donutConfigPath, nil
 }
 
+var customConfigPath string
+
 // SaveConfig save donut config
 func SaveConfig(a *Config) error {
-	donutConfigPath, err := getDonutConfigPath()
-	if err != nil {
-		return iodine.New(err, nil)
+	var donutConfigPath string
+	var err error
+	if customConfigPath != "" {
+		donutConfigPath = customConfigPath
+	} else {
+		donutConfigPath, err = getDonutConfigPath()
+		if err != nil {
+			return iodine.New(err, nil)
+		}
 	}
 	qc, err := quick.New(a)
 	if err != nil {
@@ -52,9 +60,15 @@ func SaveConfig(a *Config) error {
 
 // LoadConfig load donut config
 func LoadConfig() (*Config, error) {
-	donutConfigPath, err := getDonutConfigPath()
-	if err != nil {
-		return nil, iodine.New(err, nil)
+	var donutConfigPath string
+	var err error
+	if customConfigPath != "" {
+		donutConfigPath = customConfigPath
+	} else {
+		donutConfigPath, err = getDonutConfigPath()
+		if err != nil {
+			return nil, iodine.New(err, nil)
+		}
 	}
 	a := &Config{}
 	a.Version = "0.0.1"
@@ -66,20 +80,4 @@ func LoadConfig() (*Config, error) {
 		return nil, iodine.New(err, nil)
 	}
 	return qc.Data().(*Config), nil
-}
-
-// LoadDonut load donut from config
-func LoadDonut() (Interface, error) {
-	conf, err := LoadConfig()
-	if err != nil {
-		conf = &Config{
-			Version: "0.0.1",
-			MaxSize: 512000000,
-		}
-	}
-	donut, err := New(conf)
-	if err != nil {
-		return nil, iodine.New(err, nil)
-	}
-	return donut, nil
 }
