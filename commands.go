@@ -106,7 +106,7 @@ func runController(c *cli.Context) {
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
-	if len(c.Args()) != 2 || c.Args().First() == "help" {
+	if len(c.Args()) <= 2 || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
 	}
 	switch c.Args().First() {
@@ -122,5 +122,11 @@ func runController(c *cli.Context) {
 			Fatalln(err)
 		}
 		Println(string(memstats))
+	case "donut":
+		hostname, _ := os.Hostname()
+		err := controller.SetDonut(c.Args().Tail().First(), hostname, c.Args().Tail().Tail())
+		if err != nil {
+			Fatalln(err)
+		}
 	}
 }

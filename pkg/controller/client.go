@@ -69,4 +69,31 @@ func GetMemStats(url string) ([]byte, error) {
 	return json.MarshalIndent(reply, "", "\t")
 }
 
+// SetDonut - set donut config
+func SetDonut(url, hostname string, disks []string) error {
+	op := RPCOps{
+		Method: "Donut.Set",
+		Request: rpc.DonutArgs{
+			Hostname: hostname,
+			Disks:    disks,
+			Name:     "default",
+			MaxSize:  512000000,
+		},
+	}
+	req, err := NewRequest(url, op, http.DefaultTransport)
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	resp, err := req.Do()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	defer resp.Body.Close()
+	var reply rpc.Reply
+	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
+		return iodine.New(err, nil)
+	}
+	return reply.Error
+}
+
 // Add more functions here for many replies
