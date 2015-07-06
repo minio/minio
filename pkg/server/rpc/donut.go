@@ -16,16 +16,22 @@
 
 package rpc
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/minio/minio/pkg/donut"
+	"github.com/minio/minio/pkg/iodine"
+)
 
 // DonutService donut service
 type DonutService struct{}
 
 // DonutArgs collections of disks and name to initialize donut
 type DonutArgs struct {
-	MaxSize int64
-	Name    string
-	Disks   []string
+	Name     string
+	MaxSize  uint64
+	Hostname string
+	Disks    []string
 }
 
 // Reply reply for successful or failed Set operation
@@ -34,11 +40,21 @@ type Reply struct {
 	Error   error  `json:"error"`
 }
 
-func setDonutArgs(args *DonutArgs, reply *Reply) error {
+func setDonut(args *DonutArgs, reply *Reply) error {
+	conf := &donut.Config{Version: "0.0.1"}
+	conf.DonutName = args.Name
+	conf.MaxSize = args.MaxSize
+	conf.NodeDiskMap = make(map[string][]string)
+	conf.NodeDiskMap[args.Hostname] = args.Disks
+	if err := donut.SaveConfig(conf); err != nil {
+		return iodine.New(err, nil)
+	}
+	reply.Message = "success"
+	reply.Error = nil
 	return nil
 }
 
 // Set method
 func (s *DonutService) Set(r *http.Request, args *DonutArgs, reply *Reply) error {
-	return setDonutArgs(args, reply)
+	return setDonut(args, reply)
 }

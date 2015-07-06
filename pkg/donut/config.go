@@ -34,6 +34,7 @@ func getDonutConfigPath() (string, error) {
 	return donutConfigPath, nil
 }
 
+// NOTE - this is not to be used outside Donut package, this is primarily intended for testing purposes only
 var customConfigPath string
 
 // SaveConfig save donut config

@@ -32,7 +32,10 @@ type Minio struct {
 // New instantiate a new minio API
 func New() Minio {
 	// ignore errors for now
-	d, _ := donut.New()
+	d, err := donut.New()
+	if err != nil {
+		panic(err)
+	}
 	return Minio{
 		OP:    make(chan Operation),
 		Donut: d,

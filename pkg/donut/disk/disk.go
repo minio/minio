@@ -38,17 +38,17 @@ func New(diskPath string) (Disk, error) {
 	if diskPath == "" {
 		return Disk{}, iodine.New(InvalidArgument{}, nil)
 	}
-	s := syscall.Statfs_t{}
-	err := syscall.Statfs(diskPath, &s)
-	if err != nil {
-		return Disk{}, iodine.New(err, nil)
-	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
 		return Disk{}, iodine.New(err, nil)
 	}
 	if !st.IsDir() {
 		return Disk{}, iodine.New(syscall.ENOTDIR, nil)
+	}
+	s := syscall.Statfs_t{}
+	err = syscall.Statfs(diskPath, &s)
+	if err != nil {
+		return Disk{}, iodine.New(err, nil)
 	}
 	disk := Disk{
 		path:   diskPath,
