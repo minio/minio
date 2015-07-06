@@ -52,7 +52,8 @@ func GetDisks() (Disks, error) {
 
 	sysFiles, err := ioutil.ReadDir(sysFSDEVICES)
 	if err != nil {
-		return Disks{}, iodine.New(err, nil)
+		// may be an amazon instance, ignore this
+		return Disks{}, nil
 	}
 
 	scsidevices = filterdisks(sysFiles)
