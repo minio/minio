@@ -36,7 +36,7 @@ type Cache struct {
 	items *list.List
 
 	// reverseItems holds the time that related item's updated at
-	reverseItems map[string]*list.Element
+	reverseItems map[interface{}]*list.Element
 
 	// maxSize is a total size for overall cache
 	maxSize uint64
@@ -59,7 +59,7 @@ type Stats struct {
 }
 
 type element struct {
-	key   string
+	key   interface{}
 	value []byte
 }
 
@@ -70,7 +70,7 @@ type element struct {
 func NewCache(maxSize uint64) *Cache {
 	return &Cache{
 		items:        list.New(),
-		reverseItems: make(map[string]*list.Element),
+		reverseItems: make(map[interface{}]*list.Element),
 		maxSize:      maxSize,
 	}
 }
@@ -85,7 +85,7 @@ func (r *Cache) Stats() Stats {
 }
 
 // Get returns a value of a given key if it exists
-func (r *Cache) Get(key string) ([]byte, bool) {
+func (r *Cache) Get(key interface{}) ([]byte, bool) {
 	r.Lock()
 	defer r.Unlock()
 	ele, hit := r.reverseItems[key]
@@ -97,7 +97,7 @@ func (r *Cache) Get(key string) ([]byte, bool) {
 }
 
 // Len returns length of the value of a given key, returns zero if key doesn't exist
-func (r *Cache) Len(key string) int {
+func (r *Cache) Len(key interface{}) int {
 	r.Lock()
 	defer r.Unlock()
 	_, ok := r.reverseItems[key]
@@ -109,7 +109,7 @@ func (r *Cache) Len(key string) int {
 
 // Append will append new data to an existing key,
 // if key doesn't exist it behaves like Set()
-func (r *Cache) Append(key string, value []byte) bool {
+func (r *Cache) Append(key interface{}, value []byte) bool {
 	r.Lock()
 	defer r.Unlock()
 	valueLen := uint64(len(value))
@@ -139,7 +139,7 @@ func (r *Cache) Append(key string, value []byte) bool {
 }
 
 // Set will persist a value to the cache
-func (r *Cache) Set(key string, value []byte) bool {
+func (r *Cache) Set(key interface{}, value []byte) bool {
 	r.Lock()
 	defer r.Unlock()
 	valueLen := uint64(len(value))
@@ -164,7 +164,7 @@ func (r *Cache) Set(key string, value []byte) bool {
 }
 
 // Delete deletes a given key if exists
-func (r *Cache) Delete(key string) {
+func (r *Cache) Delete(key interface{}) {
 	r.Lock()
 	defer r.Unlock()
 	ele, ok := r.reverseItems[key]

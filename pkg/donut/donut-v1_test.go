@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
-	"time"
 
 	. "github.com/minio/check"
 )
@@ -65,7 +64,6 @@ func (s *MyDonutSuite) SetUpSuite(c *C) {
 	conf := new(Config)
 	conf.DonutName = "test"
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
-	conf.Expiration = time.Duration(1 * time.Hour)
 	conf.MaxSize = 100000
 
 	dd, err = New(conf)

@@ -19,7 +19,6 @@ package donut
 import (
 	"os/user"
 	"path/filepath"
-	"time"
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/quick"
@@ -74,9 +73,8 @@ func LoadDonut() (Interface, error) {
 	conf, err := LoadConfig()
 	if err != nil {
 		conf = &Config{
-			Version:    "0.0.1",
-			MaxSize:    512000000,
-			Expiration: 1 * time.Hour,
+			Version: "0.0.1",
+			MaxSize: 512000000,
 		}
 	}
 	donut, err := New(conf)

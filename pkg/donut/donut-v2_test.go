@@ -23,7 +23,6 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"testing"
-	"time"
 
 	. "github.com/minio/check"
 )
@@ -41,7 +40,6 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	conf := new(Config)
 	conf.DonutName = ""
 	conf.NodeDiskMap = nil
-	conf.Expiration = time.Duration(1 * time.Hour)
 	conf.MaxSize = 100000
 
 	var err error
