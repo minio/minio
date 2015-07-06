@@ -17,6 +17,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,6 +36,20 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 		Addr:           conf.Address,
 		Handler:        apiHandler,
 		MaxHeaderBytes: 1 << 20,
+	}
+
+	if conf.TLS {
+		config := &tls.Config{}
+		if httpServer.TLSConfig != nil {
+			*config = *httpServer.TLSConfig
+		}
+
+		var err error
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		if err != nil {
+			errCh <- iodine.New(err, nil)
+		}
 	}
 
 	host, port, err := net.SplitHostPort(conf.Address)
@@ -62,18 +77,16 @@ func startAPI(errCh chan error, conf api.Config, apiHandler http.Handler) {
 			}
 		}
 	}
-	switch {
-	default:
-		for _, host := range hosts {
+
+	for _, host := range hosts {
+		if conf.TLS {
+			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
+		} else {
 			fmt.Printf("Starting minio server on: http://%s:%s\n", host, port)
 		}
-		errCh <- httpServer.ListenAndServe()
-	case conf.TLS == true:
-		for _, host := range hosts {
-			fmt.Printf("Starting minio server on: https://%s:%s\n", host, port)
-		}
-		errCh <- httpServer.ListenAndServeTLS(conf.CertFile, conf.KeyFile)
+
 	}
+	errCh <- httpServer.ListenAndServe()
 }
 
 // Start RPC listener
@@ -99,7 +112,7 @@ func startTM(a api.Minio) {
 }
 
 // StartServices starts basic services for a server
-func StartServices(conf api.Config) error {
+func StartServices(conf api.Config, doneCh chan struct{}) error {
 	apiErrCh := make(chan error)
 	rpcErrCh := make(chan error)
 
@@ -113,5 +126,7 @@ func StartServices(conf api.Config) error {
 		return iodine.New(err, nil)
 	case err := <-rpcErrCh:
 		return iodine.New(err, nil)
+	case <-doneCh:
+		return nil
 	}
 }

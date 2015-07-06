@@ -23,8 +23,9 @@ type DonutService struct{}
 
 // DonutArgs collections of disks and name to initialize donut
 type DonutArgs struct {
-	Name  string
-	Disks []string
+	MaxSize int64
+	Name    string
+	Disks   []string
 }
 
 // Reply reply for successful or failed Set operation
