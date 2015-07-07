@@ -62,11 +62,11 @@ func (s *MySuite) TestFileSplitJoin(c *C) {
 	defer devnull.Close()
 
 	var reader io.Reader
-	reader, err = split.JoinFiles(".", "ERROR")
-	c.Assert(err, Not(IsNil))
+	reader = split.JoinFiles(".", "ERROR")
+	c.Assert(reader, IsNil)
 
-	reader, err = split.JoinFiles(".", "TESTPREFIX")
-	c.Assert(err, IsNil)
+	reader = split.JoinFiles(".", "TESTPREFIX")
+	c.Assert(reader, Not(IsNil))
 	_, err = io.Copy(devnull, reader)
 	c.Assert(err, IsNil)
 }

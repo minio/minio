@@ -152,7 +152,7 @@ func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, er
 				return 0, iodine.New(err, nil)
 			}
 			/// cache object read from disk
-			ok := donut.objects.Set(objectKey, pw.writtenBytes)
+			ok := donut.objects.Append(objectKey, pw.writtenBytes)
 			pw.writtenBytes = nil
 			go debug.FreeOSMemory()
 			if !ok {
@@ -208,7 +208,7 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 			if err != nil {
 				return 0, iodine.New(err, nil)
 			}
-			ok := donut.objects.Set(objectKey, pw.writtenBytes)
+			ok := donut.objects.Append(objectKey, pw.writtenBytes)
 			pw.writtenBytes = nil
 			go debug.FreeOSMemory()
 			if !ok {
