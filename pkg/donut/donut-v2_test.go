@@ -22,6 +22,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	. "github.com/minio/check"
@@ -29,14 +31,20 @@ import (
 
 func TestCache(t *testing.T) { TestingT(t) }
 
-type MyCacheSuite struct{}
+type MyCacheSuite struct {
+	root string
+}
 
 var _ = Suite(&MyCacheSuite{})
 
 var dc Interface
 
 func (s *MyCacheSuite) SetUpSuite(c *C) {
-	var err error
+	root, err := ioutil.TempDir(os.TempDir(), "donut-")
+	c.Assert(err, IsNil)
+	s.root = root
+
+	customConfigPath = filepath.Join(root, "donut.json")
 	dc, err = New()
 	c.Assert(err, IsNil)
 
@@ -44,6 +52,10 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	buckets, err := dc.ListBuckets()
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 0)
+}
+
+func (s *MyCacheSuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.root)
 }
 
 // test make bucket without name

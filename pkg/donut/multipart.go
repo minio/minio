@@ -38,8 +38,6 @@ import (
 func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -72,8 +70,6 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -93,8 +89,6 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
 func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data)
 	// possible free
@@ -201,8 +195,6 @@ func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
 // CompleteMultipartUpload - complete a multipart upload and persist the data
 func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
 	donut.lock.Lock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !IsValidBucket(bucket) {
 		donut.lock.Unlock()
@@ -282,8 +274,6 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 	// TODO handle delimiter
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
@@ -347,8 +337,6 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 	// Verify upload id
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-	// update Config if possible
-	donut.updateConfig()
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)

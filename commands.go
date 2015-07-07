@@ -2,9 +2,7 @@ package main
 
 import (
 	"os"
-	"os/signal"
 	"os/user"
-	"syscall"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/controller"
@@ -70,32 +68,13 @@ func getServerConfig(c *cli.Context) api.Config {
 	}
 }
 
-func trapServer(doneCh chan struct{}) {
-	// Go signal notification works by sending `os.Signal`
-	// values on a channel.
-	sigs := make(chan os.Signal, 1)
-
-	// `signal.Notify` registers the given channel to
-	// receive notifications of the specified signals.
-	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGUSR2)
-
-	// This executes a blocking receive for signals.
-	// When it gets one it'll then notify the program
-	// that it can finish.
-	<-sigs
-	doneCh <- struct{}{}
-}
-
 func runServer(c *cli.Context) {
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)
 	}
-	doneCh := make(chan struct{})
-	go trapServer(doneCh)
-
 	apiServerConfig := getServerConfig(c)
-	err = server.StartServices(apiServerConfig, doneCh)
+	err = server.StartServices(apiServerConfig)
 	if err != nil {
 		Fatalln(err)
 	}
