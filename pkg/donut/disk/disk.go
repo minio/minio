@@ -153,13 +153,7 @@ func (disk Disk) CreateFile(filename string) (*atomic.File, error) {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 
-	filePath := filepath.Join(disk.path, filename)
-	// Create directories if they don't exist
-	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
-		return nil, iodine.New(err, nil)
-	}
-
-	f, err := atomic.FileCreate(filePath)
+	f, err := atomic.FileCreate(filepath.Join(disk.path, filename))
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
