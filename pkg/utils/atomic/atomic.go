@@ -58,8 +58,13 @@ func (f *File) CloseAndPurge() error {
 	return nil
 }
 
-// FileCreate creates a new file at filePath for atomic writes
+// FileCreate creates a new file at filePath for atomic writes, it also creates parent directories if they don't exist
 func FileCreate(filePath string) (*File, error) {
+	// if parent directories do not exist, ioutil.TempFile doesn't create them
+	// handle such a case with os.MkdirAll()
+	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
+		return nil, iodine.New(err, nil)
+	}
 	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath))
 	if err != nil {
 		return nil, iodine.New(err, nil)
