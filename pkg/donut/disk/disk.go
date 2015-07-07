@@ -18,10 +18,12 @@ package disk
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -29,8 +31,39 @@ import (
 
 // Disk container for disk parameters
 type Disk struct {
+	lock   *sync.Mutex
 	path   string
 	fsInfo map[string]string
+}
+
+// File container provided by disk for atomic file writes
+type File struct {
+	*os.File
+	path string
+}
+
+// Close the file replacing the configured file.
+func (f *File) Close() error {
+	if err := f.File.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(f.Name(), f.path); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Abort closes the file and removes it instead of replacing the configured
+// file. This is useful if after starting to write to the file you decide you
+// don't want it anymore.
+func (f *File) Abort() error {
+	if err := f.File.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(f.Name()); err != nil {
+		return err
+	}
+	return nil
 }
 
 // New - instantiate new disk
@@ -51,6 +84,7 @@ func New(diskPath string) (Disk, error) {
 		return Disk{}, iodine.New(err, nil)
 	}
 	disk := Disk{
+		lock:   &sync.Mutex{},
 		path:   diskPath,
 		fsInfo: make(map[string]string),
 	}
@@ -70,6 +104,9 @@ func (disk Disk) GetPath() string {
 
 // GetFSInfo - get disk filesystem and its usage information
 func (disk Disk) GetFSInfo() map[string]string {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(disk.path, &s)
 	if err != nil {
@@ -84,11 +121,16 @@ func (disk Disk) GetFSInfo() map[string]string {
 
 // MakeDir - make a directory inside disk root path
 func (disk Disk) MakeDir(dirname string) error {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
 	return os.MkdirAll(filepath.Join(disk.path, dirname), 0700)
 }
 
 // ListDir - list a directory inside disk root path, get only directories
 func (disk Disk) ListDir(dirname string) ([]os.FileInfo, error) {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
 		return nil, iodine.New(err, nil)
@@ -110,6 +152,9 @@ func (disk Disk) ListDir(dirname string) ([]os.FileInfo, error) {
 
 // ListFiles - list a directory inside disk root path, get only files
 func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, error) {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
 		return nil, iodine.New(err, nil)
@@ -129,25 +174,37 @@ func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 	return files, nil
 }
 
-// CreateFile - create a file inside disk root path
-func (disk Disk) CreateFile(filename string) (*os.File, error) {
+// CreateFile - create a file inside disk root path, replies with custome disk.File which provides atomic writes
+func (disk Disk) CreateFile(filename string) (*File, error) {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
 	if filename == "" {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
+
 	filePath := filepath.Join(disk.path, filename)
 	// Create directories if they don't exist
 	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	dataFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0600)
+	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath))
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	return dataFile, nil
+	if err := os.Chmod(f.Name(), 0600); err != nil {
+		os.Remove(f.Name())
+		return nil, iodine.New(err, nil)
+	}
+
+	return &File{File: f, path: filePath}, nil
 }
 
 // OpenFile - read a file inside disk root path
 func (disk Disk) OpenFile(filename string) (*os.File, error) {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
 	if filename == "" {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}

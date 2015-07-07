@@ -37,13 +37,14 @@ var originalWD, _ = os.Getwd()
 // nimbleNet provides the family of Listen functions and maintains the associated
 // state. Typically you will have only once instance of nimbleNet per application.
 type nimbleNet struct {
-	inherited   []net.Listener
-	active      []net.Listener
-	mutex       sync.Mutex
-	inheritOnce sync.Once
+	inheritedListeners []net.Listener
+	activeListeners    []net.Listener
+	mutex              sync.Mutex
+	inheritOnce        sync.Once
 }
 
-func (n *nimbleNet) inherit() error {
+// inherit - lookg for LISTEN_FDS in environment variables and populate listeners
+func (n *nimbleNet) getInheritedListeners() error {
 	var retErr error
 	n.inheritOnce.Do(func() {
 		n.mutex.Lock()
@@ -71,7 +72,7 @@ func (n *nimbleNet) inherit() error {
 				retErr = fmt.Errorf("error closing inherited socket fd %d: %s", i, err)
 				return
 			}
-			n.inherited = append(n.inherited, l)
+			n.inheritedListeners = append(n.inheritedListeners, l)
 		}
 	})
 	return iodine.New(retErr, nil)
@@ -104,7 +105,7 @@ func (n *nimbleNet) Listen(nett, laddr string) (net.Listener, error) {
 // be: "tcp", "tcp4" or "tcp6". It returns an inherited net.Listener for the
 // matching network and address, or creates a new one using net.ListenTCP.
 func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, error) {
-	if err := n.inherit(); err != nil {
+	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
 
@@ -112,13 +113,13 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 	defer n.mutex.Unlock()
 
 	// look for an inherited listener
-	for i, l := range n.inherited {
+	for i, l := range n.inheritedListeners {
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
 		if isSameAddr(l.Addr(), laddr) {
-			n.inherited[i] = nil
-			n.active = append(n.active, l)
+			n.inheritedListeners[i] = nil
+			n.activeListeners = append(n.activeListeners, l)
 			return l.(*net.TCPListener), nil
 		}
 	}
@@ -128,7 +129,7 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	n.active = append(n.active, l)
+	n.activeListeners = append(n.activeListeners, l)
 	return l, nil
 }
 
@@ -136,7 +137,7 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 // must be a: "unix" or "unixpacket". It returns an inherited net.Listener for
 // the matching network and address, or creates a new one using net.ListenUnix.
 func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, error) {
-	if err := n.inherit(); err != nil {
+	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
 
@@ -144,13 +145,13 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 	defer n.mutex.Unlock()
 
 	// look for an inherited listener
-	for i, l := range n.inherited {
+	for i, l := range n.inheritedListeners {
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
 		if isSameAddr(l.Addr(), laddr) {
-			n.inherited[i] = nil
-			n.active = append(n.active, l)
+			n.inheritedListeners[i] = nil
+			n.activeListeners = append(n.activeListeners, l)
 			return l.(*net.UnixListener), nil
 		}
 	}
@@ -160,16 +161,16 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	n.active = append(n.active, l)
+	n.activeListeners = append(n.activeListeners, l)
 	return l, nil
 }
 
 // activeListeners returns a snapshot copy of the active listeners.
-func (n *nimbleNet) activeListeners() ([]net.Listener, error) {
+func (n *nimbleNet) getActiveListeners() ([]net.Listener, error) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
-	ls := make([]net.Listener, len(n.active))
-	copy(ls, n.active)
+	ls := make([]net.Listener, len(n.activeListeners))
+	copy(ls, n.activeListeners)
 	return ls, nil
 }
 
@@ -200,7 +201,7 @@ func isSameAddr(a1, a2 net.Addr) bool {
 // deployed binary to be started. It returns the pid of the newly started
 // process when successful.
 func (n *nimbleNet) StartProcess() (int, error) {
-	listeners, err := n.activeListeners()
+	listeners, err := n.getActiveListeners()
 	if err != nil {
 		return 0, iodine.New(err, nil)
 	}

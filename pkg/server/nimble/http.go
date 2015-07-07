@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/facebookgo/httpdown"
 	"github.com/minio/minio/pkg/iodine"
@@ -23,25 +24,16 @@ var (
 	ppid               = os.Getppid()
 )
 
-// An app contains one or more servers and associated configuration.
+// An app contains one or more servers and their associated configuration.
 type app struct {
 	servers   []*http.Server
-	net       *nimbleNet
 	listeners []net.Listener
 	sds       []httpdown.Server
+	net       *nimbleNet
 	errors    chan error
 }
 
-func newApp(servers []*http.Server) *app {
-	return &app{
-		servers:   servers,
-		net:       &nimbleNet{},
-		listeners: make([]net.Listener, 0, len(servers)),
-		sds:       make([]httpdown.Server, 0, len(servers)),
-		errors:    make(chan error, 1+(len(servers)*2)),
-	}
-}
-
+// listen initailize listeners
 func (a *app) listen() error {
 	for _, s := range a.servers {
 		l, err := a.net.Listen("tcp", s.Addr)
@@ -56,17 +48,22 @@ func (a *app) listen() error {
 	return nil
 }
 
+// serve start serving all listeners
 func (a *app) serve() {
-	h := &httpdown.HTTP{}
+	h := &httpdown.HTTP{
+		StopTimeout: 10 * time.Second,
+		KillTimeout: 1 * time.Second,
+	}
 	for i, s := range a.servers {
 		a.sds = append(a.sds, h.Serve(s, a.listeners[i]))
 	}
 }
 
+// wait for http server to signal all requests that have been served
 func (a *app) wait() {
 	var wg sync.WaitGroup
 	wg.Add(len(a.sds) * 2) // Wait & Stop
-	go a.signalHandler(&wg)
+	go a.trapSignal(&wg)
 	for _, s := range a.sds {
 		go func(s httpdown.Server) {
 			defer wg.Done()
@@ -78,28 +75,25 @@ func (a *app) wait() {
 	wg.Wait()
 }
 
-func (a *app) term(wg *sync.WaitGroup) {
-	for _, s := range a.sds {
-		go func(s httpdown.Server) {
-			defer wg.Done()
-			if err := s.Stop(); err != nil {
-				a.errors <- iodine.New(err, nil)
-			}
-		}(s)
-	}
-}
-
-func (a *app) signalHandler(wg *sync.WaitGroup) {
+// trapSignal wait on listed signals for pre-defined behaviors
+func (a *app) trapSignal(wg *sync.WaitGroup) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2, syscall.SIGHUP)
 	for {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM:
-			// this ensures a subsequent TERM will trigger standard go behaviour of
-			// terminating.
+			// this ensures a subsequent TERM will trigger standard go behaviour of terminating
 			signal.Stop(ch)
-			a.term(wg)
+			// roll through all initialized http servers and stop them
+			for _, s := range a.sds {
+				go func(s httpdown.Server) {
+					defer wg.Done()
+					if err := s.Stop(); err != nil {
+						a.errors <- iodine.New(err, nil)
+					}
+				}(s)
+			}
 			return
 		case syscall.SIGUSR2:
 			fallthrough
@@ -116,7 +110,13 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 // ListenAndServe will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2/SIGHUP).
 func ListenAndServe(servers ...*http.Server) error {
-	a := newApp(servers)
+	a := &app{
+		servers:   servers,
+		listeners: make([]net.Listener, 0, len(servers)),
+		sds:       make([]httpdown.Server, 0, len(servers)),
+		net:       &nimbleNet{},
+		errors:    make(chan error, 1+(len(servers)*2)),
+	}
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
@@ -137,6 +137,8 @@ func ListenAndServe(servers ...*http.Server) error {
 	go func() {
 		defer close(waitdone)
 		a.wait()
+		// communicate by sending not by closing a channel
+		waitdone <- struct{}{}
 	}()
 
 	select {

@@ -61,18 +61,24 @@ func (s *MyDiskSuite) TestDiskCreateDir(c *C) {
 func (s *MyDiskSuite) TestDiskCreateFile(c *C) {
 	f, err := s.disk.CreateFile("hello1")
 	c.Assert(err, IsNil)
-	c.Assert(f.Name(), Equals, filepath.Join(s.path, "hello1"))
-	defer f.Close()
+	c.Assert(f.Name(), Not(Equals), filepath.Join(s.path, "hello1"))
+	// close renames the file
+	f.Close()
+
+	// Openfile should be a success
+	_, err = s.disk.OpenFile("hello1")
+	c.Assert(err, IsNil)
 }
 
 func (s *MyDiskSuite) TestDiskOpenFile(c *C) {
-	f, err := s.disk.CreateFile("hello2")
+	f1, err := s.disk.CreateFile("hello2")
 	c.Assert(err, IsNil)
-	c.Assert(f.Name(), Equals, filepath.Join(s.path, "hello2"))
-	defer f.Close()
+	c.Assert(f1.Name(), Not(Equals), filepath.Join(s.path, "hello2"))
+	// close renames the file
+	f1.Close()
 
-	f, err = s.disk.OpenFile("hello2")
+	f2, err := s.disk.OpenFile("hello2")
 	c.Assert(err, IsNil)
-	c.Assert(f.Name(), Equals, filepath.Join(s.path, "hello2"))
-	defer f.Close()
+	c.Assert(f2.Name(), Equals, filepath.Join(s.path, "hello2"))
+	defer f2.Close()
 }
