@@ -47,8 +47,30 @@ func GetDisks(url string) ([]string, error) {
 	return reply.Disks, nil
 }
 
-// GetMemStats get system info of the server at given url
+// GetMemStats get memory status of the server at given url
 func GetMemStats(url string) ([]byte, error) {
+	op := RPCOps{
+		Method:  "MemStats.Get",
+		Request: rpc.Args{Request: ""},
+	}
+	req, err := NewRequest(url, op, http.DefaultTransport)
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	resp, err := req.Do()
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	defer resp.Body.Close()
+	var reply rpc.MemStatsReply
+	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	return json.MarshalIndent(reply, "", "\t")
+}
+
+// GetSysInfo get system status of the server at given url
+func GetSysInfo(url string) ([]byte, error) {
 	op := RPCOps{
 		Method:  "SysInfo.Get",
 		Request: rpc.Args{Request: ""},
@@ -96,4 +118,4 @@ func SetDonut(url, hostname string, disks []string) error {
 	return reply.Error
 }
 
-// Add more functions here for many replies
+// Add more functions here for other RPC messages

@@ -29,13 +29,20 @@ type SysInfoService struct{}
 
 // SysInfoReply -
 type SysInfoReply struct {
-	Hostname  string           `json:"hostname"`
-	SysARCH   string           `json:"sys.arch"`
-	SysOS     string           `json:"sys.os"`
-	SysCPUS   int              `json:"sys.ncpus"`
-	Routines  int              `json:"goroutines"`
-	GOVersion string           `json:"goversion"`
-	MemStats  runtime.MemStats `json:"memstats"`
+	Hostname  string `json:"hostname"`
+	SysARCH   string `json:"sys.arch"`
+	SysOS     string `json:"sys.os"`
+	SysCPUS   int    `json:"sys.ncpus"`
+	Routines  int    `json:"goroutines"`
+	GOVersion string `json:"goversion"`
+}
+
+// MemStatsService -
+type MemStatsService struct{}
+
+// MemStatsReply -
+type MemStatsReply struct {
+	runtime.MemStats `json:"memstats"`
 }
 
 func setSysInfoReply(sis *SysInfoReply) error {
@@ -50,15 +57,22 @@ func setSysInfoReply(sis *SysInfoReply) error {
 	if err != nil {
 		return iodine.New(err, nil)
 	}
+	return nil
+}
 
+func setMemStatsReply(sis *MemStatsReply) error {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	sis.MemStats = memStats
-
 	return nil
 }
 
 // Get method
 func (s *SysInfoService) Get(r *http.Request, args *Args, reply *SysInfoReply) error {
 	return setSysInfoReply(reply)
+}
+
+// Get method
+func (s *MemStatsService) Get(r *http.Request, args *Args, reply *MemStatsReply) error {
+	return setMemStatsReply(reply)
 }
