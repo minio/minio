@@ -31,6 +31,7 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/utils/atomic"
 )
 
 // Config - generic config interface functions
@@ -115,17 +116,20 @@ func (d config) Save(filename string) (err error) {
 		return iodine.New(err, nil)
 	}
 
-	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	file, err := atomic.FileCreate(filename)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	defer file.Close()
 
 	if runtime.GOOS == "windows" {
 		jsonData = []byte(strings.Replace(string(jsonData), "\n", "\r\n", -1))
 	}
 	_, err = file.Write(jsonData)
 	if err != nil {
+		return iodine.New(err, nil)
+	}
+
+	if err := file.Close(); err != nil {
 		return iodine.New(err, nil)
 	}
 	return nil

@@ -1,0 +1,74 @@
+/*
+ * Minio Client (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// NOTE - Rename() not guaranteed to be atomic on all filesystems which are not fully POSIX compatible
+
+// Package atomic provides atomic file write semantics by leveraging Rename's() atomicity.
+package atomic
+
+import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
+	"github.com/minio/minio/pkg/iodine"
+)
+
+// File container provided for atomic file writes
+type File struct {
+	*os.File
+	file string
+}
+
+// Close the file replacing, returns an error if any
+func (f *File) Close() error {
+	// close the embedded fd
+	if err := f.File.Close(); err != nil {
+		return iodine.New(err, nil)
+	}
+	// atomic rename to final destination
+	if err := os.Rename(f.Name(), f.file); err != nil {
+		return iodine.New(err, nil)
+	}
+	return nil
+}
+
+// CloseAndPurge removes the temp file, closes the transaction and returns an error if any
+func (f *File) CloseAndPurge() error {
+	// close the embedded fd
+	if err := f.File.Close(); err != nil {
+		return iodine.New(err, nil)
+	}
+	if err := os.Remove(f.Name()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// FileCreate creates a new file at filePath for atomic writes
+func FileCreate(filePath string) (*File, error) {
+	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath))
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	if err := os.Chmod(f.Name(), 0600); err != nil {
+		if err := os.Remove(f.Name()); err != nil {
+			return nil, iodine.New(err, nil)
+		}
+		return nil, iodine.New(err, nil)
+	}
+	return &File{File: f, file: filePath}, nil
+}
