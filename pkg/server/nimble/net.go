@@ -118,7 +118,7 @@ func (n *nimbleNet) Listen(nett, laddr string) (net.Listener, error) {
 			return nil, iodine.New(err, nil)
 		}
 		return n.ListenTCP(nett, addr)
-	case "unix", "unixpacket", "invalid_unix_net_for_test":
+	case "unix", "unixpacket":
 		addr, err := net.ResolveUnixAddr(nett, laddr)
 		if err != nil {
 			return nil, iodine.New(err, nil)
