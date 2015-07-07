@@ -20,9 +20,51 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
+
+// IsValidBucket - verify bucket name in accordance with
+//  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
+func IsValidBucket(bucket string) bool {
+	if len(bucket) < 3 || len(bucket) > 63 {
+		return false
+	}
+	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
+		return false
+	}
+	if match, _ := regexp.MatchString("\\.\\.", bucket); match == true {
+		return false
+	}
+	// We don't support buckets with '.' in them
+	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+[a-zA-Z0-9]$", bucket)
+	return match
+}
+
+// IsValidObjectName - verify object name in accordance with
+//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+func IsValidObjectName(object string) bool {
+	if strings.TrimSpace(object) == "" {
+		return false
+	}
+	if len(object) > 1024 || len(object) == 0 {
+		return false
+	}
+	if !utf8.ValidString(object) {
+		return false
+	}
+	return true
+}
+
+// IsValidPrefix - verify prefix name is correct, an empty prefix is valid
+func IsValidPrefix(prefix string) bool {
+	if strings.TrimSpace(prefix) == "" {
+		return true
+	}
+	return IsValidObjectName(prefix)
+}
 
 // ProxyWriter implements io.Writer to trap written bytes
 type ProxyWriter struct {

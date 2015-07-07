@@ -444,7 +444,7 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 				writer.CloseWithError(iodine.New(err, nil))
 				return
 			}
-			_, err = io.Copy(mwriter, bytes.NewBuffer(decodedData))
+			_, err = io.Copy(mwriter, bytes.NewReader(decodedData))
 			if err != nil {
 				writer.CloseWithError(iodine.New(err, nil))
 				return
@@ -473,7 +473,7 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadC
 	if blockSize < totalLeft {
 		curBlockSize = blockSize
 	} else {
-		curBlockSize = totalLeft // cast is safe, blockSize in if protects
+		curBlockSize = totalLeft
 	}
 	curChunkSize, err := encoder.GetEncodedBlockLen(int(curBlockSize))
 	if err != nil {
