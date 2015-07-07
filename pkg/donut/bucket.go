@@ -319,13 +319,13 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 		return iodine.New(err, nil)
 	}
 	for _, objMetadataWriter := range objMetadataWriters {
-		defer objMetadataWriter.Close()
-	}
-	for _, objMetadataWriter := range objMetadataWriters {
 		jenc := json.NewEncoder(objMetadataWriter)
 		if err := jenc.Encode(&objMetadata); err != nil {
 			return iodine.New(err, nil)
 		}
+	}
+	for _, objMetadataWriter := range objMetadataWriters {
+		objMetadataWriter.Close()
 	}
 	return nil
 }
