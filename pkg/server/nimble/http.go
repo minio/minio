@@ -35,11 +35,6 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-var (
-	inheritedListeners = os.Getenv("LISTEN_FDS")
-	ppid               = os.Getppid()
-)
-
 // An app contains one or more servers and their associated configuration.
 type app struct {
 	servers   []*http.Server
@@ -126,6 +121,9 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 // ListenAndServe will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2/SIGHUP).
 func ListenAndServe(servers ...*http.Server) error {
+	// get parent process id
+	ppid := os.Getppid()
+
 	a := &app{
 		servers:   servers,
 		listeners: make([]net.Listener, 0, len(servers)),
@@ -143,7 +141,7 @@ func ListenAndServe(servers ...*http.Server) error {
 	a.serve()
 
 	// Close the parent if we inherited and it wasn't init that started us.
-	if inheritedListeners != "" && ppid != 1 {
+	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
 			return iodine.New(err, nil)
 		}

@@ -59,7 +59,17 @@ type nimbleNet struct {
 	inheritOnce        sync.Once
 }
 
-// inherit - lookg for LISTEN_FDS in environment variables and populate listeners
+// nimbleAddr simple wrapper over net.Addr interface to implement IsEqual()
+type nimbleAddr struct {
+	net.Addr
+}
+
+// fileListener simple interface to extract file pointers from different types of net.Listener's
+type fileListener interface {
+	File() (*os.File, error)
+}
+
+// getInheritedListeners - look for LISTEN_FDS in environment variables and populate listeners accordingly
 func (n *nimbleNet) getInheritedListeners() error {
 	var retErr error
 	n.inheritOnce.Do(func() {
@@ -97,7 +107,7 @@ func (n *nimbleNet) getInheritedListeners() error {
 // Listen announces on the local network address laddr. The network net must be
 // a stream-oriented network: "tcp", "tcp4", "tcp6", "unix" or "unixpacket". It
 // returns an inherited net.Listener for the matching network and address, or
-// creates a new one using net.Listen.
+// creates a new one using net.Listen()
 func (n *nimbleNet) Listen(nett, laddr string) (net.Listener, error) {
 	switch nett {
 	default:
@@ -133,7 +143,8 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
-		if isSameAddr(l.Addr(), laddr) {
+		equal := nimbleAddr{l.Addr()}.IsEqual(laddr)
+		if equal {
 			n.inheritedListeners[i] = nil
 			n.activeListeners = append(n.activeListeners, l)
 			return l.(*net.TCPListener), nil
@@ -165,7 +176,8 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
-		if isSameAddr(l.Addr(), laddr) {
+		equal := nimbleAddr{l.Addr()}.IsEqual(laddr)
+		if equal {
 			n.inheritedListeners[i] = nil
 			n.activeListeners = append(n.activeListeners, l)
 			return l.(*net.UnixListener), nil
@@ -190,25 +202,25 @@ func (n *nimbleNet) getActiveListeners() ([]net.Listener, error) {
 	return ls, nil
 }
 
-func isSameAddr(a1, a2 net.Addr) bool {
-	if a1.Network() != a2.Network() {
+// IsEqual is synonymous with IP.IsEqual() method, here IsEqual matches net.Addr instead of net.IP
+func (n1 nimbleAddr) IsEqual(n2 net.Addr) bool {
+	if n1.Network() != n2.Network() {
 		return false
 	}
-	a1s := a1.String()
-	a2s := a2.String()
-	if a1s == a2s {
+	a1h, a1p, _ := net.SplitHostPort(n1.String())
+	a2h, a2p, _ := net.SplitHostPort(n2.String())
+	// Special cases since Addr() from net.Listener will
+	// add frivolous [::] ipv6 for no ":[PORT]" style addresses
+	if a1h == "::" && a2h == "" && a1p == a2p {
 		return true
 	}
-
-	// This allows for ipv6 vs ipv4 local addresses to compare as equal. This
-	// scenario is common when listening on localhost.
-	const ipv6prefix = "[::]"
-	a1s = strings.TrimPrefix(a1s, ipv6prefix)
-	a2s = strings.TrimPrefix(a2s, ipv6prefix)
-	const ipv4prefix = "0.0.0.0"
-	a1s = strings.TrimPrefix(a1s, ipv4prefix)
-	a2s = strings.TrimPrefix(a2s, ipv4prefix)
-	return a1s == a2s
+	if a2h == "::" && a1h == "" && a1p == a2p {
+		return true
+	}
+	if net.ParseIP(a1h).Equal(net.ParseIP(a2h)) && a1p == a2p {
+		return true
+	}
+	return false
 }
 
 // StartProcess starts a new process passing it the active listeners. It
@@ -258,8 +270,4 @@ func (n *nimbleNet) StartProcess() (int, error) {
 		return 0, iodine.New(err, nil)
 	}
 	return process.Pid, nil
-}
-
-type fileListener interface {
-	File() (*os.File, error)
 }
