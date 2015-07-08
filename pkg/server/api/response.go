@@ -25,7 +25,7 @@ import (
 
 // Reply date format
 const (
-	iso8601Format = "2006-01-02T15:04:05.000Z"
+	rfcFormat = "2006-01-02T15:04:05.000Z"
 )
 
 // takes an array of Bucketmetadata information for serialization
@@ -45,7 +45,7 @@ func generateListBucketsResponse(buckets []donut.BucketMetadata) ListBucketsResp
 	for _, bucket := range buckets {
 		var listbucket = &Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.Format(iso8601Format)
+		listbucket.CreationDate = bucket.Created.Format(rfcFormat)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -154,7 +154,7 @@ func generateListPartsResult(objectMetadata donut.ObjectResourcesMetadata) ListP
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.Format(iso8601Format)
+		newPart.LastModified = part.LastModified.Format(rfcFormat)
 		listPartsResponse.Part = append(listPartsResponse.Part, newPart)
 	}
 	return listPartsResponse
@@ -179,7 +179,7 @@ func generateListMultipartUploadsResult(bucket string, metadata donut.BucketMult
 		newUpload := &Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Key
-		newUpload.Initiated = upload.Initiated.Format(iso8601Format)
+		newUpload.Initiated = upload.Initiated.Format(rfcFormat)
 		listMultipartUploadsResponse.Upload = append(listMultipartUploadsResponse.Upload, newUpload)
 	}
 	return listMultipartUploadsResponse

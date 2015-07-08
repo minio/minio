@@ -54,7 +54,7 @@ type authHeader struct {
 }
 
 const (
-	timeFormat = "20060102T150405Z"
+	iso8601Format = "20060102T150405Z"
 )
 
 const (
@@ -111,8 +111,8 @@ func parseDate(req *http.Request) (time.Time, error) {
 		if _, err := time.Parse(time.RFC1123Z, amzDate); err == nil {
 			return time.Parse(time.RFC1123Z, amzDate)
 		}
-		if _, err := time.Parse(timeFormat, amzDate); err == nil {
-			return time.Parse(timeFormat, amzDate)
+		if _, err := time.Parse(iso8601Format, amzDate); err == nil {
+			return time.Parse(iso8601Format, amzDate)
 		}
 	}
 	date := req.Header.Get("Date")
@@ -124,8 +124,8 @@ func parseDate(req *http.Request) (time.Time, error) {
 		if _, err := time.Parse(time.RFC1123Z, date); err == nil {
 			return time.Parse(time.RFC1123Z, date)
 		}
-		if _, err := time.Parse(timeFormat, amzDate); err == nil {
-			return time.Parse(timeFormat, amzDate)
+		if _, err := time.Parse(iso8601Format, amzDate); err == nil {
+			return time.Parse(iso8601Format, amzDate)
 		}
 	}
 	return time.Time{}, errors.New("invalid request")
