@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/quick"
-	"github.com/minio/minio/pkg/server/api/auth/keys"
 )
 
 type contentTypeHandler struct {
@@ -45,7 +45,7 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-type auth struct {
+type authHeader struct {
 	prefix        string
 	credential    string
 	signedheaders string
@@ -62,13 +62,13 @@ const (
 )
 
 // strip auth from authorization header
-func stripAuth(r *http.Request) (*auth, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
+func stripAuth(r *http.Request) (*authHeader, error) {
+	ah := r.Header.Get("Authorization")
+	if ah == "" {
 		return nil, errors.New("Missing auth header")
 	}
-	a := new(auth)
-	authFields := strings.Split(authHeader, ",")
+	a := new(authHeader)
+	authFields := strings.Split(ah, ",")
 	if len(authFields) != 3 {
 		return nil, errors.New("Missing fields in Auth header")
 	}
@@ -95,7 +95,7 @@ func stripAuth(r *http.Request) (*auth, error) {
 	a.signedheaders = signedheaders[1]
 	a.signature = signature[1]
 	a.accessKey = strings.Split(a.credential, "/")[0]
-	if !keys.IsValidAccessKey(a.accessKey) {
+	if !auth.IsValidAccessKey(a.accessKey) {
 		return nil, errors.New("Invalid access key")
 	}
 	return a, nil

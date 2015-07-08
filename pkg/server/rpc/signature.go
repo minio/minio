@@ -14,31 +14,39 @@
  * limitations under the License.
  */
 
-package auth_test
+package rpc
 
 import (
-	"testing"
+	"net/http"
 
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/iodine"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+// AuthService auth service
+type AuthService struct{}
 
-type MySuite struct{}
+// AuthReply reply with new access keys and secret ids
+type AuthReply struct {
+	AccessKeyID     string `json:"accesskey"`
+	SecretAccessKey string `json:"secretaccesskey"`
+}
 
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestAuth(c *C) {
-	secretID, err := auth.GenerateSecretAccessKey()
-	c.Assert(err, IsNil)
-
+func getAuth(reply *AuthReply) error {
 	accessID, err := auth.GenerateAccessKeyID()
-	c.Assert(err, IsNil)
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	reply.AccessKeyID = string(accessID)
+	secretID, err := auth.GenerateSecretAccessKey()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	reply.SecretAccessKey = string(secretID)
+	return nil
+}
 
-	c.Assert(len(secretID), Equals, auth.MinioSecretID)
-	c.Assert(len(accessID), Equals, auth.MinioAccessID)
-
-	c.Log(string(secretID))
-	c.Log(string(accessID))
+// Get auth keys
+func (s *AuthService) Get(r *http.Request, args *Args, reply *AuthReply) error {
+	return getAuth(reply)
 }

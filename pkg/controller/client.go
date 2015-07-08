@@ -91,6 +91,28 @@ func GetSysInfo(url string) ([]byte, error) {
 	return json.MarshalIndent(reply, "", "\t")
 }
 
+// GetAuthKeys get access key id and secret access key
+func GetAuthKeys(url string) ([]byte, error) {
+	op := RPCOps{
+		Method:  "Auth.Get",
+		Request: rpc.Args{Request: ""},
+	}
+	req, err := NewRequest(url, op, http.DefaultTransport)
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	resp, err := req.Do()
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	defer resp.Body.Close()
+	var reply rpc.AuthReply
+	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	return json.MarshalIndent(reply, "", "\t")
+}
+
 // SetDonut - set donut config
 func SetDonut(url, hostname string, disks []string) error {
 	op := RPCOps{

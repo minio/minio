@@ -26,26 +26,24 @@ var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 // GenerateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func GenerateAccessKeyID(size int) ([]byte, error) {
-	alpha := make([]byte, size)
+func GenerateAccessKeyID() ([]byte, error) {
+	alpha := make([]byte, MinioAccessID)
 	_, err := rand.Read(alpha)
 	if err != nil {
 		return nil, err
 	}
-
-	for i := 0; i < size; i++ {
+	for i := 0; i < MinioAccessID; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
 	}
 	return alpha, nil
 }
 
 // GenerateSecretAccessKey - generate random base64 numeric value from a random seed.
-func GenerateSecretAccessKey(size int) ([]byte, error) {
-	rb := make([]byte, size)
+func GenerateSecretAccessKey() ([]byte, error) {
+	rb := make([]byte, MinioSecretID)
 	_, err := rand.Read(rb)
 	if err != nil {
 		return nil, err
 	}
-
-	return []byte(base64.StdEncoding.EncodeToString(rb))[:size], nil
+	return []byte(base64.StdEncoding.EncodeToString(rb))[:MinioSecretID], nil
 }
