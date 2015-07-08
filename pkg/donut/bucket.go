@@ -155,13 +155,12 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	}
 	var prefixes []string
 	var filteredObjects []string
+	filteredObjects = objects
 	if strings.TrimSpace(delimiter) != "" {
 		filteredObjects = HasNoDelimiter(objects, delimiter)
 		prefixes = HasDelimiter(objects, delimiter)
 		prefixes = SplitDelimiter(prefixes, delimiter)
 		prefixes = SortU(prefixes)
-	} else {
-		filteredObjects = objects
 	}
 	var results []string
 	var commonPrefixes []string

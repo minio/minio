@@ -500,13 +500,12 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) (
 	}
 	var prefixes []string
 	var filteredKeys []string
+	filteredKeys = keys
 	if strings.TrimSpace(resources.Delimiter) != "" {
 		filteredKeys = HasNoDelimiter(keys, resources.Delimiter)
 		prefixes = HasDelimiter(keys, resources.Delimiter)
 		prefixes = SplitDelimiter(prefixes, resources.Delimiter)
 		prefixes = SortU(prefixes)
-	} else {
-		filteredKeys = keys
 	}
 	for _, commonPrefix := range prefixes {
 		resources.CommonPrefixes = append(resources.CommonPrefixes, resources.Prefix+commonPrefix)
