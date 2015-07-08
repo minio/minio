@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package keys
+package auth
 
 import (
 	"crypto/rand"
@@ -24,9 +24,9 @@ import (
 // Static alphaNumeric table used for generating unique keys
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-// GenerateRandomAlphaNumeric - generate random alpha numeric value using only uppercase characters
+// GenerateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func GenerateRandomAlphaNumeric(size int) ([]byte, error) {
+func GenerateAccessKeyID(size int) ([]byte, error) {
 	alpha := make([]byte, size)
 	_, err := rand.Read(alpha)
 	if err != nil {
@@ -39,13 +39,13 @@ func GenerateRandomAlphaNumeric(size int) ([]byte, error) {
 	return alpha, nil
 }
 
-// GenerateRandomBase64 - generate random base64 numeric value from a random seed.
-func GenerateRandomBase64(size int) ([]byte, error) {
+// GenerateSecretAccessKey - generate random base64 numeric value from a random seed.
+func GenerateSecretAccessKey(size int) ([]byte, error) {
 	rb := make([]byte, size)
 	_, err := rand.Read(rb)
 	if err != nil {
 		return nil, err
 	}
-	dest := base64.StdEncoding.EncodeToString(rb)
-	return []byte(dest), nil
+
+	return []byte(base64.StdEncoding.EncodeToString(rb))[:size], nil
 }

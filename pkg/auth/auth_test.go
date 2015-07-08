@@ -14,32 +14,31 @@
  * limitations under the License.
  */
 
-package keys
+package auth_test
 
-import "regexp"
+import (
+	"testing"
 
-// AccessID and SecretID length in bytes
-const (
-	MinioAccessID = 20
-	MinioSecretID = 40
+	. "github.com/minio/check"
+	"github.com/minio/minio/pkg/auth"
 )
 
-/// helpers
+func Test(t *testing.T) { TestingT(t) }
 
-// IsValidSecretKey - validate secret key
-func IsValidSecretKey(secretAccessKey string) bool {
-	if secretAccessKey == "" {
-		return true
-	}
-	regex := regexp.MustCompile("^.{40}$")
-	return regex.MatchString(secretAccessKey)
-}
+type MySuite struct{}
 
-// IsValidAccessKey - validate access key
-func IsValidAccessKey(accessKeyID string) bool {
-	if accessKeyID == "" {
-		return true
-	}
-	regex := regexp.MustCompile("^[A-Z0-9\\-\\.\\_\\~]{20}$")
-	return regex.MatchString(accessKeyID)
+var _ = Suite(&MySuite{})
+
+func (s *MySuite) TestAuth(c *C) {
+	secretID, err := auth.GenerateSecretAccessKey(auth.MinioSecretID)
+	c.Assert(err, IsNil)
+
+	accessID, err := auth.GenerateAccessKeyID(auth.MinioAccessID)
+	c.Assert(err, IsNil)
+
+	c.Assert(len(secretID), Equals, auth.MinioSecretID)
+	c.Assert(len(accessID), Equals, auth.MinioAccessID)
+
+	c.Log(string(secretID))
+	c.Log(string(accessID))
 }
