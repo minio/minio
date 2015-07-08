@@ -64,3 +64,13 @@ func (r RPCRequest) Do() (*http.Response, error) {
 	}
 	return resp, nil
 }
+
+// Get - get value of requested header
+func (r RPCRequest) Get(key string) string {
+	return r.req.Header.Get(key)
+}
+
+// Set - set value of a header key
+func (r *RPCRequest) Set(key, value string) {
+	r.req.Header.Set(key, value)
+}

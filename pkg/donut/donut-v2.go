@@ -304,13 +304,15 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 
 // createObject - PUT object to cache buffer
 func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
-	if size > int64(donut.config.MaxSize) {
-		generic := GenericObjectError{Bucket: bucket, Object: key}
-		return ObjectMetadata{}, iodine.New(EntityTooLarge{
-			GenericObjectError: generic,
-			Size:               strconv.FormatInt(size, 10),
-			MaxSize:            strconv.FormatUint(donut.config.MaxSize, 10),
-		}, nil)
+	if len(donut.config.NodeDiskMap) == 0 {
+		if size > int64(donut.config.MaxSize) {
+			generic := GenericObjectError{Bucket: bucket, Object: key}
+			return ObjectMetadata{}, iodine.New(EntityTooLarge{
+				GenericObjectError: generic,
+				Size:               strconv.FormatInt(size, 10),
+				MaxSize:            strconv.FormatUint(donut.config.MaxSize, 10),
+			}, nil)
+		}
 	}
 	if !IsValidBucket(bucket) {
 		return ObjectMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
