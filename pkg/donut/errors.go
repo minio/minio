@@ -309,3 +309,20 @@ type InvalidUploadID struct {
 func (e InvalidUploadID) Error() string {
 	return "Invalid upload id " + e.UploadID
 }
+
+// SignatureDoesNotMatch invalid signature
+type SignatureDoesNotMatch struct {
+	SignatureSent       string
+	SignatureCalculated string
+}
+
+func (e SignatureDoesNotMatch) Error() string {
+	return "The request signature we calculated does not match the signature you provided"
+}
+
+// MissingDateHeader date header missing
+type MissingDateHeader struct{}
+
+func (e MissingDateHeader) Error() string {
+	return "Missing date header"
+}
