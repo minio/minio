@@ -31,4 +31,4 @@ RUN apt-get remove -y build-essential curl git && \
 
 EXPOSE 9000 9001
 
-CMD ["sh", "-c", "${GOPATH}/bin/minio mode memory 2G"]
+CMD ["sh", "-c", "${GOPATH}/bin/minio server"]
