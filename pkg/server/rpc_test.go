@@ -99,3 +99,24 @@ func (s *MyRPCSuite) TestSysInfo(c *C) {
 	resp.Body.Close()
 	c.Assert(reply, Not(DeepEquals), rpc.SysInfoReply{})
 }
+
+func (s *MyRPCSuite) TestAuth(c *C) {
+	op := controller.RPCOps{
+		Method:  "Auth.Get",
+		Request: rpc.Args{Request: ""},
+	}
+	req, err := controller.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err := req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var reply rpc.AuthReply
+	err = jsonrpc.DecodeClientResponse(resp.Body, &reply)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(reply, Not(DeepEquals), rpc.AuthReply{})
+	c.Assert(len(reply.AccessKeyID), Equals, 20)
+	c.Assert(len(reply.SecretAccessKey), Equals, 40)
+}

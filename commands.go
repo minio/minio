@@ -123,6 +123,12 @@ func runController(c *cli.Context) {
 			Fatalln(err)
 		}
 		Println(string(sysinfo))
+	case "auth":
+		keys, err := controller.GetAuthKeys(c.Args().Tail().First())
+		if err != nil {
+			Fatalln(err)
+		}
+		Println(string(keys))
 	case "donut":
 		if len(c.Args()) <= 2 || c.Args().First() == "help" {
 			cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
