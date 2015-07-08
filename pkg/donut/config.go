@@ -34,15 +34,15 @@ func getDonutConfigPath() (string, error) {
 	return donutConfigPath, nil
 }
 
-// NOTE - this is not to be used outside Donut package, this is primarily intended for testing purposes only
-var customConfigPath string
+// NOTE - this is not thread safe use it carefully, currently its purpose is only for testing purposes.
+var CustomConfigPath string
 
 // SaveConfig save donut config
 func SaveConfig(a *Config) error {
 	var donutConfigPath string
 	var err error
-	if customConfigPath != "" {
-		donutConfigPath = customConfigPath
+	if CustomConfigPath != "" {
+		donutConfigPath = CustomConfigPath
 	} else {
 		donutConfigPath, err = getDonutConfigPath()
 		if err != nil {
@@ -63,8 +63,8 @@ func SaveConfig(a *Config) error {
 func LoadConfig() (*Config, error) {
 	var donutConfigPath string
 	var err error
-	if customConfigPath != "" {
-		donutConfigPath = customConfigPath
+	if CustomConfigPath != "" {
+		donutConfigPath = CustomConfigPath
 	} else {
 		donutConfigPath, err = getDonutConfigPath()
 		if err != nil {
