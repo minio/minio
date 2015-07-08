@@ -39,14 +39,10 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error
 	}
 
 	if conf.TLS {
-		config := &tls.Config{}
-		if httpServer.TLSConfig != nil {
-			*config = *httpServer.TLSConfig
-		}
-
 		var err error
-		config.Certificates = make([]tls.Certificate, 1)
-		config.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		httpServer.TLSConfig = &tls.Config{}
+		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
