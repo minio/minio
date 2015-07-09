@@ -19,14 +19,10 @@ package api
 import (
 	"errors"
 	"net/http"
-	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/quick"
 )
 
 type contentTypeHandler struct {
@@ -182,57 +178,22 @@ func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 	return validateAuthHandler{h}
 }
 
-// User context
-type User struct {
-	Version   string
-	Name      string
-	AccessKey string
-	SecretKey string
-}
-
-func getConfigFile() string {
-	u, err := user.Current()
-	if err != nil {
-		return ""
-	}
-	confPath := filepath.Join(u.HomeDir, ".minio")
-	if err := os.MkdirAll(confPath, 0700); err != nil {
-		return ""
-	}
-	return filepath.Join(confPath, "users.json")
-}
-
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	_, err := stripAuth(r)
+	ah, err := stripAuth(r)
 	switch err.(type) {
 	case nil:
-		users := make(map[string]User)
-		configFile := getConfigFile()
-		if configFile == "" {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
-			return
-		}
-		qconf, err := quick.New(&users)
+		authConfig, err := auth.LoadConfig()
 		if err != nil {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
-		if err := qconf.Save(configFile); err != nil {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+		_, ok := authConfig.Users[ah.accessKey]
+		if !ok {
+			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
 			return
 		}
-		if err := qconf.Load(configFile); err != nil {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
-			return
-		}
-		// uncomment this when we have webcli
-		// _, ok := conf.Users[auth.accessKey]
-		//if !ok {
-		//	writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
-		//	return
-		//}
 		// Success
 		h.handler.ServeHTTP(w, r)
 	default:
