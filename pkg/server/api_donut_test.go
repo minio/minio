@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"encoding/xml"
 	"net/http"
@@ -88,7 +87,6 @@ func (s *MyAPIDonutSuite) TearDownSuite(c *C) {
 func (s *MyAPIDonutSuite) TestNonExistantBucket(c *C) {
 	request, err := http.NewRequest("HEAD", testAPIDonutServer.URL+"/nonexistantbucket", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -99,7 +97,6 @@ func (s *MyAPIDonutSuite) TestNonExistantBucket(c *C) {
 func (s *MyAPIDonutSuite) TestEmptyObject(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/emptyobject", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -108,7 +105,6 @@ func (s *MyAPIDonutSuite) TestEmptyObject(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/emptyobject/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -117,7 +113,6 @@ func (s *MyAPIDonutSuite) TestEmptyObject(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/emptyobject/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -133,7 +128,6 @@ func (s *MyAPIDonutSuite) TestEmptyObject(c *C) {
 func (s *MyAPIDonutSuite) TestBucket(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -142,7 +136,6 @@ func (s *MyAPIDonutSuite) TestBucket(c *C) {
 
 	request, err = http.NewRequest("HEAD", testAPIDonutServer.URL+"/bucket", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -154,7 +147,6 @@ func (s *MyAPIDonutSuite) TestObject(c *C) {
 	buffer := bytes.NewBufferString("hello world")
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/testobject", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -163,7 +155,6 @@ func (s *MyAPIDonutSuite) TestObject(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/testobject/object", buffer)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -172,7 +163,6 @@ func (s *MyAPIDonutSuite) TestObject(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/testobject/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -188,7 +178,6 @@ func (s *MyAPIDonutSuite) TestObject(c *C) {
 func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/multipleobjects", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -197,7 +186,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/multipleobjects/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -210,7 +198,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 	buffer1 := bytes.NewBufferString("hello one")
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/multipleobjects/object1", buffer1)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -219,7 +206,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/multipleobjects/object1", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -234,7 +220,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 	buffer2 := bytes.NewBufferString("hello two")
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/multipleobjects/object2", buffer2)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -243,7 +228,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/multipleobjects/object2", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -258,7 +242,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 	buffer3 := bytes.NewBufferString("hello three")
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/multipleobjects/object3", buffer3)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -267,7 +250,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/multipleobjects/object3", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -283,7 +265,6 @@ func (s *MyAPIDonutSuite) TestMultipleObjects(c *C) {
 func (s *MyAPIDonutSuite) TestNotImplemented(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/bucket/object?policy", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -295,7 +276,6 @@ func (s *MyAPIDonutSuite) TestNotImplemented(c *C) {
 func (s *MyAPIDonutSuite) TestHeader(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/bucket/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -308,7 +288,6 @@ func (s *MyAPIDonutSuite) TestPutBucket(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/put-bucket", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -320,7 +299,6 @@ func (s *MyAPIDonutSuite) TestPutObject(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/put-object", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -329,7 +307,6 @@ func (s *MyAPIDonutSuite) TestPutObject(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/put-object/object", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -339,7 +316,6 @@ func (s *MyAPIDonutSuite) TestPutObject(c *C) {
 func (s *MyAPIDonutSuite) TestListBuckets(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -355,7 +331,6 @@ func (s *MyAPIDonutSuite) TestListBuckets(c *C) {
 func (s *MyAPIDonutSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/innonexistantbucket/object", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -367,7 +342,6 @@ func (s *MyAPIDonutSuite) TestHeadOnObject(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/headonobject", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -376,7 +350,6 @@ func (s *MyAPIDonutSuite) TestHeadOnObject(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/headonobject/object1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -384,7 +357,6 @@ func (s *MyAPIDonutSuite) TestHeadOnObject(c *C) {
 
 	request, err = http.NewRequest("HEAD", testAPIDonutServer.URL+"/headonobject/object1", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -395,7 +367,6 @@ func (s *MyAPIDonutSuite) TestHeadOnBucket(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/headonbucket", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -404,18 +375,17 @@ func (s *MyAPIDonutSuite) TestHeadOnBucket(c *C) {
 
 	request, err = http.NewRequest("HEAD", testAPIDonutServer.URL+"/headonbucket", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
+/*
 func (s *MyAPIDonutSuite) TestDateFormat(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/dateformat", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	// set an invalid date
 	request.Header.Set("Date", "asfasdfadf")
@@ -427,16 +397,16 @@ func (s *MyAPIDonutSuite) TestDateFormat(c *C) {
 		"The difference between the request time and the server's time is too large.", http.StatusForbidden)
 
 	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
-	setDummyAuthHeader(request)
+
 	response, err = client.Do(request)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
+*/
 
 func (s *MyAPIDonutSuite) TestXMLNameNotInBucketListJson(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -452,7 +422,6 @@ func (s *MyAPIDonutSuite) TestXMLNameNotInObjectListJson(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/xmlnamenotinobjectlistjson", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -462,7 +431,6 @@ func (s *MyAPIDonutSuite) TestXMLNameNotInObjectListJson(c *C) {
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/xmlnamenotinobjectlistjson", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -477,7 +445,6 @@ func (s *MyAPIDonutSuite) TestXMLNameNotInObjectListJson(c *C) {
 func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/contenttype-persists", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -487,7 +454,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/contenttype-persists/one", bytes.NewBufferString("hello world"))
 	delete(request.Header, "Content-Type")
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -496,7 +462,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 
 	request, err = http.NewRequest("HEAD", testAPIDonutServer.URL+"/contenttype-persists/one", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -504,7 +469,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/contenttype-persists/one", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -516,7 +480,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -524,7 +487,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 
 	request, err = http.NewRequest("HEAD", testAPIDonutServer.URL+"/contenttype-persists/two", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -532,7 +494,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/contenttype-persists/two", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -542,7 +503,6 @@ func (s *MyAPIDonutSuite) TestContentTypePersists(c *C) {
 func (s *MyAPIDonutSuite) TestPartialContent(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/partial-content", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -551,7 +511,6 @@ func (s *MyAPIDonutSuite) TestPartialContent(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/partial-content/bar", bytes.NewBufferString("Hello World"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -563,7 +522,6 @@ func (s *MyAPIDonutSuite) TestPartialContent(c *C) {
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 	request.Header.Add("Range", "bytes=6-7")
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -578,7 +536,6 @@ func (s *MyAPIDonutSuite) TestPartialContent(c *C) {
 func (s *MyAPIDonutSuite) TestListObjectsHandlerErrors(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/objecthandlererrors-.", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -587,7 +544,6 @@ func (s *MyAPIDonutSuite) TestListObjectsHandlerErrors(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/objecthandlererrors", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -599,7 +555,6 @@ func (s *MyAPIDonutSuite) TestPutBucketErrors(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/putbucket-.", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -609,7 +564,6 @@ func (s *MyAPIDonutSuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/putbucket", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -619,7 +573,6 @@ func (s *MyAPIDonutSuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/putbucket", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -628,7 +581,6 @@ func (s *MyAPIDonutSuite) TestPutBucketErrors(c *C) {
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/putbucket?acl", nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "unknown")
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -638,7 +590,6 @@ func (s *MyAPIDonutSuite) TestPutBucketErrors(c *C) {
 func (s *MyAPIDonutSuite) TestGetObjectErrors(c *C) {
 	request, err := http.NewRequest("GET", testAPIDonutServer.URL+"/getobjecterrors", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -647,7 +598,6 @@ func (s *MyAPIDonutSuite) TestGetObjectErrors(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/getobjecterrors", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -656,7 +606,6 @@ func (s *MyAPIDonutSuite) TestGetObjectErrors(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/getobjecterrors/bar", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -665,7 +614,6 @@ func (s *MyAPIDonutSuite) TestGetObjectErrors(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/getobjecterrors-./bar", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -676,7 +624,6 @@ func (s *MyAPIDonutSuite) TestGetObjectErrors(c *C) {
 func (s *MyAPIDonutSuite) TestGetObjectRangeErrors(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/getobjectrangeerrors", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -685,7 +632,6 @@ func (s *MyAPIDonutSuite) TestGetObjectRangeErrors(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/getobjectrangeerrors/bar", bytes.NewBufferString("Hello World"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -695,7 +641,6 @@ func (s *MyAPIDonutSuite) TestGetObjectRangeErrors(c *C) {
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/getobjectrangeerrors/bar", nil)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -706,7 +651,6 @@ func (s *MyAPIDonutSuite) TestGetObjectRangeErrors(c *C) {
 func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartabort", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -715,7 +659,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 
 	request, err = http.NewRequest("POST", testAPIDonutServer.URL+"/objectmultipartabort/object?uploads", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -730,7 +673,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -738,7 +680,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -746,7 +687,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 
 	request, err = http.NewRequest("DELETE", testAPIDonutServer.URL+"/objectmultipartabort/object?uploadId="+uploadID, nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -756,7 +696,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartAbort(c *C) {
 func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/bucketmultipartlist", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -765,7 +704,6 @@ func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 
 	request, err = http.NewRequest("POST", testAPIDonutServer.URL+"/bucketmultipartlist/object?uploads", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -780,7 +718,6 @@ func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -788,7 +725,6 @@ func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -796,7 +732,6 @@ func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/bucketmultipartlist?uploads", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -812,7 +747,6 @@ func (s *MyAPIDonutSuite) TestBucketMultipartList(c *C) {
 func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartlist", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -821,7 +755,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 
 	request, err = http.NewRequest("POST", testAPIDonutServer.URL+"/objectmultipartlist/object?uploads", bytes.NewBufferString(""))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -836,7 +769,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -844,7 +776,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -852,7 +783,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/objectmultipartlist/object?uploadId="+uploadID, nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -863,7 +793,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipartList(c *C) {
 func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 	request, err := http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultiparts", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -872,7 +801,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 
 	request, err = http.NewRequest("POST", testAPIDonutServer.URL+"/objectmultiparts/object?uploads", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -889,7 +817,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response1, err := client.Do(request)
@@ -898,7 +825,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 
 	request, err = http.NewRequest("PUT", testAPIDonutServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	client = http.Client{}
 	response2, err := client.Do(request)
@@ -925,7 +851,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 
 	request, err = http.NewRequest("POST", testAPIDonutServer.URL+"/objectmultiparts/object?uploadId="+uploadID, &completeBuffer)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -933,7 +858,6 @@ func (s *MyAPIDonutSuite) TestObjectMultipart(c *C) {
 
 	request, err = http.NewRequest("GET", testAPIDonutServer.URL+"/objectmultiparts/object", nil)
 	c.Assert(err, IsNil)
-	setDummyAuthHeader(request)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)

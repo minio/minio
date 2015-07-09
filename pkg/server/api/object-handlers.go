@@ -205,7 +205,18 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	metadata, err := api.Donut.CreateObject(bucket, object, md5, sizeInt64, req.Body, nil)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	metadata, err := api.Donut.CreateObject(bucket, object, md5, sizeInt64, req.Body, nil, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		w.Header().Set("ETag", metadata.MD5Sum)
@@ -218,6 +229,10 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	case donut.BadDigest:
 		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+	case donut.MissingDateHeader:
+		writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.IncompleteBody:
 		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
 	case donut.EntityTooLarge:

@@ -255,7 +255,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 	// this is needed for final verification inside CreateObject, do not convert this to hex
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
 	donut.lock.Unlock()
-	objectMetadata, err := donut.CreateObject(bucket, key, md5sum, size, &fullObject, nil)
+	objectMetadata, err := donut.CreateObject(bucket, key, md5sum, size, &fullObject, nil, nil)
 	if err != nil {
 		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
 		// which would in-turn cleanup properly in accordance with S3 Spec

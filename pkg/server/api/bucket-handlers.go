@@ -42,7 +42,7 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 			return false
 		}
 	case nil:
-		if _, err := stripAuth(req); err != nil {
+		if _, err := StripAccessKeyID(req.Header.Get("Authorization")); err != nil {
 			if bucketMetadata.ACL.IsPrivate() {
 				return true
 				//uncomment this when we have webcli
@@ -194,7 +194,7 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot list buckets
-	// if _, err := stripAuth(req); err != nil {
+	// if _, err := StripAccessKeyID(req); err != nil {
 	//	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 	//	return
 	// }
@@ -231,7 +231,7 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot create a bucket
-	// if _, err := stripAuth(req); err != nil {
+	// if _, err := StripAccessKeyID(req); err != nil {
 	// 	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
 	//	return
 	// }

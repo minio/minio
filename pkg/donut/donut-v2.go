@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/donut/cache/metadata"
 	"github.com/minio/minio/pkg/iodine"
@@ -55,7 +55,6 @@ type Config struct {
 // API - local variables
 type API struct {
 	config           *Config
-	req              *http.Request
 	lock             *sync.Mutex
 	objects          *data.Cache
 	multiPartObjects map[string]*data.Cache
@@ -122,11 +121,6 @@ func New() (Interface, error) {
 		}
 	}
 	return a, nil
-}
-
-// SetRequest API for setting request header
-func (donut API) SetRequest(req *http.Request) {
-	donut.req = req
 }
 
 // GetObject - GET object from cache buffer
@@ -296,12 +290,12 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 // CreateObject - create an object
-func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string) (ObjectMetadata, error) {
+func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
 	contentType := metadata["contentType"]
-	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data, signature)
 	// free
 	debug.FreeOSMemory()
 
@@ -309,7 +303,7 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 }
 
 // createObject - PUT object to cache buffer
-func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
+func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, error) {
 	if len(donut.config.NodeDiskMap) == 0 {
 		if size > int64(donut.config.MaxSize) {
 			generic := GenericObjectError{Bucket: bucket, Object: key}
@@ -369,6 +363,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	}
 	// calculate md5
 	hash := md5.New()
+	sha256hash := sha256.New()
 
 	var err error
 	var totalLength int64
@@ -382,6 +377,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			break
 		}
 		hash.Write(byteBuffer[0:length])
+		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
 		if !ok {
 			return ObjectMetadata{}, iodine.New(InternalError{}, nil)
@@ -403,6 +399,15 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
 			return ObjectMetadata{}, iodine.New(BadDigest{}, nil)
+		}
+	}
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256hash.Sum(nil)))
+		if err != nil {
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
 		}
 	}
 

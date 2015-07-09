@@ -156,7 +156,7 @@ func (s *MyDonutSuite) TestCreateMultipleBucketsAndList(c *C) {
 
 // test object create without bucket
 func (s *MyDonutSuite) TestNewObjectFailsWithoutBucket(c *C) {
-	_, err := dd.CreateObject("unknown", "obj", "", 0, nil, nil)
+	_, err := dd.CreateObject("unknown", "obj", "", 0, nil, nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -171,7 +171,7 @@ func (s *MyDonutSuite) TestNewObjectMetadata(c *C) {
 	err := dd.MakeBucket("foo6", "private")
 	c.Assert(err, IsNil)
 
-	objectMetadata, err := dd.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"})
+	objectMetadata, err := dd.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(objectMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 	c.Assert(objectMetadata.Metadata["contentType"], Equals, "application/json")
@@ -179,7 +179,7 @@ func (s *MyDonutSuite) TestNewObjectMetadata(c *C) {
 
 // test create object fails without name
 func (s *MyDonutSuite) TestNewObjectFailsWithEmptyName(c *C) {
-	_, err := dd.CreateObject("foo", "", "", 0, nil, nil)
+	_, err := dd.CreateObject("foo", "", "", 0, nil, nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -195,7 +195,7 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	actualMetadata, err := dd.CreateObject("foo", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/octet-stream"})
+	actualMetadata, err := dd.CreateObject("foo", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/octet-stream"}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(actualMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 
@@ -217,11 +217,11 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
 
-	_, err := dd.CreateObject("foo5", "obj1", "", int64(len("one")), one, nil)
+	_, err := dd.CreateObject("foo5", "obj1", "", int64(len("one")), one, nil, nil)
 	c.Assert(err, IsNil)
 
 	two := ioutil.NopCloser(bytes.NewReader([]byte("two")))
-	_, err = dd.CreateObject("foo5", "obj2", "", int64(len("two")), two, nil)
+	_, err = dd.CreateObject("foo5", "obj2", "", int64(len("two")), two, nil, nil)
 	c.Assert(err, IsNil)
 
 	var buffer1 bytes.Buffer
@@ -270,7 +270,7 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	c.Assert(objectsMetadata[1].Object, Equals, "obj2")
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
-	_, err = dd.CreateObject("foo5", "obj3", "", int64(len("three")), three, nil)
+	_, err = dd.CreateObject("foo5", "obj3", "", int64(len("three")), three, nil, nil)
 	c.Assert(err, IsNil)
 
 	var buffer bytes.Buffer
