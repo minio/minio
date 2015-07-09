@@ -34,7 +34,7 @@ type User struct {
 // Config auth keys
 type Config struct {
 	Version string
-	Users   map[string]User
+	Users   map[string]*User
 }
 
 // getAuthConfigPath get donut config file path
@@ -86,6 +86,7 @@ func LoadConfig() (*Config, error) {
 	}
 	a := &Config{}
 	a.Version = "0.0.1"
+	a.Users = make(map[string]*User)
 	qc, err := quick.New(a)
 	if err != nil {
 		return nil, iodine.New(err, nil)

@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/rpc"
 )
@@ -108,6 +109,17 @@ func GetAuthKeys(url string) ([]byte, error) {
 	defer resp.Body.Close()
 	var reply rpc.AuthReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	authConfig := &auth.Config{}
+	authConfig.Version = "0.0.1"
+	authConfig.Users = make(map[string]*auth.User)
+	user := &auth.User{}
+	user.Name = "testuser"
+	user.AccessKeyID = reply.AccessKeyID
+	user.SecretAccessKey = reply.SecretAccessKey
+	authConfig.Users[reply.AccessKeyID] = user
+	if err := auth.SaveConfig(authConfig); err != nil {
 		return nil, iodine.New(err, nil)
 	}
 	return json.MarshalIndent(reply, "", "\t")
