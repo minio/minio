@@ -269,6 +269,14 @@ func (e EntityTooLarge) Error() string {
 	return e.Bucket + "#" + e.Object + "with " + e.Size + "reached maximum allowed size limit " + e.MaxSize
 }
 
+// IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header
+type IncompleteBody GenericObjectError
+
+// Return string an error formatted as the given text
+func (e IncompleteBody) Error() string {
+	return e.Bucket + "#" + e.Object + "has incomplete body"
+}
+
 // Return string an error formatted as the given text
 func (e BackendCorrupted) Error() string {
 	return "Backend corrupted: " + e.Path

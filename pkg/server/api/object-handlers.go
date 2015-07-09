@@ -218,6 +218,8 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	case donut.BadDigest:
 		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+	case donut.IncompleteBody:
+		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
 	case donut.EntityTooLarge:
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 	case donut.InvalidDigest:
@@ -340,6 +342,8 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	case donut.BadDigest:
 		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+	case donut.IncompleteBody:
+		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
 	case donut.EntityTooLarge:
 		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
 	case donut.InvalidDigest:
