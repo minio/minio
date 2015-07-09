@@ -110,7 +110,7 @@ func runController(c *cli.Context) {
 		if err != nil {
 			Fatalln(err)
 		}
-		Println(disks)
+		Println(string(disks))
 	case "mem":
 		memstats, err := controller.GetMemStats(c.Args().Tail().First())
 		if err != nil {

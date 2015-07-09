@@ -34,3 +34,8 @@ func (s *MySuite) TestSCSI(c *C) {
 	_, err := GetDisks()
 	c.Assert(err, IsNil)
 }
+
+func (s *MySuite) TestMountInfo(c *C) {
+	_, err := GetMountInfo()
+	c.Assert(err, IsNil)
+}

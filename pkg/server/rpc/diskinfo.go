@@ -30,8 +30,9 @@ type DiskInfoService struct{}
 // DiskInfoReply disk info reply for disk info service
 type DiskInfoReply struct {
 	Hostname       string                     `json:"hostname"`
+	Mounts         map[string]scsi.Mountinfo  `json:"mounts"`
 	Disks          []string                   `json:"disks"`
-	DiskAttributes map[string]scsi.Attributes `json:"disk-attrs"`
+	DiskAttributes map[string]scsi.Attributes `json:"-"` // for the time being not unmarshalling this
 }
 
 func setDiskInfoReply(sis *DiskInfoReply) error {
@@ -40,11 +41,19 @@ func setDiskInfoReply(sis *DiskInfoReply) error {
 	if err != nil {
 		return iodine.New(err, nil)
 	}
+	mounts, err := scsi.GetMountInfo()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	sis.Mounts = make(map[string]scsi.Mountinfo)
+	sis.Mounts = mounts
+
 	disks, err := scsi.GetDisks()
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	sis.DiskAttributes = make(map[string]scsi.Attributes)
+
 	for k, v := range disks {
 		sis.Disks = append(sis.Disks, k)
 		sis.DiskAttributes[k] = v

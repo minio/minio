@@ -27,7 +27,7 @@ import (
 )
 
 // GetDisks get disks info of the server at given url
-func GetDisks(url string) ([]string, error) {
+func GetDisks(url string) ([]byte, error) {
 	op := RPCOps{
 		Method:  "DiskInfo.Get",
 		Request: rpc.Args{Request: ""},
@@ -45,7 +45,7 @@ func GetDisks(url string) ([]string, error) {
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	return reply.Disks, nil
+	return json.MarshalIndent(reply, "", "\t")
 }
 
 // GetMemStats get memory status of the server at given url
