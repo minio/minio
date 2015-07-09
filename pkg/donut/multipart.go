@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/iodine"
 )
 
@@ -62,6 +63,9 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 		initiated:  time.Now(),
 		totalParts: 0,
 	}
+	multiPartCache := data.NewCache(0)
+	multiPartCache.OnEvicted = donut.evictedPart
+	donut.multiPartObjects[uploadID] = multiPartCache
 	donut.storedBuckets.Set(bucket, storedBucket)
 	return uploadID, nil
 }
@@ -134,11 +138,11 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 
 	// calculate md5
 	hash := md5.New()
-	var readBytes []byte
 
 	var err error
-	var length int
+	var totalLength int64
 	for err == nil {
+		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
 		// While hash.Write() wouldn't mind a Nil byteBuffer
@@ -147,19 +151,22 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 			break
 		}
 		hash.Write(byteBuffer[0:length])
-		readBytes = append(readBytes, byteBuffer[0:length]...)
+		ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
+		if !ok {
+			return "", iodine.New(InternalError{}, nil)
+		}
+		totalLength += int64(length)
+		go debug.FreeOSMemory()
+	}
+	if totalLength != size {
+		donut.multiPartObjects[uploadID].Delete(partID)
+		return "", iodine.New(IncompleteBody{Bucket: bucket, Object: key}, nil)
 	}
 	if err != io.EOF {
 		return "", iodine.New(err, nil)
 	}
-	go debug.FreeOSMemory()
+
 	md5SumBytes := hash.Sum(nil)
-	totalLength := int64(len(readBytes))
-
-	donut.multiPartObjects.Set(partID, readBytes)
-	// setting up for de-allocation
-	readBytes = nil
-
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
@@ -186,7 +193,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	for i := 1; i <= storedBucket.multiPartSession[key].totalParts; i++ {
-		donut.multiPartObjects.Delete(i)
+		donut.multiPartObjects[uploadID].Delete(i)
 	}
 	delete(storedBucket.multiPartSession, key)
 	donut.storedBuckets.Set(bucket, storedBucket)
@@ -218,7 +225,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 	var fullObject bytes.Buffer
 	for i := 1; i <= len(parts); i++ {
 		recvMD5 := parts[i]
-		object, ok := donut.multiPartObjects.Get(i)
+		object, ok := donut.multiPartObjects[uploadID].Get(i)
 		if ok == false {
 			donut.lock.Unlock()
 			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)

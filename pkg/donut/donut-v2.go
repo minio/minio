@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -54,9 +55,10 @@ type Config struct {
 // API - local variables
 type API struct {
 	config           *Config
+	req              *http.Request
 	lock             *sync.Mutex
 	objects          *data.Cache
-	multiPartObjects *data.Cache
+	multiPartObjects map[string]*data.Cache
 	storedBuckets    *metadata.Cache
 	nodes            map[string]node
 	buckets          map[string]bucket
@@ -91,9 +93,8 @@ func New() (Interface, error) {
 	a.nodes = make(map[string]node)
 	a.buckets = make(map[string]bucket)
 	a.objects = data.NewCache(a.config.MaxSize)
-	a.multiPartObjects = data.NewCache(0)
+	a.multiPartObjects = make(map[string]*data.Cache)
 	a.objects.OnEvicted = a.evictedObject
-	a.multiPartObjects.OnEvicted = a.evictedPart
 	a.lock = new(sync.Mutex)
 
 	if len(a.config.NodeDiskMap) > 0 {
@@ -113,14 +114,19 @@ func New() (Interface, error) {
 		}
 		for k, v := range buckets {
 			var newBucket = storedBucket{}
+			newBucket.bucketMetadata = v
 			newBucket.objectMetadata = make(map[string]ObjectMetadata)
 			newBucket.multiPartSession = make(map[string]MultiPartSession)
 			newBucket.partMetadata = make(map[int]PartMetadata)
-			newBucket.bucketMetadata = v
 			a.storedBuckets.Set(k, newBucket)
 		}
 	}
 	return a, nil
+}
+
+// SetRequest API for setting request header
+func (donut API) SetRequest(req *http.Request) {
+	donut.req = req
 }
 
 // GetObject - GET object from cache buffer
@@ -344,7 +350,16 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	}
 
 	if len(donut.config.NodeDiskMap) > 0 {
-		objMetadata, err := donut.putObject(bucket, key, expectedMD5Sum, data, map[string]string{"contentType": contentType})
+		objMetadata, err := donut.putObject(
+			bucket,
+			key,
+			expectedMD5Sum,
+			data,
+			map[string]string{
+				"contentType":   contentType,
+				"contentLength": strconv.FormatInt(size, 10),
+			},
+		)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
@@ -356,7 +371,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	hash := md5.New()
 
 	var err error
-	var totalLength int
+	var totalLength int64
 	for err == nil {
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
@@ -371,13 +386,17 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		if !ok {
 			return ObjectMetadata{}, iodine.New(InternalError{}, nil)
 		}
-		totalLength += length
+		totalLength += int64(length)
 		go debug.FreeOSMemory()
+	}
+	if totalLength != size {
+		// Delete perhaps the object is already saved, due to the nature of append()
+		donut.objects.Delete(objectKey)
+		return ObjectMetadata{}, iodine.New(IncompleteBody{Bucket: bucket, Object: key}, nil)
 	}
 	if err != io.EOF {
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
-
 	md5SumBytes := hash.Sum(nil)
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such

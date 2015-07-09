@@ -124,7 +124,7 @@ func (r *request) getHashedPayload() string {
 		}
 	}
 	hashedPayload := hash()
-	r.calculatedReq.Header.Set("X-Amz-Content-Sha256", hashedPayload)
+	r.calculatedReq.Header.Set("x-amz-content-sha256", hashedPayload)
 	return hashedPayload
 }
 
@@ -241,8 +241,8 @@ func (r *request) getSignature(signingKey []byte, stringToSign string) string {
 func (r *request) SignV4() (string, error) {
 	// Add date if not present
 	var date string
-	if date = r.calculatedReq.Header.Get("Date"); date == "" {
-		if date = r.calculatedReq.Header.Get("X-Amz-Date"); date == "" {
+	if date = r.calculatedReq.Header.Get("x-amz-date"); date == "" {
+		if date = r.calculatedReq.Header.Get("Date"); date == "" {
 			return "", iodine.New(MissingDateHeader{}, nil)
 		}
 	}
