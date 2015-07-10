@@ -22,8 +22,10 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"runtime/debug"
 	"sort"
@@ -31,14 +33,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/iodine"
 )
 
 // NewMultipartUpload - initiate a new multipart session
-func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *Signature) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		if !ok {
+			return "", iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -71,9 +84,19 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 }
 
 // AbortMultipartUpload - abort an incomplete multipart session
-func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
+func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *Signature) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !ok {
+			return iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -90,11 +113,11 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
 }
 
 // CreateObjectPart - create a part in a multipart session
-func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
-	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data)
+	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data, signature)
 	// possible free
 	debug.FreeOSMemory()
 
@@ -102,7 +125,7 @@ func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, cont
 }
 
 // createObject - internal wrapper function called by CreateObjectPart
-func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, error) {
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
@@ -138,6 +161,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 
 	// calculate md5
 	hash := md5.New()
+	sha256hash := sha256.New()
 
 	var err error
 	var totalLength int64
@@ -145,12 +169,8 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
-		// While hash.Write() wouldn't mind a Nil byteBuffer
-		// It is necessary for us to verify this and break
-		if length == 0 {
-			break
-		}
 		hash.Write(byteBuffer[0:length])
+		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
 		if !ok {
 			return "", iodine.New(InternalError{}, nil)
@@ -174,6 +194,17 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 			return "", iodine.New(BadDigest{}, nil)
 		}
 	}
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256hash.Sum(nil)))
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		if !ok {
+			return "", iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+
 	newPart := PartMetadata{
 		PartNumber:   partID,
 		LastModified: time.Now().UTC(),
@@ -200,7 +231,7 @@ func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
+func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, error) {
 	donut.lock.Lock()
 
 	if !IsValidBucket(bucket) {
@@ -221,11 +252,36 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 		donut.lock.Unlock()
 		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
+	partBytes, err := ioutil.ReadAll(data)
+	if err != nil {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(err, nil)
+	}
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256(partBytes)[:]))
+		if err != nil {
+			donut.lock.Unlock()
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			donut.lock.Unlock()
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+	parts := &CompleteMultipartUpload{}
+	if err := xml.Unmarshal(partBytes, parts); err != nil {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(MalformedXML{}, nil)
+	}
+	if !sort.IsSorted(completedParts(parts.Part)) {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(InvalidPartOrder{}, nil)
+	}
 	var size int64
 	var fullObject bytes.Buffer
-	for i := 1; i <= len(parts); i++ {
-		recvMD5 := parts[i]
-		object, ok := donut.multiPartObjects[uploadID].Get(i)
+	for i := 1; i <= len(parts.Part); i++ {
+		recvMD5 := parts.Part[i-1].ETag
+		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i-1].PartNumber)
 		if ok == false {
 			donut.lock.Unlock()
 			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
@@ -255,7 +311,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 	// this is needed for final verification inside CreateObject, do not convert this to hex
 	md5sum := base64.StdEncoding.EncodeToString(md5sumSlice[:])
 	donut.lock.Unlock()
-	objectMetadata, err := donut.CreateObject(bucket, key, md5sum, size, &fullObject, nil)
+	objectMetadata, err := donut.CreateObject(bucket, key, md5sum, size, &fullObject, nil, nil)
 	if err != nil {
 		// No need to call internal cleanup functions here, caller will call AbortMultipartUpload()
 		// which would in-turn cleanup properly in accordance with S3 Spec
@@ -277,14 +333,25 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given bucket
-func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
+func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *Signature) (BucketMultipartResourcesMetadata, error) {
 	// TODO handle delimiter
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return BucketMultipartResourcesMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return BucketMultipartResourcesMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
+
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	var uploads []*UploadMetadata
 
@@ -340,10 +407,20 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // ListObjectParts - list parts from incomplete multipart session for a given object
-func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
+func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata, signature *Signature) (ObjectResourcesMetadata, error) {
 	// Verify upload id
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return ObjectResourcesMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return ObjectResourcesMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)

@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/donut/cache/metadata"
 	"github.com/minio/minio/pkg/iodine"
@@ -55,7 +55,6 @@ type Config struct {
 // API - local variables
 type API struct {
 	config           *Config
-	req              *http.Request
 	lock             *sync.Mutex
 	objects          *data.Cache
 	multiPartObjects map[string]*data.Cache
@@ -124,11 +123,6 @@ func New() (Interface, error) {
 	return a, nil
 }
 
-// SetRequest API for setting request header
-func (donut API) SetRequest(req *http.Request) {
-	donut.req = req
-}
-
 // GetObject - GET object from cache buffer
 func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	donut.lock.Lock()
@@ -186,6 +180,7 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 		"start":  strconv.FormatInt(start, 10),
 		"length": strconv.FormatInt(length, 10),
 	}
+
 	if !IsValidBucket(bucket) {
 		return 0, iodine.New(BucketNameInvalid{Bucket: bucket}, errParams)
 	}
@@ -232,9 +227,19 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 }
 
 // GetBucketMetadata -
-func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
+func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return BucketMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return BucketMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return BucketMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -255,9 +260,19 @@ func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, error) {
 }
 
 // SetBucketMetadata -
-func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) error {
+func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, signature *Signature) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !ok {
+			return iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -296,12 +311,12 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 }
 
 // CreateObject - create an object
-func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string) (ObjectMetadata, error) {
+func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
 	contentType := metadata["contentType"]
-	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data)
+	objectMetadata, err := donut.createObject(bucket, key, contentType, expectedMD5Sum, size, data, signature)
 	// free
 	debug.FreeOSMemory()
 
@@ -309,7 +324,7 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 }
 
 // createObject - PUT object to cache buffer
-func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader) (ObjectMetadata, error) {
+func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, error) {
 	if len(donut.config.NodeDiskMap) == 0 {
 		if size > int64(donut.config.MaxSize) {
 			generic := GenericObjectError{Bucket: bucket, Object: key}
@@ -369,6 +384,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	}
 	// calculate md5
 	hash := md5.New()
+	sha256hash := sha256.New()
 
 	var err error
 	var totalLength int64
@@ -376,12 +392,8 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
-		// While hash.Write() wouldn't mind a Nil byteBuffer
-		// It is necessary for us to verify this and break
-		if length == 0 {
-			break
-		}
 		hash.Write(byteBuffer[0:length])
+		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
 		if !ok {
 			return ObjectMetadata{}, iodine.New(InternalError{}, nil)
@@ -405,6 +417,15 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			return ObjectMetadata{}, iodine.New(BadDigest{}, nil)
 		}
 	}
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256hash.Sum(nil)))
+		if err != nil {
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	m := make(map[string]string)
 	m["contentType"] = contentType
@@ -424,9 +445,19 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 }
 
 // MakeBucket - create bucket in cache
-func (donut API) MakeBucket(bucketName, acl string) error {
+func (donut API) MakeBucket(bucketName, acl string, signature *Signature) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !ok {
+			return iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if donut.storedBuckets.Stats().Items == totalBuckets {
 		return iodine.New(TooManyBuckets{Bucket: bucketName}, nil)
@@ -463,9 +494,19 @@ func (donut API) MakeBucket(bucketName, acl string) error {
 }
 
 // ListObjects - list objects from cache
-func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error) {
+func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, signature *Signature) ([]ObjectMetadata, BucketResourcesMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return nil, BucketResourcesMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return nil, BucketResourcesMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -556,9 +597,19 @@ func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from cache
-func (donut API) ListBuckets() ([]BucketMetadata, error) {
+func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return nil, iodine.New(err, nil)
+		}
+		if !ok {
+			return nil, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	var results []BucketMetadata
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -580,9 +631,19 @@ func (donut API) ListBuckets() ([]BucketMetadata, error) {
 }
 
 // GetObjectMetadata - get object metadata from cache
-func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, error) {
+func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (ObjectMetadata, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	// check if bucket exists
 	if !IsValidBucket(bucket) {

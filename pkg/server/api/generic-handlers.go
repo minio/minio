@@ -19,7 +19,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
@@ -41,64 +40,12 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-type authHeader struct {
-	prefix        string
-	credential    string
-	signedheaders string
-	signature     string
-	accessKey     string
-}
-
 const (
 	iso8601Format = "20060102T150405Z"
 )
 
-const (
-	authHeaderPrefix = "AWS4-HMAC-SHA256"
-)
-
-// strip auth from authorization header
-func stripAuth(r *http.Request) (*authHeader, error) {
-	ah := r.Header.Get("Authorization")
-	if ah == "" {
-		return nil, errors.New("Missing auth header")
-	}
-	a := new(authHeader)
-	authFields := strings.Split(ah, ",")
-	if len(authFields) != 3 {
-		return nil, errors.New("Missing fields in Auth header")
-	}
-	authPrefixFields := strings.Fields(authFields[0])
-	if len(authPrefixFields) != 2 {
-		return nil, errors.New("Missing fields in Auth header")
-	}
-	if authPrefixFields[0] != authHeaderPrefix {
-		return nil, errors.New("Missing fields is Auth header")
-	}
-	credentials := strings.Split(authPrefixFields[1], "=")
-	if len(credentials) != 2 {
-		return nil, errors.New("Missing fields in Auth header")
-	}
-	signedheaders := strings.Split(authFields[1], "=")
-	if len(signedheaders) != 2 {
-		return nil, errors.New("Missing fields in Auth header")
-	}
-	signature := strings.Split(authFields[2], "=")
-	if len(signature) != 2 {
-		return nil, errors.New("Missing fields in Auth header")
-	}
-	a.credential = credentials[1]
-	a.signedheaders = signedheaders[1]
-	a.signature = signature[1]
-	a.accessKey = strings.Split(a.credential, "/")[0]
-	if !auth.IsValidAccessKey(a.accessKey) {
-		return nil, errors.New("Invalid access key")
-	}
-	return a, nil
-}
-
 func parseDate(req *http.Request) (time.Time, error) {
-	amzDate := req.Header.Get("X-Amz-Date")
+	amzDate := req.Header.Get("x-amz-date")
 	switch {
 	case amzDate != "":
 		if _, err := time.Parse(time.RFC1123, amzDate); err == nil {
@@ -150,7 +97,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
-		if r.Header.Get("X-Amz-Date") == "" && r.Header.Get("Date") == "" {
+		if r.Header.Get("x-amz-date") == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
 			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
 			return
@@ -181,20 +128,20 @@ func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	ah, err := stripAuth(r)
+	accessKeyID, err := StripAccessKeyID(r.Header.Get("Authorization"))
 	switch err.(type) {
 	case nil:
+		// load auth config
 		authConfig, err := auth.LoadConfig()
 		if err != nil {
 			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
 			return
 		}
-		_, ok := authConfig.Users[ah.accessKey]
-		if !ok {
-			writeErrorResponse(w, r, AccessDenied, acceptsContentType, r.URL.Path)
+		// Access key not found
+		if _, ok := authConfig.Users[accessKeyID]; !ok {
+			writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
 			return
 		}
-		// Success
 		h.handler.ServeHTTP(w, r)
 	default:
 		// control reaches here, we should just send the request up the stack - internally

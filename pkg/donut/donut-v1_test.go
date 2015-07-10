@@ -74,7 +74,7 @@ func (s *MyDonutSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	// testing empty donut
-	buckets, err := dd.ListBuckets()
+	buckets, err := dd.ListBuckets(nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 0)
 }
@@ -86,20 +86,20 @@ func (s *MyDonutSuite) TearDownSuite(c *C) {
 // test make bucket without name
 func (s *MyDonutSuite) TestBucketWithoutNameFails(c *C) {
 	// fail to create new bucket without a name
-	err := dd.MakeBucket("", "private")
+	err := dd.MakeBucket("", "private", nil)
 	c.Assert(err, Not(IsNil))
 
-	err = dd.MakeBucket(" ", "private")
+	err = dd.MakeBucket(" ", "private", nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test empty bucket
 func (s *MyDonutSuite) TestEmptyBucket(c *C) {
-	c.Assert(dd.MakeBucket("foo1", "private"), IsNil)
+	c.Assert(dd.MakeBucket("foo1", "private", nil), IsNil)
 	// check if bucket is empty
 	var resources BucketResourcesMetadata
 	resources.Maxkeys = 1
-	objectsMetadata, resources, err := dd.ListObjects("foo1", resources)
+	objectsMetadata, resources, err := dd.ListObjects("foo1", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(objectsMetadata), Equals, 0)
 	c.Assert(resources.CommonPrefixes, DeepEquals, []string{})
@@ -109,11 +109,11 @@ func (s *MyDonutSuite) TestEmptyBucket(c *C) {
 // test bucket list
 func (s *MyDonutSuite) TestMakeBucketAndList(c *C) {
 	// create bucket
-	err := dd.MakeBucket("foo2", "private")
+	err := dd.MakeBucket("foo2", "private", nil)
 	c.Assert(err, IsNil)
 
 	// check bucket exists
-	buckets, err := dd.ListBuckets()
+	buckets, err := dd.ListBuckets(nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 5)
 	c.Assert(buckets[0].ACL, Equals, BucketACL("private"))
@@ -121,33 +121,33 @@ func (s *MyDonutSuite) TestMakeBucketAndList(c *C) {
 
 // test re-create bucket
 func (s *MyDonutSuite) TestMakeBucketWithSameNameFails(c *C) {
-	err := dd.MakeBucket("foo3", "private")
+	err := dd.MakeBucket("foo3", "private", nil)
 	c.Assert(err, IsNil)
 
-	err = dd.MakeBucket("foo3", "private")
+	err = dd.MakeBucket("foo3", "private", nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test make multiple buckets
 func (s *MyDonutSuite) TestCreateMultipleBucketsAndList(c *C) {
 	// add a second bucket
-	err := dd.MakeBucket("foo4", "private")
+	err := dd.MakeBucket("foo4", "private", nil)
 	c.Assert(err, IsNil)
 
-	err = dd.MakeBucket("bar1", "private")
+	err = dd.MakeBucket("bar1", "private", nil)
 	c.Assert(err, IsNil)
 
-	buckets, err := dd.ListBuckets()
+	buckets, err := dd.ListBuckets(nil)
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 2)
 	c.Assert(buckets[0].Name, Equals, "bar1")
 	c.Assert(buckets[1].Name, Equals, "foo4")
 
-	err = dd.MakeBucket("foobar1", "private")
+	err = dd.MakeBucket("foobar1", "private", nil)
 	c.Assert(err, IsNil)
 
-	buckets, err = dd.ListBuckets()
+	buckets, err = dd.ListBuckets(nil)
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 3)
@@ -156,7 +156,7 @@ func (s *MyDonutSuite) TestCreateMultipleBucketsAndList(c *C) {
 
 // test object create without bucket
 func (s *MyDonutSuite) TestNewObjectFailsWithoutBucket(c *C) {
-	_, err := dd.CreateObject("unknown", "obj", "", 0, nil, nil)
+	_, err := dd.CreateObject("unknown", "obj", "", 0, nil, nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -168,10 +168,10 @@ func (s *MyDonutSuite) TestNewObjectMetadata(c *C) {
 	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	err := dd.MakeBucket("foo6", "private")
+	err := dd.MakeBucket("foo6", "private", nil)
 	c.Assert(err, IsNil)
 
-	objectMetadata, err := dd.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"})
+	objectMetadata, err := dd.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(objectMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 	c.Assert(objectMetadata.Metadata["contentType"], Equals, "application/json")
@@ -179,13 +179,13 @@ func (s *MyDonutSuite) TestNewObjectMetadata(c *C) {
 
 // test create object fails without name
 func (s *MyDonutSuite) TestNewObjectFailsWithEmptyName(c *C) {
-	_, err := dd.CreateObject("foo", "", "", 0, nil, nil)
+	_, err := dd.CreateObject("foo", "", "", 0, nil, nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test create object
 func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
-	err := dd.MakeBucket("foo", "private")
+	err := dd.MakeBucket("foo", "private", nil)
 	c.Assert(err, IsNil)
 
 	data := "Hello World"
@@ -195,7 +195,7 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	actualMetadata, err := dd.CreateObject("foo", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/octet-stream"})
+	actualMetadata, err := dd.CreateObject("foo", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/octet-stream"}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(actualMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 
@@ -205,7 +205,7 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(size, Equals, int64(len(data)))
 	c.Assert(buffer.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err = dd.GetObjectMetadata("foo", "obj")
+	actualMetadata, err = dd.GetObjectMetadata("foo", "obj", nil)
 	c.Assert(err, IsNil)
 	c.Assert(hex.EncodeToString(hasher.Sum(nil)), Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
@@ -213,15 +213,15 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 
 // test list objects
 func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
-	c.Assert(dd.MakeBucket("foo5", "private"), IsNil)
+	c.Assert(dd.MakeBucket("foo5", "private", nil), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
 
-	_, err := dd.CreateObject("foo5", "obj1", "", int64(len("one")), one, nil)
+	_, err := dd.CreateObject("foo5", "obj1", "", int64(len("one")), one, nil, nil)
 	c.Assert(err, IsNil)
 
 	two := ioutil.NopCloser(bytes.NewReader([]byte("two")))
-	_, err = dd.CreateObject("foo5", "obj2", "", int64(len("two")), two, nil)
+	_, err = dd.CreateObject("foo5", "obj2", "", int64(len("two")), two, nil, nil)
 	c.Assert(err, IsNil)
 
 	var buffer1 bytes.Buffer
@@ -244,7 +244,7 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err := dd.ListObjects("foo5", resources)
+	objectsMetadata, resources, err := dd.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(resources.CommonPrefixes[0], Equals, "obj1")
@@ -253,7 +253,7 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = ""
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dd.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dd.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj2")
 	c.Assert(resources.IsTruncated, Equals, false)
@@ -263,14 +263,14 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dd.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dd.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj1")
 	c.Assert(objectsMetadata[1].Object, Equals, "obj2")
 
 	three := ioutil.NopCloser(bytes.NewReader([]byte("three")))
-	_, err = dd.CreateObject("foo5", "obj3", "", int64(len("three")), three, nil)
+	_, err = dd.CreateObject("foo5", "obj3", "", int64(len("three")), three, nil, nil)
 	c.Assert(err, IsNil)
 
 	var buffer bytes.Buffer
@@ -283,7 +283,7 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 2
-	objectsMetadata, resources, err = dd.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dd.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, true)
 	c.Assert(len(objectsMetadata), Equals, 2)

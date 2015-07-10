@@ -334,3 +334,19 @@ type MissingDateHeader struct{}
 func (e MissingDateHeader) Error() string {
 	return "Missing date header"
 }
+
+// InvalidPartOrder parts are not ordered as Requested
+type InvalidPartOrder struct {
+	UploadID string
+}
+
+func (e InvalidPartOrder) Error() string {
+	return "Invalid part order sent for " + e.UploadID
+}
+
+// MalformedXML invalid xml format
+type MalformedXML struct{}
+
+func (e MalformedXML) Error() string {
+	return "Malformed XML"
+}

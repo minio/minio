@@ -21,7 +21,6 @@ import (
 	"crypto/hmac"
 	"encoding/hex"
 	"errors"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -29,30 +28,30 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// request - a http request
-type request struct {
-	receivedReq   *http.Request
-	calculatedReq *http.Request
-	user          *auth.User
-	body          io.Reader
+// Signature - local variables
+type Signature struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	AuthHeader      string
+	Request         *http.Request
 }
 
 const (
-	authHeader    = "AWS4-HMAC-SHA256"
-	iso8601Format = "20060102T150405Z"
-	yyyymmdd      = "20060102"
+	authHeaderPrefix = "AWS4-HMAC-SHA256"
+	iso8601Format    = "20060102T150405Z"
+	yyyymmdd         = "20060102"
 )
 
 var ignoredHeaders = map[string]bool{
-	"Authorization":  true,
-	"Content-Type":   true,
-	"Content-Length": true,
-	"User-Agent":     true,
+	"Authorization":   true,
+	"Content-Type":    true,
+	"Accept-Encoding": true,
+	"Content-Length":  true,
+	"User-Agent":      true,
 }
 
 // sumHMAC calculate hmac between two input byte array
@@ -101,38 +100,11 @@ func urlEncodeName(name string) (string, error) {
 	return encodedName, nil
 }
 
-// newSignV4Request - populate a new signature v4 request
-func newSignV4Request(user *auth.User, req *http.Request, body io.Reader) (*request, error) {
-	// save for subsequent use
-	r := new(request)
-	r.user = user
-	r.body = body
-	r.receivedReq = req
-	r.calculatedReq = req
-	return r, nil
-}
-
-// getHashedPayload get the hexadecimal value of the SHA256 hash of the request payload
-func (r *request) getHashedPayload() string {
-	hash := func() string {
-		switch {
-		case r.body == nil:
-			return hex.EncodeToString(sha256.Sum256([]byte{}))
-		default:
-			sum256Bytes, _ := sha256.Sum(r.body)
-			return hex.EncodeToString(sum256Bytes)
-		}
-	}
-	hashedPayload := hash()
-	r.calculatedReq.Header.Set("x-amz-content-sha256", hashedPayload)
-	return hashedPayload
-}
-
 // getCanonicalHeaders generate a list of request headers with their values
-func (r *request) getCanonicalHeaders() string {
+func (r *Signature) getCanonicalHeaders() string {
 	var headers []string
 	vals := make(map[string][]string)
-	for k, vv := range r.calculatedReq.Header {
+	for k, vv := range r.Request.Header {
 		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
 			continue // ignored header
 		}
@@ -148,7 +120,7 @@ func (r *request) getCanonicalHeaders() string {
 		buf.WriteByte(':')
 		switch {
 		case k == "host":
-			buf.WriteString(r.calculatedReq.URL.Host)
+			buf.WriteString(r.Request.Host)
 			fallthrough
 		default:
 			for idx, v := range vals[k] {
@@ -164,9 +136,9 @@ func (r *request) getCanonicalHeaders() string {
 }
 
 // getSignedHeaders generate a string i.e alphabetically sorted, semicolon-separated list of lowercase request header names
-func (r *request) getSignedHeaders() string {
+func (r *Signature) getSignedHeaders() string {
 	var headers []string
-	for k := range r.calculatedReq.Header {
+	for k := range r.Request.Header {
 		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
 			continue // ignored header
 		}
@@ -187,24 +159,24 @@ func (r *request) getSignedHeaders() string {
 //  <SignedHeaders>\n
 //  <HashedPayload>
 //
-func (r *request) getCanonicalRequest(hashedPayload string) string {
-	r.calculatedReq.URL.RawQuery = strings.Replace(r.calculatedReq.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath, _ := urlEncodeName(r.calculatedReq.URL.Path)
+func (r *Signature) getCanonicalRequest() string {
+	r.Request.URL.RawQuery = strings.Replace(r.Request.URL.Query().Encode(), "+", "%20", -1)
+	encodedPath, _ := urlEncodeName(r.Request.URL.Path)
 	// convert any space strings back to "+"
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
-		r.calculatedReq.Method,
+		r.Request.Method,
 		encodedPath,
-		r.calculatedReq.URL.RawQuery,
+		r.Request.URL.RawQuery,
 		r.getCanonicalHeaders(),
 		r.getSignedHeaders(),
-		hashedPayload,
+		r.Request.Header.Get("x-amz-content-sha256"),
 	}, "\n")
 	return canonicalRequest
 }
 
 // getScope generate a string of a specific date, an AWS region, and a service
-func (r *request) getScope(t time.Time) string {
+func (r *Signature) getScope(t time.Time) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
 		"milkyway",
@@ -215,16 +187,16 @@ func (r *request) getScope(t time.Time) string {
 }
 
 // getStringToSign a string based on selected query values
-func (r *request) getStringToSign(canonicalRequest string, t time.Time) string {
-	stringToSign := authHeader + "\n" + t.Format(iso8601Format) + "\n"
+func (r *Signature) getStringToSign(canonicalRequest string, t time.Time) string {
+	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + r.getScope(t) + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sha256.Sum256([]byte(canonicalRequest)))
 	return stringToSign
 }
 
 // getSigningKey hmac seed to calculate final signature
-func (r *request) getSigningKey(t time.Time) []byte {
-	secret := r.user.SecretAccessKey
+func (r *Signature) getSigningKey(t time.Time) []byte {
+	secret := r.SecretAccessKey
 	date := sumHMAC([]byte("AWS4"+secret), []byte(t.Format(yyyymmdd)))
 	region := sumHMAC(date, []byte("milkyway"))
 	service := sumHMAC(region, []byte("s3"))
@@ -233,26 +205,29 @@ func (r *request) getSigningKey(t time.Time) []byte {
 }
 
 // getSignature final signature in hexadecimal form
-func (r *request) getSignature(signingKey []byte, stringToSign string) string {
+func (r *Signature) getSignature(signingKey []byte, stringToSign string) string {
 	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 
-// SignV4 the request before Do(), in accordance with - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-func (r *request) SignV4() (string, error) {
+// DoesSignatureMatch - Verify authorization header with calculated header in accordance with - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
+// returns true if matches, false other wise if error is not nil then it is always false
+func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, error) {
+	// set new calulated payload
+	r.Request.Header.Set("x-amz-content-sha256", hashedPayload)
+
 	// Add date if not present
 	var date string
-	if date = r.calculatedReq.Header.Get("x-amz-date"); date == "" {
-		if date = r.calculatedReq.Header.Get("Date"); date == "" {
-			return "", iodine.New(MissingDateHeader{}, nil)
+	if date = r.Request.Header.Get("x-amz-date"); date == "" {
+		if date = r.Request.Header.Get("Date"); date == "" {
+			return false, iodine.New(MissingDateHeader{}, nil)
 		}
 	}
 	t, err := time.Parse(iso8601Format, date)
 	if err != nil {
-		return "", iodine.New(err, nil)
+		return false, iodine.New(err, nil)
 	}
-	hashedPayload := r.getHashedPayload()
 	signedHeaders := r.getSignedHeaders()
-	canonicalRequest := r.getCanonicalRequest(hashedPayload)
+	canonicalRequest := r.getCanonicalRequest()
 	scope := r.getScope(t)
 	stringToSign := r.getStringToSign(canonicalRequest, t)
 	signingKey := r.getSigningKey(t)
@@ -260,10 +235,13 @@ func (r *request) SignV4() (string, error) {
 
 	// final Authorization header
 	parts := []string{
-		authHeader + " Credential=" + r.user.AccessKeyID + "/" + scope,
+		authHeaderPrefix + " Credential=" + r.AccessKeyID + "/" + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}
-	auth := strings.Join(parts, ", ")
-	return auth, nil
+	newAuthHeader := strings.Join(parts, ", ")
+	if newAuthHeader != r.AuthHeader {
+		return false, nil
+	}
+	return true, nil
 }

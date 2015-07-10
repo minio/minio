@@ -29,31 +29,32 @@ type Interface interface {
 // ObjectStorage is a donut object storage interface
 type ObjectStorage interface {
 	// Storage service operations
-	GetBucketMetadata(bucket string) (BucketMetadata, error)
-	SetBucketMetadata(bucket string, metadata map[string]string) error
-	ListBuckets() ([]BucketMetadata, error)
-	MakeBucket(bucket string, ACL string) error
+	GetBucketMetadata(bucket string, signature *Signature) (BucketMetadata, error)
+	SetBucketMetadata(bucket string, metadata map[string]string, signature *Signature) error
+	ListBuckets(signature *Signature) ([]BucketMetadata, error)
+	MakeBucket(bucket string, ACL string, signature *Signature) error
 
 	// Bucket operations
-	ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, error)
+	ListObjects(string, BucketResourcesMetadata, *Signature) ([]ObjectMetadata, BucketResourcesMetadata, error)
 
 	// Object operations
 	GetObject(w io.Writer, bucket, object string) (int64, error)
 	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
-	GetObjectMetadata(bucket, object string) (ObjectMetadata, error)
-	CreateObject(bucket, object, expectedMD5Sum string, size int64, reader io.Reader, metadata map[string]string) (ObjectMetadata, error)
+	GetObjectMetadata(bucket, object string, signature *Signature) (ObjectMetadata, error)
+	// bucket, object, expectedMD5Sum, size, reader, metadata, signature
+	CreateObject(string, string, string, int64, io.Reader, map[string]string, *Signature) (ObjectMetadata, error)
 
 	Multipart
 }
 
 // Multipart API
 type Multipart interface {
-	NewMultipartUpload(bucket, key, contentType string) (string, error)
-	AbortMultipartUpload(bucket, key, uploadID string) error
-	CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error)
-	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error)
-	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error)
-	ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error)
+	NewMultipartUpload(bucket, key, contentType string, signature *Signature) (string, error)
+	AbortMultipartUpload(bucket, key, uploadID string, signature *Signature) error
+	CreateObjectPart(string, string, string, int, string, string, int64, io.Reader, *Signature) (string, error)
+	CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, error)
+	ListMultipartUploads(string, BucketMultipartResourcesMetadata, *Signature) (BucketMultipartResourcesMetadata, error)
+	ListObjectParts(string, string, ObjectResourcesMetadata, *Signature) (ObjectResourcesMetadata, error)
 }
 
 // Management is a donut management system interface
