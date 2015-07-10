@@ -42,6 +42,8 @@ const (
 	bucketMetadataVersion = "1.0.0"
 )
 
+/// v1 API functions
+
 // makeBucket - make a new bucket
 func (donut API) makeBucket(bucket string, acl BucketACL) error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
@@ -204,7 +206,9 @@ func (donut API) getObjectMetadata(bucket, object string) (ObjectMetadata, error
 	return objectMetadata, nil
 }
 
-// getDiskWriters -
+//// internal functions
+
+// getBucketMetadataWriters -
 func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 	var writers []io.WriteCloser
 	for _, node := range donut.nodes {
@@ -213,8 +217,8 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for order, d := range disks {
-			bucketMetaDataWriter, err := d.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+		for order, dd := range disks {
+			bucketMetaDataWriter, err := dd.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -224,6 +228,7 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 	return writers, nil
 }
 
+// getBucketMetadataReaders -
 func (donut API) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
 	for _, node := range donut.nodes {
@@ -243,24 +248,26 @@ func (donut API) getBucketMetadataReaders() ([]io.ReadCloser, error) {
 	return readers, nil
 }
 
-//
+// setDonutBucketMetadata -
 func (donut API) setDonutBucketMetadata(metadata *AllBuckets) error {
 	writers, err := donut.getBucketMetadataWriters()
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	for _, writer := range writers {
-		defer writer.Close()
-	}
-	for _, writer := range writers {
 		jenc := json.NewEncoder(writer)
 		if err := jenc.Encode(metadata); err != nil {
+			CleanupWritersOnError(writers)
 			return iodine.New(err, nil)
 		}
+	}
+	for _, writer := range writers {
+		writer.Close()
 	}
 	return nil
 }
 
+// getDonutBucketMetadata -
 func (donut API) getDonutBucketMetadata() (*AllBuckets, error) {
 	metadata := new(AllBuckets)
 	readers, err := donut.getBucketMetadataReaders()
@@ -280,6 +287,7 @@ func (donut API) getDonutBucketMetadata() (*AllBuckets, error) {
 	return nil, iodine.New(InvalidArgument{}, nil)
 }
 
+// makeDonutBucket -
 func (donut API) makeDonutBucket(bucketName, acl string) error {
 	if err := donut.listDonutBuckets(); err != nil {
 		return iodine.New(err, nil)
@@ -329,6 +337,7 @@ func (donut API) makeDonutBucket(bucketName, acl string) error {
 	return nil
 }
 
+// listDonutBuckets -
 func (donut API) listDonutBuckets() error {
 	for _, node := range donut.nodes {
 		disks, err := node.ListDisks()

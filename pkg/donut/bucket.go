@@ -35,7 +35,6 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/split"
 	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/utils/atomic"
 )
 
 const (
@@ -228,7 +227,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	if objectName == "" || objectData == nil {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
-	writers, err := b.getWriters(normalizeObjectName(objectName), "data")
+	writers, err := b.getObjectWriters(normalizeObjectName(objectName), "data")
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
@@ -244,6 +243,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 		mw := io.MultiWriter(writers[0], sumMD5, sum256, sum512)
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
+			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		objMetadata.Size = totalLength
@@ -251,11 +251,13 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 		// calculate data and parity dictated by total number of writers
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
+			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		// write encoded data with k, m and writers
 		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, sumMD5, sum256, sum512)
 		if err != nil {
+			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		/// donutMetadata section
@@ -273,13 +275,15 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sum256.Sum(nil)))
 		if err != nil {
+			// error occurred while doing signature calculation, we return and also cleanup any temporary writers.
+			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		if !ok {
 			// purge all writers, when control flow reaches here
-			for _, writer := range writers {
-				writer.(*atomic.File).CloseAndPurge()
-			}
+			//
+			// Signature mismatch occurred all temp files to be removed and all data purged.
+			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
 		}
 	}
@@ -295,6 +299,8 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	objMetadata.Metadata = metadata
 	// write object specific metadata
 	if err := b.writeObjectMetadata(normalizeObjectName(objectName), objMetadata); err != nil {
+		// purge all writers, when control flow reaches here
+		CleanupWritersOnError(writers)
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	// close all writers, when control flow reaches here
@@ -328,13 +334,15 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 	if objMetadata.Object == "" {
 		return iodine.New(InvalidArgument{}, nil)
 	}
-	objMetadataWriters, err := b.getWriters(objectName, objectMetadataConfig)
+	objMetadataWriters, err := b.getObjectWriters(objectName, objectMetadataConfig)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
 	for _, objMetadataWriter := range objMetadataWriters {
 		jenc := json.NewEncoder(objMetadataWriter)
 		if err := jenc.Encode(&objMetadata); err != nil {
+			// Close writers and purge all temporary entries
+			CleanupWritersOnError(objMetadataWriters)
 			return iodine.New(err, nil)
 		}
 	}
@@ -350,7 +358,7 @@ func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
 	if objectName == "" {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
-	objMetadataReaders, err := b.getReaders(objectName, objectMetadataConfig)
+	objMetadataReaders, err := b.getObjectReaders(objectName, objectMetadataConfig)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
@@ -426,7 +434,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 
 // readObjectData -
 func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
-	readers, err := b.getReaders(objectName, "data")
+	readers, err := b.getObjectReaders(objectName, "data")
 	if err != nil {
 		writer.CloseWithError(iodine.New(err, nil))
 		return
@@ -510,8 +518,8 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers []io.ReadC
 	return decodedData, nil
 }
 
-// getReaders -
-func (b bucket) getReaders(objectName, objectMeta string) ([]io.ReadCloser, error) {
+// getObjectReaders -
+func (b bucket) getObjectReaders(objectName, objectMeta string) ([]io.ReadCloser, error) {
 	var readers []io.ReadCloser
 	nodeSlice := 0
 	for _, node := range b.nodes {
@@ -534,8 +542,8 @@ func (b bucket) getReaders(objectName, objectMeta string) ([]io.ReadCloser, erro
 	return readers, nil
 }
 
-// getWriters -
-func (b bucket) getWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
+// getObjectWriters -
+func (b bucket) getObjectWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
 	var writers []io.WriteCloser
 	nodeSlice := 0
 	for _, node := range b.nodes {

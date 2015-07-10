@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/minio/minio/pkg/utils/atomic"
 )
 
 // IsValidBucket - verify bucket name in accordance with
@@ -162,4 +164,11 @@ func SortU(objects []string) []string {
 	}
 	sort.Strings(results)
 	return results
+}
+
+// CleanupWritersOnError purge writers on error
+func CleanupWritersOnError(writers []io.WriteCloser) {
+	for _, writer := range writers {
+		writer.(*atomic.File).CloseAndPurge()
+	}
 }

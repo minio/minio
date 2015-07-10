@@ -123,6 +123,8 @@ func New() (Interface, error) {
 	return a, nil
 }
 
+/// V2 API functions
+
 // GetObject - GET object from cache buffer
 func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, error) {
 	donut.lock.Lock()

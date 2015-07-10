@@ -38,6 +38,8 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
+/// V2 API functions
+
 // NewMultipartUpload - initiate a new multipart session
 func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *Signature) (string, error) {
 	donut.lock.Lock()
