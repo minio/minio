@@ -54,7 +54,18 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := api.Donut.GetObjectMetadata(bucket, object)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
 	switch iodine.ToError(err).(type) {
 	case nil: // success
 		{
@@ -117,7 +128,18 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	metadata, err := api.Donut.GetObjectMetadata(bucket, object)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		setObjectHeaders(w, metadata)
@@ -270,7 +292,18 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	uploadID, err := api.Donut.NewMultipartUpload(bucket, object, "")
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	uploadID, err := api.Donut.NewMultipartUpload(bucket, object, req.Header.Get("Content-Type"), signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
@@ -401,7 +434,18 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
-	err := api.Donut.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	err := api.Donut.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
@@ -439,7 +483,18 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	objectResourcesMetadata, err := api.Donut.ListObjectParts(bucket, object, objectResourcesMetadata)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	objectResourcesMetadata, err := api.Donut.ListObjectParts(bucket, object, objectResourcesMetadata, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{

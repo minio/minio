@@ -39,9 +39,19 @@ import (
 )
 
 // NewMultipartUpload - initiate a new multipart session
-func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, error) {
+func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *Signature) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		if !ok {
+			return "", iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -74,9 +84,19 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, er
 }
 
 // AbortMultipartUpload - abort an incomplete multipart session
-func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
+func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *Signature) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		if !ok {
+			return iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !IsValidBucket(bucket) {
 		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
@@ -313,14 +333,25 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given bucket
-func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
+func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *Signature) (BucketMultipartResourcesMetadata, error) {
 	// TODO handle delimiter
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return BucketMultipartResourcesMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return BucketMultipartResourcesMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
+
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	var uploads []*UploadMetadata
 
@@ -376,10 +407,20 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // ListObjectParts - list parts from incomplete multipart session for a given object
-func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
+func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata, signature *Signature) (ObjectResourcesMetadata, error) {
 	// Verify upload id
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		if err != nil {
+			return ObjectResourcesMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			return ObjectResourcesMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)

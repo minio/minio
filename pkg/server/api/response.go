@@ -85,7 +85,7 @@ func generateListObjectsResponse(bucket string, objects []donut.ObjectMetadata, 
 			continue
 		}
 		content.Key = object.Object
-		content.LastModified = object.Created.Format(iso8601Format)
+		content.LastModified = object.Created.Format(rfcFormat)
 		content.ETag = "\"" + object.MD5Sum + "\""
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"

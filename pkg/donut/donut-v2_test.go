@@ -49,7 +49,7 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	// testing empty cache
-	buckets, err := dc.ListBuckets()
+	buckets, err := dc.ListBuckets(nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 0)
 }
@@ -61,20 +61,20 @@ func (s *MyCacheSuite) TearDownSuite(c *C) {
 // test make bucket without name
 func (s *MyCacheSuite) TestBucketWithoutNameFails(c *C) {
 	// fail to create new bucket without a name
-	err := dc.MakeBucket("", "private")
+	err := dc.MakeBucket("", "private", nil)
 	c.Assert(err, Not(IsNil))
 
-	err = dc.MakeBucket(" ", "private")
+	err = dc.MakeBucket(" ", "private", nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test empty bucket
 func (s *MyCacheSuite) TestEmptyBucket(c *C) {
-	c.Assert(dc.MakeBucket("foo1", "private"), IsNil)
+	c.Assert(dc.MakeBucket("foo1", "private", nil), IsNil)
 	// check if bucket is empty
 	var resources BucketResourcesMetadata
 	resources.Maxkeys = 1
-	objectsMetadata, resources, err := dc.ListObjects("foo1", resources)
+	objectsMetadata, resources, err := dc.ListObjects("foo1", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(objectsMetadata), Equals, 0)
 	c.Assert(resources.CommonPrefixes, DeepEquals, []string{})
@@ -84,11 +84,11 @@ func (s *MyCacheSuite) TestEmptyBucket(c *C) {
 // test bucket list
 func (s *MyCacheSuite) TestMakeBucketAndList(c *C) {
 	// create bucket
-	err := dc.MakeBucket("foo2", "private")
+	err := dc.MakeBucket("foo2", "private", nil)
 	c.Assert(err, IsNil)
 
 	// check bucket exists
-	buckets, err := dc.ListBuckets()
+	buckets, err := dc.ListBuckets(nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 5)
 	c.Assert(buckets[0].ACL, Equals, BucketACL("private"))
@@ -96,33 +96,33 @@ func (s *MyCacheSuite) TestMakeBucketAndList(c *C) {
 
 // test re-create bucket
 func (s *MyCacheSuite) TestMakeBucketWithSameNameFails(c *C) {
-	err := dc.MakeBucket("foo3", "private")
+	err := dc.MakeBucket("foo3", "private", nil)
 	c.Assert(err, IsNil)
 
-	err = dc.MakeBucket("foo3", "private")
+	err = dc.MakeBucket("foo3", "private", nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test make multiple buckets
 func (s *MyCacheSuite) TestCreateMultipleBucketsAndList(c *C) {
 	// add a second bucket
-	err := dc.MakeBucket("foo4", "private")
+	err := dc.MakeBucket("foo4", "private", nil)
 	c.Assert(err, IsNil)
 
-	err = dc.MakeBucket("bar1", "private")
+	err = dc.MakeBucket("bar1", "private", nil)
 	c.Assert(err, IsNil)
 
-	buckets, err := dc.ListBuckets()
+	buckets, err := dc.ListBuckets(nil)
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 2)
 	c.Assert(buckets[0].Name, Equals, "bar1")
 	c.Assert(buckets[1].Name, Equals, "foo4")
 
-	err = dc.MakeBucket("foobar1", "private")
+	err = dc.MakeBucket("foobar1", "private", nil)
 	c.Assert(err, IsNil)
 
-	buckets, err = dc.ListBuckets()
+	buckets, err = dc.ListBuckets(nil)
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 3)
@@ -143,7 +143,7 @@ func (s *MyCacheSuite) TestNewObjectMetadata(c *C) {
 	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	err := dc.MakeBucket("foo6", "private")
+	err := dc.MakeBucket("foo6", "private", nil)
 	c.Assert(err, IsNil)
 
 	objectMetadata, err := dc.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"}, nil)
@@ -160,7 +160,7 @@ func (s *MyCacheSuite) TestNewObjectFailsWithEmptyName(c *C) {
 
 // test create object
 func (s *MyCacheSuite) TestNewObjectCanBeWritten(c *C) {
-	err := dc.MakeBucket("foo", "private")
+	err := dc.MakeBucket("foo", "private", nil)
 	c.Assert(err, IsNil)
 
 	data := "Hello World"
@@ -180,7 +180,7 @@ func (s *MyCacheSuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(size, Equals, int64(len(data)))
 	c.Assert(buffer.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err = dc.GetObjectMetadata("foo", "obj")
+	actualMetadata, err = dc.GetObjectMetadata("foo", "obj", nil)
 	c.Assert(err, IsNil)
 	c.Assert(hex.EncodeToString(hasher.Sum(nil)), Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
@@ -188,7 +188,7 @@ func (s *MyCacheSuite) TestNewObjectCanBeWritten(c *C) {
 
 // test list objects
 func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
-	c.Assert(dc.MakeBucket("foo5", "private"), IsNil)
+	c.Assert(dc.MakeBucket("foo5", "private", nil), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
 
@@ -219,7 +219,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err := dc.ListObjects("foo5", resources)
+	objectsMetadata, resources, err := dc.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(resources.CommonPrefixes[0], Equals, "obj1")
@@ -228,7 +228,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = ""
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj2")
 	c.Assert(resources.IsTruncated, Equals, false)
@@ -238,7 +238,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj1")
@@ -258,7 +258,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 2
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, true)
 	c.Assert(len(objectsMetadata), Equals, 2)
