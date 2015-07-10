@@ -1,6 +1,26 @@
+//
+// Minimalist Object Storage, (C) 2015 Minio, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// Golang project:
+//    https://github.com/golang/go/blob/master/LICENSE
+
+// Using this part of Minio codebase under the license
+// Apache License Version 2.0 with modifications
 
 // Package log implements a simple logging package. It defines a type, Logger,
 // with methods for formatting output. It also has a predefined 'standard'
@@ -171,28 +191,53 @@ func (l *Logger) Printf(format string, v ...interface{}) {
 
 // Print calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Print.
-func (l *Logger) Print(v ...interface{}) { l.Output(2, fmt.Sprint(v...)) }
+func (l *Logger) Print(v ...interface{}) {
+	l.Output(2, fmt.Sprint(v...))
+}
 
 // Println calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Println.
-func (l *Logger) Println(v ...interface{}) { l.Output(2, fmt.Sprintln(v...)) }
+func (l *Logger) Println(v ...interface{}) {
+	l.Output(2, fmt.Sprintln(v...))
+}
 
 // Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func (l *Logger) Fatal(v ...interface{}) {
+	l.SetPrefix("FATAL:")
 	l.Output(2, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func (l *Logger) Fatalf(format string, v ...interface{}) {
+	l.SetPrefix("FATAL:")
 	l.Output(2, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to l.Println() followed by a call to os.Exit(1).
 func (l *Logger) Fatalln(v ...interface{}) {
+	l.SetPrefix("FATAL:")
 	l.Output(2, fmt.Sprintln(v...))
 	os.Exit(1)
+}
+
+// Error is equivalent to l.Print() followed by a call to os.Exit(1).
+func (l *Logger) Error(v ...interface{}) {
+	l.SetPrefix("ERROR:")
+	l.Output(2, fmt.Sprint(v...))
+}
+
+// Errorf is equivalent to l.Printf() followed by a call to os.Exit(1).
+func (l *Logger) Errorf(format string, v ...interface{}) {
+	l.SetPrefix("ERROR:")
+	l.Output(2, fmt.Sprintf(format, v...))
+}
+
+// Errorln is equivalent to l.Println() followed by a call to os.Exit(1).
+func (l *Logger) Errorln(v ...interface{}) {
+	l.SetPrefix("ERROR:")
+	l.Output(2, fmt.Sprintln(v...))
 }
 
 // Panic is equivalent to l.Print() followed by a call to panic().
@@ -293,20 +338,35 @@ func Println(v ...interface{}) {
 
 // Fatal is equivalent to Print() followed by a call to os.Exit(1).
 func Fatal(v ...interface{}) {
+	std.SetPrefix("FATAL:")
 	std.Output(2, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to Printf() followed by a call to os.Exit(1).
 func Fatalf(format string, v ...interface{}) {
+	std.SetPrefix("FATAL:")
 	std.Output(2, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to Println() followed by a call to os.Exit(1).
 func Fatalln(v ...interface{}) {
+	std.SetPrefix("FATAL:")
 	std.Output(2, fmt.Sprintln(v...))
 	os.Exit(1)
+}
+
+// Errorf is equivalent to Printf() followed by a call to os.Exit(1).
+func Errorf(format string, v ...interface{}) {
+	std.SetPrefix("ERROR:")
+	std.Output(2, fmt.Sprintf(format, v...))
+}
+
+// Errorln is equivalent to Println() followed by a call to os.Exit(1).
+func Errorln(v ...interface{}) {
+	std.SetPrefix("ERROR:")
+	std.Output(2, fmt.Sprintln(v...))
 }
 
 // Panic is equivalent to Print() followed by a call to panic().
