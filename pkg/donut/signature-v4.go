@@ -52,6 +52,7 @@ var ignoredHeaders = map[string]bool{
 	"Accept-Encoding": true,
 	"Content-Length":  true,
 	"User-Agent":      true,
+	"Connection":      true,
 }
 
 // sumHMAC calculate hmac between two input byte array
