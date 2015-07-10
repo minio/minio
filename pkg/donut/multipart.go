@@ -22,8 +22,10 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"runtime/debug"
 	"sort"
@@ -31,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -90,11 +93,11 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string) error {
 }
 
 // CreateObjectPart - create a part in a multipart session
-func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
-	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data)
+	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data, signature)
 	// possible free
 	debug.FreeOSMemory()
 
@@ -102,7 +105,7 @@ func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, cont
 }
 
 // createObject - internal wrapper function called by CreateObjectPart
-func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error) {
+func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, error) {
 	if !IsValidBucket(bucket) {
 		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
 	}
@@ -138,6 +141,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 
 	// calculate md5
 	hash := md5.New()
+	sha256hash := sha256.New()
 
 	var err error
 	var totalLength int64
@@ -145,12 +149,8 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
-		// While hash.Write() wouldn't mind a Nil byteBuffer
-		// It is necessary for us to verify this and break
-		if length == 0 {
-			break
-		}
 		hash.Write(byteBuffer[0:length])
+		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
 		if !ok {
 			return "", iodine.New(InternalError{}, nil)
@@ -174,6 +174,17 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 			return "", iodine.New(BadDigest{}, nil)
 		}
 	}
+
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256hash.Sum(nil)))
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		if !ok {
+			return "", iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+
 	newPart := PartMetadata{
 		PartNumber:   partID,
 		LastModified: time.Now().UTC(),
@@ -200,7 +211,7 @@ func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error) {
+func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, error) {
 	donut.lock.Lock()
 
 	if !IsValidBucket(bucket) {
@@ -221,11 +232,36 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, parts map
 		donut.lock.Unlock()
 		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
+	partBytes, err := ioutil.ReadAll(data)
+	if err != nil {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(err, nil)
+	}
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256(partBytes)[:]))
+		if err != nil {
+			donut.lock.Unlock()
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			donut.lock.Unlock()
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
+	parts := &CompleteMultipartUpload{}
+	if err := xml.Unmarshal(partBytes, parts); err != nil {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(MalformedXML{}, nil)
+	}
+	if !sort.IsSorted(completedParts(parts.Part)) {
+		donut.lock.Unlock()
+		return ObjectMetadata{}, iodine.New(InvalidPartOrder{}, nil)
+	}
 	var size int64
 	var fullObject bytes.Buffer
-	for i := 1; i <= len(parts); i++ {
-		recvMD5 := parts[i]
-		object, ok := donut.multiPartObjects[uploadID].Get(i)
+	for i := 1; i <= len(parts.Part); i++ {
+		recvMD5 := parts.Part[i-1].ETag
+		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i-1].PartNumber)
 		if ok == false {
 			donut.lock.Unlock()
 			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)

@@ -51,8 +51,8 @@ type ObjectStorage interface {
 type Multipart interface {
 	NewMultipartUpload(bucket, key, contentType string) (string, error)
 	AbortMultipartUpload(bucket, key, uploadID string) error
-	CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader) (string, error)
-	CompleteMultipartUpload(bucket, key, uploadID string, parts map[int]string) (ObjectMetadata, error)
+	CreateObjectPart(string, string, string, int, string, string, int64, io.Reader, *Signature) (string, error)
+	CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, error)
 	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error)
 	ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error)
 }

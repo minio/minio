@@ -18,10 +18,7 @@ package api
 
 import (
 	"net/http"
-	"sort"
 	"strconv"
-
-	"encoding/xml"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
@@ -277,7 +274,7 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			response := generateInitiateMultipartUploadResult(bucket, object, uploadID)
+			response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
@@ -346,7 +343,18 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 		writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
 	}
 
-	calculatedMD5, err := api.Donut.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body)
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	calculatedMD5, err := api.Donut.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		w.Header().Set("ETag", calculatedMD5)
@@ -357,6 +365,8 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	case donut.BadDigest:
 		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.IncompleteBody:
 		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
 	case donut.EntityTooLarge:
@@ -433,7 +443,7 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			response := generateListPartsResult(objectResourcesMetadata)
+			response := generateListPartsResponse(objectResourcesMetadata)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
@@ -464,35 +474,27 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 		return
 	}
 
-	decoder := xml.NewDecoder(req.Body)
-	parts := &CompleteMultipartUpload{}
-	err := decoder.Decode(parts)
-	if err != nil {
-		log.Error.Println(iodine.New(err, nil))
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		return
-	}
-	if !sort.IsSorted(completedParts(parts.Part)) {
-		writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
-	partMap := make(map[int]string)
-	for _, part := range parts.Part {
-		partMap[part.PartNumber] = part.ETag
+	var signature *donut.Signature
+	if _, ok := req.Header["Authorization"]; ok {
+		// Init signature V4 verification
+		var err error
+		signature, err = InitSignatureV4(req)
+		if err != nil {
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return
+		}
 	}
-
-	metadata, err := api.Donut.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, partMap)
+	metadata, err := api.Donut.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, req.Body, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		{
-			response := generateCompleteMultpartUploadResult(bucket, object, "", metadata.MD5Sum)
+			response := generateCompleteMultpartUploadResponse(bucket, object, "", metadata.MD5Sum)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
@@ -501,6 +503,16 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 		}
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+	case donut.InvalidPartOrder:
+		writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
+	case donut.MissingDateHeader:
+		writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+	case donut.IncompleteBody:
+		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+	case donut.MalformedXML:
+		writeErrorResponse(w, req, MalformedXML, acceptsContentType, req.URL.Path)
 	default:
 		log.Error.Println(iodine.New(err, nil))
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)

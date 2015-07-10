@@ -100,7 +100,7 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 	case nil: // success
 		{
 			// generate response
-			response := generateListMultipartUploadsResult(bucket, resources)
+			response := generateListMultipartUploadsResponse(bucket, resources)
 			encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
 			// write headers
 			setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))

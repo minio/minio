@@ -371,11 +371,6 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
-		// While hash.Write() wouldn't mind a Nil byteBuffer
-		// It is necessary for us to verify this and break
-		if length == 0 {
-			break
-		}
 		hash.Write(byteBuffer[0:length])
 		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])

@@ -62,6 +62,14 @@ type ListObjectsResponse struct {
 	Prefix     string
 }
 
+// Part container for part metadata
+type Part struct {
+	PartNumber   int
+	ETag         string
+	LastModified string
+	Size         int64
+}
+
 // ListPartsResponse - format for list parts response
 type ListPartsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
@@ -134,14 +142,6 @@ type Bucket struct {
 	CreationDate string
 }
 
-// Part container for part metadata
-type Part struct {
-	PartNumber   int
-	ETag         string
-	LastModified string
-	Size         int64
-}
-
 // Object container for object metadata
 type Object struct {
 	ETag         string
@@ -164,8 +164,8 @@ type Owner struct {
 	DisplayName string
 }
 
-// InitiateMultipartUploadResult container for InitiateMultiPartUpload response, provides uploadID to start MultiPart upload
-type InitiateMultipartUploadResult struct {
+// InitiateMultipartUploadResponse container for InitiateMultiPartUpload response, provides uploadID to start MultiPart upload
+type InitiateMultipartUploadResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ InitiateMultipartUploadResult" json:"-"`
 
 	Bucket   string
@@ -173,20 +173,8 @@ type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
 
-// completedParts is a sortable interface for Part slice
-type completedParts []Part
-
-func (a completedParts) Len() int           { return len(a) }
-func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
-
-// CompleteMultipartUpload container for completing multipart upload
-type CompleteMultipartUpload struct {
-	Part []Part
-}
-
-// CompleteMultipartUploadResult container for completed multipart upload response
-type CompleteMultipartUploadResult struct {
+// CompleteMultipartUploadResponse container for completed multipart upload response
+type CompleteMultipartUploadResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUploadResult" json:"-"`
 
 	Location string

@@ -27,6 +27,7 @@ import (
 	"net/http/httptest"
 
 	. "github.com/minio/check"
+	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
 )
 
@@ -627,7 +628,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
-	newResponse := &api.InitiateMultipartUploadResult{}
+	newResponse := &api.InitiateMultipartUploadResponse{}
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)
@@ -672,7 +673,7 @@ func (s *MyAPIDonutCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
-	newResponse := &api.InitiateMultipartUploadResult{}
+	newResponse := &api.InitiateMultipartUploadResponse{}
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)
@@ -723,7 +724,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
-	newResponse := &api.InitiateMultipartUploadResult{}
+	newResponse := &api.InitiateMultipartUploadResponse{}
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)
@@ -771,7 +772,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
-	newResponse := &api.InitiateMultipartUploadResult{}
+	newResponse := &api.InitiateMultipartUploadResponse{}
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)
@@ -795,8 +796,8 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
 	// complete multipart upload
-	completeUploads := &api.CompleteMultipartUpload{
-		Part: []api.Part{
+	completeUploads := &donut.CompleteMultipartUpload{
+		Part: []donut.CompletePart{
 			{
 				PartNumber: 1,
 				ETag:       response1.Header.Get("ETag"),

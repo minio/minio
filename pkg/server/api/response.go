@@ -111,18 +111,18 @@ func generateListObjectsResponse(bucket string, objects []donut.ObjectMetadata, 
 	return data
 }
 
-// generateInitiateMultipartUploadResult
-func generateInitiateMultipartUploadResult(bucket, key, uploadID string) InitiateMultipartUploadResult {
-	return InitiateMultipartUploadResult{
+// generateInitiateMultipartUploadResponse
+func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) InitiateMultipartUploadResponse {
+	return InitiateMultipartUploadResponse{
 		Bucket:   bucket,
 		Key:      key,
 		UploadID: uploadID,
 	}
 }
 
-// generateCompleteMultipartUploadResult
-func generateCompleteMultpartUploadResult(bucket, key, location, etag string) CompleteMultipartUploadResult {
-	return CompleteMultipartUploadResult{
+// generateCompleteMultipartUploadResponse
+func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) CompleteMultipartUploadResponse {
+	return CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
@@ -131,7 +131,7 @@ func generateCompleteMultpartUploadResult(bucket, key, location, etag string) Co
 }
 
 // generateListPartsResult
-func generateListPartsResult(objectMetadata donut.ObjectResourcesMetadata) ListPartsResponse {
+func generateListPartsResponse(objectMetadata donut.ObjectResourcesMetadata) ListPartsResponse {
 	// TODO - support EncodingType in xml decoding
 	listPartsResponse := ListPartsResponse{}
 	listPartsResponse.Bucket = objectMetadata.Bucket
@@ -160,8 +160,8 @@ func generateListPartsResult(objectMetadata donut.ObjectResourcesMetadata) ListP
 	return listPartsResponse
 }
 
-// generateListMultipartUploadsResult
-func generateListMultipartUploadsResult(bucket string, metadata donut.BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
+// generateListMultipartUploadsResponse
+func generateListMultipartUploadsResponse(bucket string, metadata donut.BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
 	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
 	listMultipartUploadsResponse.Bucket = bucket
 	listMultipartUploadsResponse.Delimiter = metadata.Delimiter
