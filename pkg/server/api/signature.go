@@ -35,7 +35,7 @@ func StripAccessKeyID(ah string) (string, error) {
 	if ah == "" {
 		return "", errors.New("Missing auth header")
 	}
-	authFields := strings.Split(ah, ",")
+	authFields := strings.Split(strings.TrimSpace(ah), ",")
 	if len(authFields) != 3 {
 		return "", errors.New("Missing fields in Auth header")
 	}
@@ -46,17 +46,17 @@ func StripAccessKeyID(ah string) (string, error) {
 	if authPrefixFields[0] != authHeaderPrefix {
 		return "", errors.New("Missing fields is Auth header")
 	}
-	credentials := strings.Split(authPrefixFields[1], "=")
+	credentials := strings.Split(strings.TrimSpace(authPrefixFields[1]), "=")
 	if len(credentials) != 2 {
 		return "", errors.New("Missing fields in Auth header")
 	}
-	if len(strings.Split(authFields[1], "=")) != 2 {
+	if len(strings.Split(strings.TrimSpace(authFields[1]), "=")) != 2 {
 		return "", errors.New("Missing fields in Auth header")
 	}
-	if len(strings.Split(authFields[2], "=")) != 2 {
+	if len(strings.Split(strings.TrimSpace(authFields[2]), "=")) != 2 {
 		return "", errors.New("Missing fields in Auth header")
 	}
-	accessKeyID := strings.Split(credentials[1], "/")[0]
+	accessKeyID := strings.Split(strings.TrimSpace(credentials[1]), "/")[0]
 	if !auth.IsValidAccessKey(accessKeyID) {
 		return "", errors.New("Invalid access key")
 	}

@@ -91,6 +91,8 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 		}
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
@@ -144,6 +146,10 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case nil:
 		setObjectHeaders(w, metadata)
 		w.WriteHeader(http.StatusOK)
+	case donut.SignatureDoesNotMatch:
+		error := getErrorCode(SignatureDoesNotMatch)
+		w.Header().Set("Server", "Minio")
+		w.WriteHeader(error.HTTPStatusCode)
 	case donut.BucketNameInvalid:
 		error := getErrorCode(InvalidBucketName)
 		w.Header().Set("Server", "Minio")
@@ -314,6 +320,8 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.ObjectExists:
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	default:
@@ -450,6 +458,8 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 	case nil:
 		setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
 		w.WriteHeader(http.StatusNoContent)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
@@ -505,6 +515,8 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
