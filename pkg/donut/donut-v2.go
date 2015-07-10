@@ -374,6 +374,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 				"contentType":   contentType,
 				"contentLength": strconv.FormatInt(size, 10),
 			},
+			signature,
 		)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)

@@ -31,9 +31,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/split"
 	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/utils/atomic"
 )
 
 const (
@@ -220,7 +222,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string) (ObjectMetadata, error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
@@ -231,6 +233,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	sumMD5 := md5.New()
+	sum256 := sha256.New()
 	sum512 := sha512.New()
 	objMetadata := ObjectMetadata{}
 	objMetadata.Version = objectMetadataVersion
@@ -238,7 +241,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	// if total writers are only '1' do not compute erasure
 	switch len(writers) == 1 {
 	case true:
-		mw := io.MultiWriter(writers[0], sumMD5, sum512)
+		mw := io.MultiWriter(writers[0], sumMD5, sum256, sum512)
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
@@ -251,7 +254,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
 		// write encoded data with k, m and writers
-		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, sumMD5, sum512)
+		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, sumMD5, sum256, sum512)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
@@ -267,7 +270,19 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 	objMetadata.Object = objectName
 	dataMD5sum := sumMD5.Sum(nil)
 	dataSHA512sum := sum512.Sum(nil)
-
+	if signature != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sum256.Sum(nil)))
+		if err != nil {
+			return ObjectMetadata{}, iodine.New(err, nil)
+		}
+		if !ok {
+			// purge all writers, when control flow reaches here
+			for _, writer := range writers {
+				writer.(*atomic.File).CloseAndPurge()
+			}
+			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+		}
+	}
 	objMetadata.MD5Sum = hex.EncodeToString(dataMD5sum)
 	objMetadata.SHA512Sum = hex.EncodeToString(dataSHA512sum)
 
@@ -382,7 +397,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 }
 
 // writeObjectData -
-func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum512 hash.Hash) (int, int, error) {
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum256, sum512 hash.Hash) (int, int, error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
@@ -396,6 +411,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 		totalLength = totalLength + len(chunk.Data)
 		encodedBlocks, _ := encoder.Encode(chunk.Data)
 		sumMD5.Write(chunk.Data)
+		sum256.Write(chunk.Data)
 		sum512.Write(chunk.Data)
 		for blockIndex, block := range encodedBlocks {
 			_, err := io.Copy(writers[blockIndex], bytes.NewBuffer(block))
