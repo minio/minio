@@ -118,15 +118,13 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 			// write body
 			w.Write(encodedSuccessResponse)
 		}
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
-		{
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		}
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	default:
-		{
-			log.Error.Println(iodine.New(err, nil))
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		}
+		log.Error.Println(iodine.New(err, nil))
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
 
@@ -185,6 +183,8 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 		// write body
 		w.Write(encodedSuccessResponse)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
@@ -242,6 +242,8 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
 		// write response
 		w.Write(encodedSuccessResponse)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	default:
 		log.Error.Println(iodine.New(err, nil))
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
@@ -300,6 +302,8 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		// Make sure to add Location information here only for bucket
 		w.Header().Set("Location", "/"+bucket)
 		writeSuccessResponse(w, acceptsContentType)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.TooManyBuckets:
 		writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -352,6 +356,8 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	switch iodine.ToError(err).(type) {
 	case nil:
 		writeSuccessResponse(w, acceptsContentType)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
@@ -398,6 +404,8 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	switch iodine.ToError(err).(type) {
 	case nil:
 		writeSuccessResponse(w, acceptsContentType)
+	case donut.SignatureDoesNotMatch:
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
 		error := getErrorCode(NoSuchBucket)
 		w.WriteHeader(error.HTTPStatusCode)

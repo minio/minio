@@ -226,21 +226,14 @@ func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, error) {
 	if err != nil {
 		return false, iodine.New(err, nil)
 	}
-	signedHeaders := r.getSignedHeaders()
 	canonicalRequest := r.getCanonicalRequest()
-	scope := r.getScope(t)
 	stringToSign := r.getStringToSign(canonicalRequest, t)
 	signingKey := r.getSigningKey(t)
-	signature := r.getSignature(signingKey, stringToSign)
+	newSignature := r.getSignature(signingKey, stringToSign)
 
-	// final Authorization header
-	parts := []string{
-		authHeaderPrefix + " Credential=" + r.AccessKeyID + "/" + scope,
-		"SignedHeaders=" + signedHeaders,
-		"Signature=" + signature,
-	}
-	newAuthHeader := strings.Join(parts, ", ")
-	if newAuthHeader != r.AuthHeader {
+	authFields := strings.Split(strings.TrimSpace(r.AuthHeader), ",")
+	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
+	if newSignature != signature {
 		return false, nil
 	}
 	return true, nil
