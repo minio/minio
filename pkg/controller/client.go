@@ -26,6 +26,12 @@ import (
 	"github.com/minio/minio/pkg/server/rpc"
 )
 
+func closeResp(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+}
+
 // GetDisks get disks info of the server at given url
 func GetDisks(url string) ([]byte, error) {
 	op := RPCOps{
@@ -37,10 +43,10 @@ func GetDisks(url string) ([]byte, error) {
 		return nil, iodine.New(err, nil)
 	}
 	resp, err := req.Do()
+	defer closeResp(resp)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	defer resp.Body.Close()
 	var reply rpc.DiskInfoReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return nil, iodine.New(err, nil)
@@ -59,10 +65,10 @@ func GetMemStats(url string) ([]byte, error) {
 		return nil, iodine.New(err, nil)
 	}
 	resp, err := req.Do()
+	defer closeResp(resp)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	defer resp.Body.Close()
 	var reply rpc.MemStatsReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return nil, iodine.New(err, nil)
@@ -81,10 +87,10 @@ func GetSysInfo(url string) ([]byte, error) {
 		return nil, iodine.New(err, nil)
 	}
 	resp, err := req.Do()
+	defer closeResp(resp)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	defer resp.Body.Close()
 	var reply rpc.SysInfoReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return nil, iodine.New(err, nil)
@@ -103,10 +109,10 @@ func GetAuthKeys(url string) ([]byte, error) {
 		return nil, iodine.New(err, nil)
 	}
 	resp, err := req.Do()
+	defer closeResp(resp)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	defer resp.Body.Close()
 	var reply rpc.AuthReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return nil, iodine.New(err, nil)
@@ -141,10 +147,10 @@ func SetDonut(url, hostname string, disks []string) error {
 		return iodine.New(err, nil)
 	}
 	resp, err := req.Do()
+	defer closeResp(resp)
 	if err != nil {
 		return iodine.New(err, nil)
 	}
-	defer resp.Body.Close()
 	var reply rpc.Reply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
 		return iodine.New(err, nil)
