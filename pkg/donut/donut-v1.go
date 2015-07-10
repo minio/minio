@@ -122,7 +122,7 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 }
 
 // putObject - put object
-func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string) (ObjectMetadata, error) {
+func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -146,7 +146,7 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
 		return ObjectMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
 	}
-	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata)
+	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata, signature)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
