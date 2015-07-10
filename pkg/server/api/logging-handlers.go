@@ -22,10 +22,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/utils/log"
 )
@@ -40,7 +38,6 @@ type logMessage struct {
 	StartTime     time.Time
 	Duration      time.Duration
 	StatusMessage string // human readable http status message
-	ContentLength string // human readable content length
 
 	// HTTP detailed message
 	HTTP struct {
@@ -85,9 +82,6 @@ func getLogMessage(logMessage *logMessage, w http.ResponseWriter, req *http.Requ
 	logMessage.HTTP.ResponseHeaders = w.Header()
 	logMessage.HTTP.Request = req
 
-	// humanize content-length to be printed in logs
-	contentLength, _ := strconv.Atoi(logMessage.HTTP.ResponseHeaders.Get("Content-Length"))
-	logMessage.ContentLength = humanize.IBytes(uint64(contentLength))
 	logMessage.Duration = time.Now().UTC().Sub(logMessage.StartTime)
 	js, _ := json.Marshal(logMessage)
 	js = append(js, byte('\n')) // append a new line
@@ -110,7 +104,7 @@ func fileLogger(filename string) (chan<- []byte, error) {
 	go func() {
 		for message := range ch {
 			if _, err := io.Copy(file, bytes.NewBuffer(message)); err != nil {
-				log.Println(iodine.New(err, nil))
+				log.Errorln(iodine.New(err, nil))
 			}
 		}
 	}()
