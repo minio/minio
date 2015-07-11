@@ -405,17 +405,13 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	case nil:
 		writeSuccessResponse(w, acceptsContentType)
 	case donut.SignatureDoesNotMatch:
-		error := getErrorCode(SignatureDoesNotMatch)
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
-		error := getErrorCode(NoSuchBucket)
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
-		error := getErrorCode(InvalidBucketName)
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	default:
 		log.Error.Println(iodine.New(err, nil))
-		error := getErrorCode(InternalError)
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }

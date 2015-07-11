@@ -201,6 +201,9 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int,
 	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedErrorResponse))
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
-	// write error body
-	w.Write(encodedErrorResponse)
+	// HEAD should have no body
+	if req.Method != "HEAD" {
+		// write error body
+		w.Write(encodedErrorResponse)
+	}
 }

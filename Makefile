@@ -9,7 +9,7 @@ checkgopath:
 	@for mcpath in $(echo ${GOPATH} | sed 's/:/\n/g' | grep -v Godeps); do if [ ! -d ${mcpath}/src/github.com/minio/minio ]; then echo "Project not found in ${mcpath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
 
 getdeps: checkdeps checkgopath
-	@go get github.com/minio/godep && echo "Installed godep:"
+	@go get github.com/tools/godep && echo "Installed godep:"
 	@go get github.com/golang/lint/golint && echo "Installed golint:"
 	@go get golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get github.com/fzipp/gocyclo && echo "Installed gocyclo:"

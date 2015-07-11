@@ -147,30 +147,18 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		setObjectHeaders(w, metadata)
 		w.WriteHeader(http.StatusOK)
 	case donut.SignatureDoesNotMatch:
-		error := getErrorCode(SignatureDoesNotMatch)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
-		error := getErrorCode(InvalidBucketName)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
-		error := getErrorCode(NoSuchBucket)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	case donut.ObjectNotFound:
-		error := getErrorCode(NoSuchKey)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	case donut.ObjectNameInvalid:
-		error := getErrorCode(NoSuchKey)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	default:
 		log.Error.Println(iodine.New(err, nil))
-		error := getErrorCode(InternalError)
-		w.Header().Set("Server", "Minio")
-		w.WriteHeader(error.HTTPStatusCode)
+		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
 
