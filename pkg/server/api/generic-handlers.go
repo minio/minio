@@ -162,12 +162,7 @@ func IgnoreResourcesHandler(h http.Handler) http.Handler {
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
-		error := getErrorCode(NotImplemented)
-		errorResponse := getErrorResponse(error, "")
-		encodeErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodeErrorResponse))
-		w.WriteHeader(error.HTTPStatusCode)
-		w.Write(encodeErrorResponse)
+		writeErrorResponse(w, r, NotImplemented, acceptsContentType, r.URL.Path)
 		return
 	}
 	h.handler.ServeHTTP(w, r)
