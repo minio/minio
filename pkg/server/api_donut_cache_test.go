@@ -19,6 +19,8 @@ package server
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,19 +35,33 @@ import (
 
 func TestAPIDonutCache(t *testing.T) { TestingT(t) }
 
-type MyAPIDonutCacheSuite struct{}
+type MyAPIDonutCacheSuite struct {
+	root string
+}
 
 var _ = Suite(&MyAPIDonutCacheSuite{})
 
 var testAPIDonutCacheServer *httptest.Server
 
 func (s *MyAPIDonutCacheSuite) SetUpSuite(c *C) {
+	root, err := ioutil.TempDir(os.TempDir(), "api-")
+	c.Assert(err, IsNil)
+	s.root = root
+
+	conf := new(donut.Config)
+	conf.Version = "0.0.1"
+	conf.MaxSize = 100000
+	donut.CustomConfigPath = filepath.Join(root, "donut.json")
+	err = donut.SaveConfig(conf)
+	c.Assert(err, IsNil)
+
 	httpHandler, minioAPI := getAPIHandler(api.Config{RateLimit: 16})
 	go startTM(minioAPI)
 	testAPIDonutCacheServer = httptest.NewServer(httpHandler)
 }
 
 func (s *MyAPIDonutCacheSuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.root)
 	testAPIDonutCacheServer.Close()
 }
 
