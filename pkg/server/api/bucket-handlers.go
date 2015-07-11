@@ -405,7 +405,8 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	case nil:
 		writeSuccessResponse(w, acceptsContentType)
 	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		error := getErrorCode(SignatureDoesNotMatch)
+		w.WriteHeader(error.HTTPStatusCode)
 	case donut.BucketNotFound:
 		error := getErrorCode(NoSuchBucket)
 		w.WriteHeader(error.HTTPStatusCode)
