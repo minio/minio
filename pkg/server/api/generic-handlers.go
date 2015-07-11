@@ -45,7 +45,7 @@ const (
 )
 
 func parseDate(req *http.Request) (time.Time, error) {
-	amzDate := req.Header.Get("x-amz-date")
+	amzDate := req.Header.Get(http.CanonicalHeaderKey("x-amz-date"))
 	switch {
 	case amzDate != "":
 		if _, err := time.Parse(time.RFC1123, amzDate); err == nil {
@@ -97,7 +97,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
-		if r.Header.Get("x-amz-date") == "" && r.Header.Get("Date") == "" {
+		if r.Header.Get(http.CanonicalHeaderKey("x-amz-date")) == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
 			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
 			return

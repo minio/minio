@@ -102,13 +102,10 @@ func urlEncodeName(name string) (string, error) {
 }
 
 // getCanonicalHeaders generate a list of request headers with their values
-func (r *Signature) getCanonicalHeaders() string {
+func (r *Signature) getCanonicalHeaders(signedHeaders map[string][]string) string {
 	var headers []string
 	vals := make(map[string][]string)
-	for k, vv := range r.Request.Header {
-		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
-			continue // ignored header
-		}
+	for k, vv := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 		vals[strings.ToLower(k)] = vv
 	}
@@ -137,17 +134,30 @@ func (r *Signature) getCanonicalHeaders() string {
 }
 
 // getSignedHeaders generate a string i.e alphabetically sorted, semicolon-separated list of lowercase request header names
-func (r *Signature) getSignedHeaders() string {
+func (r *Signature) getSignedHeaders(signedHeaders map[string][]string) string {
 	var headers []string
-	for k := range r.Request.Header {
-		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
-			continue // ignored header
-		}
+	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 	}
 	headers = append(headers, "host")
 	sort.Strings(headers)
 	return strings.Join(headers, ";")
+}
+
+// extractSignedHeaders extract signed headers from Authorization header
+func (r *Signature) extractSignedHeaders() map[string][]string {
+	authFields := strings.Split(strings.TrimSpace(r.AuthHeader), ",")
+	extractedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
+	extractedSignedHeadersMap := make(map[string][]string)
+	for _, header := range extractedHeaders {
+		val, ok := r.Request.Header[http.CanonicalHeaderKey(header)]
+		if !ok {
+			// if not found continue, we will fail later
+			continue
+		}
+		extractedSignedHeadersMap[header] = val
+	}
+	return extractedSignedHeadersMap
 }
 
 // getCanonicalRequest generate a canonical request of style
@@ -169,9 +179,9 @@ func (r *Signature) getCanonicalRequest() string {
 		r.Request.Method,
 		encodedPath,
 		r.Request.URL.RawQuery,
-		r.getCanonicalHeaders(),
-		r.getSignedHeaders(),
-		r.Request.Header.Get("x-amz-content-sha256"),
+		r.getCanonicalHeaders(r.extractSignedHeaders()),
+		r.getSignedHeaders(r.extractSignedHeaders()),
+		r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256")),
 	}, "\n")
 	return canonicalRequest
 }
@@ -214,11 +224,11 @@ func (r *Signature) getSignature(signingKey []byte, stringToSign string) string 
 // returns true if matches, false other wise if error is not nil then it is always false
 func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, error) {
 	// set new calulated payload
-	r.Request.Header.Set("x-amz-content-sha256", hashedPayload)
+	r.Request.Header.Set("X-Amz-Content-Sha256", hashedPayload)
 
 	// Add date if not present
 	var date string
-	if date = r.Request.Header.Get("x-amz-date"); date == "" {
+	if date = r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
 		if date = r.Request.Header.Get("Date"); date == "" {
 			return false, iodine.New(MissingDateHeader{}, nil)
 		}
