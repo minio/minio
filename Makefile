@@ -13,6 +13,7 @@ getdeps: checkdeps checkgopath
 	@go get github.com/golang/lint/golint && echo "Installed golint:"
 	@go get golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get github.com/fzipp/gocyclo && echo "Installed gocyclo:"
+	@go get github.com/minio/cli && echo "Installed cli:"
 
 verifiers: getdeps vet fmt lint cyclo
 
