@@ -20,13 +20,12 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"text/template"
 	"time"
-
-	"github.com/minio/cli"
 )
 
 type Version struct {
@@ -86,10 +85,7 @@ func (c command) String() string {
 	return message
 }
 
-func runMkdonutInstall(ctx *cli.Context) {
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "install", 1) // last argument is exit code
-	}
+func runMkdonutInstall() {
 	mkdonutInstall := command{exec.Command("godep", "go", "install", "-a", "github.com/minio/minio/cmd/mkdonut"), &bytes.Buffer{}, &bytes.Buffer{}}
 	mkdonutInstallErr := mkdonutInstall.runCommand()
 	if mkdonutInstallErr != nil {
@@ -99,10 +95,7 @@ func runMkdonutInstall(ctx *cli.Context) {
 	fmt.Print(mkdonutInstall)
 }
 
-func runMkdonutRelease(ctx *cli.Context) {
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "release", 1) // last argument is exit code
-	}
+func runMkdonutRelease() {
 	t := time.Now().UTC()
 	date := t.Format(time.RFC3339Nano)
 	version := Version{Date: date}
@@ -114,17 +107,15 @@ func runMkdonutRelease(ctx *cli.Context) {
 }
 
 func main() {
-	app := cli.NewApp()
-	app.Commands = []cli.Command{
-		{
-			Name:   "release",
-			Action: runMkdonutRelease,
-		},
-		{
-			Name:   "install",
-			Action: runMkdonutInstall,
-		},
+	releaseFlag := flag.Bool("release", false, "make a release")
+	installFlag := flag.Bool("install", false, "install mkdonut")
+
+	flag.Parse()
+
+	if *releaseFlag {
+		runMkdonutRelease()
 	}
-	app.Author = "Minio.io"
-	app.RunAndExitOnError()
+	if *installFlag {
+		runMkdonutInstall()
+	}
 }

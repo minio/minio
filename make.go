@@ -20,13 +20,12 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"text/template"
 	"time"
-
-	"github.com/minio/cli"
 )
 
 type Version struct {
@@ -87,10 +86,7 @@ func (c command) String() string {
 	return message
 }
 
-func runMinioInstall(ctx *cli.Context) {
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "install", 1) // last argument is exit code
-	}
+func runMinioInstall() {
 	minioGenerate := command{exec.Command("godep", "go", "generate", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
 	minioBuild := command{exec.Command("godep", "go", "build", "-a", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
 	minioTest := command{exec.Command("godep", "go", "test", "-race", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
@@ -121,10 +117,7 @@ func runMinioInstall(ctx *cli.Context) {
 	fmt.Print(minioInstall)
 }
 
-func runMinioRelease(ctx *cli.Context) {
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "release", 1) // last argument is exit code
-	}
+func runMinioRelease() {
 	t := time.Now().UTC()
 	date := t.Format(time.RFC3339Nano)
 	version := Version{Date: date}
@@ -136,17 +129,15 @@ func runMinioRelease(ctx *cli.Context) {
 }
 
 func main() {
-	app := cli.NewApp()
-	app.Commands = []cli.Command{
-		{
-			Name:   "release",
-			Action: runMinioRelease,
-		},
-		{
-			Name:   "install",
-			Action: runMinioInstall,
-		},
+	releaseFlag := flag.Bool("release", false, "make a release")
+	installFlag := flag.Bool("install", false, "install minio")
+
+	flag.Parse()
+
+	if *releaseFlag {
+		runMinioRelease()
 	}
-	app.Author = "Minio.io"
-	app.RunAndExitOnError()
+	if *installFlag {
+		runMinioInstall()
+	}
 }
