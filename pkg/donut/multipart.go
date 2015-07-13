@@ -281,12 +281,12 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 	}
 	var size int64
 	var fullObject bytes.Buffer
-	for i := 1; i <= len(parts.Part); i++ {
-		recvMD5 := parts.Part[i-1].ETag
-		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i-1].PartNumber)
+	for i := 0; i < len(parts.Part); i++ {
+		recvMD5 := parts.Part[i].ETag
+		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i].PartNumber)
 		if ok == false {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(i)), nil)
+			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(parts.Part[i].PartNumber)), nil)
 		}
 		size += int64(len(object))
 		calcMD5Bytes := md5.Sum(object)
