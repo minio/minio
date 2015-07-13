@@ -89,7 +89,6 @@ func registerCustomMiddleware(mux http.Handler, conf api.Config) http.Handler {
 	)
 
 	mux = ch.final(mux)
-	mux = api.RateLimitHandler(mux, conf.RateLimit)
 	return mux
 }
 

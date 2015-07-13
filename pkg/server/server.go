@@ -114,7 +114,7 @@ func StartServices(conf api.Config) error {
 	// start ticket master
 	go startTM(minioAPI)
 
-	if err := minhttp.ListenAndServe(apiServer, rpcServer); err != nil {
+	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer, rpcServer); err != nil {
 		return iodine.New(err, nil)
 	}
 	return nil
