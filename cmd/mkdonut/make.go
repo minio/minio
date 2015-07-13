@@ -31,7 +31,6 @@ import (
 
 type Version struct {
 	Date string
-	Tag  string
 }
 
 func writeVersion(version Version) error {
@@ -87,41 +86,20 @@ func (c command) String() string {
 	return message
 }
 
-func runMinioInstall(ctx *cli.Context) {
+func runMkdonutInstall(ctx *cli.Context) {
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "install", 1) // last argument is exit code
 	}
-	minioGenerate := command{exec.Command("godep", "go", "generate", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
-	minioBuild := command{exec.Command("godep", "go", "build", "-a", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
-	minioTest := command{exec.Command("godep", "go", "test", "-race", "./..."), &bytes.Buffer{}, &bytes.Buffer{}}
-	minioInstall := command{exec.Command("godep", "go", "install", "-a", "github.com/minio/minio"), &bytes.Buffer{}, &bytes.Buffer{}}
-	minioGenerateErr := minioGenerate.runCommand()
-	if minioGenerateErr != nil {
-		fmt.Print(minioGenerate)
+	mkdonutInstall := command{exec.Command("godep", "go", "install", "-a", "github.com/minio/minio/cmd/mkdonut"), &bytes.Buffer{}, &bytes.Buffer{}}
+	mkdonutInstallErr := mkdonutInstall.runCommand()
+	if mkdonutInstallErr != nil {
+		fmt.Println(mkdonutInstall)
 		os.Exit(1)
 	}
-	fmt.Print(minioGenerate)
-	minioBuildErr := minioBuild.runCommand()
-	if minioBuildErr != nil {
-		fmt.Print(minioBuild)
-		os.Exit(1)
-	}
-	fmt.Print(minioBuild)
-	minioTestErr := minioTest.runCommand()
-	if minioTestErr != nil {
-		fmt.Println(minioTest)
-		os.Exit(1)
-	}
-	fmt.Print(minioTest)
-	minioInstallErr := minioInstall.runCommand()
-	if minioInstallErr != nil {
-		fmt.Println(minioInstall)
-		os.Exit(1)
-	}
-	fmt.Print(minioInstall)
+	fmt.Print(mkdonutInstall)
 }
 
-func runMinioRelease(ctx *cli.Context) {
+func runMkdonutRelease(ctx *cli.Context) {
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "release", 1) // last argument is exit code
 	}
@@ -140,11 +118,11 @@ func main() {
 	app.Commands = []cli.Command{
 		{
 			Name:   "release",
-			Action: runMinioRelease,
+			Action: runMkdonutRelease,
 		},
 		{
 			Name:   "install",
-			Action: runMinioInstall,
+			Action: runMkdonutInstall,
 		},
 	}
 	app.Author = "Minio.io"
