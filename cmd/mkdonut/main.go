@@ -147,9 +147,15 @@ func main() {
 USAGE:
   {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
 
-COMMANDS:
-  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-  {{end}}{{if .Flags}}
+EXAMPLES:
+  1. Create a donut with four disks
+     $ {{.Name}} donuttest /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
+
+  2. Create a donut with sixteen disks
+     $ {{.Name}} donut-16 /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
+       /mnt/export6 /mnt/export7 /mnt/export8 /mnt/export9 /mnt/export10 /mnt/export11 \
+       /mnt/export12 /mnt/export13 /mnt/export14 /mnt/export15 /mnt/export16
+{{if .Flags}}
 GLOBAL FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
