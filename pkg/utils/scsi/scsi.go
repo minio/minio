@@ -28,12 +28,6 @@ import (
 
 // NOTE : supporting virtio based scsi devices is out of scope for this implementation
 
-// Attributes Scsi device attributes
-type Attributes map[string]string
-
-// Disks is a list of scsis disks and attributes
-type Disks map[string]Attributes
-
 // Get get disk scsi params
 func (d Disks) Get(disk string) Attributes {
 	return d[disk]

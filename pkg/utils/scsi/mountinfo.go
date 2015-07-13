@@ -31,16 +31,6 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// Mountinfo container to capture /etc/mtab mount structure
-type Mountinfo struct {
-	FSName string /* name of mounted filesystem */
-	Dir    string /* filesystem path prefix */
-	Type   string /* mount type (see mntent.h) */
-	Opts   string /* mount options (see mntent.h) */
-	Freq   int    /* dump frequency in days */
-	Passno int    /* pass number on parallel fsck */
-}
-
 var supportedFSType = map[string]bool{
 	"ext4":  true,
 	"xfs":   true,

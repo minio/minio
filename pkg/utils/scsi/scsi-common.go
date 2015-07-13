@@ -1,5 +1,3 @@
-// +build linux,amd64
-
 /*
  * Mini Object Storage, (C) 2014 Minio, Inc.
  *
@@ -24,6 +22,22 @@ import (
 	"path"
 	"strings"
 )
+
+// Attributes Scsi device attributes
+type Attributes map[string]string
+
+// Disks is a list of scsis disks and attributes
+type Disks map[string]Attributes
+
+// Mountinfo container to capture /etc/mtab mount structure
+type Mountinfo struct {
+	FSName string /* name of mounted filesystem */
+	Dir    string /* filesystem path prefix */
+	Type   string /* mount type (see mntent.h) */
+	Opts   string /* mount options (see mntent.h) */
+	Freq   int    /* dump frequency in days */
+	Passno int    /* pass number on parallel fsck */
+}
 
 func getattrs(scsiAttrPath string, scsiAttrList []string) map[string]string {
 	attrMap := make(map[string]string)

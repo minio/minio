@@ -63,8 +63,8 @@ func New(diskPath string) (Disk, error) {
 		disk.fsInfo["MountPoint"] = disk.path
 		return disk, nil
 	}
-	return Disk{}, iodine.New(UnsupportedFilesystem{Type: strconv.FormatInt(s.Type, 10)},
-		map[string]string{"Type": strconv.FormatInt(s.Type, 10)})
+	return Disk{}, iodine.New(UnsupportedFilesystem{Type: strconv.FormatInt(int64(s.Type), 10)},
+		map[string]string{"Type": strconv.FormatInt(int64(s.Type), 10)})
 }
 
 // GetPath - get root disk path
@@ -82,10 +82,10 @@ func (disk Disk) GetFSInfo() map[string]string {
 	if err != nil {
 		return nil
 	}
-	disk.fsInfo["Total"] = formatBytes(s.Bsize * int64(s.Blocks))
-	disk.fsInfo["Free"] = formatBytes(s.Bsize * int64(s.Bfree))
-	disk.fsInfo["TotalB"] = strconv.FormatInt(s.Bsize*int64(s.Blocks), 10)
-	disk.fsInfo["FreeB"] = strconv.FormatInt(s.Bsize*int64(s.Bfree), 10)
+	disk.fsInfo["Total"] = formatBytes(int64(s.Bsize) * int64(s.Blocks))
+	disk.fsInfo["Free"] = formatBytes(int64(s.Bsize) * int64(s.Bfree))
+	disk.fsInfo["TotalB"] = strconv.FormatInt(int64(s.Bsize)*int64(s.Blocks), 10)
+	disk.fsInfo["FreeB"] = strconv.FormatInt(int64(s.Bsize)*int64(s.Bfree), 10)
 	return disk.fsInfo
 }
 

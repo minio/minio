@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ * Mini Object Storage, (C) 2014 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,8 @@
 
 package scsi
 
-import (
-	"testing"
-
-	. "github.com/minio/check"
-)
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func Test(t *testing.T) { TestingT(t) }
-
-func (s *MySuite) TestSCSI(c *C) {
-	_, err := GetDisks()
-	c.Assert(err, IsNil)
-}
-
-func (s *MySuite) TestMountInfo(c *C) {
-	_, err := GetMountInfo()
-	c.Assert(err, IsNil)
+// GetMountInfo - get mount info map
+func GetMountInfo() (map[string]Mountinfo, error) {
+	// Stub implementation; returns an empty map
+	return make(map[string]Mountinfo), nil
 }

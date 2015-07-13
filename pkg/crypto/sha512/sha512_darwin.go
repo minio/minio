@@ -17,6 +17,7 @@
 package sha512
 
 import (
+	"hash"
 	"io"
 
 	"crypto/sha512"
@@ -60,4 +61,9 @@ func SumStream(reader io.Reader) ([sha512.Size]byte, error) {
 	}
 	copy(returnValue[:], sumSlice)
 	return returnValue, err
+}
+
+// New returns a new hash.Hash computing SHA512.
+func New() hash.Hash {
+	return sha512.New()
 }
