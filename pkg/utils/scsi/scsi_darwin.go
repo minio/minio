@@ -16,24 +16,8 @@
 
 package scsi
 
-import (
-	"testing"
-
-	. "github.com/minio/check"
-)
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func Test(t *testing.T) { TestingT(t) }
-
-func (s *MySuite) TestSCSI(c *C) {
-	_, err := GetDisks()
-	c.Assert(err, IsNil)
-}
-
-func (s *MySuite) TestMountInfo(c *C) {
-	_, err := GetMountInfo()
-	c.Assert(err, IsNil)
+// GetDisks - get system devices list
+func GetDisks() (Disks, error) {
+	// Stub implementation; returns empty disk information
+	return Disks{}, nil
 }
