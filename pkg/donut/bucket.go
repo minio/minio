@@ -417,13 +417,22 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 			return 0, 0, iodine.New(err, nil)
 		}
 		totalLength = totalLength + len(chunk.Data)
-		encodedBlocks, _ := encoder.Encode(chunk.Data)
+		encodedBlocks, err := encoder.Encode(chunk.Data)
+		if err != nil {
+			return 0, 0, iodine.New(err, nil)
+		}
+
 		sumMD5.Write(chunk.Data)
 		sum256.Write(chunk.Data)
 		sum512.Write(chunk.Data)
 		for blockIndex, block := range encodedBlocks {
-			_, err := io.Copy(writers[blockIndex], bytes.NewBuffer(block))
-			if err != nil {
+			errCh := make(chan error, 1)
+			go func(writer io.Writer, reader io.Reader) {
+				defer close(errCh)
+				_, err := io.Copy(writers[blockIndex], bytes.NewReader(block))
+				errCh <- err
+			}(writers[blockIndex], bytes.NewReader(block))
+			if err := <-errCh; err != nil {
 				return 0, 0, iodine.New(err, nil)
 			}
 		}
