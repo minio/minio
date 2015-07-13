@@ -165,3 +165,50 @@ func ListenAndServe(servers ...*http.Server) error {
 		return nil
 	}
 }
+
+// ListenAndServeLimited is similar to ListenAndServe but ratelimited with connLimit value
+func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
+	// get parent process id
+	ppid := os.Getppid()
+
+	a := &app{
+		servers:   servers,
+		listeners: make([]net.Listener, 0, len(servers)),
+		sds:       make([]httpdown.Server, 0, len(servers)),
+		net:       &minNet{connLimit: connLimit},
+		errors:    make(chan error, 1+(len(servers)*2)),
+	}
+
+	// Acquire Listeners
+	if err := a.listen(); err != nil {
+		return iodine.New(err, nil)
+	}
+
+	// Start serving.
+	a.serve()
+
+	// Close the parent if we inherited and it wasn't init that started us.
+	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
+		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
+			return iodine.New(err, nil)
+		}
+	}
+
+	waitdone := make(chan struct{})
+	go func() {
+		defer close(waitdone)
+		a.wait()
+		// communicate by sending not by closing a channel
+		waitdone <- struct{}{}
+	}()
+
+	select {
+	case err := <-a.errors:
+		if err == nil {
+			panic("unexpected nil error")
+		}
+		return iodine.New(err, nil)
+	case <-waitdone:
+		return nil
+	}
+}

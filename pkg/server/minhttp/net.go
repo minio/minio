@@ -55,6 +55,7 @@ var originalWD, _ = os.Getwd()
 type minNet struct {
 	inheritedListeners []net.Listener
 	activeListeners    []net.Listener
+	connLimit          int
 	mutex              sync.Mutex
 	inheritOnce        sync.Once
 }
@@ -130,7 +131,8 @@ func (n *minNet) Listen(nett, laddr string) (net.Listener, error) {
 // ListenTCP announces on the local network address laddr. The network net must
 // be: "tcp", "tcp4" or "tcp6". It returns an inherited net.Listener for the
 // matching network and address, or creates a new one using net.ListenTCP.
-func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, error) {
+func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, error) {
+	var err error
 	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -151,10 +153,14 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, e
 		}
 	}
 
+	var l net.Listener
 	// make a fresh listener
-	l, err := net.ListenTCP(nett, laddr)
+	l, err = net.ListenTCP(nett, laddr)
 	if err != nil {
 		return nil, iodine.New(err, nil)
+	}
+	if n.connLimit > 0 {
+		l = rateLimitedListener(l, n.connLimit)
 	}
 	n.activeListeners = append(n.activeListeners, l)
 	return l, nil
@@ -163,7 +169,8 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, e
 // ListenUnix announces on the local network address laddr. The network net
 // must be a: "unix" or "unixpacket". It returns an inherited net.Listener for
 // the matching network and address, or creates a new one using net.ListenUnix.
-func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, error) {
+func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, error) {
+	var err error
 	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -184,10 +191,14 @@ func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener
 		}
 	}
 
+	var l net.Listener
 	// make a fresh listener
-	l, err := net.ListenUnix(nett, laddr)
+	l, err = net.ListenUnix(nett, laddr)
 	if err != nil {
 		return nil, iodine.New(err, nil)
+	}
+	if n.connLimit > 0 {
+		l = rateLimitedListener(l, n.connLimit)
 	}
 	n.activeListeners = append(n.activeListeners, l)
 	return l, nil
