@@ -28,6 +28,22 @@ import (
 	"github.com/minio/minio/pkg/utils/atomic"
 )
 
+// IsValidDonut - verify donut name is correct
+func IsValidDonut(donutName string) bool {
+	if len(donutName) < 3 || len(donutName) > 63 {
+		return false
+	}
+	if donutName[0] == '.' || donutName[len(donutName)-1] == '.' {
+		return false
+	}
+	if match, _ := regexp.MatchString("\\.\\.", donutName); match == true {
+		return false
+	}
+	// We don't support donutNames with '.' in them
+	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+[a-zA-Z0-9]$", donutName)
+	return match
+}
+
 // IsValidBucket - verify bucket name in accordance with
 //  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
 func IsValidBucket(bucket string) bool {

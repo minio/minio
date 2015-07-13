@@ -20,12 +20,14 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/iodine"
 )
 
@@ -72,6 +74,50 @@ func getSystemData() map[string]string {
 	}
 }
 
+func runMkdonut(c *cli.Context) {
+	if !c.Args().Present() || c.Args().First() == "help" {
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+	}
+	donutName := c.Args().First()
+	if c.Args().First() != "" {
+		if !donut.IsValidDonut(donutName) {
+			Fatalf("Invalid donutname %s\n", donutName)
+		}
+	}
+	var disks []string
+	for _, disk := range c.Args().Tail() {
+		if _, err := isUsable(disk); err != nil {
+			Fatalln(err)
+		}
+		disks = append(disks, disk)
+	}
+	for _, disk := range disks {
+		if err := os.MkdirAll(filepath.Join(disk, donutName), 0700); err != nil {
+			Fatalln(err)
+		}
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		Fatalln(err)
+	}
+	donutConfig := &donut.Config{}
+	donutConfig.Version = "0.0.1"
+	donutConfig.DonutName = donutName
+	donutConfig.NodeDiskMap = make(map[string][]string)
+	// keep it in exact order as it was specified, do not try to sort disks
+	donutConfig.NodeDiskMap[hostname] = disks
+	// default cache is unlimited
+	donutConfig.MaxSize = 0
+
+	if err := donut.SaveConfig(donutConfig); err != nil {
+		Fatalln(err)
+	}
+
+	Infoln("Success!")
+}
+
 func main() {
 	// set up iodine
 	iodine.SetGlobalState("mkdonut.version", Version)
@@ -82,7 +128,8 @@ func main() {
 
 	// set up app
 	app := cli.NewApp()
-	app.Name = "minio"
+	app.Action = runMkdonut
+	app.Name = "mkdonut"
 	app.Version = Version
 	app.Compiled = getVersion()
 	app.Author = "Minio.io"
