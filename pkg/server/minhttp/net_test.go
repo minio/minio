@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package nimble
+package minhttp
 
 import (
 	"os"
@@ -33,19 +33,19 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestEmptyCountEnvVariable(c *C) {
 	os.Setenv(envCountKey, "")
-	n := &nimbleNet{}
+	n := &minNet{}
 	c.Assert(n.getInheritedListeners(), IsNil)
 }
 
 func (s *MySuite) TestZeroCountEnvVariable(c *C) {
 	os.Setenv(envCountKey, "0")
-	n := &nimbleNet{}
+	n := &minNet{}
 	c.Assert(n.getInheritedListeners(), IsNil)
 }
 
 func (s *MySuite) TestInvalidCountEnvVariable(c *C) {
 	os.Setenv(envCountKey, "a")
-	n := &nimbleNet{}
+	n := &minNet{}
 	expected := regexp.MustCompile("^found invalid count value: LISTEN_FDS=a$")
 	err := n.getInheritedListeners()
 	c.Assert(err, Not(IsNil))
@@ -54,7 +54,7 @@ func (s *MySuite) TestInvalidCountEnvVariable(c *C) {
 
 func (s *MySuite) TestInheritErrorOnListenTCPWithInvalidCount(c *C) {
 	os.Setenv(envCountKey, "a")
-	n := &nimbleNet{}
+	n := &minNet{}
 	expected := regexp.MustCompile("^found invalid count value: LISTEN_FDS=a$")
 	_, err := n.Listen("tcp", ":0")
 	c.Assert(err, Not(IsNil))
@@ -63,7 +63,7 @@ func (s *MySuite) TestInheritErrorOnListenTCPWithInvalidCount(c *C) {
 
 func (s *MySuite) TestInvalidNetwork(c *C) {
 	os.Setenv(envCountKey, "")
-	n := &nimbleNet{}
+	n := &minNet{}
 	_, err := n.Listen("foo", "")
 	c.Assert(err, Not(IsNil))
 	c.Assert(regexp.MustCompile("^unknown network foo$").MatchString(iodine.ToError(err).Error()), Equals, true)
@@ -71,7 +71,7 @@ func (s *MySuite) TestInvalidNetwork(c *C) {
 
 func (s *MySuite) TestInvalidTcpAddr(c *C) {
 	os.Setenv(envCountKey, "")
-	n := &nimbleNet{}
+	n := &minNet{}
 	_, err := n.Listen("tcp", "abc")
 	c.Assert(err, Not(IsNil))
 	c.Assert(regexp.MustCompile("^missing port in address abc$").MatchString(iodine.ToError(err).Error()), Equals, true)

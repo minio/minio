@@ -26,7 +26,7 @@ import (
 
 	"github.com/minio/minio/pkg/iodine"
 	"github.com/minio/minio/pkg/server/api"
-	"github.com/minio/minio/pkg/server/nimble"
+	"github.com/minio/minio/pkg/server/minhttp"
 )
 
 // getAPI server instance
@@ -114,7 +114,7 @@ func StartServices(conf api.Config) error {
 	// start ticket master
 	go startTM(minioAPI)
 
-	if err := nimble.ListenAndServe(apiServer, rpcServer); err != nil {
+	if err := minhttp.ListenAndServe(apiServer, rpcServer); err != nil {
 		return iodine.New(err, nil)
 	}
 	return nil
