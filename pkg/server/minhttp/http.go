@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-// Package nimble provides easy to use graceful restart for a set of HTTP services
+// Package minhttp provides easy to use graceful restart for a set of HTTP services
 //
-// This package originally from https://github.com/facebookgo/grace
+// This package is a fork from https://github.com/facebookgo/grace
 //
 // Re-licensing with Apache License 2.0, with code modifications
-package nimble
+package minhttp
 
 import (
 	"crypto/tls"
@@ -40,7 +40,7 @@ type app struct {
 	servers   []*http.Server
 	listeners []net.Listener
 	sds       []httpdown.Server
-	net       *nimbleNet
+	net       *minNet
 	errors    chan error
 }
 
@@ -128,7 +128,7 @@ func ListenAndServe(servers ...*http.Server) error {
 		servers:   servers,
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
-		net:       &nimbleNet{},
+		net:       &minNet{},
 		errors:    make(chan error, 1+(len(servers)*2)),
 	}
 

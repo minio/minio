@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package nimble
+package minhttp
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// This package originally from https://github.com/facebookgo/grace
+// This package is a fork https://github.com/facebookgo/grace
 //
 // Re-licensing with Apache License 2.0, with code modifications
 
@@ -50,17 +50,17 @@ const (
 // it at startup.
 var originalWD, _ = os.Getwd()
 
-// nimbleNet provides the family of Listen functions and maintains the associated
-// state. Typically you will have only once instance of nimbleNet per application.
-type nimbleNet struct {
+// minNet provides the family of Listen functions and maintains the associated
+// state. Typically you will have only once instance of minNet per application.
+type minNet struct {
 	inheritedListeners []net.Listener
 	activeListeners    []net.Listener
 	mutex              sync.Mutex
 	inheritOnce        sync.Once
 }
 
-// nimbleAddr simple wrapper over net.Addr interface to implement IsEqual()
-type nimbleAddr struct {
+// minAddr simple wrapper over net.Addr interface to implement IsEqual()
+type minAddr struct {
 	net.Addr
 }
 
@@ -70,7 +70,7 @@ type fileListener interface {
 }
 
 // getInheritedListeners - look for LISTEN_FDS in environment variables and populate listeners accordingly
-func (n *nimbleNet) getInheritedListeners() error {
+func (n *minNet) getInheritedListeners() error {
 	var retErr error
 	n.inheritOnce.Do(func() {
 		n.mutex.Lock()
@@ -108,7 +108,7 @@ func (n *nimbleNet) getInheritedListeners() error {
 // a stream-oriented network: "tcp", "tcp4", "tcp6", "unix" or "unixpacket". It
 // returns an inherited net.Listener for the matching network and address, or
 // creates a new one using net.Listen()
-func (n *nimbleNet) Listen(nett, laddr string) (net.Listener, error) {
+func (n *minNet) Listen(nett, laddr string) (net.Listener, error) {
 	switch nett {
 	default:
 		return nil, net.UnknownNetworkError(nett)
@@ -130,7 +130,7 @@ func (n *nimbleNet) Listen(nett, laddr string) (net.Listener, error) {
 // ListenTCP announces on the local network address laddr. The network net must
 // be: "tcp", "tcp4" or "tcp6". It returns an inherited net.Listener for the
 // matching network and address, or creates a new one using net.ListenTCP.
-func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, error) {
+func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener, error) {
 	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -143,7 +143,7 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
-		equal := nimbleAddr{l.Addr()}.IsEqual(laddr)
+		equal := minAddr{l.Addr()}.IsEqual(laddr)
 		if equal {
 			n.inheritedListeners[i] = nil
 			n.activeListeners = append(n.activeListeners, l)
@@ -163,7 +163,7 @@ func (n *nimbleNet) ListenTCP(nett string, laddr *net.TCPAddr) (*net.TCPListener
 // ListenUnix announces on the local network address laddr. The network net
 // must be a: "unix" or "unixpacket". It returns an inherited net.Listener for
 // the matching network and address, or creates a new one using net.ListenUnix.
-func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, error) {
+func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, error) {
 	if err := n.getInheritedListeners(); err != nil {
 		return nil, iodine.New(err, nil)
 	}
@@ -176,7 +176,7 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 		if l == nil { // we nil used inherited listeners
 			continue
 		}
-		equal := nimbleAddr{l.Addr()}.IsEqual(laddr)
+		equal := minAddr{l.Addr()}.IsEqual(laddr)
 		if equal {
 			n.inheritedListeners[i] = nil
 			n.activeListeners = append(n.activeListeners, l)
@@ -194,7 +194,7 @@ func (n *nimbleNet) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListe
 }
 
 // activeListeners returns a snapshot copy of the active listeners.
-func (n *nimbleNet) getActiveListeners() ([]net.Listener, error) {
+func (n *minNet) getActiveListeners() ([]net.Listener, error) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	ls := make([]net.Listener, len(n.activeListeners))
@@ -203,7 +203,7 @@ func (n *nimbleNet) getActiveListeners() ([]net.Listener, error) {
 }
 
 // IsEqual is synonymous with IP.IsEqual() method, here IsEqual matches net.Addr instead of net.IP
-func (n1 nimbleAddr) IsEqual(n2 net.Addr) bool {
+func (n1 minAddr) IsEqual(n2 net.Addr) bool {
 	if n1.Network() != n2.Network() {
 		return false
 	}
@@ -228,7 +228,7 @@ func (n1 nimbleAddr) IsEqual(n2 net.Addr) bool {
 // arguments as when it was originally started. This allows for a newly
 // deployed binary to be started. It returns the pid of the newly started
 // process when successful.
-func (n *nimbleNet) StartProcess() (int, error) {
+func (n *minNet) StartProcess() (int, error) {
 	listeners, err := n.getActiveListeners()
 	if err != nil {
 		return 0, iodine.New(err, nil)
