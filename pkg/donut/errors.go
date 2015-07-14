@@ -335,6 +335,13 @@ func (e MissingDateHeader) Error() string {
 	return "Missing date header"
 }
 
+// InvalidPart One or more of the specified parts could not be found
+type InvalidPart struct{}
+
+func (e InvalidPart) Error() string {
+	return "One or more of the specified parts could not be found"
+}
+
 // InvalidPartOrder parts are not ordered as Requested
 type InvalidPartOrder struct {
 	UploadID string
