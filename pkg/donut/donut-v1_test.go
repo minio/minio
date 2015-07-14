@@ -86,16 +86,16 @@ func (s *MyDonutSuite) TearDownSuite(c *C) {
 // test make bucket without name
 func (s *MyDonutSuite) TestBucketWithoutNameFails(c *C) {
 	// fail to create new bucket without a name
-	err := dd.MakeBucket("", "private", nil)
+	err := dd.MakeBucket("", "private", nil, nil)
 	c.Assert(err, Not(IsNil))
 
-	err = dd.MakeBucket(" ", "private", nil)
+	err = dd.MakeBucket(" ", "private", nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test empty bucket
 func (s *MyDonutSuite) TestEmptyBucket(c *C) {
-	c.Assert(dd.MakeBucket("foo1", "private", nil), IsNil)
+	c.Assert(dd.MakeBucket("foo1", "private", nil, nil), IsNil)
 	// check if bucket is empty
 	var resources BucketResourcesMetadata
 	resources.Maxkeys = 1
@@ -109,7 +109,7 @@ func (s *MyDonutSuite) TestEmptyBucket(c *C) {
 // test bucket list
 func (s *MyDonutSuite) TestMakeBucketAndList(c *C) {
 	// create bucket
-	err := dd.MakeBucket("foo2", "private", nil)
+	err := dd.MakeBucket("foo2", "private", nil, nil)
 	c.Assert(err, IsNil)
 
 	// check bucket exists
@@ -121,20 +121,20 @@ func (s *MyDonutSuite) TestMakeBucketAndList(c *C) {
 
 // test re-create bucket
 func (s *MyDonutSuite) TestMakeBucketWithSameNameFails(c *C) {
-	err := dd.MakeBucket("foo3", "private", nil)
+	err := dd.MakeBucket("foo3", "private", nil, nil)
 	c.Assert(err, IsNil)
 
-	err = dd.MakeBucket("foo3", "private", nil)
+	err = dd.MakeBucket("foo3", "private", nil, nil)
 	c.Assert(err, Not(IsNil))
 }
 
 // test make multiple buckets
 func (s *MyDonutSuite) TestCreateMultipleBucketsAndList(c *C) {
 	// add a second bucket
-	err := dd.MakeBucket("foo4", "private", nil)
+	err := dd.MakeBucket("foo4", "private", nil, nil)
 	c.Assert(err, IsNil)
 
-	err = dd.MakeBucket("bar1", "private", nil)
+	err = dd.MakeBucket("bar1", "private", nil, nil)
 	c.Assert(err, IsNil)
 
 	buckets, err := dd.ListBuckets(nil)
@@ -144,7 +144,7 @@ func (s *MyDonutSuite) TestCreateMultipleBucketsAndList(c *C) {
 	c.Assert(buckets[0].Name, Equals, "bar1")
 	c.Assert(buckets[1].Name, Equals, "foo4")
 
-	err = dd.MakeBucket("foobar1", "private", nil)
+	err = dd.MakeBucket("foobar1", "private", nil, nil)
 	c.Assert(err, IsNil)
 
 	buckets, err = dd.ListBuckets(nil)
@@ -168,7 +168,7 @@ func (s *MyDonutSuite) TestNewObjectMetadata(c *C) {
 	expectedMd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	reader := ioutil.NopCloser(bytes.NewReader([]byte(data)))
 
-	err := dd.MakeBucket("foo6", "private", nil)
+	err := dd.MakeBucket("foo6", "private", nil, nil)
 	c.Assert(err, IsNil)
 
 	objectMetadata, err := dd.CreateObject("foo6", "obj", expectedMd5Sum, int64(len(data)), reader, map[string]string{"contentType": "application/json"}, nil)
@@ -185,7 +185,7 @@ func (s *MyDonutSuite) TestNewObjectFailsWithEmptyName(c *C) {
 
 // test create object
 func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
-	err := dd.MakeBucket("foo", "private", nil)
+	err := dd.MakeBucket("foo", "private", nil, nil)
 	c.Assert(err, IsNil)
 
 	data := "Hello World"
@@ -213,7 +213,7 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 
 // test list objects
 func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
-	c.Assert(dd.MakeBucket("foo5", "private", nil), IsNil)
+	c.Assert(dd.MakeBucket("foo5", "private", nil, nil), IsNil)
 
 	one := ioutil.NopCloser(bytes.NewReader([]byte("one")))
 
