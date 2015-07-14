@@ -74,7 +74,7 @@ func parseDate(req *http.Request) (time.Time, error) {
 	return time.Time{}, errors.New("invalid request")
 }
 
-// ValidContentTypeHandler -
+// ValidContentTypeHandler to validate Accept type
 func ValidContentTypeHandler(h http.Handler) http.Handler {
 	return contentTypeHandler{h}
 }
@@ -88,7 +88,7 @@ func (h contentTypeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// TimeValidityHandler -
+// TimeValidityHandler to validate parsable time over http header
 func TimeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
 }
@@ -119,7 +119,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // ValidateAuthHeaderHandler -
-// validate auth header handler is wrapper handler used for API request validation with authorization header.
+// validate auth header handler is wrapper handler used for request validation with authorization header.
 // Current authorization layer supports S3's standard HMAC based signature request.
 func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 	return validateAuthHandler{h}
