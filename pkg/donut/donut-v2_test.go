@@ -44,7 +44,7 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 	s.root = root
 
-	CustomConfigPath = filepath.Join(root, "donut.json")
+	SetDonutConfigPath(filepath.Join(root, "donut.json"))
 	dc, err = New()
 	c.Assert(err, IsNil)
 

@@ -70,7 +70,7 @@ func (s *MyAPIDonutSuite) SetUpSuite(c *C) {
 	conf.DonutName = "test"
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
-	donut.CustomConfigPath = filepath.Join(root, "donut.json")
+	donut.SetDonutConfigPath(filepath.Join(root, "donut.json"))
 	err = donut.SaveConfig(conf)
 	c.Assert(err, IsNil)
 

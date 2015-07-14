@@ -51,7 +51,7 @@ func (s *MyAPIDonutCacheSuite) SetUpSuite(c *C) {
 	conf := &donut.Config{}
 	conf.Version = "0.0.1"
 	conf.MaxSize = 100000
-	donut.CustomConfigPath = filepath.Join(root, "donut.json")
+	donut.SetDonutConfigPath(filepath.Join(root, "donut.json"))
 	err = donut.SaveConfig(conf)
 	c.Assert(err, IsNil)
 

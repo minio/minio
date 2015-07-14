@@ -46,15 +46,6 @@ const (
 	yyyymmdd         = "20060102"
 )
 
-var ignoredHeaders = map[string]bool{
-	"Authorization":   true,
-	"Content-Type":    true,
-	"Accept-Encoding": true,
-	"Content-Length":  true,
-	"User-Agent":      true,
-	"Connection":      true,
-}
-
 // sumHMAC calculate hmac between two input byte array
 func sumHMAC(key []byte, data []byte) []byte {
 	hash := hmac.New(sha256.New, key)

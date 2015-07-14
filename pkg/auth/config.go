@@ -39,6 +39,9 @@ type Config struct {
 
 // getAuthConfigPath get donut config file path
 func getAuthConfigPath() (string, error) {
+	if customConfigPath != "" {
+		return customConfigPath, nil
+	}
 	u, err := user.Current()
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -47,20 +50,19 @@ func getAuthConfigPath() (string, error) {
 	return authConfigPath, nil
 }
 
-// NOTE - this is not thread safe use it carefully, currently its purpose is only for testing purposes.
-var CustomConfigPath string
+// customConfigPath not accessed from outside only allowed through get/set methods
+var customConfigPath string
+
+// SetAuthConfigPath - set custom auth config path
+func SetAuthConfigPath(configPath string) {
+	customConfigPath = configPath
+}
 
 // SaveConfig save donut config
 func SaveConfig(a *Config) error {
-	var authConfigPath string
-	var err error
-	if CustomConfigPath != "" {
-		authConfigPath = CustomConfigPath
-	} else {
-		authConfigPath, err = getAuthConfigPath()
-		if err != nil {
-			return iodine.New(err, nil)
-		}
+	authConfigPath, err := getAuthConfigPath()
+	if err != nil {
+		return iodine.New(err, nil)
 	}
 	qc, err := quick.New(a)
 	if err != nil {
@@ -74,15 +76,9 @@ func SaveConfig(a *Config) error {
 
 // LoadConfig load donut config
 func LoadConfig() (*Config, error) {
-	var authConfigPath string
-	var err error
-	if CustomConfigPath != "" {
-		authConfigPath = CustomConfigPath
-	} else {
-		authConfigPath, err = getAuthConfigPath()
-		if err != nil {
-			return nil, iodine.New(err, nil)
-		}
+	authConfigPath, err := getAuthConfigPath()
+	if err != nil {
+		return nil, iodine.New(err, nil)
 	}
 	a := &Config{}
 	a.Version = "0.0.1"

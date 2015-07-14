@@ -59,7 +59,7 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	conf.DonutName = "test"
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
-	donut.CustomConfigPath = filepath.Join(root, "donut.json")
+	donut.SetDonutConfigPath(filepath.Join(root, "donut.json"))
 	err = donut.SaveConfig(conf)
 	c.Assert(err, IsNil)
 
@@ -78,7 +78,7 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	s.accessKeyID = string(accessKeyID)
 	s.secretAccessKey = string(secretAccessKey)
 
-	auth.CustomConfigPath = filepath.Join(root, "users.json")
+	auth.SetAuthConfigPath(filepath.Join(root, "users.json"))
 	err = auth.SaveConfig(authConf)
 	c.Assert(err, IsNil)
 
