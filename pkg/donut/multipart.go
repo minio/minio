@@ -286,7 +286,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i].PartNumber)
 		if ok == false {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, iodine.New(errors.New("missing part: "+strconv.Itoa(parts.Part[i].PartNumber)), nil)
+			return ObjectMetadata{}, iodine.New(InvalidPart{}, nil)
 		}
 		size += int64(len(object))
 		calcMD5Bytes := md5.Sum(object)

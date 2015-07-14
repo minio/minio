@@ -558,6 +558,8 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 		}
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+	case donut.InvalidPart:
+		writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
 	case donut.InvalidPartOrder:
 		writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
 	case donut.MissingDateHeader:
