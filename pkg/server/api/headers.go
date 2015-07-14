@@ -18,6 +18,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
@@ -33,8 +34,23 @@ type encoder interface {
 
 //// helpers
 
+// Static alphaNumeric table used for generating unique request ids
+var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+// generateRequestID generate request id
+func generateRequestID() []byte {
+	alpha := make([]byte, 16)
+	rand.Read(alpha)
+	for i := 0; i < 16; i++ {
+		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
+	}
+	return alpha
+}
+
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength int) {
+	// set unique request ID for each reply
+	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
 	w.Header().Set("Server", "Minio")
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
