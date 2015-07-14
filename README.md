@@ -2,6 +2,16 @@
 
 Minio is a minimal object storage server written in Golang and licensed under [Apache license v2](./LICENSE). Minio is compatible with Amazon S3 APIs. 
 
+## Minio Client (mc) 
+
+[Minio Client (mc)](https://github.com/minio/mc#minio-client-mc-) provides a modern alternative to Unix commands like ``ls``, ``cat``, ``cp``, ``sync``, and ``diff``. It supports POSIX compatible filesystems and Amazon S3 compatible object storage systems. It is entirely written in Golang. 
+
+## Amazon S3 Compatible Client Libraries
+- [Golang Library](https://github.com/minio/minio-go)
+- [Java Library](https://github.com/minio/minio-java)
+- [Nodejs Library](https://github.com/minio/minio-js)
+- [Python Library](https://github.com/minio/minio-py)
+
 ## Roadmap
 
 ~~~
@@ -54,15 +64,6 @@ $ ./minio mode memory limit 12GB expire 2h
 ### How to use Minio?
 
 [![asciicast](https://asciinema.org/a/21575.png)](https://asciinema.org/a/21575)
-
-### Minio Client (mc) 
-
-``mc`` provides minimal tools to work with Amazon S3 compatible object storage and filesystems. Go to [Minio Client](https://github.com/minio/mc#minio-client-mc-).
-
-### Minimal S3 Compatible Client Libraries
-- [Golang Library](https://github.com/minio/minio-go)
-- [Java Library](https://github.com/minio/minio-java)
-- [Nodejs Library](https://github.com/minio/minio-js)
 
 ### Join The Community
 * Community hangout on Gitter    [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
