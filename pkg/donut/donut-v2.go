@@ -67,7 +67,7 @@ type API struct {
 type storedBucket struct {
 	bucketMetadata   BucketMetadata
 	objectMetadata   map[string]ObjectMetadata
-	partMetadata     map[int]PartMetadata
+	partMetadata     map[string]map[int]PartMetadata
 	multiPartSession map[string]MultiPartSession
 }
 
@@ -116,7 +116,7 @@ func New() (Interface, error) {
 			newBucket.bucketMetadata = v
 			newBucket.objectMetadata = make(map[string]ObjectMetadata)
 			newBucket.multiPartSession = make(map[string]MultiPartSession)
-			newBucket.partMetadata = make(map[int]PartMetadata)
+			newBucket.partMetadata = make(map[string]map[int]PartMetadata)
 			a.storedBuckets.Set(k, newBucket)
 		}
 	}
@@ -487,7 +487,7 @@ func (donut API) MakeBucket(bucketName, acl string, signature *Signature) error 
 	var newBucket = storedBucket{}
 	newBucket.objectMetadata = make(map[string]ObjectMetadata)
 	newBucket.multiPartSession = make(map[string]MultiPartSession)
-	newBucket.partMetadata = make(map[int]PartMetadata)
+	newBucket.partMetadata = make(map[string]map[int]PartMetadata)
 	newBucket.bucketMetadata = BucketMetadata{}
 	newBucket.bucketMetadata.Name = bucketName
 	newBucket.bucketMetadata.Created = time.Now().UTC()
