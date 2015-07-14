@@ -296,7 +296,17 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	err := api.Donut.MakeBucket(bucket, getACLTypeString(aclType), signature)
+	// if body of request is non-nil then check for validity of Content-Length
+	if req.Body != nil {
+		/// if Content-Length missing, deny the request
+		size := req.Header.Get("Content-Length")
+		if size == "" {
+			writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
+			return
+		}
+	}
+
+	err := api.Donut.MakeBucket(bucket, getACLTypeString(aclType), req.Body, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
 		// Make sure to add Location information here only for bucket

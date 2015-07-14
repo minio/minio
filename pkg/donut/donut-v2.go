@@ -448,12 +448,22 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 }
 
 // MakeBucket - create bucket in cache
-func (donut API) MakeBucket(bucketName, acl string, signature *Signature) error {
+func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signature *Signature) error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
+	// do not have to parse location constraint, using this just for signature verification
+	locationSum := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	if location != nil {
+		locationConstraintBytes, err := ioutil.ReadAll(location)
+		if err != nil {
+			return iodine.New(InternalError{}, nil)
+		}
+		locationSum = hex.EncodeToString(sha256.Sum256(locationConstraintBytes)[:])
+	}
+
 	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		ok, err := signature.DoesSignatureMatch(locationSum)
 		if err != nil {
 			return iodine.New(err, nil)
 		}

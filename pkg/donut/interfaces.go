@@ -32,7 +32,7 @@ type ObjectStorage interface {
 	GetBucketMetadata(bucket string, signature *Signature) (BucketMetadata, error)
 	SetBucketMetadata(bucket string, metadata map[string]string, signature *Signature) error
 	ListBuckets(signature *Signature) ([]BucketMetadata, error)
-	MakeBucket(bucket string, ACL string, signature *Signature) error
+	MakeBucket(bucket string, ACL string, location io.Reader, signature *Signature) error
 
 	// Bucket operations
 	ListObjects(string, BucketResourcesMetadata, *Signature) ([]ObjectMetadata, BucketResourcesMetadata, error)
