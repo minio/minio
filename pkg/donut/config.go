@@ -26,6 +26,9 @@ import (
 
 // getDonutConfigPath get donut config file path
 func getDonutConfigPath() (string, error) {
+	if customConfigPath != "" {
+		return customConfigPath, nil
+	}
 	u, err := user.Current()
 	if err != nil {
 		return "", iodine.New(err, nil)
@@ -34,20 +37,19 @@ func getDonutConfigPath() (string, error) {
 	return donutConfigPath, nil
 }
 
-// NOTE - this is not thread safe use it carefully, currently its purpose is only for testing purposes.
-var CustomConfigPath string
+// internal variable only accessed via get/set methods
+var customConfigPath string
+
+// SetDonutConfigPath - set custom donut config path
+func SetDonutConfigPath(configPath string) {
+	customConfigPath = configPath
+}
 
 // SaveConfig save donut config
 func SaveConfig(a *Config) error {
-	var donutConfigPath string
-	var err error
-	if CustomConfigPath != "" {
-		donutConfigPath = CustomConfigPath
-	} else {
-		donutConfigPath, err = getDonutConfigPath()
-		if err != nil {
-			return iodine.New(err, nil)
-		}
+	donutConfigPath, err := getDonutConfigPath()
+	if err != nil {
+		return iodine.New(err, nil)
 	}
 	qc, err := quick.New(a)
 	if err != nil {
@@ -61,15 +63,9 @@ func SaveConfig(a *Config) error {
 
 // LoadConfig load donut config
 func LoadConfig() (*Config, error) {
-	var donutConfigPath string
-	var err error
-	if CustomConfigPath != "" {
-		donutConfigPath = CustomConfigPath
-	} else {
-		donutConfigPath, err = getDonutConfigPath()
-		if err != nil {
-			return nil, iodine.New(err, nil)
-		}
+	donutConfigPath, err := getDonutConfigPath()
+	if err != nil {
+		return nil, iodine.New(err, nil)
 	}
 	a := &Config{}
 	a.Version = "0.0.1"
