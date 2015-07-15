@@ -78,7 +78,7 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	metadata.ACL = BucketACL(aclType)
 	metadata.Created = t
 	metadata.Metadata = make(map[string]string)
-	metadata.BucketObjects = make(map[string]interface{})
+	metadata.BucketObjects = make(map[string]struct{})
 
 	return b, metadata, nil
 }
@@ -455,10 +455,16 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 		writer.CloseWithError(iodine.New(err, nil))
 		return
 	}
+	expected512Sum, err := hex.DecodeString(objMetadata.SHA512Sum)
+	if err != nil {
+		writer.CloseWithError(iodine.New(err, nil))
+		return
+	}
 	hasher := md5.New()
-	mwriter := io.MultiWriter(writer, hasher)
-	switch len(readers) == 1 {
-	case false:
+	sum512hasher := sha256.New()
+	mwriter := io.MultiWriter(writer, hasher, sum512hasher)
+	switch len(readers) > 1 {
+	case true:
 		if objMetadata.ErasureTechnique == "" {
 			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
 			return
@@ -482,7 +488,7 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 			}
 			totalLeft = totalLeft - int64(objMetadata.BlockSize)
 		}
-	case true:
+	case false:
 		_, err := io.Copy(writer, readers[0])
 		if err != nil {
 			writer.CloseWithError(iodine.New(err, nil))
@@ -491,6 +497,10 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	}
 	// check if decodedData md5sum matches
 	if !bytes.Equal(expectedMd5sum, hasher.Sum(nil)) {
+		writer.CloseWithError(iodine.New(ChecksumMismatch{}, nil))
+		return
+	}
+	if !bytes.Equal(expected512Sum, sum512hasher.Sum(nil)) {
 		writer.CloseWithError(iodine.New(ChecksumMismatch{}, nil))
 		return
 	}

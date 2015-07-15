@@ -65,7 +65,4 @@ type Management interface {
 
 	AttachNode(hostname string, disks []string) error
 	DetachNode(hostname string) error
-
-	SaveConfig() error
-	LoadConfig() error
 }

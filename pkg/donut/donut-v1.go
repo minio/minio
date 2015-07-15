@@ -153,7 +153,7 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	bucketMeta.Buckets[bucket].BucketObjects[object] = 1
+	bucketMeta.Buckets[bucket].BucketObjects[object] = struct{}{}
 	if err := donut.setDonutBucketMetadata(bucketMeta); err != nil {
 		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
@@ -229,7 +229,7 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 	return writers, nil
 }
 
-// getBucketMetadataReaders -
+// getBucketMetadataReaders - readers are returned in map rather than slice
 func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
 	for _, node := range donut.nodes {

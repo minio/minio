@@ -57,12 +57,12 @@ type AllBuckets struct {
 
 // BucketMetadata container for bucket level metadata
 type BucketMetadata struct {
-	Version       string                 `json:"version"`
-	Name          string                 `json:"name"`
-	ACL           BucketACL              `json:"acl"`
-	Created       time.Time              `json:"created"`
-	Metadata      map[string]string      `json:"metadata"`
-	BucketObjects map[string]interface{} `json:"objects"`
+	Version       string              `json:"version"`
+	Name          string              `json:"name"`
+	ACL           BucketACL           `json:"acl"`
+	Created       time.Time           `json:"created"`
+	Metadata      map[string]string   `json:"metadata"`
+	BucketObjects map[string]struct{} `json:"objects"`
 }
 
 // ListObjectsResults container for list objects response
