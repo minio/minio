@@ -24,11 +24,6 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// Heal - heal a donut and fix bad data blocks
-func (donut API) Heal() error {
-	return iodine.New(NotImplemented{Function: "Heal"}, nil)
-}
-
 // Info - return info about donut configuration
 func (donut API) Info() (nodeDiskMap map[string][]string, err error) {
 	nodeDiskMap = make(map[string][]string)
@@ -59,7 +54,7 @@ func (donut API) AttachNode(hostname string, disks []string) error {
 	for i, d := range disks {
 		newDisk, err := disk.New(d)
 		if err != nil {
-			return iodine.New(err, nil)
+			continue
 		}
 		if err := newDisk.MakeDir(donut.config.DonutName); err != nil {
 			return iodine.New(err, nil)
