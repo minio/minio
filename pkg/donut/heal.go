@@ -1,33 +1,81 @@
+/*
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package donut
 
-import "github.com/minio/minio/pkg/iodine"
+import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
 
-type missingDisk struct {
-	nodeNumber  int
-	sliceNumber int
-	bucketName  string
-}
+	"github.com/minio/minio/pkg/donut/disk"
+	"github.com/minio/minio/pkg/iodine"
+)
 
 // Heal heal an existing donut
 func (donut API) Heal() error {
-	var missingDisks []missingDisk
-	nodeNumber := 0
+	if err := donut.listDonutBuckets(); err != nil {
+		return iodine.New(err, nil)
+	}
+	disks := make(map[int]disk.Disk)
 	for _, node := range donut.nodes {
-		disks, err := node.ListDisks()
+		nDisks, err := node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		for i, disk := range disks {
-			_, err := disk.ListDir(donut.config.DonutName)
-			if err == nil {
-				continue
-			}
-			missingDisk := missingDisk{
-				nodeNumber:  nodeNumber,
-				sliceNumber: i,
-			}
-			missingDisks = append(missingDisks, missingDisk)
+		for k, v := range nDisks {
+			disks[k] = v
 		}
 	}
+
+	missingDisks := make(map[int]disk.Disk)
+	for order, disk := range disks {
+		if !disk.IsUsable() {
+			missingDisks[order] = disk
+		}
+	}
+
+	bucketMetadata, err := donut.getDonutBucketMetadata()
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+
+	for _, disk := range missingDisks {
+		disk.MakeDir(donut.config.DonutName)
+		bucketMetadataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		defer bucketMetadataWriter.Close()
+		jenc := json.NewEncoder(bucketMetadataWriter)
+		if err := jenc.Encode(bucketMetadata); err != nil {
+			return iodine.New(err, nil)
+		}
+	}
+
+	for order, disk := range missingDisks {
+		for bucket := range bucketMetadata.Buckets {
+			bucketSlice := fmt.Sprintf("%s$0$%d", bucket, order) // TODO handle node slices
+			err := disk.MakeDir(filepath.Join(donut.config.DonutName, bucketSlice))
+			if err != nil {
+				return iodine.New(err, nil)
+			}
+		}
+	}
+
 	return nil
+	// TODO heal data
 }

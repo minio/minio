@@ -68,3 +68,8 @@ func (donut API) DetachNode(hostname string) error {
 	delete(donut.nodes, hostname)
 	return nil
 }
+
+// Rebalance - rebalance an existing donut with new disks and nodes
+func (donut API) Rebalance() error {
+	return iodine.New(APINotImplemented{API: "management.Rebalance"}, nil)
+}

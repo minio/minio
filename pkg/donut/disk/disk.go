@@ -67,6 +67,15 @@ func New(diskPath string) (Disk, error) {
 		map[string]string{"Type": strconv.FormatInt(int64(s.Type), 10)})
 }
 
+// IsUsable - is disk usable, alive
+func (disk Disk) IsUsable() bool {
+	_, err := os.Stat(disk.path)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 // GetPath - get root disk path
 func (disk Disk) GetPath() string {
 	return disk.path
