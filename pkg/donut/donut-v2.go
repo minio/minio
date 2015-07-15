@@ -545,15 +545,15 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, s
 		}
 		resources.CommonPrefixes = listObjects.CommonPrefixes
 		resources.IsTruncated = listObjects.IsTruncated
-		if resources.IsTruncated && resources.Delimiter != "" {
-			resources.NextMarker = results[len(results)-1].Object
-		}
 		for key := range listObjects.Objects {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
 			results = append(results, listObjects.Objects[key])
+		}
+		if resources.IsTruncated && resources.Delimiter != "" {
+			resources.NextMarker = results[len(results)-1].Object
 		}
 		return results, resources, nil
 	}
