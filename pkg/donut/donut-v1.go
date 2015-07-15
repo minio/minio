@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/iodine"
 )
 
@@ -229,14 +230,13 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 }
 
 // getBucketMetadataReaders -
-func (donut API) getBucketMetadataReaders() ([]io.ReadCloser, error) {
-	var readers []io.ReadCloser
+func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
+	readers := make(map[int]io.ReadCloser)
 	for _, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
-		readers = make([]io.ReadCloser, len(disks))
 		for order, d := range disks {
 			bucketMetaDataReader, err := d.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
@@ -339,30 +339,37 @@ func (donut API) makeDonutBucket(bucketName, acl string) error {
 
 // listDonutBuckets -
 func (donut API) listDonutBuckets() error {
+	var disks map[int]disk.Disk
+	var err error
 	for _, node := range donut.nodes {
-		disks, err := node.ListDisks()
+		disks, err = node.ListDisks()
 		if err != nil {
 			return iodine.New(err, nil)
 		}
-		for _, disk := range disks {
-			dirs, err := disk.ListDir(donut.config.DonutName)
-			if err != nil {
-				return iodine.New(err, nil)
-			}
-			for _, dir := range dirs {
-				splitDir := strings.Split(dir.Name(), "$")
-				if len(splitDir) < 3 {
-					return iodine.New(CorruptedBackend{Backend: dir.Name()}, nil)
-				}
-				bucketName := splitDir[0]
-				// we dont need this once we cache from makeDonutBucket()
-				bucket, _, err := newBucket(bucketName, "private", donut.config.DonutName, donut.nodes)
-				if err != nil {
-					return iodine.New(err, nil)
-				}
-				donut.buckets[bucketName] = bucket
-			}
+	}
+	var dirs []os.FileInfo
+	for _, disk := range disks {
+		dirs, err = disk.ListDir(donut.config.DonutName)
+		if err == nil {
+			break
 		}
+	}
+	// if all disks are missing then return error
+	if err != nil {
+		return iodine.New(err, nil)
+	}
+	for _, dir := range dirs {
+		splitDir := strings.Split(dir.Name(), "$")
+		if len(splitDir) < 3 {
+			return iodine.New(CorruptedBackend{Backend: dir.Name()}, nil)
+		}
+		bucketName := splitDir[0]
+		// we dont need this once we cache from makeDonutBucket()
+		bucket, _, err := newBucket(bucketName, "private", donut.config.DonutName, donut.nodes)
+		if err != nil {
+			return iodine.New(err, nil)
+		}
+		donut.buckets[bucketName] = bucket
 	}
 	return nil
 }
