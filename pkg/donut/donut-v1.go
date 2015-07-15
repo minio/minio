@@ -221,8 +221,8 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 			return nil, iodine.New(err, nil)
 		}
 		writers = make([]io.WriteCloser, len(disks))
-		for order, dd := range disks {
-			bucketMetaDataWriter, err := dd.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+		for order, disk := range disks {
+			bucketMetaDataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
 				return nil, iodine.New(err, nil)
 			}
@@ -235,17 +235,20 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 // getBucketMetadataReaders - readers are returned in map rather than slice
 func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
-	var disks map[int]disk.Disk
+	disks := make(map[int]disk.Disk)
 	var err error
 	for _, node := range donut.nodes {
-		disks, err = node.ListDisks()
+		nDisks, err := node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
+		for k, v := range nDisks {
+			disks[k] = v
+		}
 	}
 	var bucketMetaDataReader io.ReadCloser
-	for order, dsk := range disks {
-		bucketMetaDataReader, err = dsk.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+	for order, disk := range disks {
+		bucketMetaDataReader, err = disk.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 		if err != nil {
 			continue
 		}
