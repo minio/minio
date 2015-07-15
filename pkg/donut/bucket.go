@@ -33,6 +33,7 @@ import (
 
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
+	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/donut/split"
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -88,23 +89,30 @@ func (b bucket) getBucketName() string {
 }
 func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
+	var disks map[int]disk.Disk
+	var err error
 	for _, node := range b.nodes {
-		disks, err := node.ListDisks()
+		disks, err = node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
-		for order, disk := range disks {
-			bucketMetaDataReader, err := disk.OpenFile(filepath.Join(b.donutName, bucketMetadataConfig))
-			if err != nil {
-				return nil, iodine.New(err, nil)
-			}
-			readers[order] = bucketMetaDataReader
+	}
+	var bucketMetaDataReader io.ReadCloser
+	for order, disk := range disks {
+		bucketMetaDataReader, err = disk.OpenFile(filepath.Join(b.donutName, bucketMetadataConfig))
+		if err != nil {
+			continue
 		}
+		readers[order] = bucketMetaDataReader
+	}
+	if err != nil {
+		return nil, iodine.New(err, nil)
 	}
 	return readers, nil
 }
 
 func (b bucket) getBucketMetadata() (*AllBuckets, error) {
+	var err error
 	metadata := new(AllBuckets)
 	readers, err := b.getBucketMetadataReaders()
 	if err != nil {
@@ -115,12 +123,11 @@ func (b bucket) getBucketMetadata() (*AllBuckets, error) {
 	}
 	for _, reader := range readers {
 		jenc := json.NewDecoder(reader)
-		if err := jenc.Decode(metadata); err != nil {
-			return nil, iodine.New(err, nil)
+		if err = jenc.Decode(metadata); err == nil {
+			return metadata, nil
 		}
-		return metadata, nil
 	}
-	return nil, iodine.New(InvalidArgument{}, nil)
+	return nil, iodine.New(err, nil)
 }
 
 // GetObjectMetadata - get metadata for an object
@@ -357,6 +364,7 @@ func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
 	if objectName == "" {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
+	var err error
 	objMetadataReaders, err := b.getObjectReaders(objectName, objectMetadataConfig)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
@@ -366,12 +374,11 @@ func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
 	}
 	for _, objMetadataReader := range objMetadataReaders {
 		jdec := json.NewDecoder(objMetadataReader)
-		if err := jdec.Decode(&objMetadata); err != nil {
-			return ObjectMetadata{}, iodine.New(err, nil)
+		if err = jdec.Decode(&objMetadata); err == nil {
+			return objMetadata, nil
 		}
-		break
 	}
-	return objMetadata, nil
+	return ObjectMetadata{}, iodine.New(err, nil)
 }
 
 // TODO - This a temporary normalization of objectNames, need to find a better way
@@ -539,22 +546,27 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io
 // getObjectReaders -
 func (b bucket) getObjectReaders(objectName, objectMeta string) (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
+	var disks map[int]disk.Disk
+	var err error
 	nodeSlice := 0
 	for _, node := range b.nodes {
-		disks, err := node.ListDisks()
+		disks, err = node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
 		for order, disk := range disks {
+			var objectSlice io.ReadCloser
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
-			objectSlice, err := disk.OpenFile(objectPath)
-			if err != nil {
-				return nil, iodine.New(err, nil)
+			objectSlice, err = disk.OpenFile(objectPath)
+			if err == nil {
+				readers[order] = objectSlice
 			}
-			readers[order] = objectSlice
 		}
 		nodeSlice = nodeSlice + 1
+	}
+	if err != nil {
+		return nil, iodine.New(err, nil)
 	}
 	return readers, nil
 }

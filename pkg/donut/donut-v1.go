@@ -99,6 +99,9 @@ func (donut API) listBuckets() (map[string]BucketMetadata, error) {
 		// to figure out between acceptable and unacceptable errors
 		return make(map[string]BucketMetadata), nil
 	}
+	if metadata == nil {
+		return make(map[string]BucketMetadata), nil
+	}
 	return metadata.Buckets, nil
 }
 
@@ -232,18 +235,24 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 // getBucketMetadataReaders - readers are returned in map rather than slice
 func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
+	var disks map[int]disk.Disk
+	var err error
 	for _, node := range donut.nodes {
-		disks, err := node.ListDisks()
+		disks, err = node.ListDisks()
 		if err != nil {
 			return nil, iodine.New(err, nil)
 		}
-		for order, d := range disks {
-			bucketMetaDataReader, err := d.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
-			if err != nil {
-				return nil, iodine.New(err, nil)
-			}
-			readers[order] = bucketMetaDataReader
+	}
+	var bucketMetaDataReader io.ReadCloser
+	for order, dsk := range disks {
+		bucketMetaDataReader, err = dsk.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+		if err != nil {
+			continue
 		}
+		readers[order] = bucketMetaDataReader
+	}
+	if err != nil {
+		return nil, iodine.New(err, nil)
 	}
 	return readers, nil
 }
@@ -269,7 +278,8 @@ func (donut API) setDonutBucketMetadata(metadata *AllBuckets) error {
 
 // getDonutBucketMetadata -
 func (donut API) getDonutBucketMetadata() (*AllBuckets, error) {
-	metadata := new(AllBuckets)
+	metadata := &AllBuckets{}
+	var err error
 	readers, err := donut.getBucketMetadataReaders()
 	if err != nil {
 		return nil, iodine.New(err, nil)
@@ -279,12 +289,11 @@ func (donut API) getDonutBucketMetadata() (*AllBuckets, error) {
 	}
 	for _, reader := range readers {
 		jenc := json.NewDecoder(reader)
-		if err := jenc.Decode(metadata); err != nil {
-			return nil, iodine.New(err, nil)
+		if err = jenc.Decode(metadata); err == nil {
+			return metadata, nil
 		}
-		return metadata, nil
 	}
-	return nil, iodine.New(InvalidArgument{}, nil)
+	return nil, iodine.New(err, nil)
 }
 
 // makeDonutBucket -
