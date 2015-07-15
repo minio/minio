@@ -105,12 +105,6 @@ func runController(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
 	}
 	switch c.Args().First() {
-	case "disks":
-		disks, err := controller.GetDisks(c.Args().Tail().First())
-		if err != nil {
-			Fatalln(err)
-		}
-		Println(string(disks))
 	case "mem":
 		memstats, err := controller.GetMemStats(c.Args().Tail().First())
 		if err != nil {

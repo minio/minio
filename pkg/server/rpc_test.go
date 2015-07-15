@@ -43,25 +43,6 @@ func (s *MyRPCSuite) TearDownSuite(c *C) {
 	testRPCServer.Close()
 }
 
-func (s *MyRPCSuite) TestDiskInfo(c *C) {
-	op := controller.RPCOps{
-		Method:  "DiskInfo.Get",
-		Request: rpc.Args{Request: ""},
-	}
-	req, err := controller.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
-	c.Assert(err, IsNil)
-	c.Assert(req.Get("Content-Type"), Equals, "application/json")
-	resp, err := req.Do()
-	c.Assert(err, IsNil)
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-
-	var reply rpc.DiskInfoReply
-	err = jsonrpc.DecodeClientResponse(resp.Body, &reply)
-	c.Assert(err, IsNil)
-	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), rpc.DiskInfoReply{})
-}
-
 func (s *MyRPCSuite) TestMemStats(c *C) {
 	op := controller.RPCOps{
 		Method:  "MemStats.Get",

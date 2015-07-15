@@ -85,17 +85,17 @@ func (c command) String() string {
 	return message
 }
 
-func runMkdonutInstall() {
-	mkdonutInstall := command{exec.Command("godep", "go", "install", "-a", "github.com/minio/minio/cmd/mkdonut"), &bytes.Buffer{}, &bytes.Buffer{}}
-	mkdonutInstallErr := mkdonutInstall.runCommand()
-	if mkdonutInstallErr != nil {
-		fmt.Println(mkdonutInstall)
+func runDonutInstall() {
+	donutInstall := command{exec.Command("godep", "go", "install", "-a", "github.com/minio/minio/cmd/donut"), &bytes.Buffer{}, &bytes.Buffer{}}
+	donutInstallErr := donutInstall.runCommand()
+	if donutInstallErr != nil {
+		fmt.Println(donutInstall)
 		os.Exit(1)
 	}
-	fmt.Print(mkdonutInstall)
+	fmt.Print(donutInstall)
 }
 
-func runMkdonutRelease() {
+func runDonutRelease() {
 	t := time.Now().UTC()
 	date := t.Format(time.RFC3339Nano)
 	version := Version{Date: date}
@@ -108,14 +108,14 @@ func runMkdonutRelease() {
 
 func main() {
 	releaseFlag := flag.Bool("release", false, "make a release")
-	installFlag := flag.Bool("install", false, "install mkdonut")
+	installFlag := flag.Bool("install", false, "install donut")
 
 	flag.Parse()
 
 	if *releaseFlag {
-		runMkdonutRelease()
+		runDonutRelease()
 	}
 	if *installFlag {
-		runMkdonutInstall()
+		runDonutInstall()
 	}
 }

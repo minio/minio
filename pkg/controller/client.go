@@ -32,28 +32,6 @@ func closeResp(resp *http.Response) {
 	}
 }
 
-// GetDisks get disks info of the server at given url
-func GetDisks(url string) ([]byte, error) {
-	op := RPCOps{
-		Method:  "DiskInfo.Get",
-		Request: rpc.Args{Request: ""},
-	}
-	req, err := NewRequest(url, op, http.DefaultTransport)
-	if err != nil {
-		return nil, iodine.New(err, nil)
-	}
-	resp, err := req.Do()
-	defer closeResp(resp)
-	if err != nil {
-		return nil, iodine.New(err, nil)
-	}
-	var reply rpc.DiskInfoReply
-	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, iodine.New(err, nil)
-	}
-	return json.MarshalIndent(reply, "", "\t")
-}
-
 // GetMemStats get memory status of the server at given url
 func GetMemStats(url string) ([]byte, error) {
 	op := RPCOps{
