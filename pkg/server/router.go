@@ -114,7 +114,6 @@ func getRPCHandler() http.Handler {
 	s.RegisterService(new(rpc.VersionService), "Version")
 	s.RegisterService(new(rpc.SysInfoService), "SysInfo")
 	s.RegisterService(new(rpc.MemStatsService), "MemStats")
-	s.RegisterService(new(rpc.DiskInfoService), "DiskInfo")
 	s.RegisterService(new(rpc.DonutService), "Donut")
 	s.RegisterService(new(rpc.AuthService), "Auth")
 	// Add new RPC services here

@@ -39,6 +39,28 @@ var flags = []cli.Flag{
 		Usage: "print debug information",
 	},
 }
+var commands = []cli.Command{
+	{
+		Name:        "make",
+		Description: "make a donut",
+		Action:      runMkdonut,
+		CustomHelpTemplate: `NAME:
+  donut {{.Name}} - {{.Description}}
+
+USAGE:
+  donut {{.Name}} DONUTNAME [DISKS...]
+
+EXAMPLES:
+  1. Make a donut with 4 exports
+      $ donut {{.Name}} mongodb-backup /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
+
+  2. Make a donut with 16 exports
+      $ donut {{.Name}} operational-data /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
+       /mnt/export6 /mnt/export7 /mnt/export8 /mnt/export9 /mnt/export10 /mnt/export11 \
+       /mnt/export12 /mnt/export13 /mnt/export14 /mnt/export15 /mnt/export16
+`,
+	},
+}
 
 func init() {
 	// Check for the environment early on and gracefuly report.
@@ -76,8 +98,7 @@ func getSystemData() map[string]string {
 
 func runMkdonut(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
-		cli.ShowAppHelp(c)
-		os.Exit(1)
+		cli.ShowCommandHelpAndExit(c, "make", 1)
 	}
 	donutName := c.Args().First()
 	if c.Args().First() != "" {
@@ -109,7 +130,7 @@ func runMkdonut(c *cli.Context) {
 	// keep it in exact order as it was specified, do not try to sort disks
 	donutConfig.NodeDiskMap[hostname] = disks
 	// default cache is unlimited
-	donutConfig.MaxSize = 0
+	donutConfig.MaxSize = 512000000
 
 	if err := donut.SaveConfig(donutConfig); err != nil {
 		Fatalln(err)
@@ -129,11 +150,12 @@ func main() {
 	// set up app
 	app := cli.NewApp()
 	app.Action = runMkdonut
-	app.Name = "mkdonut"
-	app.Version = Version
+	app.Name = "donut"
+	app.Version = getVersion()
 	app.Compiled = getVersion()
 	app.Author = "Minio.io"
-	app.Usage = "Make a donut"
+	app.Usage = "Donut maker"
+	app.Commands = commands
 	app.Flags = flags
 	app.Before = func(c *cli.Context) error {
 		if c.GlobalBool("debug") {
@@ -146,15 +168,6 @@ func main() {
 
 USAGE:
   {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
-
-EXAMPLES:
-  1. Create a donut with four disks
-     $ {{.Name}} donuttest /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
-
-  2. Create a donut with sixteen disks
-     $ {{.Name}} donut-16 /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
-       /mnt/export6 /mnt/export7 /mnt/export8 /mnt/export9 /mnt/export10 /mnt/export11 \
-       /mnt/export12 /mnt/export13 /mnt/export14 /mnt/export15 /mnt/export16
 {{if .Flags}}
 GLOBAL FLAGS:
   {{range .Flags}}{{.}}
