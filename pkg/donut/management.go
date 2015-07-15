@@ -17,9 +17,6 @@
 package donut
 
 import (
-	"encoding/json"
-	"path/filepath"
-
 	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/iodine"
 )
@@ -70,34 +67,4 @@ func (donut API) AttachNode(hostname string, disks []string) error {
 func (donut API) DetachNode(hostname string) error {
 	delete(donut.nodes, hostname)
 	return nil
-}
-
-// SaveConfig - save donut configuration
-func (donut API) SaveConfig() error {
-	nodeDiskMap := make(map[string][]string)
-	for hostname, node := range donut.nodes {
-		disks, err := node.ListDisks()
-		if err != nil {
-			return iodine.New(err, nil)
-		}
-		for order, disk := range disks {
-			donutConfigPath := filepath.Join(donut.config.DonutName, donutConfig)
-			donutConfigWriter, err := disk.CreateFile(donutConfigPath)
-			defer donutConfigWriter.Close()
-			if err != nil {
-				return iodine.New(err, nil)
-			}
-			nodeDiskMap[hostname][order] = disk.GetPath()
-			jenc := json.NewEncoder(donutConfigWriter)
-			if err := jenc.Encode(nodeDiskMap); err != nil {
-				return iodine.New(err, nil)
-			}
-		}
-	}
-	return nil
-}
-
-// LoadConfig - load configuration
-func (donut API) LoadConfig() error {
-	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
 }

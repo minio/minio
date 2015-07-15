@@ -107,7 +107,7 @@ func main() {
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = Version
+	app.Version = getVersion()
 	app.Compiled = getVersion()
 	app.Author = "Minio.io"
 	app.Usage = "Minimalist Object Storage"
