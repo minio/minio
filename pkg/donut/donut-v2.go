@@ -119,6 +119,7 @@ func New() (Interface, error) {
 			newBucket.partMetadata = make(map[string]map[int]PartMetadata)
 			a.storedBuckets.Set(k, newBucket)
 		}
+		a.Heal()
 	}
 	return a, nil
 }

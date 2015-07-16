@@ -25,9 +25,13 @@ import (
 	"github.com/minio/minio/pkg/iodine"
 )
 
-// Heal heal an existing donut
-func (donut API) Heal() error {
+// healBuckets heal bucket slices
+func (donut API) healBuckets() error {
 	if err := donut.listDonutBuckets(); err != nil {
+		return iodine.New(err, nil)
+	}
+	bucketMetadata, err := donut.getDonutBucketMetadata()
+	if err != nil {
 		return iodine.New(err, nil)
 	}
 	disks := make(map[int]disk.Disk)
@@ -40,42 +44,26 @@ func (donut API) Heal() error {
 			disks[k] = v
 		}
 	}
-
-	missingDisks := make(map[int]disk.Disk)
 	for order, disk := range disks {
-		if !disk.IsUsable() {
-			missingDisks[order] = disk
-		}
-	}
-
-	bucketMetadata, err := donut.getDonutBucketMetadata()
-	if err != nil {
-		return iodine.New(err, nil)
-	}
-
-	for _, disk := range missingDisks {
-		disk.MakeDir(donut.config.DonutName)
-		bucketMetadataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
-		if err != nil {
-			return iodine.New(err, nil)
-		}
-		defer bucketMetadataWriter.Close()
-		jenc := json.NewEncoder(bucketMetadataWriter)
-		if err := jenc.Encode(bucketMetadata); err != nil {
-			return iodine.New(err, nil)
-		}
-	}
-
-	for order, disk := range missingDisks {
-		for bucket := range bucketMetadata.Buckets {
-			bucketSlice := fmt.Sprintf("%s$0$%d", bucket, order) // TODO handle node slices
-			err := disk.MakeDir(filepath.Join(donut.config.DonutName, bucketSlice))
+		if disk.IsUsable() {
+			disk.MakeDir(donut.config.DonutName)
+			bucketMetadataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
 				return iodine.New(err, nil)
 			}
+			defer bucketMetadataWriter.Close()
+			jenc := json.NewEncoder(bucketMetadataWriter)
+			if err := jenc.Encode(bucketMetadata); err != nil {
+				return iodine.New(err, nil)
+			}
+			for bucket := range bucketMetadata.Buckets {
+				bucketSlice := fmt.Sprintf("%s$0$%d", bucket, order) // TODO handle node slices
+				err := disk.MakeDir(filepath.Join(donut.config.DonutName, bucketSlice))
+				if err != nil {
+					return iodine.New(err, nil)
+				}
+			}
 		}
 	}
-
 	return nil
-	// TODO heal data
 }

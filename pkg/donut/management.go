@@ -73,3 +73,9 @@ func (donut API) DetachNode(hostname string) error {
 func (donut API) Rebalance() error {
 	return iodine.New(APINotImplemented{API: "management.Rebalance"}, nil)
 }
+
+// Heal - heal your donuts
+func (donut API) Heal() error {
+	// TODO handle data heal
+	return donut.healBuckets()
+}
