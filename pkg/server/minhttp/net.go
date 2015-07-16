@@ -92,11 +92,11 @@ func (n *minNet) getInheritedListeners() error {
 			l, err := net.FileListener(file)
 			if err != nil {
 				file.Close()
-				retErr = fmt.Errorf("error inheriting socket fd %d: %s", i, err)
+				retErr = iodine.New(fmt.Errorf("error inheriting socket fd %d: %s", i, err), nil)
 				return
 			}
 			if err := file.Close(); err != nil {
-				retErr = fmt.Errorf("error closing inherited socket fd %d: %s", i, err)
+				retErr = iodine.New(fmt.Errorf("error closing inherited socket fd %d: %s", i, err), nil)
 				return
 			}
 			n.inheritedListeners = append(n.inheritedListeners, l)
@@ -159,10 +159,7 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, error
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	if n.connLimit > 0 {
-		l = rateLimitedListener(l, n.connLimit)
-	}
-	n.activeListeners = append(n.activeListeners, l)
+	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
 }
 
@@ -197,10 +194,7 @@ func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, err
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}
-	if n.connLimit > 0 {
-		l = rateLimitedListener(l, n.connLimit)
-	}
-	n.activeListeners = append(n.activeListeners, l)
+	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
 }
 
