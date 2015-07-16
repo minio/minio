@@ -85,6 +85,9 @@ func getServerConfig(c *cli.Context) api.Config {
 }
 
 func runServer(c *cli.Context) {
+	if c.Args().Present() {
+		cli.ShowCommandHelpAndExit(c, "server", 1)
+	}
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to determine current user. Reason: %s\n", err)

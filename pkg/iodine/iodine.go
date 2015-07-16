@@ -1,5 +1,5 @@
 /*
- * Iodine, (C) 2015 Minio, Inc.
+ * Minimalist Object Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,7 +202,7 @@ func getSystemData() map[string]string {
 
 // EmitJSON writes JSON output for the error
 func (err Error) EmitJSON() ([]byte, error) {
-	return json.Marshal(err)
+	return json.MarshalIndent(err, "", "\t")
 }
 
 // EmitHumanReadable returns a human readable error message
