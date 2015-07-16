@@ -65,6 +65,25 @@ func (s *MyAPIDonutCacheSuite) TearDownSuite(c *C) {
 	testAPIDonutCacheServer.Close()
 }
 
+func (s *MyAPIDonutCacheSuite) TestDeleteBucket(c *C) {
+	request, err := http.NewRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket", nil)
+	c.Assert(err, IsNil)
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusMethodNotAllowed)
+}
+
+func (s *MyAPIDonutCacheSuite) TestDeleteObject(c *C) {
+	request, err := http.NewRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket/myobject", nil)
+	c.Assert(err, IsNil)
+	client := &http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusMethodNotAllowed)
+}
+
 func (s *MyAPIDonutCacheSuite) TestNonExistantBucket(c *C) {
 	request, err := http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/nonexistantbucket", nil)
 	c.Assert(err, IsNil)
