@@ -87,7 +87,7 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error
 func getRPCServer(rpcHandler http.Handler) *http.Server {
 	// Minio server config
 	httpServer := &http.Server{
-		Addr:           "127.0.0.1:9001", // TODO make this configurable
+		Addr:           ":9001", // TODO make this configurable
 		Handler:        rpcHandler,
 		MaxHeaderBytes: 1 << 20,
 	}

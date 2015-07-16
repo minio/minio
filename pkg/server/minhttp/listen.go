@@ -27,7 +27,10 @@ import (
 // rateLimitedListener returns a Listener that accepts at most n simultaneous
 // connections from the provided Listener.
 func rateLimitedListener(l net.Listener, nconn int) net.Listener {
-	return &rateLimitListener{l, make(chan struct{}, nconn)}
+	if nconn > 0 {
+		return &rateLimitListener{l, make(chan struct{}, nconn)}
+	}
+	return l
 }
 
 type rateLimitListener struct {
