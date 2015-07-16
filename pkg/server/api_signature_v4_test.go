@@ -92,6 +92,25 @@ func (s *MyAPISignatureV4Suite) TearDownSuite(c *C) {
 	testSignatureV4Server.Close()
 }
 
+func (s *MyAPISignatureV4Suite) TestDeleteBucket(c *C) {
+	request, err := http.NewRequest("DELETE", testSignatureV4Server.URL+"/mybucket", nil)
+	c.Assert(err, IsNil)
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusMethodNotAllowed)
+}
+
+func (s *MyAPISignatureV4Suite) TestDeleteObject(c *C) {
+	request, err := http.NewRequest("DELETE", testSignatureV4Server.URL+"/mybucket/myobject", nil)
+	c.Assert(err, IsNil)
+	client := &http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusMethodNotAllowed)
+}
+
 func (s *MyAPISignatureV4Suite) TestNonExistantBucket(c *C) {
 	request, err := s.newRequest("HEAD", testSignatureV4Server.URL+"/nonexistantbucket", 0, nil)
 	c.Assert(err, IsNil)

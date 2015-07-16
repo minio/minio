@@ -580,12 +580,12 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 
 // DeleteBucketHandler - Delete bucket
 func (api Minio) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
-	error := getErrorCode(NotImplemented)
+	error := getErrorCode(MethodNotAllowed)
 	w.WriteHeader(error.HTTPStatusCode)
 }
 
 // DeleteObjectHandler - Delete object
 func (api Minio) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
-	error := getErrorCode(NotImplemented)
+	error := getErrorCode(MethodNotAllowed)
 	w.WriteHeader(error.HTTPStatusCode)
 }
