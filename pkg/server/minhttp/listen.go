@@ -18,6 +18,7 @@ package minhttp
 
 import (
 	"net"
+	"os"
 	"sync"
 
 	"github.com/minio/minio/pkg/iodine"
@@ -37,6 +38,12 @@ type rateLimitListener struct {
 func (l *rateLimitListener) accept()  { l.sem <- struct{}{} }
 func (l *rateLimitListener) release() { <-l.sem }
 
+// File - necessary to expose underlying socket fd
+func (l *rateLimitListener) File() (f *os.File, err error) {
+	return l.Listener.(fileListener).File()
+}
+
+// Accept - accept method for accepting new connections
 func (l *rateLimitListener) Accept() (net.Conn, error) {
 	l.accept()
 
