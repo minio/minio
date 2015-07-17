@@ -88,6 +88,10 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
+	if resources.MaxUploads < 0 {
+		writeErrorResponse(w, req, InvalidMaxUploads, acceptsContentType, req.URL.Path)
+		return
+	}
 	if resources.MaxUploads == 0 {
 		resources.MaxUploads = maxObjectList
 	}
@@ -155,6 +159,10 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	resources := getBucketResources(req.URL.Query())
+	if resources.Maxkeys < 0 {
+		writeErrorResponse(w, req, InvalidMaxKeys, acceptsContentType, req.URL.Path)
+		return
+	}
 	if resources.Maxkeys == 0 {
 		resources.Maxkeys = maxObjectList
 	}
