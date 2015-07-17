@@ -473,6 +473,14 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
+	if objectResourcesMetadata.PartNumberMarker < 0 {
+		writeErrorResponse(w, req, InvalidPartNumberMarker, acceptsContentType, req.URL.Path)
+		return
+	}
+	if objectResourcesMetadata.MaxParts < 0 {
+		writeErrorResponse(w, req, InvalidMaxParts, acceptsContentType, req.URL.Path)
+		return
+	}
 	if objectResourcesMetadata.MaxParts == 0 {
 		objectResourcesMetadata.MaxParts = maxPartsList
 	}

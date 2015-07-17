@@ -52,6 +52,10 @@ const (
 	InvalidDigest
 	InvalidRange
 	InvalidRequest
+	InvalidMaxKeys
+	InvalidMaxUploads
+	InvalidMaxParts
+	InvalidPartNumberMarker
 	MalformedXML
 	MissingContentLength
 	MissingRequestBodyError
@@ -69,11 +73,31 @@ const (
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 25
+	NotAcceptable = iota + 29
 )
 
 // Error code to Error structure map
 var errorCodeResponse = map[int]Error{
+	InvalidMaxUploads: {
+		Code:           "InvalidArgument",
+		Description:    "Argument maxUploads must be an integer between 0 and 2147483647",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidMaxKeys: {
+		Code:           "InvalidArgument",
+		Description:    "Argument maxKeys must be an integer between 0 and 2147483647",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidMaxParts: {
+		Code:           "InvalidArgument",
+		Description:    "Argument maxParts must be an integer between 1 and 10000",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidPartNumberMarker: {
+		Code:           "InvalidArgument",
+		Description:    "Argument partNumberMarker must be an integer",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	AccessDenied: {
 		Code:           "AccessDenied",
 		Description:    "Access Denied",
