@@ -84,9 +84,12 @@ func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bu
 	return b, metadata, nil
 }
 
+// getBucketName -
 func (b bucket) getBucketName() string {
 	return b.name
 }
+
+// getBucketMetadataReaders -
 func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	readers := make(map[int]io.ReadCloser)
 	var disks map[int]disk.Disk
@@ -111,6 +114,7 @@ func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	return readers, nil
 }
 
+// getBucketMetadata -
 func (b bucket) getBucketMetadata() (*AllBuckets, error) {
 	var err error
 	metadata := new(AllBuckets)

@@ -57,12 +57,13 @@ type AllBuckets struct {
 
 // BucketMetadata container for bucket level metadata
 type BucketMetadata struct {
-	Version       string              `json:"version"`
-	Name          string              `json:"name"`
-	ACL           BucketACL           `json:"acl"`
-	Created       time.Time           `json:"created"`
-	Metadata      map[string]string   `json:"metadata"`
-	BucketObjects map[string]struct{} `json:"objects"`
+	Version       string                      `json:"version"`
+	Name          string                      `json:"name"`
+	ACL           BucketACL                   `json:"acl"`
+	Created       time.Time                   `json:"created"`
+	Multiparts    map[string]MultiPartSession `json:"multiparts"`
+	Metadata      map[string]string           `json:"metadata"`
+	BucketObjects map[string]struct{}         `json:"objects"`
 }
 
 // ListObjectsResults container for list objects response
@@ -74,9 +75,10 @@ type ListObjectsResults struct {
 
 // MultiPartSession multipart session
 type MultiPartSession struct {
-	totalParts int
-	uploadID   string
-	initiated  time.Time
+	UploadID   string                  `json:"uploadId"`
+	Initiated  time.Time               `json:"initiated"`
+	Parts      map[string]PartMetadata `json:"parts"`
+	TotalParts int                     `json:"total-parts"`
 }
 
 // PartMetadata - various types of individual part resources
