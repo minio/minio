@@ -90,7 +90,7 @@ var errorCodeResponse = map[int]Error{
 	},
 	InvalidMaxParts: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxParts must be an integer between 1 and 10000 ",
+		Description:    "Argument maxParts must be an integer between 1 and 10000",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidPartNumberMarker: {

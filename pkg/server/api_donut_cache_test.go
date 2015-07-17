@@ -548,6 +548,22 @@ func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
+
+	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objecthandlererrors", nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors?max-keys=-2", nil)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 }
 
 func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
@@ -787,6 +803,12 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
+	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, nil)
+	c.Assert(err, IsNil)
+
+	response4, err := client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000", http.StatusBadRequest)
 }
 
 func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
