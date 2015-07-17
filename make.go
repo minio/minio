@@ -30,7 +30,6 @@ import (
 
 type Version struct {
 	Date string
-	Tag  string
 }
 
 func writeVersion(version Version) error {

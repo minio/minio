@@ -44,6 +44,12 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
+	if !IsValidBucket(bucket) {
+		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !IsValidObjectName(key) {
+		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
+	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 		if err != nil {
@@ -53,12 +59,8 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 			return "", iodine.New(SignatureDoesNotMatch{}, nil)
 		}
 	}
-
-	if !IsValidBucket(bucket) {
-		return "", iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
-	}
-	if !IsValidObjectName(key) {
-		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
+	if len(donut.config.NodeDiskMap) > 0 {
+		return donut.newMultipartUpload(bucket, key, contentType)
 	}
 	if !donut.storedBuckets.Exists(bucket) {
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
@@ -68,14 +70,14 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
 		return "", iodine.New(ObjectExists{Object: key}, nil)
 	}
-	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + key + time.Now().String())
+	id := []byte(strconv.Itoa(rand.Int()) + bucket + key + time.Now().UTC().String())
 	uploadIDSum := sha512.Sum512(id)
 	uploadID := base64.URLEncoding.EncodeToString(uploadIDSum[:])[:47]
 
 	storedBucket.multiPartSession[key] = MultiPartSession{
-		uploadID:   uploadID,
-		initiated:  time.Now(),
-		totalParts: 0,
+		UploadID:   uploadID,
+		Initiated:  time.Now().UTC(),
+		TotalParts: 0,
 	}
 	storedBucket.partMetadata[key] = make(map[int]PartMetadata)
 	multiPartCache := data.NewCache(0)
@@ -90,6 +92,12 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
+	if !IsValidBucket(bucket) {
+		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !IsValidObjectName(key) {
+		return iodine.New(ObjectNameInvalid{Object: key}, nil)
+	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 		if err != nil {
@@ -99,15 +107,14 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 			return iodine.New(SignatureDoesNotMatch{}, nil)
 		}
 	}
-
-	if !IsValidBucket(bucket) {
-		return iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+	if len(donut.config.NodeDiskMap) > 0 {
+		return donut.abortMultipartUpload(bucket, key, uploadID)
 	}
 	if !donut.storedBuckets.Exists(bucket) {
 		return iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
-	if storedBucket.multiPartSession[key].uploadID != uploadID {
+	if storedBucket.multiPartSession[key].UploadID != uploadID {
 		return iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	donut.cleanupMultipartSession(bucket, key, uploadID)
@@ -133,12 +140,34 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 	if !IsValidObjectName(key) {
 		return "", iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
+	if len(donut.config.NodeDiskMap) > 0 {
+		metadata := make(map[string]string)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		contentType = strings.TrimSpace(contentType)
+		metadata["contentType"] = contentType
+		if strings.TrimSpace(expectedMD5Sum) != "" {
+			expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+			if err != nil {
+				// pro-actively close the connection
+				return "", iodine.New(InvalidDigest{Md5: expectedMD5Sum}, nil)
+			}
+			expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
+		}
+		partMetadata, err := donut.putObjectPart(bucket, key, expectedMD5Sum, uploadID, partID, data, metadata, signature)
+		if err != nil {
+			return "", iodine.New(err, nil)
+		}
+		return partMetadata.ETag, nil
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		return "", iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	strBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// Verify upload id
-	if strBucket.multiPartSession[key].uploadID != uploadID {
+	if strBucket.multiPartSession[key].UploadID != uploadID {
 		return "", iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 
@@ -217,7 +246,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 	parts[partID] = newPart
 	strBucket.partMetadata[key] = parts
 	multiPartSession := strBucket.multiPartSession[key]
-	multiPartSession.totalParts++
+	multiPartSession.TotalParts++
 	strBucket.multiPartSession[key] = multiPartSession
 	donut.storedBuckets.Set(bucket, strBucket)
 	return md5Sum, nil
@@ -226,7 +255,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 // cleanupMultipartSession invoked during an abort or complete multipart session to cleanup session from memory
 func (donut API) cleanupMultipartSession(bucket, key, uploadID string) {
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
-	for i := 1; i <= storedBucket.multiPartSession[key].totalParts; i++ {
+	for i := 1; i <= storedBucket.multiPartSession[key].TotalParts; i++ {
 		donut.multiPartObjects[uploadID].Delete(i)
 	}
 	delete(storedBucket.multiPartSession, key)
@@ -246,13 +275,18 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		donut.lock.Unlock()
 		return ObjectMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
 	}
+	if len(donut.config.NodeDiskMap) > 0 {
+		donut.lock.Unlock()
+		return donut.completeMultipartUpload(bucket, key, uploadID, data, signature)
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		donut.lock.Unlock()
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// Verify upload id
-	if storedBucket.multiPartSession[key].uploadID != uploadID {
+	if storedBucket.multiPartSession[key].UploadID != uploadID {
 		donut.lock.Unlock()
 		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
@@ -353,6 +387,14 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 		}
 	}
 
+	if !IsValidBucket(bucket) {
+		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+	}
+
+	if len(donut.config.NodeDiskMap) > 0 {
+		return donut.listMultipartUploads(bucket, resources)
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
@@ -366,7 +408,7 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 				sort.Sort(byKey(uploads))
 				resources.Upload = uploads
 				resources.NextKeyMarker = key
-				resources.NextUploadIDMarker = session.uploadID
+				resources.NextUploadIDMarker = session.UploadID
 				resources.IsTruncated = true
 				return resources, nil
 			}
@@ -376,25 +418,25 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 				if key > resources.KeyMarker {
 					upload := new(UploadMetadata)
 					upload.Key = key
-					upload.UploadID = session.uploadID
-					upload.Initiated = session.initiated
+					upload.UploadID = session.UploadID
+					upload.Initiated = session.Initiated
 					uploads = append(uploads, upload)
 				}
 			case resources.KeyMarker != "" && resources.UploadIDMarker != "":
-				if session.uploadID > resources.UploadIDMarker {
+				if session.UploadID > resources.UploadIDMarker {
 					if key >= resources.KeyMarker {
 						upload := new(UploadMetadata)
 						upload.Key = key
-						upload.UploadID = session.uploadID
-						upload.Initiated = session.initiated
+						upload.UploadID = session.UploadID
+						upload.Initiated = session.Initiated
 						uploads = append(uploads, upload)
 					}
 				}
 			default:
 				upload := new(UploadMetadata)
 				upload.Key = key
-				upload.UploadID = session.uploadID
-				upload.Initiated = session.initiated
+				upload.UploadID = session.UploadID
+				upload.Initiated = session.Initiated
 				uploads = append(uploads, upload)
 			}
 		}
@@ -427,6 +469,17 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 		}
 	}
 
+	if !IsValidBucket(bucket) {
+		return ObjectResourcesMetadata{}, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
+	}
+	if !IsValidObjectName(key) {
+		return ObjectResourcesMetadata{}, iodine.New(ObjectNameInvalid{Object: key}, nil)
+	}
+
+	if len(donut.config.NodeDiskMap) > 0 {
+		return donut.listObjectParts(bucket, key, resources)
+	}
+
 	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
 	}
@@ -434,7 +487,7 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 	if _, ok := storedBucket.multiPartSession[key]; ok == false {
 		return ObjectResourcesMetadata{}, iodine.New(ObjectNotFound{Object: key}, nil)
 	}
-	if storedBucket.multiPartSession[key].uploadID != resources.UploadID {
+	if storedBucket.multiPartSession[key].UploadID != resources.UploadID {
 		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, nil)
 	}
 	storedParts := storedBucket.partMetadata[key]
@@ -449,7 +502,7 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 	default:
 		startPartNumber = objectResourcesMetadata.PartNumberMarker
 	}
-	for i := startPartNumber; i <= storedBucket.multiPartSession[key].totalParts; i++ {
+	for i := startPartNumber; i <= storedBucket.multiPartSession[key].TotalParts; i++ {
 		if len(parts) > objectResourcesMetadata.MaxParts {
 			sort.Sort(partNumber(parts))
 			objectResourcesMetadata.IsTruncated = true
