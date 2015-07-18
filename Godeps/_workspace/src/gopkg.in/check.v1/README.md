@@ -3,11 +3,11 @@ Instructions
 
 Install the package with:
 
-    go get github.com/minio/check
+    go get gopkg.in/check.v1
     
 Import it with:
 
-    import "github.com/minio/check"
+    import "gopkg.in/check.v1"
 
 and use _check_ as the package name inside the code.
 

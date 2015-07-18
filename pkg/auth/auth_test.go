@@ -19,8 +19,8 @@ package auth_test
 import (
 	"testing"
 
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/auth"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }

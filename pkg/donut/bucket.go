@@ -19,7 +19,6 @@ package donut
 import (
 	"bytes"
 	"fmt"
-	"hash"
 	"io"
 	"path/filepath"
 	"sort"
@@ -154,6 +153,13 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	if err != nil {
 		return ListObjectsResults{}, iodine.New(err, nil)
 	}
+	for objectName := range bucketMetadata.Buckets[b.getBucketName()].Multiparts {
+		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
+			if objectName > marker {
+				objects = append(objects, objectName)
+			}
+		}
+	}
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].BucketObjects {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
 			if objectName > marker {
@@ -171,7 +177,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 		filteredObjects = HasNoDelimiter(objects, delimiter)
 		prefixes = HasDelimiter(objects, delimiter)
 		prefixes = SplitDelimiter(prefixes, delimiter)
-		prefixes = SortU(prefixes)
+		prefixes = SortUnique(prefixes)
 	}
 	var results []string
 	var commonPrefixes []string
@@ -264,8 +270,9 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
+		mwriter := io.MultiWriter(sumMD5, sum256, sum512)
 		// write encoded data with k, m and writers
-		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, sumMD5, sum256, sum512)
+		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, mwriter)
 		if err != nil {
 			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
@@ -364,11 +371,11 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 
 // readObjectMetadata - read object metadata
 func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
-	objMetadata := ObjectMetadata{}
 	if objectName == "" {
 		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
 	}
 	var err error
+	objMetadata := ObjectMetadata{}
 	objMetadataReaders, err := b.getObjectReaders(objectName, objectMetadataConfig)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, nil)
@@ -415,7 +422,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 }
 
 // writeObjectData -
-func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, sumMD5, sum256, sum512 hash.Hash) (int, int, error) {
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, writer io.Writer) (int, int, error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
@@ -432,9 +439,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 			return 0, 0, iodine.New(err, nil)
 		}
 
-		sumMD5.Write(chunk.Data)
-		sum256.Write(chunk.Data)
-		sum512.Write(chunk.Data)
+		writer.Write(chunk.Data)
 		for blockIndex, block := range encodedBlocks {
 			errCh := make(chan error, 1)
 			go func(writer io.Writer, reader io.Reader) {

@@ -4,7 +4,7 @@
 package check_test
 
 import (
-	"github.com/minio/check"
+	"gopkg.in/check.v1"
 	"os"
 	"reflect"
 	"runtime"

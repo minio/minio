@@ -21,8 +21,8 @@ import (
 	"regexp"
 	"testing"
 
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/iodine"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }

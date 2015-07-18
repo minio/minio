@@ -579,7 +579,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, s
 		filteredKeys = HasNoDelimiter(keys, resources.Delimiter)
 		prefixes = HasDelimiter(keys, resources.Delimiter)
 		prefixes = SplitDelimiter(prefixes, resources.Delimiter)
-		prefixes = SortU(prefixes)
+		prefixes = SortUnique(prefixes)
 	}
 	for _, commonPrefix := range prefixes {
 		resources.CommonPrefixes = append(resources.CommonPrefixes, resources.Prefix+commonPrefix)

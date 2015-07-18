@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/cpu"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }
