@@ -76,7 +76,6 @@ func (r *Cache) Get(key string) interface{} {
 	if !ok {
 		return nil
 	}
-	r.updatedAt[key] = time.Now()
 	return value
 }
 
@@ -93,7 +92,6 @@ func (r *Cache) Set(key string, value interface{}) bool {
 	r.Lock()
 	defer r.Unlock()
 	r.items[key] = value
-	r.updatedAt[key] = time.Now()
 	return true
 }
 
