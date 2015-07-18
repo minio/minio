@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	. "github.com/minio/check"
+	. "gopkg.in/check.v1"
 )
 
 type MySuite struct{}

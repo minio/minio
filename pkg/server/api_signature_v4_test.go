@@ -29,10 +29,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
+	. "gopkg.in/check.v1"
 )
 
 func TestAPISignatureV4(t *testing.T) { TestingT(t) }

@@ -14,7 +14,7 @@ package check_test
 
 import (
 	"fmt"
-	"github.com/minio/check"
+	"gopkg.in/check.v1"
 	"strings"
 )
 

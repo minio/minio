@@ -191,7 +191,7 @@ func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, 
 	if err != nil {
 		return PartMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := bucketMeta.Buckets[bucket].Multiparts[object+uploadID]; !ok {
+	if _, ok := bucketMeta.Buckets[bucket].Multiparts[object]; !ok {
 		return PartMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
@@ -208,9 +208,9 @@ func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, 
 		ETag:         objmetadata.MD5Sum,
 		Size:         objmetadata.Size,
 	}
-	multipartSession := bucketMeta.Buckets[bucket].Multiparts[object+uploadID]
+	multipartSession := bucketMeta.Buckets[bucket].Multiparts[object]
 	multipartSession.Parts[strconv.Itoa(partID)] = partMetadata
-	bucketMeta.Buckets[bucket].Multiparts[object+uploadID] = multipartSession
+	bucketMeta.Buckets[bucket].Multiparts[object] = multipartSession
 	if err := donut.setDonutBucketMetadata(bucketMeta); err != nil {
 		return PartMetadata{}, iodine.New(err, errParams)
 	}
@@ -297,7 +297,7 @@ func (donut API) newMultipartUpload(bucket, object, contentType string) (string,
 		Parts:      make(map[string]PartMetadata),
 		TotalParts: 0,
 	}
-	multiparts[object+uploadID] = multipartSession
+	multiparts[object] = multipartSession
 	bucketMetadata.Multiparts = multiparts
 	allbuckets.Buckets[bucket] = bucketMetadata
 
@@ -326,12 +326,16 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 	if _, ok := donut.buckets[bucket]; !ok {
 		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	bucketMetadata, err := donut.getDonutBucketMetadata()
+	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
 		return ObjectResourcesMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := bucketMetadata.Buckets[bucket].Multiparts[object+resources.UploadID]; !ok {
-		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, nil)
+	bucketMetadata := allBuckets.Buckets[bucket]
+	if _, ok := bucketMetadata.Multiparts[object]; !ok {
+		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, errParams)
+	}
+	if bucketMetadata.Multiparts[object].UploadID != resources.UploadID {
+		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, errParams)
 	}
 	objectResourcesMetadata := resources
 	objectResourcesMetadata.Bucket = bucket
@@ -344,7 +348,7 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 	default:
 		startPartNumber = objectResourcesMetadata.PartNumberMarker
 	}
-	for i := startPartNumber; i <= bucketMetadata.Buckets[bucket].Multiparts[object+resources.UploadID].TotalParts; i++ {
+	for i := startPartNumber; i <= bucketMetadata.Multiparts[object].TotalParts; i++ {
 		if len(parts) > objectResourcesMetadata.MaxParts {
 			sort.Sort(partNumber(parts))
 			objectResourcesMetadata.IsTruncated = true
@@ -352,7 +356,7 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 			objectResourcesMetadata.NextPartNumberMarker = i
 			return objectResourcesMetadata, nil
 		}
-		part, ok := bucketMetadata.Buckets[bucket].Multiparts[object+resources.UploadID].Parts[strconv.Itoa(i)]
+		part, ok := bucketMetadata.Multiparts[object].Parts[strconv.Itoa(i)]
 		if !ok {
 			return ObjectResourcesMetadata{}, iodine.New(InvalidPart{}, nil)
 		}
@@ -382,11 +386,15 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	if _, ok := donut.buckets[bucket]; !ok {
 		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
 	}
-	bucketMetadata, err := donut.getDonutBucketMetadata()
+	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
-	if _, ok := bucketMetadata.Buckets[bucket].Multiparts[object+uploadID]; !ok {
+	bucketMetadata := allBuckets.Buckets[bucket]
+	if _, ok := bucketMetadata.Multiparts[object]; !ok {
+		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+	}
+	if bucketMetadata.Multiparts[object].UploadID != uploadID {
 		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
 	}
 	partBytes, err := ioutil.ReadAll(data)
@@ -409,10 +417,15 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	if !sort.IsSorted(completedParts(parts.Part)) {
 		return ObjectMetadata{}, iodine.New(InvalidPartOrder{}, errParams)
 	}
+	for _, part := range parts.Part {
+		if part.ETag != bucketMetadata.Multiparts[object].Parts[strconv.Itoa(part.PartNumber)].ETag {
+			return ObjectMetadata{}, iodine.New(InvalidPart{}, errParams)
+		}
+	}
 	var finalETagBytes []byte
 	var finalSize int64
-	totalParts := strconv.Itoa(bucketMetadata.Buckets[bucket].Multiparts[object+uploadID].TotalParts)
-	for _, part := range bucketMetadata.Buckets[bucket].Multiparts[object+uploadID].Parts {
+	totalParts := strconv.Itoa(bucketMetadata.Multiparts[object].TotalParts)
+	for _, part := range bucketMetadata.Multiparts[object].Parts {
 		partETagBytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
 			return ObjectMetadata{}, iodine.New(err, errParams)
@@ -426,7 +439,7 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	objMetadata.Object = object
 	objMetadata.Bucket = bucket
 	objMetadata.Size = finalSize
-	objMetadata.Created = bucketMetadata.Buckets[bucket].Multiparts[object+uploadID].Parts[totalParts].LastModified
+	objMetadata.Created = bucketMetadata.Multiparts[object].Parts[totalParts].LastModified
 	return objMetadata, nil
 }
 
@@ -446,7 +459,6 @@ func (donut API) listMultipartUploads(bucket string, resources BucketMultipartRe
 		return BucketMultipartResourcesMetadata{}, iodine.New(err, errParams)
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
-
 	var uploads []*UploadMetadata
 	for key, session := range bucketMetadata.Multiparts {
 		if strings.HasPrefix(key, resources.Prefix) {
@@ -510,7 +522,13 @@ func (donut API) abortMultipartUpload(bucket, object, uploadID string) error {
 		return iodine.New(err, errParams)
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
-	delete(bucketMetadata.Multiparts, object+uploadID)
+	if _, ok := bucketMetadata.Multiparts[object]; !ok {
+		return iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+	}
+	if bucketMetadata.Multiparts[object].UploadID != uploadID {
+		return iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+	}
+	delete(bucketMetadata.Multiparts, object)
 
 	allbuckets.Buckets[bucket] = bucketMetadata
 	if err := donut.setDonutBucketMetadata(allbuckets); err != nil {

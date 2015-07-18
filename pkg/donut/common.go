@@ -168,8 +168,8 @@ func SplitDelimiter(objects []string, delim string) []string {
 	return results
 }
 
-// SortU sort a slice in lexical order, removing duplicate elements
-func SortU(objects []string) []string {
+// SortUnique sort a slice in lexical order, removing duplicate elements
+func SortUnique(objects []string) []string {
 	objectMap := make(map[string]string)
 	for _, v := range objects {
 		objectMap[v] = v

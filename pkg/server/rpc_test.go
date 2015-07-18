@@ -22,9 +22,9 @@ import (
 	"testing"
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
-	. "github.com/minio/check"
 	"github.com/minio/minio/pkg/controller"
 	"github.com/minio/minio/pkg/server/rpc"
+	. "gopkg.in/check.v1"
 )
 
 func TestRPC(t *testing.T) { TestingT(t) }
