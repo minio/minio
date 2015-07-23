@@ -13,4 +13,4 @@ go:
 - 1.4.2
 notifications:
   slack:
-    secure: jlDBuqna7waJXJrl/EOeTH1fXgqJu3WrTDl0Sv7oJBNVH1Af4cGmHaa1oVWrYUMB7lEPjpuF+xcBNA+N+mcR53JbpqueR3sIKlokqHL4TPZBg4XX+1yqtmYMkL6V2woWQ7Wmtis0kDstSoVZjEUVHgk3YF8hcLlK49oMhTeqY08=
+    secure: K9tsn5MvrCAxuEZTxn+m3Kq1K2NG2xMEJFSv/sTp+RQBW7TslPHzv859GsIvrm8mU1y1btOU9RlOzqrRUczI5cJpE8IL1oljPZbXrIXgetE0kbsw0Wpy99g27UQ2VGp933WDu8tfj7zU4cZv+BI0RltNLwqYO6GWXmcWP0IueCU=
