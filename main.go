@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ func main() {
 	app.Version = getVersion()
 	app.Compiled = getVersion()
 	app.Author = "Minio.io"
-	app.Usage = "Minimalist Object Storage"
+	app.Usage = "Minio Cloud Storage"
 	app.Flags = flags
 	app.Commands = commands
 	app.Before = func(c *cli.Context) error {
