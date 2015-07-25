@@ -46,7 +46,7 @@ type App struct {
 	// Compilation date
 	Compiled string
 	// ExtraInfo pass additional info as a key value map
-	ExtraInfo map[string]string
+	ExtraInfo func() map[string]string
 	// List of all authors who contributed
 	Authors []Author
 	// Name of Author (Note: Use App.Authors, this is deprecated)
@@ -125,10 +125,13 @@ func (a *App) Run(arguments []string) (err error) {
 		}()
 
 		HelpPrinter = func(templ string, data interface{}) {
-			funcMap := template.FuncMap{
-				"join": strings.Join,
+			funcMap := template.FuncMap{}
+			funcMap["join"] = strings.Join
+			// if ExtraInfo function
+			funcMap["ExtraInfo"] = func() map[string]string { return make(map[string]string) }
+			if a.ExtraInfo != nil {
+				funcMap["ExtraInfo"] = a.ExtraInfo
 			}
-
 			w := tabwriter.NewWriter(a.Writer, 0, 8, 1, '\t', 0)
 			t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
 			err := t.Execute(w, data)

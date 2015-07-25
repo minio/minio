@@ -114,11 +114,16 @@ func main() {
 	app.Flags = flags
 	app.Commands = commands
 	app.Before = func(c *cli.Context) error {
-		if c.GlobalBool("debug") {
-			app.ExtraInfo = getSystemData()
-		}
+		globalDebugFlag = c.GlobalBool("debug")
 		return nil
 	}
+	app.ExtraInfo = func() map[string]string {
+		if globalDebugFlag {
+			return getSystemData()
+		}
+		return make(map[string]string)
+	}
+
 	app.CustomAppHelpTemplate = `NAME:
   {{.Name}} - {{.Usage}}
 
@@ -134,7 +139,7 @@ GLOBAL FLAGS:
 VERSION:
   {{if .Compiled}}
   {{.Compiled}}{{end}}
-  {{range $key, $value := .ExtraInfo}}
+  {{range $key, $value := ExtraInfo}}
 {{$key}}:
   {{$value}}
 {{end}}

@@ -39,8 +39,8 @@
 		},
 		{
 			"ImportPath": "github.com/minio/cli",
-			"Comment": "1.2.0-112-g823349c",
-			"Rev": "823349ce91e76834a4af0119d5bbc58fd4d2c6b0"
+			"Comment": "1.2.0-114-g9280cba",
+			"Rev": "9280cbaadcdd26d50b5ae85123682e37944701de"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
