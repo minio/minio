@@ -25,7 +25,7 @@ VERSION:
 {{if .Compiled}}
 BUILD:
    {{.Compiled}}{{end}}
-{{range $key, $value := .ExtraInfo}}
+{{range $key, $value := ExtraInfo}}
 {{$value}}{{end}}
 `
 
