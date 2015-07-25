@@ -418,7 +418,7 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 		return ObjectMetadata{}, iodine.New(InvalidPartOrder{}, errParams)
 	}
 	for _, part := range parts.Part {
-		if part.ETag != bucketMetadata.Multiparts[object].Parts[strconv.Itoa(part.PartNumber)].ETag {
+		if strings.Trim(part.ETag, "\"") != bucketMetadata.Multiparts[object].Parts[strconv.Itoa(part.PartNumber)].ETag {
 			return ObjectMetadata{}, iodine.New(InvalidPart{}, errParams)
 		}
 	}
