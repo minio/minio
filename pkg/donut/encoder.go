@@ -17,6 +17,7 @@
 package donut
 
 import (
+	"io"
 	"strconv"
 
 	encoding "github.com/minio/minio/pkg/erasure"
@@ -84,6 +85,14 @@ func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
 		return nil, iodine.New(err, nil)
 	}
 	return encodedData, nil
+}
+
+func (e encoder) EncodeStream(data io.Reader, size int64) (encodedData [][]byte, inputData []byte, err error) {
+	encodedData, inputData, err = e.encoder.EncodeStream(data, size)
+	if err != nil {
+		return nil, nil, iodine.New(err, nil)
+	}
+	return encodedData, inputData, nil
 }
 
 // Decode - erasure decode input encoded bytes

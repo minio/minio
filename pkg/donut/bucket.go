@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/donut/split"
 	"github.com/minio/minio/pkg/iodine"
 )
 
@@ -237,7 +236,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
@@ -272,7 +271,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, expectedMD5
 		}
 		mwriter := io.MultiWriter(sumMD5, sum256, sum512)
 		// write encoded data with k, m and writers
-		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, mwriter)
+		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, size, mwriter)
 		if err != nil {
 			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
@@ -422,32 +421,40 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 }
 
 // writeObjectData -
-func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, writer io.Writer) (int, int, error) {
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, writer io.Writer) (int, int, error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
+	chunkSize := int64(10 * 1024 * 1024)
 	if err != nil {
 		return 0, 0, iodine.New(err, nil)
 	}
 	chunkCount := 0
 	totalLength := 0
-	for chunk := range split.Stream(objectData, 10*1024*1024) {
-		if chunk.Err != nil {
-			return 0, 0, iodine.New(err, nil)
+	remaining := size
+	for remaining > 0 {
+		readSize := chunkSize
+		if remaining < chunkSize {
+			readSize = remaining
 		}
-		totalLength = totalLength + len(chunk.Data)
-		encodedBlocks, err := encoder.Encode(chunk.Data)
+		remaining = remaining - readSize
+		totalLength = totalLength + int(readSize)
+		encodedBlocks, inputData, err := encoder.EncodeStream(objectData, readSize)
 		if err != nil {
 			return 0, 0, iodine.New(err, nil)
 		}
-
-		writer.Write(chunk.Data)
+		_, err = writer.Write(inputData)
+		if err != nil {
+			return 0, 0, iodine.New(err, nil)
+		}
 		for blockIndex, block := range encodedBlocks {
 			errCh := make(chan error, 1)
 			go func(writer io.Writer, reader io.Reader) {
+				// FIXME: this closes the errCh in the outer scope
 				defer close(errCh)
-				_, err := io.Copy(writers[blockIndex], bytes.NewReader(block))
+				_, err := io.Copy(writer, reader)
 				errCh <- err
 			}(writers[blockIndex], bytes.NewReader(block))
 			if err := <-errCh; err != nil {
+				// FIXME: fix premature return in case of err != nil
 				return 0, 0, iodine.New(err, nil)
 			}
 		}

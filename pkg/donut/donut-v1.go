@@ -134,7 +134,7 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 }
 
 // putObject - put object
-func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
+func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -158,7 +158,7 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
 		return ObjectMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
 	}
-	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, expectedMD5Sum, metadata, signature)
+	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, size, expectedMD5Sum, metadata, signature)
 	if err != nil {
 		return ObjectMetadata{}, iodine.New(err, errParams)
 	}
@@ -170,7 +170,7 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 }
 
 // putObject - put object
-func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, metadata map[string]string, signature *Signature) (PartMetadata, error) {
+func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (PartMetadata, error) {
 	errParams := map[string]string{
 		"bucket": bucket,
 		"object": object,
@@ -198,7 +198,7 @@ func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, 
 		return PartMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
 	}
 	objectPart := object + "/" + "multipart" + "/" + strconv.Itoa(partID)
-	objmetadata, err := donut.buckets[bucket].WriteObject(objectPart, reader, expectedMD5Sum, metadata, signature)
+	objmetadata, err := donut.buckets[bucket].WriteObject(objectPart, reader, size, expectedMD5Sum, metadata, signature)
 	if err != nil {
 		return PartMetadata{}, iodine.New(err, errParams)
 	}

@@ -373,6 +373,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			key,
 			expectedMD5Sum,
 			data,
+			size,
 			map[string]string{
 				"contentType":   contentType,
 				"contentLength": strconv.FormatInt(size, 10),
