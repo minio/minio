@@ -1,10 +1,10 @@
 ## Minio Server [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Minio is a minimal object storage server written in Golang and licensed under [Apache license v2](./LICENSE). Minio is compatible with Amazon S3 APIs. [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)
+Minio is a minimal cloud storage server written in Golang and licensed under [Apache license v2](./LICENSE). Minio is compatible with Amazon S3 APIs. [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)
 
 ## Minio Client
 
-[Minio Client (mc)](https://github.com/minio/mc#minio-client-mc-) provides a modern alternative to Unix commands like ``ls``, ``cat``, ``cp``, ``sync``, and ``diff``. It supports POSIX compatible filesystems and Amazon S3 compatible object storage systems. It is entirely written in Golang. 
+[Minio Client (mc)](https://github.com/minio/mc#minio-client-mc-) provides a modern alternative to Unix commands like ``ls``, ``cat``, ``cp``, ``sync``, and ``diff``. It supports POSIX compatible filesystems and Amazon S3 compatible cloud storage systems. It is entirely written in Golang.
 
 ## Amazon S3 Compatible Client Libraries
 - [Golang Library](https://github.com/minio/minio-go)
@@ -16,27 +16,27 @@ Minio is a minimal object storage server written in Golang and licensed under [A
 ~~~
 Storage Backend:
 - Donut: Erasure coded backend.
- - Status: Standalone mode complete. 
+ - Status: Standalone mode complete.
 Storage Operations:
 - Collective:
   - Status: Work in progress.
 
 Storage Management:
-- WebCLI: 
+- WebCLI:
   - Status: Work in progress.
 - Authentication:
   - Status: Work in progress.
 - Admin Console:
   - Status: Work in progress.
-- User Console: 
+- User Console:
   - Status: Work in progress.
-- Logging: 
+- Logging:
   - Status: Work in progress.
 ~~~
 
 ### Install
 
-#### GNU/Linux 
+#### GNU/Linux
 
 Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/minio
 

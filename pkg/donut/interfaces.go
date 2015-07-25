@@ -20,14 +20,14 @@ import "io"
 
 // Collection of Donut specification interfaces
 
-// Interface is a collection of object storage and management interface
+// Interface is a collection of cloud storage and management interface
 type Interface interface {
-	ObjectStorage
+	CloudStorage
 	Management
 }
 
-// ObjectStorage is a donut object storage interface
-type ObjectStorage interface {
+// CloudStorage is a donut cloud storage interface
+type CloudStorage interface {
 	// Storage service operations
 	GetBucketMetadata(bucket string, signature *Signature) (BucketMetadata, error)
 	SetBucketMetadata(bucket string, metadata map[string]string, signature *Signature) error
