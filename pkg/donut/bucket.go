@@ -447,14 +447,13 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 		}
 		for blockIndex, block := range encodedBlocks {
 			errCh := make(chan error, 1)
-			go func(writer io.Writer, reader io.Reader) {
-				// FIXME: this closes the errCh in the outer scope
+			go func(writer io.Writer, reader io.Reader, errCh chan<- error) {
 				defer close(errCh)
 				_, err := io.Copy(writer, reader)
 				errCh <- err
-			}(writers[blockIndex], bytes.NewReader(block))
+			}(writers[blockIndex], bytes.NewReader(block), errCh)
 			if err := <-errCh; err != nil {
-				// FIXME: fix premature return in case of err != nil
+				// Returning error is fine here CleanupErrors() would cleanup writers
 				return 0, 0, iodine.New(err, nil)
 			}
 		}

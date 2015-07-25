@@ -171,7 +171,7 @@ func (e *Erasure) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
 	// Allocate memory to the "encoded blocks" return buffer
 	encodedBlocks = make([][]byte, n) // Return buffer
 
-	// Nessary to bridge Go to the C world. C requires 2D arry of pointers to
+	// Neccessary to bridge Go to the C world. C requires 2D arry of pointers to
 	// byte array. "encodedBlocks" is a 2D slice.
 	pointersToEncodedBlock := make([]*byte, n) // Pointers to encoded blocks.
 
@@ -211,17 +211,23 @@ func (e *Erasure) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, er
 	// Length of total number of "n" data chunks
 	encodedDataBlocksLen := encodedBlockLen * n
 
+	// allocate byte array for encodedBlock length
 	inputData := make([]byte, size, encodedDataBlocksLen)
 
 	_, err := io.ReadFull(data, inputData)
 	if err != nil {
-		return nil, nil, err
+		// do not check for io.ErrUnexpectedEOF, we know the right amount of size
+		// to be read if its a short read we need to throw error since reader could
+		// have been prematurely closed.
+		if err != io.EOF {
+			return nil, nil, err
+		}
 	}
 
 	// Allocate memory to the "encoded blocks" return buffer
 	encodedBlocks := make([][]byte, n) // Return buffer
 
-	// Nessary to bridge Go to the C world. C requires 2D arry of pointers to
+	// Neccessary to bridge Go to the C world. C requires 2D arry of pointers to
 	// byte array. "encodedBlocks" is a 2D slice.
 	pointersToEncodedBlock := make([]*byte, n) // Pointers to encoded blocks.
 
