@@ -35,7 +35,7 @@ var flags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: "ADDRESS:PORT for object storage access",
+		Usage: "ADDRESS:PORT for cloud storage access",
 	},
 	cli.StringFlag{
 		Name:  "address-mgmt",

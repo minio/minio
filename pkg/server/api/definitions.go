@@ -53,7 +53,7 @@ type ListObjectsResponse struct {
 
 	// When response is truncated (the IsTruncated element value in the response
 	// is true), you can use the key name in this field as marker in the subsequent
-	// request to get next set of objects. Object storage lists objects in alphabetical
+	// request to get next set of objects. Server lists objects in alphabetical
 	// order Note: This element is returned only if you have delimiter request parameter
 	// specified. If response does not include the NextMaker and it is truncated,
 	// you can use the value of the last Key in the response as the marker in the
