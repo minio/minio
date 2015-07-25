@@ -155,7 +155,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 			}
 			expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 		}
-		partMetadata, err := donut.putObjectPart(bucket, key, expectedMD5Sum, uploadID, partID, data, metadata, signature)
+		partMetadata, err := donut.putObjectPart(bucket, key, expectedMD5Sum, uploadID, partID, data, size, metadata, signature)
 		if err != nil {
 			return "", iodine.New(err, nil)
 		}

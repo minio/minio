@@ -23,6 +23,7 @@ package erasure
 import "C"
 import (
 	"errors"
+	"io"
 	"unsafe"
 )
 
@@ -194,4 +195,48 @@ func (e *Erasure) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
 		(**C.uchar)(unsafe.Pointer(&pointersToEncodedBlock[k:][0]))) // Pointers to parity blocks
 
 	return encodedBlocks, nil
+}
+
+// EncodeStream erasure codes a block of data in "k" data blocks and "m" parity blocks.
+// Output is [k+m][]blocks of data and parity slices.
+func (e *Erasure) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, error) {
+	k := int(e.params.K) // "k" data blocks
+	m := int(e.params.M) // "m" parity blocks
+	n := k + m           // "n" total encoded blocks
+
+	// Length of a single encoded chunk.
+	// Total number of encoded chunks = "k" data  + "m" parity blocks
+	encodedBlockLen := GetEncodedBlockLen(int(size), uint8(k))
+
+	// Length of total number of "n" data chunks
+	encodedDataBlocksLen := encodedBlockLen * n
+
+	inputData := make([]byte, size, encodedDataBlocksLen)
+
+	_, err := io.ReadFull(data, inputData)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Allocate memory to the "encoded blocks" return buffer
+	encodedBlocks := make([][]byte, n) // Return buffer
+
+	// Nessary to bridge Go to the C world. C requires 2D arry of pointers to
+	// byte array. "encodedBlocks" is a 2D slice.
+	pointersToEncodedBlock := make([]*byte, n) // Pointers to encoded blocks.
+
+	// Copy data block slices to encoded block buffer
+	for i := 0; i < n; i++ {
+		encodedBlocks[i] = inputData[i*encodedBlockLen : (i+1)*encodedBlockLen]
+		pointersToEncodedBlock[i] = &encodedBlocks[i][0]
+	}
+
+	// Erasure code the data into K data blocks and M parity
+	// blocks. Only the parity blocks are filled. Data blocks remain
+	// intact.
+	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(m), e.encodeTbls,
+		(**C.uchar)(unsafe.Pointer(&pointersToEncodedBlock[:k][0])), // Pointers to data blocks
+		(**C.uchar)(unsafe.Pointer(&pointersToEncodedBlock[k:][0]))) // Pointers to parity blocks
+
+	return encodedBlocks, inputData[0:size], nil
 }
