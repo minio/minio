@@ -22,10 +22,10 @@
 #include "ec_minio_common.h"
 
 static
-int32_t _minio_src_index_in_error (int r, int32_t *error_index)
+int32_t _minio_src_index_in_error (int r, int32_t *error_index, int errs)
 {
         int i;
-        for (i = 0; error_index[i] != -1; i++) {
+        for (i = 0; i < errs; i++) {
                 if (error_index[i] == r) {
                         // true
                         return 1;
@@ -88,7 +88,7 @@ int minio_init_decoder (int32_t *error_index,
         uint32_t tmp_decode_index[k];
 
         for (i = 0, r = 0; i < k; i++, r++) {
-                while (_minio_src_index_in_error(r, error_index))
+                while (_minio_src_index_in_error(r, error_index, errs))
                         r++;
                 for (j = 0; j < k; j++) {
                         input_matrix[k * i + j] = encode_matrix[k * r + j];

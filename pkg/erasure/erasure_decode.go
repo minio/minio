@@ -63,11 +63,9 @@ func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 			missingEncodedBlocksCount++
 		}
 	}
-	missingEncodedBlocks[missingEncodedBlocksCount] = -1
-	missingEncodedBlocksCount++
 
 	// Cannot reconstruct original data. Need at least M number of data or parity blocks.
-	if missingEncodedBlocksCount-1 > m {
+	if missingEncodedBlocksCount > m {
 		return nil, fmt.Errorf("Cannot reconstruct original data. Need at least [%d]  data or parity blocks", m)
 	}
 
@@ -86,7 +84,7 @@ func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 		var decodeMatrix, decodeTbls *C.uchar
 		var decodeIndex *C.uint32_t
 
-		C.minio_init_decoder(missingEncodedBlocksC, C.int(k), C.int(n), C.int(missingEncodedBlocksCount-1),
+		C.minio_init_decoder(missingEncodedBlocksC, C.int(k), C.int(n), C.int(missingEncodedBlocksCount),
 			e.encodeMatrix, &decodeMatrix, &decodeTbls, &decodeIndex)
 
 		// cache this for future needs
@@ -102,14 +100,14 @@ func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData [
 	}
 
 	// Get pointers to source "data" and target "parity" blocks from the output byte array.
-	ret := C.minio_get_source_target(C.int(missingEncodedBlocksCount-1), C.int(k), C.int(m), missingEncodedBlocksC,
+	ret := C.minio_get_source_target(C.int(missingEncodedBlocksCount), C.int(k), C.int(m), missingEncodedBlocksC,
 		e.decodeIndex, (**C.uchar)(unsafe.Pointer(&pointers[0])), &source, &target)
 	if int(ret) == -1 {
 		return nil, errors.New("Unable to decode data")
 	}
 
 	// Decode data
-	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(missingEncodedBlocksCount-1), e.decodeTbls,
+	C.ec_encode_data(C.int(encodedBlockLen), C.int(k), C.int(missingEncodedBlocksCount), e.decodeTbls,
 		source, target)
 
 	// Allocate buffer to output buffer
