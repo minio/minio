@@ -25,6 +25,9 @@ import (
 
 // intSlice2CIntArray converts Go int slice to C int array
 func intSlice2CIntArray(srcErrList []int) *C.int32_t {
+	if len(srcErrList) == 0 {
+		return (*C.int32_t)(unsafe.Pointer(nil))
+	}
 	var sizeErrInt = int(unsafe.Sizeof(srcErrList[0]))
 	switch sizeInt {
 	case sizeErrInt:
