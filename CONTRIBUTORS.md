@@ -5,4 +5,6 @@
 - Anis Elleuch <vadmeste@gmail.com>
 - Frederick F. Kautz IV <fkautz@minio.io>
 - Harshavardhana <harsha@minio.io>
+- Krishna Srinivas <krishna@minio.io>
 - Matthew Farrellee <matt@cs.wisc.edu>
+- Nate Rosenblum <flander@gmail.com>
