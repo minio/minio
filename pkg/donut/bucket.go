@@ -543,13 +543,25 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io
 		return nil, iodine.New(err, nil)
 	}
 	encodedBytes := make([][]byte, encoder.k+encoder.m)
+
+	errCh := make(chan error)
+	var errRet error
+
 	for i, reader := range readers {
-		var bytesBuffer bytes.Buffer
-		_, err := io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
+		go func(i int, reader io.Reader) {
+			encodedBytes[i] = make([]byte, curChunkSize)
+			_, err := io.ReadFull(reader, encodedBytes[i])
+			errCh <- err
+		}(i, reader)
+	}
+	for range readers {
+		err := <-errCh
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			errRet = err
 		}
-		encodedBytes[i] = bytesBuffer.Bytes()
+	}
+	if errRet != nil {
+		return nil, iodine.New(errRet, nil)
 	}
 	decodedData, err := encoder.Decode(encodedBytes, int(curBlockSize))
 	if err != nil {
