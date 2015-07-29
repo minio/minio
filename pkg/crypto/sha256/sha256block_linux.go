@@ -44,7 +44,7 @@ func blockAVX2(dig *digest, p []byte) {
 	C.sha256_transform_rorx((*C.char)(unsafe.Pointer(&p[0])), (*C.uint32_t)(unsafe.Pointer(&dig.h[0])), (C.ulong)(len(p)/64))
 }
 
-func blockSoftware(dig *digest, p []byte) {
+func blockGeneric(dig *digest, p []byte) {
 	var w [64]uint32
 	h0, h1, h2, h3, h4, h5, h6, h7 := dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7]
 	for len(p) >= chunk {

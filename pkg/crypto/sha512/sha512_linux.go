@@ -53,7 +53,7 @@ func block(dig *digest, p []byte) {
 	case cpu.HasSSE41() == true:
 		blockSSE(dig, p)
 	default:
-		blockSoftware(dig, p)
+		blockGeneric(dig, p)
 	}
 }
 
@@ -181,15 +181,4 @@ func Sum(reader io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	return h.Sum(nil), nil
-}
-
-// SumStream - similar to 'Sum()' but returns a [Size]byte
-func SumStream(reader io.Reader) ([Size]byte, error) {
-	var returnValue [Size]byte
-	sumSlice, err := Sum(reader)
-	if err != nil {
-		return returnValue, err
-	}
-	copy(returnValue[:], sumSlice)
-	return returnValue, err
 }
