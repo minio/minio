@@ -171,7 +171,10 @@ func main() {
 
 USAGE:
   {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
-{{if .Flags}}
+
+COMMANDS:
+  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .Flags}}
 GLOBAL FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
