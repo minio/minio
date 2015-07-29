@@ -19,13 +19,13 @@ package donut
 import (
 	"bytes"
 	"fmt"
+	"hash"
 	"io"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-	"hash"
 
 	"crypto/md5"
 	"encoding/hex"
