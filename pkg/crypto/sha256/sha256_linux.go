@@ -66,7 +66,7 @@ func block(dig *digest, p []byte) {
 	case cpu.HasSSE41() == true:
 		blockSSE(dig, p)
 	default:
-		blockSoftware(dig, p)
+		blockGeneric(dig, p)
 	}
 }
 

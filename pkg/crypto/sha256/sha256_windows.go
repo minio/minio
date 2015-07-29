@@ -17,6 +17,7 @@
 package sha256
 
 import (
+	"hash"
 	"io"
 
 	"crypto/sha256"
@@ -44,4 +45,9 @@ func Sum(reader io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	return d.Sum(nil), nil
+}
+
+// New returns a new hash.Hash computing SHA256.
+func New() hash.Hash {
+	return sha256.New()
 }
