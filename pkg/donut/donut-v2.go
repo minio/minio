@@ -21,7 +21,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -127,53 +126,7 @@ func New() (Interface, error) {
 /// V2 API functions
 
 // GetObject - GET object from cache buffer
-func (donut API) GetObject(w io.Writer, bucket string, object string) (int64, error) {
-	donut.lock.Lock()
-	defer donut.lock.Unlock()
-
-	if !IsValidBucket(bucket) {
-		return 0, iodine.New(BucketNameInvalid{Bucket: bucket}, nil)
-	}
-	if !IsValidObjectName(object) {
-		return 0, iodine.New(ObjectNameInvalid{Object: object}, nil)
-	}
-	if !donut.storedBuckets.Exists(bucket) {
-		return 0, iodine.New(BucketNotFound{Bucket: bucket}, nil)
-	}
-	objectKey := bucket + "/" + object
-	data, ok := donut.objects.Get(objectKey)
-	if !ok {
-		if len(donut.config.NodeDiskMap) > 0 {
-			reader, size, err := donut.getObject(bucket, object)
-			if err != nil {
-				return 0, iodine.New(err, nil)
-			}
-			// new proxy writer to capture data read from disk
-			pw := NewProxyWriter(w)
-			written, err := io.CopyN(pw, reader, size)
-			if err != nil {
-				return 0, iodine.New(err, nil)
-			}
-			/// cache object read from disk
-			ok := donut.objects.Append(objectKey, pw.writtenBytes)
-			pw.writtenBytes = nil
-			go debug.FreeOSMemory()
-			if !ok {
-				return 0, iodine.New(InternalError{}, nil)
-			}
-			return written, nil
-		}
-		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
-	}
-	written, err := io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
-	if err != nil {
-		return 0, iodine.New(err, nil)
-	}
-	return written, nil
-}
-
-// GetPartialObject - GET object from cache buffer range
-func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error) {
+func (donut API) GetObject(w io.Writer, bucket string, object string, start, length int64) (int64, error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -196,35 +149,58 @@ func (donut API) GetPartialObject(w io.Writer, bucket, object string, start, len
 			Length: length,
 		}, errParams)
 	}
+	if !donut.storedBuckets.Exists(bucket) {
+		return 0, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+	}
 	objectKey := bucket + "/" + object
 	data, ok := donut.objects.Get(objectKey)
+	var written int64
+	var err error
 	if !ok {
 		if len(donut.config.NodeDiskMap) > 0 {
-			reader, _, err := donut.getObject(bucket, object)
+			reader, size, err := donut.getObject(bucket, object)
 			if err != nil {
 				return 0, iodine.New(err, nil)
 			}
-			if _, err := io.CopyN(ioutil.Discard, reader, start); err != nil {
-				return 0, iodine.New(err, nil)
+			if start > 0 {
+				if _, err := io.CopyN(ioutil.Discard, reader, start); err != nil {
+					return 0, iodine.New(err, errParams)
+				}
 			}
+			// new proxy writer to capture data read from disk
 			pw := NewProxyWriter(w)
-			written, err := io.CopyN(w, reader, length)
-			if err != nil {
-				return 0, iodine.New(err, nil)
+			if length > 0 {
+				written, err = io.CopyN(pw, reader, length)
+				if err != nil {
+					return 0, iodine.New(err, errParams)
+				}
+			} else {
+				written, err = io.CopyN(pw, reader, size)
+				if err != nil {
+					return 0, iodine.New(err, errParams)
+				}
 			}
+			/// cache object read from disk
 			ok := donut.objects.Append(objectKey, pw.writtenBytes)
 			pw.writtenBytes = nil
 			go debug.FreeOSMemory()
 			if !ok {
-				return 0, iodine.New(InternalError{}, nil)
+				return 0, iodine.New(InternalError{}, errParams)
 			}
 			return written, nil
 		}
-		return 0, iodine.New(ObjectNotFound{Object: object}, nil)
+		return 0, iodine.New(ObjectNotFound{Object: object}, errParams)
 	}
-	written, err := io.CopyN(w, bytes.NewBuffer(data[start:]), length)
-	if err != nil {
-		return 0, iodine.New(err, nil)
+	if start == 0 && length == 0 {
+		written, err = io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
+		if err != nil {
+			return 0, iodine.New(err, nil)
+		}
+	} else {
+		written, err = io.CopyN(w, bytes.NewBuffer(data[start:]), length)
+		if err != nil {
+			return 0, iodine.New(err, nil)
+		}
 	}
 	return written, nil
 }
@@ -306,11 +282,11 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
 			return iodine.New(err, nil)
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return iodine.New(errors.New("bad digest, md5sum mismatch"), nil)
+			return iodine.New(BadDigest{}, nil)
 		}
 		return nil
 	}
-	return iodine.New(errors.New("invalid argument"), nil)
+	return iodine.New(InvalidArgument{}, nil)
 }
 
 // CreateObject - create an object

@@ -200,7 +200,7 @@ func (s *MyDonutSuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(actualMetadata.MD5Sum, Equals, hex.EncodeToString(hasher.Sum(nil)))
 
 	var buffer bytes.Buffer
-	size, err := dd.GetObject(&buffer, "foo", "obj")
+	size, err := dd.GetObject(&buffer, "foo", "obj", 0, 0)
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len(data)))
 	c.Assert(buffer.Bytes(), DeepEquals, []byte(data))
@@ -225,13 +225,13 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	var buffer1 bytes.Buffer
-	size, err := dd.GetObject(&buffer1, "foo5", "obj1")
+	size, err := dd.GetObject(&buffer1, "foo5", "obj1", 0, 0)
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("one"))))
 	c.Assert(buffer1.Bytes(), DeepEquals, []byte("one"))
 
 	var buffer2 bytes.Buffer
-	size, err = dd.GetObject(&buffer2, "foo5", "obj2")
+	size, err = dd.GetObject(&buffer2, "foo5", "obj2", 0, 0)
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("two"))))
 
@@ -274,7 +274,7 @@ func (s *MyDonutSuite) TestMultipleNewObjects(c *C) {
 	c.Assert(err, IsNil)
 
 	var buffer bytes.Buffer
-	size, err = dd.GetObject(&buffer, "foo5", "obj3")
+	size, err = dd.GetObject(&buffer, "foo5", "obj3", 0, 0)
 	c.Assert(err, IsNil)
 	c.Assert(size, Equals, int64(len([]byte("three"))))
 	c.Assert(buffer.Bytes(), DeepEquals, []byte("three"))

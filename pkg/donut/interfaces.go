@@ -38,8 +38,7 @@ type CloudStorage interface {
 	ListObjects(string, BucketResourcesMetadata, *Signature) ([]ObjectMetadata, BucketResourcesMetadata, error)
 
 	// Object operations
-	GetObject(w io.Writer, bucket, object string) (int64, error)
-	GetPartialObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
+	GetObject(w io.Writer, bucket, object string, start, length int64) (int64, error)
 	GetObjectMetadata(bucket, object string, signature *Signature) (ObjectMetadata, error)
 	// bucket, object, expectedMD5Sum, size, reader, metadata, signature
 	CreateObject(string, string, string, int64, io.Reader, map[string]string, *Signature) (ObjectMetadata, error)

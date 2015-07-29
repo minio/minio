@@ -69,26 +69,16 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	switch iodine.ToError(err).(type) {
 	case nil: // success
 		{
-			httpRange, err := getRequestedRange(req, metadata.Size)
+			httpRange, err := getRequestedRange(req.Header.Get("Range"), metadata.Size)
 			if err != nil {
 				writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
 				return
 			}
-			switch httpRange.start == 0 && httpRange.length == 0 {
-			case true:
-				setObjectHeaders(w, metadata)
-				if _, err := api.Donut.GetObject(w, bucket, object); err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
-					log.Error.Println(iodine.New(err, nil))
-				}
-			case false:
-				metadata.Size = httpRange.length
-				setRangeObjectHeaders(w, metadata, httpRange)
-				w.WriteHeader(http.StatusPartialContent)
-				if _, err := api.Donut.GetPartialObject(w, bucket, object, httpRange.start, httpRange.length); err != nil {
-					// unable to write headers, we've already printed data. Just close the connection.
-					log.Error.Println(iodine.New(err, nil))
-				}
+			setObjectHeaders(w, metadata, httpRange)
+			if _, err := api.Donut.GetObject(w, bucket, object, httpRange.start, httpRange.length); err != nil {
+				// unable to write headers, we've already printed data. Just close the connection.
+				log.Error.Println(iodine.New(err, nil))
+				return
 			}
 		}
 	case donut.SignatureDoesNotMatch:
@@ -144,7 +134,7 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
 	switch iodine.ToError(err).(type) {
 	case nil:
-		setObjectHeaders(w, metadata)
+		setObjectHeaders(w, metadata, nil)
 		w.WriteHeader(http.StatusOK)
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
