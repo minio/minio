@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"encoding/hex"
-	"errors"
 	"net/http"
 	"regexp"
 	"sort"
@@ -79,7 +78,7 @@ func urlEncodeName(name string) (string, error) {
 		default:
 			len := utf8.RuneLen(s)
 			if len < 0 {
-				return "", errors.New("invalid utf-8")
+				return "", iodine.New(InvalidArgument{}, nil)
 			}
 			u := make([]byte, len)
 			utf8.EncodeRune(u, s)

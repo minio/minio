@@ -78,23 +78,30 @@ func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata) {
+func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, contentRange *httpRange) {
+	// set common headers
+	if contentRange != nil {
+		if contentRange.length > 0 {
+			setCommonHeaders(w, metadata.Metadata["contentType"], int(contentRange.length))
+		} else {
+			setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
+		}
+	} else {
+		setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
+	}
+	// set object headers
 	lastModified := metadata.Created.Format(http.TimeFormat)
-	// common headers
-	setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
 	// object related headers
 	w.Header().Set("ETag", "\""+metadata.MD5Sum+"\"")
 	w.Header().Set("Last-Modified", lastModified)
-}
 
-// Write range object header
-func setRangeObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, contentRange *httpRange) {
-	// set common headers
-	setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
-	// set object headers
-	setObjectHeaders(w, metadata)
 	// set content range
-	w.Header().Set("Content-Range", contentRange.getContentRange())
+	if contentRange != nil {
+		if contentRange.start > 0 || contentRange.length > 0 {
+			w.Header().Set("Content-Range", contentRange.String())
+			w.WriteHeader(http.StatusPartialContent)
+		}
+	}
 }
 
 func encodeSuccessResponse(response interface{}, acceptsType contentType) []byte {
