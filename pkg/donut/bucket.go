@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"hash"
 
 	"crypto/md5"
 	"encoding/hex"
@@ -247,15 +248,23 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		return ObjectMetadata{}, iodine.New(err, nil)
 	}
 	sumMD5 := md5.New()
-	sum256 := sha256.New()
 	sum512 := sha512.New()
+	var sum256 hash.Hash
+	var mwriter io.Writer
+
+	if signature != nil {
+		sum256 = sha256.New()
+		mwriter = io.MultiWriter(sumMD5, sum256, sum512)
+	} else {
+		mwriter = io.MultiWriter(sumMD5, sum512)
+	}
 	objMetadata := ObjectMetadata{}
 	objMetadata.Version = objectMetadataVersion
 	objMetadata.Created = time.Now().UTC()
 	// if total writers are only '1' do not compute erasure
 	switch len(writers) == 1 {
 	case true:
-		mw := io.MultiWriter(writers[0], sumMD5, sum256, sum512)
+		mw := io.MultiWriter(writers[0], mwriter)
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
 			CleanupWritersOnError(writers)
@@ -269,7 +278,6 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 			CleanupWritersOnError(writers)
 			return ObjectMetadata{}, iodine.New(err, nil)
 		}
-		mwriter := io.MultiWriter(sumMD5, sum256, sum512)
 		// write encoded data with k, m and writers
 		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, size, mwriter)
 		if err != nil {
