@@ -109,31 +109,4 @@ func GetAuthKeys(url string) ([]byte, error) {
 	return json.MarshalIndent(reply, "", "\t")
 }
 
-// SetDonut - set donut config
-func SetDonut(url, hostname string, disks []string) error {
-	op := RPCOps{
-		Method: "Donut.Set",
-		Request: rpc.DonutArgs{
-			Hostname: hostname,
-			Disks:    disks,
-			Name:     "default",
-			MaxSize:  512000000,
-		},
-	}
-	req, err := NewRequest(url, op, http.DefaultTransport)
-	if err != nil {
-		return iodine.New(err, nil)
-	}
-	resp, err := req.Do()
-	defer closeResp(resp)
-	if err != nil {
-		return iodine.New(err, nil)
-	}
-	var reply rpc.Reply
-	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return iodine.New(err, nil)
-	}
-	return reply.Error
-}
-
 // Add more functions here for other RPC messages

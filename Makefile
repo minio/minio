@@ -34,7 +34,6 @@ cyclo:
 gomake-all: getdeps verifiers
 	@echo "Installing minio:"
 	@go run make.go -install
-	@go run cmd/donut/make.go -install
 
 release: getdeps verifiers
 	@echo "Installing minio:"
