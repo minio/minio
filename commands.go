@@ -19,9 +19,11 @@ package main
 import (
 	"os"
 	"os/user"
+	"path/filepath"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/controller"
+	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server"
 	"github.com/minio/minio/pkg/server/api"
 )
@@ -29,6 +31,7 @@ import (
 var commands = []cli.Command{
 	serverCmd,
 	controllerCmd,
+	donutCmd,
 }
 
 var serverCmd = cli.Command{
@@ -66,6 +69,78 @@ EXAMPLES:
       $ minio {{.Name}} mem http://localhost:9001/rpc
 
 `,
+}
+
+var donutSubCommands = []cli.Command{
+	{
+		Name:        "make",
+		Description: "make a donut",
+		Action:      runMkdonut,
+		CustomHelpTemplate: `NAME:
+  donut {{.Name}} - {{.Description}}
+
+USAGE:
+  donut {{.Name}} DONUTNAME [DISKS...]
+
+EXAMPLES:
+  1. Make a donut with 4 exports
+      $ donut {{.Name}} mongodb-backup /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
+
+  2. Make a donut with 16 exports
+      $ donut {{.Name}} operational-data /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
+       /mnt/export6 /mnt/export7 /mnt/export8 /mnt/export9 /mnt/export10 /mnt/export11 \
+       /mnt/export12 /mnt/export13 /mnt/export14 /mnt/export15 /mnt/export16
+`,
+	},
+}
+
+var donutCmd = cli.Command{
+	Name:        "donut",
+	Description: "Donut maker",
+	Subcommands: donutSubCommands,
+}
+
+func runMkdonut(c *cli.Context) {
+	if !c.Args().Present() || c.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(c, "make", 1)
+	}
+	donutName := c.Args().First()
+	if c.Args().First() != "" {
+		if !donut.IsValidDonut(donutName) {
+			Fatalf("Invalid donutname %s\n", donutName)
+		}
+	}
+	var disks []string
+	for _, disk := range c.Args().Tail() {
+		if _, err := isUsable(disk); err != nil {
+			Fatalln(err)
+		}
+		disks = append(disks, disk)
+	}
+	for _, disk := range disks {
+		if err := os.MkdirAll(filepath.Join(disk, donutName), 0700); err != nil {
+			Fatalln(err)
+		}
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		Fatalln(err)
+	}
+	donutConfig := &donut.Config{}
+	donutConfig.Version = "0.0.1"
+	donutConfig.DonutName = donutName
+	donutConfig.NodeDiskMap = make(map[string][]string)
+	// keep it in exact order as it was specified, do not try to sort disks
+	donutConfig.NodeDiskMap[hostname] = disks
+	// default cache is unlimited
+	donutConfig.MaxSize = 512000000
+
+	if err := donut.SaveConfig(donutConfig); err != nil {
+		Fatalln(err)
+	}
+
+	Infoln("Success!")
 }
 
 func getServerConfig(c *cli.Context) api.Config {
@@ -126,14 +201,5 @@ func runController(c *cli.Context) {
 			Fatalln(err)
 		}
 		Println(string(keys))
-	case "donut":
-		if len(c.Args()) <= 2 || c.Args().First() == "help" {
-			cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
-		}
-		hostname, _ := os.Hostname()
-		err := controller.SetDonut(c.Args().Tail().First(), hostname, c.Args().Tail().Tail())
-		if err != nil {
-			Fatalln(err)
-		}
 	}
 }
