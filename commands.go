@@ -77,17 +77,17 @@ var donutSubCommands = []cli.Command{
 		Description: "make a donut",
 		Action:      runMkdonut,
 		CustomHelpTemplate: `NAME:
-  donut {{.Name}} - {{.Description}}
+  minio donut {{.Name}} - {{.Description}}
 
 USAGE:
-  donut {{.Name}} DONUTNAME [DISKS...]
+  minio donut {{.Name}} DONUTNAME [DISKS...]
 
 EXAMPLES:
   1. Make a donut with 4 exports
-      $ donut {{.Name}} mongodb-backup /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
+      $ minio donut {{.Name}} mongodb-backup /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4
 
   2. Make a donut with 16 exports
-      $ donut {{.Name}} operational-data /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
+      $ minio donut {{.Name}} operational-data /mnt/export1 /mnt/export2 /mnt/export3 /mnt/export4 /mnt/export5 \
        /mnt/export6 /mnt/export7 /mnt/export8 /mnt/export9 /mnt/export10 /mnt/export11 \
        /mnt/export12 /mnt/export13 /mnt/export14 /mnt/export15 /mnt/export16
 `,
