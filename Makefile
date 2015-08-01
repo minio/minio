@@ -31,14 +31,21 @@ cyclo:
 	@echo "Running $@:"
 	@test -z "$$(gocyclo -over 25 . | grep -v Godeps/_workspace/src/ | tee /dev/stderr)"
 
-gomake-all: getdeps verifiers
+build: getdeps verifiers
 	@echo "Installing minio:"
-	@go run make.go -install
+	@godep go generate ./...
+	@godep go test -race ./...
 
-release: getdeps verifiers
-	@echo "Installing minio:"
-	@go run make.go -release
-	@go run make.go -install
+gomake-all: build
+	@godep go install github.com/minio/minio
+
+release: genversion
+	@echo "Installing minio for new version.go:"
+	@godep go install github.com/minio/minio
+
+genversion:
+	@echo "Generating new minio version.go"
+	@godep go run genversion.go
 
 godepupdate:
 	@(env bash $(PWD)/buildscripts/updatedeps.sh)
@@ -59,4 +66,5 @@ clean:
 	@rm -fv cover.out
 	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv minio
+	@godep go clean
 	@find Godeps -name "*.a" -type f -exec rm -vf {} \+
