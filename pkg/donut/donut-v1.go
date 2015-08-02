@@ -576,7 +576,7 @@ func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	}
 	var bucketMetaDataReader io.ReadCloser
 	for order, disk := range disks {
-		bucketMetaDataReader, err = disk.OpenFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
+		bucketMetaDataReader, err = disk.Open(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 		if err != nil {
 			continue
 		}
