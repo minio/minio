@@ -170,8 +170,8 @@ func (disk Disk) CreateFile(filename string) (*atomic.File, error) {
 	return f, nil
 }
 
-// OpenFile - read a file inside disk root path
-func (disk Disk) OpenFile(filename string) (*os.File, error) {
+// Open - read a file inside disk root path
+func (disk Disk) Open(filename string) (*os.File, error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
@@ -179,6 +179,21 @@ func (disk Disk) OpenFile(filename string) (*os.File, error) {
 		return nil, iodine.New(InvalidArgument{}, nil)
 	}
 	dataFile, err := os.Open(filepath.Join(disk.path, filename))
+	if err != nil {
+		return nil, iodine.New(err, nil)
+	}
+	return dataFile, nil
+}
+
+// OpenFile - Use with caution
+func (disk Disk) OpenFile(filename string, flags int, perm os.FileMode) (*os.File, error) {
+	disk.lock.Lock()
+	defer disk.lock.Unlock()
+
+	if filename == "" {
+		return nil, iodine.New(InvalidArgument{}, nil)
+	}
+	dataFile, err := os.OpenFile(filepath.Join(disk.path, filename), flags, perm)
 	if err != nil {
 		return nil, iodine.New(err, nil)
 	}

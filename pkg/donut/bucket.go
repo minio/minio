@@ -101,7 +101,7 @@ func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 	}
 	var bucketMetaDataReader io.ReadCloser
 	for order, disk := range disks {
-		bucketMetaDataReader, err = disk.OpenFile(filepath.Join(b.donutName, bucketMetadataConfig))
+		bucketMetaDataReader, err = disk.Open(filepath.Join(b.donutName, bucketMetadataConfig))
 		if err != nil {
 			continue
 		}
@@ -581,7 +581,7 @@ func (b bucket) getObjectReaders(objectName, objectMeta string) (map[int]io.Read
 			var objectSlice io.ReadCloser
 			bucketSlice := fmt.Sprintf("%s$%d$%d", b.name, nodeSlice, order)
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
-			objectSlice, err = disk.OpenFile(objectPath)
+			objectSlice, err = disk.Open(objectPath)
 			if err == nil {
 				readers[order] = objectSlice
 			}
