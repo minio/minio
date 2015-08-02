@@ -60,7 +60,7 @@ type tracePoint struct {
 
 // Error implements tracing error functionality.
 type Error struct {
-	lock        sync.Mutex
+	lock        sync.RWMutex
 	e           error
 	sysInfo     map[string]string
 	tracePoints []tracePoint
@@ -71,7 +71,8 @@ type Error struct {
 // trace the return path with Probe.Trace and finally handle reporting or quitting
 // at the top level.
 func New(e error) *Error {
-	return &Error{sync.Mutex{}, e, GetSysInfo(), []tracePoint{}}
+	Err := Error{sync.RWMutex{}, e, GetSysInfo(), []tracePoint{}}
+	return Err.Trace()
 }
 
 // Trace records the point at which it is invoked. Stack traces are important for
@@ -114,6 +115,9 @@ func (e *Error) Error() string {
 
 // String returns error message.
 func (e *Error) String() string {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
 	trace := e.e.Error() + "\n"
 	for i, tp := range e.tracePoints {
 		if len(tp.Env) > 0 {
@@ -135,6 +139,9 @@ func (e *Error) String() string {
 
 // JSON returns JSON formated error trace.
 func (e *Error) JSON() string {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
 	anonError := struct {
 		SysInfo     map[string]string
 		TracePoints []tracePoint
@@ -153,5 +160,6 @@ func (e *Error) JSON() string {
 
 // ToError returns original emnedded error.
 func (e *Error) ToError() error {
+	// No need to lock. "e.e" is set once during New and never changed.
 	return e.e
 }

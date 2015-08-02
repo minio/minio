@@ -16,7 +16,6 @@
 package probe
 
 import (
-	"fmt"
 	"os"
 	"testing"
 )
@@ -33,8 +32,14 @@ func TestProbe(t *testing.T) {
 	if es == nil {
 		t.Fail()
 	}
-	es.Trace()
-	fmt.Println(es)
-	// fmt.Println(es.JSON())
-	// fmt.Println(es.ToError())
+
+	newES := es.Trace()
+	if newES == nil {
+		t.Fail()
+	}
+	/*
+		fmt.Println(es)
+		fmt.Println(es.JSON())
+		fmt.Println(es.ToError())
+	*/
 }
