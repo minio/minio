@@ -72,7 +72,7 @@ type Error struct {
 // at the top level.
 func New(e error) *Error {
 	Err := Error{sync.RWMutex{}, e, GetSysInfo(), []tracePoint{}}
-	return Err.Trace()
+	return Err.trace()
 }
 
 // Trace records the point at which it is invoked. Stack traces are important for
@@ -81,7 +81,13 @@ func (e *Error) Trace(fields ...string) *Error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
-	pc, file, line, _ := runtime.Caller(1)
+	return e.trace(fields...)
+}
+
+// internal trace - records the point at which it is invoked. Stack traces are important for
+// debugging purposes.
+func (e *Error) trace(fields ...string) *Error {
+	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
 	_, function = filepath.Split(function)
 	file = "..." + strings.TrimPrefix(file, os.Getenv("GOPATH")) // trim gopathSource from file
