@@ -78,6 +78,10 @@ func New(e error) *Error {
 // Trace records the point at which it is invoked. Stack traces are important for
 // debugging purposes.
 func (e *Error) Trace(fields ...string) *Error {
+	if e == nil {
+		return nil
+	}
+
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -103,6 +107,9 @@ func (e *Error) trace(fields ...string) *Error {
 
 // Untrace erases last trace entry.
 func (e *Error) Untrace() {
+	if e == nil {
+		return
+	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -116,35 +123,48 @@ func (e *Error) Untrace() {
 
 // Error returns error string.
 func (e *Error) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
 	return e.String()
 }
 
 // String returns error message.
 func (e *Error) String() string {
+	if e == nil {
+		return "<nil>"
+	}
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 
-	trace := e.e.Error() + "\n"
-	for i, tp := range e.tracePoints {
-		if len(tp.Env) > 0 {
-			trace += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n", i, tp.Filename, tp.Line, tp.Function, strings.Join(tp.Env["Tags"], ", "))
-		} else {
-			trace += fmt.Sprintf(" (%d) %s:%d %s(..)\n", i, tp.Filename, tp.Line, tp.Function)
+	if e.e != nil {
+		trace := e.e.Error() + "\n"
+		for i, tp := range e.tracePoints {
+			if len(tp.Env) > 0 {
+				trace += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n", i, tp.Filename, tp.Line, tp.Function, strings.Join(tp.Env["Tags"], ", "))
+			} else {
+				trace += fmt.Sprintf(" (%d) %s:%d %s(..)\n", i, tp.Filename, tp.Line, tp.Function)
+			}
 		}
+
+		trace += " Host:" + e.sysInfo["host.name"] + " | "
+		trace += "OS:" + e.sysInfo["host.os"] + " | "
+		trace += "Arch:" + e.sysInfo["host.arch"] + " | "
+		trace += "Lang:" + e.sysInfo["host.lang"] + " | "
+		trace += "Mem:" + e.sysInfo["mem.used"] + "/" + e.sysInfo["mem.total"] + " | "
+		trace += "Heap:" + e.sysInfo["mem.heap.used"] + "/" + e.sysInfo["mem.heap.total"]
+
+		return trace
 	}
-
-	trace += " Host:" + e.sysInfo["host.name"] + " | "
-	trace += "OS:" + e.sysInfo["host.os"] + " | "
-	trace += "Arch:" + e.sysInfo["host.arch"] + " | "
-	trace += "Lang:" + e.sysInfo["host.lang"] + " | "
-	trace += "Mem:" + e.sysInfo["mem.used"] + "/" + e.sysInfo["mem.total"] + " | "
-	trace += "Heap:" + e.sysInfo["mem.heap.used"] + "/" + e.sysInfo["mem.heap.total"]
-
-	return trace
+	return "<nil>"
 }
 
 // JSON returns JSON formated error trace.
 func (e *Error) JSON() string {
+	if e == nil {
+		return "<nil>"
+	}
+
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 
