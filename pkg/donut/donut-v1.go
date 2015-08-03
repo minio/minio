@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // config files used inside Donut
@@ -52,41 +52,41 @@ const (
 /// v1 API functions
 
 // makeBucket - make a new bucket
-func (donut API) makeBucket(bucket string, acl BucketACL) error {
+func (donut API) makeBucket(bucket string, acl BucketACL) *probe.Error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return iodine.New(InvalidArgument{}, nil)
+		return probe.New(InvalidArgument{})
 	}
 	return donut.makeDonutBucket(bucket, acl.String())
 }
 
 // getBucketMetadata - get bucket metadata
-func (donut API) getBucketMetadata(bucketName string) (BucketMetadata, error) {
+func (donut API) getBucketMetadata(bucketName string) (BucketMetadata, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return BucketMetadata{}, iodine.New(err, nil)
+		return BucketMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucketName]; !ok {
-		return BucketMetadata{}, iodine.New(BucketNotFound{Bucket: bucketName}, nil)
+		return BucketMetadata{}, probe.New(BucketNotFound{Bucket: bucketName})
 	}
 	metadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return BucketMetadata{}, iodine.New(err, nil)
+		return BucketMetadata{}, err.Trace()
 	}
 	return metadata.Buckets[bucketName], nil
 }
 
 // setBucketMetadata - set bucket metadata
-func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]string) error {
+func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]string) *probe.Error {
 	if err := donut.listDonutBuckets(); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	metadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	oldBucketMetadata := metadata.Buckets[bucketName]
 	acl, ok := bucketMetadata["acl"]
 	if !ok {
-		return iodine.New(InvalidArgument{}, nil)
+		return probe.New(InvalidArgument{})
 	}
 	oldBucketMetadata.ACL = BucketACL(acl)
 	metadata.Buckets[bucketName] = oldBucketMetadata
@@ -94,9 +94,9 @@ func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]
 }
 
 // listBuckets - return list of buckets
-func (donut API) listBuckets() (map[string]BucketMetadata, error) {
+func (donut API) listBuckets() (map[string]BucketMetadata, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	metadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -112,95 +112,80 @@ func (donut API) listBuckets() (map[string]BucketMetadata, error) {
 }
 
 // listObjects - return list of objects
-func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, error) {
-	errParams := map[string]string{
-		"bucket":    bucket,
-		"prefix":    prefix,
-		"marker":    marker,
-		"delimiter": delimiter,
-		"maxkeys":   strconv.Itoa(maxkeys),
-	}
+func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return ListObjectsResults{}, iodine.New(err, errParams)
+		return ListObjectsResults{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ListObjectsResults{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ListObjectsResults{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	listObjects, err := donut.buckets[bucket].ListObjects(prefix, marker, delimiter, maxkeys)
 	if err != nil {
-		return ListObjectsResults{}, iodine.New(err, errParams)
+		return ListObjectsResults{}, err.Trace()
 	}
 	return listObjects, nil
 }
 
 // putObject - put object
-func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-	}
+func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
+		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
-		return ObjectMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
+		return ObjectMetadata{}, probe.New(ObjectExists{Object: object})
 	}
 	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, size, expectedMD5Sum, metadata, signature)
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	bucketMeta.Buckets[bucket].BucketObjects[object] = struct{}{}
 	if err := donut.setDonutBucketMetadata(bucketMeta); err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	return objMetadata, nil
 }
 
 // putObject - put object
-func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (PartMetadata, error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-	}
+func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (PartMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return PartMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return PartMetadata{}, probe.New(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return PartMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return PartMetadata{}, probe.New(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
-		return PartMetadata{}, iodine.New(err, errParams)
+		return PartMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return PartMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, nil)
+		return PartMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return PartMetadata{}, iodine.New(err, errParams)
+		return PartMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].Multiparts[object]; !ok {
-		return PartMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, nil)
+		return PartMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
-		return PartMetadata{}, iodine.New(ObjectExists{Object: object}, errParams)
+		return PartMetadata{}, probe.New(ObjectExists{Object: object})
 	}
 	objectPart := object + "/" + "multipart" + "/" + strconv.Itoa(partID)
 	objmetadata, err := donut.buckets[bucket].WriteObject(objectPart, reader, size, expectedMD5Sum, metadata, signature)
 	if err != nil {
-		return PartMetadata{}, iodine.New(err, errParams)
+		return PartMetadata{}, err.Trace()
 	}
 	partMetadata := PartMetadata{
 		PartNumber:   partID,
@@ -212,74 +197,61 @@ func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, 
 	multipartSession.Parts[strconv.Itoa(partID)] = partMetadata
 	bucketMeta.Buckets[bucket].Multiparts[object] = multipartSession
 	if err := donut.setDonutBucketMetadata(bucketMeta); err != nil {
-		return PartMetadata{}, iodine.New(err, errParams)
+		return PartMetadata{}, err.Trace()
 	}
 	return partMetadata, nil
 }
 
 // getObject - get object
-func (donut API) getObject(bucket, object string) (reader io.ReadCloser, size int64, err error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-	}
+func (donut API) getObject(bucket, object string) (reader io.ReadCloser, size int64, err *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return nil, 0, iodine.New(InvalidArgument{}, errParams)
+		return nil, 0, probe.New(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return nil, 0, iodine.New(InvalidArgument{}, errParams)
+		return nil, 0, probe.New(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
-		return nil, 0, iodine.New(err, nil)
+		return nil, 0, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return nil, 0, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return nil, 0, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	return donut.buckets[bucket].ReadObject(object)
 }
 
 // getObjectMetadata - get object metadata
-func (donut API) getObjectMetadata(bucket, object string) (ObjectMetadata, error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-	}
+func (donut API) getObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; !ok {
-		return ObjectMetadata{}, iodine.New(ObjectNotFound{Object: object}, errParams)
+		return ObjectMetadata{}, probe.New(ObjectNotFound{Object: object})
 	}
 	objectMetadata, err := donut.buckets[bucket].GetObjectMetadata(object)
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, nil)
+		return ObjectMetadata{}, err.Trace()
 	}
 	return objectMetadata, nil
 }
 
 // newMultipartUpload - new multipart upload request
-func (donut API) newMultipartUpload(bucket, object, contentType string) (string, error) {
-	errParams := map[string]string{
-		"bucket":      bucket,
-		"object":      object,
-		"contentType": contentType,
-	}
+func (donut API) newMultipartUpload(bucket, object, contentType string) (string, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return "", iodine.New(err, errParams)
+		return "", err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return "", iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return "", probe.New(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return "", iodine.New(err, errParams)
+		return "", err.Trace()
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
 	multiparts := make(map[string]MultiPartSession)
@@ -302,40 +274,36 @@ func (donut API) newMultipartUpload(bucket, object, contentType string) (string,
 	allbuckets.Buckets[bucket] = bucketMetadata
 
 	if err := donut.setDonutBucketMetadata(allbuckets); err != nil {
-		return "", iodine.New(err, errParams)
+		return "", err.Trace()
 	}
 
 	return uploadID, nil
 }
 
 // listObjectParts list all object parts
-func (donut API) listObjectParts(bucket, object string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-		"object": object,
-	}
+func (donut API) listObjectParts(bucket, object string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectResourcesMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectResourcesMetadata{}, probe.New(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectResourcesMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectResourcesMetadata{}, probe.New(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
-		return ObjectResourcesMetadata{}, iodine.New(err, nil)
+		return ObjectResourcesMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectResourcesMetadata{}, iodine.New(err, errParams)
+		return ObjectResourcesMetadata{}, err.Trace()
 	}
 	bucketMetadata := allBuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, errParams)
+		return ObjectResourcesMetadata{}, probe.New(InvalidUploadID{UploadID: resources.UploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != resources.UploadID {
-		return ObjectResourcesMetadata{}, iodine.New(InvalidUploadID{UploadID: resources.UploadID}, errParams)
+		return ObjectResourcesMetadata{}, probe.New(InvalidUploadID{UploadID: resources.UploadID})
 	}
 	objectResourcesMetadata := resources
 	objectResourcesMetadata.Bucket = bucket
@@ -358,7 +326,7 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 		}
 		part, ok := bucketMetadata.Multiparts[object].Parts[strconv.Itoa(i)]
 		if !ok {
-			return ObjectResourcesMetadata{}, iodine.New(InvalidPart{}, nil)
+			return ObjectResourcesMetadata{}, probe.New(InvalidPart{})
 		}
 		parts = append(parts, &part)
 	}
@@ -368,58 +336,57 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 }
 
 // completeMultipartUpload complete an incomplete multipart upload
-func (donut API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, error) {
-	errParams := map[string]string{
-		"bucket":   bucket,
-		"object":   object,
-		"uploadID": uploadID,
-	}
+func (donut API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+		return ObjectMetadata{}, err.Trace()
 	}
 	bucketMetadata := allBuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != uploadID {
-		return ObjectMetadata{}, iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
 	}
-	partBytes, err := ioutil.ReadAll(data)
-	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, errParams)
+	var partBytes []byte
+	{
+		var err error
+		partBytes, err = ioutil.ReadAll(data)
+		if err != nil {
+			return ObjectMetadata{}, probe.New(err)
+		}
 	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256(partBytes)[:]))
 		if err != nil {
-			return ObjectMetadata{}, iodine.New(err, errParams)
+			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, errParams)
+			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}
 	if err := xml.Unmarshal(partBytes, parts); err != nil {
-		return ObjectMetadata{}, iodine.New(MalformedXML{}, errParams)
+		return ObjectMetadata{}, probe.New(MalformedXML{})
 	}
 	if !sort.IsSorted(completedParts(parts.Part)) {
-		return ObjectMetadata{}, iodine.New(InvalidPartOrder{}, errParams)
+		return ObjectMetadata{}, probe.New(InvalidPartOrder{})
 	}
 	for _, part := range parts.Part {
 		if strings.Trim(part.ETag, "\"") != bucketMetadata.Multiparts[object].Parts[strconv.Itoa(part.PartNumber)].ETag {
-			return ObjectMetadata{}, iodine.New(InvalidPart{}, errParams)
+			return ObjectMetadata{}, probe.New(InvalidPart{})
 		}
 	}
 	var finalETagBytes []byte
@@ -428,7 +395,7 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	for _, part := range bucketMetadata.Multiparts[object].Parts {
 		partETagBytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
-			return ObjectMetadata{}, iodine.New(err, errParams)
+			return ObjectMetadata{}, probe.New(err)
 		}
 		finalETagBytes = append(finalETagBytes, partETagBytes...)
 		finalSize += part.Size
@@ -444,19 +411,16 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 }
 
 // listMultipartUploads list all multipart uploads
-func (donut API) listMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, error) {
-	errParams := map[string]string{
-		"bucket": bucket,
-	}
+func (donut API) listMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error) {
 	if err := donut.listDonutBuckets(); err != nil {
-		return BucketMultipartResourcesMetadata{}, iodine.New(err, errParams)
+		return BucketMultipartResourcesMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return BucketMultipartResourcesMetadata{}, iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return BucketMultipartResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return BucketMultipartResourcesMetadata{}, iodine.New(err, errParams)
+		return BucketMultipartResourcesMetadata{}, err.Trace()
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
 	var uploads []*UploadMetadata
@@ -505,34 +469,29 @@ func (donut API) listMultipartUploads(bucket string, resources BucketMultipartRe
 }
 
 // abortMultipartUpload - abort a incomplete multipart upload
-func (donut API) abortMultipartUpload(bucket, object, uploadID string) error {
-	errParams := map[string]string{
-		"bucket":   bucket,
-		"object":   object,
-		"uploadID": uploadID,
-	}
+func (donut API) abortMultipartUpload(bucket, object, uploadID string) *probe.Error {
 	if err := donut.listDonutBuckets(); err != nil {
-		return iodine.New(err, errParams)
+		return err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return iodine.New(BucketNotFound{Bucket: bucket}, errParams)
+		return probe.New(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return iodine.New(err, errParams)
+		return err.Trace()
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+		return probe.New(InvalidUploadID{UploadID: uploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != uploadID {
-		return iodine.New(InvalidUploadID{UploadID: uploadID}, errParams)
+		return probe.New(InvalidUploadID{UploadID: uploadID})
 	}
 	delete(bucketMetadata.Multiparts, object)
 
 	allbuckets.Buckets[bucket] = bucketMetadata
 	if err := donut.setDonutBucketMetadata(allbuckets); err != nil {
-		return iodine.New(err, errParams)
+		return err.Trace()
 	}
 
 	return nil
@@ -541,18 +500,18 @@ func (donut API) abortMultipartUpload(bucket, object, uploadID string) error {
 //// internal functions
 
 // getBucketMetadataWriters -
-func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
+func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, *probe.Error) {
 	var writers []io.WriteCloser
 	for _, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 		writers = make([]io.WriteCloser, len(disks))
 		for order, disk := range disks {
 			bucketMetaDataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
-				return nil, iodine.New(err, nil)
+				return nil, err.Trace()
 			}
 			writers[order] = bucketMetaDataWriter
 		}
@@ -561,14 +520,14 @@ func (donut API) getBucketMetadataWriters() ([]io.WriteCloser, error) {
 }
 
 // getBucketMetadataReaders - readers are returned in map rather than slice
-func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
+func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, *probe.Error) {
 	readers := make(map[int]io.ReadCloser)
 	disks := make(map[int]disk.Disk)
-	var err error
+	var err *probe.Error
 	for _, node := range donut.nodes {
 		nDisks, err := node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 		for k, v := range nDisks {
 			disks[k] = v
@@ -583,22 +542,22 @@ func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 		readers[order] = bucketMetaDataReader
 	}
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	return readers, nil
 }
 
 // setDonutBucketMetadata -
-func (donut API) setDonutBucketMetadata(metadata *AllBuckets) error {
+func (donut API) setDonutBucketMetadata(metadata *AllBuckets) *probe.Error {
 	writers, err := donut.getBucketMetadataWriters()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	for _, writer := range writers {
 		jenc := json.NewEncoder(writer)
 		if err := jenc.Encode(metadata); err != nil {
 			CleanupWritersOnError(writers)
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 	}
 	for _, writer := range writers {
@@ -608,83 +567,85 @@ func (donut API) setDonutBucketMetadata(metadata *AllBuckets) error {
 }
 
 // getDonutBucketMetadata -
-func (donut API) getDonutBucketMetadata() (*AllBuckets, error) {
+func (donut API) getDonutBucketMetadata() (*AllBuckets, *probe.Error) {
 	metadata := &AllBuckets{}
-	var err error
 	readers, err := donut.getBucketMetadataReaders()
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	for _, reader := range readers {
 		defer reader.Close()
 	}
-	for _, reader := range readers {
-		jenc := json.NewDecoder(reader)
-		if err = jenc.Decode(metadata); err == nil {
-			return metadata, nil
+	{
+		var err error
+		for _, reader := range readers {
+			jenc := json.NewDecoder(reader)
+			if err = jenc.Decode(metadata); err == nil {
+				return metadata, nil
+			}
 		}
+		return nil, probe.New(err)
 	}
-	return nil, iodine.New(err, nil)
 }
 
 // makeDonutBucket -
-func (donut API) makeDonutBucket(bucketName, acl string) error {
+func (donut API) makeDonutBucket(bucketName, acl string) *probe.Error {
 	if err := donut.listDonutBuckets(); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	if _, ok := donut.buckets[bucketName]; ok {
-		return iodine.New(BucketExists{Bucket: bucketName}, nil)
+		return probe.New(BucketExists{Bucket: bucketName})
 	}
 	bucket, bucketMetadata, err := newBucket(bucketName, acl, donut.config.DonutName, donut.nodes)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	nodeNumber := 0
 	donut.buckets[bucketName] = bucket
 	for _, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 		for order, disk := range disks {
 			bucketSlice := fmt.Sprintf("%s$%d$%d", bucketName, nodeNumber, order)
 			err := disk.MakeDir(filepath.Join(donut.config.DonutName, bucketSlice))
 			if err != nil {
-				return iodine.New(err, nil)
+				return err.Trace()
 			}
 		}
 		nodeNumber = nodeNumber + 1
 	}
 	metadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		if os.IsNotExist(iodine.ToError(err)) {
+		if os.IsNotExist(err.ToError()) {
 			metadata := new(AllBuckets)
 			metadata.Buckets = make(map[string]BucketMetadata)
 			metadata.Buckets[bucketName] = bucketMetadata
 			err = donut.setDonutBucketMetadata(metadata)
 			if err != nil {
-				return iodine.New(err, nil)
+				return err.Trace()
 			}
 			return nil
 		}
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	metadata.Buckets[bucketName] = bucketMetadata
 	err = donut.setDonutBucketMetadata(metadata)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	return nil
 }
 
 // listDonutBuckets -
-func (donut API) listDonutBuckets() error {
+func (donut API) listDonutBuckets() *probe.Error {
 	var disks map[int]disk.Disk
-	var err error
+	var err *probe.Error
 	for _, node := range donut.nodes {
 		disks, err = node.ListDisks()
 		if err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 	}
 	var dirs []os.FileInfo
@@ -696,18 +657,18 @@ func (donut API) listDonutBuckets() error {
 	}
 	// if all disks are missing then return error
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	for _, dir := range dirs {
 		splitDir := strings.Split(dir.Name(), "$")
 		if len(splitDir) < 3 {
-			return iodine.New(CorruptedBackend{Backend: dir.Name()}, nil)
+			return probe.New(CorruptedBackend{Backend: dir.Name()})
 		}
 		bucketName := splitDir[0]
 		// we dont need this once we cache from makeDonutBucket()
 		bucket, _, err := newBucket(bucketName, "private", donut.config.DonutName, donut.nodes)
 		if err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 		donut.buckets[bucketName] = bucket
 	}

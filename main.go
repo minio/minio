@@ -22,11 +22,9 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/iodine"
 )
 
 var globalDebugFlag = false
@@ -96,11 +94,13 @@ func getSystemData() map[string]string {
 	}
 }
 
-func main() {
-	// set up iodine
-	iodine.SetGlobalState("minio.version", Version)
-	iodine.SetGlobalState("minio.starttime", time.Now().Format(time.RFC3339))
+func init() {
+	if _, err := user.Current(); err != nil {
+		Fatalf("Unable to determine current user. Reason: %s\n", err)
+	}
+}
 
+func main() {
 	// set up go max processes
 	runtime.GOMAXPROCS(runtime.NumCPU())
 

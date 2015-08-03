@@ -22,23 +22,23 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // healBuckets heal bucket slices
-func (donut API) healBuckets() error {
+func (donut API) healBuckets() *probe.Error {
 	if err := donut.listDonutBuckets(); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	bucketMetadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	disks := make(map[int]disk.Disk)
 	for _, node := range donut.nodes {
 		nDisks, err := node.ListDisks()
 		if err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 		for k, v := range nDisks {
 			disks[k] = v
@@ -49,18 +49,18 @@ func (donut API) healBuckets() error {
 			disk.MakeDir(donut.config.DonutName)
 			bucketMetadataWriter, err := disk.CreateFile(filepath.Join(donut.config.DonutName, bucketMetadataConfig))
 			if err != nil {
-				return iodine.New(err, nil)
+				return err.Trace()
 			}
 			defer bucketMetadataWriter.Close()
 			jenc := json.NewEncoder(bucketMetadataWriter)
 			if err := jenc.Encode(bucketMetadata); err != nil {
-				return iodine.New(err, nil)
+				return probe.New(err)
 			}
 			for bucket := range bucketMetadata.Buckets {
 				bucketSlice := fmt.Sprintf("%s$0$%d", bucket, order) // TODO handle node slices
 				err := disk.MakeDir(filepath.Join(donut.config.DonutName, bucketSlice))
 				if err != nil {
-					return iodine.New(err, nil)
+					return err.Trace()
 				}
 			}
 		}

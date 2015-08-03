@@ -20,7 +20,6 @@ package quick
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,19 +29,18 @@ import (
 	"sync"
 
 	"github.com/fatih/structs"
-	"github.com/minio/minio/pkg/iodine"
-	"github.com/minio/minio/pkg/utils/atomic"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Config - generic config interface functions
 type Config interface {
 	String() string
 	Version() string
-	Save(string) error
-	Load(string) error
+	Save(string) *probe.Error
+	Load(string) *probe.Error
 	Data() interface{}
-	Diff(Config) ([]structs.Field, error)
-	DeepDiff(Config) ([]structs.Field, error)
+	Diff(Config) ([]structs.Field, *probe.Error)
+	DeepDiff(Config) ([]structs.Field, *probe.Error)
 }
 
 // config - implements quick.Config interface
@@ -52,29 +50,29 @@ type config struct {
 }
 
 // CheckData - checks the validity of config data. Data sould be of type struct and contain a string type field called "Version"
-func CheckData(data interface{}) error {
+func CheckData(data interface{}) *probe.Error {
 	if !structs.IsStruct(data) {
-		return iodine.New(errors.New("Invalid argument type. Expecing \"struct\" type."), nil)
+		return probe.New(fmt.Errorf("Invalid argument type. Expecing \"struct\" type."))
 	}
 
 	st := structs.New(data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return iodine.New(fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name()), nil)
+		return probe.New(fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name()))
 	}
 
 	if f.Kind() != reflect.String {
-		return iodine.New(fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name()), nil)
+		return probe.New(fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name()))
 	}
 
 	return nil
 }
 
 // New - instantiate a new config
-func New(data interface{}) (Config, error) {
+func New(data interface{}) (Config, *probe.Error) {
 	err := CheckData(data)
 	if err != nil {
-		return nil, err
+		return nil, err.Trace()
 	}
 
 	d := new(config)
@@ -107,47 +105,40 @@ func (d config) String() string {
 }
 
 // Save writes config data in JSON format to a file.
-func (d config) Save(filename string) (err error) {
+func (d config) Save(filename string) *probe.Error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	jsonData, err := json.MarshalIndent(d.data, "", "\t")
 	if err != nil {
-		return iodine.New(err, nil)
-	}
-
-	file, err := atomic.FileCreate(filename)
-	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 
 	if runtime.GOOS == "windows" {
 		jsonData = []byte(strings.Replace(string(jsonData), "\n", "\r\n", -1))
 	}
-	_, err = file.Write(jsonData)
+
+	err = ioutil.WriteFile(filename, jsonData, 0600)
 	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 
-	if err := file.Close(); err != nil {
-		return iodine.New(err, nil)
-	}
 	return nil
 }
 
 // Load - loads JSON config from file and merge with currently set values
-func (d *config) Load(filename string) (err error) {
+func (d *config) Load(filename string) *probe.Error {
 	(*d).lock.Lock()
 	defer (*d).lock.Unlock()
 
-	_, err = os.Stat(filename)
+	_, err := os.Stat(filename)
 	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 
 	fileData, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -156,22 +147,21 @@ func (d *config) Load(filename string) (err error) {
 
 	err = json.Unmarshal(fileData, (*d).data)
 	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 
-	err = CheckData(*(*d).data)
-	if err != nil {
-		return iodine.New(err, nil)
+	if err := CheckData(*(*d).data); err != nil {
+		return err.Trace()
 	}
 
 	st := structs.New(*(*d).data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return iodine.New(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()), nil)
+		return probe.New(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
 	}
 
 	if (*d).Version() != f.Value() {
-		return iodine.New(errors.New("Version mismatch"), nil)
+		return probe.New(fmt.Errorf("Version mismatch"))
 	}
 
 	return nil
@@ -183,10 +173,11 @@ func (d config) Data() interface{} {
 }
 
 //Diff  - list fields that are in A but not in B
-func (d config) Diff(c Config) (fields []structs.Field, err error) {
-	err = CheckData(c.Data())
+func (d config) Diff(c Config) ([]structs.Field, *probe.Error) {
+	var fields []structs.Field
+	err := CheckData(c.Data())
 	if err != nil {
-		return []structs.Field{}, iodine.New(err, nil)
+		return []structs.Field{}, err.Trace()
 	}
 
 	currFields := structs.Fields(d.Data())
@@ -208,10 +199,11 @@ func (d config) Diff(c Config) (fields []structs.Field, err error) {
 }
 
 //DeepDiff  - list fields in A that are missing or not equal to fields in B
-func (d config) DeepDiff(c Config) (fields []structs.Field, err error) {
-	err = CheckData(c.Data())
+func (d config) DeepDiff(c Config) ([]structs.Field, *probe.Error) {
+	var fields []structs.Field
+	err := CheckData(c.Data())
 	if err != nil {
-		return []structs.Field{}, iodine.New(err, nil)
+		return []structs.Field{}, err.Trace()
 	}
 
 	currFields := structs.Fields(d.Data())

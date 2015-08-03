@@ -23,7 +23,7 @@ import (
 
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/donut"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 const (
@@ -64,16 +64,23 @@ func StripAccessKeyID(ah string) (string, error) {
 }
 
 // InitSignatureV4 initializing signature verification
-func InitSignatureV4(req *http.Request) (*donut.Signature, error) {
+func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	// strip auth from authorization header
 	ah := req.Header.Get("Authorization")
-	accessKeyID, err := StripAccessKeyID(ah)
-	if err != nil {
-		return nil, iodine.New(err, nil)
+	var accessKeyID string
+	{
+		var err error
+		accessKeyID, err = StripAccessKeyID(ah)
+		if err != nil {
+			return nil, probe.New(err)
+		}
 	}
 	authConfig, err := auth.LoadConfig()
+	if err != nil {
+		return nil, err.Trace()
+	}
 	if _, ok := authConfig.Users[accessKeyID]; !ok {
-		return nil, errors.New("Access ID not found")
+		return nil, probe.New(errors.New("AccessID not found"))
 	}
 	signature := &donut.Signature{
 		AccessKeyID:     authConfig.Users[accessKeyID].AccessKeyID,

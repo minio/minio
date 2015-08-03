@@ -23,8 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/minio/minio/pkg/iodine"
 )
 
 // File container provided for atomic file writes
@@ -37,11 +35,11 @@ type File struct {
 func (f *File) Close() error {
 	// close the embedded fd
 	if err := f.File.Close(); err != nil {
-		return iodine.New(err, nil)
+		return err
 	}
 	// atomic rename to final destination
 	if err := os.Rename(f.Name(), f.file); err != nil {
-		return iodine.New(err, nil)
+		return err
 	}
 	return nil
 }
@@ -50,7 +48,7 @@ func (f *File) Close() error {
 func (f *File) CloseAndPurge() error {
 	// close the embedded fd
 	if err := f.File.Close(); err != nil {
-		return iodine.New(err, nil)
+		return err
 	}
 	if err := os.Remove(f.Name()); err != nil {
 		return err
@@ -63,17 +61,17 @@ func FileCreate(filePath string) (*File, error) {
 	// if parent directories do not exist, ioutil.TempFile doesn't create them
 	// handle such a case with os.MkdirAll()
 	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err
 	}
 	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err
 	}
 	if err := os.Chmod(f.Name(), 0600); err != nil {
 		if err := os.Remove(f.Name()); err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err
 		}
-		return nil, iodine.New(err, nil)
+		return nil, err
 	}
 	return &File{File: f, file: filePath}, nil
 }

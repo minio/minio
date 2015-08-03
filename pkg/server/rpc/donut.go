@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/pkg/donut"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // DonutService donut service
@@ -40,14 +40,14 @@ type Reply struct {
 	Error   error  `json:"error"`
 }
 
-func setDonut(args *DonutArgs, reply *Reply) error {
+func setDonut(args *DonutArgs, reply *Reply) *probe.Error {
 	conf := &donut.Config{Version: "0.0.1"}
 	conf.DonutName = args.Name
 	conf.MaxSize = args.MaxSize
 	conf.NodeDiskMap = make(map[string][]string)
 	conf.NodeDiskMap[args.Hostname] = args.Disks
 	if err := donut.SaveConfig(conf); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	reply.Message = "success"
 	reply.Error = nil

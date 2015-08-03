@@ -25,7 +25,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/utils/atomic"
 )
 
@@ -37,21 +37,22 @@ type Disk struct {
 }
 
 // New - instantiate new disk
-func New(diskPath string) (Disk, error) {
+func New(diskPath string) (Disk, *probe.Error) {
 	if diskPath == "" {
-		return Disk{}, iodine.New(InvalidArgument{}, nil)
+		return Disk{}, probe.New(InvalidArgument{})
 	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
-		return Disk{}, iodine.New(err, nil)
+		return Disk{}, probe.New(err)
 	}
+
 	if !st.IsDir() {
-		return Disk{}, iodine.New(syscall.ENOTDIR, nil)
+		return Disk{}, probe.New(syscall.ENOTDIR)
 	}
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(diskPath, &s)
 	if err != nil {
-		return Disk{}, iodine.New(err, nil)
+		return Disk{}, probe.New(err)
 	}
 	disk := Disk{
 		lock:   &sync.Mutex{},
@@ -63,8 +64,7 @@ func New(diskPath string) (Disk, error) {
 		disk.fsInfo["MountPoint"] = disk.path
 		return disk, nil
 	}
-	return Disk{}, iodine.New(UnsupportedFilesystem{Type: strconv.FormatInt(int64(s.Type), 10)},
-		map[string]string{"Type": strconv.FormatInt(int64(s.Type), 10)})
+	return Disk{}, probe.New(UnsupportedFilesystem{Type: strconv.FormatInt(int64(s.Type), 10)})
 }
 
 // IsUsable - is disk usable, alive
@@ -99,25 +99,28 @@ func (disk Disk) GetFSInfo() map[string]string {
 }
 
 // MakeDir - make a directory inside disk root path
-func (disk Disk) MakeDir(dirname string) error {
+func (disk Disk) MakeDir(dirname string) *probe.Error {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
-	return os.MkdirAll(filepath.Join(disk.path, dirname), 0700)
+	if err := os.MkdirAll(filepath.Join(disk.path, dirname), 0700); err != nil {
+		return probe.New(err)
+	}
+	return nil
 }
 
 // ListDir - list a directory inside disk root path, get only directories
-func (disk Disk) ListDir(dirname string) ([]os.FileInfo, error) {
+func (disk Disk) ListDir(dirname string) ([]os.FileInfo, *probe.Error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	var directories []os.FileInfo
 	for _, content := range contents {
@@ -130,18 +133,18 @@ func (disk Disk) ListDir(dirname string) ([]os.FileInfo, error) {
 }
 
 // ListFiles - list a directory inside disk root path, get only files
-func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, error) {
+func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, *probe.Error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	var files []os.FileInfo
 	for _, content := range contents {
@@ -154,48 +157,48 @@ func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, error) {
 }
 
 // CreateFile - create a file inside disk root path, replies with custome disk.File which provides atomic writes
-func (disk Disk) CreateFile(filename string) (*atomic.File, error) {
+func (disk Disk) CreateFile(filename string) (*atomic.File, *probe.Error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return nil, probe.New(InvalidArgument{})
 	}
 
 	f, err := atomic.FileCreate(filepath.Join(disk.path, filename))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 
 	return f, nil
 }
 
 // Open - read a file inside disk root path
-func (disk Disk) Open(filename string) (*os.File, error) {
+func (disk Disk) Open(filename string) (*os.File, *probe.Error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return nil, probe.New(InvalidArgument{})
 	}
 	dataFile, err := os.Open(filepath.Join(disk.path, filename))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	return dataFile, nil
 }
 
 // OpenFile - Use with caution
-func (disk Disk) OpenFile(filename string, flags int, perm os.FileMode) (*os.File, error) {
+func (disk Disk) OpenFile(filename string, flags int, perm os.FileMode) (*os.File, *probe.Error) {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return nil, probe.New(InvalidArgument{})
 	}
 	dataFile, err := os.OpenFile(filepath.Join(disk.path, filename), flags, perm)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	return dataFile, nil
 }

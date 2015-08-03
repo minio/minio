@@ -25,7 +25,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // This package is a fork https://github.com/facebookgo/grace
@@ -71,8 +71,8 @@ type fileListener interface {
 }
 
 // getInheritedListeners - look for LISTEN_FDS in environment variables and populate listeners accordingly
-func (n *minNet) getInheritedListeners() error {
-	var retErr error
+func (n *minNet) getInheritedListeners() *probe.Error {
+	var retErr *probe.Error
 	n.inheritOnce.Do(func() {
 		n.mutex.Lock()
 		defer n.mutex.Unlock()
@@ -82,7 +82,7 @@ func (n *minNet) getInheritedListeners() error {
 		}
 		count, err := strconv.Atoi(countStr)
 		if err != nil {
-			retErr = fmt.Errorf("found invalid count value: %s=%s", envCountKey, countStr)
+			retErr = probe.New(fmt.Errorf("found invalid count value: %s=%s", envCountKey, countStr))
 			return
 		}
 
@@ -92,37 +92,40 @@ func (n *minNet) getInheritedListeners() error {
 			l, err := net.FileListener(file)
 			if err != nil {
 				file.Close()
-				retErr = iodine.New(fmt.Errorf("error inheriting socket fd %d: %s", i, err), nil)
+				retErr = probe.New(err)
 				return
 			}
 			if err := file.Close(); err != nil {
-				retErr = iodine.New(fmt.Errorf("error closing inherited socket fd %d: %s", i, err), nil)
+				retErr = probe.New(err)
 				return
 			}
 			n.inheritedListeners = append(n.inheritedListeners, l)
 		}
 	})
-	return iodine.New(retErr, nil)
+	if retErr != nil {
+		return probe.New(retErr)
+	}
+	return nil
 }
 
 // Listen announces on the local network address laddr. The network net must be
 // a stream-oriented network: "tcp", "tcp4", "tcp6", "unix" or "unixpacket". It
 // returns an inherited net.Listener for the matching network and address, or
 // creates a new one using net.Listen()
-func (n *minNet) Listen(nett, laddr string) (net.Listener, error) {
+func (n *minNet) Listen(nett, laddr string) (net.Listener, *probe.Error) {
 	switch nett {
 	default:
-		return nil, net.UnknownNetworkError(nett)
+		return nil, probe.New(net.UnknownNetworkError(nett))
 	case "tcp", "tcp4", "tcp6":
 		addr, err := net.ResolveTCPAddr(nett, laddr)
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 		return n.ListenTCP(nett, addr)
 	case "unix", "unixpacket":
 		addr, err := net.ResolveUnixAddr(nett, laddr)
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 		return n.ListenUnix(nett, addr)
 	}
@@ -131,10 +134,9 @@ func (n *minNet) Listen(nett, laddr string) (net.Listener, error) {
 // ListenTCP announces on the local network address laddr. The network net must
 // be: "tcp", "tcp4" or "tcp6". It returns an inherited net.Listener for the
 // matching network and address, or creates a new one using net.ListenTCP.
-func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, error) {
-	var err error
+func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, *probe.Error) {
 	if err := n.getInheritedListeners(); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 
 	n.mutex.Lock()
@@ -153,11 +155,10 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, error
 		}
 	}
 
-	var l net.Listener
 	// make a fresh listener
-	l, err = net.ListenTCP(nett, laddr)
+	l, err := net.ListenTCP(nett, laddr)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
@@ -166,10 +167,9 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, error
 // ListenUnix announces on the local network address laddr. The network net
 // must be a: "unix" or "unixpacket". It returns an inherited net.Listener for
 // the matching network and address, or creates a new one using net.ListenUnix.
-func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, error) {
-	var err error
+func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, *probe.Error) {
 	if err := n.getInheritedListeners(); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 
 	n.mutex.Lock()
@@ -188,23 +188,22 @@ func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, err
 		}
 	}
 
-	var l net.Listener
 	// make a fresh listener
-	l, err = net.ListenUnix(nett, laddr)
+	l, err := net.ListenUnix(nett, laddr)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
 }
 
 // activeListeners returns a snapshot copy of the active listeners.
-func (n *minNet) getActiveListeners() ([]net.Listener, error) {
+func (n *minNet) getActiveListeners() []net.Listener {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	ls := make([]net.Listener, len(n.activeListeners))
 	copy(ls, n.activeListeners)
-	return ls, nil
+	return ls
 }
 
 // IsEqual is synonymous with IP.IsEqual() method, here IsEqual matches net.Addr instead of net.IP
@@ -233,18 +232,15 @@ func (n1 minAddr) IsEqual(n2 net.Addr) bool {
 // arguments as when it was originally started. This allows for a newly
 // deployed binary to be started. It returns the pid of the newly started
 // process when successful.
-func (n *minNet) StartProcess() (int, error) {
-	listeners, err := n.getActiveListeners()
-	if err != nil {
-		return 0, iodine.New(err, nil)
-	}
-
+func (n *minNet) StartProcess() (int, *probe.Error) {
+	listeners := n.getActiveListeners()
 	// Extract the fds from the listeners.
 	files := make([]*os.File, len(listeners))
 	for i, l := range listeners {
+		var err error
 		files[i], err = l.(fileListener).File()
 		if err != nil {
-			return 0, iodine.New(err, nil)
+			return 0, probe.New(err)
 		}
 		defer files[i].Close()
 	}
@@ -253,7 +249,7 @@ func (n *minNet) StartProcess() (int, error) {
 	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])
 	if err != nil {
-		return 0, iodine.New(err, nil)
+		return 0, probe.New(err)
 	}
 
 	// Pass on the environment and replace the old count key with the new one.
@@ -272,7 +268,7 @@ func (n *minNet) StartProcess() (int, error) {
 		Files: allFiles,
 	})
 	if err != nil {
-		return 0, iodine.New(err, nil)
+		return 0, probe.New(err)
 	}
 	return process.Pid, nil
 }

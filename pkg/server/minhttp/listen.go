@@ -20,8 +20,6 @@ import (
 	"net"
 	"os"
 	"sync"
-
-	"github.com/minio/minio/pkg/iodine"
 )
 
 // rateLimitedListener returns a Listener that accepts at most n simultaneous
@@ -53,7 +51,7 @@ func (l *rateLimitListener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err != nil {
 		l.release()
-		return nil, iodine.New(err, nil)
+		return nil, err
 	}
 	return &rateLimitListenerConn{Conn: c, release: l.release}, nil
 }
@@ -67,5 +65,5 @@ type rateLimitListenerConn struct {
 func (l *rateLimitListenerConn) Close() error {
 	err := l.Conn.Close()
 	l.releaseOnce.Do(l.release)
-	return iodine.New(err, nil)
+	return err
 }

@@ -28,7 +28,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/minio/minio/pkg/crypto/sha256"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Signature - local variables
@@ -59,7 +59,7 @@ func sumHMAC(key []byte, data []byte) []byte {
 //
 // This function on the other hand is a direct replacement for url.Encode() technique to support
 // pretty much every UTF-8 character.
-func urlEncodeName(name string) (string, error) {
+func urlEncodeName(name string) (string, *probe.Error) {
 	// if object matches reserved string, no need to encode them
 	reservedNames := regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
 	if reservedNames.MatchString(name) {
@@ -78,7 +78,7 @@ func urlEncodeName(name string) (string, error) {
 		default:
 			len := utf8.RuneLen(s)
 			if len < 0 {
-				return "", iodine.New(InvalidArgument{}, nil)
+				return "", probe.New(InvalidArgument{})
 			}
 			u := make([]byte, len)
 			utf8.EncodeRune(u, s)
@@ -212,7 +212,7 @@ func (r *Signature) getSignature(signingKey []byte, stringToSign string) string 
 
 // DoesSignatureMatch - Verify authorization header with calculated header in accordance with - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns true if matches, false other wise if error is not nil then it is always false
-func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, error) {
+func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
 	// set new calulated payload
 	r.Request.Header.Set("X-Amz-Content-Sha256", hashedPayload)
 
@@ -220,12 +220,12 @@ func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, error) {
 	var date string
 	if date = r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
 		if date = r.Request.Header.Get("Date"); date == "" {
-			return false, iodine.New(MissingDateHeader{}, nil)
+			return false, probe.New(MissingDateHeader{})
 		}
 	}
 	t, err := time.Parse(iso8601Format, date)
 	if err != nil {
-		return false, iodine.New(err, nil)
+		return false, probe.New(err)
 	}
 	canonicalRequest := r.getCanonicalRequest()
 	stringToSign := r.getStringToSign(canonicalRequest, t)

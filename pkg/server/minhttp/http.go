@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/facebookgo/httpdown"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // An app contains one or more servers and their associated configuration.
@@ -45,11 +45,11 @@ type app struct {
 }
 
 // listen initailize listeners
-func (a *app) listen() error {
+func (a *app) listen() *probe.Error {
 	for _, s := range a.servers {
 		l, err := a.net.Listen("tcp", s.Addr)
 		if err != nil {
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 		if s.TLSConfig != nil {
 			l = tls.NewListener(l, s.TLSConfig)
@@ -79,7 +79,7 @@ func (a *app) wait() {
 		go func(s httpdown.Server) {
 			defer wg.Done()
 			if err := s.Wait(); err != nil {
-				a.errors <- iodine.New(err, nil)
+				a.errors <- probe.New(err)
 			}
 		}(s)
 	}
@@ -101,7 +101,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 				go func(s httpdown.Server) {
 					defer wg.Done()
 					if err := s.Stop(); err != nil {
-						a.errors <- iodine.New(err, nil)
+						a.errors <- probe.New(err)
 					}
 				}(s)
 			}
@@ -112,7 +112,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
-				a.errors <- iodine.New(err, nil)
+				a.errors <- probe.New(err)
 			}
 		}
 	}
@@ -120,7 +120,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 
 // ListenAndServe will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2/SIGHUP).
-func ListenAndServe(servers ...*http.Server) error {
+func ListenAndServe(servers ...*http.Server) *probe.Error {
 	// get parent process id
 	ppid := os.Getppid()
 
@@ -134,7 +134,7 @@ func ListenAndServe(servers ...*http.Server) error {
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 
 	// Start serving.
@@ -143,7 +143,7 @@ func ListenAndServe(servers ...*http.Server) error {
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 	}
 
@@ -160,14 +160,14 @@ func ListenAndServe(servers ...*http.Server) error {
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return iodine.New(err, nil)
+		return probe.New(err)
 	case <-waitdone:
 		return nil
 	}
 }
 
 // ListenAndServeLimited is similar to ListenAndServe but ratelimited with connLimit value
-func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
+func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error {
 	// get parent process id
 	ppid := os.Getppid()
 
@@ -181,7 +181,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 
 	// Start serving.
@@ -190,7 +190,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 	}
 
@@ -207,7 +207,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return iodine.New(err, nil)
+		return probe.New(err)
 	case <-waitdone:
 		return nil
 	}

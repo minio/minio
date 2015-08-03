@@ -21,7 +21,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // SysInfoService -
@@ -45,7 +45,7 @@ type MemStatsReply struct {
 	runtime.MemStats `json:"memstats"`
 }
 
-func setSysInfoReply(sis *SysInfoReply) error {
+func setSysInfoReply(sis *SysInfoReply) *probe.Error {
 	sis.SysARCH = runtime.GOARCH
 	sis.SysOS = runtime.GOOS
 	sis.SysCPUS = runtime.NumCPU()
@@ -55,12 +55,12 @@ func setSysInfoReply(sis *SysInfoReply) error {
 	var err error
 	sis.Hostname, err = os.Hostname()
 	if err != nil {
-		return iodine.New(err, nil)
+		return probe.New(err)
 	}
 	return nil
 }
 
-func setMemStatsReply(sis *MemStatsReply) error {
+func setMemStatsReply(sis *MemStatsReply) *probe.Error {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	sis.MemStats = memStats
@@ -69,10 +69,16 @@ func setMemStatsReply(sis *MemStatsReply) error {
 
 // Get method
 func (s *SysInfoService) Get(r *http.Request, args *Args, reply *SysInfoReply) error {
-	return setSysInfoReply(reply)
+	if err := setSysInfoReply(reply); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Get method
 func (s *MemStatsService) Get(r *http.Request, args *Args, reply *MemStatsReply) error {
-	return setMemStatsReply(reply)
+	if err := setMemStatsReply(reply); err != nil {
+		return err
+	}
+	return nil
 }

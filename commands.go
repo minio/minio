@@ -18,7 +18,6 @@ package main
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/minio/cli"
@@ -163,22 +162,14 @@ func runServer(c *cli.Context) {
 	if c.Args().Present() {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
-	_, err := user.Current()
-	if err != nil {
-		Fatalf("Unable to determine current user. Reason: %s\n", err)
-	}
 	apiServerConfig := getServerConfig(c)
-	err = server.StartServices(apiServerConfig)
+	err := server.StartServices(apiServerConfig)
 	if err != nil {
 		Fatalln(err)
 	}
 }
 
 func runController(c *cli.Context) {
-	_, err := user.Current()
-	if err != nil {
-		Fatalf("Unable to determine current user. Reason: %s\n", err)
-	}
 	if len(c.Args()) < 2 || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
 	}

@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/pkg/donut"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 const (
@@ -51,7 +51,7 @@ func getRequestedRange(hrange string, size int64) (*httpRange, error) {
 	if hrange != "" {
 		err := r.parseRange(hrange)
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 	}
 	return r, nil
@@ -60,7 +60,7 @@ func getRequestedRange(hrange string, size int64) (*httpRange, error) {
 func (r *httpRange) parse(ra string) error {
 	i := strings.Index(ra, "-")
 	if i < 0 {
-		return iodine.New(donut.InvalidRange{}, nil)
+		return probe.New(donut.InvalidRange{})
 	}
 	start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
 	if start == "" {
@@ -68,7 +68,7 @@ func (r *httpRange) parse(ra string) error {
 		// range start relative to the end of the file.
 		i, err := strconv.ParseInt(end, 10, 64)
 		if err != nil {
-			return iodine.New(donut.InvalidRange{}, nil)
+			return probe.New(donut.InvalidRange{})
 		}
 		if i > r.size {
 			i = r.size
@@ -78,7 +78,7 @@ func (r *httpRange) parse(ra string) error {
 	} else {
 		i, err := strconv.ParseInt(start, 10, 64)
 		if err != nil || i > r.size || i < 0 {
-			return iodine.New(donut.InvalidRange{}, nil)
+			return probe.New(donut.InvalidRange{})
 		}
 		r.start = i
 		if end == "" {
@@ -87,7 +87,7 @@ func (r *httpRange) parse(ra string) error {
 		} else {
 			i, err := strconv.ParseInt(end, 10, 64)
 			if err != nil || r.start > i {
-				return iodine.New(donut.InvalidRange{}, nil)
+				return probe.New(donut.InvalidRange{})
 			}
 			if i >= r.size {
 				i = r.size - 1
@@ -101,24 +101,24 @@ func (r *httpRange) parse(ra string) error {
 // parseRange parses a Range header string as per RFC 2616.
 func (r *httpRange) parseRange(s string) error {
 	if s == "" {
-		return iodine.New(errors.New("header not present"), nil)
+		return probe.New(errors.New("header not present"))
 	}
 	if !strings.HasPrefix(s, b) {
-		return iodine.New(donut.InvalidRange{}, nil)
+		return probe.New(donut.InvalidRange{})
 	}
 
 	ras := strings.Split(s[len(b):], ",")
 	if len(ras) == 0 {
-		return iodine.New(errors.New("invalid request"), nil)
+		return probe.New(errors.New("invalid request"))
 	}
 	// Just pick the first one and ignore the rest, we only support one range per object
 	if len(ras) > 1 {
-		return iodine.New(errors.New("multiple ranges specified"), nil)
+		return probe.New(errors.New("multiple ranges specified"))
 	}
 
 	ra := strings.TrimSpace(ras[0])
 	if ra == "" {
-		return iodine.New(donut.InvalidRange{}, nil)
+		return probe.New(donut.InvalidRange{})
 	}
 	return r.parse(ra)
 }
