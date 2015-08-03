@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // RPCOps RPC operation
@@ -37,14 +37,14 @@ type RPCRequest struct {
 }
 
 // NewRequest initiate a new client RPC request
-func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest, error) {
+func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest, *probe.Error) {
 	params, err := json.EncodeClientRequest(op.Method, op.Request)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(params))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	rpcReq := &RPCRequest{}
 	rpcReq.req = req
@@ -57,10 +57,10 @@ func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest
 }
 
 // Do - make a http connection
-func (r RPCRequest) Do() (*http.Response, error) {
+func (r RPCRequest) Do() (*http.Response, *probe.Error) {
 	resp, err := r.transport.RoundTrip(r.req)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	return resp, nil
 }

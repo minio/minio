@@ -18,10 +18,9 @@ package donut
 
 import (
 	"io"
-	"strconv"
 
 	encoding "github.com/minio/minio/pkg/erasure"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // encoder internal struct
@@ -32,74 +31,71 @@ type encoder struct {
 }
 
 // getErasureTechnique - convert technique string into Technique type
-func getErasureTechnique(technique string) (encoding.Technique, error) {
+func getErasureTechnique(technique string) (encoding.Technique, *probe.Error) {
 	switch true {
 	case technique == "Cauchy":
 		return encoding.Cauchy, nil
 	case technique == "Vandermonde":
 		return encoding.Cauchy, nil
 	default:
-		return encoding.None, iodine.New(InvalidErasureTechnique{Technique: technique}, nil)
+		return encoding.None, probe.New(InvalidErasureTechnique{Technique: technique})
 	}
 }
 
 // newEncoder - instantiate a new encoder
-func newEncoder(k, m uint8, technique string) (encoder, error) {
-	errParams := map[string]string{
-		"k":         strconv.FormatUint(uint64(k), 10),
-		"m":         strconv.FormatUint(uint64(m), 10),
-		"technique": technique,
-	}
+func newEncoder(k, m uint8, technique string) (encoder, *probe.Error) {
 	e := encoder{}
 	t, err := getErasureTechnique(technique)
 	if err != nil {
-		return encoder{}, iodine.New(err, errParams)
+		return encoder{}, err.Trace()
 	}
-	params, err := encoding.ValidateParams(k, m, t)
-	if err != nil {
-		return encoder{}, iodine.New(err, errParams)
+	{
+		params, err := encoding.ValidateParams(k, m, t)
+		if err != nil {
+			return encoder{}, probe.New(err)
+		}
+		e.encoder = encoding.NewErasure(params)
+		e.k = k
+		e.m = m
+		e.technique = t
+		return e, nil
 	}
-	e.encoder = encoding.NewErasure(params)
-	e.k = k
-	e.m = m
-	e.technique = t
-	return e, nil
 }
 
 // TODO - think again if this is needed
 // GetEncodedBlockLen - wrapper around erasure function with the same name
-func (e encoder) GetEncodedBlockLen(dataLength int) (int, error) {
+func (e encoder) GetEncodedBlockLen(dataLength int) (int, *probe.Error) {
 	if dataLength <= 0 {
-		return 0, iodine.New(InvalidArgument{}, nil)
+		return 0, probe.New(InvalidArgument{})
 	}
 	return encoding.GetEncodedBlockLen(dataLength, e.k), nil
 }
 
 // Encode - erasure code input bytes
-func (e encoder) Encode(data []byte) (encodedData [][]byte, err error) {
+func (e encoder) Encode(data []byte) ([][]byte, *probe.Error) {
 	if data == nil {
-		return nil, iodine.New(InvalidArgument{}, nil)
+		return nil, probe.New(InvalidArgument{})
 	}
-	encodedData, err = e.encoder.Encode(data)
+	encodedData, err := e.encoder.Encode(data)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	return encodedData, nil
 }
 
-func (e encoder) EncodeStream(data io.Reader, size int64) (encodedData [][]byte, inputData []byte, err error) {
-	encodedData, inputData, err = e.encoder.EncodeStream(data, size)
+func (e encoder) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, *probe.Error) {
+	encodedData, inputData, err := e.encoder.EncodeStream(data, size)
 	if err != nil {
-		return nil, nil, iodine.New(err, nil)
+		return nil, nil, probe.New(err)
 	}
 	return encodedData, inputData, nil
 }
 
 // Decode - erasure decode input encoded bytes
-func (e encoder) Decode(encodedData [][]byte, dataLength int) (data []byte, err error) {
+func (e encoder) Decode(encodedData [][]byte, dataLength int) ([]byte, *probe.Error) {
 	decodedData, err := e.encoder.Decode(encodedData, dataLength)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	return decodedData, nil
 }

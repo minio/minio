@@ -18,7 +18,7 @@ package donut
 
 import (
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // node struct internal
@@ -28,9 +28,9 @@ type node struct {
 }
 
 // newNode - instantiates a new node
-func newNode(hostname string) (node, error) {
+func newNode(hostname string) (node, *probe.Error) {
 	if hostname == "" {
-		return node{}, iodine.New(InvalidArgument{}, nil)
+		return node{}, probe.New(InvalidArgument{})
 	}
 	disks := make(map[int]disk.Disk)
 	n := node{
@@ -46,31 +46,31 @@ func (n node) GetHostname() string {
 }
 
 // ListDisks - return number of disks
-func (n node) ListDisks() (map[int]disk.Disk, error) {
+func (n node) ListDisks() (map[int]disk.Disk, *probe.Error) {
 	return n.disks, nil
 }
 
 // AttachDisk - attach a disk
-func (n node) AttachDisk(disk disk.Disk, diskOrder int) error {
+func (n node) AttachDisk(disk disk.Disk, diskOrder int) *probe.Error {
 	if diskOrder < 0 {
-		return iodine.New(InvalidArgument{}, nil)
+		return probe.New(InvalidArgument{})
 	}
 	n.disks[diskOrder] = disk
 	return nil
 }
 
 // DetachDisk - detach a disk
-func (n node) DetachDisk(diskOrder int) error {
+func (n node) DetachDisk(diskOrder int) *probe.Error {
 	delete(n.disks, diskOrder)
 	return nil
 }
 
 // SaveConfig - save node configuration
-func (n node) SaveConfig() error {
-	return iodine.New(NotImplemented{Function: "SaveConfig"}, nil)
+func (n node) SaveConfig() *probe.Error {
+	return probe.New(NotImplemented{Function: "SaveConfig"})
 }
 
 // LoadConfig - load node configuration from saved configs
-func (n node) LoadConfig() error {
-	return iodine.New(NotImplemented{Function: "LoadConfig"}, nil)
+func (n node) LoadConfig() *probe.Error {
+	return probe.New(NotImplemented{Function: "LoadConfig"})
 }

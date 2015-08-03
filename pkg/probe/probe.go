@@ -71,6 +71,9 @@ type Error struct {
 // trace the return path with Probe.Trace and finally handle reporting or quitting
 // at the top level.
 func New(e error) *Error {
+	if e == nil {
+		return nil
+	}
 	Err := Error{sync.RWMutex{}, e, GetSysInfo(), []tracePoint{}}
 	return Err.trace()
 }

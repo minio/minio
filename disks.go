@@ -22,34 +22,34 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // isUsable provides a comprehensive way of knowing if the provided mountPath is mounted and writable
-func isUsable(mountPath string) (bool, error) {
+func isUsable(mountPath string) (bool, *probe.Error) {
 	mntpoint, err := os.Stat(mountPath)
 	if err != nil {
-		return false, iodine.New(err, nil)
+		return false, probe.New(err)
 	}
 	parent, err := os.Stat("/")
 	if err != nil {
-		return false, iodine.New(err, nil)
+		return false, probe.New(err)
 	}
 	mntpointSt := mntpoint.Sys().(*syscall.Stat_t)
 	parentSt := parent.Sys().(*syscall.Stat_t)
 
 	if mntpointSt.Dev == parentSt.Dev {
-		return false, iodine.New(fmt.Errorf("Not mounted %s", mountPath), nil)
+		return false, probe.New(fmt.Errorf("Not mounted %s", mountPath))
 	}
 	testFile, err := ioutil.TempFile(mountPath, "writetest-")
 	if err != nil {
-		return false, iodine.New(err, nil)
+		return false, probe.New(err)
 	}
-	testFileName := testFile.Name()
 	// close the file, to avoid leaky fd's
-	testFile.Close()
+	defer testFile.Close()
+	testFileName := testFile.Name()
 	if err := os.Remove(testFileName); err != nil {
-		return false, iodine.New(err, nil)
+		return false, probe.New(err)
 	}
 	return true, nil
 }

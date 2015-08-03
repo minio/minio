@@ -20,18 +20,18 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
 )
 
 // getDonutConfigPath get donut config file path
-func getDonutConfigPath() (string, error) {
+func getDonutConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
 	u, err := user.Current()
 	if err != nil {
-		return "", iodine.New(err, nil)
+		return "", probe.New(err)
 	}
 	donutConfigPath := filepath.Join(u.HomeDir, ".minio", "donut.json")
 	return donutConfigPath, nil
@@ -46,35 +46,35 @@ func SetDonutConfigPath(configPath string) {
 }
 
 // SaveConfig save donut config
-func SaveConfig(a *Config) error {
+func SaveConfig(a *Config) *probe.Error {
 	donutConfigPath, err := getDonutConfigPath()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	qc, err := quick.New(a)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	if err := qc.Save(donutConfigPath); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	return nil
 }
 
 // LoadConfig load donut config
-func LoadConfig() (*Config, error) {
+func LoadConfig() (*Config, *probe.Error) {
 	donutConfigPath, err := getDonutConfigPath()
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	a := &Config{}
 	a.Version = "0.0.1"
 	qc, err := quick.New(a)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	if err := qc.Load(donutConfigPath); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	return qc.Data().(*Config), nil
 }

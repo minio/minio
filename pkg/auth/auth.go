@@ -19,6 +19,8 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
+
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Static alphaNumeric table used for generating unique keys
@@ -26,11 +28,11 @@ var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 // GenerateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func GenerateAccessKeyID() ([]byte, error) {
+func GenerateAccessKeyID() ([]byte, *probe.Error) {
 	alpha := make([]byte, MinioAccessID)
 	_, err := rand.Read(alpha)
 	if err != nil {
-		return nil, err
+		return nil, probe.New(err)
 	}
 	for i := 0; i < MinioAccessID; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
@@ -39,11 +41,11 @@ func GenerateAccessKeyID() ([]byte, error) {
 }
 
 // GenerateSecretAccessKey - generate random base64 numeric value from a random seed.
-func GenerateSecretAccessKey() ([]byte, error) {
+func GenerateSecretAccessKey() ([]byte, *probe.Error) {
 	rb := make([]byte, MinioSecretID)
 	_, err := rand.Read(rb)
 	if err != nil {
-		return nil, err
+		return nil, probe.New(err)
 	}
 	return []byte(base64.StdEncoding.EncodeToString(rb))[:MinioSecretID], nil
 }

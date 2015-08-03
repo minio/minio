@@ -18,16 +18,16 @@ package donut
 
 import (
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Info - return info about donut configuration
-func (donut API) Info() (nodeDiskMap map[string][]string, err error) {
+func (donut API) Info() (nodeDiskMap map[string][]string, err *probe.Error) {
 	nodeDiskMap = make(map[string][]string)
 	for nodeName, node := range donut.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 		diskList := make([]string, len(disks))
 		for diskOrder, disk := range disks {
@@ -39,13 +39,13 @@ func (donut API) Info() (nodeDiskMap map[string][]string, err error) {
 }
 
 // AttachNode - attach node
-func (donut API) AttachNode(hostname string, disks []string) error {
+func (donut API) AttachNode(hostname string, disks []string) *probe.Error {
 	if hostname == "" || len(disks) == 0 {
-		return iodine.New(InvalidArgument{}, nil)
+		return probe.New(InvalidArgument{})
 	}
 	node, err := newNode(hostname)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	donut.nodes[hostname] = node
 	for i, d := range disks {
@@ -54,28 +54,28 @@ func (donut API) AttachNode(hostname string, disks []string) error {
 			continue
 		}
 		if err := newDisk.MakeDir(donut.config.DonutName); err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 		if err := node.AttachDisk(newDisk, i); err != nil {
-			return iodine.New(err, nil)
+			return err.Trace()
 		}
 	}
 	return nil
 }
 
 // DetachNode - detach node
-func (donut API) DetachNode(hostname string) error {
+func (donut API) DetachNode(hostname string) *probe.Error {
 	delete(donut.nodes, hostname)
 	return nil
 }
 
 // Rebalance - rebalance an existing donut with new disks and nodes
-func (donut API) Rebalance() error {
-	return iodine.New(APINotImplemented{API: "management.Rebalance"}, nil)
+func (donut API) Rebalance() *probe.Error {
+	return probe.New(APINotImplemented{API: "management.Rebalance"})
 }
 
 // Heal - heal your donuts
-func (donut API) Heal() error {
+func (donut API) Heal() *probe.Error {
 	// TODO handle data heal
 	return donut.healBuckets()
 }

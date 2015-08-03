@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // AuthService auth service
@@ -32,15 +32,15 @@ type AuthReply struct {
 	SecretAccessKey string `json:"secretaccesskey"`
 }
 
-func getAuth(reply *AuthReply) error {
+func getAuth(reply *AuthReply) *probe.Error {
 	accessID, err := auth.GenerateAccessKeyID()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	reply.AccessKeyID = string(accessID)
 	secretID, err := auth.GenerateSecretAccessKey()
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	reply.SecretAccessKey = string(secretID)
 	return nil
@@ -48,5 +48,8 @@ func getAuth(reply *AuthReply) error {
 
 // Get auth keys
 func (s *AuthService) Get(r *http.Request, args *Args, reply *AuthReply) error {
-	return getAuth(reply)
+	if err := getAuth(reply); err != nil {
+		return err
+	}
+	return nil
 }

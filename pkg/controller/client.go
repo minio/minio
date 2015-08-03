@@ -22,7 +22,7 @@ import (
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/server/rpc"
 )
 
@@ -33,25 +33,31 @@ func closeResp(resp *http.Response) {
 }
 
 // GetMemStats get memory status of the server at given url
-func GetMemStats(url string) ([]byte, error) {
+func GetMemStats(url string) ([]byte, *probe.Error) {
 	op := RPCOps{
 		Method:  "MemStats.Get",
 		Request: rpc.Args{Request: ""},
 	}
 	req, err := NewRequest(url, op, http.DefaultTransport)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	resp, err := req.Do()
 	defer closeResp(resp)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	var reply rpc.MemStatsReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
-	return json.MarshalIndent(reply, "", "\t")
+	{
+		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+		if err != nil {
+			return nil, probe.New(err)
+		}
+		return jsonRespBytes, nil
+	}
 }
 
 // GetSysInfo get system status of the server at given url
@@ -62,18 +68,24 @@ func GetSysInfo(url string) ([]byte, error) {
 	}
 	req, err := NewRequest(url, op, http.DefaultTransport)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	resp, err := req.Do()
 	defer closeResp(resp)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	var reply rpc.SysInfoReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
-	return json.MarshalIndent(reply, "", "\t")
+	{
+		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+		if err != nil {
+			return nil, probe.New(err)
+		}
+		return jsonRespBytes, nil
+	}
 }
 
 // GetAuthKeys get access key id and secret access key
@@ -84,16 +96,16 @@ func GetAuthKeys(url string) ([]byte, error) {
 	}
 	req, err := NewRequest(url, op, http.DefaultTransport)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	resp, err := req.Do()
 	defer closeResp(resp)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	var reply rpc.AuthReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 	authConfig := &auth.Config{}
 	authConfig.Version = "0.0.1"
@@ -104,9 +116,15 @@ func GetAuthKeys(url string) ([]byte, error) {
 	user.SecretAccessKey = reply.SecretAccessKey
 	authConfig.Users[reply.AccessKeyID] = user
 	if err := auth.SaveConfig(authConfig); err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
-	return json.MarshalIndent(reply, "", "\t")
+	{
+		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+		if err != nil {
+			return nil, probe.New(err)
+		}
+		return jsonRespBytes, nil
+	}
 }
 
 // Add more functions here for other RPC messages

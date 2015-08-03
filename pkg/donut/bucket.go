@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/disk"
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 )
 
 const (
@@ -52,15 +52,9 @@ type bucket struct {
 }
 
 // newBucket - instantiate a new bucket
-func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bucket, BucketMetadata, error) {
-	errParams := map[string]string{
-		"bucketName": bucketName,
-		"donutName":  donutName,
-		"aclType":    aclType,
-	}
-
+func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bucket, BucketMetadata, *probe.Error) {
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
-		return bucket{}, BucketMetadata{}, iodine.New(InvalidArgument{}, errParams)
+		return bucket{}, BucketMetadata{}, probe.New(InvalidArgument{})
 	}
 
 	b := bucket{}
@@ -89,14 +83,14 @@ func (b bucket) getBucketName() string {
 }
 
 // getBucketMetadataReaders -
-func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
+func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, *probe.Error) {
 	readers := make(map[int]io.ReadCloser)
 	var disks map[int]disk.Disk
-	var err error
+	var err *probe.Error
 	for _, node := range b.nodes {
 		disks, err = node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 	}
 	var bucketMetaDataReader io.ReadCloser
@@ -108,40 +102,44 @@ func (b bucket) getBucketMetadataReaders() (map[int]io.ReadCloser, error) {
 		readers[order] = bucketMetaDataReader
 	}
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	return readers, nil
 }
 
 // getBucketMetadata -
-func (b bucket) getBucketMetadata() (*AllBuckets, error) {
-	var err error
+func (b bucket) getBucketMetadata() (*AllBuckets, *probe.Error) {
 	metadata := new(AllBuckets)
-	readers, err := b.getBucketMetadataReaders()
-	if err != nil {
-		return nil, iodine.New(err, nil)
+	var readers map[int]io.ReadCloser
+	{
+		var err *probe.Error
+		readers, err = b.getBucketMetadataReaders()
+		if err != nil {
+			return nil, err.Trace()
+		}
 	}
 	for _, reader := range readers {
 		defer reader.Close()
 	}
+	var err error
 	for _, reader := range readers {
 		jenc := json.NewDecoder(reader)
 		if err = jenc.Decode(metadata); err == nil {
 			return metadata, nil
 		}
 	}
-	return nil, iodine.New(err, nil)
+	return nil, probe.New(err)
 }
 
 // GetObjectMetadata - get metadata for an object
-func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, error) {
+func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	return b.readObjectMetadata(objectName)
 }
 
 // ListObjects - list all objects
-func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, error) {
+func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (ListObjectsResults, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if maxkeys <= 0 {
@@ -151,7 +149,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	var objects []string
 	bucketMetadata, err := b.getBucketMetadata()
 	if err != nil {
-		return ListObjectsResults{}, iodine.New(err, nil)
+		return ListObjectsResults{}, err.Trace()
 	}
 	for objectName := range bucketMetadata.Buckets[b.getBucketName()].Multiparts {
 		if strings.HasPrefix(objectName, strings.TrimSpace(prefix)) {
@@ -206,7 +204,7 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 	for _, objectName := range results {
 		objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
 		if err != nil {
-			return ListObjectsResults{}, iodine.New(err, nil)
+			return ListObjectsResults{}, err.Trace()
 		}
 		listObjects.Objects[objectName] = objMetadata
 	}
@@ -214,22 +212,22 @@ func (b bucket) ListObjects(prefix, marker, delimiter string, maxkeys int) (List
 }
 
 // ReadObject - open an object to read
-func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64, err error) {
+func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64, err *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	reader, writer := io.Pipe()
 	// get list of objects
 	bucketMetadata, err := b.getBucketMetadata()
 	if err != nil {
-		return nil, 0, iodine.New(err, nil)
+		return nil, 0, err.Trace()
 	}
 	// check if object exists
 	if _, ok := bucketMetadata.Buckets[b.getBucketName()].BucketObjects[objectName]; !ok {
-		return nil, 0, iodine.New(ObjectNotFound{Object: objectName}, nil)
+		return nil, 0, probe.New(ObjectNotFound{Object: objectName})
 	}
 	objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
 	if err != nil {
-		return nil, 0, iodine.New(err, nil)
+		return nil, 0, err.Trace()
 	}
 	// read and reply back to GetObject() request in a go-routine
 	go b.readObjectData(normalizeObjectName(objectName), writer, objMetadata)
@@ -237,15 +235,15 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
 	writers, err := b.getObjectWriters(normalizeObjectName(objectName), "data")
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, nil)
+		return ObjectMetadata{}, err.Trace()
 	}
 	sumMD5 := md5.New()
 	sum512 := sha512.New()
@@ -268,7 +266,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, iodine.New(err, nil)
+			return ObjectMetadata{}, probe.New(err)
 		}
 		objMetadata.Size = totalLength
 	case false:
@@ -276,13 +274,13 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		k, m, err := b.getDataAndParity(len(writers))
 		if err != nil {
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, iodine.New(err, nil)
+			return ObjectMetadata{}, err.Trace()
 		}
 		// write encoded data with k, m and writers
 		chunkCount, totalLength, err := b.writeObjectData(k, m, writers, objectData, size, mwriter)
 		if err != nil {
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, iodine.New(err, nil)
+			return ObjectMetadata{}, err.Trace()
 		}
 		/// donutMetadata section
 		objMetadata.BlockSize = blockSize
@@ -301,14 +299,14 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		if err != nil {
 			// error occurred while doing signature calculation, we return and also cleanup any temporary writers.
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, iodine.New(err, nil)
+			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
 			// purge all writers, when control flow reaches here
 			//
 			// Signature mismatch occurred all temp files to be removed and all data purged.
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, iodine.New(SignatureDoesNotMatch{}, nil)
+			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
 		}
 	}
 	objMetadata.MD5Sum = hex.EncodeToString(dataMD5sum)
@@ -317,7 +315,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := b.isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), objMetadata.MD5Sum); err != nil {
-			return ObjectMetadata{}, iodine.New(err, nil)
+			return ObjectMetadata{}, err.Trace()
 		}
 	}
 	objMetadata.Metadata = metadata
@@ -325,7 +323,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 	if err := b.writeObjectMetadata(normalizeObjectName(objectName), objMetadata); err != nil {
 		// purge all writers, when control flow reaches here
 		CleanupWritersOnError(writers)
-		return ObjectMetadata{}, iodine.New(err, nil)
+		return ObjectMetadata{}, err.Trace()
 	}
 	// close all writers, when control flow reaches here
 	for _, writer := range writers {
@@ -335,39 +333,39 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 }
 
 // isMD5SumEqual - returns error if md5sum mismatches, other its `nil`
-func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) error {
+func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
 		if err != nil {
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
 		if err != nil {
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return iodine.New(BadDigest{}, nil)
+			return probe.New(BadDigest{})
 		}
 		return nil
 	}
-	return iodine.New(InvalidArgument{}, nil)
+	return probe.New(InvalidArgument{})
 }
 
 // writeObjectMetadata - write additional object metadata
-func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadata) error {
+func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadata) *probe.Error {
 	if objMetadata.Object == "" {
-		return iodine.New(InvalidArgument{}, nil)
+		return probe.New(InvalidArgument{})
 	}
 	objMetadataWriters, err := b.getObjectWriters(objectName, objectMetadataConfig)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	for _, objMetadataWriter := range objMetadataWriters {
 		jenc := json.NewEncoder(objMetadataWriter)
 		if err := jenc.Encode(&objMetadata); err != nil {
 			// Close writers and purge all temporary entries
 			CleanupWritersOnError(objMetadataWriters)
-			return iodine.New(err, nil)
+			return probe.New(err)
 		}
 	}
 	for _, objMetadataWriter := range objMetadataWriters {
@@ -377,26 +375,28 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 }
 
 // readObjectMetadata - read object metadata
-func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, error) {
+func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, *probe.Error) {
 	if objectName == "" {
-		return ObjectMetadata{}, iodine.New(InvalidArgument{}, nil)
+		return ObjectMetadata{}, probe.New(InvalidArgument{})
 	}
-	var err error
 	objMetadata := ObjectMetadata{}
 	objMetadataReaders, err := b.getObjectReaders(objectName, objectMetadataConfig)
 	if err != nil {
-		return ObjectMetadata{}, iodine.New(err, nil)
+		return ObjectMetadata{}, err.Trace()
 	}
 	for _, objMetadataReader := range objMetadataReaders {
 		defer objMetadataReader.Close()
 	}
-	for _, objMetadataReader := range objMetadataReaders {
-		jdec := json.NewDecoder(objMetadataReader)
-		if err = jdec.Decode(&objMetadata); err == nil {
-			return objMetadata, nil
+	{
+		var err error
+		for _, objMetadataReader := range objMetadataReaders {
+			jdec := json.NewDecoder(objMetadataReader)
+			if err = jdec.Decode(&objMetadata); err == nil {
+				return objMetadata, nil
+			}
 		}
+		return ObjectMetadata{}, probe.New(err)
 	}
-	return ObjectMetadata{}, iodine.New(err, nil)
 }
 
 // TODO - This a temporary normalization of objectNames, need to find a better way
@@ -413,14 +413,14 @@ func normalizeObjectName(objectName string) string {
 }
 
 // getDataAndParity - calculate k, m (data and parity) values from number of disks
-func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error) {
+func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err *probe.Error) {
 	if totalWriters <= 1 {
-		return 0, 0, iodine.New(InvalidArgument{}, nil)
+		return 0, 0, probe.New(InvalidArgument{})
 	}
 	quotient := totalWriters / 2 // not using float or abs to let integer round off to lower value
 	// quotient cannot be bigger than (255 / 2) = 127
 	if quotient > 127 {
-		return 0, 0, iodine.New(ParityOverflow{}, nil)
+		return 0, 0, probe.New(ParityOverflow{})
 	}
 	remainder := totalWriters % 2 // will be 1 for odd and 0 for even numbers
 	k = uint8(quotient + remainder)
@@ -429,11 +429,11 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err error)
 }
 
 // writeObjectData -
-func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, writer io.Writer) (int, int, error) {
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, writer io.Writer) (int, int, *probe.Error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
 	chunkSize := int64(10 * 1024 * 1024)
 	if err != nil {
-		return 0, 0, iodine.New(err, nil)
+		return 0, 0, err.Trace()
 	}
 	chunkCount := 0
 	totalLength := 0
@@ -447,11 +447,10 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 		totalLength = totalLength + int(readSize)
 		encodedBlocks, inputData, err := encoder.EncodeStream(objectData, readSize)
 		if err != nil {
-			return 0, 0, iodine.New(err, nil)
+			return 0, 0, err.Trace()
 		}
-		_, err = writer.Write(inputData)
-		if err != nil {
-			return 0, 0, iodine.New(err, nil)
+		if _, err := writer.Write(inputData); err != nil {
+			return 0, 0, probe.New(err)
 		}
 		for blockIndex, block := range encodedBlocks {
 			errCh := make(chan error, 1)
@@ -462,7 +461,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 			}(writers[blockIndex], bytes.NewReader(block), errCh)
 			if err := <-errCh; err != nil {
 				// Returning error is fine here CleanupErrors() would cleanup writers
-				return 0, 0, iodine.New(err, nil)
+				return 0, 0, probe.New(err)
 			}
 		}
 		chunkCount = chunkCount + 1
@@ -474,21 +473,25 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
 	readers, err := b.getObjectReaders(objectName, "data")
 	if err != nil {
-		writer.CloseWithError(iodine.New(err, nil))
+		writer.CloseWithError(err.Trace())
 		return
 	}
 	for _, reader := range readers {
 		defer reader.Close()
 	}
-	expectedMd5sum, err := hex.DecodeString(objMetadata.MD5Sum)
-	if err != nil {
-		writer.CloseWithError(iodine.New(err, nil))
-		return
-	}
-	expected512Sum, err := hex.DecodeString(objMetadata.SHA512Sum)
-	if err != nil {
-		writer.CloseWithError(iodine.New(err, nil))
-		return
+	var expected512Sum, expectedMd5sum []byte
+	{
+		var err error
+		expectedMd5sum, err = hex.DecodeString(objMetadata.MD5Sum)
+		if err != nil {
+			writer.CloseWithError(probe.New(err))
+			return
+		}
+		expected512Sum, err = hex.DecodeString(objMetadata.SHA512Sum)
+		if err != nil {
+			writer.CloseWithError(probe.New(err))
+			return
+		}
 	}
 	hasher := md5.New()
 	sum512hasher := sha256.New()
@@ -496,24 +499,23 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	switch len(readers) > 1 {
 	case true:
 		if objMetadata.ErasureTechnique == "" {
-			writer.CloseWithError(iodine.New(MissingErasureTechnique{}, nil))
+			writer.CloseWithError(probe.New(MissingErasureTechnique{}))
 			return
 		}
 		encoder, err := newEncoder(objMetadata.DataDisks, objMetadata.ParityDisks, objMetadata.ErasureTechnique)
 		if err != nil {
-			writer.CloseWithError(iodine.New(err, nil))
+			writer.CloseWithError(err.Trace())
 			return
 		}
 		totalLeft := objMetadata.Size
 		for i := 0; i < objMetadata.ChunkCount; i++ {
 			decodedData, err := b.decodeEncodedData(totalLeft, int64(objMetadata.BlockSize), readers, encoder, writer)
 			if err != nil {
-				writer.CloseWithError(iodine.New(err, nil))
+				writer.CloseWithError(err.Trace())
 				return
 			}
-			_, err = io.Copy(mwriter, bytes.NewReader(decodedData))
-			if err != nil {
-				writer.CloseWithError(iodine.New(err, nil))
+			if _, err := io.Copy(mwriter, bytes.NewReader(decodedData)); err != nil {
+				writer.CloseWithError(probe.New(err))
 				return
 			}
 			totalLeft = totalLeft - int64(objMetadata.BlockSize)
@@ -521,17 +523,17 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	case false:
 		_, err := io.Copy(writer, readers[0])
 		if err != nil {
-			writer.CloseWithError(iodine.New(err, nil))
+			writer.CloseWithError(probe.New(err))
 			return
 		}
 	}
 	// check if decodedData md5sum matches
 	if !bytes.Equal(expectedMd5sum, hasher.Sum(nil)) {
-		writer.CloseWithError(iodine.New(ChecksumMismatch{}, nil))
+		writer.CloseWithError(probe.New(ChecksumMismatch{}))
 		return
 	}
 	if !bytes.Equal(expected512Sum, sum512hasher.Sum(nil)) {
-		writer.CloseWithError(iodine.New(ChecksumMismatch{}, nil))
+		writer.CloseWithError(probe.New(ChecksumMismatch{}))
 		return
 	}
 	writer.Close()
@@ -539,7 +541,7 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 }
 
 // decodeEncodedData -
-func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io.ReadCloser, encoder encoder, writer *io.PipeWriter) ([]byte, error) {
+func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io.ReadCloser, encoder encoder, writer *io.PipeWriter) ([]byte, *probe.Error) {
 	var curBlockSize int64
 	if blockSize < totalLeft {
 		curBlockSize = blockSize
@@ -548,34 +550,34 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io
 	}
 	curChunkSize, err := encoder.GetEncodedBlockLen(int(curBlockSize))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	encodedBytes := make([][]byte, encoder.k+encoder.m)
 	for i, reader := range readers {
 		var bytesBuffer bytes.Buffer
 		_, err := io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 		encodedBytes[i] = bytesBuffer.Bytes()
 	}
 	decodedData, err := encoder.Decode(encodedBytes, int(curBlockSize))
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	return decodedData, nil
 }
 
 // getObjectReaders -
-func (b bucket) getObjectReaders(objectName, objectMeta string) (map[int]io.ReadCloser, error) {
+func (b bucket) getObjectReaders(objectName, objectMeta string) (map[int]io.ReadCloser, *probe.Error) {
 	readers := make(map[int]io.ReadCloser)
 	var disks map[int]disk.Disk
-	var err error
+	var err *probe.Error
 	nodeSlice := 0
 	for _, node := range b.nodes {
 		disks, err = node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 		for order, disk := range disks {
 			var objectSlice io.ReadCloser
@@ -589,19 +591,19 @@ func (b bucket) getObjectReaders(objectName, objectMeta string) (map[int]io.Read
 		nodeSlice = nodeSlice + 1
 	}
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, err.Trace()
 	}
 	return readers, nil
 }
 
 // getObjectWriters -
-func (b bucket) getObjectWriters(objectName, objectMeta string) ([]io.WriteCloser, error) {
+func (b bucket) getObjectWriters(objectName, objectMeta string) ([]io.WriteCloser, *probe.Error) {
 	var writers []io.WriteCloser
 	nodeSlice := 0
 	for _, node := range b.nodes {
 		disks, err := node.ListDisks()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, err.Trace()
 		}
 		writers = make([]io.WriteCloser, len(disks))
 		for order, disk := range disks {
@@ -609,7 +611,7 @@ func (b bucket) getObjectWriters(objectName, objectMeta string) ([]io.WriteClose
 			objectPath := filepath.Join(b.donutName, bucketSlice, objectName, objectMeta)
 			objectSlice, err := disk.CreateFile(objectPath)
 			if err != nil {
-				return nil, iodine.New(err, nil)
+				return nil, err.Trace()
 			}
 			writers[order] = objectSlice
 		}

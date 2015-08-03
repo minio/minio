@@ -24,13 +24,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/minio/minio/pkg/iodine"
+	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/server/api"
 	"github.com/minio/minio/pkg/server/minhttp"
 )
 
 // getAPI server instance
-func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error) {
+func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, *probe.Error) {
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           conf.Address,
@@ -44,13 +44,13 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error
 		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
 		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 	}
 
 	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
-		return nil, iodine.New(err, nil)
+		return nil, probe.New(err)
 	}
 
 	var hosts []string
@@ -60,7 +60,7 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, error
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			return nil, iodine.New(err, nil)
+			return nil, probe.New(err)
 		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
@@ -104,18 +104,18 @@ func startTM(a api.Minio) {
 }
 
 // StartServices starts basic services for a server
-func StartServices(conf api.Config) error {
+func StartServices(conf api.Config) *probe.Error {
 	apiHandler, minioAPI := getAPIHandler(conf)
 	apiServer, err := getAPIServer(conf, apiHandler)
 	if err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	rpcServer := getRPCServer(getRPCHandler())
 	// start ticket master
 	go startTM(minioAPI)
 
 	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer, rpcServer); err != nil {
-		return iodine.New(err, nil)
+		return err.Trace()
 	}
 	return nil
 }

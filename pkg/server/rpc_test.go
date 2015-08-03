@@ -56,8 +56,7 @@ func (s *MyRPCSuite) TestMemStats(c *C) {
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
 	var reply rpc.MemStatsReply
-	err = jsonrpc.DecodeClientResponse(resp.Body, &reply)
-	c.Assert(err, IsNil)
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
 	c.Assert(reply, Not(DeepEquals), rpc.MemStatsReply{})
 }
@@ -75,8 +74,7 @@ func (s *MyRPCSuite) TestSysInfo(c *C) {
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
 	var reply rpc.SysInfoReply
-	err = jsonrpc.DecodeClientResponse(resp.Body, &reply)
-	c.Assert(err, IsNil)
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
 	c.Assert(reply, Not(DeepEquals), rpc.SysInfoReply{})
 }
@@ -94,8 +92,7 @@ func (s *MyRPCSuite) TestAuth(c *C) {
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
 	var reply rpc.AuthReply
-	err = jsonrpc.DecodeClientResponse(resp.Body, &reply)
-	c.Assert(err, IsNil)
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
 	c.Assert(reply, Not(DeepEquals), rpc.AuthReply{})
 	c.Assert(len(reply.AccessKeyID), Equals, 20)
