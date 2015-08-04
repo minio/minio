@@ -49,7 +49,7 @@ func (a *app) listen() *probe.Error {
 	for _, s := range a.servers {
 		l, err := a.net.Listen("tcp", s.Addr)
 		if err != nil {
-			return probe.New(err)
+			return err.Trace()
 		}
 		if s.TLSConfig != nil {
 			l = tls.NewListener(l, s.TLSConfig)
