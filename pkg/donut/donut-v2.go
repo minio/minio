@@ -517,7 +517,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, s
 			resources.Maxkeys,
 		)
 		if err != nil {
-			return nil, BucketResourcesMetadata{IsTruncated: false}, probe.New(err)
+			return nil, BucketResourcesMetadata{IsTruncated: false}, err.Trace()
 		}
 		resources.CommonPrefixes = listObjects.CommonPrefixes
 		resources.IsTruncated = listObjects.IsTruncated
@@ -604,7 +604,7 @@ func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, *probe.Err
 	if len(donut.config.NodeDiskMap) > 0 {
 		buckets, err := donut.listBuckets()
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, err.Trace()
 		}
 		for _, bucketMetadata := range buckets {
 			results = append(results, bucketMetadata)

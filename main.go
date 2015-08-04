@@ -143,6 +143,11 @@ VERSION:
 {{$key}}:
   {{$value}}
 {{end}}
+
 `
+	app.CommandNotFound = func(ctx *cli.Context, command string) {
+		Fatalf("Command not found: ‘%s’\n", command)
+	}
+
 	app.RunAndExitOnError()
 }
