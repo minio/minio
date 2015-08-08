@@ -38,74 +38,70 @@ func GetMemStats(url string) ([]byte, *probe.Error) {
 		Method:  "MemStats.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := NewRequest(url, op, http.DefaultTransport)
-	if err != nil {
-		return nil, err.Trace()
+	req, perr := NewRequest(url, op, http.DefaultTransport)
+	if perr != nil {
+		return nil, perr.Trace()
 	}
-	resp, err := req.Do()
+	resp, perr := req.Do()
 	defer closeResp(resp)
-	if err != nil {
-		return nil, err.Trace()
+	if perr != nil {
+		return nil, perr.Trace()
 	}
 	var reply rpc.MemStatsReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
-	{
-		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
-		if err != nil {
-			return nil, probe.New(err)
-		}
-		return jsonRespBytes, nil
+	jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+	if err != nil {
+		return nil, probe.NewError(err)
 	}
+	return jsonRespBytes, nil
 }
 
 // GetSysInfo get system status of the server at given url
-func GetSysInfo(url string) ([]byte, error) {
+func GetSysInfo(url string) ([]byte, *probe.Error) {
 	op := RPCOps{
 		Method:  "SysInfo.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := NewRequest(url, op, http.DefaultTransport)
-	if err != nil {
-		return nil, err.Trace()
+	req, perr := NewRequest(url, op, http.DefaultTransport)
+	if perr != nil {
+		return nil, perr.Trace()
 	}
-	resp, err := req.Do()
+	resp, perr := req.Do()
 	defer closeResp(resp)
-	if err != nil {
-		return nil, err.Trace()
+	if perr != nil {
+		return nil, perr.Trace()
 	}
 	var reply rpc.SysInfoReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
-	{
-		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
-		if err != nil {
-			return nil, probe.New(err)
-		}
-		return jsonRespBytes, nil
+	jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+	if err != nil {
+		return nil, probe.NewError(err)
 	}
+	return jsonRespBytes, nil
 }
 
 // GetAuthKeys get access key id and secret access key
-func GetAuthKeys(url string) ([]byte, error) {
+func GetAuthKeys(url string) ([]byte, *probe.Error) {
 	op := RPCOps{
 		Method:  "Auth.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := NewRequest(url, op, http.DefaultTransport)
-	if err != nil {
-		return nil, err.Trace()
+	req, perr := NewRequest(url, op, http.DefaultTransport)
+	if perr != nil {
+		return nil, perr.Trace()
 	}
-	resp, err := req.Do()
+	resp, perr := req.Do()
 	defer closeResp(resp)
-	if err != nil {
-		return nil, err.Trace()
+	if perr != nil {
+		return nil, perr.Trace()
 	}
 	var reply rpc.AuthReply
 	if err := jsonrpc.DecodeClientResponse(resp.Body, &reply); err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	authConfig := &auth.Config{}
 	authConfig.Version = "0.0.1"
@@ -118,13 +114,11 @@ func GetAuthKeys(url string) ([]byte, error) {
 	if err := auth.SaveConfig(authConfig); err != nil {
 		return nil, err.Trace()
 	}
-	{
-		jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
-		if err != nil {
-			return nil, probe.New(err)
-		}
-		return jsonRespBytes, nil
+	jsonRespBytes, err := json.MarshalIndent(reply, "", "\t")
+	if err != nil {
+		return nil, probe.NewError(err)
 	}
+	return jsonRespBytes, nil
 }
 
 // Add more functions here for other RPC messages

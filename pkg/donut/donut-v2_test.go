@@ -45,12 +45,12 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 	s.root = root
 
 	SetDonutConfigPath(filepath.Join(root, "donut.json"))
-	dc, err = New()
-	c.Assert(err, IsNil)
+	dc, _ = New()
 
 	// testing empty cache
-	buckets, err := dc.ListBuckets(nil)
-	c.Assert(err, IsNil)
+	var buckets []BucketMetadata
+	buckets, perr := dc.ListBuckets(nil)
+	c.Assert(perr, IsNil)
 	c.Assert(len(buckets), Equals, 0)
 }
 

@@ -30,7 +30,7 @@ type node struct {
 // newNode - instantiates a new node
 func newNode(hostname string) (node, *probe.Error) {
 	if hostname == "" {
-		return node{}, probe.New(InvalidArgument{})
+		return node{}, probe.NewError(InvalidArgument{})
 	}
 	disks := make(map[int]disk.Disk)
 	n := node{
@@ -53,7 +53,7 @@ func (n node) ListDisks() (map[int]disk.Disk, *probe.Error) {
 // AttachDisk - attach a disk
 func (n node) AttachDisk(disk disk.Disk, diskOrder int) *probe.Error {
 	if diskOrder < 0 {
-		return probe.New(InvalidArgument{})
+		return probe.NewError(InvalidArgument{})
 	}
 	n.disks[diskOrder] = disk
 	return nil
@@ -67,10 +67,10 @@ func (n node) DetachDisk(diskOrder int) *probe.Error {
 
 // SaveConfig - save node configuration
 func (n node) SaveConfig() *probe.Error {
-	return probe.New(NotImplemented{Function: "SaveConfig"})
+	return probe.NewError(NotImplemented{Function: "SaveConfig"})
 }
 
 // LoadConfig - load node configuration from saved configs
 func (n node) LoadConfig() *probe.Error {
-	return probe.New(NotImplemented{Function: "LoadConfig"})
+	return probe.NewError(NotImplemented{Function: "LoadConfig"})
 }

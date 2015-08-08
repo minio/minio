@@ -41,7 +41,7 @@ type app struct {
 	listeners []net.Listener
 	sds       []httpdown.Server
 	net       *minNet
-	errors    chan error
+	errors    chan *probe.Error
 }
 
 // listen initailize listeners
@@ -79,7 +79,7 @@ func (a *app) wait() {
 		go func(s httpdown.Server) {
 			defer wg.Done()
 			if err := s.Wait(); err != nil {
-				a.errors <- probe.New(err)
+				a.errors <- probe.NewError(err)
 			}
 		}(s)
 	}
@@ -101,7 +101,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 				go func(s httpdown.Server) {
 					defer wg.Done()
 					if err := s.Stop(); err != nil {
-						a.errors <- probe.New(err)
+						a.errors <- probe.NewError(err)
 					}
 				}(s)
 			}
@@ -112,7 +112,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
-				a.errors <- probe.New(err)
+				a.errors <- err.Trace()
 			}
 		}
 	}
@@ -129,7 +129,7 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
 		net:       &minNet{},
-		errors:    make(chan error, 1+(len(servers)*2)),
+		errors:    make(chan *probe.Error, 1+(len(servers)*2)),
 	}
 
 	// Acquire Listeners
@@ -143,7 +143,7 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 	}
 
@@ -160,7 +160,7 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return probe.New(err)
+		return err.Trace()
 	case <-waitdone:
 		return nil
 	}
@@ -176,7 +176,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
 		net:       &minNet{connLimit: connLimit},
-		errors:    make(chan error, 1+(len(servers)*2)),
+		errors:    make(chan *probe.Error, 1+(len(servers)*2)),
 	}
 
 	// Acquire Listeners
@@ -190,7 +190,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := syscall.Kill(ppid, syscall.SIGTERM); err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 	}
 
@@ -207,7 +207,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return probe.New(err)
+		return err.Trace()
 	case <-waitdone:
 		return nil
 	}

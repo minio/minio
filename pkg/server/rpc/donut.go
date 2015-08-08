@@ -56,5 +56,8 @@ func setDonut(args *DonutArgs, reply *Reply) *probe.Error {
 
 // Set method
 func (s *DonutService) Set(r *http.Request, args *DonutArgs, reply *Reply) error {
-	return setDonut(args, reply)
+	if err := setDonut(args, reply); err != nil {
+		return probe.NewWrappedError(err)
+	}
+	return nil
 }

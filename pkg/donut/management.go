@@ -41,7 +41,7 @@ func (donut API) Info() (nodeDiskMap map[string][]string, err *probe.Error) {
 // AttachNode - attach node
 func (donut API) AttachNode(hostname string, disks []string) *probe.Error {
 	if hostname == "" || len(disks) == 0 {
-		return probe.New(InvalidArgument{})
+		return probe.NewError(InvalidArgument{})
 	}
 	node, err := newNode(hostname)
 	if err != nil {
@@ -71,7 +71,7 @@ func (donut API) DetachNode(hostname string) *probe.Error {
 
 // Rebalance - rebalance an existing donut with new disks and nodes
 func (donut API) Rebalance() *probe.Error {
-	return probe.New(APINotImplemented{API: "management.Rebalance"})
+	return probe.NewError(APINotImplemented{API: "management.Rebalance"})
 }
 
 // Heal - heal your donuts

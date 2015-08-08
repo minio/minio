@@ -29,27 +29,27 @@ import (
 func isUsable(mountPath string) (bool, *probe.Error) {
 	mntpoint, err := os.Stat(mountPath)
 	if err != nil {
-		return false, probe.New(err)
+		return false, probe.NewError(err)
 	}
 	parent, err := os.Stat("/")
 	if err != nil {
-		return false, probe.New(err)
+		return false, probe.NewError(err)
 	}
 	mntpointSt := mntpoint.Sys().(*syscall.Stat_t)
 	parentSt := parent.Sys().(*syscall.Stat_t)
 
 	if mntpointSt.Dev == parentSt.Dev {
-		return false, probe.New(fmt.Errorf("Not mounted %s", mountPath))
+		return false, probe.NewError(fmt.Errorf("Not mounted %s", mountPath))
 	}
 	testFile, err := ioutil.TempFile(mountPath, "writetest-")
 	if err != nil {
-		return false, probe.New(err)
+		return false, probe.NewError(err)
 	}
 	// close the file, to avoid leaky fd's
 	defer testFile.Close()
 	testFileName := testFile.Name()
 	if err := os.Remove(testFileName); err != nil {
-		return false, probe.New(err)
+		return false, probe.NewError(err)
 	}
 	return true, nil
 }

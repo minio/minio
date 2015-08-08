@@ -72,7 +72,7 @@ func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 		var err error
 		accessKeyID, err = StripAccessKeyID(ah)
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 	}
 	authConfig, err := auth.LoadConfig()
@@ -80,7 +80,7 @@ func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 		return nil, err.Trace()
 	}
 	if _, ok := authConfig.Users[accessKeyID]; !ok {
-		return nil, probe.New(errors.New("AccessID not found"))
+		return nil, probe.NewError(errors.New("AccessID not found"))
 	}
 	signature := &donut.Signature{
 		AccessKeyID:     authConfig.Users[accessKeyID].AccessKeyID,

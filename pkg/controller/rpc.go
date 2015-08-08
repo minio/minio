@@ -40,11 +40,11 @@ type RPCRequest struct {
 func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest, *probe.Error) {
 	params, err := json.EncodeClientRequest(op.Method, op.Request)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(params))
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	rpcReq := &RPCRequest{}
 	rpcReq.req = req
@@ -60,7 +60,10 @@ func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest
 func (r RPCRequest) Do() (*http.Response, *probe.Error) {
 	resp, err := r.transport.RoundTrip(r.req)
 	if err != nil {
-		return nil, probe.New(err)
+		if werr, ok := probe.ToWrappedError(err); ok {
+			return nil, werr.ToError().Trace()
+		}
+		return nil, probe.NewError(err)
 	}
 	return resp, nil
 }

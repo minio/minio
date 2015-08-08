@@ -24,7 +24,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/utils/log"
 )
 
@@ -99,12 +98,12 @@ func fileLogger(filename string) (chan<- []byte, error) {
 	ch := make(chan []byte)
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, err
 	}
 	go func() {
 		for message := range ch {
 			if _, err := io.Copy(file, bytes.NewBuffer(message)); err != nil {
-				log.Errorln(probe.New(err))
+				log.Errorln(err)
 			}
 		}
 	}()

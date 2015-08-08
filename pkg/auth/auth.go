@@ -32,7 +32,7 @@ func GenerateAccessKeyID() ([]byte, *probe.Error) {
 	alpha := make([]byte, MinioAccessID)
 	_, err := rand.Read(alpha)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	for i := 0; i < MinioAccessID; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
@@ -45,7 +45,7 @@ func GenerateSecretAccessKey() ([]byte, *probe.Error) {
 	rb := make([]byte, MinioSecretID)
 	_, err := rand.Read(rb)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	return []byte(base64.StdEncoding.EncodeToString(rb))[:MinioSecretID], nil
 }

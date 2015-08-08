@@ -39,20 +39,20 @@ type Disk struct {
 // New - instantiate new disk
 func New(diskPath string) (Disk, *probe.Error) {
 	if diskPath == "" {
-		return Disk{}, probe.New(InvalidArgument{})
+		return Disk{}, probe.NewError(InvalidArgument{})
 	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
-		return Disk{}, probe.New(err)
+		return Disk{}, probe.NewError(err)
 	}
 
 	if !st.IsDir() {
-		return Disk{}, probe.New(syscall.ENOTDIR)
+		return Disk{}, probe.NewError(syscall.ENOTDIR)
 	}
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(diskPath, &s)
 	if err != nil {
-		return Disk{}, probe.New(err)
+		return Disk{}, probe.NewError(err)
 	}
 	disk := Disk{
 		lock:   &sync.Mutex{},
@@ -64,7 +64,7 @@ func New(diskPath string) (Disk, *probe.Error) {
 		disk.fsInfo["MountPoint"] = disk.path
 		return disk, nil
 	}
-	return Disk{}, probe.New(UnsupportedFilesystem{Type: strconv.FormatInt(int64(s.Type), 10)})
+	return Disk{}, probe.NewError(UnsupportedFilesystem{Type: strconv.FormatInt(int64(s.Type), 10)})
 }
 
 // IsUsable - is disk usable, alive
@@ -103,7 +103,7 @@ func (disk Disk) MakeDir(dirname string) *probe.Error {
 	disk.lock.Lock()
 	defer disk.lock.Unlock()
 	if err := os.MkdirAll(filepath.Join(disk.path, dirname), 0700); err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 	return nil
 }
@@ -115,12 +115,12 @@ func (disk Disk) ListDir(dirname string) ([]os.FileInfo, *probe.Error) {
 
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	var directories []os.FileInfo
 	for _, content := range contents {
@@ -139,12 +139,12 @@ func (disk Disk) ListFiles(dirname string) ([]os.FileInfo, *probe.Error) {
 
 	dir, err := os.Open(filepath.Join(disk.path, dirname))
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	defer dir.Close()
 	contents, err := dir.Readdir(-1)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	var files []os.FileInfo
 	for _, content := range contents {
@@ -162,12 +162,12 @@ func (disk Disk) CreateFile(filename string) (*atomic.File, *probe.Error) {
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, probe.New(InvalidArgument{})
+		return nil, probe.NewError(InvalidArgument{})
 	}
 
 	f, err := atomic.FileCreate(filepath.Join(disk.path, filename))
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 
 	return f, nil
@@ -179,11 +179,11 @@ func (disk Disk) Open(filename string) (*os.File, *probe.Error) {
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, probe.New(InvalidArgument{})
+		return nil, probe.NewError(InvalidArgument{})
 	}
 	dataFile, err := os.Open(filepath.Join(disk.path, filename))
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	return dataFile, nil
 }
@@ -194,11 +194,11 @@ func (disk Disk) OpenFile(filename string, flags int, perm os.FileMode) (*os.Fil
 	defer disk.lock.Unlock()
 
 	if filename == "" {
-		return nil, probe.New(InvalidArgument{})
+		return nil, probe.NewError(InvalidArgument{})
 	}
 	dataFile, err := os.OpenFile(filepath.Join(disk.path, filename), flags, perm)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	return dataFile, nil
 }

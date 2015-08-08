@@ -54,7 +54,7 @@ const (
 // makeBucket - make a new bucket
 func (donut API) makeBucket(bucket string, acl BucketACL) *probe.Error {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return probe.New(InvalidArgument{})
+		return probe.NewError(InvalidArgument{})
 	}
 	return donut.makeDonutBucket(bucket, acl.String())
 }
@@ -65,7 +65,7 @@ func (donut API) getBucketMetadata(bucketName string) (BucketMetadata, *probe.Er
 		return BucketMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucketName]; !ok {
-		return BucketMetadata{}, probe.New(BucketNotFound{Bucket: bucketName})
+		return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucketName})
 	}
 	metadata, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -86,7 +86,7 @@ func (donut API) setBucketMetadata(bucketName string, bucketMetadata map[string]
 	oldBucketMetadata := metadata.Buckets[bucketName]
 	acl, ok := bucketMetadata["acl"]
 	if !ok {
-		return probe.New(InvalidArgument{})
+		return probe.NewError(InvalidArgument{})
 	}
 	oldBucketMetadata.ACL = BucketACL(acl)
 	metadata.Buckets[bucketName] = oldBucketMetadata
@@ -117,7 +117,7 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 		return ListObjectsResults{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ListObjectsResults{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ListObjectsResults{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	listObjects, err := donut.buckets[bucket].ListObjects(prefix, marker, delimiter, maxkeys)
 	if err != nil {
@@ -129,23 +129,23 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 // putObject - put object
 func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
 		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
 		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
-		return ObjectMetadata{}, probe.New(ObjectExists{Object: object})
+		return ObjectMetadata{}, probe.NewError(ObjectExists{Object: object})
 	}
 	objMetadata, err := donut.buckets[bucket].WriteObject(object, reader, size, expectedMD5Sum, metadata, signature)
 	if err != nil {
@@ -161,26 +161,26 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 // putObject - put object
 func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (PartMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return PartMetadata{}, probe.New(InvalidArgument{})
+		return PartMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return PartMetadata{}, probe.New(InvalidArgument{})
+		return PartMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
 		return PartMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return PartMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return PartMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
 		return PartMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].Multiparts[object]; !ok {
-		return PartMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
+		return PartMetadata{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; ok {
-		return PartMetadata{}, probe.New(ObjectExists{Object: object})
+		return PartMetadata{}, probe.NewError(ObjectExists{Object: object})
 	}
 	objectPart := object + "/" + "multipart" + "/" + strconv.Itoa(partID)
 	objmetadata, err := donut.buckets[bucket].WriteObject(objectPart, reader, size, expectedMD5Sum, metadata, signature)
@@ -205,16 +205,16 @@ func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, 
 // getObject - get object
 func (donut API) getObject(bucket, object string) (reader io.ReadCloser, size int64, err *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return nil, 0, probe.New(InvalidArgument{})
+		return nil, 0, probe.NewError(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return nil, 0, probe.New(InvalidArgument{})
+		return nil, 0, probe.NewError(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
 		return nil, 0, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return nil, 0, probe.New(BucketNotFound{Bucket: bucket})
+		return nil, 0, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	return donut.buckets[bucket].ReadObject(object)
 }
@@ -225,14 +225,14 @@ func (donut API) getObjectMetadata(bucket, object string) (ObjectMetadata, *prob
 		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	bucketMeta, err := donut.getDonutBucketMetadata()
 	if err != nil {
 		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := bucketMeta.Buckets[bucket].BucketObjects[object]; !ok {
-		return ObjectMetadata{}, probe.New(ObjectNotFound{Object: object})
+		return ObjectMetadata{}, probe.NewError(ObjectNotFound{Object: object})
 	}
 	objectMetadata, err := donut.buckets[bucket].GetObjectMetadata(object)
 	if err != nil {
@@ -247,7 +247,7 @@ func (donut API) newMultipartUpload(bucket, object, contentType string) (string,
 		return "", err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return "", probe.New(BucketNotFound{Bucket: bucket})
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -283,16 +283,16 @@ func (donut API) newMultipartUpload(bucket, object, contentType string) (string,
 // listObjectParts list all object parts
 func (donut API) listObjectParts(bucket, object string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectResourcesMetadata{}, probe.New(InvalidArgument{})
+		return ObjectResourcesMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectResourcesMetadata{}, probe.New(InvalidArgument{})
+		return ObjectResourcesMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
 		return ObjectResourcesMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -300,10 +300,10 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 	}
 	bucketMetadata := allBuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return ObjectResourcesMetadata{}, probe.New(InvalidUploadID{UploadID: resources.UploadID})
+		return ObjectResourcesMetadata{}, probe.NewError(InvalidUploadID{UploadID: resources.UploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != resources.UploadID {
-		return ObjectResourcesMetadata{}, probe.New(InvalidUploadID{UploadID: resources.UploadID})
+		return ObjectResourcesMetadata{}, probe.NewError(InvalidUploadID{UploadID: resources.UploadID})
 	}
 	objectResourcesMetadata := resources
 	objectResourcesMetadata.Bucket = bucket
@@ -326,7 +326,7 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 		}
 		part, ok := bucketMetadata.Multiparts[object].Parts[strconv.Itoa(i)]
 		if !ok {
-			return ObjectResourcesMetadata{}, probe.New(InvalidPart{})
+			return ObjectResourcesMetadata{}, probe.NewError(InvalidPart{})
 		}
 		parts = append(parts, &part)
 	}
@@ -338,16 +338,16 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 // completeMultipartUpload complete an incomplete multipart upload
 func (donut API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if object == "" || strings.TrimSpace(object) == "" {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	if err := donut.listDonutBuckets(); err != nil {
 		return ObjectMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	allBuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -355,17 +355,17 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	}
 	bucketMetadata := allBuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return ObjectMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
+		return ObjectMetadata{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != uploadID {
-		return ObjectMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
+		return ObjectMetadata{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	var partBytes []byte
 	{
 		var err error
 		partBytes, err = ioutil.ReadAll(data)
 		if err != nil {
-			return ObjectMetadata{}, probe.New(err)
+			return ObjectMetadata{}, probe.NewError(err)
 		}
 	}
 	if signature != nil {
@@ -374,19 +374,19 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}
 	if err := xml.Unmarshal(partBytes, parts); err != nil {
-		return ObjectMetadata{}, probe.New(MalformedXML{})
+		return ObjectMetadata{}, probe.NewError(MalformedXML{})
 	}
 	if !sort.IsSorted(completedParts(parts.Part)) {
-		return ObjectMetadata{}, probe.New(InvalidPartOrder{})
+		return ObjectMetadata{}, probe.NewError(InvalidPartOrder{})
 	}
 	for _, part := range parts.Part {
 		if strings.Trim(part.ETag, "\"") != bucketMetadata.Multiparts[object].Parts[strconv.Itoa(part.PartNumber)].ETag {
-			return ObjectMetadata{}, probe.New(InvalidPart{})
+			return ObjectMetadata{}, probe.NewError(InvalidPart{})
 		}
 	}
 	var finalETagBytes []byte
@@ -395,7 +395,7 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 	for _, part := range bucketMetadata.Multiparts[object].Parts {
 		partETagBytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
-			return ObjectMetadata{}, probe.New(err)
+			return ObjectMetadata{}, probe.NewError(err)
 		}
 		finalETagBytes = append(finalETagBytes, partETagBytes...)
 		finalSize += part.Size
@@ -416,7 +416,7 @@ func (donut API) listMultipartUploads(bucket string, resources BucketMultipartRe
 		return BucketMultipartResourcesMetadata{}, err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return BucketMultipartResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -474,7 +474,7 @@ func (donut API) abortMultipartUpload(bucket, object, uploadID string) *probe.Er
 		return err.Trace()
 	}
 	if _, ok := donut.buckets[bucket]; !ok {
-		return probe.New(BucketNotFound{Bucket: bucket})
+		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	allbuckets, err := donut.getDonutBucketMetadata()
 	if err != nil {
@@ -482,10 +482,10 @@ func (donut API) abortMultipartUpload(bucket, object, uploadID string) *probe.Er
 	}
 	bucketMetadata := allbuckets.Buckets[bucket]
 	if _, ok := bucketMetadata.Multiparts[object]; !ok {
-		return probe.New(InvalidUploadID{UploadID: uploadID})
+		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	if bucketMetadata.Multiparts[object].UploadID != uploadID {
-		return probe.New(InvalidUploadID{UploadID: uploadID})
+		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	delete(bucketMetadata.Multiparts, object)
 
@@ -557,7 +557,7 @@ func (donut API) setDonutBucketMetadata(metadata *AllBuckets) *probe.Error {
 		jenc := json.NewEncoder(writer)
 		if err := jenc.Encode(metadata); err != nil {
 			CleanupWritersOnError(writers)
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 	}
 	for _, writer := range writers {
@@ -584,7 +584,7 @@ func (donut API) getDonutBucketMetadata() (*AllBuckets, *probe.Error) {
 				return metadata, nil
 			}
 		}
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 }
 
@@ -594,7 +594,7 @@ func (donut API) makeDonutBucket(bucketName, acl string) *probe.Error {
 		return err.Trace()
 	}
 	if _, ok := donut.buckets[bucketName]; ok {
-		return probe.New(BucketExists{Bucket: bucketName})
+		return probe.NewError(BucketExists{Bucket: bucketName})
 	}
 	bucket, bucketMetadata, err := newBucket(bucketName, acl, donut.config.DonutName, donut.nodes)
 	if err != nil {
@@ -662,7 +662,7 @@ func (donut API) listDonutBuckets() *probe.Error {
 	for _, dir := range dirs {
 		splitDir := strings.Split(dir.Name(), "$")
 		if len(splitDir) < 3 {
-			return probe.New(CorruptedBackend{Backend: dir.Name()})
+			return probe.NewError(CorruptedBackend{Backend: dir.Name()})
 		}
 		bucketName := splitDir[0]
 		// we dont need this once we cache from makeDonutBucket()

@@ -71,8 +71,8 @@ func (s *MyAPIDonutSuite) SetUpSuite(c *C) {
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
 	donut.SetDonutConfigPath(filepath.Join(root, "donut.json"))
-	err = donut.SaveConfig(conf)
-	c.Assert(err, IsNil)
+	perr := donut.SaveConfig(conf)
+	c.Assert(perr, IsNil)
 
 	httpHandler, minioAPI := getAPIHandler(api.Config{RateLimit: 16})
 	go startTM(minioAPI)

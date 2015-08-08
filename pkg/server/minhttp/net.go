@@ -82,7 +82,7 @@ func (n *minNet) getInheritedListeners() *probe.Error {
 		}
 		count, err := strconv.Atoi(countStr)
 		if err != nil {
-			retErr = probe.New(fmt.Errorf("found invalid count value: %s=%s", envCountKey, countStr))
+			retErr = probe.NewError(fmt.Errorf("found invalid count value: %s=%s", envCountKey, countStr))
 			return
 		}
 
@@ -92,18 +92,18 @@ func (n *minNet) getInheritedListeners() *probe.Error {
 			l, err := net.FileListener(file)
 			if err != nil {
 				file.Close()
-				retErr = probe.New(err)
+				retErr = probe.NewError(err)
 				return
 			}
 			if err := file.Close(); err != nil {
-				retErr = probe.New(err)
+				retErr = probe.NewError(err)
 				return
 			}
 			n.inheritedListeners = append(n.inheritedListeners, l)
 		}
 	})
 	if retErr != nil {
-		return probe.New(retErr)
+		return retErr.Trace()
 	}
 	return nil
 }
@@ -115,17 +115,17 @@ func (n *minNet) getInheritedListeners() *probe.Error {
 func (n *minNet) Listen(nett, laddr string) (net.Listener, *probe.Error) {
 	switch nett {
 	default:
-		return nil, probe.New(net.UnknownNetworkError(nett))
+		return nil, probe.NewError(net.UnknownNetworkError(nett))
 	case "tcp", "tcp4", "tcp6":
 		addr, err := net.ResolveTCPAddr(nett, laddr)
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 		return n.ListenTCP(nett, addr)
 	case "unix", "unixpacket":
 		addr, err := net.ResolveUnixAddr(nett, laddr)
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 		return n.ListenUnix(nett, addr)
 	}
@@ -158,7 +158,7 @@ func (n *minNet) ListenTCP(nett string, laddr *net.TCPAddr) (net.Listener, *prob
 	// make a fresh listener
 	l, err := net.ListenTCP(nett, laddr)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
@@ -191,7 +191,7 @@ func (n *minNet) ListenUnix(nett string, laddr *net.UnixAddr) (net.Listener, *pr
 	// make a fresh listener
 	l, err := net.ListenUnix(nett, laddr)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	n.activeListeners = append(n.activeListeners, rateLimitedListener(l, n.connLimit))
 	return l, nil
@@ -240,7 +240,7 @@ func (n *minNet) StartProcess() (int, *probe.Error) {
 		var err error
 		files[i], err = l.(fileListener).File()
 		if err != nil {
-			return 0, probe.New(err)
+			return 0, probe.NewError(err)
 		}
 		defer files[i].Close()
 	}
@@ -249,7 +249,7 @@ func (n *minNet) StartProcess() (int, *probe.Error) {
 	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])
 	if err != nil {
-		return 0, probe.New(err)
+		return 0, probe.NewError(err)
 	}
 
 	// Pass on the environment and replace the old count key with the new one.
@@ -268,7 +268,7 @@ func (n *minNet) StartProcess() (int, *probe.Error) {
 		Files: allFiles,
 	})
 	if err != nil {
-		return 0, probe.New(err)
+		return 0, probe.NewError(err)
 	}
 	return process.Pid, nil
 }

@@ -52,17 +52,17 @@ type config struct {
 // CheckData - checks the validity of config data. Data sould be of type struct and contain a string type field called "Version"
 func CheckData(data interface{}) *probe.Error {
 	if !structs.IsStruct(data) {
-		return probe.New(fmt.Errorf("Invalid argument type. Expecing \"struct\" type."))
+		return probe.NewError(fmt.Errorf("Invalid argument type. Expecing \"struct\" type."))
 	}
 
 	st := structs.New(data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return probe.New(fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name()))
+		return probe.NewError(fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name()))
 	}
 
 	if f.Kind() != reflect.String {
-		return probe.New(fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name()))
+		return probe.NewError(fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name()))
 	}
 
 	return nil
@@ -111,7 +111,7 @@ func (d config) Save(filename string) *probe.Error {
 
 	jsonData, err := json.MarshalIndent(d.data, "", "\t")
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -120,7 +120,7 @@ func (d config) Save(filename string) *probe.Error {
 
 	err = ioutil.WriteFile(filename, jsonData, 0600)
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 
 	return nil
@@ -133,12 +133,12 @@ func (d *config) Load(filename string) *probe.Error {
 
 	_, err := os.Stat(filename)
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 
 	fileData, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -147,7 +147,7 @@ func (d *config) Load(filename string) *probe.Error {
 
 	err = json.Unmarshal(fileData, (*d).data)
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 
 	if err := CheckData(*(*d).data); err != nil {
@@ -157,11 +157,11 @@ func (d *config) Load(filename string) *probe.Error {
 	st := structs.New(*(*d).data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return probe.New(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
+		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
 	}
 
 	if (*d).Version() != f.Value() {
-		return probe.New(fmt.Errorf("Version mismatch"))
+		return probe.NewError(fmt.Errorf("Version mismatch"))
 	}
 
 	return nil

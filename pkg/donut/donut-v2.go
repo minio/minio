@@ -98,7 +98,7 @@ func New() (Interface, *probe.Error) {
 	if len(a.config.NodeDiskMap) > 0 {
 		for k, v := range a.config.NodeDiskMap {
 			if len(v) == 0 {
-				return nil, probe.New(InvalidDisksArgument{})
+				return nil, probe.NewError(InvalidDisksArgument{})
 			}
 			err := a.AttachNode(k, v)
 			if err != nil {
@@ -131,19 +131,19 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 	defer donut.lock.Unlock()
 
 	if !IsValidBucket(bucket) {
-		return 0, probe.New(BucketNameInvalid{Bucket: bucket})
+		return 0, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return 0, probe.New(ObjectNameInvalid{Object: object})
+		return 0, probe.NewError(ObjectNameInvalid{Object: object})
 	}
 	if start < 0 {
-		return 0, probe.New(InvalidRange{
+		return 0, probe.NewError(InvalidRange{
 			Start:  start,
 			Length: length,
 		})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return 0, probe.New(BucketNotFound{Bucket: bucket})
+		return 0, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	objectKey := bucket + "/" + object
 	data, ok := donut.objects.Get(objectKey)
@@ -156,7 +156,7 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 			}
 			if start > 0 {
 				if _, err := io.CopyN(ioutil.Discard, reader, start); err != nil {
-					return 0, probe.New(err)
+					return 0, probe.NewError(err)
 				}
 			}
 			// new proxy writer to capture data read from disk
@@ -166,12 +166,12 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 				if length > 0 {
 					written, err = io.CopyN(pw, reader, length)
 					if err != nil {
-						return 0, probe.New(err)
+						return 0, probe.NewError(err)
 					}
 				} else {
 					written, err = io.CopyN(pw, reader, size)
 					if err != nil {
-						return 0, probe.New(err)
+						return 0, probe.NewError(err)
 					}
 				}
 			}
@@ -180,23 +180,23 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 			pw.writtenBytes = nil
 			go debug.FreeOSMemory()
 			if !ok {
-				return 0, probe.New(InternalError{})
+				return 0, probe.NewError(InternalError{})
 			}
 			return written, nil
 		}
-		return 0, probe.New(ObjectNotFound{Object: object})
+		return 0, probe.NewError(ObjectNotFound{Object: object})
 	}
 	{
 		var err error
 		if start == 0 && length == 0 {
 			written, err = io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
 			if err != nil {
-				return 0, probe.New(err)
+				return 0, probe.NewError(err)
 			}
 		} else {
 			written, err = io.CopyN(w, bytes.NewBuffer(data[start:]), length)
 			if err != nil {
-				return 0, probe.New(err)
+				return 0, probe.NewError(err)
 			}
 		}
 		return written, nil
@@ -214,12 +214,12 @@ func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketM
 			return BucketMetadata{}, err.Trace()
 		}
 		if !ok {
-			return BucketMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return BucketMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if !IsValidBucket(bucket) {
-		return BucketMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
 		if len(donut.config.NodeDiskMap) > 0 {
@@ -231,7 +231,7 @@ func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketM
 			storedBucket.bucketMetadata = bucketMetadata
 			donut.storedBuckets.Set(bucket, storedBucket)
 		}
-		return BucketMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	return donut.storedBuckets.Get(bucket).(storedBucket).bucketMetadata, nil
 }
@@ -247,15 +247,15 @@ func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, si
 			return err.Trace()
 		}
 		if !ok {
-			return probe.New(SignatureDoesNotMatch{})
+			return probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if !IsValidBucket(bucket) {
-		return probe.New(BucketNameInvalid{Bucket: bucket})
+		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return probe.New(BucketNotFound{Bucket: bucket})
+		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		if err := donut.setBucketMetadata(bucket, metadata); err != nil {
@@ -273,18 +273,18 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
 		if err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
 		if err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return probe.New(BadDigest{})
+			return probe.NewError(BadDigest{})
 		}
 		return nil
 	}
-	return probe.New(InvalidArgument{})
+	return probe.NewError(InvalidArgument{})
 }
 
 // CreateObject - create an object
@@ -305,7 +305,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	if len(donut.config.NodeDiskMap) == 0 {
 		if size > int64(donut.config.MaxSize) {
 			generic := GenericObjectError{Bucket: bucket, Object: key}
-			return ObjectMetadata{}, probe.New(EntityTooLarge{
+			return ObjectMetadata{}, probe.NewError(EntityTooLarge{
 				GenericObjectError: generic,
 				Size:               strconv.FormatInt(size, 10),
 				MaxSize:            strconv.FormatUint(donut.config.MaxSize, 10),
@@ -313,19 +313,19 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		}
 	}
 	if !IsValidBucket(bucket) {
-		return ObjectMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return ObjectMetadata{}, probe.New(ObjectNameInvalid{Object: key})
+		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// get object key
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		return ObjectMetadata{}, probe.New(ObjectExists{Object: key})
+		return ObjectMetadata{}, probe.NewError(ObjectExists{Object: key})
 	}
 
 	if contentType == "" {
@@ -336,7 +336,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
-			return ObjectMetadata{}, probe.New(InvalidDigest{Md5: expectedMD5Sum})
+			return ObjectMetadata{}, probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -375,7 +375,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
 		if !ok {
-			return ObjectMetadata{}, probe.New(InternalError{})
+			return ObjectMetadata{}, probe.NewError(InternalError{})
 		}
 		totalLength += int64(length)
 		go debug.FreeOSMemory()
@@ -383,17 +383,17 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	if totalLength != size {
 		// Delete perhaps the object is already saved, due to the nature of append()
 		donut.objects.Delete(objectKey)
-		return ObjectMetadata{}, probe.New(IncompleteBody{Bucket: bucket, Object: key})
+		return ObjectMetadata{}, probe.NewError(IncompleteBody{Bucket: bucket, Object: key})
 	}
 	if err != io.EOF {
-		return ObjectMetadata{}, probe.New(err)
+		return ObjectMetadata{}, probe.NewError(err)
 	}
 	md5SumBytes := hash.Sum(nil)
 	md5Sum := hex.EncodeToString(md5SumBytes)
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
-			return ObjectMetadata{}, probe.New(BadDigest{})
+			return ObjectMetadata{}, probe.NewError(BadDigest{})
 		}
 	}
 	if signature != nil {
@@ -402,7 +402,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
@@ -433,7 +433,7 @@ func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signatur
 	if location != nil {
 		locationConstraintBytes, err := ioutil.ReadAll(location)
 		if err != nil {
-			return probe.New(InternalError{})
+			return probe.NewError(InternalError{})
 		}
 		locationSum = hex.EncodeToString(sha256.Sum256(locationConstraintBytes)[:])
 	}
@@ -444,21 +444,21 @@ func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signatur
 			return err.Trace()
 		}
 		if !ok {
-			return probe.New(SignatureDoesNotMatch{})
+			return probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if donut.storedBuckets.Stats().Items == totalBuckets {
-		return probe.New(TooManyBuckets{Bucket: bucketName})
+		return probe.NewError(TooManyBuckets{Bucket: bucketName})
 	}
 	if !IsValidBucket(bucketName) {
-		return probe.New(BucketNameInvalid{Bucket: bucketName})
+		return probe.NewError(BucketNameInvalid{Bucket: bucketName})
 	}
 	if !IsValidBucketACL(acl) {
-		return probe.New(InvalidACL{ACL: acl})
+		return probe.NewError(InvalidACL{ACL: acl})
 	}
 	if donut.storedBuckets.Exists(bucketName) {
-		return probe.New(BucketExists{Bucket: bucketName})
+		return probe.NewError(BucketExists{Bucket: bucketName})
 	}
 
 	if strings.TrimSpace(acl) == "" {
@@ -493,18 +493,18 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, s
 			return nil, BucketResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return nil, BucketResourcesMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return nil, BucketResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if !IsValidBucket(bucket) {
-		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidPrefix(resources.Prefix) {
-		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.New(ObjectNameInvalid{Object: resources.Prefix})
+		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.NewError(ObjectNameInvalid{Object: resources.Prefix})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.New(BucketNotFound{Bucket: bucket})
+		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	var results []ObjectMetadata
 	var keys []string
@@ -593,10 +593,10 @@ func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, *probe.Err
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, err.Trace()
 		}
 		if !ok {
-			return nil, probe.New(SignatureDoesNotMatch{})
+			return nil, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
@@ -630,19 +630,19 @@ func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (Ob
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	// check if bucket exists
 	if !IsValidBucket(bucket) {
-		return ObjectMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return ObjectMetadata{}, probe.New(ObjectNameInvalid{Object: key})
+		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	objectKey := bucket + "/" + key
@@ -659,7 +659,7 @@ func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (Ob
 		donut.storedBuckets.Set(bucket, storedBucket)
 		return objMetadata, nil
 	}
-	return ObjectMetadata{}, probe.New(ObjectNotFound{Object: key})
+	return ObjectMetadata{}, probe.NewError(ObjectNotFound{Object: key})
 }
 
 // evictedObject callback function called when an item is evicted from memory
