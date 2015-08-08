@@ -44,13 +44,13 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, *prob
 		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
 		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 	}
 
 	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 
 	var hosts []string
@@ -60,7 +60,7 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, *prob
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {

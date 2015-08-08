@@ -54,7 +54,7 @@ func (donut API) healBuckets() *probe.Error {
 			defer bucketMetadataWriter.Close()
 			jenc := json.NewEncoder(bucketMetadataWriter)
 			if err := jenc.Encode(bucketMetadata); err != nil {
-				return probe.New(err)
+				return probe.NewError(err)
 			}
 			for bucket := range bucketMetadata.Buckets {
 				bucketSlice := fmt.Sprintf("%s$0$%d", bucket, order) // TODO handle node slices

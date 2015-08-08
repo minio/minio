@@ -66,11 +66,11 @@ type Error struct {
 	tracePoints []tracePoint
 }
 
-// New function instantiates an error probe for tracing. Original errors.error (golang's error
+// NewError function instantiates an error probe for tracing. Original errors.error (golang's error
 // interface) is injected in only once during this New call. Rest of the time, you
 // trace the return path with Probe.Trace and finally handle reporting or quitting
 // at the top level.
-func New(e error) *Error {
+func NewError(e error) *Error {
 	if e == nil {
 		return nil
 	}
@@ -124,17 +124,9 @@ func (e *Error) Untrace() {
 	e.tracePoints = e.tracePoints[:l-1]
 }
 
-// Error returns error string.
-func (e *Error) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-	return e.String()
-}
-
 // String returns error message.
 func (e *Error) String() string {
-	if e == nil {
+	if e == nil || e.e == nil {
 		return "<nil>"
 	}
 	e.lock.RLock()
@@ -164,7 +156,7 @@ func (e *Error) String() string {
 
 // JSON returns JSON formated error trace.
 func (e *Error) JSON() string {
-	if e == nil {
+	if e == nil || e.e == nil {
 		return "<nil>"
 	}
 
@@ -187,8 +179,38 @@ func (e *Error) JSON() string {
 	return string(jBytes)
 }
 
-// ToError returns original emnedded error.
+// ToError returns original embedded error.
 func (e *Error) ToError() error {
 	// No need to lock. "e.e" is set once during New and never changed.
 	return e.e
+}
+
+// WrappedError implements container for *probe.Error
+type WrappedError struct {
+	err *Error
+}
+
+// NewWrappedError function wraps a *probe.Error into a 'error' compatible duck type
+func NewWrappedError(err *Error) error {
+	return &WrappedError{err: err}
+}
+
+// Error interface method
+func (w *WrappedError) Error() string {
+	return w.err.String()
+}
+
+// ToError get the *probe.Error embedded internally
+func (w *WrappedError) ToError() *Error {
+	return w.err
+}
+
+// ToWrappedError try to convert generic 'error' into typed *WrappedError, returns true if yes, false otherwise
+func ToWrappedError(err error) (*WrappedError, bool) {
+	switch e := err.(type) {
+	case *WrappedError:
+		return e, true
+	default:
+		return nil, false
+	}
 }

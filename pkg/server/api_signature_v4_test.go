@@ -60,13 +60,13 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
 	donut.SetDonutConfigPath(filepath.Join(root, "donut.json"))
-	err = donut.SaveConfig(conf)
-	c.Assert(err, IsNil)
+	perr := donut.SaveConfig(conf)
+	c.Assert(perr, IsNil)
 
-	accessKeyID, err := auth.GenerateAccessKeyID()
-	c.Assert(err, IsNil)
-	secretAccessKey, err := auth.GenerateSecretAccessKey()
-	c.Assert(err, IsNil)
+	accessKeyID, perr := auth.GenerateAccessKeyID()
+	c.Assert(perr, IsNil)
+	secretAccessKey, perr := auth.GenerateSecretAccessKey()
+	c.Assert(perr, IsNil)
 
 	authConf := &auth.Config{}
 	authConf.Users = make(map[string]*auth.User)
@@ -79,8 +79,8 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	s.secretAccessKey = string(secretAccessKey)
 
 	auth.SetAuthConfigPath(filepath.Join(root, "users.json"))
-	err = auth.SaveConfig(authConf)
-	c.Assert(err, IsNil)
+	perr = auth.SaveConfig(authConf)
+	c.Assert(perr, IsNil)
 
 	httpHandler, minioAPI := getAPIHandler(api.Config{RateLimit: 16})
 	go startTM(minioAPI)

@@ -31,7 +31,7 @@ func getDonutConfigPath() (string, *probe.Error) {
 	}
 	u, err := user.Current()
 	if err != nil {
-		return "", probe.New(err)
+		return "", probe.NewError(err)
 	}
 	donutConfigPath := filepath.Join(u.HomeDir, ".minio", "donut.json")
 	return donutConfigPath, nil

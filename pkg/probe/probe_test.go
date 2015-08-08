@@ -13,33 +13,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package probe
+package probe_test
 
 import (
 	"os"
 	"testing"
+
+	"github.com/minio/minio/pkg/probe"
+	. "gopkg.in/check.v1"
 )
 
-func testDummy() *Error {
-	_, e := os.Stat("this-file-cannot-exit-234234232423423")
-	es := New(e)
-	es.Trace("this is hell", "asdf")
+func Test(t *testing.T) { TestingT(t) }
+
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
+
+func testDummy() *probe.Error {
+	_, e := os.Stat("this-file-cannot-exit")
+	es := probe.NewError(e)
+	es.Trace("Important info 1", "Import into 2")
 	return es
 }
 
-func TestProbe(t *testing.T) {
+func (s *MySuite) TestProbe(c *C) {
 	es := testDummy()
-	if es == nil {
-		t.Fail()
-	}
+	c.Assert(es, Not(Equals), nil)
 
 	newES := es.Trace()
-	if newES == nil {
-		t.Fail()
-	}
-	/*
-		fmt.Println(es)
-		fmt.Println(es.JSON())
-		fmt.Println(es.ToError())
-	*/
+	c.Assert(newES, Not(Equals), nil)
+}
+
+func (s *MySuite) TestWrappedError(c *C) {
+	_, e := os.Stat("this-file-cannot-exit")
+	es := probe.NewError(e)       // *probe.Error
+	e = probe.NewWrappedError(es) // *probe.WrappedError
+	_, ok := probe.ToWrappedError(e)
+	c.Assert(ok, Equals, true)
 }

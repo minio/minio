@@ -78,7 +78,7 @@ func urlEncodeName(name string) (string, *probe.Error) {
 		default:
 			len := utf8.RuneLen(s)
 			if len < 0 {
-				return "", probe.New(InvalidArgument{})
+				return "", probe.NewError(InvalidArgument{})
 			}
 			u := make([]byte, len)
 			utf8.EncodeRune(u, s)
@@ -220,12 +220,12 @@ func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error
 	var date string
 	if date = r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
 		if date = r.Request.Header.Get("Date"); date == "" {
-			return false, probe.New(MissingDateHeader{})
+			return false, probe.NewError(MissingDateHeader{})
 		}
 	}
 	t, err := time.Parse(iso8601Format, date)
 	if err != nil {
-		return false, probe.New(err)
+		return false, probe.NewError(err)
 	}
 	canonicalRequest := r.getCanonicalRequest()
 	stringToSign := r.getStringToSign(canonicalRequest, t)

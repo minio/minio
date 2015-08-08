@@ -45,10 +45,10 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 	defer donut.lock.Unlock()
 
 	if !IsValidBucket(bucket) {
-		return "", probe.New(BucketNameInvalid{Bucket: bucket})
+		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return "", probe.New(ObjectNameInvalid{Object: key})
+		return "", probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -56,19 +56,19 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 			return "", err.Trace()
 		}
 		if !ok {
-			return "", probe.New(SignatureDoesNotMatch{})
+			return "", probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		return donut.newMultipartUpload(bucket, key, contentType)
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return "", probe.New(BucketNotFound{Bucket: bucket})
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	objectKey := bucket + "/" + key
 	if _, ok := storedBucket.objectMetadata[objectKey]; ok == true {
-		return "", probe.New(ObjectExists{Object: key})
+		return "", probe.NewError(ObjectExists{Object: key})
 	}
 	id := []byte(strconv.Itoa(rand.Int()) + bucket + key + time.Now().UTC().String())
 	uploadIDSum := sha512.Sum512(id)
@@ -93,10 +93,10 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 	defer donut.lock.Unlock()
 
 	if !IsValidBucket(bucket) {
-		return probe.New(BucketNameInvalid{Bucket: bucket})
+		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return probe.New(ObjectNameInvalid{Object: key})
+		return probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -104,18 +104,18 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 			return err.Trace()
 		}
 		if !ok {
-			return probe.New(SignatureDoesNotMatch{})
+			return probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		return donut.abortMultipartUpload(bucket, key, uploadID)
 	}
 	if !donut.storedBuckets.Exists(bucket) {
-		return probe.New(BucketNotFound{Bucket: bucket})
+		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	if storedBucket.multiPartSession[key].UploadID != uploadID {
-		return probe.New(InvalidUploadID{UploadID: uploadID})
+		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	donut.cleanupMultipartSession(bucket, key, uploadID)
 	return nil
@@ -135,10 +135,10 @@ func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, cont
 // createObject - internal wrapper function called by CreateObjectPart
 func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, *probe.Error) {
 	if !IsValidBucket(bucket) {
-		return "", probe.New(BucketNameInvalid{Bucket: bucket})
+		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return "", probe.New(ObjectNameInvalid{Object: key})
+		return "", probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		metadata := make(map[string]string)
@@ -151,7 +151,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 			expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 			if err != nil {
 				// pro-actively close the connection
-				return "", probe.New(InvalidDigest{Md5: expectedMD5Sum})
+				return "", probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
 			}
 			expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 		}
@@ -163,12 +163,12 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 	}
 
 	if !donut.storedBuckets.Exists(bucket) {
-		return "", probe.New(BucketNotFound{Bucket: bucket})
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	strBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// Verify upload id
 	if strBucket.multiPartSession[key].UploadID != uploadID {
-		return "", probe.New(InvalidUploadID{UploadID: uploadID})
+		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// get object key
@@ -185,7 +185,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
-			return "", probe.New(InvalidDigest{Md5: expectedMD5Sum})
+			return "", probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -204,17 +204,17 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		sha256hash.Write(byteBuffer[0:length])
 		ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
 		if !ok {
-			return "", probe.New(InternalError{})
+			return "", probe.NewError(InternalError{})
 		}
 		totalLength += int64(length)
 		go debug.FreeOSMemory()
 	}
 	if totalLength != size {
 		donut.multiPartObjects[uploadID].Delete(partID)
-		return "", probe.New(IncompleteBody{Bucket: bucket, Object: key})
+		return "", probe.NewError(IncompleteBody{Bucket: bucket, Object: key})
 	}
 	if err != io.EOF {
-		return "", probe.New(err)
+		return "", probe.NewError(err)
 	}
 
 	md5SumBytes := hash.Sum(nil)
@@ -233,7 +233,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 				return "", err.Trace()
 			}
 			if !ok {
-				return "", probe.New(SignatureDoesNotMatch{})
+				return "", probe.NewError(SignatureDoesNotMatch{})
 			}
 		}
 	}
@@ -271,11 +271,11 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 
 	if !IsValidBucket(bucket) {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(ObjectNameInvalid{Object: key})
+		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
 	if len(donut.config.NodeDiskMap) > 0 {
 		donut.lock.Unlock()
@@ -284,18 +284,18 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 
 	if !donut.storedBuckets.Exists(bucket) {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	// Verify upload id
 	if storedBucket.multiPartSession[key].UploadID != uploadID {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(InvalidUploadID{UploadID: uploadID})
+		return ObjectMetadata{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	partBytes, err := ioutil.ReadAll(data)
 	if err != nil {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(err)
+		return ObjectMetadata{}, probe.NewError(err)
 	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256(partBytes)[:]))
@@ -305,17 +305,17 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		}
 		if !ok {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}
 	if err := xml.Unmarshal(partBytes, parts); err != nil {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(MalformedXML{})
+		return ObjectMetadata{}, probe.NewError(MalformedXML{})
 	}
 	if !sort.IsSorted(completedParts(parts.Part)) {
 		donut.lock.Unlock()
-		return ObjectMetadata{}, probe.New(InvalidPartOrder{})
+		return ObjectMetadata{}, probe.NewError(InvalidPartOrder{})
 	}
 
 	var size int64
@@ -325,7 +325,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		object, ok := donut.multiPartObjects[uploadID].Get(parts.Part[i].PartNumber)
 		if ok == false {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, probe.New(InvalidPart{})
+			return ObjectMetadata{}, probe.NewError(InvalidPart{})
 		}
 		size += int64(len(object))
 		calcMD5Bytes := md5.Sum(object)
@@ -333,15 +333,15 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		recvMD5Bytes, err := hex.DecodeString(strings.Trim(recvMD5, "\""))
 		if err != nil {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, probe.New(InvalidDigest{Md5: recvMD5})
+			return ObjectMetadata{}, probe.NewError(InvalidDigest{Md5: recvMD5})
 		}
 		if !bytes.Equal(recvMD5Bytes, calcMD5Bytes[:]) {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, probe.New(BadDigest{})
+			return ObjectMetadata{}, probe.NewError(BadDigest{})
 		}
 		if _, err := io.Copy(&fullObject, bytes.NewBuffer(object)); err != nil {
 			donut.lock.Unlock()
-			return ObjectMetadata{}, probe.New(err)
+			return ObjectMetadata{}, probe.NewError(err)
 		}
 		object = nil
 		go debug.FreeOSMemory()
@@ -386,12 +386,12 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 			return BucketMultipartResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return BucketMultipartResourcesMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return BucketMultipartResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if !IsValidBucket(bucket) {
-		return BucketMultipartResourcesMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -399,7 +399,7 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 	}
 
 	if !donut.storedBuckets.Exists(bucket) {
-		return BucketMultipartResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
@@ -468,15 +468,15 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 			return ObjectResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectResourcesMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 
 	if !IsValidBucket(bucket) {
-		return ObjectResourcesMetadata{}, probe.New(BucketNameInvalid{Bucket: bucket})
+		return ObjectResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(key) {
-		return ObjectResourcesMetadata{}, probe.New(ObjectNameInvalid{Object: key})
+		return ObjectResourcesMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
 
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -484,14 +484,14 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 	}
 
 	if !donut.storedBuckets.Exists(bucket) {
-		return ObjectResourcesMetadata{}, probe.New(BucketNotFound{Bucket: bucket})
+		return ObjectResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	storedBucket := donut.storedBuckets.Get(bucket).(storedBucket)
 	if _, ok := storedBucket.multiPartSession[key]; ok == false {
-		return ObjectResourcesMetadata{}, probe.New(ObjectNotFound{Object: key})
+		return ObjectResourcesMetadata{}, probe.NewError(ObjectNotFound{Object: key})
 	}
 	if storedBucket.multiPartSession[key].UploadID != resources.UploadID {
-		return ObjectResourcesMetadata{}, probe.New(InvalidUploadID{UploadID: resources.UploadID})
+		return ObjectResourcesMetadata{}, probe.NewError(InvalidUploadID{UploadID: resources.UploadID})
 	}
 	storedParts := storedBucket.partMetadata[key]
 	objectResourcesMetadata := resources
@@ -515,7 +515,7 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 		}
 		part, ok := storedParts[i]
 		if !ok {
-			return ObjectResourcesMetadata{}, probe.New(InvalidPart{})
+			return ObjectResourcesMetadata{}, probe.NewError(InvalidPart{})
 		}
 		parts = append(parts, &part)
 	}

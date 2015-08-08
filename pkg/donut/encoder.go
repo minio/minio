@@ -38,7 +38,7 @@ func getErasureTechnique(technique string) (encoding.Technique, *probe.Error) {
 	case technique == "Vandermonde":
 		return encoding.Cauchy, nil
 	default:
-		return encoding.None, probe.New(InvalidErasureTechnique{Technique: technique})
+		return encoding.None, probe.NewError(InvalidErasureTechnique{Technique: technique})
 	}
 }
 
@@ -52,7 +52,7 @@ func newEncoder(k, m uint8, technique string) (encoder, *probe.Error) {
 	{
 		params, err := encoding.ValidateParams(k, m, t)
 		if err != nil {
-			return encoder{}, probe.New(err)
+			return encoder{}, probe.NewError(err)
 		}
 		e.encoder = encoding.NewErasure(params)
 		e.k = k
@@ -66,7 +66,7 @@ func newEncoder(k, m uint8, technique string) (encoder, *probe.Error) {
 // GetEncodedBlockLen - wrapper around erasure function with the same name
 func (e encoder) GetEncodedBlockLen(dataLength int) (int, *probe.Error) {
 	if dataLength <= 0 {
-		return 0, probe.New(InvalidArgument{})
+		return 0, probe.NewError(InvalidArgument{})
 	}
 	return encoding.GetEncodedBlockLen(dataLength, e.k), nil
 }
@@ -74,11 +74,11 @@ func (e encoder) GetEncodedBlockLen(dataLength int) (int, *probe.Error) {
 // Encode - erasure code input bytes
 func (e encoder) Encode(data []byte) ([][]byte, *probe.Error) {
 	if data == nil {
-		return nil, probe.New(InvalidArgument{})
+		return nil, probe.NewError(InvalidArgument{})
 	}
 	encodedData, err := e.encoder.Encode(data)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	return encodedData, nil
 }
@@ -86,7 +86,7 @@ func (e encoder) Encode(data []byte) ([][]byte, *probe.Error) {
 func (e encoder) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, *probe.Error) {
 	encodedData, inputData, err := e.encoder.EncodeStream(data, size)
 	if err != nil {
-		return nil, nil, probe.New(err)
+		return nil, nil, probe.NewError(err)
 	}
 	return encodedData, inputData, nil
 }
@@ -95,7 +95,7 @@ func (e encoder) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, *pr
 func (e encoder) Decode(encodedData [][]byte, dataLength int) ([]byte, *probe.Error) {
 	decodedData, err := e.encoder.Decode(encodedData, dataLength)
 	if err != nil {
-		return nil, probe.New(err)
+		return nil, probe.NewError(err)
 	}
 	return decodedData, nil
 }

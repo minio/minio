@@ -55,7 +55,7 @@ func setSysInfoReply(sis *SysInfoReply) *probe.Error {
 	var err error
 	sis.Hostname, err = os.Hostname()
 	if err != nil {
-		return probe.New(err)
+		return probe.NewError(err)
 	}
 	return nil
 }
@@ -70,7 +70,7 @@ func setMemStatsReply(sis *MemStatsReply) *probe.Error {
 // Get method
 func (s *SysInfoService) Get(r *http.Request, args *Args, reply *SysInfoReply) error {
 	if err := setSysInfoReply(reply); err != nil {
-		return err
+		return probe.NewWrappedError(err)
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func (s *SysInfoService) Get(r *http.Request, args *Args, reply *SysInfoReply) e
 // Get method
 func (s *MemStatsService) Get(r *http.Request, args *Args, reply *MemStatsReply) error {
 	if err := setMemStatsReply(reply); err != nil {
-		return err
+		return probe.NewWrappedError(err)
 	}
 	return nil
 }

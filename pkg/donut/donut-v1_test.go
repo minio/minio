@@ -67,15 +67,15 @@ func (s *MyDonutSuite) SetUpSuite(c *C) {
 	conf.NodeDiskMap = createTestNodeDiskMap(root)
 	conf.MaxSize = 100000
 	SetDonutConfigPath(filepath.Join(root, "donut.json"))
-	err = SaveConfig(conf)
-	c.Assert(err, IsNil)
+	perr := SaveConfig(conf)
+	c.Assert(perr, IsNil)
 
-	dd, err = New()
-	c.Assert(err, IsNil)
+	dd, perr = New()
+	c.Assert(perr, IsNil)
 
 	// testing empty donut
-	buckets, err := dd.ListBuckets(nil)
-	c.Assert(err, IsNil)
+	buckets, perr := dd.ListBuckets(nil)
+	c.Assert(perr, IsNil)
 	c.Assert(len(buckets), Equals, 0)
 }
 

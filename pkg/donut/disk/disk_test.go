@@ -38,8 +38,8 @@ func (s *MyDiskSuite) SetUpSuite(c *C) {
 	path, err := ioutil.TempDir(os.TempDir(), "disk-")
 	c.Assert(err, IsNil)
 	s.path = path
-	d, err := New(s.path)
-	c.Assert(err, IsNil)
+	d, perr := New(s.path)
+	c.Assert(perr, IsNil)
 	s.disk = d
 }
 

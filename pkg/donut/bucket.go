@@ -54,7 +54,7 @@ type bucket struct {
 // newBucket - instantiate a new bucket
 func newBucket(bucketName, aclType, donutName string, nodes map[string]node) (bucket, BucketMetadata, *probe.Error) {
 	if strings.TrimSpace(bucketName) == "" || strings.TrimSpace(donutName) == "" {
-		return bucket{}, BucketMetadata{}, probe.New(InvalidArgument{})
+		return bucket{}, BucketMetadata{}, probe.NewError(InvalidArgument{})
 	}
 
 	b := bucket{}
@@ -128,7 +128,7 @@ func (b bucket) getBucketMetadata() (*AllBuckets, *probe.Error) {
 			return metadata, nil
 		}
 	}
-	return nil, probe.New(err)
+	return nil, probe.NewError(err)
 }
 
 // GetObjectMetadata - get metadata for an object
@@ -223,7 +223,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 	}
 	// check if object exists
 	if _, ok := bucketMetadata.Buckets[b.getBucketName()].BucketObjects[objectName]; !ok {
-		return nil, 0, probe.New(ObjectNotFound{Object: objectName})
+		return nil, 0, probe.NewError(ObjectNotFound{Object: objectName})
 	}
 	objMetadata, err := b.readObjectMetadata(normalizeObjectName(objectName))
 	if err != nil {
@@ -239,7 +239,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	writers, err := b.getObjectWriters(normalizeObjectName(objectName), "data")
 	if err != nil {
@@ -266,7 +266,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		totalLength, err := io.Copy(mw, objectData)
 		if err != nil {
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, probe.New(err)
+			return ObjectMetadata{}, probe.NewError(err)
 		}
 		objMetadata.Size = totalLength
 	case false:
@@ -306,7 +306,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 			//
 			// Signature mismatch occurred all temp files to be removed and all data purged.
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, probe.New(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
 	objMetadata.MD5Sum = hex.EncodeToString(dataMD5sum)
@@ -337,24 +337,24 @@ func (b bucket) isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error 
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
 		if err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
 		if err != nil {
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return probe.New(BadDigest{})
+			return probe.NewError(BadDigest{})
 		}
 		return nil
 	}
-	return probe.New(InvalidArgument{})
+	return probe.NewError(InvalidArgument{})
 }
 
 // writeObjectMetadata - write additional object metadata
 func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadata) *probe.Error {
 	if objMetadata.Object == "" {
-		return probe.New(InvalidArgument{})
+		return probe.NewError(InvalidArgument{})
 	}
 	objMetadataWriters, err := b.getObjectWriters(objectName, objectMetadataConfig)
 	if err != nil {
@@ -365,7 +365,7 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 		if err := jenc.Encode(&objMetadata); err != nil {
 			// Close writers and purge all temporary entries
 			CleanupWritersOnError(objMetadataWriters)
-			return probe.New(err)
+			return probe.NewError(err)
 		}
 	}
 	for _, objMetadataWriter := range objMetadataWriters {
@@ -377,7 +377,7 @@ func (b bucket) writeObjectMetadata(objectName string, objMetadata ObjectMetadat
 // readObjectMetadata - read object metadata
 func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, *probe.Error) {
 	if objectName == "" {
-		return ObjectMetadata{}, probe.New(InvalidArgument{})
+		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
 	objMetadata := ObjectMetadata{}
 	objMetadataReaders, err := b.getObjectReaders(objectName, objectMetadataConfig)
@@ -395,7 +395,7 @@ func (b bucket) readObjectMetadata(objectName string) (ObjectMetadata, *probe.Er
 				return objMetadata, nil
 			}
 		}
-		return ObjectMetadata{}, probe.New(err)
+		return ObjectMetadata{}, probe.NewError(err)
 	}
 }
 
@@ -415,12 +415,12 @@ func normalizeObjectName(objectName string) string {
 // getDataAndParity - calculate k, m (data and parity) values from number of disks
 func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err *probe.Error) {
 	if totalWriters <= 1 {
-		return 0, 0, probe.New(InvalidArgument{})
+		return 0, 0, probe.NewError(InvalidArgument{})
 	}
 	quotient := totalWriters / 2 // not using float or abs to let integer round off to lower value
 	// quotient cannot be bigger than (255 / 2) = 127
 	if quotient > 127 {
-		return 0, 0, probe.New(ParityOverflow{})
+		return 0, 0, probe.NewError(ParityOverflow{})
 	}
 	remainder := totalWriters % 2 // will be 1 for odd and 0 for even numbers
 	k = uint8(quotient + remainder)
@@ -450,7 +450,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 			return 0, 0, err.Trace()
 		}
 		if _, err := writer.Write(inputData); err != nil {
-			return 0, 0, probe.New(err)
+			return 0, 0, probe.NewError(err)
 		}
 		for blockIndex, block := range encodedBlocks {
 			errCh := make(chan error, 1)
@@ -461,7 +461,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 			}(writers[blockIndex], bytes.NewReader(block), errCh)
 			if err := <-errCh; err != nil {
 				// Returning error is fine here CleanupErrors() would cleanup writers
-				return 0, 0, probe.New(err)
+				return 0, 0, probe.NewError(err)
 			}
 		}
 		chunkCount = chunkCount + 1
@@ -473,7 +473,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
 	readers, err := b.getObjectReaders(objectName, "data")
 	if err != nil {
-		writer.CloseWithError(err.Trace())
+		writer.CloseWithError(probe.NewWrappedError(err))
 		return
 	}
 	for _, reader := range readers {
@@ -484,12 +484,12 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 		var err error
 		expectedMd5sum, err = hex.DecodeString(objMetadata.MD5Sum)
 		if err != nil {
-			writer.CloseWithError(probe.New(err))
+			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
 			return
 		}
 		expected512Sum, err = hex.DecodeString(objMetadata.SHA512Sum)
 		if err != nil {
-			writer.CloseWithError(probe.New(err))
+			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
 			return
 		}
 	}
@@ -499,23 +499,23 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	switch len(readers) > 1 {
 	case true:
 		if objMetadata.ErasureTechnique == "" {
-			writer.CloseWithError(probe.New(MissingErasureTechnique{}))
+			writer.CloseWithError(probe.NewWrappedError(probe.NewError(MissingErasureTechnique{})))
 			return
 		}
 		encoder, err := newEncoder(objMetadata.DataDisks, objMetadata.ParityDisks, objMetadata.ErasureTechnique)
 		if err != nil {
-			writer.CloseWithError(err.Trace())
+			writer.CloseWithError(probe.NewWrappedError(err))
 			return
 		}
 		totalLeft := objMetadata.Size
 		for i := 0; i < objMetadata.ChunkCount; i++ {
 			decodedData, err := b.decodeEncodedData(totalLeft, int64(objMetadata.BlockSize), readers, encoder, writer)
 			if err != nil {
-				writer.CloseWithError(err.Trace())
+				writer.CloseWithError(probe.NewWrappedError(err))
 				return
 			}
 			if _, err := io.Copy(mwriter, bytes.NewReader(decodedData)); err != nil {
-				writer.CloseWithError(probe.New(err))
+				writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
 				return
 			}
 			totalLeft = totalLeft - int64(objMetadata.BlockSize)
@@ -523,17 +523,17 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	case false:
 		_, err := io.Copy(writer, readers[0])
 		if err != nil {
-			writer.CloseWithError(probe.New(err))
+			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
 			return
 		}
 	}
 	// check if decodedData md5sum matches
 	if !bytes.Equal(expectedMd5sum, hasher.Sum(nil)) {
-		writer.CloseWithError(probe.New(ChecksumMismatch{}))
+		writer.CloseWithError(probe.NewWrappedError(probe.NewError(ChecksumMismatch{})))
 		return
 	}
 	if !bytes.Equal(expected512Sum, sum512hasher.Sum(nil)) {
-		writer.CloseWithError(probe.New(ChecksumMismatch{}))
+		writer.CloseWithError(probe.NewWrappedError(probe.NewError(ChecksumMismatch{})))
 		return
 	}
 	writer.Close()
@@ -557,7 +557,7 @@ func (b bucket) decodeEncodedData(totalLeft, blockSize int64, readers map[int]io
 		var bytesBuffer bytes.Buffer
 		_, err := io.CopyN(&bytesBuffer, reader, int64(curChunkSize))
 		if err != nil {
-			return nil, probe.New(err)
+			return nil, probe.NewError(err)
 		}
 		encodedBytes[i] = bytesBuffer.Bytes()
 	}
