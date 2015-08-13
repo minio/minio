@@ -45,7 +45,7 @@ type Config interface {
 
 // config - implements quick.Config interface
 type config struct {
-	data *interface{}
+	data interface{}
 	lock *sync.RWMutex
 }
 
@@ -76,14 +76,14 @@ func New(data interface{}) (Config, *probe.Error) {
 	}
 
 	d := new(config)
-	d.data = &data
+	d.data = data
 	d.lock = new(sync.RWMutex)
 	return d, nil
 }
 
 // Version returns the current config file format version
 func (d config) Version() string {
-	st := structs.New(*d.data)
+	st := structs.New(d.data)
 
 	f, ok := st.FieldOk("Version")
 	if !ok {
@@ -100,7 +100,7 @@ func (d config) Version() string {
 
 // String converts JSON config to printable string
 func (d config) String() string {
-	configBytes, _ := json.MarshalIndent(*d.data, "", "\t")
+	configBytes, _ := json.MarshalIndent(d.data, "", "\t")
 	return string(configBytes)
 }
 
@@ -128,8 +128,8 @@ func (d config) Save(filename string) *probe.Error {
 
 // Load - loads JSON config from file and merge with currently set values
 func (d *config) Load(filename string) *probe.Error {
-	(*d).lock.Lock()
-	defer (*d).lock.Unlock()
+	d.lock.Lock()
+	defer d.lock.Unlock()
 
 	_, err := os.Stat(filename)
 	if err != nil {
@@ -145,16 +145,16 @@ func (d *config) Load(filename string) *probe.Error {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
 
-	err = json.Unmarshal(fileData, (*d).data)
+	err = json.Unmarshal(fileData, d.data)
 	if err != nil {
 		return probe.NewError(err)
 	}
 
-	if err := CheckData(*(*d).data); err != nil {
+	if err := CheckData(d.data); err != nil {
 		return err.Trace()
 	}
 
-	st := structs.New(*(*d).data)
+	st := structs.New(d.data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
 		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
@@ -169,7 +169,7 @@ func (d *config) Load(filename string) *probe.Error {
 
 // Data - grab internal data map for reading
 func (d config) Data() interface{} {
-	return *d.data
+	return d.data
 }
 
 //Diff  - list fields that are in A but not in B

@@ -16,13 +16,14 @@
  * limitations under the License.
  */
 
-package quick
+package quick_test
 
 import (
 	"os"
 	"testing"
 
 	. "github.com/minio/minio/internal/gopkg.in/check.v1"
+	"github.com/minio/minio/pkg/quick"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -32,7 +33,7 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestCheckData(c *C) {
-	err := CheckData(nil)
+	err := quick.CheckData(nil)
 	c.Assert(err, Not(IsNil))
 
 	type myStructBad struct {
@@ -41,7 +42,7 @@ func (s *MySuite) TestCheckData(c *C) {
 		Folders  []string
 	}
 	saveMeBad := myStructBad{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = CheckData(&saveMeBad)
+	err = quick.CheckData(&saveMeBad)
 	c.Assert(err, Not(IsNil))
 
 	type myStructGood struct {
@@ -52,7 +53,7 @@ func (s *MySuite) TestCheckData(c *C) {
 	}
 
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = CheckData(&saveMeGood)
+	err = quick.CheckData(&saveMeGood)
 	c.Assert(err, IsNil)
 }
 
@@ -65,13 +66,13 @@ func (s *MySuite) TestSaveLoad(c *C) {
 		Folders  []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := quick.New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	config.Save("test.json")
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := New(&loadMe)
+	newConfig, err := quick.New(&loadMe)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 	newConfig.Load("test.json")
@@ -91,7 +92,7 @@ func (s *MySuite) TestDiff(c *C) {
 		Folders  []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := quick.New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
@@ -103,7 +104,7 @@ func (s *MySuite) TestDiff(c *C) {
 	}
 
 	mismatch := myNewStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := New(&mismatch)
+	newConfig, err := quick.New(&mismatch)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 
@@ -125,12 +126,12 @@ func (s *MySuite) TestDeepDiff(c *C) {
 		Folders  []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := quick.New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
 	mismatch := myStruct{"1", "Guest", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := New(&mismatch)
+	newConfig, err := quick.New(&mismatch)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 
