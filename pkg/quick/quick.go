@@ -28,7 +28,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/fatih/structs"
+	"github.com/minio/minio/internal/github.com/fatih/structs"
 	"github.com/minio/minio/pkg/probe"
 )
 

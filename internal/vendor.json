@@ -1,0 +1,83 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"canonical": "github.com/dustin/go-humanize",
+			"comment": "",
+			"local": "github.com/dustin/go-humanize",
+			"revision": "1c212aae1d02984808182b98b0da7a3e07e4c770",
+			"revisionTime": "2015-08-09T13:14:05-07:00"
+		},
+		{
+			"canonical": "github.com/facebookgo/clock",
+			"comment": "",
+			"local": "github.com/facebookgo/clock",
+			"revision": "600d898af40aa09a7a93ecb9265d87b0504b6f03",
+			"revisionTime": "2015-04-09T18:09:13-07:00"
+		},
+		{
+			"canonical": "github.com/facebookgo/httpdown",
+			"comment": "",
+			"local": "github.com/facebookgo/httpdown",
+			"revision": "9229879964ff32fc4e42c7ba6b4745efce39023c",
+			"revisionTime": "2015-08-07T22:21:07Z"
+		},
+		{
+			"canonical": "github.com/facebookgo/stats",
+			"comment": "",
+			"local": "github.com/facebookgo/stats",
+			"revision": "31fb71caf5a4f04c9f8bb3fa8e7c2597ba6eb50a",
+			"revisionTime": "2015-06-12T18:29:15Z"
+		},
+		{
+			"canonical": "github.com/fatih/structs",
+			"comment": "",
+			"local": "github.com/fatih/structs",
+			"revision": "a9f7daa9c2729e97450c2da2feda19130a367d8f",
+			"revisionTime": "2015-05-26T09:43:52+03:00"
+		},
+		{
+			"canonical": "github.com/gorilla/context",
+			"comment": "",
+			"local": "github.com/gorilla/context",
+			"revision": "215affda49addc4c8ef7e2534915df2c8c35c6cd",
+			"revisionTime": "2014-12-17T08:02:51-08:00"
+		},
+		{
+			"canonical": "github.com/gorilla/mux",
+			"comment": "",
+			"local": "github.com/gorilla/mux",
+			"revision": "5112c33f3a6ef694c1e5784b68981f08b3f0327c",
+			"revisionTime": "2015-08-11T22:16:22-07:00"
+		},
+		{
+			"canonical": "github.com/gorilla/rpc/v2",
+			"comment": "",
+			"local": "github.com/gorilla/rpc/v2",
+			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
+			"revisionTime": "2015-08-09T21:43:58-07:00"
+		},
+		{
+			"canonical": "github.com/gorilla/rpc/v2/json",
+			"comment": "",
+			"local": "github.com/gorilla/rpc/v2/json",
+			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
+			"revisionTime": "2015-08-09T21:43:58-07:00"
+		},
+		{
+			"canonical": "github.com/minio/cli",
+			"comment": "",
+			"local": "github.com/minio/cli",
+			"revision": "9280cbaadcdd26d50b5ae85123682e37944701de",
+			"revisionTime": "2015-07-24T23:32:06-07:00"
+		},
+		{
+			"canonical": "gopkg.in/check.v1",
+			"comment": "",
+			"local": "gopkg.in/check.v1",
+			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
+			"revisionTime": "2015-07-29T10:04:31+02:00"
+		}
+	]
+}

@@ -19,7 +19,7 @@ package data
 import (
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }
