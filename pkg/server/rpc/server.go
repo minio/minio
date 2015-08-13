@@ -19,8 +19,8 @@ package rpc
 import (
 	"net/http"
 
-	"github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/internal/github.com/gorilla/rpc/v2"
+	"github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
 )
 
 // Server rpc server container

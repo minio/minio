@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 )
 
 func TestCache(t *testing.T) { TestingT(t) }

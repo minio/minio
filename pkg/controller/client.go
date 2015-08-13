@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	jsonrpc "github.com/gorilla/rpc/v2/json"
+	jsonrpc "github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/server/rpc"

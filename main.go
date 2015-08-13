@@ -23,8 +23,8 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/dustin/go-humanize"
-	"github.com/minio/cli"
+	"github.com/minio/minio/internal/github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/github.com/minio/cli"
 )
 
 var globalDebugFlag = false

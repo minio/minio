@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 )
 
 func TestDisk(t *testing.T) { TestingT(t) }

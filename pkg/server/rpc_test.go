@@ -21,10 +21,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	jsonrpc "github.com/gorilla/rpc/v2/json"
+	jsonrpc "github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
+	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 	"github.com/minio/minio/pkg/controller"
 	"github.com/minio/minio/pkg/server/rpc"
-	. "gopkg.in/check.v1"
 )
 
 func TestRPC(t *testing.T) { TestingT(t) }
