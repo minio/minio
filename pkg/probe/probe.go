@@ -50,7 +50,7 @@ func GetSysInfo() map[string]string {
 	}
 }
 
-type tracePoint struct {
+type TracePoint struct {
 	Line     int                 `json:"Line"`
 	Filename string              `json:"File"`
 	Function string              `json:"Func"`
@@ -61,7 +61,7 @@ type tracePoint struct {
 type Error struct {
 	lock      sync.RWMutex
 	Cause     error             `json:"cause,omitempty"`
-	CallTrace []tracePoint      `json:"trace,omitempty"`
+	CallTrace []TracePoint      `json:"trace,omitempty"`
 	SysInfo   map[string]string `json:"sysinfo,omitempty"`
 }
 
@@ -73,7 +73,7 @@ func NewError(e error) *Error {
 	if e == nil {
 		return nil
 	}
-	Err := Error{lock: sync.RWMutex{}, Cause: e, CallTrace: []tracePoint{}, SysInfo: GetSysInfo()}
+	Err := Error{lock: sync.RWMutex{}, Cause: e, CallTrace: []TracePoint{}, SysInfo: GetSysInfo()}
 	return Err.trace()
 }
 
@@ -97,11 +97,11 @@ func (e *Error) trace(fields ...string) *Error {
 	function := runtime.FuncForPC(pc).Name()
 	_, function = filepath.Split(function)
 	file = "..." + strings.TrimPrefix(file, os.Getenv("GOPATH")) // trim gopathSource from file
-	tp := tracePoint{}
+	tp := TracePoint{}
 	if len(fields) > 0 {
-		tp = tracePoint{Line: line, Filename: file, Function: function, Env: map[string][]string{"Tags": fields}}
+		tp = TracePoint{Line: line, Filename: file, Function: function, Env: map[string][]string{"Tags": fields}}
 	} else {
-		tp = tracePoint{Line: line, Filename: file, Function: function}
+		tp = TracePoint{Line: line, Filename: file, Function: function}
 	}
 	e.CallTrace = append(e.CallTrace, tp)
 	return e
