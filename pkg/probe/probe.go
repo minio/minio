@@ -51,10 +51,10 @@ func GetSysInfo() map[string]string {
 }
 
 type TracePoint struct {
-	Line     int                 `json:"Line"`
-	Filename string              `json:"File"`
-	Function string              `json:"Func"`
-	Env      map[string][]string `json:"Env"`
+	Line     int                 `json:"Line,omitempty"`
+	Filename string              `json:"File,omitempty"`
+	Function string              `json:"Func,omitempty"`
+	Env      map[string][]string `json:"Env,omitempty"`
 }
 
 // Error implements tracing error functionality.
