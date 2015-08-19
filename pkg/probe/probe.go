@@ -18,7 +18,6 @@
 package probe
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,10 +59,10 @@ type tracePoint struct {
 
 // Error implements tracing error functionality.
 type Error struct {
-	lock        sync.RWMutex
-	e           error
-	sysInfo     map[string]string
-	tracePoints []tracePoint
+	lock      sync.RWMutex
+	Cause     error             `json:"cause"`
+	CallTrace []tracePoint      `json:"trace"`
+	SysInfo   map[string]string `json:"sysinfo"`
 }
 
 // NewError function instantiates an error probe for tracing. Original errors.error (golang's error
@@ -74,7 +73,7 @@ func NewError(e error) *Error {
 	if e == nil {
 		return nil
 	}
-	Err := Error{sync.RWMutex{}, e, GetSysInfo(), []tracePoint{}}
+	Err := Error{lock: sync.RWMutex{}, Cause: e, CallTrace: []tracePoint{}, SysInfo: GetSysInfo()}
 	return Err.trace()
 }
 
@@ -104,7 +103,7 @@ func (e *Error) trace(fields ...string) *Error {
 	} else {
 		tp = tracePoint{Line: line, Filename: file, Function: function}
 	}
-	e.tracePoints = append(e.tracePoints, tp)
+	e.CallTrace = append(e.CallTrace, tp)
 	return e
 }
 
@@ -116,101 +115,44 @@ func (e *Error) Untrace() {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
-	l := len(e.tracePoints)
+	l := len(e.CallTrace)
 	if l == 0 {
 		return
 	}
-	//	topTP := e.tracePoints[l-1]
-	e.tracePoints = e.tracePoints[:l-1]
+	e.CallTrace = e.CallTrace[:l-1]
+}
+
+// ToError returns original error message.
+func (e *Error) ToGoError() error {
+	return e.Cause
 }
 
 // String returns error message.
 func (e *Error) String() string {
-	if e == nil || e.e == nil {
+	if e == nil || e.Cause == nil {
 		return "<nil>"
 	}
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 
-	if e.e != nil {
-		trace := e.e.Error() + "\n"
-		for i, tp := range e.tracePoints {
+	if e.Cause != nil {
+		str := e.Cause.Error() + "\n"
+		for i, tp := range e.CallTrace {
 			if len(tp.Env) > 0 {
-				trace += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n", i, tp.Filename, tp.Line, tp.Function, strings.Join(tp.Env["Tags"], ", "))
+				str += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n", i, tp.Filename, tp.Line, tp.Function, strings.Join(tp.Env["Tags"], ", "))
 			} else {
-				trace += fmt.Sprintf(" (%d) %s:%d %s(..)\n", i, tp.Filename, tp.Line, tp.Function)
+				str += fmt.Sprintf(" (%d) %s:%d %s(..)\n", i, tp.Filename, tp.Line, tp.Function)
 			}
 		}
 
-		trace += " Host:" + e.sysInfo["host.name"] + " | "
-		trace += "OS:" + e.sysInfo["host.os"] + " | "
-		trace += "Arch:" + e.sysInfo["host.arch"] + " | "
-		trace += "Lang:" + e.sysInfo["host.lang"] + " | "
-		trace += "Mem:" + e.sysInfo["mem.used"] + "/" + e.sysInfo["mem.total"] + " | "
-		trace += "Heap:" + e.sysInfo["mem.heap.used"] + "/" + e.sysInfo["mem.heap.total"]
+		str += " Host:" + e.SysInfo["host.name"] + " | "
+		str += "OS:" + e.SysInfo["host.os"] + " | "
+		str += "Arch:" + e.SysInfo["host.arch"] + " | "
+		str += "Lang:" + e.SysInfo["host.lang"] + " | "
+		str += "Mem:" + e.SysInfo["mem.used"] + "/" + e.SysInfo["mem.total"] + " | "
+		str += "Heap:" + e.SysInfo["mem.heap.used"] + "/" + e.SysInfo["mem.heap.total"]
 
-		return trace
+		return str
 	}
 	return "<nil>"
-}
-
-// JSON returns JSON formated error trace.
-func (e *Error) JSON() string {
-	if e == nil || e.e == nil {
-		return "<nil>"
-	}
-
-	e.lock.RLock()
-	defer e.lock.RUnlock()
-
-	anonError := struct {
-		SysInfo     map[string]string
-		TracePoints []tracePoint
-	}{
-		e.sysInfo,
-		e.tracePoints,
-	}
-
-	//	jBytes, err := json.Marshal(anonError)
-	jBytes, err := json.MarshalIndent(anonError, "", "\t")
-	if err != nil {
-		return ""
-	}
-	return string(jBytes)
-}
-
-// ToError returns original embedded error.
-func (e *Error) ToError() error {
-	// No need to lock. "e.e" is set once during New and never changed.
-	return e.e
-}
-
-// WrappedError implements container for *probe.Error
-type WrappedError struct {
-	err *Error
-}
-
-// NewWrappedError function wraps a *probe.Error into a 'error' compatible duck type
-func NewWrappedError(err *Error) error {
-	return &WrappedError{err: err}
-}
-
-// Error interface method
-func (w *WrappedError) Error() string {
-	return w.err.String()
-}
-
-// ToError get the *probe.Error embedded internally
-func (w *WrappedError) ToError() *Error {
-	return w.err
-}
-
-// ToWrappedError try to convert generic 'error' into typed *WrappedError, returns true if yes, false otherwise
-func ToWrappedError(err error) (*WrappedError, bool) {
-	switch e := err.(type) {
-	case *WrappedError:
-		return e, true
-	default:
-		return nil, false
-	}
 }

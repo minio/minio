@@ -47,7 +47,7 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 		}
 		return true
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.BucketNotFound:
 		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 		return false
@@ -117,7 +117,7 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:
@@ -188,7 +188,7 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -249,7 +249,7 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	default:
@@ -321,7 +321,7 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		writeSuccessResponse(w, acceptsContentType)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.TooManyBuckets:
@@ -377,7 +377,7 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 		writeSuccessResponse(w, acceptsContentType)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -427,7 +427,7 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 		writeSuccessResponse(w, acceptsContentType)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNotFound:

@@ -46,8 +46,8 @@ func (s *MySuite) TestProbe(c *C) {
 
 func (s *MySuite) TestWrappedError(c *C) {
 	_, e := os.Stat("this-file-cannot-exit")
-	es := probe.NewError(e)       // *probe.Error
-	e = probe.NewWrappedError(es) // *probe.WrappedError
-	_, ok := probe.ToWrappedError(e)
+	es := probe.NewError(e) // *probe.Error
+	e = probe.WrapError(es) // *probe.WrappedError
+	_, ok := probe.UnwrapError(e)
 	c.Assert(ok, Equals, true)
 }

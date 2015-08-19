@@ -49,7 +49,7 @@ func getAuth(reply *AuthReply) *probe.Error {
 // Get auth keys
 func (s *AuthService) Get(r *http.Request, args *Args, reply *AuthReply) error {
 	if err := getAuth(reply); err != nil {
-		return probe.NewWrappedError(err)
+		return probe.WrapError(err)
 	}
 	return nil
 }

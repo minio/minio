@@ -80,7 +80,7 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -137,7 +137,7 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -231,7 +231,7 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		writeSuccessResponse(w, acceptsContentType)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.BucketNotFound:
 		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
@@ -305,7 +305,7 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.ObjectExists:
@@ -395,7 +395,7 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 		writeSuccessResponse(w, acceptsContentType)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	case donut.ObjectExists:
@@ -455,7 +455,7 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.InvalidUploadID:
@@ -520,7 +520,7 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.InvalidUploadID:
@@ -573,7 +573,7 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToError().(type) {
+	switch err.ToGoError().(type) {
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	case donut.InvalidPart:
