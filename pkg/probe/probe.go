@@ -60,9 +60,9 @@ type tracePoint struct {
 // Error implements tracing error functionality.
 type Error struct {
 	lock      sync.RWMutex
-	Cause     error             `json:"cause"`
-	CallTrace []tracePoint      `json:"trace"`
-	SysInfo   map[string]string `json:"sysinfo"`
+	Cause     error             `json:"cause,omitempty"`
+	CallTrace []tracePoint      `json:"trace,omitempty"`
+	SysInfo   map[string]string `json:"sysinfo,omitempty"`
 }
 
 // NewError function instantiates an error probe for tracing. Original errors.error (golang's error
@@ -122,7 +122,7 @@ func (e *Error) Untrace() {
 	e.CallTrace = e.CallTrace[:l-1]
 }
 
-// ToError returns original error message.
+// ToGoError returns original error message.
 func (e *Error) ToGoError() error {
 	return e.Cause
 }
