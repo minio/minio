@@ -60,8 +60,8 @@ func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest
 func (r RPCRequest) Do() (*http.Response, *probe.Error) {
 	resp, err := r.transport.RoundTrip(r.req)
 	if err != nil {
-		if werr, ok := probe.ToWrappedError(err); ok {
-			return nil, werr.ToError().Trace()
+		if err, ok := probe.UnwrapError(err); ok {
+			return nil, err.Trace()
 		}
 		return nil, probe.NewError(err)
 	}

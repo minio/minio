@@ -473,7 +473,7 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMetadata ObjectMetadata) {
 	readers, err := b.getObjectReaders(objectName, "data")
 	if err != nil {
-		writer.CloseWithError(probe.NewWrappedError(err))
+		writer.CloseWithError(probe.WrapError(err))
 		return
 	}
 	for _, reader := range readers {
@@ -484,12 +484,12 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 		var err error
 		expectedMd5sum, err = hex.DecodeString(objMetadata.MD5Sum)
 		if err != nil {
-			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
+			writer.CloseWithError(probe.WrapError(probe.NewError(err)))
 			return
 		}
 		expected512Sum, err = hex.DecodeString(objMetadata.SHA512Sum)
 		if err != nil {
-			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
+			writer.CloseWithError(probe.WrapError(probe.NewError(err)))
 			return
 		}
 	}
@@ -499,23 +499,23 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	switch len(readers) > 1 {
 	case true:
 		if objMetadata.ErasureTechnique == "" {
-			writer.CloseWithError(probe.NewWrappedError(probe.NewError(MissingErasureTechnique{})))
+			writer.CloseWithError(probe.WrapError(probe.NewError(MissingErasureTechnique{})))
 			return
 		}
 		encoder, err := newEncoder(objMetadata.DataDisks, objMetadata.ParityDisks, objMetadata.ErasureTechnique)
 		if err != nil {
-			writer.CloseWithError(probe.NewWrappedError(err))
+			writer.CloseWithError(probe.WrapError(err))
 			return
 		}
 		totalLeft := objMetadata.Size
 		for i := 0; i < objMetadata.ChunkCount; i++ {
 			decodedData, err := b.decodeEncodedData(totalLeft, int64(objMetadata.BlockSize), readers, encoder, writer)
 			if err != nil {
-				writer.CloseWithError(probe.NewWrappedError(err))
+				writer.CloseWithError(probe.WrapError(err))
 				return
 			}
 			if _, err := io.Copy(mwriter, bytes.NewReader(decodedData)); err != nil {
-				writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
+				writer.CloseWithError(probe.WrapError(probe.NewError(err)))
 				return
 			}
 			totalLeft = totalLeft - int64(objMetadata.BlockSize)
@@ -523,17 +523,17 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	case false:
 		_, err := io.Copy(writer, readers[0])
 		if err != nil {
-			writer.CloseWithError(probe.NewWrappedError(probe.NewError(err)))
+			writer.CloseWithError(probe.WrapError(probe.NewError(err)))
 			return
 		}
 	}
 	// check if decodedData md5sum matches
 	if !bytes.Equal(expectedMd5sum, hasher.Sum(nil)) {
-		writer.CloseWithError(probe.NewWrappedError(probe.NewError(ChecksumMismatch{})))
+		writer.CloseWithError(probe.WrapError(probe.NewError(ChecksumMismatch{})))
 		return
 	}
 	if !bytes.Equal(expected512Sum, sum512hasher.Sum(nil)) {
-		writer.CloseWithError(probe.NewWrappedError(probe.NewError(ChecksumMismatch{})))
+		writer.CloseWithError(probe.WrapError(probe.NewError(ChecksumMismatch{})))
 		return
 	}
 	writer.Close()
