@@ -29,15 +29,23 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func testDummy() *probe.Error {
+func testDummy0() *probe.Error {
 	_, e := os.Stat("this-file-cannot-exit")
-	es := probe.NewError(e)
-	es.Trace("Important info 1", "Import into 2")
-	return es
+	return probe.NewError(e)
+}
+
+func testDummy1() *probe.Error {
+	return testDummy0().Trace("DummyTag1")
+}
+
+func testDummy2() *probe.Error {
+	return testDummy1().Trace("DummyTag2")
 }
 
 func (s *MySuite) TestProbe(c *C) {
-	es := testDummy()
+	es := testDummy2().Trace("TopOfStack")
+	// Uncomment the following Println to visually test probe call trace.
+	// fmt.Println("Expecting a simulated error here.", es)
 	c.Assert(es, Not(Equals), nil)
 
 	newES := es.Trace()

@@ -137,11 +137,14 @@ func (e *Error) String() string {
 
 	if e.Cause != nil {
 		str := e.Cause.Error() + "\n"
-		for i, tp := range e.CallTrace {
-			if len(tp.Env) > 0 {
-				str += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n", i, tp.Filename, tp.Line, tp.Function, strings.Join(tp.Env["Tags"], ", "))
+		callLen := len(e.CallTrace)
+		for i := callLen - 1; i >= 0; i-- {
+			if len(e.CallTrace[i].Env) > 0 {
+				str += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n",
+					i, e.CallTrace[i].Filename, e.CallTrace[i].Line, e.CallTrace[i].Function, strings.Join(e.CallTrace[i].Env["Tags"], ", "))
 			} else {
-				str += fmt.Sprintf(" (%d) %s:%d %s(..)\n", i, tp.Filename, tp.Line, tp.Function)
+				str += fmt.Sprintf(" (%d) %s:%d %s(..)\n",
+					i, e.CallTrace[i].Filename, e.CallTrace[i].Line, e.CallTrace[i].Function)
 			}
 		}
 
