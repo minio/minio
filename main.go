@@ -18,47 +18,18 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/user"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/minio/minio/internal/github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/github.com/minio/cli"
 )
 
 var globalDebugFlag = false
-
-var flags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "address",
-		Value: ":9000",
-		Usage: "ADDRESS:PORT for cloud storage access",
-	},
-	cli.StringFlag{
-		Name:  "address-mgmt",
-		Hide:  true,
-		Value: ":9001",
-		Usage: "ADDRESS:PORT for management console access",
-	},
-	cli.IntFlag{
-		Name:  "ratelimit",
-		Value: 16,
-		Usage: "Limit for total concurrent requests: [DEFAULT: 16]",
-	},
-	cli.StringFlag{
-		Name:  "cert",
-		Usage: "Provide your domain certificate",
-	},
-	cli.StringFlag{
-		Name:  "key",
-		Usage: "Provide your domain private key",
-	},
-	cli.BoolFlag{
-		Name:  "debug",
-		Usage: "print debug information",
-	},
-}
 
 func init() {
 	// Check for the environment early on and gracefuly report.
@@ -100,29 +71,39 @@ func init() {
 	}
 }
 
-func main() {
-	// set up go max processes
-	runtime.GOMAXPROCS(runtime.NumCPU())
+// getFormattedVersion -
+func getFormattedVersion() string {
+	t, _ := time.Parse(time.RFC3339Nano, Version)
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(http.TimeFormat)
+}
+
+func registerApp() *cli.App {
+	// register all commands
+	registerCommand(donutCmd)
+	registerCommand(serverCmd)
+	registerCommand(controllerCmd)
+	registerCommand(versionCmd)
+
+	// register all flags
+	registerFlag(addressFlag)
+	registerFlag(addressMgmtFlag)
+	registerFlag(ratelimitFlag)
+	registerFlag(certFlag)
+	registerFlag(keyFlag)
+	registerFlag(debugFlag)
 
 	// set up app
 	app := cli.NewApp()
 	app.Name = "minio"
-	app.Version = getVersion()
-	app.Compiled = getVersion()
+	// hide --version flag, version is a command
+	app.HideVersion = true
 	app.Author = "Minio.io"
 	app.Usage = "Minio Cloud Storage"
 	app.Flags = flags
 	app.Commands = commands
-	app.Before = func(c *cli.Context) error {
-		globalDebugFlag = c.GlobalBool("debug")
-		return nil
-	}
-	app.ExtraInfo = func() map[string]string {
-		if globalDebugFlag {
-			return getSystemData()
-		}
-		return make(map[string]string)
-	}
 
 	app.CustomAppHelpTemplate = `NAME:
   {{.Name}} - {{.Usage}}
@@ -137,8 +118,9 @@ GLOBAL FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
 VERSION:
-  {{if .Compiled}}
-  {{.Compiled}}{{end}}
+
+` + getFormattedVersion() +
+		`
   {{range $key, $value := ExtraInfo}}
 {{$key}}:
   {{$value}}
@@ -147,6 +129,27 @@ VERSION:
 `
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
 		Fatalf("Command not found: ‘%s’\n", command)
+	}
+
+	return app
+}
+
+func registerBefore(c *cli.Context) error {
+	globalDebugFlag = c.GlobalBool("debug")
+	return nil
+}
+
+func main() {
+	// set up go max processes
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	app := registerApp()
+	app.Before = registerBefore
+	app.ExtraInfo = func() map[string]string {
+		if globalDebugFlag {
+			return getSystemData()
+		}
+		return make(map[string]string)
 	}
 
 	app.RunAndExitOnError()

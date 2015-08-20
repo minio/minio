@@ -16,12 +16,33 @@
 
 package main
 
-import "github.com/minio/minio/internal/github.com/minio/cli"
+import (
+	"net/http"
+	"time"
 
-// Collection of minio commands currently supported are
-var commands = []cli.Command{}
+	"github.com/minio/minio/internal/github.com/minio/cli"
+)
 
-// registerCommand registers a cli command
-func registerCommand(command cli.Command) {
-	commands = append(commands, command)
+var versionCmd = cli.Command{
+	Name:   "version",
+	Usage:  "Print version",
+	Action: mainVersion,
+	CustomHelpTemplate: `NAME:
+   mc {{.Name}} - {{.Usage}}
+
+USAGE:
+   mc {{.Name}} {{if .Description}}
+
+EXAMPLES:
+
+`,
+}
+
+func mainVersion(ctxx *cli.Context) {
+	t, _ := time.Parse(time.RFC3339Nano, Version)
+	if t.IsZero() {
+		Println("")
+		return
+	}
+	Println(t.Format(http.TimeFormat))
 }
