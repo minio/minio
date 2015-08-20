@@ -1,4 +1,4 @@
-all: getdeps install
+all: install
 
 checkdeps:
 	@echo "Checking deps:"

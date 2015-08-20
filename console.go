@@ -129,7 +129,7 @@ var (
 			mutex.Unlock()
 			os.Exit(1)
 		default:
-			fmt.Print(a...)
+			fmt.Println(a...)
 		}
 	}
 
