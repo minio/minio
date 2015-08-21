@@ -126,6 +126,35 @@ func (d config) Save(filename string) *probe.Error {
 	return nil
 }
 
+// Load - loads json config
+func Load(filename string, data interface{}) (Config, *probe.Error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	if runtime.GOOS == "windows" {
+		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
+	}
+
+	err = json.Unmarshal(fileData, &data)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	config, perr := New(data)
+	if perr != nil {
+		return nil, perr.Trace()
+	}
+
+	return config, nil
+}
+
 // Load - loads JSON config from file and merge with currently set values
 func (d *config) Load(filename string) *probe.Error {
 	d.lock.Lock()
@@ -145,6 +174,12 @@ func (d *config) Load(filename string) *probe.Error {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
 
+	st := structs.New(d.data)
+	f, ok := st.FieldOk("Version")
+	if !ok {
+		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
+	}
+
 	err = json.Unmarshal(fileData, d.data)
 	if err != nil {
 		return probe.NewError(err)
@@ -152,12 +187,6 @@ func (d *config) Load(filename string) *probe.Error {
 
 	if err := CheckData(d.data); err != nil {
 		return err.Trace()
-	}
-
-	st := structs.New(d.data)
-	f, ok := st.FieldOk("Version")
-	if !ok {
-		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
 	}
 
 	if (*d).Version() != f.Value() {
