@@ -28,9 +28,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 	"unicode/utf8"
+
+	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 )
+
+// Hook up gocheck into the "go test" runner.
+func Test(t *testing.T) { TestingT(t) }
 
 const (
 	authHeader    = "AWS4-HMAC-SHA256"

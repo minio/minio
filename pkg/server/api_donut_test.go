@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"testing"
 
 	"encoding/xml"
 	"net/http"
@@ -33,8 +32,6 @@ import (
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
 )
-
-func TestAPIDonut(t *testing.T) { TestingT(t) }
 
 type MyAPIDonutSuite struct {
 	root string

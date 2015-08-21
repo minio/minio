@@ -19,15 +19,12 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
-	"testing"
 
 	jsonrpc "github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
 	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 	"github.com/minio/minio/pkg/controller"
 	"github.com/minio/minio/pkg/server/rpc"
 )
-
-func TestRPC(t *testing.T) { TestingT(t) }
 
 type MyRPCSuite struct{}
 
