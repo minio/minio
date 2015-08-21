@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	"encoding/xml"
 	"net/http"
@@ -34,8 +33,6 @@ import (
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
 )
-
-func TestAPISignatureV4(t *testing.T) { TestingT(t) }
 
 type MyAPISignatureV4Suite struct {
 	root            string

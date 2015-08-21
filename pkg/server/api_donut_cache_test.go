@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	"encoding/xml"
 	"net/http"
@@ -32,8 +31,6 @@ import (
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
 )
-
-func TestAPIDonutCache(t *testing.T) { TestingT(t) }
 
 type MyAPIDonutCacheSuite struct {
 	root string
