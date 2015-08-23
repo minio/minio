@@ -50,6 +50,12 @@ genversion:
 	@echo "Generating new minio version.go"
 	@go run genversion.go
 
+pkg-remove:
+	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)
+
+pkg-add:
+	@GO15VENDOREXPERIMENT=1 govendor add $(PKG)
+
 install: gomake-all
 
 clean:
