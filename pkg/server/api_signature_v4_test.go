@@ -28,10 +28,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/server/api"
+	. "gopkg.in/check.v1"
 )
 
 type MyAPISignatureV4Suite struct {

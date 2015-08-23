@@ -24,7 +24,7 @@ _init() {
     CLANG_VERSION="3.5"
     YASM_VERSION="1.2.0"
     GIT_VERSION="1.0"
-    GO_VERSION="1.4"
+    GO_VERSION="1.5"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
 
@@ -173,7 +173,7 @@ is_supported_arch() {
 check_deps() {
     check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" "${GO_VERSION}"
     if [ $? -ge 2 ]; then
-        MISSING="${MISSING} golang(1.4)"
+        MISSING="${MISSING} golang(1.5)"
     fi
 
     check_version "$(env git --version 2>/dev/null | sed -e 's/^.* \([0-9.\].*\).*$/\1/' -e 's/^\([0-9.\]*\).*/\1/g')" "${GIT_VERSION}"

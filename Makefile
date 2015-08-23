@@ -17,33 +17,34 @@ verifiers: getdeps vet fmt lint cyclo
 
 vet:
 	@echo "Running $@:"
-	@go vet .
-	@go vet github.com/minio/minio/pkg...
+	@GO15VENDOREXPERIMENT=1 go vet .
+	@GO15VENDOREXPERIMENT=1 go vet github.com/minio/minio/pkg...
+
 fmt:
 	@echo "Running $@:"
-	@gofmt -s -l *.go
-	@gofmt -s -l pkg
+	@GO15VENDOREXPERIMENT=1 gofmt -s -l *.go
+	@GO15VENDOREXPERIMENT=1 gofmt -s -l pkg
 
 lint:
 	@echo "Running $@:"
-	@golint .
-	@golint pkg
+	@GO15VENDOREXPERIMENT=1 golint .
+	@GO15VENDOREXPERIMENT=1 golint pkg
 
 cyclo:
 	@echo "Running $@:"
-	@gocyclo -over 25 .
+	@GO15VENDOREXPERIMENT=1 gocyclo -over 25 .
 
 build: getdeps verifiers
 	@echo "Installing minio:"
-	@go generate ./...
-	@go test -race github.com/minio/minio/pkg...
+	@GO15VENDOREXPERIMENT=1 go generate ./...
+	@GO15VENDOREXPERIMENT=1 go test -race github.com/minio/minio/pkg...
 
 gomake-all: build
-	@go install github.com/minio/minio
+	@GO15VENDOREXPERIMENT=1 go install github.com/minio/minio
 
 release: genversion
 	@echo "Installing minio for new version.go:"
-	@go install github.com/minio/minio
+	@GO15VENDOREXPERIMENT=1 go install github.com/minio/minio
 
 genversion:
 	@echo "Generating new minio version.go"

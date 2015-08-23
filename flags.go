@@ -16,7 +16,7 @@
 
 package main
 
-import "github.com/minio/minio/internal/github.com/minio/cli"
+import "github.com/minio/cli"
 
 // Collection of minio flags currently supported
 var flags = []cli.Flag{}

@@ -20,10 +20,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	jsonrpc "github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
-	. "github.com/minio/minio/internal/gopkg.in/check.v1"
+	jsonrpc "github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/controller"
 	"github.com/minio/minio/pkg/server/rpc"
+	. "gopkg.in/check.v1"
 )
 
 type MyRPCSuite struct{}

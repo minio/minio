@@ -20,7 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/minio/minio/internal/github.com/minio/cli"
+	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/donut"
 )
 

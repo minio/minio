@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio/minio/internal/github.com/minio/cli"
+	"github.com/minio/cli"
 )
 
 var versionCmd = cli.Command{
