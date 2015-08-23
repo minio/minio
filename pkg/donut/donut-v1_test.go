@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"testing"
 
-	. "github.com/minio/minio/internal/gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 )
 
 func TestDonut(t *testing.T) { TestingT(t) }

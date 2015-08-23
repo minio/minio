@@ -32,7 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	. "github.com/minio/minio/internal/gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 )
 
 // Hook up gocheck into the "go test" runner.

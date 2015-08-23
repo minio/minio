@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/minio/minio/internal/github.com/gorilla/rpc/v2/json"
+	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/probe"
 )
 

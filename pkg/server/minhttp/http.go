@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minio/minio/internal/github.com/facebookgo/httpdown"
+	"github.com/facebookgo/httpdown"
 	"github.com/minio/minio/pkg/probe"
 )
 

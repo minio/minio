@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/minio/minio/internal/github.com/minio/cli"
+	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/controller"
 )
 

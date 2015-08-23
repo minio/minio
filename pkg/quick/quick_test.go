@@ -22,8 +22,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/minio/minio/internal/gopkg.in/check.v1"
 	"github.com/minio/minio/pkg/quick"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }

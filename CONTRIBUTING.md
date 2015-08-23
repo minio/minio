@@ -53,7 +53,9 @@ Building Libraries
 * If you have additional dependencies for ``Minio``, ``Minio`` manages its depedencies using [govendor](https://github.com/kardianos/govendor)
     - Run `go get foo/bar`
     - Edit your code to import foo/bar
-    - Run `govendor add foo/bar` from top-level directory
+    - export GO15VENDOREXPERIMENT=1
+    - Run `govendor remove +vendor` from top-level directory
+    - Run `govendor add +external` from top-level directory
 
 * When you're ready to create a pull request, be sure to:
     - Have test cases for the new code. If you have questions about how to do it, please ask in your pull request.

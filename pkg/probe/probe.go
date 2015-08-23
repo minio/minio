@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/internal/github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 // GetSysInfo returns useful system statistics.

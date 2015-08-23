@@ -19,7 +19,7 @@ package server
 import (
 	"net/http"
 
-	router "github.com/minio/minio/internal/github.com/gorilla/mux"
+	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/server/api"
 	"github.com/minio/minio/pkg/server/rpc"
 )

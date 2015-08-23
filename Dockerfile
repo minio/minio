@@ -3,7 +3,7 @@ FROM ubuntu:14.04
 
 MAINTAINER Minio Community
 
-ENV GOLANG_TARBALL go1.4.2.linux-amd64.tar.gz
+ENV GOLANG_TARBALL go1.5.linux-amd64.tar.gz
 
 ENV GOROOT /usr/local/go/
 ENV GOPATH /go-workspace

@@ -19,7 +19,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/minio/minio/internal/github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/utils/log"

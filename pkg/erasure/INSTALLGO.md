@@ -7,15 +7,15 @@ This installation document assumes Ubuntu 14.04+ on x86-64 platform.
 $ sudo apt-get install git build-essential yasm
 ```
 
-##### Install Go 1.4+
+##### Install Go 1.5+
 
-Download Go 1.4+ from [https://golang.org/dl/](https://golang.org/dl/).
+Download Go 1.5+ from [https://golang.org/dl/](https://golang.org/dl/).
 
 ```sh
-$ wget https://storage.googleapis.com/golang/go1.4.linux-amd64.tar.gz
+$ wget https://storage.googleapis.com/golang/go1.5.linux-amd64.tar.gz
 $ mkdir -p ${HOME}/bin/
 $ mkdir -p ${HOME}/go/
-$ tar -C ${HOME}/bin/ -xzf go1.4.linux-amd64.tar.gz
+$ tar -C ${HOME}/bin/ -xzf go1.5.linux-amd64.tar.gz
 ```
 ##### Setup GOROOT and GOPATH
 
@@ -42,7 +42,7 @@ $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/maste
 $ brew install git python yasm
 ```
 
-##### Install Go 1.4+
+##### Install Go 1.5+
 
 Install golang binaries using `brew`
 
