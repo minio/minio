@@ -108,18 +108,19 @@ func (e *Error) trace(fields ...string) *Error {
 }
 
 // Untrace erases last trace entry.
-func (e *Error) Untrace() {
+func (e *Error) Untrace() *Error {
 	if e == nil {
-		return
+		return nil
 	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	l := len(e.CallTrace)
 	if l == 0 {
-		return
+		return nil
 	}
 	e.CallTrace = e.CallTrace[:l-1]
+	return e
 }
 
 // ToGoError returns original error message.
