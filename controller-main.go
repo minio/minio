@@ -23,52 +23,27 @@ import (
 
 var controllerCmd = cli.Command{
 	Name:   "controller",
-	Usage:  "Get|Set server configuration",
+	Usage:  "Start minio controller",
 	Action: controllerMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Description}}
 
 USAGE:
-  minio {{.Name}} [get|set] [INFOTYPE] [SERVERURL]
+  minio {{.Name}}
 
 EXAMPLES:
-  1. Get disks from controller
-      $ minio {{.Name}} get disks http://localhost:9001/rpc
-
-  2. Get memstats from controller
-      $ minio {{.Name}} get mem http://localhost:9001/rpc
+  1. Start minio controller
+      $ minio {{.Name}}
 
 `,
 }
 
 func controllerMain(c *cli.Context) {
-	if len(c.Args()) < 2 || c.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(c, "controller", 1) // last argument is exit code
+	if c.Args().Present() {
+		cli.ShowCommandHelpAndExit(c, "controller", 1)
 	}
-	if c.Args().First() == "get" {
-		newArgs := c.Args().Tail()
-		switch newArgs.First() {
-		case "mem":
-			memstats, err := controller.GetMemStats(newArgs.Tail().First())
-			if err != nil {
-				Fatalln(err)
-			}
-			Println(string(memstats))
-		case "sysinfo":
-			sysinfo, err := controller.GetSysInfo(newArgs.Tail().First())
-			if err != nil {
-				Fatalln(err)
-			}
-			Println(string(sysinfo))
-		case "auth":
-			keys, err := controller.GetAuthKeys(newArgs.Tail().First())
-			if err != nil {
-				Fatalln(err)
-			}
-			Println(string(keys))
-		}
-	}
-	if c.Args().First() == "set" {
-		Fatalln("Not supported yet")
+	err := controller.StartController()
+	if err != nil {
+		Fatalln(err)
 	}
 }

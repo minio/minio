@@ -24,9 +24,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/minio/minio/pkg/minhttp"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/server/api"
-	"github.com/minio/minio/pkg/server/minhttp"
 )
 
 // getAPI server instance

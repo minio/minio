@@ -20,8 +20,8 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/rpc"
 	"github.com/minio/minio/pkg/server/api"
-	"github.com/minio/minio/pkg/server/rpc"
 )
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -92,12 +92,6 @@ func registerCustomMiddleware(mux http.Handler, conf api.Config) http.Handler {
 	return mux
 }
 
-// registerRPC - register rpc handlers
-func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
-	mux.Handle("/rpc", s)
-	return mux
-}
-
 // getAPIHandler api handler
 func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 	mux := router.NewRouter()
@@ -111,11 +105,12 @@ func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 func getRPCHandler() http.Handler {
 	s := rpc.NewServer()
 	s.RegisterJSONCodec()
-	s.RegisterService(new(rpc.VersionService), "Version")
-	s.RegisterService(new(rpc.SysInfoService), "SysInfo")
-	s.RegisterService(new(rpc.MemStatsService), "MemStats")
-	s.RegisterService(new(rpc.DonutService), "Donut")
-	s.RegisterService(new(rpc.AuthService), "Auth")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
+}
+
+// registerRPC - register rpc handlers
+func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
+	mux.Handle("/rpc", s)
+	return mux
 }
