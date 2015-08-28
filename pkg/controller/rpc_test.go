@@ -14,38 +14,41 @@
  * limitations under the License.
  */
 
-package server
+package controller
 
 import (
 	"net/http"
 	"net/http/httptest"
+	"testing"
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/controller"
-	"github.com/minio/minio/pkg/server/rpc"
+	"github.com/minio/minio/pkg/rpc"
 	. "gopkg.in/check.v1"
 )
 
-type MyRPCSuite struct{}
+// Hook up gocheck into the "go test" runner.
+func Test(t *testing.T) { TestingT(t) }
 
-var _ = Suite(&MyRPCSuite{})
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
 
 var testRPCServer *httptest.Server
 
-func (s *MyRPCSuite) SetUpSuite(c *C) {
+func (s *MySuite) SetUpSuite(c *C) {
 	testRPCServer = httptest.NewServer(getRPCHandler())
 }
 
-func (s *MyRPCSuite) TearDownSuite(c *C) {
+func (s *MySuite) TearDownSuite(c *C) {
 	testRPCServer.Close()
 }
 
-func (s *MyRPCSuite) TestMemStats(c *C) {
-	op := controller.RPCOps{
+func (s *MySuite) TestMemStats(c *C) {
+	op := rpc.Operation{
 		Method:  "MemStats.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := controller.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -58,12 +61,12 @@ func (s *MyRPCSuite) TestMemStats(c *C) {
 	c.Assert(reply, Not(DeepEquals), rpc.MemStatsReply{})
 }
 
-func (s *MyRPCSuite) TestSysInfo(c *C) {
-	op := controller.RPCOps{
+func (s *MySuite) TestSysInfo(c *C) {
+	op := rpc.Operation{
 		Method:  "SysInfo.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := controller.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -76,12 +79,12 @@ func (s *MyRPCSuite) TestSysInfo(c *C) {
 	c.Assert(reply, Not(DeepEquals), rpc.SysInfoReply{})
 }
 
-func (s *MyRPCSuite) TestAuth(c *C) {
-	op := controller.RPCOps{
+func (s *MySuite) TestAuth(c *C) {
+	op := rpc.Operation{
 		Method:  "Auth.Get",
 		Request: rpc.Args{Request: ""},
 	}
-	req, err := controller.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()

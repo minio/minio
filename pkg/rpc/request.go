@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package controller
+package rpc
 
 import (
 	"bytes"
@@ -24,20 +24,20 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// RPCOps RPC operation
-type RPCOps struct {
+// Operation RPC operation
+type Operation struct {
 	Method  string
 	Request interface{}
 }
 
-// RPCRequest rpc client request
-type RPCRequest struct {
+// Request rpc client request
+type Request struct {
 	req       *http.Request
 	transport http.RoundTripper
 }
 
 // NewRequest initiate a new client RPC request
-func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest, *probe.Error) {
+func NewRequest(url string, op Operation, transport http.RoundTripper) (*Request, *probe.Error) {
 	params, err := json.EncodeClientRequest(op.Method, op.Request)
 	if err != nil {
 		return nil, probe.NewError(err)
@@ -46,7 +46,7 @@ func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
-	rpcReq := &RPCRequest{}
+	rpcReq := &Request{}
 	rpcReq.req = req
 	rpcReq.req.Header.Set("Content-Type", "application/json")
 	if transport == nil {
@@ -57,7 +57,7 @@ func NewRequest(url string, op RPCOps, transport http.RoundTripper) (*RPCRequest
 }
 
 // Do - make a http connection
-func (r RPCRequest) Do() (*http.Response, *probe.Error) {
+func (r Request) Do() (*http.Response, *probe.Error) {
 	resp, err := r.transport.RoundTrip(r.req)
 	if err != nil {
 		if err, ok := probe.UnwrapError(err); ok {
@@ -69,11 +69,11 @@ func (r RPCRequest) Do() (*http.Response, *probe.Error) {
 }
 
 // Get - get value of requested header
-func (r RPCRequest) Get(key string) string {
+func (r Request) Get(key string) string {
 	return r.req.Header.Get(key)
 }
 
 // Set - set value of a header key
-func (r *RPCRequest) Set(key, value string) {
+func (r *Request) Set(key, value string) {
 	r.req.Header.Set(key, value)
 }
