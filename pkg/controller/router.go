@@ -21,6 +21,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/rpc"
+	"github.com/rs/cors"
 )
 
 // getRPCHandler rpc handler
@@ -39,5 +40,5 @@ func getRPCHandler() http.Handler {
 // registerRPC - register rpc handlers
 func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
 	mux.Handle("/rpc", s)
-	return mux
+	return cors.Default().Handler(mux)
 }
