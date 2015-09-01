@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/rs/cors"
 )
 
 type contentTypeHandler struct {
@@ -148,6 +149,10 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// individual calls will validate themselves against un-authenticated requests
 		h.handler.ServeHTTP(w, r)
 	}
+}
+
+func CorsHandler(h http.Handler) http.Handler {
+	return cors.Default().Handler(h)
 }
 
 // IgnoreResourcesHandler -

@@ -85,6 +85,7 @@ func registerCustomMiddleware(mux http.Handler, conf api.Config) http.Handler {
 		api.IgnoreResourcesHandler,
 		api.ValidateAuthHeaderHandler,
 		api.LoggingHandler,
+		api.CorsHandler,
 		// Add new your new middleware here
 	)
 
