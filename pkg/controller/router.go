@@ -40,5 +40,8 @@ func getRPCHandler() http.Handler {
 // registerRPC - register rpc handlers
 func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
 	mux.Handle("/rpc", s)
-	return cors.Default().Handler(mux)
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"http://localhost:3000"},
+	})
+	return c.Handler(mux)
 }
