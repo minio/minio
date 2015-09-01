@@ -73,13 +73,6 @@
 			"revisionTime": "2015-08-19T11:23:55-07:00"
 		},
 		{
-			"canonical": "github.com/rs/cors",
-			"comment": "",
-			"local": "vendor/github.com/rs/cors",
-			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
-			"revisionTime": "2015-08-29T22:34:20-07:00"
-		},
-		{
 			"canonical": "gopkg.in/check.v1",
 			"comment": "",
 			"local": "vendor/gopkg.in/check.v1",
