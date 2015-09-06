@@ -31,12 +31,6 @@
 ;;; gf_5vect_mad_sse(len, vec, vec_i, mul_array, src, dest);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_5VECT_MAD_SSE _gf_5vect_mad_sse
-%else
- %define GF_5VECT_MAD_SSE gf_5vect_mad_sse
-%endif
-
 %define PS 8
 
 %ifidn __OUTPUT_FORMAT__, win64
@@ -205,8 +199,8 @@ section .text
 
 
 align 16
-global GF_5VECT_MAD_SSE:function
-func(GF_5VECT_MAD_SSE)
+global gf_5vect_mad_sse:function
+func(gf_5vect_mad_sse)
 	FUNC_SAVE
 	sub	len, 16
 	jl	.return_fail
@@ -406,4 +400,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func             core, ver, snum
-slversion GF_5VECT_MAD_SSE, 00,  00,  020c
+slversion gf_5vect_mad_sse, 00,  00,  020c

@@ -94,3 +94,14 @@
 %define BYTE(reg)  reg %+ b
 
 %define XWORD(reg) reg %+ x
+
+%ifidn __OUTPUT_FORMAT__,elf32
+section .note.GNU-stack noalloc noexec nowrite progbits
+section .text
+%endif
+        
+%ifidn __OUTPUT_FORMAT__,elf64
+section .note.GNU-stack noalloc noexec nowrite progbits
+section .text
+%endif
+        

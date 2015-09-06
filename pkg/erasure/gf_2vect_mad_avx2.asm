@@ -31,12 +31,6 @@
 ;;; gf_2vect_mad_avx2(len, vec, vec_i, mul_array, src, dest);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_2VECT_MAD_AVX2 _gf_2vect_mad_avx2
-%else
- %define GF_2VECT_MAD_AVX2 gf_2vect_mad_avx2
-%endif
-
 %define PS 8
 
 %ifidn __OUTPUT_FORMAT__, win64
@@ -188,9 +182,8 @@ section .text
 %define xtmpd2  ymm9
 
 align 16
-global GF_2VECT_MAD_AVX2:function
-
-func(GF_2VECT_MAD_AVX2)
+global gf_2vect_mad_avx2:function
+func(gf_2vect_mad_avx2)
 	FUNC_SAVE
 	sub	len, 32
 	jl	.return_fail
@@ -277,4 +270,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func              core, ver, snum
-slversion GF_2VECT_MAD_AVX2, 04,  00,  0205
+slversion gf_2vect_mad_avx2, 04,  00,  0205
