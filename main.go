@@ -118,14 +118,11 @@ GLOBAL FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
 VERSION:
-
-` + getFormattedVersion() +
-		`
-  {{range $key, $value := ExtraInfo}}
+  ` + getFormattedVersion() +
+		`{{range $key, $value := ExtraInfo}}
 {{$key}}:
   {{$value}}
 {{end}}
-
 `
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
 		Fatalf("Command not found: ‘%s’\n", command)

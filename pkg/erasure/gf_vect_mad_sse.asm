@@ -31,12 +31,6 @@
 ;;; gf_vect_mad_sse(len, vec, vec_i, mul_array, src, dest);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_VECT_MAD_SSE _gf_vect_mad_sse
-%else
- %define GF_VECT_MAD_SSE gf_vect_mad_sse
-%endif
-
 %ifidn __OUTPUT_FORMAT__, win64
  %define arg0  rcx
  %define arg0.w ecx
@@ -89,6 +83,7 @@
  %define func(x) x:
  %define FUNC_SAVE
  %define FUNC_RESTORE
+
 %elifidn __OUTPUT_FORMAT__, macho64
  %define arg0  rdi
  %define arg0.w edi
@@ -150,8 +145,8 @@ section .text
 
 
 align 16
-global GF_VECT_MAD_SSE:function
-func(GF_VECT_MAD_SSE)
+global gf_vect_mad_sse:function
+func(gf_vect_mad_sse)
 	FUNC_SAVE
 	sub	len, 16
 	jl	.return_fail
@@ -221,4 +216,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func            core, ver, snum
-slversion GF_VECT_MAD_SSE, 00,  00,  0200
+slversion gf_vect_mad_sse, 00,  00,  0200

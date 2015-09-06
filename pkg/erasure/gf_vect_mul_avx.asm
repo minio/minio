@@ -31,12 +31,6 @@
 ;;; gf_vect_mul_avx(len, mul_array, src, dest)
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_VECT_MUL_AVX _gf_vect_mul_avx
-%else
- %define GF_VECT_MUL_AVX gf_vect_mul_avx
-%endif
-
 %ifidn __OUTPUT_FORMAT__, elf64
  %define arg0  rdi
  %define arg1  rsi
@@ -128,8 +122,8 @@ section .text
 %define xtmp2c xmm7
 
 align 16
-global GF_VECT_MUL_AVX:function
-func(GF_VECT_MUL_AVX)
+global gf_vect_mul_avx:function
+func(gf_vect_mul_avx)
 	FUNC_SAVE
 	mov	pos, 0
 	vmovdqa	xmask0f, [mask0f]	;Load mask of lower nibble in each byte
@@ -186,4 +180,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func             core, ver, snum
-slversion GF_VECT_MUL_AVX, 01,   02,  0036
+slversion gf_vect_mul_avx, 01,   02,  0036

@@ -31,12 +31,6 @@
 ;;; gf_2vect_dot_prod_avx2(len, vec, *g_tbls, **buffs, **dests);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_2VECT_DOT_PROD_AVX2 _gf_2vect_dot_prod_avx2
-%else
- %define GF_2VECT_DOT_PROD_AVX2 gf_2vect_dot_prod_avx2
-%endif
-
 %ifidn __OUTPUT_FORMAT__, elf64
  %define arg0  rdi
  %define arg1  rsi
@@ -282,9 +276,8 @@ section .text
 %endif
 
 align 16
-global GF_2VECT_DOT_PROD_AVX2:function
-
-func(GF_2VECT_DOT_PROD_AVX2)
+global gf_2vect_dot_prod_avx2:function
+func(gf_2vect_dot_prod_avx2)
 	FUNC_SAVE
 	SLDR	len, len_m
 	sub	len, 32
@@ -395,4 +388,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func                   core, ver, snum
-slversion GF_2VECT_DOT_PROD_AVX2, 04,  04,  0196
+slversion gf_2vect_dot_prod_avx2, 04,  04,  0196

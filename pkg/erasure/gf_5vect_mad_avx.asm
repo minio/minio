@@ -31,12 +31,6 @@
 ;;; gf_5vect_mad_avx(len, vec, vec_i, mul_array, src, dest);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_5VECT_MAD_AVX _gf_5vect_mad_avx
-%else
- %define GF_5VECT_MAD_AVX gf_5vect_mad_avx
-%endif
-
 %define PS 8
 
 %ifidn __OUTPUT_FORMAT__, win64
@@ -206,8 +200,8 @@ section .text
 
 
 align 16
-global GF_5VECT_MAD_AVX:function
-func(GF_5VECT_MAD_AVX)
+global gf_5vect_mad_avx:function
+func(gf_5vect_mad_avx)
 	FUNC_SAVE
 	sub	len, 16
 	jl	.return_fail
@@ -398,4 +392,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func             core, ver, snum
-slversion GF_5VECT_MAD_AVX, 02,  00,  020d
+slversion gf_5vect_mad_avx, 02,  00,  020d

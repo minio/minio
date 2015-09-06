@@ -31,12 +31,6 @@
 ;;; gf_4vect_dot_prod_sse(len, vec, *g_tbls, **buffs, **dests);
 ;;;
 
-%ifidn __OUTPUT_FORMAT__, macho64
- %define GF_4VECT_DOT_PROD_SSE _gf_4vect_dot_prod_sse
-%else
- %define GF_4VECT_DOT_PROD_SSE gf_4vect_dot_prod_sse
-%endif
-
 %ifidn __OUTPUT_FORMAT__, elf64
  %define arg0  rdi
  %define arg1  rsi
@@ -334,8 +328,8 @@ section .text
  %define xp4    xmm5
 %endif
 align 16
-global GF_4VECT_DOT_PROD_SSE:function
-func(GF_4VECT_DOT_PROD_SSE)
+global gf_4vect_dot_prod_sse:function
+func(gf_4vect_dot_prod_sse)
 	FUNC_SAVE
 	SLDR	len, len_m
 	sub	len, 16
@@ -488,4 +482,4 @@ global %1_slver
 	db 0x%3, 0x%2
 %endmacro
 ;;;       func                  core, ver, snum
-slversion GF_4VECT_DOT_PROD_SSE, 00,  05,  0064
+slversion gf_4vect_dot_prod_sse, 00,  05,  0064

@@ -61,5 +61,5 @@ install: gomake-all
 clean:
 	@echo "Cleaning up all the generated files:"
 	@rm -fv cover.out
-	@rm -fv pkg/utils/split/TESTPREFIX.*
 	@rm -fv minio
+	@rm -fv pkg/erasure/*.syso
