@@ -22,6 +22,7 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/donut"
+	"github.com/minio/minio/pkg/probe"
 )
 
 var (
@@ -68,19 +69,19 @@ func makeDonutMain(c *cli.Context) {
 	var disks []string
 	for _, disk := range c.Args().Tail() {
 		if _, err := isUsable(disk); err != nil {
-			Fatalln(err)
+			Fatalln(err.Trace())
 		}
 		disks = append(disks, disk)
 	}
 	for _, disk := range disks {
 		if err := os.MkdirAll(filepath.Join(disk, donutName), 0700); err != nil {
-			Fatalln(err)
+			Fatalln(probe.NewError(err))
 		}
 	}
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		Fatalln(err)
+		Fatalln(probe.NewError(err))
 	}
 	donutConfig := &donut.Config{}
 	donutConfig.Version = "0.0.1"
@@ -92,7 +93,7 @@ func makeDonutMain(c *cli.Context) {
 	donutConfig.MaxSize = 512000000
 
 	if err := donut.SaveConfig(donutConfig); err != nil {
-		Fatalln(err)
+		Fatalln(err.Trace())
 	}
 
 	Infoln("Success!")
