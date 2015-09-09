@@ -12,10 +12,10 @@ $ sudo apt-get install git build-essential yasm
 Download Go 1.5+ from [https://golang.org/dl/](https://golang.org/dl/).
 
 ```sh
-$ wget https://storage.googleapis.com/golang/go1.5.linux-amd64.tar.gz
+$ wget https://storage.googleapis.com/golang/go1.5.1.linux-amd64.tar.gz
 $ mkdir -p ${HOME}/bin/
 $ mkdir -p ${HOME}/go/
-$ tar -C ${HOME}/bin/ -xzf go1.5.linux-amd64.tar.gz
+$ tar -C ${HOME}/bin/ -xzf go1.5.1.linux-amd64.tar.gz
 ```
 ##### Setup GOROOT and GOPATH
 
