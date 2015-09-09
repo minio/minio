@@ -31,10 +31,19 @@ import (
 
 func init() {
 	// Check for the environment early on and gracefuly report.
-	_, err := user.Current()
+	u, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
+	var uid int
+	uid, err = strconv.Atoi(u.Uid)
+	if err != nil {
+		Fatalf("Unable to convert user id to an integer. \nError: %s\n", err)
+	}
+	if uid == 0 {
+		Fatalln("Please run as a normal user, running as root is disallowed")
+	}
+	verifyMinioRuntime()
 }
 
 // Tries to get os/arch/platform specific information
