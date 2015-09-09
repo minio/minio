@@ -24,8 +24,8 @@ import (
 // Info - return info about donut configuration
 func (donut API) Info() (nodeDiskMap map[string][]string, err *probe.Error) {
 	nodeDiskMap = make(map[string][]string)
-	for nodeName, node := range donut.nodes {
-		disks, err := node.ListDisks()
+	for nodeName, n := range donut.nodes {
+		disks, err := n.ListDisks()
 		if err != nil {
 			return nil, err.Trace()
 		}
@@ -43,11 +43,11 @@ func (donut API) AttachNode(hostname string, disks []string) *probe.Error {
 	if hostname == "" || len(disks) == 0 {
 		return probe.NewError(InvalidArgument{})
 	}
-	node, err := newNode(hostname)
+	n, err := newNode(hostname)
 	if err != nil {
 		return err.Trace()
 	}
-	donut.nodes[hostname] = node
+	donut.nodes[hostname] = n
 	for i, d := range disks {
 		newDisk, err := disk.New(d)
 		if err != nil {
@@ -56,7 +56,7 @@ func (donut API) AttachNode(hostname string, disks []string) *probe.Error {
 		if err := newDisk.MakeDir(donut.config.DonutName); err != nil {
 			return err.Trace()
 		}
-		if err := node.AttachDisk(newDisk, i); err != nil {
+		if err := n.AttachDisk(newDisk, i); err != nil {
 			return err.Trace()
 		}
 	}

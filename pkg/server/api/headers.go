@@ -62,18 +62,18 @@ func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength i
 // Write error response headers
 func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
 	var bytesBuffer bytes.Buffer
-	var encoder encoder
+	var e encoder
 	// write common headers
 	switch acceptsType {
 	case xmlContentType:
-		encoder = xml.NewEncoder(&bytesBuffer)
+		e = xml.NewEncoder(&bytesBuffer)
 	case jsonContentType:
-		encoder = json.NewEncoder(&bytesBuffer)
+		e = json.NewEncoder(&bytesBuffer)
 	// by default even if unknown Accept header received handle it by sending XML contenttype response
 	default:
-		encoder = xml.NewEncoder(&bytesBuffer)
+		e = xml.NewEncoder(&bytesBuffer)
 	}
-	encoder.Encode(response)
+	e.Encode(response)
 	return bytesBuffer.Bytes()
 }
 
@@ -105,14 +105,14 @@ func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, cont
 }
 
 func encodeSuccessResponse(response interface{}, acceptsType contentType) []byte {
-	var encoder encoder
+	var e encoder
 	var bytesBuffer bytes.Buffer
 	switch acceptsType {
 	case xmlContentType:
-		encoder = xml.NewEncoder(&bytesBuffer)
+		e = xml.NewEncoder(&bytesBuffer)
 	case jsonContentType:
-		encoder = json.NewEncoder(&bytesBuffer)
+		e = json.NewEncoder(&bytesBuffer)
 	}
-	encoder.Encode(response)
+	e.Encode(response)
 	return bytesBuffer.Bytes()
 }

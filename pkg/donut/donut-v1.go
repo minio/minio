@@ -525,7 +525,8 @@ func (donut API) getBucketMetadataReaders() (map[int]io.ReadCloser, *probe.Error
 	disks := make(map[int]disk.Disk)
 	var err *probe.Error
 	for _, node := range donut.nodes {
-		nDisks, err := node.ListDisks()
+		nDisks := make(map[int]disk.Disk)
+		nDisks, err = node.ListDisks()
 		if err != nil {
 			return nil, err.Trace()
 		}
@@ -596,14 +597,15 @@ func (donut API) makeDonutBucket(bucketName, acl string) *probe.Error {
 	if _, ok := donut.buckets[bucketName]; ok {
 		return probe.NewError(BucketExists{Bucket: bucketName})
 	}
-	bucket, bucketMetadata, err := newBucket(bucketName, acl, donut.config.DonutName, donut.nodes)
+	bkt, bucketMetadata, err := newBucket(bucketName, acl, donut.config.DonutName, donut.nodes)
 	if err != nil {
 		return err.Trace()
 	}
 	nodeNumber := 0
-	donut.buckets[bucketName] = bucket
+	donut.buckets[bucketName] = bkt
 	for _, node := range donut.nodes {
-		disks, err := node.ListDisks()
+		disks := make(map[int]disk.Disk)
+		disks, err = node.ListDisks()
 		if err != nil {
 			return err.Trace()
 		}
@@ -666,11 +668,11 @@ func (donut API) listDonutBuckets() *probe.Error {
 		}
 		bucketName := splitDir[0]
 		// we dont need this once we cache from makeDonutBucket()
-		bucket, _, err := newBucket(bucketName, "private", donut.config.DonutName, donut.nodes)
+		bkt, _, err := newBucket(bucketName, "private", donut.config.DonutName, donut.nodes)
 		if err != nil {
 			return err.Trace()
 		}
-		donut.buckets[bucketName] = bucket
+		donut.buckets[bucketName] = bkt
 	}
 	return nil
 }
