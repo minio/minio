@@ -29,8 +29,6 @@ import (
 	"github.com/minio/cli"
 )
 
-var globalDebugFlag = false
-
 func init() {
 	// Check for the environment early on and gracefuly report.
 	_, err := user.Current()
@@ -131,22 +129,17 @@ VERSION:
 	return app
 }
 
-func registerBefore(c *cli.Context) error {
-	globalDebugFlag = c.GlobalBool("debug")
-	return nil
-}
-
 func main() {
 	// set up go max processes
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	app := registerApp()
-	app.Before = registerBefore
+	app.Before = func(c *cli.Context) error {
+		// get  flag and set global defaults here.
+		return nil
+	}
 	app.ExtraInfo = func() map[string]string {
-		if globalDebugFlag {
-			return getSystemData()
-		}
-		return make(map[string]string)
+		return getSystemData()
 	}
 
 	app.RunAndExitOnError()
