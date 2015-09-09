@@ -67,13 +67,14 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 
 	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
 	if err == nil {
-		httpRange, err := getRequestedRange(req.Header.Get("Range"), metadata.Size)
+		var hrange *httpRange
+		hrange, err = getRequestedRange(req.Header.Get("Range"), metadata.Size)
 		if err != nil {
 			writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
 			return
 		}
-		setObjectHeaders(w, metadata, httpRange)
-		if _, err := api.Donut.GetObject(w, bucket, object, httpRange.start, httpRange.length); err != nil {
+		setObjectHeaders(w, metadata, hrange)
+		if _, err = api.Donut.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
 			// unable to write headers, we've already printed data. Just close the connection.
 			log.Error.Println(err.Trace())
 			return
