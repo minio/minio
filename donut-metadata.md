@@ -5,18 +5,18 @@
 "minio": {
     "version": 1,
     "users": [{
-    	"secret-key": string,
-    	"access-key": string,
-    	"status": string // enum: ok, disabled, deleted
+    	"secretAccessKey": String,
+    	"accessKeyId": String,
+    	"status": String // enum: ok, disabled, deleted
     }],
     "hosts": [{
-    	"address": string,
-    	"uuid": string,
-    	"status": string, // enum: ok, disabled, deleted, busy, offline,
+    	"address": String,
+    	"uuid": String,
+    	"status": String, // enum: ok, disabled, deleted, busy, offline.
     	"disks": [{
-        		"disk": string,
-        		"uuid": string,
-        		"status": string // ok, offline, disabled, busy
+        		"disk": String,
+        		"uuid": String,
+        		"status": String // ok, offline, disabled, busy.
         }]
     }]
 }
@@ -26,9 +26,9 @@
 
 ```js
 "buckets": {
-    "bucket": string, // index
-    "permissions": string,
-    "deleted": bool
+    "bucket": String, // index
+    "deleted": Boolean,
+    "permissions": String
 }
 ```
 
@@ -36,20 +36,20 @@
 
 ```js
 "objects": {
-    "key": string, // index
+    "key": String, // index
     "createdAt": Date,
     "hosts[16]": [{
-    	"host": string,
-    	"disk": string,
-    }]
-    "deleted": bool
+    	"host": String,
+    	"disk": String,
+    }],
+    "deleted": Boolean
 }
 ```
 
 ```js
 "meta": {
-    "key": string, // index
-    "type": string // content-type
+    "key": String, // index
+    "type": String // content-type
     // type speific meta
 }
 ```
