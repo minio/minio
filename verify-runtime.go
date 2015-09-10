@@ -49,20 +49,20 @@ type version struct {
 }
 
 func newVersion(v string) version {
-	var ver version
+	ver := version{}
 	verSlice := strings.Split(v, ".")
-	if len(verSlice) > 2 {
-		ver = version{
-			major: verSlice[0],
-			minor: verSlice[1],
-			patch: verSlice[2],
-		}
-		return ver
+	if len(verSlice) < 2 {
+		Fatalln("Version string missing major and minor versions, cannot proceed exiting.")
 	}
-	ver = version{
-		major: verSlice[0],
-		minor: verSlice[1],
-		patch: "0",
+	if len(verSlice) > 3 {
+		Fatalf("Unknown Version style format, newVersion only supports ‘major.minor.patch’ not ‘%s’.\n", v)
+	}
+	ver.major = verSlice[0]
+	ver.minor = verSlice[1]
+	if len(verSlice) == 3 {
+		ver.patch = verSlice[2]
+	} else {
+		ver.patch = "0"
 	}
 	return ver
 }
