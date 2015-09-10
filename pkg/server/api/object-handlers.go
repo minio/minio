@@ -23,7 +23,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/utils/log"
 )
 
 const (
@@ -76,7 +75,7 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		setObjectHeaders(w, metadata, hrange)
 		if _, err = api.Donut.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
 			// unable to write headers, we've already printed data. Just close the connection.
-			log.Error.Println(err.Trace())
+			// log.Error.Println(err.Trace())
 			return
 		}
 		return
@@ -93,7 +92,7 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.ObjectNameInvalid:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -150,7 +149,7 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.ObjectNameInvalid:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -252,7 +251,7 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.InvalidDigest:
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -312,7 +311,7 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	case donut.ObjectExists:
 		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -412,7 +411,7 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 	case donut.InvalidDigest:
 		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -462,7 +461,7 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -527,7 +526,7 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	case donut.InvalidUploadID:
 		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -590,7 +589,7 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 	case donut.MalformedXML:
 		writeErrorResponse(w, req, MalformedXML, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }

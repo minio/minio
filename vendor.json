@@ -3,6 +3,13 @@
 	"ignore": "",
 	"package": [
 		{
+			"canonical": "github.com/Sirupsen/logrus",
+			"comment": "",
+			"local": "vendor/github.com/Sirupsen/logrus",
+			"revision": "418b41d23a1bf978c06faea5313ba194650ac088",
+			"revisionTime": "2015-09-08T20:46:18Z"
+		},
+		{
 			"canonical": "github.com/dustin/go-humanize",
 			"comment": "",
 			"local": "vendor/github.com/dustin/go-humanize",
