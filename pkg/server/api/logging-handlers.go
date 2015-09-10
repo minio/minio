@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/minio/minio/pkg/utils/log"
 )
 
 type logHandler struct {
@@ -103,7 +101,7 @@ func fileLogger(filename string) (chan<- []byte, error) {
 	go func() {
 		for message := range ch {
 			if _, err := io.Copy(file, bytes.NewBuffer(message)); err != nil {
-				log.Errorln(err)
+				// log.Errorln(err)
 			}
 		}
 	}()

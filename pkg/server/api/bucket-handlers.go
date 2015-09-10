@@ -22,7 +22,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/utils/log"
 )
 
 func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
@@ -55,7 +54,7 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 		return false
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		return false
 	}
@@ -123,7 +122,7 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 	case donut.BucketNotFound:
 		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -200,7 +199,7 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.ObjectNameInvalid:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -253,7 +252,7 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -331,7 +330,7 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.BucketExists:
 		writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -385,7 +384,7 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.BucketNotFound:
 		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -435,7 +434,7 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 	default:
-		log.Error.Println(err.Trace())
+		// log.Error.Println(err.Trace())
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
