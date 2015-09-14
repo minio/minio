@@ -32,16 +32,12 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 	if err == nil {
 		if _, err := StripAccessKeyID(req.Header.Get("Authorization")); err != nil {
 			if bucketMetadata.ACL.IsPrivate() {
-				return true
-				//uncomment this when we have webcli
-				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-				//return false
+				writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				return false
 			}
 			if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
-				return true
-				//uncomment this when we have webcli
-				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-				//return false
+				writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+				return false
 			}
 		}
 		return true
