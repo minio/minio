@@ -25,7 +25,7 @@ import (
 )
 
 // registerAPI - register all the object API handlers to their respective paths
-func registerAPI(mux *router.Router, a api.Minio) http.Handler {
+func registerAPI(mux *router.Router, a api.Minio) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")
@@ -44,61 +44,32 @@ func registerAPI(mux *router.Router, a api.Minio) http.Handler {
 
 	// unsupported API
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
-
-	return mux
 }
 
-// add a handlerFunc typedef
-type handlerFunc func(http.Handler) http.Handler
-
-// chain struct to hold handlers
-type chain struct {
-	handlers []handlerFunc
-}
-
-// loop through handlers and return a final one
-func (c chain) final(mux http.Handler) http.Handler {
+func registerCustomMiddleware(mux *router.Router, mwHandlers ...api.MiddlewareHandler) http.Handler {
 	var f http.Handler
-	if mux != nil {
-		f = mux
-	} else {
-		f = http.DefaultServeMux
-	}
-	for _, handler := range c.handlers {
-		f = handler(f)
+	f = mux
+	for _, mw := range mwHandlers {
+		f = mw(f)
 	}
 	return f
 }
 
-// registerChain - register an array of handlers in a chain of style -> handler(handler(handler(handler...)))
-func registerChain(handlers ...handlerFunc) chain {
-	ch := chain{}
-	ch.handlers = append(ch.handlers, handlers...)
-	return ch
-}
-
-// registerCustomMiddleware register all available custom middleware
-func registerCustomMiddleware(mux http.Handler, conf api.Config) http.Handler {
-	ch := registerChain(
+// getAPIHandler api handler
+func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
+	var mwHandlers = []api.MiddlewareHandler{
 		api.ValidContentTypeHandler,
 		api.TimeValidityHandler,
 		api.IgnoreResourcesHandler,
 		api.ValidateAuthHeaderHandler,
 		// api.LoggingHandler, // Disabled logging until we bring in external logging support
 		api.CorsHandler,
-		// Add new your new middleware here
-	)
+	}
 
-	mux = ch.final(mux)
-	return mux
-}
-
-// getAPIHandler api handler
-func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 	mux := router.NewRouter()
 	minioAPI := api.New()
-	apiHandler := registerAPI(mux, minioAPI)
-	apiHandler = registerCustomMiddleware(apiHandler, conf)
+	registerAPI(mux, minioAPI)
+	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler, minioAPI
 }
 

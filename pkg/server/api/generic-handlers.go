@@ -25,6 +25,8 @@ import (
 	"github.com/rs/cors"
 )
 
+type MiddlewareHandler func(http.Handler) http.Handler
+
 type contentTypeHandler struct {
 	handler http.Handler
 }
