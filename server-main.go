@@ -60,7 +60,7 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 	apiServerConfig := getServerConfig(c)
-	if err := server.StartServices(apiServerConfig); err != nil {
+	if err := server.Start(apiServerConfig); err != nil {
 		Fatalln(err.Trace())
 	}
 }

@@ -54,7 +54,8 @@ func getRPCServer(rpcHandler http.Handler) (*http.Server, *probe.Error) {
 	return httpServer, nil
 }
 
-func StartController() *probe.Error {
+// Start starts a controller
+func Start() *probe.Error {
 	rpcServer, err := getRPCServer(getRPCHandler())
 	if err != nil {
 		return err.Trace()
