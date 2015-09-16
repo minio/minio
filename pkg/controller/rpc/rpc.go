@@ -16,4 +16,19 @@
 
 package rpc
 
-type ServerService struct{}
+import (
+	"github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
+)
+
+type Server struct {
+	*rpc.Server
+}
+
+// NewServer - provide a new instance of RPC server
+func NewServer() *Server {
+	s := &Server{}
+	s.Server = rpc.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
+	return s
+}
