@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/rpc"
+	"github.com/minio/minio/pkg/controller/rpc"
 )
 
 // getRPCHandler rpc handler

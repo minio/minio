@@ -20,7 +20,6 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/rpc"
 	"github.com/minio/minio/pkg/server/api"
 )
 
@@ -71,18 +70,4 @@ func getAPIHandler(conf api.Config) (http.Handler, api.Minio) {
 	registerAPI(mux, minioAPI)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler, minioAPI
-}
-
-// getRPCHandler rpc handler
-func getRPCHandler() http.Handler {
-	s := rpc.NewServer()
-	s.RegisterJSONCodec()
-	// Add new RPC services here
-	return registerRPC(router.NewRouter(), s)
-}
-
-// registerRPC - register rpc handlers
-func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
-	mux.Handle("/rpc", s)
-	return mux
 }
