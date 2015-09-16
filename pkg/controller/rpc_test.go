@@ -45,7 +45,7 @@ func (s *MySuite) TearDownSuite(c *C) {
 
 func (s *MySuite) TestMemStats(c *C) {
 	op := rpc.Operation{
-		Method:  "MemStats.Get",
+		Method:  "Server.MemStats",
 		Request: rpc.Args{Request: ""},
 	}
 	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
@@ -63,7 +63,7 @@ func (s *MySuite) TestMemStats(c *C) {
 
 func (s *MySuite) TestSysInfo(c *C) {
 	op := rpc.Operation{
-		Method:  "SysInfo.Get",
+		Method:  "Server.SysInfo",
 		Request: rpc.Args{Request: ""},
 	}
 	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
