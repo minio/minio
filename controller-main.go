@@ -42,7 +42,7 @@ func controllerMain(c *cli.Context) {
 	if c.Args().Present() {
 		cli.ShowCommandHelpAndExit(c, "controller", 1)
 	}
-	err := controller.StartController()
+	err := controller.Start()
 	if err != nil {
 		Fatalln(err)
 	}

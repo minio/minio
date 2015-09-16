@@ -83,17 +83,6 @@ func getAPIServer(conf api.Config, apiHandler http.Handler) (*http.Server, *prob
 	return httpServer, nil
 }
 
-// getRPCServer instance
-func getRPCServer(rpcHandler http.Handler) *http.Server {
-	// Minio server config
-	httpServer := &http.Server{
-		Addr:           ":9001", // TODO make this configurable
-		Handler:        rpcHandler,
-		MaxHeaderBytes: 1 << 20,
-	}
-	return httpServer
-}
-
 // Start ticket master
 func startTM(a api.Minio) {
 	for {
@@ -103,18 +92,16 @@ func startTM(a api.Minio) {
 	}
 }
 
-// StartServices starts basic services for a server
-func StartServices(conf api.Config) *probe.Error {
+// Start starts a s3 compatible cloud storage server
+func Start(conf api.Config) *probe.Error {
 	apiHandler, minioAPI := getAPIHandler(conf)
 	apiServer, err := getAPIServer(conf, apiHandler)
 	if err != nil {
 		return err.Trace()
 	}
-	rpcServer := getRPCServer(getRPCHandler())
 	// start ticket master
 	go startTM(minioAPI)
-
-	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer, rpcServer); err != nil {
+	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer); err != nil {
 		return err.Trace()
 	}
 	return nil

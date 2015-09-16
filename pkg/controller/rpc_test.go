@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/rpc"
+	"github.com/minio/minio/pkg/controller/rpc"
 	. "gopkg.in/check.v1"
 )
 
