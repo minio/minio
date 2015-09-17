@@ -24,7 +24,7 @@ _init() {
     CLANG_VERSION="3.5"
     YASM_VERSION="1.2.0"
     GIT_VERSION="1.0"
-    GO_VERSION="1.5"
+    GO_VERSION="1.5.1"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
 
