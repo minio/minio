@@ -38,7 +38,7 @@ Storage Management:
 ### Install 
 
 <blockquote>
-NOTE: If you happen to compile from source code, following options mentioned below are not available anymore. Minio master branch is going through lots of rapid changes, documentation will be updated subsequently. 
+NOTE: If you happen to compile from source code, following options are not available anymore. Minio master branch is going through lots of rapid changes, documentation will be updated subsequently. 
 </blockquote>
 
 #### GNU/Linux
