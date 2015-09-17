@@ -21,7 +21,11 @@ import "github.com/minio/cli"
 // Collection of minio commands currently supported are
 var commands = []cli.Command{}
 
+// Collection of minio commands currently supported in a trie tree
+var commandsTree = newTrie()
+
 // registerCommand registers a cli command
 func registerCommand(command cli.Command) {
 	commands = append(commands, command)
+	commandsTree.Insert(command.Name)
 }

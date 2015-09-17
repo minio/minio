@@ -87,6 +87,14 @@ func getFormattedVersion() string {
 	return t.Format(http.TimeFormat)
 }
 
+func findClosestCommands(command string) []string {
+	var closestCommands []string
+	for _, value := range commandsTree.PrefixMatch(command) {
+		closestCommands = append(closestCommands, value.(string))
+	}
+	return closestCommands
+}
+
 func registerApp() *cli.App {
 	// register all commands
 	registerCommand(donutCmd)
@@ -132,7 +140,15 @@ VERSION:
 {{end}}
 `
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
-		Fatalf("Command not found: ‘%s’\n", command)
+		msg := fmt.Sprintf("‘%s’ is not a mc command. See ‘minio help’.", command)
+		closestCommands := findClosestCommands(command)
+		if len(closestCommands) > 0 {
+			msg += fmt.Sprintf("\n\nDid you mean one of these?\n")
+			for _, cmd := range closestCommands {
+				msg += fmt.Sprintf("        ‘%s’\n", cmd)
+			}
+		}
+		Fatalln(msg)
 	}
 
 	return app
