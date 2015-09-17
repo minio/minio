@@ -34,7 +34,12 @@ Storage Management:
   - Status: Work in progress.
 ~~~
 
-### Install
+
+### Install 
+
+<blockquote>
+NOTE: If you happen to compile from source code, following options mentioned below are not available anymore. Minio master branch is going through lots of rapid changes, documentation will be updated subsequently. 
+</blockquote>
 
 #### GNU/Linux
 
@@ -45,6 +50,7 @@ $ wget https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/minio
 $ chmod +x minio
 $ ./minio mode memory limit 12GB expire 2h
 ~~~
+
 #### OS X
 
 Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/darwin-amd64/minio
