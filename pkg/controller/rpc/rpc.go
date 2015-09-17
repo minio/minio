@@ -14,28 +14,21 @@
  * limitations under the License.
  */
 
-package controller
+package rpc
 
 import (
-	"net/http"
-
-	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/controller/rpc"
+	"github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
 )
 
-// getRPCHandler rpc handler
-func getRPCHandler() http.Handler {
-	s := rpc.NewServer()
-	s.RegisterService(new(rpc.VersionService), "Version")
-	s.RegisterService(new(rpc.DonutService), "Donut")
-	s.RegisterService(new(rpc.AuthService), "Auth")
-	s.RegisterService(rpc.NewServerService(), "Server")
-	// Add new RPC services here
-	return registerRPC(router.NewRouter(), s)
+type Server struct {
+	*rpc.Server
 }
 
-// registerRPC - register rpc handlers
-func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
-	mux.Handle("/rpc", s)
-	return mux
+// NewServer - provide a new instance of RPC server
+func NewServer() *Server {
+	s := &Server{}
+	s.Server = rpc.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
+	return s
 }

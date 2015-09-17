@@ -18,34 +18,91 @@ package rpc
 
 import (
 	"net/http"
+	"os"
+	"runtime"
+	"syscall"
 
-	"github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/pkg/probe"
 )
 
-// Server rpc server container
-type Server struct {
-	RPCServer *rpc.Server
+type MinioServer struct {
+	Name string `json:"name"`
+	IP   string `json:"ip"`
+	ID   string `json:"id"`
 }
 
-// RegisterJSONCodec - register standard json codec
-func (s Server) RegisterJSONCodec() {
-	s.RPCServer.RegisterCodec(json.NewCodec(), "application/json")
+type ServerArg struct {
+	MinioServer
 }
 
-// RegisterService - register new services
-func (s Server) RegisterService(recv interface{}, name string) {
-	s.RPCServer.RegisterService(recv, name)
+type DummyReply struct{}
+
+type MemStatsReply struct {
+	runtime.MemStats `json:"memstats"`
 }
 
-// NewServer - provide a new instance of RPC server
-func NewServer() *Server {
-	s := &Server{}
-	s.RPCServer = rpc.NewServer()
+type DiskStatsReply struct {
+	DiskStats syscall.Statfs_t `json:"diskstats"`
+}
+
+type SysInfoReply struct {
+	Hostname  string `json:"hostname"`
+	SysARCH   string `json:"sys.arch"`
+	SysOS     string `json:"sys.os"`
+	SysCPUS   int    `json:"sys.ncpus"`
+	Routines  int    `json:"goroutines"`
+	GOVersion string `json:"goversion"`
+}
+
+type ListReply struct {
+	Res  string        `json:"res"`
+	List []MinioServer `json:"list"`
+}
+
+type ServerService struct {
+	list []MinioServer
+}
+
+func (this *ServerService) Add(r *http.Request, arg *ServerArg, reply *DummyReply) error {
+	this.list = append(this.list, MinioServer{arg.Name, arg.IP, arg.ID})
+	return nil
+}
+
+func (this *ServerService) MemStats(r *http.Request, arg *ServerArg, reply *MemStatsReply) error {
+	runtime.ReadMemStats(&reply.MemStats)
+	return nil
+}
+
+func (this *ServerService) DiskStats(r *http.Request, arg *ServerArg, reply *DiskStatsReply) error {
+	syscall.Statfs("/", &reply.DiskStats)
+	return nil
+}
+
+func (this *ServerService) SysInfo(r *http.Request, arg *ServerArg, reply *SysInfoReply) error {
+	reply.SysARCH = runtime.GOARCH
+	reply.SysOS = runtime.GOOS
+	reply.SysCPUS = runtime.NumCPU()
+	reply.Routines = runtime.NumGoroutine()
+	reply.GOVersion = runtime.Version()
+	var err error
+	reply.Hostname, err = os.Hostname()
+	if err != nil {
+		return probe.WrapError(probe.NewError(err))
+	}
+	return nil
+}
+
+func (this *ServerService) List(r *http.Request, arg *ServerArg, reply *ListReply) error {
+	reply.List = this.list
+	return nil
+}
+
+func NewServerService() *ServerService {
+	s := &ServerService{}
+	s.list = []MinioServer{
+		{"server.one", "192.168.1.1", "192.168.1.1"},
+		{"server.two", "192.168.1.2", "192.168.1.2"},
+		{"server.three", "192.168.1.3", "192.168.1.3"},
+	}
 	return s
-}
-
-// ServeHTTP wrapper method for http.Handler interface
-func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.RPCServer.ServeHTTP(w, r)
 }
