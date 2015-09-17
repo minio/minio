@@ -27,11 +27,9 @@ import (
 func getRPCHandler() http.Handler {
 	s := rpc.NewServer()
 	s.RegisterService(new(rpc.VersionService), "Version")
-	s.RegisterService(new(rpc.SysInfoService), "SysInfo")
-	s.RegisterService(new(rpc.MemStatsService), "MemStats")
 	s.RegisterService(new(rpc.DonutService), "Donut")
 	s.RegisterService(new(rpc.AuthService), "Auth")
-	s.RegisterService(new(rpc.AuthService), "Server")
+	s.RegisterService(rpc.NewServerService(), "Server")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
 }
