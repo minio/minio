@@ -122,9 +122,9 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// ValidateAuthHeaderHandler -
-// validate auth header handler is wrapper handler used for request validation with authorization header.
-// Current authorization layer supports S3's standard HMAC based signature request.
+// ValidateAuthHeaderHandler - validate auth header handler is wrapper handler used
+// for request validation with authorization header. Current authorization layer
+// supports S3's standard HMAC based signature request.
 func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 	return validateAuthHandler{h}
 }
@@ -132,8 +132,14 @@ func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acceptsContentType := getContentType(r)
-	accessKeyID, err := StripAccessKeyID(r.Header.Get("Authorization"))
-	switch err.(type) {
+	accessKeyID, err := stripAccessKeyID(r.Header.Get("Authorization"))
+	switch err.ToGoError() {
+	case errInvalidRegion:
+		writeErrorResponse(w, r, AuthorizationHeaderMalformed, acceptsContentType, r.URL.Path)
+		return
+	case errAccessKeyIDInvalid:
+		writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
+		return
 	case nil:
 		// load auth config
 		authConfig, err := auth.LoadConfig()
@@ -150,6 +156,7 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
 		return
+	// All other errors for now, serve them
 	default:
 		// control reaches here, we should just send the request up the stack - internally
 		// individual calls will validate themselves against un-authenticated requests

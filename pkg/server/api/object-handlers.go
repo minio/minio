@@ -57,7 +57,7 @@ func (api Minio) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -124,7 +124,7 @@ func (api Minio) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -218,7 +218,7 @@ func (api Minio) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -288,7 +288,7 @@ func (api Minio) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -382,7 +382,7 @@ func (api Minio) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) 
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -442,7 +442,7 @@ func (api Minio) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Re
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -503,7 +503,7 @@ func (api Minio) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -557,7 +557,7 @@ func (api Minio) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return

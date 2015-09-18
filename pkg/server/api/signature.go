@@ -30,50 +30,75 @@ const (
 	authHeaderPrefix = "AWS4-HMAC-SHA256"
 )
 
-// StripAccessKeyID - strip only access key id from auth header
-func StripAccessKeyID(ah string) (string, error) {
-	if ah == "" {
-		return "", errors.New("Missing auth header")
+// getCredentialsFromAuth parse credentials tag from authorization value
+func getCredentialsFromAuth(authValue string) ([]string, *probe.Error) {
+	if authValue == "" {
+		return nil, probe.NewError(errMissingAuthHeaderValue)
 	}
-	authFields := strings.Split(strings.TrimSpace(ah), ",")
+	authFields := strings.Split(strings.TrimSpace(authValue), ",")
 	if len(authFields) != 3 {
-		return "", errors.New("Missing fields in Auth header")
+		return nil, probe.NewError(errInvalidAuthHeaderValue)
 	}
 	authPrefixFields := strings.Fields(authFields[0])
 	if len(authPrefixFields) != 2 {
-		return "", errors.New("Missing fields in Auth header")
+		return nil, probe.NewError(errMissingFieldsAuthHeader)
 	}
 	if authPrefixFields[0] != authHeaderPrefix {
-		return "", errors.New("Missing fields is Auth header")
+		return nil, probe.NewError(errInvalidAuthHeaderPrefix)
 	}
 	credentials := strings.Split(strings.TrimSpace(authPrefixFields[1]), "=")
 	if len(credentials) != 2 {
-		return "", errors.New("Missing fields in Auth header")
+		return nil, probe.NewError(errMissingFieldsCredentialTag)
 	}
 	if len(strings.Split(strings.TrimSpace(authFields[1]), "=")) != 2 {
-		return "", errors.New("Missing fields in Auth header")
+		return nil, probe.NewError(errMissingFieldsSignedHeadersTag)
 	}
 	if len(strings.Split(strings.TrimSpace(authFields[2]), "=")) != 2 {
-		return "", errors.New("Missing fields in Auth header")
+		return nil, probe.NewError(errMissingFieldsSignatureTag)
 	}
-	accessKeyID := strings.Split(strings.TrimSpace(credentials[1]), "/")[0]
+	credentialElements := strings.Split(strings.TrimSpace(credentials[1]), "/")
+	if len(credentialElements) != 5 {
+		return nil, probe.NewError(errCredentialTagMalformed)
+	}
+	return credentialElements, nil
+}
+
+// verify if authHeader value has valid region
+func isValidRegion(authHeaderValue string) *probe.Error {
+	credentialElements, err := getCredentialsFromAuth(authHeaderValue)
+	if err != nil {
+		return err.Trace()
+	}
+	region := credentialElements[2]
+	if region != "milkyway" {
+		return probe.NewError(errInvalidRegion)
+	}
+	return nil
+}
+
+// stripAccessKeyID - strip only access key id from auth header
+func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
+	if err := isValidRegion(authHeaderValue); err != nil {
+		return "", err.Trace()
+	}
+	credentialElements, err := getCredentialsFromAuth(authHeaderValue)
+	if err != nil {
+		return "", err.Trace()
+	}
+	accessKeyID := credentialElements[0]
 	if !auth.IsValidAccessKey(accessKeyID) {
-		return "", errors.New("Invalid access key")
+		return "", probe.NewError(errAccessKeyIDInvalid)
 	}
 	return accessKeyID, nil
 }
 
-// InitSignatureV4 initializing signature verification
-func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
+// initSignatureV4 initializing signature verification
+func initSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	// strip auth from authorization header
-	ah := req.Header.Get("Authorization")
-	var accessKeyID string
-	{
-		var err error
-		accessKeyID, err = StripAccessKeyID(ah)
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
+	authHeaderValue := req.Header.Get("Authorization")
+	accessKeyID, err := stripAccessKeyID(authHeaderValue)
+	if err != nil {
+		return nil, err.Trace()
 	}
 	authConfig, err := auth.LoadConfig()
 	if err != nil {
@@ -84,11 +109,11 @@ func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 			signature := &donut.Signature{
 				AccessKeyID:     user.AccessKeyID,
 				SecretAccessKey: user.SecretAccessKey,
-				AuthHeader:      ah,
+				AuthHeader:      authHeaderValue,
 				Request:         req,
 			}
 			return signature, nil
 		}
 	}
-	return nil, probe.NewError(errors.New("AccessID not found"))
+	return nil, probe.NewError(errors.New("AccessKeyID not found"))
 }

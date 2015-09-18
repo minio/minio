@@ -572,7 +572,7 @@ func (s *MyAPISignatureV4Suite) TestListObjectsHandlerErrors(c *C) {
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
+	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647.", http.StatusBadRequest)
 }
 
 func (s *MyAPISignatureV4Suite) TestPutBucketErrors(c *C) {
@@ -824,7 +824,7 @@ func (s *MyAPISignatureV4Suite) TestObjectMultipartList(c *C) {
 
 	response4, err := client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000", http.StatusBadRequest)
+	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000.", http.StatusBadRequest)
 }
 
 func (s *MyAPISignatureV4Suite) TestObjectMultipart(c *C) {
