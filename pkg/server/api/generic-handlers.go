@@ -142,11 +142,14 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Access key not found
-		if _, ok := authConfig.Users[accessKeyID]; !ok {
-			writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
-			return
+		for _, user := range authConfig.Users {
+			if user.AccessKeyID == accessKeyID {
+				h.handler.ServeHTTP(w, r)
+				return
+			}
 		}
-		h.handler.ServeHTTP(w, r)
+		writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
+		return
 	default:
 		// control reaches here, we should just send the request up the stack - internally
 		// individual calls will validate themselves against un-authenticated requests

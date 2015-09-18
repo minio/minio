@@ -79,14 +79,16 @@ func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
-	if _, ok := authConfig.Users[accessKeyID]; !ok {
-		return nil, probe.NewError(errors.New("AccessID not found"))
+	for _, user := range authConfig.Users {
+		if user.AccessKeyID == accessKeyID {
+			signature := &donut.Signature{
+				AccessKeyID:     user.AccessKeyID,
+				SecretAccessKey: user.SecretAccessKey,
+				AuthHeader:      ah,
+				Request:         req,
+			}
+			return signature, nil
+		}
 	}
-	signature := &donut.Signature{
-		AccessKeyID:     authConfig.Users[accessKeyID].AccessKeyID,
-		SecretAccessKey: authConfig.Users[accessKeyID].SecretAccessKey,
-		AuthHeader:      ah,
-		Request:         req,
-	}
-	return signature, nil
+	return nil, probe.NewError(errors.New("AccessID not found"))
 }
