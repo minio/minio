@@ -87,6 +87,13 @@
 			"revisionTime": "2015-08-29T22:34:20-07:00"
 		},
 		{
+			"canonical": "github.com/weekface/mgorus",
+			"comment": "",
+			"local": "vendor/github.com/weekface/mgorus",
+			"revision": "9a3ff865bf11d949ab7084198479139d9746c68f",
+			"revisionTime": "2015-09-01T11:57:24+08:00"
+		},
+		{
 			"canonical": "gopkg.in/check.v1",
 			"comment": "",
 			"local": "vendor/gopkg.in/check.v1",
