@@ -50,7 +50,7 @@ release: genversion
 
 genversion:
 	@echo "Generating new minio version.go"
-	@go run genversion.go
+	@cd ./pkg/version; go run genversion.go; cd - 1>/dev/null
 
 pkg-remove:
 	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)

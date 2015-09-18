@@ -27,6 +27,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/version"
 )
 
 func init() {
@@ -80,7 +81,7 @@ func init() {
 
 // getFormattedVersion -
 func getFormattedVersion() string {
-	t, _ := time.Parse(time.RFC3339Nano, Version)
+	t, _ := time.Parse(time.RFC3339Nano, version.Version)
 	if t.IsZero() {
 		return ""
 	}
