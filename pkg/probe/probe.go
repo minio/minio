@@ -50,11 +50,12 @@ func GetSysInfo() map[string]string {
 	}
 }
 
+// TracePoint container for individual trace entries in overall call trace
 type TracePoint struct {
-	Line     int                 `json:"Line,omitempty"`
-	Filename string              `json:"File,omitempty"`
-	Function string              `json:"Func,omitempty"`
-	Env      map[string][]string `json:"Env,omitempty"`
+	Line     int                 `json:"line,omitempty"`
+	Filename string              `json:"file,omitempty"`
+	Function string              `json:"func,omitempty"`
+	Env      map[string][]string `json:"env,omitempty"`
 }
 
 // Error implements tracing error functionality.
@@ -65,10 +66,24 @@ type Error struct {
 	SysInfo   map[string]string `json:"sysinfo,omitempty"`
 }
 
-// NewError function instantiates an error probe for tracing. Original errors.error (golang's error
-// interface) is injected in only once during this New call. Rest of the time, you
-// trace the return path with Probe.Trace and finally handle reporting or quitting
-// at the top level.
+// NewError function instantiates an error probe for tracing.
+// Default ``error`` (golang's error interface) is injected in
+// only once. Rest of the time, you trace the return path with
+// ``probe.Trace`` and finally handling them at top level
+//
+// Following dummy code talks about how one can pass up the
+// errors and put them in CallTrace.
+//
+//     func sendError() *probe.Error {
+//          return probe.NewError(errors.New("Help Needed"))
+//     }
+//     func recvError() *probe.Error {
+//          return sendError().Trace()
+//     }
+//     if err := recvError(); err != nil {
+//           log.Fatalln(err.Trace())
+//     }
+//
 func NewError(e error) *Error {
 	if e == nil {
 		return nil
@@ -77,8 +92,8 @@ func NewError(e error) *Error {
 	return Err.trace()
 }
 
-// Trace records the point at which it is invoked. Stack traces are important for
-// debugging purposes.
+// Trace records the point at which it is invoked.
+// Stack traces are important for debugging purposes.
 func (e *Error) Trace(fields ...string) *Error {
 	if e == nil {
 		return nil
@@ -90,8 +105,7 @@ func (e *Error) Trace(fields ...string) *Error {
 	return e.trace(fields...)
 }
 
-// internal trace - records the point at which it is invoked. Stack traces are important for
-// debugging purposes.
+// Internal trace - records the point at which it is invoked.
 func (e *Error) trace(fields ...string) *Error {
 	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
@@ -107,7 +121,7 @@ func (e *Error) trace(fields ...string) *Error {
 	return e
 }
 
-// Untrace erases last trace entry.
+// Untrace erases last known trace entry.
 func (e *Error) Untrace() *Error {
 	if e == nil {
 		return nil
