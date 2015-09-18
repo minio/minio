@@ -29,7 +29,7 @@ func getRPCHandler() http.Handler {
 	s.RegisterService(new(rpc.VersionService), "Version")
 	s.RegisterService(new(rpc.DonutService), "Donut")
 	s.RegisterService(new(rpc.AuthService), "Auth")
-	s.RegisterService(rpc.NewServerService(), "Server")
+	s.RegisterService(new(rpc.ServerService), "Server")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
 }
