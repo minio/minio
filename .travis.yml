@@ -8,6 +8,9 @@ before_install:
 - make
 - export PATH=$PATH:`pwd`
 - cd ..
+script:
+- make test
+- make test GOFLAGS="-race"
 sudo: false
 go:
 - 1.5.1
