@@ -142,9 +142,11 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Access key not found
-		if _, ok := authConfig.Users[accessKeyID]; !ok {
-			writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
-			return
+		if !authConfig.NoAuth {
+			if _, ok := authConfig.Users[accessKeyID]; !ok {
+				writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
+				return
+			}
 		}
 		h.handler.ServeHTTP(w, r)
 	default:

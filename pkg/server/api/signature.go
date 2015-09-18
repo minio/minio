@@ -65,6 +65,15 @@ func StripAccessKeyID(ah string) (string, error) {
 
 // InitSignatureV4 initializing signature verification
 func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
+	authConfig, err := auth.LoadConfig()
+	if err != nil {
+		return nil, err.Trace()
+	}
+
+	if authConfig.NoAuth {
+		return nil, nil
+	}
+
 	// strip auth from authorization header
 	ah := req.Header.Get("Authorization")
 	var accessKeyID string
@@ -74,10 +83,6 @@ func InitSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 		if err != nil {
 			return nil, probe.NewError(err)
 		}
-	}
-	authConfig, err := auth.LoadConfig()
-	if err != nil {
-		return nil, err.Trace()
 	}
 	if _, ok := authConfig.Users[accessKeyID]; !ok {
 		return nil, probe.NewError(errors.New("AccessID not found"))
