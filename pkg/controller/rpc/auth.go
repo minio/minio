@@ -68,6 +68,8 @@ func generateAuth(args *AuthArgs, reply *AuthReply) *probe.Error {
 		return err.Trace()
 	}
 	reply.SecretAccessKey = string(secretAccessKey)
+	reply.Name = args.User
+
 	config.Users[args.User] = &auth.User{
 		Name:            args.User,
 		AccessKeyID:     string(accessKeyID),
@@ -90,6 +92,7 @@ func fetchAuth(args *AuthArgs, reply *AuthReply) *probe.Error {
 	}
 	reply.AccessKeyID = config.Users[args.User].AccessKeyID
 	reply.SecretAccessKey = config.Users[args.User].SecretAccessKey
+	reply.Name = args.User
 	return nil
 }
 
@@ -112,6 +115,7 @@ func resetAuth(args *AuthArgs, reply *AuthReply) *probe.Error {
 		return err.Trace()
 	}
 	reply.SecretAccessKey = string(secretAccessKey)
+	reply.Name = args.User
 
 	config.Users[args.User] = &auth.User{
 		Name:            args.User,
