@@ -17,11 +17,14 @@
 package controller
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	jsonrpc "github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/controller/rpc"
 	. "gopkg.in/check.v1"
 )
@@ -36,6 +39,10 @@ var _ = Suite(&MySuite{})
 var testRPCServer *httptest.Server
 
 func (s *MySuite) SetUpSuite(c *C) {
+	root, err := ioutil.TempDir(os.TempDir(), "api-")
+	c.Assert(err, IsNil)
+	auth.SetAuthConfigPath(root)
+
 	testRPCServer = httptest.NewServer(getRPCHandler())
 }
 
@@ -81,8 +88,8 @@ func (s *MySuite) TestSysInfo(c *C) {
 
 func (s *MySuite) TestAuth(c *C) {
 	op := rpc.Operation{
-		Method:  "Auth.Get",
-		Request: rpc.Args{Request: ""},
+		Method:  "Auth.Generate",
+		Request: rpc.AuthArgs{User: "newuser"},
 	}
 	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -97,4 +104,40 @@ func (s *MySuite) TestAuth(c *C) {
 	c.Assert(reply, Not(DeepEquals), rpc.AuthReply{})
 	c.Assert(len(reply.AccessKeyID), Equals, 20)
 	c.Assert(len(reply.SecretAccessKey), Equals, 40)
+
+	op = rpc.Operation{
+		Method:  "Auth.Fetch",
+		Request: rpc.AuthArgs{User: "newuser"},
+	}
+	req, err = rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err = req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var newReply rpc.AuthReply
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &newReply), IsNil)
+	resp.Body.Close()
+	c.Assert(newReply, Not(DeepEquals), rpc.AuthReply{})
+	c.Assert(reply.AccessKeyID, Equals, newReply.AccessKeyID)
+	c.Assert(reply.SecretAccessKey, Equals, newReply.SecretAccessKey)
+
+	op = rpc.Operation{
+		Method:  "Auth.Reset",
+		Request: rpc.AuthArgs{User: "newuser"},
+	}
+	req, err = rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err = req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var resetReply rpc.AuthReply
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &resetReply), IsNil)
+	resp.Body.Close()
+	c.Assert(newReply, Not(DeepEquals), rpc.AuthReply{})
+	c.Assert(reply.AccessKeyID, Not(Equals), resetReply.AccessKeyID)
+	c.Assert(reply.SecretAccessKey, Not(Equals), resetReply.SecretAccessKey)
 }

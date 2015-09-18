@@ -107,6 +107,9 @@ func (e *Error) Trace(fields ...string) *Error {
 
 // Internal trace - records the point at which it is invoked.
 func (e *Error) trace(fields ...string) *Error {
+	if e == nil {
+		return nil
+	}
 	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
 	_, function = filepath.Split(function)
@@ -139,6 +142,9 @@ func (e *Error) Untrace() *Error {
 
 // ToGoError returns original error message.
 func (e *Error) ToGoError() error {
+	if e == nil || e.Cause == nil {
+		return nil
+	}
 	return e.Cause
 }
 
