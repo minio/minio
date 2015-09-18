@@ -53,7 +53,7 @@ func generateRequestID() []byte {
 func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength int) {
 	// set unique request ID for each reply
 	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
-	w.Header().Set("Server", ("Minio/" + version.Version + " (" + runtime.GOOS + "," + runtime.GOARCH + ")"))
+	w.Header().Set("Server", ("Minio/" + version.Version + " (" + runtime.GOOS + ";" + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
 	w.Header().Set("Connection", "close")
