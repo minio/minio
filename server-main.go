@@ -17,14 +17,17 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/server"
 	"github.com/minio/minio/pkg/server/api"
 )
 
 var serverCmd = cli.Command{
 	Name:   "server",
-	Usage:  "Start minio server",
+	Usage:  "Start minio server.",
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Description}}
@@ -60,7 +63,9 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 	apiServerConfig := getServerConfig(c)
-	if err := server.Start(apiServerConfig); err != nil {
-		Fatalln(err.Trace())
-	}
+
+	err := server.Start(apiServerConfig)
+	err = probe.NewError(fmt.Errorf("Fake error."))
+	errorIf(err.Trace(), "Failed to start the server.", nil)
+
 }
