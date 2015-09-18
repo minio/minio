@@ -26,6 +26,7 @@ import (
 	"time"
 )
 
+// Version version string
 type Version struct {
 	Date string
 }

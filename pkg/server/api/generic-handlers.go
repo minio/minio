@@ -25,6 +25,7 @@ import (
 	"github.com/rs/cors"
 )
 
+// MiddlewareHandler - useful to chain different middleware http.Handler
 type MiddlewareHandler func(http.Handler) http.Handler
 
 type contentTypeHandler struct {
@@ -153,6 +154,7 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CorsHandler handler for CORS (Cross Origin Resource Sharing)
 func CorsHandler(h http.Handler) http.Handler {
 	return cors.Default().Handler(h)
 }

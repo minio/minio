@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/rpc/v2/json"
 )
 
+// Server new rpc server container
 type Server struct {
 	*rpc.Server
 }
