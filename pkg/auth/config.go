@@ -35,6 +35,7 @@ type User struct {
 type Config struct {
 	Version string
 	Users   map[string]*User
+	NoAuth bool
 }
 
 // getAuthConfigPath get donut config file path
