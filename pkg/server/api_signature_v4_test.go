@@ -75,7 +75,7 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	s.accessKeyID = string(accessKeyID)
 	s.secretAccessKey = string(secretAccessKey)
 
-	auth.SetAuthConfigPath(filepath.Join(root, "users.json"))
+	auth.SetAuthConfigPath(root)
 	perr = auth.SaveConfig(authConf)
 	c.Assert(perr, IsNil)
 

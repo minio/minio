@@ -17,6 +17,7 @@
 package auth
 
 import (
+	"os"
 	"os/user"
 	"path/filepath"
 
@@ -37,7 +38,7 @@ type Config struct {
 	Users   map[string]*User
 }
 
-// getAuthConfigPath get donut config file path
+// getAuthConfigPath get users config path
 func getAuthConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
@@ -46,8 +47,49 @@ func getAuthConfigPath() (string, *probe.Error) {
 	if err != nil {
 		return "", probe.NewError(err)
 	}
-	authConfigPath := filepath.Join(u.HomeDir, ".minio", "users.json")
+	authConfigPath := filepath.Join(u.HomeDir, ".minio")
 	return authConfigPath, nil
+}
+
+// createAuthConfigPath create users config path
+func createAuthConfigPath() *probe.Error {
+	authConfigPath, err := getAuthConfigPath()
+	if err != nil {
+		return err.Trace()
+	}
+	if err := os.MkdirAll(authConfigPath, 0700); err != nil {
+		return probe.NewError(err)
+	}
+	return nil
+}
+
+// isAuthConfigFileExists is auth config file exists?
+func isAuthConfigFileExists() bool {
+	if _, err := os.Stat(mustGetAuthConfigFile()); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		panic(err)
+	}
+	return true
+}
+
+// mustGetAuthConfigFile always get users config file, if not panic
+func mustGetAuthConfigFile() string {
+	authConfigFile, err := getAuthConfigFile()
+	if err != nil {
+		panic(err)
+	}
+	return authConfigFile
+}
+
+// getAuthConfigFile get users config file
+func getAuthConfigFile() (string, *probe.Error) {
+	authConfigPath, err := getAuthConfigPath()
+	if err != nil {
+		return "", err.Trace()
+	}
+	return filepath.Join(authConfigPath, "users.json"), nil
 }
 
 // customConfigPath not accessed from outside only allowed through get/set methods
@@ -58,9 +100,9 @@ func SetAuthConfigPath(configPath string) {
 	customConfigPath = configPath
 }
 
-// SaveConfig save donut config
+// SaveConfig save auth config
 func SaveConfig(a *Config) *probe.Error {
-	authConfigPath, err := getAuthConfigPath()
+	authConfigFile, err := getAuthConfigFile()
 	if err != nil {
 		return err.Trace()
 	}
@@ -68,17 +110,20 @@ func SaveConfig(a *Config) *probe.Error {
 	if err != nil {
 		return err.Trace()
 	}
-	if err := qc.Save(authConfigPath); err != nil {
+	if err := qc.Save(authConfigFile); err != nil {
 		return err.Trace()
 	}
 	return nil
 }
 
-// LoadConfig load donut config
+// LoadConfig load auth config
 func LoadConfig() (*Config, *probe.Error) {
-	authConfigPath, err := getAuthConfigPath()
+	authConfigFile, err := getAuthConfigFile()
 	if err != nil {
 		return nil, err.Trace()
+	}
+	if _, err := os.Stat(authConfigFile); err != nil {
+		return nil, probe.NewError(err)
 	}
 	a := &Config{}
 	a.Version = "0.0.1"
@@ -87,7 +132,7 @@ func LoadConfig() (*Config, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
-	if err := qc.Load(authConfigPath); err != nil {
+	if err := qc.Load(authConfigFile); err != nil {
 		return nil, err.Trace()
 	}
 	return qc.Data().(*Config), nil

@@ -18,7 +18,8 @@ package rpc
 
 import (
 	"net/http"
-	"time"
+
+	"github.com/minio/minio/pkg/version"
 )
 
 // Args basic json RPC params
@@ -29,7 +30,7 @@ type Args struct {
 // VersionReply version reply
 type VersionReply struct {
 	Version   string `json:"version"`
-	BuildDate string `json:"build-date"`
+	BuildDate string `json:"buildDate"`
 }
 
 // VersionService -
@@ -38,8 +39,9 @@ type VersionService struct{}
 func getVersion() string {
 	return "0.0.1"
 }
+
 func getBuildDate() string {
-	return time.Now().UTC().Format(http.TimeFormat)
+	return version.Version
 }
 
 func setVersionReply(reply *VersionReply) {
