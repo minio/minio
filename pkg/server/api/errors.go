@@ -69,38 +69,39 @@ const (
 	MethodNotAllowed
 	InvalidPart
 	InvalidPartOrder
+	AuthorizationHeaderMalformed
 )
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 29
+	NotAcceptable = iota + 30
 )
 
 // Error code to Error structure map
 var errorCodeResponse = map[int]Error{
 	InvalidMaxUploads: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxUploads must be an integer between 0 and 2147483647",
+		Description:    "Argument maxUploads must be an integer between 0 and 2147483647.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidMaxKeys: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxKeys must be an integer between 0 and 2147483647",
+		Description:    "Argument maxKeys must be an integer between 0 and 2147483647.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidMaxParts: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxParts must be an integer between 1 and 10000",
+		Description:    "Argument maxParts must be an integer between 1 and 10000.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidPartNumberMarker: {
 		Code:           "InvalidArgument",
-		Description:    "Argument partNumberMarker must be an integer",
+		Description:    "Argument partNumberMarker must be an integer.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	AccessDenied: {
 		Code:           "AccessDenied",
-		Description:    "Access Denied",
+		Description:    "Access Denied.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	BadDigest: {
@@ -125,7 +126,7 @@ var errorCodeResponse = map[int]Error{
 	},
 	IncompleteBody: {
 		Code:           "IncompleteBody",
-		Description:    "You did not provide the number of bytes specified by the Content-Length HTTP header",
+		Description:    "You did not provide the number of bytes specified by the Content-Length HTTP header.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InternalError: {
@@ -215,12 +216,17 @@ var errorCodeResponse = map[int]Error{
 	},
 	InvalidPart: {
 		Code:           "InvalidPart",
-		Description:    "One or more of the specified parts could not be found",
+		Description:    "One or more of the specified parts could not be found.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidPartOrder: {
 		Code:           "InvalidPartOrder",
 		Description:    "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	AuthorizationHeaderMalformed: {
+		Code:           "AuthorizationHeaderMalformed",
+		Description:    "The authorization header is malformed; the region is wrong; expecting 'milkyway'.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 }

@@ -29,35 +29,35 @@ func (api Minio) isValidOp(w http.ResponseWriter, req *http.Request, acceptsCont
 	bucket := vars["bucket"]
 
 	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket, nil)
-	if err == nil {
-		if _, err := StripAccessKeyID(req.Header.Get("Authorization")); err != nil {
-			if bucketMetadata.ACL.IsPrivate() {
-				return true
-				//uncomment this when we have webcli
-				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-				//return false
-			}
-			if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
-				return true
-				//uncomment this when we have webcli
-				//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
-				//return false
-			}
+	if err != nil {
+		switch err.ToGoError().(type) {
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			return false
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			return false
+		default:
+			// log.Error.Println(err.Trace())
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			return false
 		}
-		return true
 	}
-	switch err.ToGoError().(type) {
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-		return false
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-		return false
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-		return false
+	if _, err = stripAccessKeyID(req.Header.Get("Authorization")); err != nil {
+		if bucketMetadata.ACL.IsPrivate() {
+			return true
+			//uncomment this when we have webcli
+			//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			//return false
+		}
+		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
+			return true
+			//uncomment this when we have webcli
+			//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			//return false
+		}
 	}
+	return true
 }
 
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
@@ -98,7 +98,7 @@ func (api Minio) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Re
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -169,7 +169,7 @@ func (api Minio) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -230,7 +230,7 @@ func (api Minio) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -296,7 +296,7 @@ func (api Minio) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -364,7 +364,7 @@ func (api Minio) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
@@ -414,7 +414,7 @@ func (api Minio) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
-		signature, err = InitSignatureV4(req)
+		signature, err = initSignatureV4(req)
 		if err != nil {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
