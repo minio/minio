@@ -104,6 +104,7 @@ func (s *MySuite) TestAuth(c *C) {
 	c.Assert(reply, Not(DeepEquals), rpc.AuthReply{})
 	c.Assert(len(reply.AccessKeyID), Equals, 20)
 	c.Assert(len(reply.SecretAccessKey), Equals, 40)
+	c.Assert(len(reply.Name), Not(Equals), 0)
 
 	op = rpc.Operation{
 		Method:  "Auth.Fetch",
@@ -122,6 +123,7 @@ func (s *MySuite) TestAuth(c *C) {
 	c.Assert(newReply, Not(DeepEquals), rpc.AuthReply{})
 	c.Assert(reply.AccessKeyID, Equals, newReply.AccessKeyID)
 	c.Assert(reply.SecretAccessKey, Equals, newReply.SecretAccessKey)
+	c.Assert(len(reply.Name), Not(Equals), 0)
 
 	op = rpc.Operation{
 		Method:  "Auth.Reset",
@@ -140,4 +142,31 @@ func (s *MySuite) TestAuth(c *C) {
 	c.Assert(newReply, Not(DeepEquals), rpc.AuthReply{})
 	c.Assert(reply.AccessKeyID, Not(Equals), resetReply.AccessKeyID)
 	c.Assert(reply.SecretAccessKey, Not(Equals), resetReply.SecretAccessKey)
+	c.Assert(len(reply.Name), Not(Equals), 0)
+
+	// these operations should fail
+
+	/// generating access for existing user fails
+	op = rpc.Operation{
+		Method:  "Auth.Generate",
+		Request: rpc.AuthArgs{User: "newuser"},
+	}
+	req, err = rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err = req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusBadRequest)
+
+	/// null user provided invalid
+	op = rpc.Operation{
+		Method:  "Auth.Generate",
+		Request: rpc.AuthArgs{User: ""},
+	}
+	req, err = rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err = req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusBadRequest)
 }
