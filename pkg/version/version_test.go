@@ -14,36 +14,24 @@
  * limitations under the License.
  */
 
-package main
+package version_test
 
 import (
-	"net/http"
+	"testing"
 	"time"
 
-	"github.com/minio/cli"
 	"github.com/minio/minio/pkg/version"
+
+	. "gopkg.in/check.v1"
 )
 
-var versionCmd = cli.Command{
-	Name:   "version",
-	Usage:  "Print version",
-	Action: mainVersion,
-	CustomHelpTemplate: `NAME:
-   mc {{.Name}} - {{.Usage}}
+func Test(t *testing.T) { TestingT(t) }
 
-USAGE:
-   mc {{.Name}} {{if .Description}}
+type MySuite struct{}
 
-EXAMPLES:
+var _ = Suite(&MySuite{})
 
-`,
-}
-
-func mainVersion(ctxx *cli.Context) {
-	t, _ := time.Parse(time.RFC3339Nano, version.Version)
-	if t.IsZero() {
-		Println("")
-		return
-	}
-	Println(t.Format(http.TimeFormat))
+func (s *MySuite) TestVersion(c *C) {
+	_, err := time.Parse(version.Version, time.RFC3339Nano)
+	c.Assert(err, NotNil)
 }

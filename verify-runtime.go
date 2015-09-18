@@ -44,12 +44,12 @@ func getNormalizedGolangVersion() string {
 	return version
 }
 
-type version struct {
+type golangVersion struct {
 	major, minor, patch string
 }
 
-func newVersion(v string) version {
-	ver := version{}
+func newVersion(v string) golangVersion {
+	ver := golangVersion{}
 	verSlice := strings.Split(v, ".")
 	if len(verSlice) < 2 {
 		Fatalln("Version string missing major and minor versions, cannot proceed exiting.")
@@ -67,11 +67,11 @@ func newVersion(v string) version {
 	return ver
 }
 
-func (v1 version) String() string {
+func (v1 golangVersion) String() string {
 	return fmt.Sprintf("%s%s%s", v1.major, v1.minor, v1.patch)
 }
 
-func (v1 version) Version() int {
+func (v1 golangVersion) Version() int {
 	ver, e := strconv.Atoi(v1.String())
 	if e != nil {
 		Fatalln("Unable to parse version string.")
@@ -79,7 +79,7 @@ func (v1 version) Version() int {
 	return ver
 }
 
-func (v1 version) LessThan(v2 version) bool {
+func (v1 golangVersion) LessThan(v2 golangVersion) bool {
 	if v1.Version() < v2.Version() {
 		return true
 	}
