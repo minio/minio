@@ -39,7 +39,10 @@ cyclo:
 build: getdeps verifiers
 	@echo "Installing minio:"
 	@GO15VENDOREXPERIMENT=1 go generate ./...
-	@GO15VENDOREXPERIMENT=1 go test -race github.com/minio/minio/pkg...
+
+test: build
+	@echo "Running all testing:"
+	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
 	@GO15VENDOREXPERIMENT=1 go install github.com/minio/minio
