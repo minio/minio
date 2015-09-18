@@ -23,6 +23,8 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
+const tb = (1024 * 1024 * 1024 * 1024)
+
 // DonutService donut service
 type DonutService struct{}
 
@@ -59,5 +61,30 @@ func (s *DonutService) Set(r *http.Request, args *DonutArgs, reply *Reply) error
 	if err := setDonut(args, reply); err != nil {
 		return probe.WrapError(err)
 	}
+	return nil
+}
+
+type BucketStorage struct {
+	Name string `json:"name"`
+	Used uint64 `json:"used"`
+}
+
+type StorageStatsReply struct {
+	Buckets []BucketStorage `json:"buckets"`
+}
+
+func (s *DonutService) StorageStats(r *http.Request, args *DonutArgs, reply *StorageStatsReply) error {
+	reply.Buckets = []BucketStorage{{"bucket1", 4 * tb}, {"bucket2", 120 * tb}, {"bucket3", 45 * tb}}
+	return nil
+}
+
+type RebalanceStatsReply struct {
+	Inprogress []string `json:"inprogress"`
+	Done       []string `json:"done"`
+}
+
+func (s *DonutService) RebalaceStats(r *http.Request, args *DonutArgs, reply *RebalanceStatsReply) error {
+	reply.Inprogress = []string{"bucket1/obj1", "bucket2/obj2", "bucket3/obj3"}
+	reply.Done = []string{"bucket1/rebobj1", "bucket2/rebobj2", "bucket3/rebobj3"}
 	return nil
 }
