@@ -15,6 +15,7 @@
  */
 
 package main
+<<<<<<< HEAD
 
 import (
 	"crypto/tls"
@@ -127,3 +128,5 @@ func StartServer(conf APIConfig) *probe.Error {
 	}
 	return nil
 }
+=======
+>>>>>>> Consolidating more codebase and cleanup in server / controller

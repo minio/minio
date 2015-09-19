@@ -18,7 +18,6 @@ package main
 
 import (
 	"net/http"
-	"sort"
 
 	"github.com/minio/minio/pkg/donut"
 )
@@ -55,13 +54,6 @@ func generateListBucketsResponse(buckets []donut.BucketMetadata) ListBucketsResp
 	return data
 }
 
-// itemKey
-type itemKey []*Object
-
-func (b itemKey) Len() int           { return len(b) }
-func (b itemKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b itemKey) Less(i, j int) bool { return b[i].Key < b[j].Key }
-
 // takes a set of objects and prepares the objects for serialization
 // input:
 // bucket name
@@ -92,7 +84,6 @@ func generateListObjectsResponse(bucket string, objects []donut.ObjectMetadata, 
 		content.Owner = owner
 		contents = append(contents, content)
 	}
-	sort.Sort(itemKey(contents))
 	// TODO - support EncodingType in xml decoding
 	data.Name = bucket
 	data.Contents = contents
@@ -201,7 +192,7 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int,
 	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedErrorResponse))
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
-	// HEAD should have no body
+	// HEAD should have no body, do not attempt to write to it
 	if req.Method != "HEAD" {
 		// write error body
 		w.Write(encodedErrorResponse)

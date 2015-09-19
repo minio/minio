@@ -16,7 +16,18 @@
 
 package main
 
-import "github.com/minio/cli"
+import (
+	"crypto/tls"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/minhttp"
+	"github.com/minio/minio/pkg/probe"
+)
 
 var serverCmd = cli.Command{
 	Name:   "server",
@@ -35,21 +46,106 @@ EXAMPLES:
 `,
 }
 
-func getServerConfig(c *cli.Context) APIConfig {
+// apiConfig - http server config
+type apiConfig struct {
+	Address   string
+	TLS       bool
+	CertFile  string
+	KeyFile   string
+	RateLimit int
+}
+
+// getAPI server instance
+func getAPIServer(conf apiConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
+	// Minio server config
+	httpServer := &http.Server{
+		Addr:           conf.Address,
+		Handler:        apiHandler,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	if conf.TLS {
+		var err error
+		httpServer.TLSConfig = &tls.Config{}
+		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+	}
+
+	host, port, err := net.SplitHostPort(conf.Address)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	var hosts []string
+	switch {
+	case host != "":
+		hosts = append(hosts, host)
+	default:
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				host := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(host); ip.To4() != nil {
+					hosts = append(hosts, host)
+				}
+			}
+		}
+	}
+
+	for _, host := range hosts {
+		if conf.TLS {
+			fmt.Printf("Starting minio server on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
+		} else {
+			fmt.Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
+		}
+
+	}
+	return httpServer, nil
+}
+
+// Start ticket master
+func startTM(a MinioAPI) {
+	for {
+		for op := range a.OP {
+			op.ProceedCh <- struct{}{}
+		}
+	}
+}
+
+// startServer starts an s3 compatible cloud storage server
+func startServer(conf apiConfig) *probe.Error {
+	apiHandler, minioAPI := getAPIHandler()
+	apiServer, err := getAPIServer(conf, apiHandler)
+	if err != nil {
+		return err.Trace()
+	}
+	// start ticket master
+	go startTM(minioAPI)
+	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer); err != nil {
+		return err.Trace()
+	}
+	return nil
+}
+
+func getServerConfig(c *cli.Context) apiConfig {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
-
-	return APIConfig{
-		Address:    c.GlobalString("address"),
-		AddressRPC: c.GlobalString("address-rpcserver"),
-		TLS:        tls,
-		CertFile:   certFile,
-		KeyFile:    keyFile,
-		RateLimit:  c.GlobalInt("ratelimit"),
+	return apiConfig{
+		Address:   c.GlobalString("address"),
+		TLS:       tls,
+		CertFile:  certFile,
+		KeyFile:   keyFile,
+		RateLimit: c.GlobalInt("ratelimit"),
 	}
 }
 
@@ -59,6 +155,6 @@ func serverMain(c *cli.Context) {
 	}
 
 	apiServerConfig := getServerConfig(c)
-	err := StartServer(apiServerConfig)
+	err := startServer(apiServerConfig)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }
