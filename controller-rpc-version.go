@@ -17,10 +17,29 @@
 package main
 
 import (
-	"testing"
-
-	. "gopkg.in/check.v1"
+	"net/http"
+	"runtime"
 )
 
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+// VersionArgs basic json RPC params
+type VersionArgs struct{}
+
+// VersionService get version service
+type VersionService struct{}
+
+// VersionReply version reply
+type VersionReply struct {
+	Version         string `json:"version"`
+	BuildDate       string `json:"buildDate"`
+	Architecture    string `json:"arch"`
+	OperatingSystem string `json:"os"`
+}
+
+// Get version
+func (v *VersionService) Get(r *http.Request, args *VersionArgs, reply *VersionReply) error {
+	reply.Version = "0.0.1"
+	reply.BuildDate = minioVersion
+	reply.Architecture = runtime.GOARCH
+	reply.OperatingSystem = runtime.GOOS
+	return nil
+}

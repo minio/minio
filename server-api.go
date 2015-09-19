@@ -16,30 +16,28 @@
 
 package main
 
-import "github.com/minio/cli"
+import "github.com/minio/minio/pkg/donut"
 
-var controllerCmd = cli.Command{
-	Name:   "controller",
-	Usage:  "Start minio controller",
-	Action: controllerMain,
-	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Description}}
-
-USAGE:
-  minio {{.Name}}
-
-EXAMPLES:
-  1. Start minio controller
-      $ minio {{.Name}}
-
-`,
+// APIOperation container for individual operations read by Ticket Master
+type APIOperation struct {
+	ProceedCh chan struct{}
 }
 
-func controllerMain(c *cli.Context) {
-	if c.Args().Present() {
-		cli.ShowCommandHelpAndExit(c, "controller", 1)
-	}
+// MinioAPI container for API and also carries OP (operation) channel
+type MinioAPI struct {
+	OP    chan APIOperation
+	Donut donut.Interface
+}
 
-	err := StartController()
-	errorIf(err.Trace(), "Failed to start minio controller.", nil)
+// NewAPI instantiate a new minio API
+func NewAPI() MinioAPI {
+	// ignore errors for now
+	d, err := donut.New()
+	if err != nil {
+		panic(err)
+	}
+	return MinioAPI{
+		OP:    make(chan APIOperation),
+		Donut: d,
+	}
 }

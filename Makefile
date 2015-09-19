@@ -34,7 +34,8 @@ lint:
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 gocyclo -over 25 .
+	@GO15VENDOREXPERIMENT=1 gocyclo -over 25 *.go
+	@GO15VENDOREXPERIMENT=1 gocyclo -over 25 pkg
 
 build: getdeps verifiers
 	@echo "Installing minio:"
@@ -42,6 +43,7 @@ build: getdeps verifiers
 
 test: build
 	@echo "Running all testing:"
+	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
