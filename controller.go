@@ -28,7 +28,7 @@ import (
 )
 
 // getRPCServer instance
-func getRPCServer(rpcHandler http.Handler) (*http.Server, *probe.Error) {
+func getControllerRPCServer(rpcHandler http.Handler) (*http.Server, *probe.Error) {
 	// Minio server config
 	httpServer := &http.Server{
 		Addr:           ":9001", // TODO make this configurable
@@ -56,7 +56,7 @@ func getRPCServer(rpcHandler http.Handler) (*http.Server, *probe.Error) {
 
 // StartController starts a minio controller
 func StartController() *probe.Error {
-	rpcServer, err := getRPCServer(getRPCHandler())
+	rpcServer, err := getControllerRPCServer(getRPCCtrlHandler())
 	if err != nil {
 		return err.Trace()
 	}

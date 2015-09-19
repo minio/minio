@@ -91,6 +91,7 @@ func registerApp() *cli.App {
 	registerFlag(certFlag)
 	registerFlag(keyFlag)
 	registerFlag(debugFlag)
+	registerFlag(addressRPCServerFlag)
 
 	// set up app
 	app := cli.NewApp()

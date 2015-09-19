@@ -1,3 +1,5 @@
+// +build ignore
+
 /*
  * Minio Cloud Storage, (C) 2014 Minio, Inc.
  *
@@ -38,7 +40,7 @@ func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 	auth.SetAuthConfigPath(root)
 
-	testRPCServer = httptest.NewServer(getRPCHandler())
+	testRPCServer = httptest.NewServer(getRPCCtrlHandler())
 }
 
 func (s *ControllerRPCSuite) TearDownSuite(c *C) {
@@ -48,7 +50,7 @@ func (s *ControllerRPCSuite) TearDownSuite(c *C) {
 func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	op := rpcOperation{
 		Method:  "Server.MemStats",
-		Request: ServerArgs{},
+		Request: ServerArg{},
 	}
 	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -57,16 +59,16 @@ func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var reply MemStatsReply
+	var reply MemStatsRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), MemStatsReply{})
+	c.Assert(reply, Not(DeepEquals), MemStatsRep{})
 }
 
 func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	op := rpcOperation{
 		Method:  "Server.SysInfo",
-		Request: ServerArgs{},
+		Request: ServerArg{},
 	}
 	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -75,16 +77,16 @@ func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var reply SysInfoReply
+	var reply SysInfoRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), SysInfoReply{})
+	c.Assert(reply, Not(DeepEquals), SysInfoRep{})
 }
 
 func (s *ControllerRPCSuite) TestServerList(c *C) {
 	op := rpcOperation{
 		Method:  "Server.List",
-		Request: ServerArgs{},
+		Request: ServerArg{},
 	}
 	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -93,16 +95,16 @@ func (s *ControllerRPCSuite) TestServerList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var reply ServerListReply
+	var reply ServerListRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), ServerListReply{})
+	c.Assert(reply, Not(DeepEquals), ServerListRep{})
 }
 
 func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	op := rpcOperation{
 		Method:  "Server.Add",
-		Request: ServerArgs{MinioServers: []MinioServer{}},
+		Request: ServerArg{},
 	}
 	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -111,10 +113,10 @@ func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var reply ServerAddReply
+	var reply DefaultRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), ServerAddReply{ServersAdded: []MinioServer{}})
+	c.Assert(reply, Not(DeepEquals), DefaultRep{0, "Added"})
 }
 
 func (s *ControllerRPCSuite) TestAuth(c *C) {

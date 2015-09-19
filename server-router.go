@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	jsonrpc "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
 )
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -69,4 +71,13 @@ func getAPIHandler(conf APIConfig) (http.Handler, MinioAPI) {
 	registerAPI(mux, minioAPI)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler, minioAPI
+}
+
+func getRPCServerHandler() http.Handler {
+	s := jsonrpc.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
+	s.RegisterService(new(serverServerService), "Server")
+	mux := router.NewRouter()
+	mux.Handle("/rpc", s)
+	return mux
 }

@@ -28,28 +28,20 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// getAPI server instance
-func getAPIServer(conf APIConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
-	// Minio server config
-	httpServer := &http.Server{
-		Addr:           conf.Address,
-		Handler:        apiHandler,
-		MaxHeaderBytes: 1 << 20,
-	}
-
+func configureServer(conf APIConfig, httpServer *http.Server) *probe.Error {
 	if conf.TLS {
 		var err error
 		httpServer.TLSConfig = &tls.Config{}
 		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
 		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
-			return nil, probe.NewError(err)
+			return probe.NewError(err)
 		}
 	}
 
 	host, port, err := net.SplitHostPort(conf.Address)
 	if err != nil {
-		return nil, probe.NewError(err)
+		return probe.NewError(err)
 	}
 
 	var hosts []string
@@ -59,7 +51,7 @@ func getAPIServer(conf APIConfig, apiHandler http.Handler) (*http.Server, *probe
 	default:
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
-			return nil, probe.NewError(err)
+			return probe.NewError(err)
 		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
@@ -77,7 +69,20 @@ func getAPIServer(conf APIConfig, apiHandler http.Handler) (*http.Server, *probe
 		} else {
 			fmt.Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
 		}
+	}
+	return nil
+}
 
+// getAPI server instance
+func getAPIServer(conf APIConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
+	// Minio server config
+	httpServer := &http.Server{
+		Addr:           conf.Address,
+		Handler:        apiHandler,
+		MaxHeaderBytes: 1 << 20,
+	}
+	if err := configureServer(conf, httpServer); err != nil {
+		return nil, err
 	}
 	return httpServer, nil
 }
@@ -91,7 +96,19 @@ func startTM(a MinioAPI) {
 	}
 }
 
-// StartServer starts an s3 compatible cloud storage server
+func getServerRPCServer(conf APIConfig, handler http.Handler) (*http.Server, *probe.Error) {
+	httpServer := &http.Server{
+		Addr:           conf.AddressRPC,
+		Handler:        handler,
+		MaxHeaderBytes: 1 << 20,
+	}
+	if err := configureServer(conf, httpServer); err != nil {
+		return nil, err
+	}
+	return httpServer, nil
+}
+
+// Start starts a s3 compatible cloud storage server
 func StartServer(conf APIConfig) *probe.Error {
 	apiHandler, minioAPI := getAPIHandler(conf)
 	apiServer, err := getAPIServer(conf, apiHandler)
@@ -100,7 +117,12 @@ func StartServer(conf APIConfig) *probe.Error {
 	}
 	// start ticket master
 	go startTM(minioAPI)
-	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer); err != nil {
+	rpcHandler := getRPCServerHandler()
+	rpcServer, err := getServerRPCServer(conf, rpcHandler)
+	if err != nil {
+		return err.Trace()
+	}
+	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer, rpcServer); err != nil {
 		return err.Trace()
 	}
 	return nil

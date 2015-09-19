@@ -25,13 +25,13 @@ import (
 )
 
 // getRPCHandler rpc handler
-func getRPCHandler() http.Handler {
+func getRPCCtrlHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
 	s.RegisterService(new(VersionService), "Version")
 	s.RegisterService(new(DonutService), "Donut")
 	s.RegisterService(new(AuthService), "Auth")
-	s.RegisterService(new(ServerService), "Server")
+	s.RegisterService(new(controllerServerRPCService), "Server")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
 }
