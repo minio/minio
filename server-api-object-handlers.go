@@ -59,41 +59,41 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
-	if err == nil {
-		var hrange *httpRange
-		hrange, err = getRequestedRange(req.Header.Get("Range"), metadata.Size)
-		if err != nil {
-			writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
-			return
-		}
-		setObjectHeaders(w, metadata, hrange)
-		if _, err = api.Donut.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
-			// unable to write headers, we've already printed data. Just close the connection.
-			// log.Error.Println(err.Trace())
-			return
+	if err != nil {
+		errorIf(err.Trace(), "GetObject failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		case donut.ObjectNotFound:
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		case donut.ObjectNameInvalid:
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	case donut.ObjectNotFound:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-	case donut.ObjectNameInvalid:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+	var hrange *httpRange
+	hrange, err = getRequestedRange(req.Header.Get("Range"), metadata.Size)
+	if err != nil {
+		writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
+		return
+	}
+	setObjectHeaders(w, metadata, hrange)
+	if _, err = api.Donut.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
+		errorIf(err.Trace(), "GetObject failed.", nil)
+		return
 	}
 }
 
@@ -126,32 +126,33 @@ func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) 
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
-	if err == nil {
-		setObjectHeaders(w, metadata, nil)
-		w.WriteHeader(http.StatusOK)
+	if err != nil {
+		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		case donut.ObjectNotFound:
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		case donut.ObjectNameInvalid:
+			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	case donut.ObjectNotFound:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-	case donut.ObjectNameInvalid:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	setObjectHeaders(w, metadata, nil)
+	w.WriteHeader(http.StatusOK)
 }
 
 // PutObjectHandler - PUT Object
@@ -220,40 +221,41 @@ func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	metadata, err := api.Donut.CreateObject(bucket, object, md5, sizeInt64, req.Body, nil, signature)
-	if err == nil {
-		w.Header().Set("ETag", metadata.MD5Sum)
-		writeSuccessResponse(w, acceptsContentType)
+	if err != nil {
+		errorIf(err.Trace(), "CreateObject failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		case donut.ObjectExists:
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		case donut.BadDigest:
+			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+		case donut.MissingDateHeader:
+			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.IncompleteBody:
+			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+		case donut.EntityTooLarge:
+			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		case donut.InvalidDigest:
+			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	case donut.ObjectExists:
-		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-	case donut.BadDigest:
-		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-	case donut.MissingDateHeader:
-		writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.IncompleteBody:
-		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
-	case donut.EntityTooLarge:
-		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
-	case donut.InvalidDigest:
-		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	w.Header().Set("ETag", metadata.MD5Sum)
+	writeSuccessResponse(w, acceptsContentType)
 }
 
 /// Multipart API
@@ -290,30 +292,32 @@ func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.R
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	uploadID, err := api.Donut.NewMultipartUpload(bucket, object, req.Header.Get("Content-Type"), signature)
-	if err == nil {
-		response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+	if err != nil {
+		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.ObjectExists:
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.ObjectExists:
-		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+
+	response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
+	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	// write headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	// write body
+	w.Write(encodedSuccessResponse)
 }
 
 // PutObjectPartHandler - Upload part
@@ -375,6 +379,7 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 		partID, err = strconv.Atoi(partIDString)
 		if err != nil {
 			writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
+			return
 		}
 	}
 
@@ -384,36 +389,37 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	calculatedMD5, err := api.Donut.CreateObjectPart(bucket, object, uploadID, partID, "", md5, sizeInt64, req.Body, signature)
-	if err == nil {
-		w.Header().Set("ETag", calculatedMD5)
-		writeSuccessResponse(w, acceptsContentType)
+	if err != nil {
+		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.InvalidUploadID:
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		case donut.ObjectExists:
+			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		case donut.BadDigest:
+			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.IncompleteBody:
+			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+		case donut.EntityTooLarge:
+			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		case donut.InvalidDigest:
+			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-	case donut.ObjectExists:
-		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
-	case donut.BadDigest:
-		writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.IncompleteBody:
-		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
-	case donut.EntityTooLarge:
-		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
-	case donut.InvalidDigest:
-		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	w.Header().Set("ETag", calculatedMD5)
+	writeSuccessResponse(w, acceptsContentType)
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
@@ -444,26 +450,27 @@ func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	err := api.Donut.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, signature)
-	if err == nil {
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
-		w.WriteHeader(http.StatusNoContent)
+	if err != nil {
+		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.InvalidUploadID:
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ListObjectPartsHandler - List object parts
@@ -505,30 +512,31 @@ func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Requ
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	objectResourcesMetadata, err := api.Donut.ListObjectParts(bucket, object, objectResourcesMetadata, signature)
-	if err == nil {
-		response := generateListPartsResponse(objectResourcesMetadata)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+	if err != nil {
+		errorIf(err.Trace(), "ListObjectParts failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.InvalidUploadID:
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	response := generateListPartsResponse(objectResourcesMetadata)
+	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	// write headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	// write body
+	w.Write(encodedSuccessResponse)
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
@@ -559,39 +567,40 @@ func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *h
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 	metadata, err := api.Donut.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, req.Body, signature)
-	if err == nil {
-		response := generateCompleteMultpartUploadResponse(bucket, object, "", metadata.MD5Sum)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+	if err != nil {
+		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.InvalidUploadID:
+			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+		case donut.InvalidPart:
+			writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
+		case donut.InvalidPartOrder:
+			writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
+		case donut.MissingDateHeader:
+			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.IncompleteBody:
+			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+		case donut.MalformedXML:
+			writeErrorResponse(w, req, MalformedXML, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.InvalidUploadID:
-		writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
-	case donut.InvalidPart:
-		writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
-	case donut.InvalidPartOrder:
-		writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
-	case donut.MissingDateHeader:
-		writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.IncompleteBody:
-		writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
-	case donut.MalformedXML:
-		writeErrorResponse(w, req, MalformedXML, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	response := generateCompleteMultpartUploadResponse(bucket, object, "", metadata.MD5Sum)
+	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	// write headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	// write body
+	w.Write(encodedSuccessResponse)
 }
 
 /// Delete API
