@@ -51,7 +51,7 @@ func (s *MyAPIDonutCacheSuite) SetUpSuite(c *C) {
 	perr := donut.SaveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	httpHandler, minioAPI := getAPIHandler(APIConfig{RateLimit: 16})
+	httpHandler, minioAPI := getAPIHandler()
 	go startTM(minioAPI)
 	testAPIDonutCacheServer = httptest.NewServer(httpHandler)
 }
