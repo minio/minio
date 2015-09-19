@@ -30,6 +30,7 @@ func (api MinioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsC
 
 	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket, nil)
 	if err != nil {
+		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
 		case donut.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
@@ -38,7 +39,6 @@ func (api MinioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsC
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
 			return false
 		default:
-			// log.Error.Println(err.Trace())
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return false
 		}
@@ -100,31 +100,32 @@ func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	resources, err := api.Donut.ListMultipartUploads(bucket, resources, signature)
-	if err == nil {
-		// generate response
-		response := generateListMultipartUploadsResponse(bucket, resources)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
-		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+	if err != nil {
+		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	// generate response
+	response := generateListMultipartUploadsResponse(bucket, resources)
+	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	// write headers
+	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	// write body
+	w.Write(encodedSuccessResponse)
 }
 
 // ListObjectsHandler - GET Bucket (List Objects)
@@ -171,6 +172,7 @@ func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request)
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
@@ -199,7 +201,7 @@ func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request)
 	case donut.ObjectNameInvalid:
 		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
 	default:
-		// log.Error.Println(err.Trace())
+		errorIf(err.Trace(), "ListObjects failed.", nil)
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -232,6 +234,7 @@ func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request)
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
@@ -252,7 +255,7 @@ func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request)
 	case donut.SignatureDoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	default:
-		// log.Error.Println(err.Trace())
+		errorIf(err.Trace(), "ListBuckets failed.", nil)
 		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 	}
 }
@@ -298,6 +301,7 @@ func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
@@ -314,25 +318,25 @@ func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	err := api.Donut.MakeBucket(bucket, getACLTypeString(aclType), req.Body, signature)
-	if err == nil {
-		// Make sure to add Location information here only for bucket
-		w.Header().Set("Location", "/"+bucket)
-		writeSuccessResponse(w, acceptsContentType)
+	if err != nil {
+		errorIf(err.Trace(), "MakeBucket failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.TooManyBuckets:
+			writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		case donut.BucketExists:
+			writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.TooManyBuckets:
-		writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	case donut.BucketExists:
-		writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	// Make sure to add Location information here only for bucket
+	w.Header().Set("Location", "/"+bucket)
+	writeSuccessResponse(w, acceptsContentType)
 }
 
 // PutBucketACLHandler - PUT Bucket ACL
@@ -366,27 +370,28 @@ func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	err := api.Donut.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)}, signature)
-	if err == nil {
-		writeSuccessResponse(w, acceptsContentType)
+	if err != nil {
+		errorIf(err.Trace(), "PutBucketACL failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	writeSuccessResponse(w, acceptsContentType)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -416,25 +421,26 @@ func (api MinioAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) 
 		var err *probe.Error
 		signature, err = initSignatureV4(req)
 		if err != nil {
+			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
 	}
 
 	_, err := api.Donut.GetBucketMetadata(bucket, signature)
-	if err == nil {
-		writeSuccessResponse(w, acceptsContentType)
+	if err != nil {
+		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.SignatureDoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		}
 		return
 	}
-	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
-	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
-	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
-	default:
-		// log.Error.Println(err.Trace())
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
-	}
+	writeSuccessResponse(w, acceptsContentType)
 }

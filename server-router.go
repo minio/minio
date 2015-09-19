@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/donut"
 )
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -53,8 +54,31 @@ func registerCustomMiddleware(mux *router.Router, mwHandlers ...MiddlewareHandle
 	return f
 }
 
+// APIOperation container for individual operations read by Ticket Master
+type APIOperation struct {
+	ProceedCh chan struct{}
+}
+
+// MinioAPI container for API and also carries OP (operation) channel
+type MinioAPI struct {
+	OP    chan APIOperation
+	Donut donut.Interface
+}
+
+// getNewAPI instantiate a new minio API
+func getNewAPI() MinioAPI {
+	// ignore errors for now
+	d, err := donut.New()
+	fatalIf(err.Trace(), "Instantiating donut failed.", nil)
+
+	return MinioAPI{
+		OP:    make(chan APIOperation),
+		Donut: d,
+	}
+}
+
 // getAPIHandler api handler
-func getAPIHandler(conf APIConfig) (http.Handler, MinioAPI) {
+func getAPIHandler() (http.Handler, MinioAPI) {
 	var mwHandlers = []MiddlewareHandler{
 		ValidContentTypeHandler,
 		TimeValidityHandler,
@@ -65,7 +89,7 @@ func getAPIHandler(conf APIConfig) (http.Handler, MinioAPI) {
 	}
 
 	mux := router.NewRouter()
-	minioAPI := NewAPI()
+	minioAPI := getNewAPI()
 	registerAPI(mux, minioAPI)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler, minioAPI
