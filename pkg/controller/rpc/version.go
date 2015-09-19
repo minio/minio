@@ -19,8 +19,6 @@ package rpc
 import (
 	"net/http"
 	"runtime"
-
-	"github.com/minio/minio/pkg/version"
 )
 
 // VersionArgs basic json RPC params
@@ -40,7 +38,8 @@ type VersionReply struct {
 // Get version
 func (v *VersionService) Get(r *http.Request, args *VersionArgs, reply *VersionReply) error {
 	reply.Version = "0.0.1"
-	reply.BuildDate = version.Version
+	//TODO: Better approach needed here to pass global states like version. --ab.
+	//	reply.BuildDate = version.Version
 	reply.Architecture = runtime.GOARCH
 	reply.OperatingSystem = runtime.GOOS
 	return nil
