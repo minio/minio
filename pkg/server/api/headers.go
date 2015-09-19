@@ -22,11 +22,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
-	"runtime"
 	"strconv"
 
 	"github.com/minio/minio/pkg/donut"
-	"github.com/minio/minio/pkg/version"
 )
 
 // No encoder interface exists, so we create one.
@@ -53,7 +51,10 @@ func generateRequestID() []byte {
 func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength int) {
 	// set unique request ID for each reply
 	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
-	w.Header().Set("Server", ("Minio/" + version.Version + " (" + runtime.GOOS + ";" + runtime.GOARCH + ")"))
+
+	// TODO: Modularity comes in the way of passing global state like "version". A better approach needed here. -ab
+	// w.Header().Set("Server", ("Minio/" + version + " (" + runtime.GOOS + ";" + runtime.GOARCH + ")"))
+
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", acceptsType)
 	w.Header().Set("Connection", "close")

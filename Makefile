@@ -47,13 +47,13 @@ test: build
 gomake-all: build
 	@GO15VENDOREXPERIMENT=1 go install github.com/minio/minio
 
-release: genversion
-	@echo "Installing minio for new version.go:"
+release: version
+	@echo "Installing minio (new version):"
 	@GO15VENDOREXPERIMENT=1 go install github.com/minio/minio
 
-genversion:
-	@echo "Generating new minio version.go"
-	@cd ./pkg/version; go run genversion.go; cd - 1>/dev/null
+version:
+	@echo "Generating new version.go"
+	@GO15VENDOREXPERIMENT=1 go run buildscripts/genversion.go
 
 pkg-remove:
 	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)

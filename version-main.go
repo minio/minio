@@ -16,13 +16,7 @@
 
 package main
 
-import (
-	"net/http"
-	"time"
-
-	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/version"
-)
+import "github.com/minio/cli"
 
 var versionCmd = cli.Command{
 	Name:   "version",
@@ -40,10 +34,6 @@ EXAMPLES:
 }
 
 func mainVersion(ctxx *cli.Context) {
-	t, _ := time.Parse(time.RFC3339Nano, version.Version)
-	if t.IsZero() {
-		Println("")
-		return
-	}
-	Println(t.Format(http.TimeFormat))
+	Println("Version: " + minioVersion)
+	Println("Release-Tag: " + minioReleaseTag)
 }
