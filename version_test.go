@@ -18,19 +18,12 @@ package main
 
 import (
 	"net/http"
-	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestVersion(c *C) {
+func (s *TestSuite) TestVersion(c *C) {
 	_, err := time.Parse(minioVersion, http.TimeFormat)
 	c.Assert(err, NotNil)
 }

@@ -17,31 +17,19 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-
-	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
+	"testing"
 
 	. "gopkg.in/check.v1"
 )
 
-func (s *TestSuite) TestLogger(c *C) {
-	var buffer bytes.Buffer
-	var fields logrus.Fields
-	log.Out = &buffer
-	log.Formatter = new(logrus.JSONFormatter)
+func Test(t *testing.T) { TestingT(t) }
 
-	errorIf(probe.NewError(errors.New("Fake error")), "Failed with error.", nil)
-	err := json.Unmarshal(buffer.Bytes(), &fields)
-	c.Assert(err, IsNil)
-	c.Assert(fields["level"], Equals, "error")
+type TestSuite struct{}
 
-	msg, ok := fields["error"]
-	c.Assert(ok, Equals, true)
-	c.Assert(msg, Equals, "Fake error")
+var _ = Suite(&TestSuite{})
 
-	_, ok = fields["probe"]
-	c.Assert(ok, Equals, true)
+func (s *TestSuite) SetUpSuite(c *C) {
+}
+
+func (s *TestSuite) TearDownSuite(c *C) {
 }
