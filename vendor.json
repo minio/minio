@@ -99,6 +99,34 @@
 			"local": "vendor/gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
+		},
+		{
+			"canonical": "gopkg.in/mgo.v2",
+			"comment": "",
+			"local": "vendor/gopkg.in/mgo.v2",
+			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
+			"revisionTime": "2015-08-21T12:30:02-03:00"
+		},
+		{
+			"canonical": "gopkg.in/mgo.v2/bson",
+			"comment": "",
+			"local": "vendor/gopkg.in/mgo.v2/bson",
+			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
+			"revisionTime": "2015-08-21T12:30:02-03:00"
+		},
+		{
+			"canonical": "gopkg.in/mgo.v2/internal/sasl",
+			"comment": "",
+			"local": "vendor/gopkg.in/mgo.v2/internal/sasl",
+			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
+			"revisionTime": "2015-08-21T12:30:02-03:00"
+		},
+		{
+			"canonical": "gopkg.in/mgo.v2/internal/scram",
+			"comment": "",
+			"local": "vendor/gopkg.in/mgo.v2/internal/scram",
+			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
+			"revisionTime": "2015-08-21T12:30:02-03:00"
 		}
 	]
 }

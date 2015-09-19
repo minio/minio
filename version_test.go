@@ -23,7 +23,11 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func (s *TestSuite) TestVersion(c *C) {
+type VersionSuite struct{}
+
+var _ = Suite(&VersionSuite{})
+
+func (s *VersionSuite) TestVersion(c *C) {
 	_, err := time.Parse(minioVersion, http.TimeFormat)
 	c.Assert(err, NotNil)
 }

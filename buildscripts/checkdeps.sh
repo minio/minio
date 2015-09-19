@@ -21,7 +21,7 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GCC_VERSION="4.0"
-    CLANG_VERSION="3.5"
+    LLVM_VERSION="7.0.0"
     YASM_VERSION="1.2.0"
     GIT_VERSION="1.0"
     GO_VERSION="1.5.1"
@@ -173,7 +173,7 @@ is_supported_arch() {
 check_deps() {
     check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" "${GO_VERSION}"
     if [ $? -ge 2 ]; then
-        MISSING="${MISSING} golang(1.5)"
+        MISSING="${MISSING} golang(${GO_VERSION})"
     fi
 
     check_version "$(env git --version 2>/dev/null | sed -e 's/^.* \([0-9.\].*\).*$/\1/' -e 's/^\([0-9.\]*\).*/\1/g')" "${GIT_VERSION}"
@@ -185,13 +185,13 @@ check_deps() {
         "Linux")
             check_version "$(env gcc --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${GCC_VERSION}"
             if [ $? -ge 2 ]; then
-                MISSING="${MISSING} build-essential"
+                MISSING="${MISSING} build-essential(${GCC_VERSION})"
             fi
             ;;
         "Darwin")
-            check_version "$(env gcc --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${CLANG_VERSION}"
+            check_version "$(env gcc --version 2>/dev/null | awk '{print $4}' | head -1)" "${LLVM_VERSION}"
             if [ $? -ge 2 ]; then
-                MISSING="${MISSING} xcode-cli"
+                MISSING="${MISSING} xcode-cli(${LLVM_VERSION})"
             fi
             ;;
         "*")
@@ -200,7 +200,7 @@ check_deps() {
 
     check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${YASM_VERSION}"
     if [ $? -ge 2 ]; then
-        MISSING="${MISSING} yasm(1.2.0)"
+        MISSING="${MISSING} yasm(${YASM_VERSION})"
     fi
 
 }

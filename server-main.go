@@ -16,11 +16,7 @@
 
 package main
 
-import (
-	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/server"
-	"github.com/minio/minio/pkg/server/api"
-)
+import "github.com/minio/cli"
 
 var serverCmd = cli.Command{
 	Name:   "server",
@@ -39,14 +35,14 @@ EXAMPLES:
 `,
 }
 
-func getServerConfig(c *cli.Context) api.Config {
+func getServerConfig(c *cli.Context) APIConfig {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
-	return api.Config{
+	return APIConfig{
 		Address:   c.GlobalString("address"),
 		TLS:       tls,
 		CertFile:  certFile,
@@ -61,6 +57,6 @@ func serverMain(c *cli.Context) {
 	}
 
 	apiServerConfig := getServerConfig(c)
-	err := server.Start(apiServerConfig)
+	err := StartServer(apiServerConfig)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

@@ -27,7 +27,11 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func (s *TestSuite) TestLogger(c *C) {
+type LoggerSuite struct{}
+
+var _ = Suite(&LoggerSuite{})
+
+func (s *LoggerSuite) TestLogger(c *C) {
 	var buffer bytes.Buffer
 	var fields logrus.Fields
 	log.Out = &buffer
