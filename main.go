@@ -18,33 +18,29 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"os/user"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/version"
 )
 
 func init() {
 	// Check for the environment early on and gracefuly report.
-	u, err := user.Current()
+
+	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
-	var uid int
-	uid, err = strconv.Atoi(u.Uid)
-	if err != nil {
-		Fatalf("Unable to convert user id to an integer. \nError: %s\n", err)
+
+	if os.Geteuid() == 0 {
+		Fatalln("Please run ‘minio’ as a non-root user.")
 	}
-	if uid == 0 {
-		Fatalln("Please run as a normal user, running as root is disallowed")
-	}
-	verifyMinioRuntime()
+
+	// Check if minio was compiled using a supported version of Golang.
+	checkGolangRuntimeVersion()
 }
 
 // Tries to get os/arch/platform specific information
@@ -71,21 +67,6 @@ func getSystemData() map[string]string {
 		"RUNTIME":  goruntime,
 		"MEM":      mem,
 	}
-}
-
-func init() {
-	if _, err := user.Current(); err != nil {
-		Fatalf("Unable to determine current user. Reason: %s\n", err)
-	}
-}
-
-// getFormattedVersion -
-func getFormattedVersion() string {
-	t, _ := time.Parse(time.RFC3339Nano, version.Version)
-	if t.IsZero() {
-		return ""
-	}
-	return t.Format(http.TimeFormat)
 }
 
 func findClosestCommands(command string) []string {
@@ -134,14 +115,14 @@ GLOBAL FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
 VERSION:
-  ` + getFormattedVersion() +
+  ` + minioVersion +
 		`{{range $key, $value := ExtraInfo}}
 {{$key}}:
   {{$value}}
 {{end}}
 `
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
-		msg := fmt.Sprintf("‘%s’ is not a mc command. See ‘minio help’.", command)
+		msg := fmt.Sprintf("‘%s’ is not a minio sub-command. See ‘minio help’.", command)
 		closestCommands := findClosestCommands(command)
 		if len(closestCommands) > 0 {
 			msg += fmt.Sprintf("\n\nDid you mean one of these?\n")

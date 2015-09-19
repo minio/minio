@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package version_test
+package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
-
-	"github.com/minio/minio/pkg/version"
 
 	. "gopkg.in/check.v1"
 )
@@ -32,6 +31,6 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestVersion(c *C) {
-	_, err := time.Parse(version.Version, time.RFC3339Nano)
+	_, err := time.Parse(minioVersion, http.TimeFormat)
 	c.Assert(err, NotNil)
 }
