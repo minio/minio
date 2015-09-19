@@ -27,20 +27,20 @@ import (
 
 // MinioServer - container for minio server data
 type MinioServer struct {
-	Name string `json:"name"`
-	IP   string `json:"ip"`
-	ID   string `json:"id"`
+	IP     string `json:"ip"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
-// ServerArg - server arg
-type ServerArg struct {
-	MinioServer
+// ServerArgs - server arg
+type ServerArgs struct {
+	MinioServers []MinioServer `json:"servers"`
 }
 
 // ServerAddReply - server add reply
 type ServerAddReply struct {
-	Server MinioServer `json:"server"`
-	Status string      `json:"status"`
+	ServersAdded []MinioServer `json:"serversAdded"`
 }
 
 // MemStatsReply memory statistics
@@ -55,12 +55,12 @@ type DiskStatsReply struct {
 
 // SysInfoReply system info
 type SysInfoReply struct {
-	Hostname  string `json:"hostname"`
-	SysARCH   string `json:"sys.arch"`
-	SysOS     string `json:"sys.os"`
-	SysCPUS   int    `json:"sys.ncpus"`
-	Routines  int    `json:"goroutines"`
-	GOVersion string `json:"goversion"`
+	Hostname   string `json:"hostname"`
+	SysARCH    string `json:"sysArch"`
+	SysOS      string `json:"sysOS"`
+	SysCPUS    int    `json:"sysNCPUs"`
+	GORoutines int    `json:"golangRoutines"`
+	GOVersion  string `json:"golangVersion"`
 }
 
 // ServerListReply list of minio servers
@@ -74,32 +74,33 @@ type ServerService struct {
 }
 
 // Add - add new server
-func (s *ServerService) Add(r *http.Request, arg *ServerArg, reply *ServerAddReply) error {
-	reply.Server = MinioServer{arg.Name, arg.IP, arg.ID}
-	reply.Status = "connected"
-	s.serverList = append(s.serverList, reply.Server)
+func (s *ServerService) Add(r *http.Request, arg *ServerArgs, reply *ServerAddReply) error {
+	for _, server := range arg.MinioServers {
+		server.Status = "connected"
+		reply.ServersAdded = append(reply.ServersAdded, server)
+	}
 	return nil
 }
 
 // MemStats - memory statistics on the server
-func (s *ServerService) MemStats(r *http.Request, arg *ServerArg, reply *MemStatsReply) error {
+func (s *ServerService) MemStats(r *http.Request, arg *ServerArgs, reply *MemStatsReply) error {
 	runtime.ReadMemStats(&reply.MemStats)
 	return nil
 }
 
 // DiskStats - disk statistics on the server
-func (s *ServerService) DiskStats(r *http.Request, arg *ServerArg, reply *DiskStatsReply) error {
+func (s *ServerService) DiskStats(r *http.Request, arg *ServerArgs, reply *DiskStatsReply) error {
 	syscall.Statfs("/", &reply.DiskStats)
 	return nil
 }
 
 // SysInfo - system info for the server
-func (s *ServerService) SysInfo(r *http.Request, arg *ServerArg, reply *SysInfoReply) error {
-	reply.SysARCH = runtime.GOARCH
+func (s *ServerService) SysInfo(r *http.Request, arg *ServerArgs, reply *SysInfoReply) error {
 	reply.SysOS = runtime.GOOS
+	reply.SysARCH = runtime.GOARCH
 	reply.SysCPUS = runtime.NumCPU()
-	reply.Routines = runtime.NumGoroutine()
 	reply.GOVersion = runtime.Version()
+	reply.GORoutines = runtime.NumGoroutine()
 	var err error
 	reply.Hostname, err = os.Hostname()
 	if err != nil {
@@ -109,11 +110,26 @@ func (s *ServerService) SysInfo(r *http.Request, arg *ServerArg, reply *SysInfoR
 }
 
 // List of servers in the cluster
-func (s *ServerService) List(r *http.Request, arg *ServerArg, reply *ServerListReply) error {
+func (s *ServerService) List(r *http.Request, arg *ServerArgs, reply *ServerListReply) error {
 	reply.ServerList = []MinioServer{
-		{"server.one", "192.168.1.1", "192.168.1.1"},
-		{"server.two", "192.168.1.2", "192.168.1.2"},
-		{"server.three", "192.168.1.3", "192.168.1.3"},
+		{
+			"server.one",
+			"192.168.1.1",
+			"192.168.1.1",
+			"connected",
+		},
+		{
+			"server.two",
+			"192.168.1.2",
+			"192.168.1.2",
+			"connected",
+		},
+		{
+			"server.three",
+			"192.168.1.3",
+			"192.168.1.3",
+			"connected",
+		},
 	}
 	return nil
 }

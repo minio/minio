@@ -20,12 +20,15 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	jsonrpc "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/controller/rpc"
 )
 
 // getRPCHandler rpc handler
 func getRPCHandler() http.Handler {
-	s := rpc.NewServer()
+	s := jsonrpc.NewServer()
+	s.RegisterCodec(json.NewCodec(), "application/json")
 	s.RegisterService(new(rpc.VersionService), "Version")
 	s.RegisterService(new(rpc.DonutService), "Donut")
 	s.RegisterService(new(rpc.AuthService), "Auth")
@@ -35,7 +38,7 @@ func getRPCHandler() http.Handler {
 }
 
 // registerRPC - register rpc handlers
-func registerRPC(mux *router.Router, s *rpc.Server) http.Handler {
+func registerRPC(mux *router.Router, s *jsonrpc.Server) http.Handler {
 	mux.Handle("/rpc", s)
 	return mux
 }
