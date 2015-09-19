@@ -53,7 +53,7 @@ func (s *MySuite) TearDownSuite(c *C) {
 func (s *MySuite) TestMemStats(c *C) {
 	op := rpc.Operation{
 		Method:  "Server.MemStats",
-		Request: rpc.Args{Request: ""},
+		Request: rpc.ServerArgs{},
 	}
 	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -71,7 +71,7 @@ func (s *MySuite) TestMemStats(c *C) {
 func (s *MySuite) TestSysInfo(c *C) {
 	op := rpc.Operation{
 		Method:  "Server.SysInfo",
-		Request: rpc.Args{Request: ""},
+		Request: rpc.ServerArgs{},
 	}
 	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -84,6 +84,42 @@ func (s *MySuite) TestSysInfo(c *C) {
 	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
 	c.Assert(reply, Not(DeepEquals), rpc.SysInfoReply{})
+}
+
+func (s *MySuite) TestServerList(c *C) {
+	op := rpc.Operation{
+		Method:  "Server.List",
+		Request: rpc.ServerArgs{},
+	}
+	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err := req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var reply rpc.ServerListReply
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
+	resp.Body.Close()
+	c.Assert(reply, Not(DeepEquals), rpc.ServerListReply{})
+}
+
+func (s *MySuite) TestServerAdd(c *C) {
+	op := rpc.Operation{
+		Method:  "Server.Add",
+		Request: rpc.ServerArgs{MinioServers: []rpc.MinioServer{}},
+	}
+	req, err := rpc.NewRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err := req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var reply rpc.ServerAddReply
+	c.Assert(jsonrpc.DecodeClientResponse(resp.Body, &reply), IsNil)
+	resp.Body.Close()
+	c.Assert(reply, Not(DeepEquals), rpc.ServerAddReply{ServersAdded: []rpc.MinioServer{}})
 }
 
 func (s *MySuite) TestAuth(c *C) {

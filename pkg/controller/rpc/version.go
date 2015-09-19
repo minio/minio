@@ -18,40 +18,30 @@ package rpc
 
 import (
 	"net/http"
+	"runtime"
 
 	"github.com/minio/minio/pkg/version"
 )
 
-// Args basic json RPC params
-type Args struct {
-	Request string
-}
+// VersionArgs basic json RPC params
+type VersionArgs struct{}
+
+// VersionService get version service
+type VersionService struct{}
 
 // VersionReply version reply
 type VersionReply struct {
-	Version   string `json:"version"`
-	BuildDate string `json:"buildDate"`
+	Version         string `json:"version"`
+	BuildDate       string `json:"buildDate"`
+	Architecture    string `json:"arch"`
+	OperatingSystem string `json:"os"`
 }
 
-// VersionService -
-type VersionService struct{}
-
-func getVersion() string {
-	return "0.0.1"
-}
-
-func getBuildDate() string {
-	return version.Version
-}
-
-func setVersionReply(reply *VersionReply) {
-	reply.Version = getVersion()
-	reply.BuildDate = getBuildDate()
-	return
-}
-
-// Get method
-func (v *VersionService) Get(r *http.Request, args *Args, reply *VersionReply) error {
-	setVersionReply(reply)
+// Get version
+func (v *VersionService) Get(r *http.Request, args *VersionArgs, reply *VersionReply) error {
+	reply.Version = "0.0.1"
+	reply.BuildDate = version.Version
+	reply.Architecture = runtime.GOARCH
+	reply.OperatingSystem = runtime.GOOS
 	return nil
 }
