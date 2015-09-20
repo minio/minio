@@ -149,9 +149,6 @@ VERSION:
 }
 
 func main() {
-	// set up go max processes
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		// get  flag and set global defaults here.
