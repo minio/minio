@@ -16,11 +16,19 @@
 
 package main
 
-// Network properties of a server
-type Network struct {
-	IP       string `json:"address"`
-	Mask     string `json:"netmask"`
-	Ethernet string `json:"networkInterface"`
+//// RPC params
+
+// AuthArgs auth params
+type AuthArgs struct {
+	User string `json:"user"`
+}
+
+// DonutArgs collections of disks and name to initialize donut
+type DonutArgs struct {
+	Name     string
+	MaxSize  uint64
+	Hostname string
+	Disks    []string
 }
 
 // ServerArg server metadata to identify a server
@@ -29,6 +37,8 @@ type ServerArg struct {
 	URL  string `json:"url"`
 	ID   string `json:"id"`
 }
+
+//// RPC replies
 
 // ServerRep server reply container for Server.List
 type ServerRep struct {
@@ -39,7 +49,7 @@ type ServerRep struct {
 
 // DefaultRep default reply
 type DefaultRep struct {
-	Error   int64  `json:"error"`
+	Error   error  `json:"error"`
 	Message string `json:"message"`
 }
 
@@ -61,7 +71,11 @@ type MemStatsRep struct {
 
 // NetStatsRep network statistics of a server
 type NetStatsRep struct {
-	Interfaces []Network
+	Interfaces []struct {
+		IP       string `json:"address"`
+		Mask     string `json:"netmask"`
+		Ethernet string `json:"networkInterface"`
+	}
 }
 
 // SysInfoRep system information of a server
@@ -85,4 +99,11 @@ type VersionRep struct {
 	BuildDate       string `json:"buildDate"`
 	Architecture    string `json:"arch"`
 	OperatingSystem string `json:"os"`
+}
+
+// AuthRep reply with access keys and secret ids for the user
+type AuthRep struct {
+	Name            string `json:"name"`
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
 }

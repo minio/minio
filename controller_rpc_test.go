@@ -54,7 +54,7 @@ func (s *ControllerRPCSuite) TearDownSuite(c *C) {
 
 func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	op := rpcOperation{
-		Method:  "Server.MemStats",
+		Method:  "Controller.GetServerMemStats",
 		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -70,9 +70,27 @@ func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	c.Assert(reply, Not(DeepEquals), MemStatsRep{})
 }
 
+func (s *ControllerRPCSuite) TestDiskStats(c *C) {
+	op := rpcOperation{
+		Method:  "Controller.GetServerDiskStats",
+		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+	}
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
+	c.Assert(err, IsNil)
+	c.Assert(req.Get("Content-Type"), Equals, "application/json")
+	resp, err := req.Do()
+	c.Assert(err, IsNil)
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var reply MemStatsRep
+	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
+	resp.Body.Close()
+	c.Assert(reply, Not(DeepEquals), DiskStatsRep{})
+}
+
 func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	op := rpcOperation{
-		Method:  "Server.SysInfo",
+		Method:  "Controller.GetServerSysInfo",
 		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -90,7 +108,7 @@ func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 
 func (s *ControllerRPCSuite) TestServerList(c *C) {
 	op := rpcOperation{
-		Method:  "Server.List",
+		Method:  "Controller.ListServers",
 		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -108,7 +126,7 @@ func (s *ControllerRPCSuite) TestServerList(c *C) {
 
 func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	op := rpcOperation{
-		Method:  "Server.Add",
+		Method:  "Controller.AddServer",
 		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -121,12 +139,12 @@ func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	var reply DefaultRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), DefaultRep{0, "Added"})
+	c.Assert(reply, Not(DeepEquals), DefaultRep{nil, "Added"})
 }
 
 func (s *ControllerRPCSuite) TestAuth(c *C) {
 	op := rpcOperation{
-		Method:  "Auth.Generate",
+		Method:  "Controller.GenerateAuth",
 		Request: AuthArgs{User: "newuser"},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -136,16 +154,16 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var reply AuthReply
+	var reply AuthRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), AuthReply{})
+	c.Assert(reply, Not(DeepEquals), AuthRep{})
 	c.Assert(len(reply.AccessKeyID), Equals, 20)
 	c.Assert(len(reply.SecretAccessKey), Equals, 40)
 	c.Assert(len(reply.Name), Not(Equals), 0)
 
 	op = rpcOperation{
-		Method:  "Auth.Fetch",
+		Method:  "Controller.FetchAuth",
 		Request: AuthArgs{User: "newuser"},
 	}
 	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -155,16 +173,16 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var newReply AuthReply
+	var newReply AuthRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &newReply), IsNil)
 	resp.Body.Close()
-	c.Assert(newReply, Not(DeepEquals), AuthReply{})
+	c.Assert(newReply, Not(DeepEquals), AuthRep{})
 	c.Assert(reply.AccessKeyID, Equals, newReply.AccessKeyID)
 	c.Assert(reply.SecretAccessKey, Equals, newReply.SecretAccessKey)
 	c.Assert(len(reply.Name), Not(Equals), 0)
 
 	op = rpcOperation{
-		Method:  "Auth.Reset",
+		Method:  "Controller.ResetAuth",
 		Request: AuthArgs{User: "newuser"},
 	}
 	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -174,10 +192,10 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var resetReply AuthReply
+	var resetReply AuthRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &resetReply), IsNil)
 	resp.Body.Close()
-	c.Assert(newReply, Not(DeepEquals), AuthReply{})
+	c.Assert(newReply, Not(DeepEquals), AuthRep{})
 	c.Assert(reply.AccessKeyID, Not(Equals), resetReply.AccessKeyID)
 	c.Assert(reply.SecretAccessKey, Not(Equals), resetReply.SecretAccessKey)
 	c.Assert(len(reply.Name), Not(Equals), 0)
@@ -186,7 +204,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 
 	/// generating access for existing user fails
 	op = rpcOperation{
-		Method:  "Auth.Generate",
+		Method:  "Controller.GenerateAuth",
 		Request: AuthArgs{User: "newuser"},
 	}
 	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
@@ -198,7 +216,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 
 	/// null user provided invalid
 	op = rpcOperation{
-		Method:  "Auth.Generate",
+		Method:  "Controller.GenerateAuth",
 		Request: AuthArgs{User: ""},
 	}
 	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
