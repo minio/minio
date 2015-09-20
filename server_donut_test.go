@@ -70,7 +70,8 @@ func (s *MyAPIDonutSuite) SetUpSuite(c *C) {
 	perr := donut.SaveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	httpHandler, minioAPI := getAPIHandler(APIConfig{RateLimit: 16})
+	minioAPI := getNewAPI()
+	httpHandler := getAPIHandler(minioAPI)
 	go startTM(minioAPI)
 	testAPIDonutServer = httptest.NewServer(httpHandler)
 }

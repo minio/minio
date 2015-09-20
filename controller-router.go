@@ -24,14 +24,13 @@ import (
 	"github.com/gorilla/rpc/v2/json"
 )
 
-// getRPCHandler rpc handler
-func getRPCCtrlHandler() http.Handler {
+// getControllerRPCHandler rpc handler for controller
+func getControllerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(VersionService), "Version")
 	s.RegisterService(new(DonutService), "Donut")
 	s.RegisterService(new(AuthService), "Auth")
-	s.RegisterService(new(controllerServerRPCService), "Server")
+	s.RegisterService(new(controllerRPCService), "Server")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
 }

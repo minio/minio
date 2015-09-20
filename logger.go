@@ -54,7 +54,21 @@ func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 		fields["probe"] = string(jsonErr)
 	}
 	log.WithFields(fields).Error(msg)
+}
 
+func fatalIf(err *probe.Error, msg string, fields map[string]interface{}) {
+	if err == nil {
+		return
+	}
+	if fields == nil {
+		fields = make(map[string]interface{})
+	}
+
+	fields["error"] = err.ToGoError()
+	if jsonErr, e := json.Marshal(err); e == nil {
+		fields["probe"] = string(jsonErr)
+	}
+	log.WithFields(fields).Fatal(msg)
 }
 
 func audit(msg string, fields logrus.Fields) {

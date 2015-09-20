@@ -24,26 +24,26 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-type serverServerService struct{}
+type serverRPCService struct{}
 
-func (s *serverServerService) Add(r *http.Request, arg *ServerArg, rep *DefaultRep) error {
+func (s *serverRPCService) Add(r *http.Request, arg *ServerArg, rep *DefaultRep) error {
 	rep.Error = 0
 	rep.Message = "Added successfully"
 	return nil
 }
 
-func (s *serverServerService) MemStats(r *http.Request, arg *ServerArg, rep *MemStatsRep) error {
+func (s *serverRPCService) MemStats(r *http.Request, arg *ServerArg, rep *MemStatsRep) error {
 	rep.Total = 64 * 1024 * 1024 * 1024
 	rep.Free = 9 * 1024 * 1024 * 1024
 	return nil
 }
 
-func (s *serverServerService) DiskStats(r *http.Request, arg *ServerArg, rep *DiskStatsRep) error {
+func (s *serverRPCService) DiskStats(r *http.Request, arg *ServerArg, rep *DiskStatsRep) error {
 	rep.Disks = []string{"/mnt/disk1", "/mnt/disk2", "/mnt/disk3", "/mnt/disk4", "/mnt/disk5", "/mnt/disk6"}
 	return nil
 }
 
-func (s *serverServerService) SysInfo(r *http.Request, arg *ServerArg, rep *SysInfoRep) error {
+func (s *serverRPCService) SysInfo(r *http.Request, arg *ServerArg, rep *SysInfoRep) error {
 	rep.SysARCH = runtime.GOARCH
 	rep.SysOS = runtime.GOOS
 	rep.SysCPUS = runtime.NumCPU()
@@ -57,7 +57,15 @@ func (s *serverServerService) SysInfo(r *http.Request, arg *ServerArg, rep *SysI
 	return nil
 }
 
-func (s *serverServerService) NetStats(r *http.Request, arg *ServerArg, rep *NetStatsRep) error {
-	rep.Interfaces = []Ifc{{"192.168.1.1", "255.255.255.0", "eth0"}}
+func (s *serverRPCService) NetStats(r *http.Request, arg *ServerArg, rep *NetStatsRep) error {
+	rep.Interfaces = []Network{{"192.168.1.1", "255.255.255.0", "eth0"}}
+	return nil
+}
+
+func (s *serverRPCService) Version(r *http.Request, arg *ServerArg, rep *VersionRep) error {
+	rep.Version = "0.0.1"
+	rep.BuildDate = minioVersion
+	rep.Architecture = runtime.GOARCH
+	rep.OperatingSystem = runtime.GOOS
 	return nil
 }

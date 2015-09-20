@@ -78,7 +78,8 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	perr = auth.SaveConfig(authConf)
 	c.Assert(perr, IsNil)
 
-	httpHandler, minioAPI := getAPIHandler(APIConfig{RateLimit: 16})
+	minioAPI := getNewAPI()
+	httpHandler := getAPIHandler(minioAPI)
 	go startTM(minioAPI)
 	testSignatureV4Server = httptest.NewServer(httpHandler)
 }

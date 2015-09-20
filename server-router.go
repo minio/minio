@@ -22,6 +22,7 @@ import (
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio/pkg/donut"
 )
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -55,8 +56,31 @@ func registerCustomMiddleware(mux *router.Router, mwHandlers ...MiddlewareHandle
 	return f
 }
 
+// APIOperation container for individual operations read by Ticket Master
+type APIOperation struct {
+	ProceedCh chan struct{}
+}
+
+// MinioAPI container for API and also carries OP (operation) channel
+type MinioAPI struct {
+	OP    chan APIOperation
+	Donut donut.Interface
+}
+
+// getNewAPI instantiate a new minio API
+func getNewAPI() MinioAPI {
+	// ignore errors for now
+	d, err := donut.New()
+	fatalIf(err.Trace(), "Instantiating donut failed.", nil)
+
+	return MinioAPI{
+		OP:    make(chan APIOperation),
+		Donut: d,
+	}
+}
+
 // getAPIHandler api handler
-func getAPIHandler(conf APIConfig) (http.Handler, MinioAPI) {
+func getAPIHandler(minioAPI MinioAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		ValidContentTypeHandler,
 		TimeValidityHandler,
@@ -65,18 +89,16 @@ func getAPIHandler(conf APIConfig) (http.Handler, MinioAPI) {
 		// api.LoggingHandler, // Disabled logging until we bring in external logging support
 		CorsHandler,
 	}
-
 	mux := router.NewRouter()
-	minioAPI := NewAPI()
 	registerAPI(mux, minioAPI)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
-	return apiHandler, minioAPI
+	return apiHandler
 }
 
-func getRPCServerHandler() http.Handler {
+func getServerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(serverServerService), "Server")
+	s.RegisterService(new(serverRPCService), "Server")
 	mux := router.NewRouter()
 	mux.Handle("/rpc", s)
 	return mux
