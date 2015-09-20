@@ -28,9 +28,7 @@ import (
 func getControllerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(DonutService), "Donut")
-	s.RegisterService(new(AuthService), "Auth")
-	s.RegisterService(new(controllerRPCService), "Server")
+	s.RegisterService(new(controllerRPCService), "Controller")
 	// Add new RPC services here
 	return registerRPC(router.NewRouter(), s)
 }
