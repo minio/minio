@@ -1,5 +1,3 @@
-// +build ignore
-
 /*
  * Minio Cloud Storage, (C) 2014 Minio, Inc.
  *
@@ -33,26 +31,33 @@ type ControllerRPCSuite struct{}
 
 var _ = Suite(&ControllerRPCSuite{})
 
-var testRPCServer *httptest.Server
+var (
+	testControllerRPC *httptest.Server
+	testServerRPC     *httptest.Server
+)
 
 func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(err, IsNil)
 	auth.SetAuthConfigPath(root)
 
-	testRPCServer = httptest.NewServer(getRPCCtrlHandler())
+	testControllerRPC = httptest.NewServer(getControllerRPCHandler())
+	testServerRPC = httptest.NewUnstartedServer(getServerRPCHandler())
+	testServerRPC.Config.Addr = ":9002"
+	testServerRPC.Start()
 }
 
 func (s *ControllerRPCSuite) TearDownSuite(c *C) {
-	testRPCServer.Close()
+	testServerRPC.Close()
+	testControllerRPC.Close()
 }
 
 func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	op := rpcOperation{
 		Method:  "Server.MemStats",
-		Request: ServerArg{},
+		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
-	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -68,9 +73,9 @@ func (s *ControllerRPCSuite) TestMemStats(c *C) {
 func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	op := rpcOperation{
 		Method:  "Server.SysInfo",
-		Request: ServerArg{},
+		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
-	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -86,9 +91,9 @@ func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 func (s *ControllerRPCSuite) TestServerList(c *C) {
 	op := rpcOperation{
 		Method:  "Server.List",
-		Request: ServerArg{},
+		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
-	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -104,9 +109,9 @@ func (s *ControllerRPCSuite) TestServerList(c *C) {
 func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	op := rpcOperation{
 		Method:  "Server.Add",
-		Request: ServerArg{},
+		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
 	}
-	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -124,7 +129,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 		Method:  "Auth.Generate",
 		Request: AuthArgs{User: "newuser"},
 	}
-	req, err := newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err := req.Do()
@@ -143,7 +148,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 		Method:  "Auth.Fetch",
 		Request: AuthArgs{User: "newuser"},
 	}
-	req, err = newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err = req.Do()
@@ -162,7 +167,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 		Method:  "Auth.Reset",
 		Request: AuthArgs{User: "newuser"},
 	}
-	req, err = newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err = req.Do()
@@ -184,7 +189,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 		Method:  "Auth.Generate",
 		Request: AuthArgs{User: "newuser"},
 	}
-	req, err = newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err = req.Do()
@@ -196,7 +201,7 @@ func (s *ControllerRPCSuite) TestAuth(c *C) {
 		Method:  "Auth.Generate",
 		Request: AuthArgs{User: ""},
 	}
-	req, err = newRPCRequest(testRPCServer.URL+"/rpc", op, http.DefaultTransport)
+	req, err = newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
 	c.Assert(req.Get("Content-Type"), Equals, "application/json")
 	resp, err = req.Do()

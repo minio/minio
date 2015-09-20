@@ -80,7 +80,7 @@ func getNewAPI() MinioAPI {
 }
 
 // getAPIHandler api handler
-func getAPIHandler() (http.Handler, MinioAPI) {
+func getAPIHandler(minioAPI MinioAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		ValidContentTypeHandler,
 		TimeValidityHandler,
@@ -89,18 +89,16 @@ func getAPIHandler() (http.Handler, MinioAPI) {
 		// api.LoggingHandler, // Disabled logging until we bring in external logging support
 		CorsHandler,
 	}
-
 	mux := router.NewRouter()
-	minioAPI := getNewAPI()
 	registerAPI(mux, minioAPI)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
-	return apiHandler, minioAPI
+	return apiHandler
 }
 
-func getRPCServerHandler() http.Handler {
+func getServerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(serverServerService), "Server")
+	s.RegisterService(new(serverRPCService), "Server")
 	mux := router.NewRouter()
 	mux.Handle("/rpc", s)
 	return mux

@@ -28,15 +28,15 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access",
 	}
 
-	addressMgmtFlag = cli.StringFlag{
-		Name:  "address-mgmt",
+	addressControllerFlag = cli.StringFlag{
+		Name:  "address-controller",
 		Hide:  true,
 		Value: ":9001",
 		Usage: "ADDRESS:PORT for management console access",
 	}
 
-	addressRPCServerFlag = cli.StringFlag{
-		Name:  "address-rpcserver",
+	addressServerRPCFlag = cli.StringFlag{
+		Name:  "address-server-rpc",
 		Hide:  true,
 		Value: ":9002",
 		Usage: "ADDRESS:PORT for management console access",

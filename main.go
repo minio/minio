@@ -27,6 +27,17 @@ import (
 	"github.com/minio/cli"
 )
 
+// minioConfig - http server config
+type minioConfig struct {
+	Address           string
+	ControllerAddress string
+	RPCAddress        string
+	TLS               bool
+	CertFile          string
+	KeyFile           string
+	RateLimit         int
+}
+
 func init() {
 	// Check for the environment early on and gracefuly report.
 
@@ -86,12 +97,12 @@ func registerApp() *cli.App {
 
 	// register all flags
 	registerFlag(addressFlag)
-	registerFlag(addressMgmtFlag)
+	registerFlag(addressControllerFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(certFlag)
 	registerFlag(keyFlag)
 	registerFlag(debugFlag)
-	registerFlag(addressRPCServerFlag)
+	registerFlag(addressServerRPCFlag)
 
 	// set up app
 	app := cli.NewApp()

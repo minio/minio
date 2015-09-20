@@ -46,19 +46,10 @@ EXAMPLES:
 `,
 }
 
-// apiConfig - http server config
-type apiConfig struct {
-	Address   string
-	TLS       bool
-	CertFile  string
-	KeyFile   string
-	RateLimit int
-}
-
-// getAPI server instance
-func getAPIServer(conf apiConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
+// configureAPIServer configure a new server instance
+func configureAPIServer(conf minioConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
 	// Minio server config
-	httpServer := &http.Server{
+	apiServer := &http.Server{
 		Addr:           conf.Address,
 		Handler:        apiHandler,
 		MaxHeaderBytes: 1 << 20,
@@ -66,9 +57,9 @@ func getAPIServer(conf apiConfig, apiHandler http.Handler) (*http.Server, *probe
 
 	if conf.TLS {
 		var err error
-		httpServer.TLSConfig = &tls.Config{}
-		httpServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		httpServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		apiServer.TLSConfig = &tls.Config{}
+		apiServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		apiServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
 		if err != nil {
 			return nil, probe.NewError(err)
 		}
@@ -104,9 +95,29 @@ func getAPIServer(conf apiConfig, apiHandler http.Handler) (*http.Server, *probe
 		} else {
 			fmt.Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
 		}
-
 	}
-	return httpServer, nil
+	return apiServer, nil
+}
+
+// configureServerRPC configure server rpc port
+func configureServerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Server, *probe.Error) {
+	// Minio server config
+	rpcServer := &http.Server{
+		Addr:           conf.RPCAddress,
+		Handler:        rpcHandler,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	if conf.TLS {
+		var err error
+		rpcServer.TLSConfig = &tls.Config{}
+		rpcServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		rpcServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+	}
+	return rpcServer, nil
 }
 
 // Start ticket master
@@ -119,33 +130,37 @@ func startTM(a MinioAPI) {
 }
 
 // startServer starts an s3 compatible cloud storage server
-func startServer(conf apiConfig) *probe.Error {
-	apiHandler, minioAPI := getAPIHandler()
-	apiServer, err := getAPIServer(conf, apiHandler)
+func startServer(conf minioConfig) *probe.Error {
+	minioAPI := getNewAPI()
+	apiHandler := getAPIHandler(minioAPI)
+	apiServer, err := configureAPIServer(conf, apiHandler)
 	if err != nil {
 		return err.Trace()
 	}
+	rpcServer, err := configureServerRPC(conf, getServerRPCHandler())
+
 	// start ticket master
 	go startTM(minioAPI)
-	if err := minhttp.ListenAndServeLimited(conf.RateLimit, apiServer); err != nil {
+	if err := minhttp.ListenAndServe(apiServer, rpcServer); err != nil {
 		return err.Trace()
 	}
 	return nil
 }
 
-func getServerConfig(c *cli.Context) apiConfig {
+func getServerConfig(c *cli.Context) minioConfig {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
-	return apiConfig{
-		Address:   c.GlobalString("address"),
-		TLS:       tls,
-		CertFile:  certFile,
-		KeyFile:   keyFile,
-		RateLimit: c.GlobalInt("ratelimit"),
+	return minioConfig{
+		Address:    c.GlobalString("address"),
+		RPCAddress: c.GlobalString("address-server-rpc"),
+		TLS:        tls,
+		CertFile:   certFile,
+		KeyFile:    keyFile,
+		RateLimit:  c.GlobalInt("ratelimit"),
 	}
 }
 

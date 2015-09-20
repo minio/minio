@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -45,36 +46,61 @@ EXAMPLES:
 `,
 }
 
-// getRPCServer instance
-func getRPCServer(rpcHandler http.Handler) (*http.Server, *probe.Error) {
+// configureControllerRPC instance
+func configureControllerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Server, *probe.Error) {
 	// Minio server config
-	httpServer := &http.Server{
-		Addr:           ":9001", // TODO make this configurable
+	rpcServer := &http.Server{
+		Addr:           conf.ControllerAddress,
 		Handler:        rpcHandler,
 		MaxHeaderBytes: 1 << 20,
 	}
-	var hosts []string
-	addrs, err := net.InterfaceAddrs()
+	if conf.TLS {
+		var err error
+		rpcServer.TLSConfig = &tls.Config{}
+		rpcServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		rpcServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+	}
+
+	host, port, err := net.SplitHostPort(conf.ControllerAddress)
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
-	for _, addr := range addrs {
-		if addr.Network() == "ip+net" {
-			host := strings.Split(addr.String(), "/")[0]
-			if ip := net.ParseIP(host); ip.To4() != nil {
-				hosts = append(hosts, host)
+
+	var hosts []string
+	switch {
+	case host != "":
+		hosts = append(hosts, host)
+	default:
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				host := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(host); ip.To4() != nil {
+					hosts = append(hosts, host)
+				}
 			}
 		}
 	}
+
 	for _, host := range hosts {
-		fmt.Printf("Starting minio server on: http://%s:9001/rpc, PID: %d\n", host, os.Getpid())
+		if conf.TLS {
+			fmt.Printf("Starting minio controller on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
+		} else {
+			fmt.Printf("Starting minio controller on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
+		}
 	}
-	return httpServer, nil
+	return rpcServer, nil
 }
 
 // startController starts a minio controller
-func startController() *probe.Error {
-	rpcServer, err := getRPCServer(getRPCHandler())
+func startController(conf minioConfig) *probe.Error {
+	rpcServer, err := configureControllerRPC(conf, getControllerRPCHandler())
 	if err != nil {
 		return err.Trace()
 	}
@@ -85,11 +111,27 @@ func startController() *probe.Error {
 	return nil
 }
 
+func getControllerConfig(c *cli.Context) minioConfig {
+	certFile := c.GlobalString("cert")
+	keyFile := c.GlobalString("key")
+	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
+		Fatalln("Both certificate and key are required to enable https.")
+	}
+	tls := (certFile != "" && keyFile != "")
+	return minioConfig{
+		ControllerAddress: c.GlobalString("address-controller"),
+		TLS:               tls,
+		CertFile:          certFile,
+		KeyFile:           keyFile,
+		RateLimit:         c.GlobalInt("ratelimit"),
+	}
+}
+
 func controllerMain(c *cli.Context) {
 	if c.Args().Present() {
 		cli.ShowCommandHelpAndExit(c, "controller", 1)
 	}
 
-	err := startController()
+	err := startController(getControllerConfig(c))
 	errorIf(err.Trace(), "Failed to start minio controller.", nil)
 }
