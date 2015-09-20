@@ -25,8 +25,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/minio/minio/pkg/atomic"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/utils/atomic"
 )
 
 // Disk container for disk parameters

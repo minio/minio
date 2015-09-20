@@ -27,7 +27,9 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type ControllerRPCSuite struct{}
+type ControllerRPCSuite struct {
+	root string
+}
 
 var _ = Suite(&ControllerRPCSuite{})
 
@@ -39,6 +41,7 @@ var (
 func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(err, IsNil)
+	s.root = root
 	auth.SetAuthConfigPath(root)
 
 	testControllerRPC = httptest.NewServer(getControllerRPCHandler())
@@ -48,6 +51,7 @@ func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 }
 
 func (s *ControllerRPCSuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.root)
 	testServerRPC.Close()
 	testControllerRPC.Close()
 }
