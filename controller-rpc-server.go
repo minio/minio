@@ -18,118 +18,51 @@ package main
 
 import (
 	"net/http"
-	"os"
-	"runtime"
-	"syscall"
 
+	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/probe"
 )
 
-// MinioServer - container for minio server data
-type MinioServer struct {
-	IP     string `json:"ip"`
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+type controllerServerRPCService struct {
+	serverList []ServerArg
 }
 
-// ServerArgs - server arg
-type ServerArgs struct {
-	MinioServers []MinioServer `json:"servers"`
-}
-
-// ServerAddReply - server add reply
-type ServerAddReply struct {
-	ServersAdded []MinioServer `json:"serversAdded"`
-}
-
-// MemStatsReply memory statistics
-type MemStatsReply struct {
-	runtime.MemStats `json:"memstats"`
-}
-
-// DiskStatsReply disk statistics
-type DiskStatsReply struct {
-	DiskStats syscall.Statfs_t `json:"diskstats"`
-}
-
-// SysInfoReply system info
-type SysInfoReply struct {
-	Hostname   string `json:"hostname"`
-	SysARCH    string `json:"sysArch"`
-	SysOS      string `json:"sysOS"`
-	SysCPUS    int    `json:"sysNCPUs"`
-	GORoutines int    `json:"golangRoutines"`
-	GOVersion  string `json:"golangVersion"`
-}
-
-// ServerListReply list of minio servers
-type ServerListReply struct {
-	ServerList []MinioServer `json:"servers"`
-}
-
-// ServerService server json rpc service
-type ServerService struct {
-	serverList []MinioServer
-}
-
-// Add - add new server
-func (s *ServerService) Add(r *http.Request, arg *ServerArgs, reply *ServerAddReply) error {
-	for _, server := range arg.MinioServers {
-		server.Status = "connected"
-		reply.ServersAdded = append(reply.ServersAdded, server)
+func proxyRequest(method string, ip string, arg interface{}, res interface{}) error {
+	op := rpcOperation{
+		Method:  "Server." + method,
+		Request: arg,
 	}
-	return nil
-}
 
-// MemStats - memory statistics on the server
-func (s *ServerService) MemStats(r *http.Request, arg *ServerArgs, reply *MemStatsReply) error {
-	runtime.ReadMemStats(&reply.MemStats)
-	return nil
-}
-
-// DiskStats - disk statistics on the server
-func (s *ServerService) DiskStats(r *http.Request, arg *ServerArgs, reply *DiskStatsReply) error {
-	syscall.Statfs("/", &reply.DiskStats)
-	return nil
-}
-
-// SysInfo - system info for the server
-func (s *ServerService) SysInfo(r *http.Request, arg *ServerArgs, reply *SysInfoReply) error {
-	reply.SysOS = runtime.GOOS
-	reply.SysARCH = runtime.GOARCH
-	reply.SysCPUS = runtime.NumCPU()
-	reply.GOVersion = runtime.Version()
-	reply.GORoutines = runtime.NumGoroutine()
-	var err error
-	reply.Hostname, err = os.Hostname()
+	request, _ := newRPCRequest("http://"+ip+":9002/rpc", op, nil)
+	resp, err := request.Do()
 	if err != nil {
-		return probe.WrapError(probe.NewError(err))
+		return probe.WrapError(err)
 	}
-	return nil
+	decodeerr := json.DecodeClientResponse(resp.Body, res)
+	return decodeerr
 }
 
-// List of servers in the cluster
-func (s *ServerService) List(r *http.Request, arg *ServerArgs, reply *ServerListReply) error {
-	reply.ServerList = []MinioServer{
-		{
-			"server.one",
-			"192.168.1.1",
-			"192.168.1.1",
-			"connected",
-		},
-		{
-			"server.two",
-			"192.168.1.2",
-			"192.168.1.2",
-			"connected",
-		},
-		{
-			"server.three",
-			"192.168.1.3",
-			"192.168.1.3",
-			"connected",
-		},
+func (s *controllerServerRPCService) Add(r *http.Request, arg *ServerArg, res *DefaultRep) error {
+	err := proxyRequest("Add", arg.IP, arg, res)
+	if err == nil {
+		s.serverList = append(s.serverList, *arg)
 	}
+	return err
+}
+
+func (s *controllerServerRPCService) MemStats(r *http.Request, arg *ServerArg, res *MemStatsRep) error {
+	return proxyRequest("MemStats", arg.IP, arg, res)
+}
+
+func (s *controllerServerRPCService) DiskStats(r *http.Request, arg *ServerArg, res *DiskStatsRep) error {
+	return proxyRequest("DiskStats", arg.IP, arg, res)
+}
+
+func (s *controllerServerRPCService) SysInfo(r *http.Request, arg *ServerArg, res *SysInfoRep) error {
+	return proxyRequest("SysInfo", arg.IP, arg, res)
+}
+
+func (s *controllerServerRPCService) List(r *http.Request, arg *ServerArg, res *ListRep) error {
+	res.List = s.serverList
 	return nil
 }

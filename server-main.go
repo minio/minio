@@ -42,12 +42,14 @@ func getServerConfig(c *cli.Context) APIConfig {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
+
 	return APIConfig{
-		Address:   c.GlobalString("address"),
-		TLS:       tls,
-		CertFile:  certFile,
-		KeyFile:   keyFile,
-		RateLimit: c.GlobalInt("ratelimit"),
+		Address:    c.GlobalString("address"),
+		AddressRPC: c.GlobalString("address-rpcserver"),
+		TLS:        tls,
+		CertFile:   certFile,
+		KeyFile:    keyFile,
+		RateLimit:  c.GlobalInt("ratelimit"),
 	}
 }
 

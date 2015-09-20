@@ -35,6 +35,13 @@ var (
 		Usage: "ADDRESS:PORT for management console access",
 	}
 
+	addressRPCServerFlag = cli.StringFlag{
+		Name:  "address-rpcserver",
+		Hide:  true,
+		Value: ":9002",
+		Usage: "ADDRESS:PORT for management console access",
+	}
+
 	ratelimitFlag = cli.IntFlag{
 		Name:  "ratelimit",
 		Value: 16,
