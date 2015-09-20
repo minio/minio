@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/utils/atomic"
+	"github.com/minio/minio/pkg/atomic"
 )
 
 // IsValidDonut - verify donut name is correct

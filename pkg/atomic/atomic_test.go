@@ -27,29 +27,37 @@ import (
 
 func Test(t *testing.T) { TestingT(t) }
 
-type MySuite struct{}
+type MySuite struct {
+	root string
+}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) TestAtomic(c *C) {
+func (s *MySuite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir("/tmp", "atomic-")
 	c.Assert(err, IsNil)
-	f, err := FileCreate(filepath.Join(root, "testfile"))
+	s.root = root
+}
+
+func (s *MySuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.root)
+}
+
+func (s *MySuite) TestAtomic(c *C) {
+	f, err := FileCreate(filepath.Join(s.root, "testfile"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(root, "testfile"))
+	_, err = os.Stat(filepath.Join(s.root, "testfile"))
 	c.Assert(err, Not(IsNil))
 	err = f.Close()
 	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(root, "testfile"))
+	_, err = os.Stat(filepath.Join(s.root, "testfile"))
 	c.Assert(err, IsNil)
 }
 
 func (s *MySuite) TestAtomicPurge(c *C) {
-	root, err := ioutil.TempDir("/tmp", "atomic-")
+	f, err := FileCreate(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, IsNil)
-	f, err := FileCreate(filepath.Join(root, "testfile"))
-	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(root, "testfile"))
+	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, Not(IsNil))
 	err = f.CloseAndPurge()
 	c.Assert(err, IsNil)
