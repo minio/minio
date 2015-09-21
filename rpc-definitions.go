@@ -16,6 +16,8 @@
 
 package main
 
+//// In memory metadata
+
 //// RPC params
 
 // AuthArgs auth params
@@ -31,20 +33,22 @@ type DonutArgs struct {
 	Disks    []string
 }
 
-// ServerArg server metadata to identify a server
-type ServerArg struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	ID   string `json:"id"`
+// ServerArg server params
+type ServerArg struct{}
+
+// ControllerArgs controller params
+type ControllerArgs struct {
+	Hosts []string `json:"hosts"` // hosts is a collection of host or host:port
+	SSL   bool     `json:"ssl"`
+	ID    string   `json:"id"`
 }
 
 //// RPC replies
 
 // ServerRep server reply container for Server.List
 type ServerRep struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	ID      string `json:"id"`
+	Host string `json:"host"`
+	ID   string `json:"id"`
 }
 
 // DefaultRep default reply
@@ -69,13 +73,17 @@ type MemStatsRep struct {
 	Free  uint64 `json:"free"`
 }
 
+// Network metadata of a server
+type Network struct {
+	IP       string `json:"address"`
+	NetMask  string `json:"netmask"`
+	Hostname string `json:"hostname"`
+	Ethernet string `json:"networkInterface"`
+}
+
 // NetStatsRep network statistics of a server
 type NetStatsRep struct {
-	Interfaces []struct {
-		IP       string `json:"address"`
-		Mask     string `json:"netmask"`
-		Ethernet string `json:"networkInterface"`
-	}
+	Interfaces []Network
 }
 
 // SysInfoRep system information of a server
@@ -90,7 +98,7 @@ type SysInfoRep struct {
 
 // ListRep all servers list
 type ListRep struct {
-	List []ServerArg `json:"list"`
+	List []ServerRep `json:"list"`
 }
 
 // VersionRep version reply

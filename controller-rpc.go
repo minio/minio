@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -29,7 +30,7 @@ import (
 )
 
 type controllerRPCService struct {
-	serverList []ServerArg
+	serverList []ServerRep
 }
 
 func makeDonut(args *DonutArgs, reply *DefaultRep) *probe.Error {
@@ -171,46 +172,92 @@ func (s *controllerRPCService) ResetAuth(r *http.Request, args *AuthArgs, reply 
 	return nil
 }
 
-func proxyRequest(method string, url string, arg interface{}, res interface{}) error {
-	// can be configured to something else in future
+func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
+	u := &url.URL{
+		Scheme: func() string {
+			if ssl {
+				return "https"
+			}
+			return "http"
+		}(),
+		Host: host,
+		Path: "/rpc",
+	}
 	op := rpcOperation{
 		Method:  method,
-		Request: arg,
+		Request: ServerArg{},
 	}
-	request, _ := newRPCRequest(url, op, nil)
-	resp, err := request.Do()
+	request, err := newRPCRequest(u.String(), op, nil)
 	if err != nil {
-		return probe.WrapError(err)
+		return err.Trace()
 	}
-	decodeerr := json.DecodeClientResponse(resp.Body, res)
-	return decodeerr
-}
-
-func (s *controllerRPCService) AddServer(r *http.Request, arg *ServerArg, res *DefaultRep) error {
-	err := proxyRequest("Server.Add", arg.URL, arg, res)
-	if err == nil {
-		s.serverList = append(s.serverList, *arg)
+	var resp *http.Response
+	resp, err = request.Do()
+	if err != nil {
+		return err.Trace()
 	}
-	return err
+	if err := json.DecodeClientResponse(resp.Body, res); err != nil {
+		return probe.NewError(err)
+	}
+	return nil
 }
 
-func (s *controllerRPCService) GetServerMemStats(r *http.Request, arg *ServerArg, res *MemStatsRep) error {
-	return proxyRequest("Server.MemStats", arg.URL, arg, res)
+func (s *controllerRPCService) AddServer(r *http.Request, args *ControllerArgs, res *ServerRep) error {
+	for _, host := range args.Hosts {
+		err := proxyRequest("Server.Add", host, args.SSL, res)
+		if err != nil {
+			return probe.WrapError(err)
+		}
+		s.serverList = append(s.serverList, *res)
+	}
+	return nil
 }
 
-func (s *controllerRPCService) GetServerDiskStats(r *http.Request, arg *ServerArg, res *DiskStatsRep) error {
-	return proxyRequest("Server.DiskStats", arg.URL, arg, res)
+func (s *controllerRPCService) GetServerMemStats(r *http.Request, args *ControllerArgs, res *MemStatsRep) error {
+	for _, host := range args.Hosts {
+		err := proxyRequest("Server.MemStats", host, args.SSL, res)
+		if err != nil {
+			return probe.WrapError(err)
+		}
+		return nil
+	}
+	return errors.New("Invalid argument")
 }
 
-func (s *controllerRPCService) GetServerSysInfo(r *http.Request, arg *ServerArg, res *SysInfoRep) error {
-	return proxyRequest("Server.SysInfo", arg.URL, arg, res)
+func (s *controllerRPCService) GetServerDiskStats(r *http.Request, args *ControllerArgs, res *DiskStatsRep) error {
+	for _, host := range args.Hosts {
+		err := proxyRequest("Server.DiskStats", host, args.SSL, res)
+		if err != nil {
+			return probe.WrapError(err)
+		}
+		return nil
+	}
+	return errors.New("Invalid argument")
 }
 
-func (s *controllerRPCService) ListServers(r *http.Request, arg *ServerArg, res *ListRep) error {
+func (s *controllerRPCService) GetServerSysInfo(r *http.Request, args *ControllerArgs, res *SysInfoRep) error {
+	for _, host := range args.Hosts {
+		err := proxyRequest("Server.SysInfo", host, args.SSL, res)
+		if err != nil {
+			return probe.WrapError(err)
+		}
+		return nil
+	}
+	return errors.New("Invalid argument")
+}
+
+func (s *controllerRPCService) ListServers(r *http.Request, args *ControllerArgs, res *ListRep) error {
 	res.List = s.serverList
 	return nil
 }
 
-func (s *controllerRPCService) GetServerVersion(r *http.Request, arg *ServerArg, res *VersionRep) error {
-	return proxyRequest("Server.Version", arg.URL, arg, res)
+func (s *controllerRPCService) GetServerVersion(r *http.Request, args *ControllerArgs, res *VersionRep) error {
+	for _, host := range args.Hosts {
+		err := proxyRequest("Server.Version", host, args.SSL, res)
+		if err != nil {
+			return probe.WrapError(err)
+		}
+		return nil
+	}
+	return errors.New("Invalid argument")
 }

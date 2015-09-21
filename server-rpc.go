@@ -26,9 +26,11 @@ import (
 
 type serverRPCService struct{}
 
-func (s *serverRPCService) Add(r *http.Request, arg *ServerArg, rep *DefaultRep) error {
-	rep.Message = "Server " + arg.URL + " added successfully"
-	rep.Error = nil
+func (s *serverRPCService) Add(r *http.Request, arg *ServerArg, rep *ServerRep) error {
+	rep = &ServerRep{
+		Host: "192.168.1.1:9002",
+		ID:   "6F27CB16-493D-40FA-B035-2A2E5646066A",
+	}
 	return nil
 }
 
@@ -58,17 +60,8 @@ func (s *serverRPCService) SysInfo(r *http.Request, arg *ServerArg, rep *SysInfo
 }
 
 func (s *serverRPCService) NetStats(r *http.Request, arg *ServerArg, rep *NetStatsRep) error {
-	rep.Interfaces = []struct {
-		IP       string `json:"address"`
-		Mask     string `json:"netmask"`
-		Ethernet string `json:"networkInterface"`
-	}{
-		{
-			"192.168.1.1",
-			"255.255.255.0",
-			"eth0",
-		},
-	}
+	rep.Interfaces = make([]Network, 0)
+	rep.Interfaces = append(rep.Interfaces, Network{IP: "192.168.1.1", NetMask: "255.255.255.0", Hostname: "hostname1", Ethernet: "eth0"})
 	return nil
 }
 
