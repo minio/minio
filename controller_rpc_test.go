@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 
 	"github.com/gorilla/rpc/v2/json"
@@ -29,6 +30,7 @@ import (
 
 type ControllerRPCSuite struct {
 	root string
+	url  *url.URL
 }
 
 var _ = Suite(&ControllerRPCSuite{})
@@ -48,6 +50,10 @@ func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 	testServerRPC = httptest.NewUnstartedServer(getServerRPCHandler())
 	testServerRPC.Config.Addr = ":9002"
 	testServerRPC.Start()
+
+	url, gerr := url.Parse(testServerRPC.URL)
+	c.Assert(gerr, IsNil)
+	s.url = url
 }
 
 func (s *ControllerRPCSuite) TearDownSuite(c *C) {
@@ -59,7 +65,7 @@ func (s *ControllerRPCSuite) TearDownSuite(c *C) {
 func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerMemStats",
-		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+		Request: ControllerArgs{Hosts: []string{s.url.Host}},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -77,7 +83,7 @@ func (s *ControllerRPCSuite) TestMemStats(c *C) {
 func (s *ControllerRPCSuite) TestDiskStats(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerDiskStats",
-		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+		Request: ControllerArgs{Hosts: []string{s.url.Host}},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -95,7 +101,7 @@ func (s *ControllerRPCSuite) TestDiskStats(c *C) {
 func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerSysInfo",
-		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+		Request: ControllerArgs{Hosts: []string{s.url.Host}},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -113,7 +119,7 @@ func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 func (s *ControllerRPCSuite) TestServerList(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.ListServers",
-		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+		Request: ControllerArgs{Hosts: []string{s.url.Host}},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -125,13 +131,13 @@ func (s *ControllerRPCSuite) TestServerList(c *C) {
 	var reply ServerListRep
 	c.Assert(json.DecodeClientResponse(resp.Body, &reply), IsNil)
 	resp.Body.Close()
-	c.Assert(reply, Not(DeepEquals), ServerListRep{})
+	c.Assert(reply, Not(DeepEquals), ServerListRep{List: []ServerRep{}})
 }
 
 func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.AddServer",
-		Request: ServerArg{URL: testServerRPC.URL + "/rpc"},
+		Request: ControllerArgs{Hosts: []string{s.url.Host}},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
