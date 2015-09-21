@@ -42,10 +42,7 @@ func (s *LoggerSuite) TestLogger(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(fields["level"], Equals, "error")
 
-	msg, ok := fields["error"]
+	msg, ok := fields["Error"]
 	c.Assert(ok, Equals, true)
-	c.Assert(msg, Equals, "Fake error")
-
-	_, ok = fields["probe"]
-	c.Assert(ok, Equals, true)
+	c.Assert(msg.(map[string]interface{})["cause"], Equals, "Fake error")
 }

@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/probe"
@@ -48,10 +49,16 @@ func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 	if fields == nil {
 		fields = make(map[string]interface{})
 	}
-
-	fields["error"] = err.ToGoError()
-	if jsonErr, e := json.Marshal(err); e == nil {
-		fields["probe"] = string(jsonErr)
+	fields["Error"] = struct {
+		Cause     string             `json:"cause,omitempty"`
+		Type      string             `json:"type,omitempty"`
+		CallTrace []probe.TracePoint `json:"trace,omitempty"`
+		SysInfo   map[string]string  `json:"sysinfo,omitempty"`
+	}{
+		err.Cause.Error(),
+		reflect.TypeOf(err.Cause).String(),
+		err.CallTrace,
+		err.SysInfo,
 	}
 	log.WithFields(fields).Error(msg)
 }
