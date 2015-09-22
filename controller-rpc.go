@@ -34,6 +34,8 @@ type controllerRPCService struct {
 	serverList []ServerRep
 }
 
+const tb = (1024 * 1024 * 1024 * 1024)
+
 func makeDonut(args *DonutArgs, reply *DefaultRep) *probe.Error {
 	conf := &donut.Config{Version: "0.0.1"}
 	conf.DonutName = args.Name
@@ -53,6 +55,19 @@ func (s *controllerRPCService) MakeDonut(r *http.Request, args *DonutArgs, reply
 	if err := makeDonut(args, reply); err != nil {
 		return probe.WrapError(err)
 	}
+	return nil
+}
+
+// StorageStats returns dummy storage stats
+func (s *controllerRPCService) StorageStats(r *http.Request, args *DonutArgs, reply *StorageStatsRep) error {
+	reply.Buckets = []BucketStorage{{"bucket1", 4 * tb}, {"bucket2", 120 * tb}, {"bucket3", 45 * tb}}
+	return nil
+}
+
+// RebalaceStats returns dummy rebalance stats
+func (s *controllerRPCService) RebalanceStats(r *http.Request, args *DonutArgs, reply *RebalanceStatsRep) error {
+	reply.Inprogress = []string{"bucket1/obj1", "bucket2/obj2", "bucket3/obj3"}
+	reply.Done = []string{"bucket1/rebobj1", "bucket2/rebobj2", "bucket3/rebobj3"}
 	return nil
 }
 

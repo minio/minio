@@ -115,3 +115,20 @@ type AuthRep struct {
 	AccessKeyID     string `json:"accessKeyId"`
 	SecretAccessKey string `json:"secretAccessKey"`
 }
+
+// BucketStorage bucket-name and storage used
+type BucketStorage struct {
+	Name string `json:"name"`
+	Used uint64 `json:"used"`
+}
+
+// StorageStatsRep array of buckets-storage-stats
+type StorageStatsRep struct {
+	Buckets []BucketStorage `json:"buckets"`
+}
+
+// RebalanceStatsRep rebalance information
+type RebalanceStatsRep struct {
+	Inprogress []string `json:"inprogress"`
+	Done       []string `json:"done"`
+}
