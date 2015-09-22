@@ -27,10 +27,8 @@ import (
 type serverRPCService struct{}
 
 func (s *serverRPCService) Add(r *http.Request, arg *ServerArg, rep *ServerRep) error {
-	rep = &ServerRep{
-		Host: "192.168.1.1:9002",
-		ID:   "6F27CB16-493D-40FA-B035-2A2E5646066A",
-	}
+	rep.Host = "192.168.1.1:9002"
+	rep.ID = "6F27CB16-493D-40FA-B035-2A2E5646066A"
 	return nil
 }
 

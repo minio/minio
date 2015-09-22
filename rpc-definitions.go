@@ -59,12 +59,12 @@ type DefaultRep struct {
 
 // ServerListRep collection of server replies
 type ServerListRep struct {
-	List []ServerRep
+	List []ServerRep `json:"list"`
 }
 
 // DiskStatsRep collection of disks
 type DiskStatsRep struct {
-	Disks []string
+	Disks []string `json:"disks"`
 }
 
 // MemStatsRep memory statistics of a server
@@ -83,7 +83,7 @@ type Network struct {
 
 // NetStatsRep network statistics of a server
 type NetStatsRep struct {
-	Interfaces []Network
+	Interfaces []Network `json:"interfaces"`
 }
 
 // SysInfoRep system information of a server
