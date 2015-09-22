@@ -65,7 +65,7 @@ func (s *ControllerRPCSuite) TearDownSuite(c *C) {
 func (s *ControllerRPCSuite) TestMemStats(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerMemStats",
-		Request: ControllerArgs{Hosts: []string{s.url.Host}},
+		Request: ControllerArgs{Host: s.url.Host},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -83,7 +83,7 @@ func (s *ControllerRPCSuite) TestMemStats(c *C) {
 func (s *ControllerRPCSuite) TestDiskStats(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerDiskStats",
-		Request: ControllerArgs{Hosts: []string{s.url.Host}},
+		Request: ControllerArgs{Host: s.url.Host},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -101,7 +101,7 @@ func (s *ControllerRPCSuite) TestDiskStats(c *C) {
 func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.GetServerSysInfo",
-		Request: ControllerArgs{Hosts: []string{s.url.Host}},
+		Request: ControllerArgs{Host: s.url.Host},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -119,7 +119,7 @@ func (s *ControllerRPCSuite) TestSysInfo(c *C) {
 func (s *ControllerRPCSuite) TestServerList(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.ListServers",
-		Request: ControllerArgs{Hosts: []string{s.url.Host}},
+		Request: ControllerArgs{Host: s.url.Host},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)
@@ -137,7 +137,7 @@ func (s *ControllerRPCSuite) TestServerList(c *C) {
 func (s *ControllerRPCSuite) TestServerAdd(c *C) {
 	op := rpcOperation{
 		Method:  "Controller.AddServer",
-		Request: ControllerArgs{Hosts: []string{s.url.Host}},
+		Request: ControllerArgs{Host: s.url.Host},
 	}
 	req, err := newRPCRequest(testControllerRPC.URL+"/rpc", op, http.DefaultTransport)
 	c.Assert(err, IsNil)

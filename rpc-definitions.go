@@ -38,9 +38,9 @@ type ServerArg struct{}
 
 // ControllerArgs controller params
 type ControllerArgs struct {
-	Hosts []string `json:"hosts"` // hosts is a collection of host or host:port
-	SSL   bool     `json:"ssl"`
-	ID    string   `json:"id"`
+	Host string `json:"host"` // host or host:port
+	SSL  bool   `json:"ssl"`
+	ID   string `json:"id"`
 }
 
 //// RPC replies

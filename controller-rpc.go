@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -173,16 +174,20 @@ func (s *controllerRPCService) ResetAuth(r *http.Request, args *AuthArgs, reply 
 }
 
 func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
-	u := &url.URL{
-		Scheme: func() string {
-			if ssl {
-				return "https"
-			}
-			return "http"
-		}(),
-		Host: host,
-		Path: "/rpc",
+	u := &url.URL{}
+	if ssl {
+		u.Scheme = "https"
+	} else {
+		u.Scheme = "http"
 	}
+	u.Host = host
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		u.Host = host
+	} else {
+		u.Host = host + ":9002"
+	}
+	u.Path = "/rpc"
+
 	op := rpcOperation{
 		Method:  method,
 		Request: ServerArg{},
@@ -203,47 +208,36 @@ func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
 }
 
 func (s *controllerRPCService) AddServer(r *http.Request, args *ControllerArgs, res *ServerRep) error {
-	for _, host := range args.Hosts {
-		err := proxyRequest("Server.Add", host, args.SSL, res)
-		if err != nil {
-			return probe.WrapError(err)
-		}
-		s.serverList = append(s.serverList, *res)
+	err := proxyRequest("Server.Add", args.Host, args.SSL, res)
+	if err != nil {
+		return probe.WrapError(err)
 	}
+	s.serverList = append(s.serverList, *res)
 	return nil
 }
 
 func (s *controllerRPCService) GetServerMemStats(r *http.Request, args *ControllerArgs, res *MemStatsRep) error {
-	for _, host := range args.Hosts {
-		err := proxyRequest("Server.MemStats", host, args.SSL, res)
-		if err != nil {
-			return probe.WrapError(err)
-		}
-		return nil
+	err := proxyRequest("Server.MemStats", args.Host, args.SSL, res)
+	if err != nil {
+		return probe.WrapError(err)
 	}
-	return errors.New("Invalid argument")
+	return nil
 }
 
 func (s *controllerRPCService) GetServerDiskStats(r *http.Request, args *ControllerArgs, res *DiskStatsRep) error {
-	for _, host := range args.Hosts {
-		err := proxyRequest("Server.DiskStats", host, args.SSL, res)
-		if err != nil {
-			return probe.WrapError(err)
-		}
-		return nil
+	err := proxyRequest("Server.DiskStats", args.Host, args.SSL, res)
+	if err != nil {
+		return probe.WrapError(err)
 	}
-	return errors.New("Invalid argument")
+	return nil
 }
 
 func (s *controllerRPCService) GetServerSysInfo(r *http.Request, args *ControllerArgs, res *SysInfoRep) error {
-	for _, host := range args.Hosts {
-		err := proxyRequest("Server.SysInfo", host, args.SSL, res)
-		if err != nil {
-			return probe.WrapError(err)
-		}
-		return nil
+	err := proxyRequest("Server.SysInfo", args.Host, args.SSL, res)
+	if err != nil {
+		return probe.WrapError(err)
 	}
-	return errors.New("Invalid argument")
+	return nil
 }
 
 func (s *controllerRPCService) ListServers(r *http.Request, args *ControllerArgs, res *ListRep) error {
@@ -252,12 +246,9 @@ func (s *controllerRPCService) ListServers(r *http.Request, args *ControllerArgs
 }
 
 func (s *controllerRPCService) GetServerVersion(r *http.Request, args *ControllerArgs, res *VersionRep) error {
-	for _, host := range args.Hosts {
-		err := proxyRequest("Server.Version", host, args.SSL, res)
-		if err != nil {
-			return probe.WrapError(err)
-		}
-		return nil
+	err := proxyRequest("Server.Version", args.Host, args.SSL, res)
+	if err != nil {
+		return probe.WrapError(err)
 	}
-	return errors.New("Invalid argument")
+	return nil
 }
