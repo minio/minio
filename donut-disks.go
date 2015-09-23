@@ -17,39 +17,31 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
-	"syscall"
 
 	"github.com/minio/minio/pkg/probe"
 )
 
 // isUsable provides a comprehensive way of knowing if the provided mountPath is mounted and writable
 func isUsable(mountPath string) (bool, *probe.Error) {
-	mntpoint, err := os.Stat(mountPath)
-	if err != nil {
-		return false, probe.NewError(err)
+	_, e := os.Stat(mountPath)
+	if e != nil {
+		e := os.MkdirAll(mountPath, 0700)
+		if e != nil {
+			return false, probe.NewError(e)
+		}
 	}
-	parent, err := os.Stat("/")
-	if err != nil {
-		return false, probe.NewError(err)
-	}
-	mntpointSt := mntpoint.Sys().(*syscall.Stat_t)
-	parentSt := parent.Sys().(*syscall.Stat_t)
 
-	if mntpointSt.Dev == parentSt.Dev {
-		return false, probe.NewError(fmt.Errorf("Not mounted %s", mountPath))
+	testFile, e := ioutil.TempFile(mountPath, "writetest-")
+	if e != nil {
+		return false, probe.NewError(e)
 	}
-	testFile, err := ioutil.TempFile(mountPath, "writetest-")
-	if err != nil {
-		return false, probe.NewError(err)
-	}
-	// close the file, to avoid leaky fd's
 	defer testFile.Close()
+
 	testFileName := testFile.Name()
-	if err := os.Remove(testFileName); err != nil {
-		return false, probe.NewError(err)
+	if e := os.Remove(testFileName); e != nil {
+		return false, probe.NewError(e)
 	}
 	return true, nil
 }
