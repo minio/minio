@@ -46,6 +46,11 @@ type ServerRep struct {
 	ID   string `json:"id"`
 }
 
+// ControllerNetInfoRep array of ip/mask in the form: 172.17.42.1/16
+type ControllerNetInfoRep struct {
+	NetInfo []string `json:"netinfo"`
+}
+
 // DefaultRep default reply
 type DefaultRep struct {
 	Error   error  `json:"error"`
@@ -111,7 +116,25 @@ type AuthRep struct {
 	SecretAccessKey string `json:"secretAccessKey"`
 }
 
-// BucketStats bucket name and total used by the bucket
+// DiscoverArgs array of IP addresses / names to discover
+type DiscoverArgs struct {
+	Hosts []string `json:"hosts"`
+	Port  int      `json:"port"`
+	SSL   bool     `json:"bool"`
+}
+
+// DiscoverRepEntry : Error is "" if there is no error
+type DiscoverRepEntry struct {
+	Host  string `json:"host"`
+	Error string `json:"error"`
+}
+
+// DiscoverRep list of discovered hosts
+type DiscoverRep struct {
+	Entry []DiscoverRepEntry `json:"entry"`
+}
+
+// BucketStats bucket-name and storage used
 type BucketStats struct {
 	Name string `json:"name"`
 	Used uint64 `json:"used"`
