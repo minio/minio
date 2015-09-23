@@ -41,7 +41,7 @@ func genVersion(version string) {
 	t := template.Must(template.New("version").Parse(versionTemplate))
 	versionFile, err := os.OpenFile("version.go", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		fmt.Println("genversion: Unable to generate ‘version.go’. Error: %s.", err)
+		fmt.Printf("genversion: Unable to generate ‘version.go’. Error: %s.\n", err)
 		os.Exit(1)
 	}
 	defer versionFile.Close()
@@ -52,7 +52,7 @@ func genVersion(version string) {
 	}{version, genReleaseTag(version)})
 
 	if err != nil {
-		fmt.Println("genversion: Unable to generate ‘version.go’. Error: %s.", err)
+		fmt.Printf("genversion: Unable to generate ‘version.go’. Error: %s.\n", err)
 		os.Exit(1)
 	}
 }
