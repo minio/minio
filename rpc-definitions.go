@@ -25,13 +25,8 @@ type AuthArgs struct {
 	User string `json:"user"`
 }
 
-// DonutArgs collections of disks and name to initialize donut
-type DonutArgs struct {
-	Name     string
-	MaxSize  uint64
-	Hostname string
-	Disks    []string
-}
+// DonutArg donut params
+type DonutArg struct{}
 
 // ServerArg server params
 type ServerArg struct{}
@@ -75,7 +70,7 @@ type MemStatsRep struct {
 
 // Network metadata of a server
 type Network struct {
-	IP       string `json:"address"`
+	Address  string `json:"address"`
 	NetMask  string `json:"netmask"`
 	Hostname string `json:"hostname"`
 	Ethernet string `json:"networkInterface"`
@@ -116,19 +111,34 @@ type AuthRep struct {
 	SecretAccessKey string `json:"secretAccessKey"`
 }
 
-// BucketStorage bucket-name and storage used
-type BucketStorage struct {
+// BucketStats bucket name and total used by the bucket
+type BucketStats struct {
 	Name string `json:"name"`
 	Used uint64 `json:"used"`
 }
 
-// StorageStatsRep array of buckets-storage-stats
+// StorageStatsRep array of BucketStats
 type StorageStatsRep struct {
-	Buckets []BucketStorage `json:"buckets"`
+	Buckets []BucketStats `json:"bucketStats"`
 }
 
 // RebalanceStatsRep rebalance information
 type RebalanceStatsRep struct {
-	Inprogress []string `json:"inprogress"`
-	Done       []string `json:"done"`
+	State map[string]string `json:"rebalanceState"`
+}
+
+// ListNodesRep all nodes part of donut cluster
+type ListNodesRep struct {
+	Nodes []struct {
+		Hostname string `json:"hostname"`
+		Address  string `json:"address"`
+		ID       string `json:"id"`
+	} `json:"nodes"`
+}
+
+// DonutVersionRep reply donut on disk format version
+type DonutVersionRep struct {
+	Version         string `json:"version"`
+	Architecture    string `json:"arch"`
+	OperatingSystem string `json:"os"`
 }

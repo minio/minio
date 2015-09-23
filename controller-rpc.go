@@ -26,49 +26,11 @@ import (
 
 	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
 )
 
 type controllerRPCService struct {
 	serverList []ServerRep
-}
-
-const tb = (1024 * 1024 * 1024 * 1024)
-
-func makeDonut(args *DonutArgs, reply *DefaultRep) *probe.Error {
-	conf := &donut.Config{Version: "0.0.1"}
-	conf.DonutName = args.Name
-	conf.MaxSize = args.MaxSize
-	conf.NodeDiskMap = make(map[string][]string)
-	conf.NodeDiskMap[args.Hostname] = args.Disks
-	if err := donut.SaveConfig(conf); err != nil {
-		return err.Trace()
-	}
-	reply.Message = "success"
-	reply.Error = nil
-	return nil
-}
-
-// MakeDonut method
-func (s *controllerRPCService) MakeDonut(r *http.Request, args *DonutArgs, reply *DefaultRep) error {
-	if err := makeDonut(args, reply); err != nil {
-		return probe.WrapError(err)
-	}
-	return nil
-}
-
-// StorageStats returns dummy storage stats
-func (s *controllerRPCService) StorageStats(r *http.Request, args *DonutArgs, reply *StorageStatsRep) error {
-	reply.Buckets = []BucketStorage{{"bucket1", 4 * tb}, {"bucket2", 120 * tb}, {"bucket3", 45 * tb}}
-	return nil
-}
-
-// RebalaceStats returns dummy rebalance stats
-func (s *controllerRPCService) RebalanceStats(r *http.Request, args *DonutArgs, reply *RebalanceStatsRep) error {
-	reply.Inprogress = []string{"bucket1/obj1", "bucket2/obj2", "bucket3/obj3"}
-	reply.Done = []string{"bucket1/rebobj1", "bucket2/rebobj2", "bucket3/rebobj3"}
-	return nil
 }
 
 // generateAuth generate new auth keys for a user
@@ -218,6 +180,24 @@ func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
 	}
 	if err := json.DecodeClientResponse(resp.Body, res); err != nil {
 		return probe.NewError(err)
+	}
+	return nil
+}
+
+// StorageStats returns dummy storage stats
+func (s *controllerRPCService) StorageStats(r *http.Request, args *ControllerArgs, reply *StorageStatsRep) error {
+	err := proxyRequest("Donut.StorageStats", args.Host, args.SSL, reply)
+	if err != nil {
+		return probe.WrapError(err)
+	}
+	return nil
+}
+
+// RebalaceStats returns dummy rebalance stats
+func (s *controllerRPCService) RebalanceStats(r *http.Request, args *ControllerArgs, reply *RebalanceStatsRep) error {
+	err := proxyRequest("Donut.RebalanceStats", args.Host, args.SSL, reply)
+	if err != nil {
+		return probe.WrapError(err)
 	}
 	return nil
 }

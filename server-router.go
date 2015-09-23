@@ -99,6 +99,7 @@ func getServerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
 	s.RegisterService(new(serverRPCService), "Server")
+	s.RegisterService(new(donutRPCService), "Donut")
 	mux := router.NewRouter()
 	mux.Handle("/rpc", s)
 	return mux

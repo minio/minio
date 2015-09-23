@@ -59,7 +59,7 @@ func (s *serverRPCService) SysInfo(r *http.Request, arg *ServerArg, rep *SysInfo
 
 func (s *serverRPCService) NetStats(r *http.Request, arg *ServerArg, rep *NetStatsRep) error {
 	rep.Interfaces = make([]Network, 0)
-	rep.Interfaces = append(rep.Interfaces, Network{IP: "192.168.1.1", NetMask: "255.255.255.0", Hostname: "hostname1", Ethernet: "eth0"})
+	rep.Interfaces = append(rep.Interfaces, Network{Address: "192.168.1.1", NetMask: "255.255.255.0", Hostname: "hostname1", Ethernet: "eth0"})
 	return nil
 }
 
