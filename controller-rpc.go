@@ -211,6 +211,65 @@ func (s *controllerRPCService) AddServer(r *http.Request, args *ControllerArgs, 
 	return nil
 }
 
+func (s *controllerRPCService) DiscoverServers(r *http.Request, args *DiscoverArgs, rep *DiscoverRep) error {
+	c := make(chan DiscoverRepEntry)
+	defer close(c)
+	for _, host := range args.Hosts {
+		go func(c chan DiscoverRepEntry, host string) {
+			u := &url.URL{}
+			if args.SSL {
+				u.Scheme = "https"
+			} else {
+				u.Scheme = "http"
+			}
+			if args.Port != 0 {
+				u.Host = host + ":" + string(args.Port)
+			} else {
+				u.Host = host + ":9002"
+			}
+			u.Path = "/rpc"
+
+			op := rpcOperation{
+				Method:  "Server.Version",
+				Request: ServerArg{},
+			}
+			versionrep := VersionRep{}
+			request, err := newRPCRequest(u.String(), op, nil)
+			if err != nil {
+				c <- DiscoverRepEntry{host, err.ToGoError().Error()}
+				return
+			}
+			var resp *http.Response
+			resp, err = request.Do()
+			if err != nil {
+				c <- DiscoverRepEntry{host, err.ToGoError().Error()}
+				return
+			}
+			if err := json.DecodeClientResponse(resp.Body, &versionrep); err != nil {
+				c <- DiscoverRepEntry{host, err.Error()}
+				return
+			}
+			c <- DiscoverRepEntry{host, ""}
+		}(c, host)
+	}
+	for range args.Hosts {
+		entry := <-c
+		rep.Entry = append(rep.Entry, entry)
+	}
+	return nil
+}
+
+func (s *controllerRPCService) GetControllerNetInfo(r *http.Request, args *ServerArg, res *ControllerNetInfoRep) error {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		res.NetInfo = append(res.NetInfo, addr.String())
+	}
+	return nil
+}
+
 func (s *controllerRPCService) GetServerMemStats(r *http.Request, args *ControllerArgs, res *MemStatsRep) error {
 	err := proxyRequest("Server.MemStats", args.Host, args.SSL, res)
 	if err != nil {
