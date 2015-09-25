@@ -17,6 +17,13 @@
 			"revisionTime": "2015-08-09T13:14:05-07:00"
 		},
 		{
+			"canonical": "github.com/elazarl/go-bindata-assetfs",
+			"comment": "",
+			"local": "vendor/github.com/elazarl/go-bindata-assetfs",
+			"revision": "d5cac425555ca5cf00694df246e04f05e6a55150",
+			"revisionTime": "2015-08-13T07:46:22+03:00"
+		},
+		{
 			"canonical": "github.com/facebookgo/clock",
 			"comment": "",
 			"local": "vendor/github.com/facebookgo/clock",
