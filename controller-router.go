@@ -27,14 +27,13 @@ import (
 // getControllerRPCHandler rpc handler for controller
 func getControllerRPCHandler() http.Handler {
 	s := jsonrpc.NewServer()
-	s.RegisterCodec(json.NewCodec(), "application/json")
+	codec := json.NewCodec()
+	s.RegisterCodec(codec, "application/json")
+	s.RegisterCodec(codec, "application/json; charset=UTF-8")
 	s.RegisterService(new(controllerRPCService), "Controller")
+	mux := router.NewRouter()
 	// Add new RPC services here
-	return registerRPC(router.NewRouter(), s)
-}
-
-// registerRPC - register rpc handlers
-func registerRPC(mux *router.Router, s *jsonrpc.Server) http.Handler {
 	mux.Handle("/rpc", s)
+	mux.Handle("/{file:.*}", http.FileServer(assetFS()))
 	return mux
 }
