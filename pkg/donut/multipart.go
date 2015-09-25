@@ -59,9 +59,9 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 			return "", probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
-	if len(donut.config.NodeDiskMap) > 0 {
-		return donut.newMultipartUpload(bucket, key, contentType)
-	}
+	//	if len(donut.config.NodeDiskMap) > 0 {
+	//		return donut.newMultipartUpload(bucket, key, contentType)
+	//	}
 	if !donut.storedBuckets.Exists(bucket) {
 		return "", probe.NewError(BucketNotFound{Bucket: bucket})
 	}
@@ -107,9 +107,12 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 			return probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
-	if len(donut.config.NodeDiskMap) > 0 {
-		return donut.abortMultipartUpload(bucket, key, uploadID)
-	}
+	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
+	//       it can be stored, disabling this for now until we get the underlying layout stable.
+	//
+	//	if len(donut.config.NodeDiskMap) > 0 {
+	//		return donut.abortMultipartUpload(bucket, key, uploadID)
+	//	}
 	if !donut.storedBuckets.Exists(bucket) {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
@@ -140,28 +143,32 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 	if !IsValidObjectName(key) {
 		return "", probe.NewError(ObjectNameInvalid{Object: key})
 	}
-	if len(donut.config.NodeDiskMap) > 0 {
-		metadata := make(map[string]string)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-		contentType = strings.TrimSpace(contentType)
-		metadata["contentType"] = contentType
-		if strings.TrimSpace(expectedMD5Sum) != "" {
-			expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
-			if err != nil {
-				// pro-actively close the connection
-				return "", probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
+	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
+	//       it can be stored, disabling this for now until we get the underlying layout stable.
+	//
+	/*
+		if len(donut.config.NodeDiskMap) > 0 {
+			metadata := make(map[string]string)
+			if contentType == "" {
+				contentType = "application/octet-stream"
 			}
-			expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
+			contentType = strings.TrimSpace(contentType)
+			metadata["contentType"] = contentType
+			if strings.TrimSpace(expectedMD5Sum) != "" {
+				expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+				if err != nil {
+					// pro-actively close the connection
+					return "", probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
+				}
+				expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
+			}
+			partMetadata, err := donut.putObjectPart(bucket, key, expectedMD5Sum, uploadID, partID, data, size, metadata, signature)
+			if err != nil {
+				return "", err.Trace()
+			}
+			return partMetadata.ETag, nil
 		}
-		partMetadata, err := donut.putObjectPart(bucket, key, expectedMD5Sum, uploadID, partID, data, size, metadata, signature)
-		if err != nil {
-			return "", err.Trace()
-		}
-		return partMetadata.ETag, nil
-	}
-
+	*/
 	if !donut.storedBuckets.Exists(bucket) {
 		return "", probe.NewError(BucketNotFound{Bucket: bucket})
 	}
@@ -277,10 +284,13 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 		donut.lock.Unlock()
 		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
-	if len(donut.config.NodeDiskMap) > 0 {
-		donut.lock.Unlock()
-		return donut.completeMultipartUpload(bucket, key, uploadID, data, signature)
-	}
+	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
+	//       it can be stored, disabling this for now until we get the underlying layout stable.
+	//
+	//	if len(donut.config.NodeDiskMap) > 0 {
+	//		donut.lock.Unlock()
+	//		return donut.completeMultipartUpload(bucket, key, uploadID, data, signature)
+	//	}
 
 	if !donut.storedBuckets.Exists(bucket) {
 		donut.lock.Unlock()
@@ -376,7 +386,7 @@ func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given bucket
 func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *Signature) (BucketMultipartResourcesMetadata, *probe.Error) {
-	// TODO handle delimiter
+	// TODO handle delimiter, low priority
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -394,9 +404,12 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	if len(donut.config.NodeDiskMap) > 0 {
-		return donut.listMultipartUploads(bucket, resources)
-	}
+	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
+	//       it can be stored, disabling this for now until we get the underlying layout stable.
+	//
+	//	if len(donut.config.NodeDiskMap) > 0 {
+	//		return donut.listMultipartUploads(bucket, resources)
+	//	}
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
@@ -479,9 +492,12 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 		return ObjectResourcesMetadata{}, probe.NewError(ObjectNameInvalid{Object: key})
 	}
 
-	if len(donut.config.NodeDiskMap) > 0 {
-		return donut.listObjectParts(bucket, key, resources)
-	}
+	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
+	//       it can be stored, disabling this for now until we get the underlying layout stable.
+	//
+	//	if len(donut.config.NodeDiskMap) > 0 {
+	//		return donut.listObjectParts(bucket, key, resources)
+	//	}
 
 	if !donut.storedBuckets.Exists(bucket) {
 		return ObjectResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
