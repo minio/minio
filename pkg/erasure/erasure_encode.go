@@ -16,7 +16,6 @@
 
 package erasure
 
-// #cgo CFLAGS: -O0
 // #include <stdlib.h>
 // #include "ec_isal-l.h"
 // #include "ec_minio_common.h"
