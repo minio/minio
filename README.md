@@ -66,7 +66,7 @@ $ ./minio mode memory limit 12GB expire 2h
 [![asciicast](https://asciinema.org/a/21575.png)](https://asciinema.org/a/21575)
 
 ### Contribute to Minio Project
-Please follow Minio [Contributors Guide](./CONTRIBUTING.md)
+Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
 
 ### Jobs
 If you think in Lisp or Haskell and hack in go, you would blend right in. Send your github link to callhome@minio.io.
