@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/gorilla/rpc/v2/json"
@@ -304,5 +305,13 @@ func (s *controllerRPCService) GetServerVersion(r *http.Request, args *Controlle
 	if err != nil {
 		return probe.WrapError(err)
 	}
+	return nil
+}
+
+func (s *controllerRPCService) GetVersion(r *http.Request, args *ControllerArgs, res *VersionRep) error {
+	res.Version = "0.0.1"
+	res.BuildDate = minioVersion
+	res.Architecture = runtime.GOARCH
+	res.OperatingSystem = runtime.GOOS
 	return nil
 }
