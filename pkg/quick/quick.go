@@ -19,6 +19,7 @@
 package quick
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -144,7 +145,12 @@ func Load(filename string, data interface{}) (Config, *probe.Error) {
 
 	err = json.Unmarshal(fileData, &data)
 	if err != nil {
-		return nil, probe.NewError(err)
+		switch err := err.(type) {
+		case *json.SyntaxError:
+			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+		default:
+			return nil, probe.NewError(err)
+		}
 	}
 
 	config, perr := New(data)
@@ -182,7 +188,12 @@ func (d *config) Load(filename string) *probe.Error {
 
 	err = json.Unmarshal(fileData, d.data)
 	if err != nil {
-		return probe.NewError(err)
+		switch err := err.(type) {
+		case *json.SyntaxError:
+			return probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+		default:
+			return probe.NewError(err)
+		}
 	}
 
 	if err := CheckData(d.data); err != nil {
