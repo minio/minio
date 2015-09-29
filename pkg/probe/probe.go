@@ -157,19 +157,19 @@ func (e *Error) String() string {
 	defer e.lock.RUnlock()
 
 	if e.Cause != nil {
-		str := e.Cause.Error() + "\n"
+		str := e.Cause.Error()
 		callLen := len(e.CallTrace)
 		for i := callLen - 1; i >= 0; i-- {
 			if len(e.CallTrace[i].Env) > 0 {
-				str += fmt.Sprintf(" (%d) %s:%d %s(..) Tags: [%s]\n",
+				str += fmt.Sprintf("\n (%d) %s:%d %s(..) Tags: [%s]",
 					i, e.CallTrace[i].Filename, e.CallTrace[i].Line, e.CallTrace[i].Function, strings.Join(e.CallTrace[i].Env["Tags"], ", "))
 			} else {
-				str += fmt.Sprintf(" (%d) %s:%d %s(..)\n",
+				str += fmt.Sprintf("\n (%d) %s:%d %s(..)",
 					i, e.CallTrace[i].Filename, e.CallTrace[i].Line, e.CallTrace[i].Function)
 			}
 		}
 
-		str += " Host:" + e.SysInfo["host.name"] + " | "
+		str += "\n" + " Host:" + e.SysInfo["host.name"] + " | "
 		str += "OS:" + e.SysInfo["host.os"] + " | "
 		str += "Arch:" + e.SysInfo["host.arch"] + " | "
 		str += "Lang:" + e.SysInfo["host.lang"] + " | "
