@@ -21,8 +21,10 @@ import (
 	"crypto/hmac"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -35,7 +37,10 @@ import (
 type Signature struct {
 	AccessKeyID     string
 	SecretAccessKey string
-	AuthHeader      string
+	Presigned       bool
+	PresignedPolicy bool
+	SignedHeaders   []string
+	Signature       string
 	Request         *http.Request
 }
 
@@ -135,11 +140,9 @@ func (r *Signature) getSignedHeaders(signedHeaders map[string][]string) string {
 }
 
 // extractSignedHeaders extract signed headers from Authorization header
-func (r *Signature) extractSignedHeaders() map[string][]string {
-	authFields := strings.Split(strings.TrimSpace(r.AuthHeader), ",")
-	extractedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
+func (r Signature) extractSignedHeaders() map[string][]string {
 	extractedSignedHeadersMap := make(map[string][]string)
-	for _, header := range extractedHeaders {
+	for _, header := range r.SignedHeaders {
 		val, ok := r.Request.Header[http.CanonicalHeaderKey(header)]
 		if !ok {
 			// if not found continue, we will fail later
@@ -161,6 +164,7 @@ func (r *Signature) extractSignedHeaders() map[string][]string {
 //  <HashedPayload>
 //
 func (r *Signature) getCanonicalRequest() string {
+	payload := r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256"))
 	r.Request.URL.RawQuery = strings.Replace(r.Request.URL.Query().Encode(), "+", "%20", -1)
 	encodedPath, _ := urlEncodeName(r.Request.URL.Path)
 	// convert any space strings back to "+"
@@ -171,7 +175,33 @@ func (r *Signature) getCanonicalRequest() string {
 		r.Request.URL.RawQuery,
 		r.getCanonicalHeaders(r.extractSignedHeaders()),
 		r.getSignedHeaders(r.extractSignedHeaders()),
-		r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256")),
+		payload,
+	}, "\n")
+	return canonicalRequest
+}
+
+// getCanonicalRequest generate a canonical request of style
+//
+// canonicalRequest =
+//  <HTTPMethod>\n
+//  <CanonicalURI>\n
+//  <CanonicalQueryString>\n
+//  <CanonicalHeaders>\n
+//  <SignedHeaders>\n
+//  <HashedPayload>
+//
+func (r *Signature) getPresignedCanonicalRequest(presignedQuery string) string {
+	rawQuery := strings.Replace(presignedQuery, "+", "%20", -1)
+	encodedPath, _ := urlEncodeName(r.Request.URL.Path)
+	// convert any space strings back to "+"
+	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
+	canonicalRequest := strings.Join([]string{
+		r.Request.Method,
+		encodedPath,
+		rawQuery,
+		r.getCanonicalHeaders(r.extractSignedHeaders()),
+		r.getSignedHeaders(r.extractSignedHeaders()),
+		"UNSIGNED-PAYLOAD",
 	}, "\n")
 	return canonicalRequest
 }
@@ -210,13 +240,62 @@ func (r *Signature) getSignature(signingKey []byte, stringToSign string) string 
 	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 
-// DoesSignatureMatch - Verify authorization header with calculated header in accordance with - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-// returns true if matches, false other wise if error is not nil then it is always false
+// DoesPolicySignatureMatch - Verify query headers with post policy
+//     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
+// returns true if matches, false otherwise. if error is not nil then it is always false
+func (r *Signature) DoesPolicySignatureMatch() (bool, *probe.Error) {
+	// FIXME: Implement this
+	return true, nil
+}
+
+// DoesPresignedSignatureMatch - Verify query headers with presigned signature
+//     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+// returns true if matches, false otherwise. if error is not nil then it is always false
+func (r *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
+	query := make(url.Values)
+	query.Set("X-Amz-Algorithm", authHeaderPrefix)
+
+	var date string
+	if date = r.Request.URL.Query().Get("X-Amz-Date"); date == "" {
+		return false, probe.NewError(MissingDateHeader{})
+	}
+	t, err := time.Parse(iso8601Format, date)
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+	if _, ok := r.Request.URL.Query()["X-Amz-Expires"]; !ok {
+		return false, probe.NewError(MissingExpiresQuery{})
+	}
+	expireSeconds, err := strconv.Atoi(r.Request.URL.Query().Get("X-Amz-Expires"))
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+	if time.Now().UTC().Sub(t) > time.Duration(expireSeconds)*time.Second {
+		return false, probe.NewError(ExpiredPresignedRequest{})
+	}
+	query.Set("X-Amz-Date", t.Format(iso8601Format))
+	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
+	query.Set("X-Amz-SignedHeaders", r.getSignedHeaders(r.extractSignedHeaders()))
+	query.Set("X-Amz-Credential", r.AccessKeyID+"/"+r.getScope(t))
+
+	encodedQuery := query.Encode()
+	newSignature := r.getSignature(r.getSigningKey(t), r.getStringToSign(r.getPresignedCanonicalRequest(encodedQuery), t))
+	encodedQuery += "&X-Amz-Signature=" + newSignature
+
+	if encodedQuery != r.Request.URL.RawQuery {
+		return false, nil
+	}
+	return true, nil
+}
+
+// DoesSignatureMatch - Verify authorization header with calculated header in accordance with
+//     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
+// returns true if matches, false otherwise. if error is not nil then it is always false
 func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
 	// set new calulated payload
 	r.Request.Header.Set("X-Amz-Content-Sha256", hashedPayload)
 
-	// Add date if not present
+	// Add date if not present throw error
 	var date string
 	if date = r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
 		if date = r.Request.Header.Get("Date"); date == "" {
@@ -232,9 +311,7 @@ func (r *Signature) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error
 	signingKey := r.getSigningKey(t)
 	newSignature := r.getSignature(signingKey, stringToSign)
 
-	authFields := strings.Split(strings.TrimSpace(r.AuthHeader), ",")
-	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
-	if newSignature != signature {
+	if newSignature != r.Signature {
 		return false, nil
 	}
 	return true, nil

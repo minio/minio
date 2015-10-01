@@ -135,7 +135,7 @@ func (b bucket) getBucketMetadata() (*AllBuckets, *probe.Error) {
 func (b bucket) GetObjectMetadata(objectName string) (ObjectMetadata, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	return b.readObjectMetadata(objectName)
+	return b.readObjectMetadata(normalizeObjectName(objectName))
 }
 
 // ListObjects - list all objects

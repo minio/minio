@@ -106,16 +106,52 @@ func initSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
+	authFields := strings.Split(strings.TrimSpace(authHeaderValue), ",")
+	signedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
+	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
 	for _, user := range authConfig.Users {
 		if user.AccessKeyID == accessKeyID {
 			signature := &donut.Signature{
 				AccessKeyID:     user.AccessKeyID,
 				SecretAccessKey: user.SecretAccessKey,
-				AuthHeader:      authHeaderValue,
+				Signature:       signature,
+				SignedHeaders:   signedHeaders,
 				Request:         req,
 			}
 			return signature, nil
 		}
 	}
 	return nil, probe.NewError(errors.New("AccessKeyID not found"))
+}
+
+// initPresignedSignatureV4 initializing presigned signature verification
+func initPresignedSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
+	credentialElements := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-Credential")), "/")
+	if len(credentialElements) != 5 {
+		return nil, probe.NewError(errCredentialTagMalformed)
+	}
+	accessKeyID := credentialElements[0]
+	if !auth.IsValidAccessKey(accessKeyID) {
+		return nil, probe.NewError(errAccessKeyIDInvalid)
+	}
+	authConfig, err := auth.LoadConfig()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	signedHeaders := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-SignedHeaders")), ";")
+	signature := strings.TrimSpace(req.URL.Query().Get("X-Amz-Signature"))
+	for _, user := range authConfig.Users {
+		if user.AccessKeyID == accessKeyID {
+			signature := &donut.Signature{
+				AccessKeyID:     user.AccessKeyID,
+				SecretAccessKey: user.SecretAccessKey,
+				Signature:       signature,
+				SignedHeaders:   signedHeaders,
+				Presigned:       true,
+				Request:         req,
+			}
+			return signature, nil
+		}
+	}
+	return nil, probe.NewError(errAccessKeyIDInvalid)
 }
