@@ -361,6 +361,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		donut.storedBuckets.Set(bucket, storedBucket)
 		return objMetadata, nil
 	}
+
 	// calculate md5
 	hash := md5.New()
 	sha256hash := sha256.New()
