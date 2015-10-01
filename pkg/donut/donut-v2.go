@@ -626,12 +626,22 @@ func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (Ob
 	defer donut.lock.Unlock()
 
 	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return ObjectMetadata{}, err.Trace()
-		}
-		if !ok {
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+		if signature.Presigned {
+			ok, err := signature.DoesPresignedSignatureMatch()
+			if err != nil {
+				return ObjectMetadata{}, err.Trace()
+			}
+			if !ok {
+				return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			}
+		} else {
+			ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+			if err != nil {
+				return ObjectMetadata{}, err.Trace()
+			}
+			if !ok {
+				return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			}
 		}
 	}
 

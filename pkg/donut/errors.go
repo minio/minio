@@ -328,6 +328,20 @@ func (e SignatureDoesNotMatch) Error() string {
 	return "The request signature we calculated does not match the signature you provided"
 }
 
+// ExpiredPresignedRequest request already expired
+type ExpiredPresignedRequest struct{}
+
+func (e ExpiredPresignedRequest) Error() string {
+	return "Presigned request already expired"
+}
+
+// MissingExpiresQuery expires query string missing
+type MissingExpiresQuery struct{}
+
+func (e MissingExpiresQuery) Error() string {
+	return "Missing expires query string"
+}
+
 // MissingDateHeader date header missing
 type MissingDateHeader struct{}
 

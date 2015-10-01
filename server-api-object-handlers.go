@@ -63,8 +63,24 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
 			return
 		}
+	} else {
+		if _, ok := req.URL.Query()["X-Amz-Credential"]; ok {
+			var err *probe.Error
+			signature, err = initPresignedSignatureV4(req)
+			if err != nil {
+				switch err.ToGoError() {
+				case errAccessKeyIDInvalid:
+					errorIf(err.Trace(), "Invalid access key id requested.", nil)
+					writeErrorResponse(w, req, InvalidAccessKeyID, acceptsContentType, req.URL.Path)
+					return
+				default:
+					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+					writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+					return
+				}
+			}
+		}
 	}
-
 	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
