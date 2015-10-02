@@ -1,13 +1,16 @@
-
-FROM ubuntu:14.04
+FROM ubuntu-debootstrap:14.04
 
 MAINTAINER Minio Community
 
-ENV GOLANG_TARBALL go1.5.linux-amd64.tar.gz
+ENV GOLANG_TARBALL go1.5.1.linux-amd64.tar.gz
 
 ENV GOROOT /usr/local/go/
 ENV GOPATH /go-workspace
 ENV PATH ${GOROOT}/bin:${GOPATH}/bin/:$PATH
+
+ENV MINIOHOME /home/minio
+ENV MINIOUSER minio
+RUN useradd -m -d $MINIOHOME $MINIOUSER
 
 RUN apt-get update -y && apt-get install -y -q \
 		curl \
@@ -28,6 +31,8 @@ RUN cd ${GOPATH}/src/github.com/minio/minio && \
 RUN apt-get remove -y build-essential curl git && \
         apt-get -y autoremove && \
         rm -rf /var/lib/apt/lists/*
+
+USER minio
 
 EXPOSE 9000 9001
 
