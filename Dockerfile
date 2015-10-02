@@ -8,6 +8,10 @@ ENV GOROOT /usr/local/go/
 ENV GOPATH /go-workspace
 ENV PATH ${GOROOT}/bin:${GOPATH}/bin/:$PATH
 
+ENV MINIOHOME /home/minio
+ENV MINIOUSER minio
+RUN useradd -m -d $MINIOHOME $MINIOUSER
+
 RUN apt-get update -y && apt-get install -y -q \
 		curl \
 		git \
@@ -27,6 +31,8 @@ RUN cd ${GOPATH}/src/github.com/minio/minio && \
 RUN apt-get remove -y build-essential curl git && \
         apt-get -y autoremove && \
         rm -rf /var/lib/apt/lists/*
+
+USER minio
 
 EXPOSE 9000 9001
 
