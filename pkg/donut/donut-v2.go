@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/donut/cache/metadata"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 // total Number of buckets allowed
@@ -204,7 +205,7 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 }
 
 // GetBucketMetadata -
-func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketMetadata, *probe.Error) {
+func (donut API) GetBucketMetadata(bucket string, signature *signv4.Signature) (BucketMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -214,7 +215,7 @@ func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketM
 			return BucketMetadata{}, err.Trace()
 		}
 		if !ok {
-			return BucketMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return BucketMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -237,7 +238,7 @@ func (donut API) GetBucketMetadata(bucket string, signature *Signature) (BucketM
 }
 
 // SetBucketMetadata -
-func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, signature *Signature) *probe.Error {
+func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, signature *signv4.Signature) *probe.Error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -247,7 +248,7 @@ func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, si
 			return err.Trace()
 		}
 		if !ok {
-			return probe.NewError(SignatureDoesNotMatch{})
+			return probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -288,7 +289,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
 }
 
 // CreateObject - create an object
-func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -301,7 +302,7 @@ func (donut API) CreateObject(bucket, key, expectedMD5Sum string, size int64, da
 }
 
 // createObject - PUT object to cache buffer
-func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	if len(donut.config.NodeDiskMap) == 0 {
 		if size > int64(donut.config.MaxSize) {
 			generic := GenericObjectError{Bucket: bucket, Object: key}
@@ -381,10 +382,12 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		totalLength += int64(length)
 		go debug.FreeOSMemory()
 	}
-	if totalLength != size {
-		// Delete perhaps the object is already saved, due to the nature of append()
-		donut.objects.Delete(objectKey)
-		return ObjectMetadata{}, probe.NewError(IncompleteBody{Bucket: bucket, Object: key})
+	if size != 0 {
+		if totalLength != size {
+			// Delete perhaps the object is already saved, due to the nature of append()
+			donut.objects.Delete(objectKey)
+			return ObjectMetadata{}, probe.NewError(IncompleteBody{Bucket: bucket, Object: key})
+		}
 	}
 	if err != io.EOF {
 		return ObjectMetadata{}, probe.NewError(err)
@@ -403,7 +406,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -425,7 +428,7 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 }
 
 // MakeBucket - create bucket in cache
-func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signature *Signature) *probe.Error {
+func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signature *signv4.Signature) *probe.Error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -445,7 +448,7 @@ func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signatur
 			return err.Trace()
 		}
 		if !ok {
-			return probe.NewError(SignatureDoesNotMatch{})
+			return probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -484,7 +487,7 @@ func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signatur
 }
 
 // ListObjects - list objects from cache
-func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, signature *Signature) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
+func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, signature *signv4.Signature) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -494,7 +497,7 @@ func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, s
 			return nil, BucketResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return nil, BucketResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return nil, BucketResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -587,7 +590,7 @@ func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from cache
-func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, *probe.Error) {
+func (donut API) ListBuckets(signature *signv4.Signature) ([]BucketMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -597,7 +600,7 @@ func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, *probe.Err
 			return nil, err.Trace()
 		}
 		if !ok {
-			return nil, probe.NewError(SignatureDoesNotMatch{})
+			return nil, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -621,7 +624,7 @@ func (donut API) ListBuckets(signature *Signature) ([]BucketMetadata, *probe.Err
 }
 
 // GetObjectMetadata - get object metadata from cache
-func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) GetObjectMetadata(bucket, key string, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -632,7 +635,7 @@ func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (Ob
 				return ObjectMetadata{}, err.Trace()
 			}
 			if !ok {
-				return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+				return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 			}
 		} else {
 			ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -640,7 +643,7 @@ func (donut API) GetObjectMetadata(bucket, key string, signature *Signature) (Ob
 				return ObjectMetadata{}, err.Trace()
 			}
 			if !ok {
-				return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+				return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 			}
 		}
 	}

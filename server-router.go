@@ -26,11 +26,12 @@ import (
 )
 
 // registerAPI - register all the object API handlers to their respective paths
-func registerAPI(mux *router.Router, a MinioAPI) {
+func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")
 	mux.HandleFunc("/{bucket}", a.HeadBucketHandler).Methods("HEAD")
+	mux.HandleFunc("/{bucket}", a.PostPolicyBucketHandler).Methods("POST")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.HeadObjectHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}").Methods("GET")
@@ -61,26 +62,26 @@ type APIOperation struct {
 	ProceedCh chan struct{}
 }
 
-// MinioAPI container for API and also carries OP (operation) channel
-type MinioAPI struct {
+// API container for API and also carries OP (operation) channel
+type API struct {
 	OP    chan APIOperation
 	Donut donut.Interface
 }
 
 // getNewAPI instantiate a new minio API
-func getNewAPI() MinioAPI {
+func getNewAPI() API {
 	// ignore errors for now
 	d, err := donut.New()
 	fatalIf(err.Trace(), "Instantiating donut failed.", nil)
 
-	return MinioAPI{
+	return API{
 		OP:    make(chan APIOperation),
 		Donut: d,
 	}
 }
 
 // getAPIHandler api handler
-func getAPIHandler(minioAPI MinioAPI) http.Handler {
+func getAPIHandler(api API) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		ValidContentTypeHandler,
 		TimeValidityHandler,
@@ -90,7 +91,7 @@ func getAPIHandler(minioAPI MinioAPI) http.Handler {
 		CorsHandler,
 	}
 	mux := router.NewRouter()
-	registerAPI(mux, minioAPI)
+	registerAPI(mux, api)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler
 }

@@ -70,11 +70,12 @@ const (
 	InvalidPart
 	InvalidPartOrder
 	AuthorizationHeaderMalformed
+	MalformedPOSTRequest
 )
 
 // Error codes, non exhaustive list - standard HTTP errors
 const (
-	NotAcceptable = iota + 30
+	NotAcceptable = iota + 31
 )
 
 // APIError code to Error structure map
@@ -227,6 +228,11 @@ var errorCodeResponse = map[int]APIError{
 	AuthorizationHeaderMalformed: {
 		Code:           "AuthorizationHeaderMalformed",
 		Description:    "The authorization header is malformed; the region is wrong; expecting 'milkyway'.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	MalformedPOSTRequest: {
+		Code:           "MalformedPOSTRequest",
+		Description:    "The body of your POST request is not well-formed multipart/form-data.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 }

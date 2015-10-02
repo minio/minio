@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package donut
+package signature
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ type Signature struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	Presigned       bool
-	PresignedPolicy bool
+	PresignedPolicy []byte
 	SignedHeaders   []string
 	Signature       string
 	Request         *http.Request
@@ -57,18 +57,18 @@ func sumHMAC(key []byte, data []byte) []byte {
 	return hash.Sum(nil)
 }
 
-// urlEncodedName encode the strings from UTF-8 byte representations to HTML hex escape sequences
+// getURLEncodedName encode the strings from UTF-8 byte representations to HTML hex escape sequences
 //
 // This is necessary since regular url.Parse() and url.Encode() functions do not support UTF-8
 // non english characters cannot be parsed due to the nature in which url.Encode() is written
 //
 // This function on the other hand is a direct replacement for url.Encode() technique to support
 // pretty much every UTF-8 character.
-func urlEncodeName(name string) (string, *probe.Error) {
+func getURLEncodedName(name string) string {
 	// if object matches reserved string, no need to encode them
 	reservedNames := regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
 	if reservedNames.MatchString(name) {
-		return name, nil
+		return name
 	}
 	var encodedName string
 	for _, s := range name {
@@ -83,7 +83,7 @@ func urlEncodeName(name string) (string, *probe.Error) {
 		default:
 			len := utf8.RuneLen(s)
 			if len < 0 {
-				return "", probe.NewError(InvalidArgument{})
+				return name
 			}
 			u := make([]byte, len)
 			utf8.EncodeRune(u, s)
@@ -93,7 +93,7 @@ func urlEncodeName(name string) (string, *probe.Error) {
 			}
 		}
 	}
-	return encodedName, nil
+	return encodedName
 }
 
 // getCanonicalHeaders generate a list of request headers with their values
@@ -166,7 +166,7 @@ func (r Signature) extractSignedHeaders() map[string][]string {
 func (r *Signature) getCanonicalRequest() string {
 	payload := r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256"))
 	r.Request.URL.RawQuery = strings.Replace(r.Request.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath, _ := urlEncodeName(r.Request.URL.Path)
+	encodedPath := getURLEncodedName(r.Request.URL.Path)
 	// convert any space strings back to "+"
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
@@ -192,7 +192,7 @@ func (r *Signature) getCanonicalRequest() string {
 //
 func (r *Signature) getPresignedCanonicalRequest(presignedQuery string) string {
 	rawQuery := strings.Replace(presignedQuery, "+", "%20", -1)
-	encodedPath, _ := urlEncodeName(r.Request.URL.Path)
+	encodedPath := getURLEncodedName(r.Request.URL.Path)
 	// convert any space strings back to "+"
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
@@ -243,8 +243,17 @@ func (r *Signature) getSignature(signingKey []byte, stringToSign string) string 
 // DoesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func (r *Signature) DoesPolicySignatureMatch() (bool, *probe.Error) {
-	// FIXME: Implement this
+func (r *Signature) DoesPolicySignatureMatch(date string) (bool, *probe.Error) {
+	t, err := time.Parse(iso8601Format, date)
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+	signingKey := r.getSigningKey(t)
+	stringToSign := string(r.PresignedPolicy)
+	newSignature := r.getSignature(signingKey, stringToSign)
+	if newSignature != r.Signature {
+		return false, nil
+	}
 	return true, nil
 }
 

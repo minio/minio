@@ -17,13 +17,19 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
+	"io"
+	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -95,7 +101,7 @@ func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
 }
 
 // initSignatureV4 initializing signature verification
-func initSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
+func initSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 	// strip auth from authorization header
 	authHeaderValue := req.Header.Get("Authorization")
 	accessKeyID, err := stripAccessKeyID(authHeaderValue)
@@ -111,7 +117,7 @@ func initSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
 	for _, user := range authConfig.Users {
 		if user.AccessKeyID == accessKeyID {
-			signature := &donut.Signature{
+			signature := &signv4.Signature{
 				AccessKeyID:     user.AccessKeyID,
 				SecretAccessKey: user.SecretAccessKey,
 				Signature:       signature,
@@ -124,8 +130,112 @@ func initSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
 	return nil, probe.NewError(errors.New("AccessKeyID not found"))
 }
 
+func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, *probe.Error) {
+	/// HTML Form values
+	formValues := make(map[string]string)
+	filePart := new(bytes.Buffer)
+	var err error
+	for err == nil {
+		var part *multipart.Part
+		part, err = reader.NextPart()
+		if part != nil {
+			if part.FileName() == "" {
+				buffer, err := ioutil.ReadAll(part)
+				if err != nil {
+					return nil, nil, probe.NewError(err)
+				}
+				formValues[part.FormName()] = string(buffer)
+			} else {
+				// FIXME: this will hog memory
+				_, err := io.Copy(filePart, part)
+				if err != nil {
+					return nil, nil, probe.NewError(err)
+				}
+			}
+		}
+	}
+	return filePart, formValues, nil
+}
+
+func applyPolicy(formValues map[string]string, policy []byte) *probe.Error {
+	if formValues["X-Amz-Algorithm"] != "AWS4-HMAC-SHA256" {
+		return probe.NewError(errUnsupportedAlgorithm)
+	}
+	postPolicyForm, perr := signv4.ParsePostPolicyForm(string(policy))
+	if perr != nil {
+		return perr.Trace()
+	}
+	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
+		return probe.NewError(errPolicyAlreadyExpired)
+	}
+	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
+		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
+		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
+		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
+		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
+		if !strings.HasPrefix(formValues["key"], postPolicyForm.Conditions.Policies["$key"].Value) {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
+		if formValues["key"] != postPolicyForm.Conditions.Policies["$key"].Value {
+			return probe.NewError(errPolicyMissingFields)
+		}
+	}
+	return nil
+}
+
+// initPostPresignedPolicyV4 initializing post policy signature verification
+func initPostPresignedPolicyV4(formValues map[string]string) (*signv4.Signature, *probe.Error) {
+	/// Decoding policy
+	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+	credentialElements := strings.Split(strings.TrimSpace(formValues["X-Amz-Credential"]), "/")
+	if len(credentialElements) != 5 {
+		return nil, probe.NewError(errCredentialTagMalformed)
+	}
+	accessKeyID := credentialElements[0]
+	if !auth.IsValidAccessKey(accessKeyID) {
+		return nil, probe.NewError(errAccessKeyIDInvalid)
+	}
+	authConfig, perr := auth.LoadConfig()
+	if perr != nil {
+		return nil, perr.Trace()
+	}
+	for _, user := range authConfig.Users {
+		if user.AccessKeyID == accessKeyID {
+			signature := &signv4.Signature{
+				AccessKeyID:     user.AccessKeyID,
+				SecretAccessKey: user.SecretAccessKey,
+				Signature:       formValues["X-Amz-Signature"],
+				PresignedPolicy: policyBytes,
+			}
+			return signature, nil
+		}
+	}
+	return nil, probe.NewError(errAccessKeyIDInvalid)
+}
+
 // initPresignedSignatureV4 initializing presigned signature verification
-func initPresignedSignatureV4(req *http.Request) (*donut.Signature, *probe.Error) {
+func initPresignedSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 	credentialElements := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-Credential")), "/")
 	if len(credentialElements) != 5 {
 		return nil, probe.NewError(errCredentialTagMalformed)
@@ -142,7 +252,7 @@ func initPresignedSignatureV4(req *http.Request) (*donut.Signature, *probe.Error
 	signature := strings.TrimSpace(req.URL.Query().Get("X-Amz-Signature"))
 	for _, user := range authConfig.Users {
 		if user.AccessKeyID == accessKeyID {
-			signature := &donut.Signature{
+			signature := &signv4.Signature{
 				AccessKeyID:     user.AccessKeyID,
 				SecretAccessKey: user.SecretAccessKey,
 				Signature:       signature,
