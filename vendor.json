@@ -87,6 +87,13 @@
 			"revisionTime": "2015-08-19T11:23:55-07:00"
 		},
 		{
+			"canonical": "github.com/olekukonko/ts",
+			"comment": "",
+			"local": "vendor/github.com/olekukonko/ts",
+			"revision": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8",
+			"revisionTime": "2014-04-12T15:01:45-07:00"
+		},
+		{
 			"canonical": "github.com/rs/cors",
 			"comment": "",
 			"local": "vendor/github.com/rs/cors",
