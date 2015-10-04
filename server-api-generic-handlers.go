@@ -28,10 +28,6 @@ import (
 // MiddlewareHandler - useful to chain different middleware http.Handler
 type MiddlewareHandler func(http.Handler) http.Handler
 
-type contentTypeHandler struct {
-	handler http.Handler
-}
-
 type timeHandler struct {
 	handler http.Handler
 }
@@ -74,44 +70,29 @@ func parseDate(req *http.Request) (time.Time, error) {
 	return time.Time{}, errors.New("invalid request")
 }
 
-// ValidContentTypeHandler to validate Accept type
-func ValidContentTypeHandler(h http.Handler) http.Handler {
-	return contentTypeHandler{h}
-}
-
-func (h contentTypeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	acceptsContentType := getContentType(r)
-	if acceptsContentType == unknownContentType {
-		writeErrorResponse(w, r, NotAcceptable, acceptsContentType, r.URL.Path)
-		return
-	}
-	h.handler.ServeHTTP(w, r)
-}
-
 // TimeValidityHandler to validate parsable time over http header
 func TimeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
 }
 
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	acceptsContentType := getContentType(r)
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
 		if r.Header.Get(http.CanonicalHeaderKey("x-amz-date")) == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
-			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 		date, err := parseDate(r)
 		if err != nil {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
-			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 		duration := time.Since(date)
 		minutes := time.Duration(5) * time.Minute
 		if duration.Minutes() > minutes.Minutes() {
-			writeErrorResponse(w, r, RequestTimeTooSkewed, acceptsContentType, r.URL.Path)
+			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 	}
@@ -127,20 +108,19 @@ func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
 
 // validate auth header handler ServeHTTP() wrapper
 func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	acceptsContentType := getContentType(r)
 	accessKeyID, err := stripAccessKeyID(r.Header.Get("Authorization"))
 	switch err.ToGoError() {
 	case errInvalidRegion:
-		writeErrorResponse(w, r, AuthorizationHeaderMalformed, acceptsContentType, r.URL.Path)
+		writeErrorResponse(w, r, AuthorizationHeaderMalformed, r.URL.Path)
 		return
 	case errAccessKeyIDInvalid:
-		writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
+		writeErrorResponse(w, r, InvalidAccessKeyID, r.URL.Path)
 		return
 	case nil:
 		// load auth config
 		authConfig, err := auth.LoadConfig()
 		if err != nil {
-			writeErrorResponse(w, r, InternalError, acceptsContentType, r.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 			return
 		}
 		// Access key not found
@@ -150,7 +130,7 @@ func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		writeErrorResponse(w, r, InvalidAccessKeyID, acceptsContentType, r.URL.Path)
+		writeErrorResponse(w, r, InvalidAccessKeyID, r.URL.Path)
 		return
 	// All other errors for now, serve them
 	default:
@@ -175,9 +155,8 @@ func IgnoreResourcesHandler(h http.Handler) http.Handler {
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	acceptsContentType := getContentType(r)
 	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
-		writeErrorResponse(w, r, NotImplemented, acceptsContentType, r.URL.Path)
+		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
 		return
 	}
 	h.handler.ServeHTTP(w, r)

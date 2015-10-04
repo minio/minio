@@ -177,19 +177,19 @@ func generateListMultipartUploadsResponse(bucket string, metadata donut.BucketMu
 }
 
 // writeSuccessResponse write success headers
-func writeSuccessResponse(w http.ResponseWriter, acceptsContentType contentType) {
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
+func writeSuccessResponse(w http.ResponseWriter) {
+	setCommonHeaders(w, 0)
 	w.WriteHeader(http.StatusOK)
 }
 
 // writeErrorRespone write error headers
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, acceptsContentType contentType, resource string) {
+func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, resource string) {
 	error := getErrorCode(errorType)
 	// generate error response
 	errorResponse := getErrorResponse(error, resource)
-	encodedErrorResponse := encodeErrorResponse(errorResponse, acceptsContentType)
+	encodedErrorResponse := encodeErrorResponse(errorResponse)
 	// set common headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedErrorResponse))
+	setCommonHeaders(w, len(encodedErrorResponse))
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
 	// HEAD should have no body, do not attempt to write to it

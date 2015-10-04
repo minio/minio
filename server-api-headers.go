@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/json"
 	"encoding/xml"
 	"net/http"
 	"runtime"
@@ -27,11 +26,6 @@ import (
 
 	"github.com/minio/minio/pkg/donut"
 )
-
-// No encoder interface exists, so we create one.
-type encoder interface {
-	Encode(v interface{}) error
-}
 
 //// helpers
 
@@ -49,32 +43,21 @@ func generateRequestID() []byte {
 }
 
 // Write http common headers
-func setCommonHeaders(w http.ResponseWriter, acceptsType string, contentLength int) {
+func setCommonHeaders(w http.ResponseWriter, contentLength int) {
 	// set unique request ID for each reply
 	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
 	w.Header().Set("Server", ("Minio/" + minioReleaseTag + " (" + runtime.GOOS + ";" + runtime.GOARCH + ")"))
-
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", acceptsType)
 	w.Header().Set("Connection", "close")
 	// should be set to '0' by default
 	w.Header().Set("Content-Length", strconv.Itoa(contentLength))
 }
 
 // Write error response headers
-func encodeErrorResponse(response interface{}, acceptsType contentType) []byte {
+func encodeErrorResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
-	var e encoder
 	// write common headers
-	switch acceptsType {
-	case xmlContentType:
-		e = xml.NewEncoder(&bytesBuffer)
-	case jsonContentType:
-		e = json.NewEncoder(&bytesBuffer)
-	// by default even if unknown Accept header received handle it by sending XML contenttype response
-	default:
-		e = xml.NewEncoder(&bytesBuffer)
-	}
+	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
 	return bytesBuffer.Bytes()
 }
@@ -84,16 +67,17 @@ func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, cont
 	// set common headers
 	if contentRange != nil {
 		if contentRange.length > 0 {
-			setCommonHeaders(w, metadata.Metadata["contentType"], int(contentRange.length))
+			setCommonHeaders(w, int(contentRange.length))
 		} else {
-			setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
+			setCommonHeaders(w, int(metadata.Size))
 		}
 	} else {
-		setCommonHeaders(w, metadata.Metadata["contentType"], int(metadata.Size))
+		setCommonHeaders(w, int(metadata.Size))
 	}
 	// set object headers
 	lastModified := metadata.Created.Format(http.TimeFormat)
 	// object related headers
+	w.Header().Set("Content-Type", metadata.Metadata["contentType"])
 	w.Header().Set("ETag", "\""+metadata.MD5Sum+"\"")
 	w.Header().Set("Last-Modified", lastModified)
 
@@ -106,15 +90,9 @@ func setObjectHeaders(w http.ResponseWriter, metadata donut.ObjectMetadata, cont
 	}
 }
 
-func encodeSuccessResponse(response interface{}, acceptsType contentType) []byte {
-	var e encoder
+func encodeSuccessResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
-	switch acceptsType {
-	case xmlContentType:
-		e = xml.NewEncoder(&bytesBuffer)
-	case jsonContentType:
-		e = json.NewEncoder(&bytesBuffer)
-	}
+	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
 	return bytesBuffer.Bytes()
 }

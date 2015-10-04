@@ -25,7 +25,7 @@ import (
 	signv4 "github.com/minio/minio/pkg/signature"
 )
 
-func (api API) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
+func (api API) isValidOp(w http.ResponseWriter, req *http.Request) bool {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -34,13 +34,13 @@ func (api API) isValidOp(w http.ResponseWriter, req *http.Request, acceptsConten
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 			return false
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 			return false
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return false
 		}
 	}
@@ -48,13 +48,13 @@ func (api API) isValidOp(w http.ResponseWriter, req *http.Request, acceptsConten
 		if bucketMetadata.ACL.IsPrivate() {
 			return true
 			//uncomment this when we have webcli
-			//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			//writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
 			//return false
 		}
 		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
 			return true
 			//uncomment this when we have webcli
-			//writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+			//writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
 			//return false
 		}
 	}
@@ -78,14 +78,13 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads < 0 {
-		writeErrorResponse(w, req, InvalidMaxUploads, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidMaxUploads, req.URL.Path)
 		return
 	}
 	if resources.MaxUploads == 0 {
@@ -102,7 +101,7 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -112,19 +111,19 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	// generate response
 	response := generateListMultipartUploadsResponse(bucket, resources)
-	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	setCommonHeaders(w, len(encodedSuccessResponse))
 	// write body
 	w.Write(encodedSuccessResponse)
 }
@@ -145,8 +144,7 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -157,7 +155,7 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 
 	resources := getBucketResources(req.URL.Query())
 	if resources.Maxkeys < 0 {
-		writeErrorResponse(w, req, InvalidMaxKeys, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidMaxKeys, req.URL.Path)
 		return
 	}
 	if resources.Maxkeys == 0 {
@@ -174,7 +172,7 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -183,27 +181,27 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	if err == nil {
 		// generate response
 		response := generateListObjectsResponse(bucket, objects, resources)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		encodedSuccessResponse := encodeSuccessResponse(response)
 		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+		setCommonHeaders(w, len(encodedSuccessResponse))
 		// write body
 		w.Write(encodedSuccessResponse)
 		return
 	}
 	switch err.ToGoError().(type) {
 	case signv4.DoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 	case donut.BucketNameInvalid:
-		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 	case donut.BucketNotFound:
-		writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 	case donut.ObjectNotFound:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 	case donut.ObjectNameInvalid:
-		writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 	default:
 		errorIf(err.Trace(), "ListObjects failed.", nil)
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InternalError, req.URL.Path)
 	}
 }
 
@@ -221,11 +219,10 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot list buckets
 	// if _, err := StripAccessKeyID(req); err != nil {
-	//	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	//	writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
 	//	return
 	// }
 
@@ -236,7 +233,7 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -245,19 +242,19 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	if err == nil {
 		// generate response
 		response := generateListBucketsResponse(buckets)
-		encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+		encodedSuccessResponse := encodeSuccessResponse(response)
 		// write headers
-		setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+		setCommonHeaders(w, len(encodedSuccessResponse))
 		// write response
 		w.Write(encodedSuccessResponse)
 		return
 	}
 	switch err.ToGoError().(type) {
 	case signv4.DoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 	default:
 		errorIf(err.Trace(), "ListBuckets failed.", nil)
-		writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InternalError, req.URL.Path)
 	}
 }
 
@@ -274,11 +271,10 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
 	// uncomment this when we have webcli
 	// without access key credentials one cannot create a bucket
 	// if _, err := StripAccessKeyID(req); err != nil {
-	// 	writeErrorResponse(w, req, AccessDenied, acceptsContentType, req.URL.Path)
+	// 	writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
 	//	return
 	// }
 
@@ -289,7 +285,7 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
-		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotImplemented, req.URL.Path)
 		return
 	}
 
@@ -303,7 +299,7 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -313,7 +309,7 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		/// if Content-Length missing, deny the request
 		size := req.Header.Get("Content-Length")
 		if size == "" {
-			writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 			return
 		}
 	}
@@ -323,21 +319,21 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "MakeBucket failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.TooManyBuckets:
-			writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, TooManyBuckets, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketExists:
-			writeErrorResponse(w, req, BucketAlreadyExists, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BucketAlreadyExists, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	// Make sure to add Location information here only for bucket
 	w.Header().Set("Location", "/"+bucket)
-	writeSuccessResponse(w, acceptsContentType)
+	writeSuccessResponse(w)
 }
 
 // PostPolicyBucketHandler - POST policy
@@ -360,14 +356,14 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 	reader, err := req.MultipartReader()
 	if err != nil {
 		errorIf(probe.NewError(err), "Unable to initialize multipart reader.", nil)
-		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 
 	fileBody, formValues, perr := extractHTTPFormValues(reader)
 	if perr != nil {
 		errorIf(perr.Trace(), "Unable to parse form values.", nil)
-		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	bucket := mux.Vars(req)["bucket"]
@@ -376,22 +372,22 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 	signature, perr := initPostPresignedPolicyV4(formValues)
 	if perr != nil {
 		errorIf(perr.Trace(), "Unable to initialize post policy presigned.", nil)
-		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	if perr = applyPolicy(formValues, signature.PresignedPolicy); perr != nil {
 		errorIf(perr.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
-		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	var ok bool
 	if ok, perr = signature.DoesPolicySignatureMatch(formValues["X-Amz-Date"]); perr != nil {
 		errorIf(perr.Trace(), "Unable to verify signature.", nil)
-		writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		return
 	}
 	if ok == false {
-		writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		return
 	}
 	metadata, perr := api.Donut.CreateObject(bucket, object, "", 0, fileBody, nil, nil)
@@ -399,30 +395,30 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 		errorIf(perr.Trace(), "CreateObject failed.", nil)
 		switch perr.ToGoError().(type) {
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, 1, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, 1, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.ObjectExists:
-			writeErrorResponse(w, req, MethodNotAllowed, 1, req.URL.Path)
+			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		case donut.BadDigest:
-			writeErrorResponse(w, req, BadDigest, 1, req.URL.Path)
+			writeErrorResponse(w, req, BadDigest, req.URL.Path)
 		case signv4.MissingDateHeader:
-			writeErrorResponse(w, req, RequestTimeTooSkewed, 1, req.URL.Path)
+			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, 1, req.URL.Path)
+			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
 		case donut.EntityTooLarge:
-			writeErrorResponse(w, req, EntityTooLarge, 1, req.URL.Path)
+			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		case donut.InvalidDigest:
-			writeErrorResponse(w, req, InvalidDigest, 1, req.URL.Path)
+			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, 1, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	w.Header().Set("ETag", metadata.MD5Sum)
-	writeSuccessResponse(w, 1)
+	writeSuccessResponse(w)
 }
 
 // PutBucketACLHandler - PUT Bucket ACL
@@ -438,12 +434,10 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
-		writeErrorResponse(w, req, NotImplemented, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, NotImplemented, req.URL.Path)
 		return
 	}
 
@@ -457,7 +451,7 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -467,17 +461,17 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "PutBucketACL failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
-	writeSuccessResponse(w, acceptsContentType)
+	writeSuccessResponse(w)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -496,8 +490,6 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -508,7 +500,7 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -518,15 +510,15 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
-	writeSuccessResponse(w, acceptsContentType)
+	writeSuccessResponse(w)
 }
