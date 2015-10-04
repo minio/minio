@@ -44,8 +44,7 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -61,7 +60,7 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	} else {
@@ -72,11 +71,11 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 				switch err.ToGoError() {
 				case errAccessKeyIDInvalid:
 					errorIf(err.Trace(), "Invalid access key id requested.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, acceptsContentType, req.URL.Path)
+					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
 					return
 				default:
 					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+					writeErrorResponse(w, req, InternalError, req.URL.Path)
 					return
 				}
 			}
@@ -87,24 +86,24 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 		case donut.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	var hrange *httpRange
 	hrange, err = getRequestedRange(req.Header.Get("Range"), metadata.Size)
 	if err != nil {
-		writeErrorResponse(w, req, InvalidRange, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidRange, req.URL.Path)
 		return
 	}
 	setObjectHeaders(w, metadata, hrange)
@@ -127,8 +126,7 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -144,7 +142,7 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -154,17 +152,17 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 		case donut.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
@@ -185,8 +183,7 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -198,18 +195,18 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		return
 	}
 	/// if Content-Length missing, deny the request
 	size := req.Header.Get("Content-Length")
 	if size == "" {
-		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 		return
 	}
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		return
 	}
 	/// minimum Upload size for objects in a single operation
@@ -219,7 +216,7 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	// create a 0byte file using a regular putObject() operation
 	//
 	// if isMinObjectSize(size) {
-	//      writeErrorResponse(w, req, EntityTooSmall, acceptsContentType, req.URL.Path)
+	//      writeErrorResponse(w, req, EntityTooSmall,  req.URL.Path)
 	//	return
 	// }
 	var sizeInt64 int64
@@ -227,7 +224,7 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		var err error
 		sizeInt64, err = strconv.ParseInt(size, 10, 64)
 		if err != nil {
-			writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
 			return
 		}
 	}
@@ -239,7 +236,7 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -249,30 +246,30 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.ObjectExists:
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		case donut.BadDigest:
-			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BadDigest, req.URL.Path)
 		case signv4.MissingDateHeader:
-			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
 		case donut.EntityTooLarge:
-			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		case donut.InvalidDigest:
-			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	w.Header().Set("ETag", metadata.MD5Sum)
-	writeSuccessResponse(w, acceptsContentType)
+	writeSuccessResponse(w)
 }
 
 /// Multipart API
@@ -288,13 +285,12 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
 	if !isRequestUploads(req.URL.Query()) {
-		writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		return
 	}
 
@@ -310,7 +306,7 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -320,19 +316,19 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.ObjectExists:
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 
 	response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
-	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	setCommonHeaders(w, len(encodedSuccessResponse))
 	// write body
 	w.Write(encodedSuccessResponse)
 }
@@ -348,28 +344,27 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		return
 	}
 
 	/// if Content-Length missing, throw away
 	size := req.Header.Get("Content-Length")
 	if size == "" {
-		writeErrorResponse(w, req, MissingContentLength, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 		return
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		return
 	}
 
@@ -378,7 +373,7 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		var err error
 		sizeInt64, err = strconv.ParseInt(size, 10, 64)
 		if err != nil {
-			writeErrorResponse(w, req, InvalidRequest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
 			return
 		}
 	}
@@ -395,7 +390,7 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		var err error
 		partID, err = strconv.Atoi(partIDString)
 		if err != nil {
-			writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidPart, req.URL.Path)
 			return
 		}
 	}
@@ -407,7 +402,7 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -417,26 +412,26 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
 		case donut.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		case donut.ObjectExists:
-			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		case donut.BadDigest:
-			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, BadDigest, req.URL.Path)
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
 		case donut.EntityTooLarge:
-			writeErrorResponse(w, req, EntityTooLarge, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		case donut.InvalidDigest:
-			writeErrorResponse(w, req, InvalidDigest, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	w.Header().Set("ETag", calculatedMD5)
-	writeSuccessResponse(w, acceptsContentType)
+	writeSuccessResponse(w)
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
@@ -450,8 +445,7 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -468,7 +462,7 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -478,15 +472,15 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), 0)
+	setCommonHeaders(w, 0)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -501,18 +495,17 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	if objectResourcesMetadata.PartNumberMarker < 0 {
-		writeErrorResponse(w, req, InvalidPartNumberMarker, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidPartNumberMarker, req.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts < 0 {
-		writeErrorResponse(w, req, InvalidMaxParts, acceptsContentType, req.URL.Path)
+		writeErrorResponse(w, req, InvalidMaxParts, req.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts == 0 {
@@ -530,7 +523,7 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -540,18 +533,18 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	response := generateListPartsResponse(objectResourcesMetadata)
-	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	setCommonHeaders(w, len(encodedSuccessResponse))
 	// write body
 	w.Write(encodedSuccessResponse)
 }
@@ -567,8 +560,7 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 		<-op.ProceedCh
 	}
 
-	acceptsContentType := getContentType(req)
-	if !api.isValidOp(w, req, acceptsContentType) {
+	if !api.isValidOp(w, req) {
 		return
 	}
 
@@ -585,7 +577,7 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 		signature, err = initSignatureV4(req)
 		if err != nil {
 			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 			return
 		}
 	}
@@ -594,28 +586,28 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case donut.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		case donut.InvalidPart:
-			writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidPart, req.URL.Path)
 		case donut.InvalidPartOrder:
-			writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InvalidPartOrder, req.URL.Path)
 		case signv4.MissingDateHeader:
-			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
 		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
 		case donut.MalformedXML:
-			writeErrorResponse(w, req, MalformedXML, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, MalformedXML, req.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, acceptsContentType, req.URL.Path)
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 		return
 	}
 	response := generateCompleteMultpartUploadResponse(bucket, object, "", metadata.MD5Sum)
-	encodedSuccessResponse := encodeSuccessResponse(response, acceptsContentType)
+	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, getContentTypeString(acceptsContentType), len(encodedSuccessResponse))
+	setCommonHeaders(w, len(encodedSuccessResponse))
 	// write body
 	w.Write(encodedSuccessResponse)
 }

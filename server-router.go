@@ -83,7 +83,6 @@ func getNewAPI() API {
 // getAPIHandler api handler
 func getAPIHandler(api API) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
-		ValidContentTypeHandler,
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
 		ValidateAuthHeaderHandler,
