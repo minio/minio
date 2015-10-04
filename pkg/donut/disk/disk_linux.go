@@ -31,6 +31,7 @@ var fsType2StringMap = map[string]string{
 	"6969":     "NFS",
 	"ef51":     "EXT2OLD",
 	"ef53":     "EXT4",
+	"f15f":     "ecryptfs",
 }
 
 // getFSType - get filesystem type

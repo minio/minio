@@ -205,19 +205,9 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 }
 
 // GetBucketMetadata -
-func (donut API) GetBucketMetadata(bucket string, signature *signv4.Signature) (BucketMetadata, *probe.Error) {
+func (donut API) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return BucketMetadata{}, err.Trace()
-		}
-		if !ok {
-			return BucketMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	if !IsValidBucket(bucket) {
 		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -238,19 +228,9 @@ func (donut API) GetBucketMetadata(bucket string, signature *signv4.Signature) (
 }
 
 // SetBucketMetadata -
-func (donut API) SetBucketMetadata(bucket string, metadata map[string]string, signature *signv4.Signature) *probe.Error {
+func (donut API) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return err.Trace()
-		}
-		if !ok {
-			return probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	if !IsValidBucket(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -487,19 +467,9 @@ func (donut API) MakeBucket(bucketName, acl string, location io.Reader, signatur
 }
 
 // ListObjects - list objects from cache
-func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata, signature *signv4.Signature) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
+func (donut API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return nil, BucketResourcesMetadata{}, err.Trace()
-		}
-		if !ok {
-			return nil, BucketResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	if !IsValidBucket(bucket) {
 		return nil, BucketResourcesMetadata{IsTruncated: false}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -590,19 +560,9 @@ func (b byBucketName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byBucketName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 // ListBuckets - List buckets from cache
-func (donut API) ListBuckets(signature *signv4.Signature) ([]BucketMetadata, *probe.Error) {
+func (donut API) ListBuckets() ([]BucketMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return nil, err.Trace()
-		}
-		if !ok {
-			return nil, probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	var results []BucketMetadata
 	if len(donut.config.NodeDiskMap) > 0 {
@@ -624,29 +584,9 @@ func (donut API) ListBuckets(signature *signv4.Signature) ([]BucketMetadata, *pr
 }
 
 // GetObjectMetadata - get object metadata from cache
-func (donut API) GetObjectMetadata(bucket, key string, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) GetObjectMetadata(bucket, key string) (ObjectMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		if signature.Presigned {
-			ok, err := signature.DoesPresignedSignatureMatch()
-			if err != nil {
-				return ObjectMetadata{}, err.Trace()
-			}
-			if !ok {
-				return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-			}
-		} else {
-			ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-			if err != nil {
-				return ObjectMetadata{}, err.Trace()
-			}
-			if !ok {
-				return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-			}
-		}
-	}
 
 	// check if bucket exists
 	if !IsValidBucket(bucket) {

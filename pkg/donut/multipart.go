@@ -41,7 +41,7 @@ import (
 /// V2 API functions
 
 // NewMultipartUpload - initiate a new multipart session
-func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *signv4.Signature) (string, *probe.Error) {
+func (donut API) NewMultipartUpload(bucket, key, contentType string) (string, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -50,15 +50,6 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 	}
 	if !IsValidObjectName(key) {
 		return "", probe.NewError(ObjectNameInvalid{Object: key})
-	}
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return "", err.Trace()
-		}
-		if !ok {
-			return "", probe.NewError(signv4.DoesNotMatch{})
-		}
 	}
 	//	if len(donut.config.NodeDiskMap) > 0 {
 	//		return donut.newMultipartUpload(bucket, key, contentType)
@@ -89,7 +80,7 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 }
 
 // AbortMultipartUpload - abort an incomplete multipart session
-func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *signv4.Signature) *probe.Error {
+func (donut API) AbortMultipartUpload(bucket, key, uploadID string) *probe.Error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -98,15 +89,6 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *s
 	}
 	if !IsValidObjectName(key) {
 		return probe.NewError(ObjectNameInvalid{Object: key})
-	}
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return err.Trace()
-		}
-		if !ok {
-			return probe.NewError(signv4.DoesNotMatch{})
-		}
 	}
 	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
 	//       it can be stored, disabling this for now until we get the underlying layout stable.
@@ -381,20 +363,10 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given bucket
-func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *signv4.Signature) (BucketMultipartResourcesMetadata, *probe.Error) {
+func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error) {
 	// TODO handle delimiter, low priority
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return BucketMultipartResourcesMetadata{}, err.Trace()
-		}
-		if !ok {
-			return BucketMultipartResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	if !IsValidBucket(bucket) {
 		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -466,20 +438,10 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // ListObjectParts - list parts from incomplete multipart session for a given object
-func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata, signature *signv4.Signature) (ObjectResourcesMetadata, *probe.Error) {
+func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error) {
 	// Verify upload id
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
-
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-		if err != nil {
-			return ObjectResourcesMetadata{}, err.Trace()
-		}
-		if !ok {
-			return ObjectResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
-		}
-	}
 
 	if !IsValidBucket(bucket) {
 		return ObjectResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})

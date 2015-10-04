@@ -619,10 +619,11 @@ func (donut API) makeDonutBucket(bucketName, acl string) *probe.Error {
 		}
 		nodeNumber = nodeNumber + 1
 	}
-	metadata, err := donut.getDonutBucketMetadata()
+	var metadata *AllBuckets
+	metadata, err = donut.getDonutBucketMetadata()
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
-			metadata := new(AllBuckets)
+			metadata = new(AllBuckets)
 			metadata.Buckets = make(map[string]BucketMetadata)
 			metadata.Buckets[bucketName] = bucketMetadata
 			err = donut.setDonutBucketMetadata(metadata)

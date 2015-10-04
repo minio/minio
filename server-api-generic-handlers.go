@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio/minio/pkg/auth"
 	"github.com/rs/cors"
 )
 
@@ -97,47 +96,6 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.handler.ServeHTTP(w, r)
-}
-
-// ValidateAuthHeaderHandler - validate auth header handler is wrapper handler used
-// for request validation with authorization header. Current authorization layer
-// supports S3's standard HMAC based signature request.
-func ValidateAuthHeaderHandler(h http.Handler) http.Handler {
-	return validateAuthHandler{h}
-}
-
-// validate auth header handler ServeHTTP() wrapper
-func (h validateAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	accessKeyID, err := stripAccessKeyID(r.Header.Get("Authorization"))
-	switch err.ToGoError() {
-	case errInvalidRegion:
-		writeErrorResponse(w, r, AuthorizationHeaderMalformed, r.URL.Path)
-		return
-	case errAccessKeyIDInvalid:
-		writeErrorResponse(w, r, InvalidAccessKeyID, r.URL.Path)
-		return
-	case nil:
-		// load auth config
-		authConfig, err := auth.LoadConfig()
-		if err != nil {
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
-			return
-		}
-		// Access key not found
-		for _, user := range authConfig.Users {
-			if user.AccessKeyID == accessKeyID {
-				h.handler.ServeHTTP(w, r)
-				return
-			}
-		}
-		writeErrorResponse(w, r, InvalidAccessKeyID, r.URL.Path)
-		return
-	// All other errors for now, serve them
-	default:
-		// control reaches here, we should just send the request up the stack - internally
-		// individual calls will validate themselves against un-authenticated requests
-		h.handler.ServeHTTP(w, r)
-	}
 }
 
 // CorsHandler handler for CORS (Cross Origin Resource Sharing)

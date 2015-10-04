@@ -34,17 +34,17 @@ type Interface interface {
 // CloudStorage is a donut cloud storage interface
 type CloudStorage interface {
 	// Storage service operations
-	GetBucketMetadata(bucket string, signature *signv4.Signature) (BucketMetadata, *probe.Error)
-	SetBucketMetadata(bucket string, metadata map[string]string, signature *signv4.Signature) *probe.Error
-	ListBuckets(signature *signv4.Signature) ([]BucketMetadata, *probe.Error)
+	GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error)
+	SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error
+	ListBuckets() ([]BucketMetadata, *probe.Error)
 	MakeBucket(bucket string, ACL string, location io.Reader, signature *signv4.Signature) *probe.Error
 
 	// Bucket operations
-	ListObjects(string, BucketResourcesMetadata, *signv4.Signature) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error)
+	ListObjects(string, BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error)
 
 	// Object operations
 	GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error)
-	GetObjectMetadata(bucket, object string, signature *signv4.Signature) (ObjectMetadata, *probe.Error)
+	GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error)
 	// bucket, object, expectedMD5Sum, size, reader, metadata, signature
 	CreateObject(string, string, string, int64, io.Reader, map[string]string, *signv4.Signature) (ObjectMetadata, *probe.Error)
 
@@ -53,12 +53,12 @@ type CloudStorage interface {
 
 // Multipart API
 type Multipart interface {
-	NewMultipartUpload(bucket, key, contentType string, signature *signv4.Signature) (string, *probe.Error)
-	AbortMultipartUpload(bucket, key, uploadID string, signature *signv4.Signature) *probe.Error
+	NewMultipartUpload(bucket, key, contentType string) (string, *probe.Error)
+	AbortMultipartUpload(bucket, key, uploadID string) *probe.Error
 	CreateObjectPart(string, string, string, int, string, string, int64, io.Reader, *signv4.Signature) (string, *probe.Error)
 	CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signv4.Signature) (ObjectMetadata, *probe.Error)
-	ListMultipartUploads(string, BucketMultipartResourcesMetadata, *signv4.Signature) (BucketMultipartResourcesMetadata, *probe.Error)
-	ListObjectParts(string, string, ObjectResourcesMetadata, *signv4.Signature) (ObjectResourcesMetadata, *probe.Error)
+	ListMultipartUploads(string, BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error)
+	ListObjectParts(string, string, ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error)
 }
 
 // Management is a donut management system interface
