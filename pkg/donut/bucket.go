@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -235,7 +236,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {
@@ -306,7 +307,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 			//
 			// Signature mismatch occurred all temp files to be removed and all data purged.
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 	objMetadata.MD5Sum = hex.EncodeToString(dataMD5sum)
@@ -429,27 +430,25 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err *probe
 }
 
 // writeObjectData -
-func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, writer io.Writer) (int, int, *probe.Error) {
+func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, hashWriter io.Writer) (int, int, *probe.Error) {
 	encoder, err := newEncoder(k, m, "Cauchy")
-	chunkSize := int64(10 * 1024 * 1024)
 	if err != nil {
 		return 0, 0, err.Trace()
 	}
+	chunkSize := int64(10 * 1024 * 1024)
 	chunkCount := 0
 	totalLength := 0
-	remaining := size
-	for remaining > 0 {
-		readSize := chunkSize
-		if remaining < chunkSize {
-			readSize = remaining
-		}
-		remaining = remaining - readSize
-		totalLength = totalLength + int(readSize)
-		encodedBlocks, inputData, err := encoder.EncodeStream(objectData, readSize)
+
+	var e error
+	for e == nil {
+		var length int
+		inputData := make([]byte, chunkSize)
+		length, e = objectData.Read(inputData)
+		encodedBlocks, err := encoder.Encode(inputData)
 		if err != nil {
 			return 0, 0, err.Trace()
 		}
-		if _, err := writer.Write(inputData); err != nil {
+		if _, err := hashWriter.Write(inputData[0:length]); err != nil {
 			return 0, 0, probe.NewError(err)
 		}
 		for blockIndex, block := range encodedBlocks {
@@ -464,7 +463,11 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 				return 0, 0, probe.NewError(err)
 			}
 		}
+		totalLength += length
 		chunkCount = chunkCount + 1
+	}
+	if e != io.EOF {
+		return 0, 0, probe.NewError(e)
 	}
 	return chunkCount, totalLength, nil
 }

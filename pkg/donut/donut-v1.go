@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/donut/disk"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 // config files used inside Donut
@@ -127,7 +128,7 @@ func (donut API) listObjects(bucket, prefix, marker, delimiter string, maxkeys i
 }
 
 // putObject - put object
-func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
@@ -159,7 +160,7 @@ func (donut API) putObject(bucket, object, expectedMD5Sum string, reader io.Read
 }
 
 // putObject - put object
-func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *Signature) (PartMetadata, *probe.Error) {
+func (donut API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *signv4.Signature) (PartMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return PartMetadata{}, probe.NewError(InvalidArgument{})
 	}
@@ -336,7 +337,7 @@ func (donut API) listObjectParts(bucket, object string, resources ObjectResource
 }
 
 // completeMultipartUpload complete an incomplete multipart upload
-func (donut API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
@@ -374,7 +375,7 @@ func (donut API) completeMultipartUpload(bucket, object, uploadID string, data i
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}

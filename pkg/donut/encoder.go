@@ -17,8 +17,6 @@
 package donut
 
 import (
-	"io"
-
 	encoding "github.com/minio/minio/pkg/erasure"
 	"github.com/minio/minio/pkg/probe"
 )
@@ -81,14 +79,6 @@ func (e encoder) Encode(data []byte) ([][]byte, *probe.Error) {
 		return nil, probe.NewError(err)
 	}
 	return encodedData, nil
-}
-
-func (e encoder) EncodeStream(data io.Reader, size int64) ([][]byte, []byte, *probe.Error) {
-	encodedData, inputData, err := e.encoder.EncodeStream(data, size)
-	if err != nil {
-		return nil, nil, probe.NewError(err)
-	}
-	return encodedData, inputData, nil
 }
 
 // Decode - erasure decode input encoded bytes

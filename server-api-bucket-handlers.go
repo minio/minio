@@ -22,9 +22,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
-func (api MinioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
+func (api API) isValidOp(w http.ResponseWriter, req *http.Request, acceptsContentType contentType) bool {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -67,7 +68,7 @@ func (api MinioAPI) isValidOp(w http.ResponseWriter, req *http.Request, acceptsC
 // using the Initiate Multipart Upload request, but has not yet been completed or aborted.
 // This operation returns at most 1,000 multipart uploads in the response.
 //
-func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -94,7 +95,7 @@ func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -110,7 +111,7 @@ func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http
 	if err != nil {
 		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)
@@ -134,7 +135,7 @@ func (api MinioAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
-func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -166,7 +167,7 @@ func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request)
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -190,7 +191,7 @@ func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
+	case signv4.DoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
@@ -210,7 +211,7 @@ func (api MinioAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request)
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
-func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -228,7 +229,7 @@ func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request)
 	//	return
 	// }
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -252,7 +253,7 @@ func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	switch err.ToGoError().(type) {
-	case donut.SignatureDoesNotMatch:
+	case signv4.DoesNotMatch:
 		writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 	default:
 		errorIf(err.Trace(), "ListBuckets failed.", nil)
@@ -263,7 +264,7 @@ func (api MinioAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request)
 // PutBucketHandler - PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
-func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -295,7 +296,7 @@ func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -321,7 +322,7 @@ func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "MakeBucket failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.TooManyBuckets:
 			writeErrorResponse(w, req, TooManyBuckets, acceptsContentType, req.URL.Path)
@@ -339,10 +340,95 @@ func (api MinioAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	writeSuccessResponse(w, acceptsContentType)
 }
 
+// PostPolicyBucketHandler - POST policy
+// ----------
+// This implementation of the POST operation handles object creation with a specified
+// signature policy in multipart/form-data
+func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request) {
+	// Ticket master block
+	{
+		op := APIOperation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
+	}
+
+	// Here the parameter is the size of the form data that should
+	// be loaded in memory, the remaining being put in temporary
+	// files
+	reader, err := req.MultipartReader()
+	if err != nil {
+		errorIf(probe.NewError(err), "Unable to initialize multipart reader.", nil)
+		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		return
+	}
+
+	fileBody, formValues, perr := extractHTTPFormValues(reader)
+	if perr != nil {
+		errorIf(perr.Trace(), "Unable to parse form values.", nil)
+		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		return
+	}
+	bucket := mux.Vars(req)["bucket"]
+	formValues["Bucket"] = bucket
+	object := formValues["key"]
+	signature, perr := initPostPresignedPolicyV4(formValues)
+	if perr != nil {
+		errorIf(perr.Trace(), "Unable to initialize post policy presigned.", nil)
+		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		return
+	}
+	if perr = applyPolicy(formValues, signature.PresignedPolicy); perr != nil {
+		errorIf(perr.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
+		writeErrorResponse(w, req, MalformedPOSTRequest, 1, req.URL.Path)
+		return
+	}
+	var ok bool
+	if ok, perr = signature.DoesPolicySignatureMatch(formValues["X-Amz-Date"]); perr != nil {
+		errorIf(perr.Trace(), "Unable to verify signature.", nil)
+		writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+		return
+	}
+	if ok == false {
+		writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+		return
+	}
+	metadata, perr := api.Donut.CreateObject(bucket, object, "", 0, fileBody, nil, nil)
+	if perr != nil {
+		errorIf(perr.Trace(), "CreateObject failed.", nil)
+		switch perr.ToGoError().(type) {
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, 1, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, 1, req.URL.Path)
+		case donut.ObjectExists:
+			writeErrorResponse(w, req, MethodNotAllowed, 1, req.URL.Path)
+		case donut.BadDigest:
+			writeErrorResponse(w, req, BadDigest, 1, req.URL.Path)
+		case signv4.MissingDateHeader:
+			writeErrorResponse(w, req, RequestTimeTooSkewed, 1, req.URL.Path)
+		case signv4.DoesNotMatch:
+			writeErrorResponse(w, req, SignatureDoesNotMatch, 1, req.URL.Path)
+		case donut.IncompleteBody:
+			writeErrorResponse(w, req, IncompleteBody, 1, req.URL.Path)
+		case donut.EntityTooLarge:
+			writeErrorResponse(w, req, EntityTooLarge, 1, req.URL.Path)
+		case donut.InvalidDigest:
+			writeErrorResponse(w, req, InvalidDigest, 1, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, 1, req.URL.Path)
+		}
+		return
+	}
+	w.Header().Set("ETag", metadata.MD5Sum)
+	writeSuccessResponse(w, 1)
+}
+
 // PutBucketACLHandler - PUT Bucket ACL
 // ----------
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
-func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -364,7 +450,7 @@ func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -380,7 +466,7 @@ func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request
 	if err != nil {
 		errorIf(err.Trace(), "PutBucketACL failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
@@ -400,7 +486,7 @@ func (api MinioAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request
 // The operation returns a 200 OK if the bucket exists and you
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
-func (api MinioAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -415,7 +501,7 @@ func (api MinioAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) 
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -431,7 +517,7 @@ func (api MinioAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, acceptsContentType, req.URL.Path)

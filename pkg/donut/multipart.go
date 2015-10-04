@@ -35,12 +35,13 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/donut/cache/data"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 /// V2 API functions
 
 // NewMultipartUpload - initiate a new multipart session
-func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *Signature) (string, *probe.Error) {
+func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *signv4.Signature) (string, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -56,7 +57,7 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 			return "", err.Trace()
 		}
 		if !ok {
-			return "", probe.NewError(SignatureDoesNotMatch{})
+			return "", probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 	//	if len(donut.config.NodeDiskMap) > 0 {
@@ -88,7 +89,7 @@ func (donut API) NewMultipartUpload(bucket, key, contentType string, signature *
 }
 
 // AbortMultipartUpload - abort an incomplete multipart session
-func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *Signature) *probe.Error {
+func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *signv4.Signature) *probe.Error {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 
@@ -104,7 +105,7 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 			return err.Trace()
 		}
 		if !ok {
-			return probe.NewError(SignatureDoesNotMatch{})
+			return probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 	// TODO: multipart support for donut is broken, since we haven't finalized the format in which
@@ -125,7 +126,7 @@ func (donut API) AbortMultipartUpload(bucket, key, uploadID string, signature *S
 }
 
 // CreateObjectPart - create a part in a multipart session
-func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, *probe.Error) {
+func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signv4.Signature) (string, *probe.Error) {
 	donut.lock.Lock()
 	etag, err := donut.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data, signature)
 	donut.lock.Unlock()
@@ -136,7 +137,7 @@ func (donut API) CreateObjectPart(bucket, key, uploadID string, partID int, cont
 }
 
 // createObject - internal wrapper function called by CreateObjectPart
-func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (string, *probe.Error) {
+func (donut API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signv4.Signature) (string, *probe.Error) {
 	if !IsValidBucket(bucket) {
 		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
@@ -240,7 +241,7 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 				return "", err.Trace()
 			}
 			if !ok {
-				return "", probe.NewError(SignatureDoesNotMatch{})
+				return "", probe.NewError(signv4.DoesNotMatch{})
 			}
 		}
 	}
@@ -303,7 +304,7 @@ func (donut API) mergeMultipart(parts *CompleteMultipartUpload, uploadID string,
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signv4.Signature) (ObjectMetadata, *probe.Error) {
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
 	size := int64(donut.multiPartObjects[uploadID].Stats().Bytes)
@@ -321,7 +322,7 @@ func (donut API) CompleteMultipartUpload(bucket, key, uploadID string, data io.R
 	return objectMetadata, nil
 }
 
-func (donut API) completeMultipartUploadV2(bucket, key, uploadID string, data io.Reader, signature *Signature) (io.Reader, *probe.Error) {
+func (donut API) completeMultipartUploadV2(bucket, key, uploadID string, data io.Reader, signature *signv4.Signature) (io.Reader, *probe.Error) {
 	if !IsValidBucket(bucket) {
 		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
@@ -355,7 +356,7 @@ func (donut API) completeMultipartUploadV2(bucket, key, uploadID string, data io
 			return nil, err.Trace()
 		}
 		if !ok {
-			return nil, probe.NewError(SignatureDoesNotMatch{})
+			return nil, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}
@@ -380,7 +381,7 @@ func (a byKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given bucket
-func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *Signature) (BucketMultipartResourcesMetadata, *probe.Error) {
+func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata, signature *signv4.Signature) (BucketMultipartResourcesMetadata, *probe.Error) {
 	// TODO handle delimiter, low priority
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
@@ -391,7 +392,7 @@ func (donut API) ListMultipartUploads(bucket string, resources BucketMultipartRe
 			return BucketMultipartResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return BucketMultipartResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return BucketMultipartResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 
@@ -465,7 +466,7 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // ListObjectParts - list parts from incomplete multipart session for a given object
-func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata, signature *Signature) (ObjectResourcesMetadata, *probe.Error) {
+func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMetadata, signature *signv4.Signature) (ObjectResourcesMetadata, *probe.Error) {
 	// Verify upload id
 	donut.lock.Lock()
 	defer donut.lock.Unlock()
@@ -476,7 +477,7 @@ func (donut API) ListObjectParts(bucket, key string, resources ObjectResourcesMe
 			return ObjectResourcesMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectResourcesMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectResourcesMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
 

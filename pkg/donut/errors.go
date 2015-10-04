@@ -125,6 +125,13 @@ func (e ChecksumMismatch) Error() string {
 	return "Checksum mismatch"
 }
 
+// MissingPOSTPolicy missing post policy
+type MissingPOSTPolicy struct{}
+
+func (e MissingPOSTPolicy) Error() string {
+	return "Missing POST policy in multipart form"
+}
+
 // MissingErasureTechnique missing erasure technique
 type MissingErasureTechnique struct{}
 
@@ -316,37 +323,6 @@ type InvalidUploadID struct {
 
 func (e InvalidUploadID) Error() string {
 	return "Invalid upload id " + e.UploadID
-}
-
-// SignatureDoesNotMatch invalid signature
-type SignatureDoesNotMatch struct {
-	SignatureSent       string
-	SignatureCalculated string
-}
-
-func (e SignatureDoesNotMatch) Error() string {
-	return "The request signature we calculated does not match the signature you provided"
-}
-
-// ExpiredPresignedRequest request already expired
-type ExpiredPresignedRequest struct{}
-
-func (e ExpiredPresignedRequest) Error() string {
-	return "Presigned request already expired"
-}
-
-// MissingExpiresQuery expires query string missing
-type MissingExpiresQuery struct{}
-
-func (e MissingExpiresQuery) Error() string {
-	return "Missing expires query string"
-}
-
-// MissingDateHeader date header missing
-type MissingDateHeader struct{}
-
-func (e MissingDateHeader) Error() string {
-	return "Missing date header"
 }
 
 // InvalidPart One or more of the specified parts could not be found

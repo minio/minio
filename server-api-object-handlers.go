@@ -23,6 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/donut"
 	"github.com/minio/minio/pkg/probe"
+	signv4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	// ticket master block
 	{
 		op := APIOperation{}
@@ -53,7 +54,7 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -85,7 +86,7 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
@@ -116,7 +117,7 @@ func (api MinioAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	// ticket master block
 	{
 		op := APIOperation{}
@@ -136,7 +137,7 @@ func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) 
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -152,7 +153,7 @@ func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, acceptsContentType, req.URL.Path)
@@ -174,7 +175,7 @@ func (api MinioAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) 
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -231,7 +232,7 @@ func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -255,9 +256,9 @@ func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 		case donut.BadDigest:
 			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-		case donut.MissingDateHeader:
+		case signv4.MissingDateHeader:
 			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
@@ -277,7 +278,7 @@ func (api MinioAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 /// Multipart API
 
 // NewMultipartUploadHandler - New multipart upload
-func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -302,7 +303,7 @@ func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.R
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -318,7 +319,7 @@ func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.R
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.ObjectExists:
 			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
@@ -337,7 +338,7 @@ func (api MinioAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.R
 }
 
 // PutObjectPartHandler - Upload part
-func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -399,7 +400,7 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -421,7 +422,7 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 			writeErrorResponse(w, req, MethodNotAllowed, acceptsContentType, req.URL.Path)
 		case donut.BadDigest:
 			writeErrorResponse(w, req, BadDigest, acceptsContentType, req.URL.Path)
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
@@ -439,7 +440,7 @@ func (api MinioAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Reques
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -460,7 +461,7 @@ func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -476,7 +477,7 @@ func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.InvalidUploadID:
 			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
@@ -490,7 +491,7 @@ func (api MinioAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http
 }
 
 // ListObjectPartsHandler - List object parts
-func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -522,7 +523,7 @@ func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Requ
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -538,7 +539,7 @@ func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Requ
 	if err != nil {
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.InvalidUploadID:
 			writeErrorResponse(w, req, NoSuchUpload, acceptsContentType, req.URL.Path)
@@ -556,7 +557,7 @@ func (api MinioAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	// Ticket master block
 	{
 		op := APIOperation{}
@@ -577,7 +578,7 @@ func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *h
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
-	var signature *donut.Signature
+	var signature *signv4.Signature
 	if _, ok := req.Header["Authorization"]; ok {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -598,9 +599,9 @@ func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *h
 			writeErrorResponse(w, req, InvalidPart, acceptsContentType, req.URL.Path)
 		case donut.InvalidPartOrder:
 			writeErrorResponse(w, req, InvalidPartOrder, acceptsContentType, req.URL.Path)
-		case donut.MissingDateHeader:
+		case signv4.MissingDateHeader:
 			writeErrorResponse(w, req, RequestTimeTooSkewed, acceptsContentType, req.URL.Path)
-		case donut.SignatureDoesNotMatch:
+		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, acceptsContentType, req.URL.Path)
 		case donut.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, acceptsContentType, req.URL.Path)
@@ -622,13 +623,13 @@ func (api MinioAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *h
 /// Delete API
 
 // DeleteBucketHandler - Delete bucket
-func (api MinioAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(MethodNotAllowed)
 	w.WriteHeader(error.HTTPStatusCode)
 }
 
 // DeleteObjectHandler - Delete object
-func (api MinioAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api API) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 	error := getErrorCode(MethodNotAllowed)
 	w.WriteHeader(error.HTTPStatusCode)
 }

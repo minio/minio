@@ -121,9 +121,9 @@ func configureServerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Server
 }
 
 // Start ticket master
-func startTM(a MinioAPI) {
+func startTM(api API) {
 	for {
-		for op := range a.OP {
+		for op := range api.OP {
 			op.ProceedCh <- struct{}{}
 		}
 	}
