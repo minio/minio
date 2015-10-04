@@ -14,32 +14,24 @@
  * limitations under the License.
  */
 
-package auth
+package main
 
-import "regexp"
+import . "gopkg.in/check.v1"
 
-// AccessID and SecretID length in bytes
-const (
-	MinioAccessID = 20
-	MinioSecretID = 40
-)
+type MySuite struct{}
 
-/// helpers
+var _ = Suite(&MySuite{})
 
-// IsValidSecretKey - validate secret key
-func IsValidSecretKey(secretAccessKey string) bool {
-	if secretAccessKey == "" {
-		return true
-	}
-	regex := regexp.MustCompile("^.{40}$")
-	return regex.MatchString(secretAccessKey)
-}
+func (s *MySuite) TestAuth(c *C) {
+	secretID, err := GenerateSecretAccessKey()
+	c.Assert(err, IsNil)
 
-// IsValidAccessKey - validate access key
-func IsValidAccessKey(accessKeyID string) bool {
-	if accessKeyID == "" {
-		return true
-	}
-	regex := regexp.MustCompile("^[A-Z0-9\\-\\.\\_\\~]{20}$")
-	return regex.MatchString(accessKeyID)
+	accessID, err := GenerateAccessKeyID()
+	c.Assert(err, IsNil)
+
+	c.Assert(len(secretID), Equals, MinioSecretID)
+	c.Assert(len(accessID), Equals, MinioAccessID)
+
+	c.Log(string(secretID))
+	c.Log(string(accessID))
 }

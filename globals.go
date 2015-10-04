@@ -14,31 +14,9 @@
  * limitations under the License.
  */
 
-package auth_test
+package main
 
-import (
-	"testing"
-
-	"github.com/minio/minio/pkg/auth"
-	. "gopkg.in/check.v1"
+var (
+	globalJSONFlag  = false // Json flag set via command line
+	globalDebugFlag = false // Debug flag set via command line
 )
-
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestAuth(c *C) {
-	secretID, err := auth.GenerateSecretAccessKey()
-	c.Assert(err, IsNil)
-
-	accessID, err := auth.GenerateAccessKeyID()
-	c.Assert(err, IsNil)
-
-	c.Assert(len(secretID), Equals, auth.MinioSecretID)
-	c.Assert(len(accessID), Equals, auth.MinioAccessID)
-
-	c.Log(string(secretID))
-	c.Log(string(accessID))
-}

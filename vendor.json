@@ -45,6 +45,13 @@
 			"revisionTime": "2015-06-12T18:29:15Z"
 		},
 		{
+			"canonical": "github.com/fatih/color",
+			"comment": "",
+			"local": "vendor/github.com/fatih/color",
+			"revision": "76d423163af754ff6423d2d9be0057fbf03c57c2",
+			"revisionTime": "2015-08-24T00:44:34+03:00"
+		},
+		{
 			"canonical": "github.com/fatih/structs",
 			"comment": "",
 			"local": "vendor/github.com/fatih/structs",
@@ -80,6 +87,13 @@
 			"revisionTime": "2015-08-09T21:43:58-07:00"
 		},
 		{
+			"canonical": "github.com/mattn/go-isatty",
+			"comment": "",
+			"local": "vendor/github.com/mattn/go-isatty",
+			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
+			"revisionTime": "2015-08-14T09:26:29+09:00"
+		},
+		{
 			"canonical": "github.com/minio/cli",
 			"comment": "",
 			"local": "vendor/github.com/minio/cli",
@@ -99,6 +113,13 @@
 			"local": "vendor/github.com/rs/cors",
 			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
 			"revisionTime": "2015-08-29T22:34:20-07:00"
+		},
+		{
+			"canonical": "github.com/shiena/ansicolor",
+			"comment": "",
+			"local": "vendor/github.com/shiena/ansicolor",
+			"revision": "a5e2b567a4dd6cc74545b8a4f27c9d63b9e7735b",
+			"revisionTime": "2015-07-19T16:15:31+09:00"
 		},
 		{
 			"canonical": "github.com/weekface/mgorus",

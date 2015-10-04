@@ -36,7 +36,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/donut"
 	. "gopkg.in/check.v1"
 )
@@ -67,14 +66,14 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	perr := donut.SaveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	accessKeyID, perr := auth.GenerateAccessKeyID()
+	accessKeyID, perr := GenerateAccessKeyID()
 	c.Assert(perr, IsNil)
-	secretAccessKey, perr := auth.GenerateSecretAccessKey()
+	secretAccessKey, perr := GenerateSecretAccessKey()
 	c.Assert(perr, IsNil)
 
-	authConf := &auth.Config{}
-	authConf.Users = make(map[string]*auth.User)
-	authConf.Users[string(accessKeyID)] = &auth.User{
+	authConf := &AuthConfig{}
+	authConf.Users = make(map[string]*AuthUser)
+	authConf.Users[string(accessKeyID)] = &AuthUser{
 		Name:            "testuser",
 		AccessKeyID:     string(accessKeyID),
 		SecretAccessKey: string(secretAccessKey),
@@ -82,8 +81,8 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	s.accessKeyID = string(accessKeyID)
 	s.secretAccessKey = string(secretAccessKey)
 
-	auth.SetAuthConfigPath(root)
-	perr = auth.SaveConfig(authConf)
+	SetAuthConfigPath(root)
+	perr = SaveConfig(authConf)
 	c.Assert(perr, IsNil)
 
 	minioAPI := getNewAPI()

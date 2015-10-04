@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/probe"
 	signv4 "github.com/minio/minio/pkg/signature"
 )
@@ -93,7 +92,7 @@ func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
 		return "", err.Trace()
 	}
 	accessKeyID := credentialElements[0]
-	if !auth.IsValidAccessKey(accessKeyID) {
+	if !IsValidAccessKey(accessKeyID) {
 		return "", probe.NewError(errAccessKeyIDInvalid)
 	}
 	return accessKeyID, nil
@@ -107,7 +106,7 @@ func initSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
-	authConfig, err := auth.LoadConfig()
+	authConfig, err := LoadConfig()
 	if err != nil {
 		return nil, err.Trace()
 	}
@@ -212,10 +211,10 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*signv4.Signature,
 		return nil, probe.NewError(errCredentialTagMalformed)
 	}
 	accessKeyID := credentialElements[0]
-	if !auth.IsValidAccessKey(accessKeyID) {
+	if !IsValidAccessKey(accessKeyID) {
 		return nil, probe.NewError(errAccessKeyIDInvalid)
 	}
-	authConfig, perr := auth.LoadConfig()
+	authConfig, perr := LoadConfig()
 	if perr != nil {
 		return nil, perr.Trace()
 	}
@@ -240,10 +239,10 @@ func initPresignedSignatureV4(req *http.Request) (*signv4.Signature, *probe.Erro
 		return nil, probe.NewError(errCredentialTagMalformed)
 	}
 	accessKeyID := credentialElements[0]
-	if !auth.IsValidAccessKey(accessKeyID) {
+	if !IsValidAccessKey(accessKeyID) {
 		return nil, probe.NewError(errAccessKeyIDInvalid)
 	}
-	authConfig, err := auth.LoadConfig()
+	authConfig, err := LoadConfig()
 	if err != nil {
 		return nil, err.Trace()
 	}

@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -36,13 +35,13 @@ type controllerRPCService struct {
 
 // generateAuth generate new auth keys for a user
 func generateAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
-	config, err := auth.LoadConfig()
+	config, err := LoadConfig()
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
 			// Initialize new config, since config file doesn't exist yet
-			config = &auth.Config{}
+			config = &AuthConfig{}
 			config.Version = "0.0.1"
-			config.Users = make(map[string]*auth.User)
+			config.Users = make(map[string]*AuthUser)
 		} else {
 			return err.Trace()
 		}
@@ -50,25 +49,25 @@ func generateAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
 	if _, ok := config.Users[args.User]; ok {
 		return probe.NewError(errors.New("Credentials already set, if you wish to change this invoke Reset() method"))
 	}
-	accessKeyID, err := auth.GenerateAccessKeyID()
+	accessKeyID, err := GenerateAccessKeyID()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.AccessKeyID = string(accessKeyID)
 
-	secretAccessKey, err := auth.GenerateSecretAccessKey()
+	secretAccessKey, err := GenerateSecretAccessKey()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.SecretAccessKey = string(secretAccessKey)
 	reply.Name = args.User
 
-	config.Users[args.User] = &auth.User{
+	config.Users[args.User] = &AuthUser{
 		Name:            args.User,
 		AccessKeyID:     string(accessKeyID),
 		SecretAccessKey: string(secretAccessKey),
 	}
-	if err := auth.SaveConfig(config); err != nil {
+	if err := SaveConfig(config); err != nil {
 		return err.Trace()
 	}
 	return nil
@@ -76,7 +75,7 @@ func generateAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
 
 // fetchAuth fetch auth keys for a user
 func fetchAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
-	config, err := auth.LoadConfig()
+	config, err := LoadConfig()
 	if err != nil {
 		return err.Trace()
 	}
@@ -91,31 +90,31 @@ func fetchAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
 
 // resetAuth reset auth keys for a user
 func resetAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
-	config, err := auth.LoadConfig()
+	config, err := LoadConfig()
 	if err != nil {
 		return err.Trace()
 	}
 	if _, ok := config.Users[args.User]; !ok {
 		return probe.NewError(errors.New("User not found"))
 	}
-	accessKeyID, err := auth.GenerateAccessKeyID()
+	accessKeyID, err := GenerateAccessKeyID()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.AccessKeyID = string(accessKeyID)
-	secretAccessKey, err := auth.GenerateSecretAccessKey()
+	secretAccessKey, err := GenerateSecretAccessKey()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.SecretAccessKey = string(secretAccessKey)
 	reply.Name = args.User
 
-	config.Users[args.User] = &auth.User{
+	config.Users[args.User] = &AuthUser{
 		Name:            args.User,
 		AccessKeyID:     string(accessKeyID),
 		SecretAccessKey: string(secretAccessKey),
 	}
-	return auth.SaveConfig(config).Trace()
+	return SaveConfig(config).Trace()
 }
 
 // Generate auth keys
