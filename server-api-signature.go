@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -127,7 +126,7 @@ func initSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 			return signature, nil
 		}
 	}
-	return nil, probe.NewError(errors.New("AccessKeyID not found"))
+	return nil, probe.NewError(errAccessKeyIDInvalid)
 }
 
 func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, *probe.Error) {

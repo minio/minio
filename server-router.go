@@ -85,7 +85,7 @@ func getAPIHandler(api API) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
-		ValidateAuthHeaderHandler,
+		SignatureHandler,
 		// api.LoggingHandler, // Disabled logging until we bring in external logging support
 		CorsHandler,
 	}

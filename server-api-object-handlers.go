@@ -53,40 +53,10 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	} else {
-		if _, ok := req.URL.Query()["X-Amz-Credential"]; ok {
-			var err *probe.Error
-			signature, err = initPresignedSignatureV4(req)
-			if err != nil {
-				switch err.ToGoError() {
-				case errAccessKeyIDInvalid:
-					errorIf(err.Trace(), "Invalid access key id requested.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-					return
-				default:
-					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
-			}
-		}
-	}
-	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
+	metadata, err := api.Donut.GetObjectMetadata(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
@@ -135,24 +105,10 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	metadata, err := api.Donut.GetObjectMetadata(bucket, object, signature)
+	metadata, err := api.Donut.GetObjectMetadata(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
@@ -299,24 +255,10 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	uploadID, err := api.Donut.NewMultipartUpload(bucket, object, req.Header.Get("Content-Type"), signature)
+	uploadID, err := api.Donut.NewMultipartUpload(bucket, object, req.Header.Get("Content-Type"))
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.ObjectExists:
 			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		default:
@@ -455,24 +397,10 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	err := api.Donut.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, signature)
+	err := api.Donut.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.InvalidUploadID:
 			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		default:
@@ -516,24 +444,10 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	objectResourcesMetadata, err := api.Donut.ListObjectParts(bucket, object, objectResourcesMetadata, signature)
+	objectResourcesMetadata, err := api.Donut.ListObjectParts(bucket, object, objectResourcesMetadata)
 	if err != nil {
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.InvalidUploadID:
 			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		default:

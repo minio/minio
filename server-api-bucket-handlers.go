@@ -29,7 +29,7 @@ func (api API) isValidOp(w http.ResponseWriter, req *http.Request) bool {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket, nil)
+	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
@@ -94,24 +94,10 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	resources, err := api.Donut.ListMultipartUploads(bucket, resources, signature)
+	resources, err := api.Donut.ListMultipartUploads(bucket, resources)
 	if err != nil {
 		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		default:
@@ -165,19 +151,7 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	objects, resources, err := api.Donut.ListObjects(bucket, resources, signature)
+	objects, resources, err := api.Donut.ListObjects(bucket, resources)
 	if err == nil {
 		// generate response
 		response := generateListObjectsResponse(bucket, objects, resources)
@@ -189,8 +163,6 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	switch err.ToGoError().(type) {
-	case signv4.DoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 	case donut.BucketNameInvalid:
 		writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 	case donut.BucketNotFound:
@@ -226,19 +198,7 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	//	return
 	// }
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	buckets, err := api.Donut.ListBuckets(signature)
+	buckets, err := api.Donut.ListBuckets()
 	if err == nil {
 		// generate response
 		response := generateListBucketsResponse(buckets)
@@ -249,13 +209,8 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write(encodedSuccessResponse)
 		return
 	}
-	switch err.ToGoError().(type) {
-	case signv4.DoesNotMatch:
-		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
-	default:
-		errorIf(err.Trace(), "ListBuckets failed.", nil)
-		writeErrorResponse(w, req, InternalError, req.URL.Path)
-	}
+	errorIf(err.Trace(), "ListBuckets failed.", nil)
+	writeErrorResponse(w, req, InternalError, req.URL.Path)
 }
 
 // PutBucketHandler - PUT Bucket
@@ -402,8 +357,6 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 			writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		case donut.BadDigest:
 			writeErrorResponse(w, req, BadDigest, req.URL.Path)
-		case signv4.MissingDateHeader:
-			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
 		case signv4.DoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.IncompleteBody:
@@ -444,19 +397,7 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	err := api.Donut.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)}, signature)
+	err := api.Donut.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)})
 	if err != nil {
 		errorIf(err.Trace(), "PutBucketACL failed.", nil)
 		switch err.ToGoError().(type) {
@@ -493,19 +434,7 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
-		}
-	}
-
-	_, err := api.Donut.GetBucketMetadata(bucket, signature)
+	_, err := api.Donut.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {

@@ -49,7 +49,7 @@ func (s *MyCacheSuite) SetUpSuite(c *C) {
 
 	// testing empty cache
 	var buckets []BucketMetadata
-	buckets, perr := dc.ListBuckets(nil)
+	buckets, perr := dc.ListBuckets()
 	c.Assert(perr, IsNil)
 	c.Assert(len(buckets), Equals, 0)
 }
@@ -74,7 +74,7 @@ func (s *MyCacheSuite) TestEmptyBucket(c *C) {
 	// check if bucket is empty
 	var resources BucketResourcesMetadata
 	resources.Maxkeys = 1
-	objectsMetadata, resources, err := dc.ListObjects("foo1", resources, nil)
+	objectsMetadata, resources, err := dc.ListObjects("foo1", resources)
 	c.Assert(err, IsNil)
 	c.Assert(len(objectsMetadata), Equals, 0)
 	c.Assert(resources.CommonPrefixes, DeepEquals, []string{})
@@ -88,7 +88,7 @@ func (s *MyCacheSuite) TestMakeBucketAndList(c *C) {
 	c.Assert(err, IsNil)
 
 	// check bucket exists
-	buckets, err := dc.ListBuckets(nil)
+	buckets, err := dc.ListBuckets()
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 5)
 	c.Assert(buckets[0].ACL, Equals, BucketACL("private"))
@@ -112,7 +112,7 @@ func (s *MyCacheSuite) TestCreateMultipleBucketsAndList(c *C) {
 	err = dc.MakeBucket("bar1", "private", nil, nil)
 	c.Assert(err, IsNil)
 
-	buckets, err := dc.ListBuckets(nil)
+	buckets, err := dc.ListBuckets()
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 2)
@@ -122,7 +122,7 @@ func (s *MyCacheSuite) TestCreateMultipleBucketsAndList(c *C) {
 	err = dc.MakeBucket("foobar1", "private", nil, nil)
 	c.Assert(err, IsNil)
 
-	buckets, err = dc.ListBuckets(nil)
+	buckets, err = dc.ListBuckets()
 	c.Assert(err, IsNil)
 
 	c.Assert(len(buckets), Equals, 3)
@@ -180,7 +180,7 @@ func (s *MyCacheSuite) TestNewObjectCanBeWritten(c *C) {
 	c.Assert(size, Equals, int64(len(data)))
 	c.Assert(buffer.Bytes(), DeepEquals, []byte(data))
 
-	actualMetadata, err = dc.GetObjectMetadata("foo", "obj", nil)
+	actualMetadata, err = dc.GetObjectMetadata("foo", "obj")
 	c.Assert(err, IsNil)
 	c.Assert(hex.EncodeToString(hasher.Sum(nil)), Equals, actualMetadata.MD5Sum)
 	c.Assert(int64(len(data)), Equals, actualMetadata.Size)
@@ -219,7 +219,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err := dc.ListObjects("foo5", resources, nil)
+	objectsMetadata, resources, err := dc.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(resources.CommonPrefixes[0], Equals, "obj1")
@@ -228,7 +228,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = ""
 	resources.Delimiter = "1"
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj2")
 	c.Assert(resources.IsTruncated, Equals, false)
@@ -238,7 +238,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 10
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, false)
 	c.Assert(objectsMetadata[0].Object, Equals, "obj1")
@@ -258,7 +258,7 @@ func (s *MyCacheSuite) TestMultipleNewObjects(c *C) {
 	resources.Prefix = "o"
 	resources.Delimiter = ""
 	resources.Maxkeys = 2
-	objectsMetadata, resources, err = dc.ListObjects("foo5", resources, nil)
+	objectsMetadata, resources, err = dc.ListObjects("foo5", resources)
 	c.Assert(err, IsNil)
 	c.Assert(resources.IsTruncated, Equals, true)
 	c.Assert(len(objectsMetadata), Equals, 2)
