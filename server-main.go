@@ -18,7 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -91,9 +90,9 @@ func configureAPIServer(conf minioConfig, apiHandler http.Handler) (*http.Server
 
 	for _, host := range hosts {
 		if conf.TLS {
-			fmt.Printf("Starting minio server on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Starting minio server on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
 		} else {
-			fmt.Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
 		}
 	}
 	return apiServer, nil

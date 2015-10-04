@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package main
 
 import (
 	"crypto/rand"
@@ -22,9 +22,6 @@ import (
 
 	"github.com/minio/minio/pkg/probe"
 )
-
-// Static alphaNumeric table used for generating unique keys
-var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 // GenerateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer

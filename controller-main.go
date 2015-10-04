@@ -18,7 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -37,12 +36,14 @@ var controllerCmd = cli.Command{
   minio {{.Name}} - {{.Description}}
 
 USAGE:
-  minio {{.Name}}
+  minio {{.Name}} [OPTION]
 
 EXAMPLES:
   1. Start minio controller
       $ minio {{.Name}}
 
+  2. Colored output of generated keys
+      $ minio {{.Name}} keys
 `,
 }
 
@@ -63,12 +64,10 @@ func configureControllerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Se
 			return nil, probe.NewError(err)
 		}
 	}
-
 	host, port, err := net.SplitHostPort(conf.ControllerAddress)
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
-
 	var hosts []string
 	switch {
 	case host != "":
@@ -87,12 +86,11 @@ func configureControllerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Se
 			}
 		}
 	}
-
 	for _, host := range hosts {
 		if conf.TLS {
-			fmt.Printf("Starting minio controller on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Starting minio controller on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
 		} else {
-			fmt.Printf("Starting minio controller on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Starting minio controller on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
 		}
 	}
 	return rpcServer, nil
@@ -107,6 +105,57 @@ func startController(conf minioConfig) *probe.Error {
 	// Setting rate limit to 'zero' no ratelimiting implemented
 	if err := minhttp.ListenAndServeLimited(0, rpcServer); err != nil {
 		return err.Trace()
+	}
+	return nil
+}
+
+func genAuthFirstTime() (*AuthConfig, *probe.Error) {
+	if isAuthConfigFileExists() {
+		return nil, nil
+	}
+	// Initialize new config, since config file doesn't exist yet
+	config := &AuthConfig{}
+	config.Version = "0.0.1"
+	config.Users = make(map[string]*AuthUser)
+	accessKeyID, err := GenerateAccessKeyID()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	secretAccessKey, err := GenerateSecretAccessKey()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	config.Users["admin"] = &AuthUser{
+		Name:            "admin",
+		AccessKeyID:     string(accessKeyID),
+		SecretAccessKey: string(secretAccessKey),
+	}
+	if err := SaveConfig(config); err != nil {
+		return nil, err.Trace()
+	}
+	return config, nil
+}
+
+func getAuth() (*AuthConfig, *probe.Error) {
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	return config, nil
+}
+
+// firstTimeAuth first time authorization
+func firstTimeAuth() *probe.Error {
+	conf, err := genAuthFirstTime()
+	if err != nil {
+		return err.Trace()
+	}
+	if conf != nil {
+		for _, user := range conf.Users {
+			Println(colorizeMessage("AccessKey: " + user.AccessKeyID))
+			Println(colorizeMessage("SecretKey: " + user.SecretAccessKey))
+			Println(colorizeMessage("$ minio controller keys"))
+		}
 	}
 	return nil
 }
@@ -128,10 +177,25 @@ func getControllerConfig(c *cli.Context) minioConfig {
 }
 
 func controllerMain(c *cli.Context) {
-	if c.Args().Present() {
+	if c.Args().Present() && c.Args().First() != "keys" {
 		cli.ShowCommandHelpAndExit(c, "controller", 1)
 	}
 
-	err := startController(getControllerConfig(c))
-	errorIf(err.Trace(), "Failed to start minio controller.", nil)
+	if c.Args().First() == "keys" {
+		conf, err := getAuth()
+		fatalIf(err.Trace(), "Failed to fetch keys for minio controller.", nil)
+		if conf != nil {
+			for _, user := range conf.Users {
+				Println(colorizeMessage("AccessKey: " + user.AccessKeyID))
+				Println(colorizeMessage("SecretKey: " + user.SecretAccessKey))
+			}
+		}
+		return
+	}
+
+	err := firstTimeAuth()
+	fatalIf(err.Trace(), "Failed to generate keys for minio.", nil)
+
+	err = startController(getControllerConfig(c))
+	fatalIf(err.Trace(), "Failed to start minio controller.", nil)
 }

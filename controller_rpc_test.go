@@ -24,7 +24,6 @@ import (
 	"os"
 
 	"github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/auth"
 	. "gopkg.in/check.v1"
 )
 
@@ -44,7 +43,7 @@ func (s *ControllerRPCSuite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(err, IsNil)
 	s.root = root
-	auth.SetAuthConfigPath(root)
+	SetAuthConfigPath(root)
 
 	testControllerRPC = httptest.NewServer(getControllerRPCHandler())
 	testServerRPC = httptest.NewUnstartedServer(getServerRPCHandler())

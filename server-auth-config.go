@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package main
 
 import (
 	"os"
@@ -25,17 +25,17 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-// User container
-type User struct {
+// AuthUser container
+type AuthUser struct {
 	Name            string
 	AccessKeyID     string
 	SecretAccessKey string
 }
 
-// Config auth keys
-type Config struct {
+// AuthConfig auth keys
+type AuthConfig struct {
 	Version string
-	Users   map[string]*User
+	Users   map[string]*AuthUser
 }
 
 // getAuthConfigPath get users config path
@@ -101,7 +101,7 @@ func SetAuthConfigPath(configPath string) {
 }
 
 // SaveConfig save auth config
-func SaveConfig(a *Config) *probe.Error {
+func SaveConfig(a *AuthConfig) *probe.Error {
 	authConfigFile, err := getAuthConfigFile()
 	if err != nil {
 		return err.Trace()
@@ -117,7 +117,7 @@ func SaveConfig(a *Config) *probe.Error {
 }
 
 // LoadConfig load auth config
-func LoadConfig() (*Config, *probe.Error) {
+func LoadConfig() (*AuthConfig, *probe.Error) {
 	authConfigFile, err := getAuthConfigFile()
 	if err != nil {
 		return nil, err.Trace()
@@ -125,9 +125,9 @@ func LoadConfig() (*Config, *probe.Error) {
 	if _, err := os.Stat(authConfigFile); err != nil {
 		return nil, probe.NewError(err)
 	}
-	a := &Config{}
+	a := &AuthConfig{}
 	a.Version = "0.0.1"
-	a.Users = make(map[string]*User)
+	a.Users = make(map[string]*AuthUser)
 	qc, err := quick.New(a)
 	if err != nil {
 		return nil, err.Trace()
@@ -135,5 +135,5 @@ func LoadConfig() (*Config, *probe.Error) {
 	if err := qc.Load(authConfigFile); err != nil {
 		return nil, err.Trace()
 	}
-	return qc.Data().(*Config), nil
+	return qc.Data().(*AuthConfig), nil
 }
