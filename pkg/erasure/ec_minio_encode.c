@@ -28,6 +28,8 @@ int32_t minio_init_encoder (int technique, int k, int m,
                             unsigned char **encode_matrix,
                             unsigned char **encode_tbls)
 {
+        size_t encode_matrix_size;
+        size_t encode_tbls_size;
         unsigned char *tmp_matrix;
         unsigned char *tmp_tbls;
 

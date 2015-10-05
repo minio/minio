@@ -80,18 +80,12 @@ int minio_init_decoder (int32_t *error_index,
                         unsigned char **decode_tbls,
                         uint32_t **decode_index)
 {
-        int i, j, r, l;
-
-        uint32_t      *tmp_decode_index = (uint32_t *) malloc(sizeof(uint32_t) * k);
-        unsigned char *input_matrix;
-        unsigned char *inverse_matrix;
-        unsigned char *tmp_decode_matrix;
-        unsigned char *tmp_decode_tbls;
-
-        input_matrix = (unsigned char *) malloc(sizeof(unsigned char) * k * n);
-        inverse_matrix = (unsigned char *) malloc(sizeof(unsigned char) * k * n);
-        tmp_decode_matrix = (unsigned char *) malloc(sizeof(unsigned char) * k * n);;
-        tmp_decode_tbls = (unsigned char *) malloc(sizeof(unsigned char) * k * n * 32);
+        int i, j, r, s, l, z;
+        unsigned char input_matrix[k * n];
+        unsigned char inverse_matrix[k * n];
+        unsigned char tmp_decode_matrix[k * n];
+        unsigned char tmp_decode_tbls[k * n * 32];
+        uint32_t tmp_decode_index[k];
 
         for (i = 0, r = 0; i < k; i++, r++) {
                 while (_minio_src_index_in_error(r, error_index, errs))
@@ -104,9 +98,6 @@ int minio_init_decoder (int32_t *error_index,
 
         // Not all vandermonde matrix can be inverted
         if (gf_invert_matrix(input_matrix, inverse_matrix, k) < 0) {
-                free(tmp_decode_matrix);
-                free(tmp_decode_tbls);
-                free(tmp_decode_index);
                 return -1;
         }
 
@@ -119,9 +110,10 @@ int minio_init_decoder (int32_t *error_index,
                                                        error_index[l] + j];
                         }
                 } else {
+                        int s = 0;
                         // decoding matrix element for coding chunks
                         for (i = 0; i < k; i++) {
-                                unsigned char s = 0;
+                                s = 0;
                                 for (j = 0; j < k; j++) {
                                         s ^= gf_mul(inverse_matrix[j * k + i],
                                                     encode_matrix[k *
