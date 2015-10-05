@@ -42,8 +42,8 @@ func colorizeMessage(message string) string {
 
 	terminal, err := ts.GetSize()
 	if err != nil {
-		globalJSONFlag = true
-		return ""
+		// no coloring needed just send as is
+		return message
 	}
 	var msg string
 	switch {

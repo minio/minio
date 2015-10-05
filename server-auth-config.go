@@ -27,9 +27,9 @@ import (
 
 // AuthUser container
 type AuthUser struct {
-	Name            string
-	AccessKeyID     string
-	SecretAccessKey string
+	Name            string `json:"name"`
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
 }
 
 // AuthConfig auth keys

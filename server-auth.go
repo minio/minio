@@ -23,9 +23,9 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// GenerateAccessKeyID - generate random alpha numeric value using only uppercase characters
+// generateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func GenerateAccessKeyID() ([]byte, *probe.Error) {
+func generateAccessKeyID() ([]byte, *probe.Error) {
 	alpha := make([]byte, MinioAccessID)
 	_, err := rand.Read(alpha)
 	if err != nil {
@@ -37,12 +37,34 @@ func GenerateAccessKeyID() ([]byte, *probe.Error) {
 	return alpha, nil
 }
 
-// GenerateSecretAccessKey - generate random base64 numeric value from a random seed.
-func GenerateSecretAccessKey() ([]byte, *probe.Error) {
+// generateSecretAccessKey - generate random base64 numeric value from a random seed.
+func generateSecretAccessKey() ([]byte, *probe.Error) {
 	rb := make([]byte, MinioSecretID)
 	_, err := rand.Read(rb)
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
 	return []byte(base64.StdEncoding.EncodeToString(rb))[:MinioSecretID], nil
+}
+
+// mustGenerateAccessKeyID - must generate random alpha numeric value using only uppercase characters
+// takes input as size in integer
+func mustGenerateAccessKeyID() []byte {
+	alpha := make([]byte, MinioAccessID)
+	_, err := rand.Read(alpha)
+	fatalIf(probe.NewError(err), "Unable to get random number from crypto/rand.", nil)
+
+	for i := 0; i < MinioAccessID; i++ {
+		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
+	}
+	return alpha
+}
+
+// mustGenerateSecretAccessKey - generate random base64 numeric value from a random seed.
+func mustGenerateSecretAccessKey() []byte {
+	rb := make([]byte, MinioSecretID)
+	_, err := rand.Read(rb)
+	fatalIf(probe.NewError(err), "Unable to get random number from crypto/rand.", nil)
+
+	return []byte(base64.StdEncoding.EncodeToString(rb))[:MinioSecretID]
 }

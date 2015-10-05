@@ -98,11 +98,11 @@ func registerApp() *cli.App {
 	// register all flags
 	registerFlag(addressFlag)
 	registerFlag(addressControllerFlag)
+	registerFlag(addressServerRPCFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(certFlag)
 	registerFlag(keyFlag)
-	registerFlag(debugFlag)
-	registerFlag(addressServerRPCFlag)
+	registerFlag(jsonFlag)
 
 	// set up app
 	app := cli.NewApp()
@@ -151,7 +151,7 @@ VERSION:
 func main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
-		// get  flag and set global defaults here.
+		globalJSONFlag = c.GlobalBool("json")
 		return nil
 	}
 	app.ExtraInfo = func() map[string]string {

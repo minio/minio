@@ -23,10 +23,10 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAuth(c *C) {
-	secretID, err := GenerateSecretAccessKey()
+	secretID, err := generateSecretAccessKey()
 	c.Assert(err, IsNil)
 
-	accessID, err := GenerateAccessKeyID()
+	accessID, err := generateAccessKeyID()
 	c.Assert(err, IsNil)
 
 	c.Assert(len(secretID), Equals, MinioSecretID)
