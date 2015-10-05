@@ -66,9 +66,9 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	perr := donut.SaveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	accessKeyID, perr := GenerateAccessKeyID()
+	accessKeyID, perr := generateAccessKeyID()
 	c.Assert(perr, IsNil)
-	secretAccessKey, perr := GenerateSecretAccessKey()
+	secretAccessKey, perr := generateSecretAccessKey()
 	c.Assert(perr, IsNil)
 
 	authConf := &AuthConfig{}
@@ -1133,16 +1133,4 @@ func (s *MyAPISignatureV4Suite) TestObjectMultipart(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	/*
-		request, err = s.newRequest("GET", testSignatureV4Server.URL+"/objectmultiparts/object", 0, nil)
-		c.Assert(err, IsNil)
-
-		response, err = client.Do(request)
-		c.Assert(err, IsNil)
-		c.Assert(response.StatusCode, Equals, http.StatusOK)
-		object, err := ioutil.ReadAll(response.Body)
-		c.Assert(err, IsNil)
-		c.Assert(string(object), Equals, ("hello worldhello world"))
-	*/
 }

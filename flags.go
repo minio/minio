@@ -25,42 +25,43 @@ var (
 	addressFlag = cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: "ADDRESS:PORT for cloud storage access",
+		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
 	addressControllerFlag = cli.StringFlag{
 		Name:  "address-controller",
 		Hide:  true,
 		Value: ":9001",
-		Usage: "ADDRESS:PORT for management console access",
+		Usage: "ADDRESS:PORT for management console access.",
 	}
 
 	addressServerRPCFlag = cli.StringFlag{
 		Name:  "address-server-rpc",
 		Hide:  true,
 		Value: ":9002",
-		Usage: "ADDRESS:PORT for management console access",
+		Usage: "ADDRESS:PORT for management console access.",
 	}
 
 	ratelimitFlag = cli.IntFlag{
 		Name:  "ratelimit",
+		Hide:  true,
 		Value: 16,
-		Usage: "Limit for total concurrent requests: [DEFAULT: 16]",
+		Usage: "Limit for total concurrent requests: [DEFAULT: 16].",
 	}
 
 	certFlag = cli.StringFlag{
 		Name:  "cert",
-		Usage: "Provide your domain certificate",
+		Usage: "Provide your domain certificate.",
 	}
 
 	keyFlag = cli.StringFlag{
 		Name:  "key",
-		Usage: "Provide your domain private key",
+		Usage: "Provide your domain private key.",
 	}
 
-	debugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "print debug information",
+	jsonFlag = cli.BoolFlag{
+		Name:  "json",
+		Usage: "Enable json formatted output.",
 	}
 )
 

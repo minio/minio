@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -190,14 +191,16 @@ func (donut API) createObjectPart(bucket, key, uploadID string, partID int, cont
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer) // do not read error return error here, we will handle this error later
-		hash.Write(byteBuffer[0:length])
-		sha256hash.Write(byteBuffer[0:length])
-		ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
-		if !ok {
-			return "", probe.NewError(InternalError{})
+		if length != 0 {
+			hash.Write(byteBuffer[0:length])
+			sha256hash.Write(byteBuffer[0:length])
+			ok := donut.multiPartObjects[uploadID].Append(partID, byteBuffer[0:length])
+			if !ok {
+				return "", probe.NewError(InternalError{})
+			}
+			totalLength += int64(length)
+			go debug.FreeOSMemory()
 		}
-		totalLength += int64(length)
-		go debug.FreeOSMemory()
 	}
 	if totalLength != size {
 		donut.multiPartObjects[uploadID].Delete(partID)

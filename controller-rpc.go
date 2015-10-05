@@ -49,13 +49,13 @@ func generateAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
 	if _, ok := config.Users[args.User]; ok {
 		return probe.NewError(errors.New("Credentials already set, if you wish to change this invoke Reset() method"))
 	}
-	accessKeyID, err := GenerateAccessKeyID()
+	accessKeyID, err := generateAccessKeyID()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.AccessKeyID = string(accessKeyID)
 
-	secretAccessKey, err := GenerateSecretAccessKey()
+	secretAccessKey, err := generateSecretAccessKey()
 	if err != nil {
 		return err.Trace()
 	}
@@ -97,12 +97,12 @@ func resetAuth(args *AuthArgs, reply *AuthRep) *probe.Error {
 	if _, ok := config.Users[args.User]; !ok {
 		return probe.NewError(errors.New("User not found"))
 	}
-	accessKeyID, err := GenerateAccessKeyID()
+	accessKeyID, err := generateAccessKeyID()
 	if err != nil {
 		return err.Trace()
 	}
 	reply.AccessKeyID = string(accessKeyID)
-	secretAccessKey, err := GenerateSecretAccessKey()
+	secretAccessKey, err := generateSecretAccessKey()
 	if err != nil {
 		return err.Trace()
 	}

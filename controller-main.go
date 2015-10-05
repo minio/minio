@@ -18,6 +18,8 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -42,7 +44,7 @@ EXAMPLES:
   1. Start minio controller
       $ minio {{.Name}}
 
-  2. Colored output of generated keys
+  2. Fetch stored access keys
       $ minio {{.Name}} keys
 `,
 }
@@ -117,18 +119,16 @@ func genAuthFirstTime() (*AuthConfig, *probe.Error) {
 	config := &AuthConfig{}
 	config.Version = "0.0.1"
 	config.Users = make(map[string]*AuthUser)
-	accessKeyID, err := GenerateAccessKeyID()
-	if err != nil {
-		return nil, err.Trace()
-	}
-	secretAccessKey, err := GenerateSecretAccessKey()
-	if err != nil {
-		return nil, err.Trace()
-	}
+
 	config.Users["admin"] = &AuthUser{
 		Name:            "admin",
-		AccessKeyID:     string(accessKeyID),
-		SecretAccessKey: string(secretAccessKey),
+		AccessKeyID:     "admin",
+		SecretAccessKey: string(mustGenerateSecretAccessKey()),
+	}
+	config.Users["user"] = &AuthUser{
+		Name:            "user",
+		AccessKeyID:     string(mustGenerateAccessKeyID()),
+		SecretAccessKey: string(mustGenerateSecretAccessKey()),
 	}
 	if err := SaveConfig(config); err != nil {
 		return nil, err.Trace()
@@ -144,6 +144,21 @@ func getAuth() (*AuthConfig, *probe.Error) {
 	return config, nil
 }
 
+type accessKeys struct {
+	*AuthUser
+}
+
+func (a accessKeys) String() string {
+	return colorizeMessage(fmt.Sprintf("Username: %s, AccessKey: %s, SecretKey: %s", a.Name, a.AccessKeyID, a.SecretAccessKey))
+}
+
+// JSON - json formatted output
+func (a accessKeys) JSON() string {
+	b, err := json.Marshal(a)
+	errorIf(probe.NewError(err), "Unable to marshal json", nil)
+	return string(b)
+}
+
 // firstTimeAuth first time authorization
 func firstTimeAuth() *probe.Error {
 	conf, err := genAuthFirstTime()
@@ -151,11 +166,17 @@ func firstTimeAuth() *probe.Error {
 		return err.Trace()
 	}
 	if conf != nil {
+		Println("Running for first time, generating access keys.")
 		for _, user := range conf.Users {
-			Println(colorizeMessage("AccessKey: " + user.AccessKeyID))
-			Println(colorizeMessage("SecretKey: " + user.SecretAccessKey))
-			Println(colorizeMessage("$ minio controller keys"))
+			if globalJSONFlag {
+				Println(accessKeys{user}.JSON())
+			} else {
+				Println(accessKeys{user})
+			}
+
 		}
+		Println("To fetch your keys again.")
+		Println("  $ minio controller keys")
 	}
 	return nil
 }
@@ -186,8 +207,11 @@ func controllerMain(c *cli.Context) {
 		fatalIf(err.Trace(), "Failed to fetch keys for minio controller.", nil)
 		if conf != nil {
 			for _, user := range conf.Users {
-				Println(colorizeMessage("AccessKey: " + user.AccessKeyID))
-				Println(colorizeMessage("SecretKey: " + user.SecretAccessKey))
+				if globalJSONFlag {
+					Println(accessKeys{user}.JSON())
+				} else {
+					Println(accessKeys{user})
+				}
 			}
 		}
 		return

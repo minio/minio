@@ -187,21 +187,19 @@ func (donut API) GetObject(w io.Writer, bucket string, object string, start, len
 		}
 		return 0, probe.NewError(ObjectNotFound{Object: object})
 	}
-	{
-		var err error
-		if start == 0 && length == 0 {
-			written, err = io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
-			if err != nil {
-				return 0, probe.NewError(err)
-			}
-		} else {
-			written, err = io.CopyN(w, bytes.NewBuffer(data[start:]), length)
-			if err != nil {
-				return 0, probe.NewError(err)
-			}
+	var err error
+	if start == 0 && length == 0 {
+		written, err = io.CopyN(w, bytes.NewBuffer(data), int64(donut.objects.Len(objectKey)))
+		if err != nil {
+			return 0, probe.NewError(err)
 		}
 		return written, nil
 	}
+	written, err = io.CopyN(w, bytes.NewBuffer(data[start:]), length)
+	if err != nil {
+		return 0, probe.NewError(err)
+	}
+	return written, nil
 }
 
 // GetBucketMetadata -
@@ -353,14 +351,16 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 		var length int
 		byteBuffer := make([]byte, 1024*1024)
 		length, err = data.Read(byteBuffer)
-		hash.Write(byteBuffer[0:length])
-		sha256hash.Write(byteBuffer[0:length])
-		ok := donut.objects.Append(objectKey, byteBuffer[0:length])
-		if !ok {
-			return ObjectMetadata{}, probe.NewError(InternalError{})
+		if length != 0 {
+			hash.Write(byteBuffer[0:length])
+			sha256hash.Write(byteBuffer[0:length])
+			ok := donut.objects.Append(objectKey, byteBuffer[0:length])
+			if !ok {
+				return ObjectMetadata{}, probe.NewError(InternalError{})
+			}
+			totalLength += int64(length)
+			go debug.FreeOSMemory()
 		}
-		totalLength += int64(length)
-		go debug.FreeOSMemory()
 	}
 	if size != 0 {
 		if totalLength != size {
@@ -377,15 +377,21 @@ func (donut API) createObject(bucket, key, contentType, expectedMD5Sum string, s
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); err != nil {
+			// Delete perhaps the object is already saved, due to the nature of append()
+			donut.objects.Delete(objectKey)
 			return ObjectMetadata{}, probe.NewError(BadDigest{})
 		}
 	}
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256hash.Sum(nil)))
 		if err != nil {
+			// Delete perhaps the object is already saved, due to the nature of append()
+			donut.objects.Delete(objectKey)
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
+			// Delete perhaps the object is already saved, due to the nature of append()
+			donut.objects.Delete(objectKey)
 			return ObjectMetadata{}, probe.NewError(signv4.DoesNotMatch{})
 		}
 	}
