@@ -30,11 +30,10 @@ type ObjectMetadata struct {
 	Size    int64     `json:"size"`
 
 	// erasure
-	DataDisks        uint8  `json:"sys.erasureK"`
-	ParityDisks      uint8  `json:"sys.erasureM"`
-	ErasureTechnique string `json:"sys.erasureTechnique"`
-	BlockSize        int    `json:"sys.blockSize"`
-	ChunkCount       int    `json:"sys.chunkCount"`
+	DataDisks   uint8 `json:"sys.erasureK"`
+	ParityDisks uint8 `json:"sys.erasureM"`
+	BlockSize   int   `json:"sys.blockSize"`
+	ChunkCount  int   `json:"sys.chunkCount"`
 
 	// checksums
 	MD5Sum    string `json:"sys.md5sum"`

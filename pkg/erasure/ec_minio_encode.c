@@ -17,16 +17,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "ec_isal-l.h"
+#include "ec.h"
 #include "ec_minio_common.h"
 
 /*
   Generate encode matrix during the encoding phase
 */
 
-int32_t minio_init_encoder (int technique, int k, int m,
-                            unsigned char **encode_matrix,
-                            unsigned char **encode_tbls)
+int32_t minio_init_encoder (int k, int m, unsigned char **encode_matrix, unsigned char **encode_tbls)
 {
         unsigned char *tmp_matrix;
         unsigned char *tmp_tbls;
@@ -34,7 +32,7 @@ int32_t minio_init_encoder (int technique, int k, int m,
         tmp_matrix = (unsigned char *) malloc (k * (k + m));
         tmp_tbls = (unsigned char *) malloc (k * (k + m) * 32);
 
-	if (technique == 0) {
+        if (k < 5) {
                 /*
                   Commonly used method for choosing coefficients in erasure
                   encoding but does not guarantee invertable for every sub
@@ -44,7 +42,7 @@ int32_t minio_init_encoder (int technique, int k, int m,
                   -- Intel
                 */
 		gf_gen_rs_matrix (tmp_matrix, k + m, k);
-	} else if (technique == 1) {
+        } else {
 		gf_gen_cauchy1_matrix (tmp_matrix, k + m, k);
         }
 

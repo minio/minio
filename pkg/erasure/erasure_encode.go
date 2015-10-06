@@ -17,28 +17,12 @@
 package erasure
 
 // #include <stdlib.h>
-// #include "ec_isal-l.h"
+// #include "ec.h"
 // #include "ec_minio_common.h"
 import "C"
 import (
 	"errors"
 	"unsafe"
-)
-
-// Technique - type of matrix type used in encoding
-type Technique uint8
-
-// Different types of supported matrix types
-const (
-	Vandermonde Technique = iota
-	Cauchy
-	None
-)
-
-// Default Data and Parity blocks
-const (
-	K = 10
-	M = 3
 )
 
 // Block alignment
@@ -48,9 +32,8 @@ const (
 
 // Params is a configuration set for building an encoder. It is created using ValidateParams().
 type Params struct {
-	K         uint8
-	M         uint8
-	Technique Technique // cauchy or vandermonde matrix (RS)
+	K uint8
+	M uint8
 }
 
 // Erasure is an object used to encode and decode data.
@@ -66,7 +49,7 @@ type Erasure struct {
 // k and m represent the matrix size, which corresponds to the protection level
 // technique is the matrix type. Valid inputs are Cauchy (recommended) or Vandermonde.
 //
-func ValidateParams(k, m uint8, technique Technique) (*Params, error) {
+func ValidateParams(k, m uint8) (*Params, error) {
 	if k < 1 {
 		return nil, errors.New("k cannot be zero")
 	}
@@ -79,19 +62,9 @@ func ValidateParams(k, m uint8, technique Technique) (*Params, error) {
 		return nil, errors.New("(k + m) cannot be bigger than Galois field GF(2^8) - 1")
 	}
 
-	switch technique {
-	case Vandermonde:
-		break
-	case Cauchy:
-		break
-	default:
-		return nil, errors.New("Technique can be either vandermonde or cauchy")
-	}
-
 	return &Params{
-		K:         k,
-		M:         m,
-		Technique: technique,
+		K: k,
+		M: m,
 	}, nil
 }
 
@@ -103,8 +76,7 @@ func NewErasure(ep *Params) *Erasure {
 	var encodeMatrix *C.uchar
 	var encodeTbls *C.uchar
 
-	C.minio_init_encoder(C.int(ep.Technique), k, m, &encodeMatrix,
-		&encodeTbls)
+	C.minio_init_encoder(k, m, &encodeMatrix, &encodeTbls)
 
 	return &Erasure{
 		params:       ep,

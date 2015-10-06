@@ -132,22 +132,6 @@ func (e MissingPOSTPolicy) Error() string {
 	return "Missing POST policy in multipart form"
 }
 
-// MissingErasureTechnique missing erasure technique
-type MissingErasureTechnique struct{}
-
-func (e MissingErasureTechnique) Error() string {
-	return "Missing erasure technique"
-}
-
-// InvalidErasureTechnique invalid erasure technique
-type InvalidErasureTechnique struct {
-	Technique string
-}
-
-func (e InvalidErasureTechnique) Error() string {
-	return "Invalid erasure technique: " + e.Technique
-}
-
 // InternalError - generic internal error
 type InternalError struct {
 }

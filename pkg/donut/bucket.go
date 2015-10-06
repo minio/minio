@@ -288,7 +288,6 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 		objMetadata.ChunkCount = chunkCount
 		objMetadata.DataDisks = k
 		objMetadata.ParityDisks = m
-		objMetadata.ErasureTechnique = "Cauchy"
 		objMetadata.Size = int64(totalLength)
 	}
 	objMetadata.Bucket = b.getBucketName()
@@ -431,7 +430,7 @@ func (b bucket) getDataAndParity(totalWriters int) (k uint8, m uint8, err *probe
 
 // writeObjectData -
 func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData io.Reader, size int64, hashWriter io.Writer) (int, int, *probe.Error) {
-	encoder, err := newEncoder(k, m, "Cauchy")
+	encoder, err := newEncoder(k, m)
 	if err != nil {
 		return 0, 0, err.Trace()
 	}
@@ -503,11 +502,7 @@ func (b bucket) readObjectData(objectName string, writer *io.PipeWriter, objMeta
 	mwriter := io.MultiWriter(writer, hasher, sum512hasher)
 	switch len(readers) > 1 {
 	case true:
-		if objMetadata.ErasureTechnique == "" {
-			writer.CloseWithError(probe.WrapError(probe.NewError(MissingErasureTechnique{})))
-			return
-		}
-		encoder, err := newEncoder(objMetadata.DataDisks, objMetadata.ParityDisks, objMetadata.ErasureTechnique)
+		encoder, err := newEncoder(objMetadata.DataDisks, objMetadata.ParityDisks)
 		if err != nil {
 			writer.CloseWithError(probe.WrapError(err))
 			return

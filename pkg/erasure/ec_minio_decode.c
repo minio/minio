@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ec_isal-l.h"
+#include "ec.h"
 #include "ec_minio_common.h"
 
 static
