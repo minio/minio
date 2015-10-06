@@ -39,10 +39,9 @@
 //
 // But here are the few points to keep in mind
 //
-//  Techniques:
+//  Matrix Type:
 //     - Vandermonde is most commonly used method for choosing coefficients in erasure
 //       encoding but does not guarantee invertable for every sub matrix.
-//       Users may want to adjust for k > 5. (k is data blocks)
 //     - Whereas Cauchy is our recommended method for choosing coefficients in erasure coding.
 //       Since any sub-matrix of a Cauchy matrix is invertable.
 //
@@ -53,14 +52,14 @@
 //
 // Creating and using an encoder
 //  var bytes []byte
-//  params := erasure.ValidateParams(10, 5, erasure.Cauchy)
+//  params := erasure.ValidateParams(10, 5)
 //  encoder := erasure.NewErasure(params)
 //  encodedData, length := encoder.Encode(bytes)
 //
 // Creating and using a decoder
 //  var encodedData [][]byte
 //  var length int
-//  params := erasure.ValidateParams(10, 5, erasure.Cauchy)
+//  params := erasure.ValidateParams(10, 5)
 //  encoder := erasure.NewErasure(params)
 //  originalData, err := encoder.Decode(encodedData, length)
 //

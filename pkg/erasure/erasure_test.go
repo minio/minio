@@ -34,8 +34,15 @@ const (
 	m = 5
 )
 
-func (s *MySuite) TestCauchyEncodeDecodeFailure(c *C) {
-	ep, _ := ValidateParams(k, m, Cauchy)
+func corruptChunks(chunks [][]byte, errorIndex []int) [][]byte {
+	for _, err := range errorIndex {
+		chunks[err] = nil
+	}
+	return chunks
+}
+
+func (s *MySuite) TestEncodeDecodeFailure(c *C) {
+	ep, _ := ValidateParams(k, m)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
@@ -50,8 +57,8 @@ func (s *MySuite) TestCauchyEncodeDecodeFailure(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-func (s *MySuite) TestCauchyEncodeDecodeSuccess(c *C) {
-	ep, _ := ValidateParams(k, m, Cauchy)
+func (s *MySuite) TestEncodeDecodeSuccess(c *C) {
+	ep, _ := ValidateParams(k, m)
 
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
 
@@ -68,4 +75,28 @@ func (s *MySuite) TestCauchyEncodeDecodeSuccess(c *C) {
 	if !bytes.Equal(data, recoveredData) {
 		c.Fatalf("Recovered data mismatches with original data")
 	}
+}
+
+func (s *MySuite) TestEncodeDecodeSuccessBuffer(c *C) {
+	ep, _ := ValidateParams(k, m)
+
+	tmpBuffer := new(bytes.Buffer)
+	for i := 0; i < 1024*1024; i++ {
+		tmpBuffer.Write([]byte("Hello world, hello world"))
+	}
+
+	e := NewErasure(ep)
+	chunks, err := e.Encode(tmpBuffer.Bytes())
+	c.Assert(err, IsNil)
+
+	errorIndex := []int{0, 3, 5, 9, 13}
+	chunks = corruptChunks(chunks, errorIndex)
+
+	recoveredData, err := e.Decode(chunks, len(tmpBuffer.Bytes()))
+	c.Assert(err, IsNil)
+
+	if !bytes.Equal(tmpBuffer.Bytes(), recoveredData) {
+		c.Fatalf("Recovered data mismatches with original data")
+	}
+
 }

@@ -23,41 +23,21 @@ import (
 
 // encoder internal struct
 type encoder struct {
-	encoder   *encoding.Erasure
-	k, m      uint8
-	technique encoding.Technique
-}
-
-// getErasureTechnique - convert technique string into Technique type
-func getErasureTechnique(technique string) (encoding.Technique, *probe.Error) {
-	switch true {
-	case technique == "Cauchy":
-		return encoding.Cauchy, nil
-	case technique == "Vandermonde":
-		return encoding.Cauchy, nil
-	default:
-		return encoding.None, probe.NewError(InvalidErasureTechnique{Technique: technique})
-	}
+	encoder *encoding.Erasure
+	k, m    uint8
 }
 
 // newEncoder - instantiate a new encoder
-func newEncoder(k, m uint8, technique string) (encoder, *probe.Error) {
+func newEncoder(k, m uint8) (encoder, *probe.Error) {
 	e := encoder{}
-	t, err := getErasureTechnique(technique)
+	params, err := encoding.ValidateParams(k, m)
 	if err != nil {
-		return encoder{}, err.Trace()
+		return encoder{}, probe.NewError(err)
 	}
-	{
-		params, err := encoding.ValidateParams(k, m, t)
-		if err != nil {
-			return encoder{}, probe.NewError(err)
-		}
-		e.encoder = encoding.NewErasure(params)
-		e.k = k
-		e.m = m
-		e.technique = t
-		return e, nil
-	}
+	e.encoder = encoding.NewErasure(params)
+	e.k = k
+	e.m = m
+	return e, nil
 }
 
 // TODO - think again if this is needed

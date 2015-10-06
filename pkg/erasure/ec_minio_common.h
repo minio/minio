@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-int32_t minio_init_encoder (int technique, int k, int m,
+int32_t minio_init_encoder (int k, int m,
                             unsigned char **encode_matrix,
                             unsigned char **encode_tbls);
 
