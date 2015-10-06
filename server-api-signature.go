@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"io"
 	"io/ioutil"
@@ -130,7 +131,7 @@ func initSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, *probe.Error) {
 	/// HTML Form values
 	formValues := make(map[string]string)
-	var filePart io.Reader
+	filePart := new(bytes.Buffer)
 	var err error
 	for err == nil {
 		var part *multipart.Part
@@ -141,20 +142,28 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 				if err != nil {
 					return nil, nil, probe.NewError(err)
 				}
-				formValues[part.FormName()] = string(buffer)
+				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
 			} else {
-				filePart = part
+				_, err := io.Copy(filePart, part)
+				if err != nil {
+					return nil, nil, probe.NewError(err)
+				}
 			}
 		}
 	}
 	return filePart, formValues, nil
 }
 
-func applyPolicy(formValues map[string]string, policy []byte) *probe.Error {
+func applyPolicy(formValues map[string]string) *probe.Error {
 	if formValues["X-Amz-Algorithm"] != "AWS4-HMAC-SHA256" {
 		return probe.NewError(errUnsupportedAlgorithm)
 	}
-	postPolicyForm, perr := signv4.ParsePostPolicyForm(string(policy))
+	/// Decoding policy
+	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if err != nil {
+		return probe.NewError(err)
+	}
+	postPolicyForm, perr := signv4.ParsePostPolicyForm(string(policyBytes))
 	if perr != nil {
 		return perr.Trace()
 	}
@@ -182,12 +191,12 @@ func applyPolicy(formValues map[string]string, policy []byte) *probe.Error {
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
-		if !strings.HasPrefix(formValues["key"], postPolicyForm.Conditions.Policies["$key"].Value) {
+		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
 			return probe.NewError(errPolicyMissingFields)
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
-		if formValues["key"] != postPolicyForm.Conditions.Policies["$key"].Value {
+		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
 			return probe.NewError(errPolicyMissingFields)
 		}
 	}
@@ -196,11 +205,6 @@ func applyPolicy(formValues map[string]string, policy []byte) *probe.Error {
 
 // initPostPresignedPolicyV4 initializing post policy signature verification
 func initPostPresignedPolicyV4(formValues map[string]string) (*signv4.Signature, *probe.Error) {
-	/// Decoding policy
-	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
 	credentialElements := strings.Split(strings.TrimSpace(formValues["X-Amz-Credential"]), "/")
 	if len(credentialElements) != 5 {
 		return nil, probe.NewError(errCredentialTagMalformed)
@@ -219,7 +223,7 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*signv4.Signature,
 				AccessKeyID:     user.AccessKeyID,
 				SecretAccessKey: user.SecretAccessKey,
 				Signature:       formValues["X-Amz-Signature"],
-				PresignedPolicy: policyBytes,
+				PresignedPolicy: formValues["Policy"],
 			}
 			return signature, nil
 		}
