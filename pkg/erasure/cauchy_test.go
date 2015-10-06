@@ -69,3 +69,27 @@ func (s *MySuite) TestCauchyEncodeDecodeSuccess(c *C) {
 		c.Fatalf("Recovered data mismatches with original data")
 	}
 }
+
+func (s *MySuite) TestCauchyEncodeDecodeSuccessBuffer(c *C) {
+	ep, _ := ValidateParams(k, m, Cauchy)
+
+	tmpBuffer := new(bytes.Buffer)
+	for i := 0; i < 1024*1024; i++ {
+		tmpBuffer.Write([]byte("Hello world, hello world"))
+	}
+
+	e := NewErasure(ep)
+	chunks, err := e.Encode(tmpBuffer.Bytes())
+	c.Assert(err, IsNil)
+
+	errorIndex := []int{0, 3, 5, 9, 13}
+	chunks = corruptChunks(chunks, errorIndex)
+
+	recoveredData, err := e.Decode(chunks, len(tmpBuffer.Bytes()))
+	c.Assert(err, IsNil)
+
+	if !bytes.Equal(tmpBuffer.Bytes(), recoveredData) {
+		c.Fatalf("Recovered data mismatches with original data")
+	}
+
+}
