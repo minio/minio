@@ -323,15 +323,10 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 	}
 	bucket := mux.Vars(req)["bucket"]
 	formValues["Bucket"] = bucket
-	object := formValues["key"]
+	object := formValues["Key"]
 	signature, perr := initPostPresignedPolicyV4(formValues)
 	if perr != nil {
 		errorIf(perr.Trace(), "Unable to initialize post policy presigned.", nil)
-		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
-		return
-	}
-	if perr = applyPolicy(formValues, signature.PresignedPolicy); perr != nil {
-		errorIf(perr.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
 		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
@@ -343,6 +338,11 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 	}
 	if ok == false {
 		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
+		return
+	}
+	if perr = applyPolicy(formValues); perr != nil {
+		errorIf(perr.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
+		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	metadata, perr := api.Donut.CreateObject(bucket, object, "", 0, fileBody, nil, nil)

@@ -77,6 +77,7 @@ func (s *MySuite) TestEncodeDecodeSuccess(c *C) {
 	}
 }
 
+/*
 func (s *MySuite) TestEncodeDecodeSuccessBuffer(c *C) {
 	ep, _ := ValidateParams(k, m)
 
@@ -100,3 +101,4 @@ func (s *MySuite) TestEncodeDecodeSuccessBuffer(c *C) {
 	}
 
 }
+*/

@@ -38,7 +38,7 @@ type Signature struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	Presigned       bool
-	PresignedPolicy []byte
+	PresignedPolicy string
 	SignedHeaders   []string
 	Signature       string
 	Request         *http.Request
