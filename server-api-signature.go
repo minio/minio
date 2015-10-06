@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"io"
 	"io/ioutil"
@@ -131,7 +130,7 @@ func initSignatureV4(req *http.Request) (*signv4.Signature, *probe.Error) {
 func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, *probe.Error) {
 	/// HTML Form values
 	formValues := make(map[string]string)
-	filePart := new(bytes.Buffer)
+	var filePart io.Reader
 	var err error
 	for err == nil {
 		var part *multipart.Part
@@ -144,11 +143,7 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 				}
 				formValues[part.FormName()] = string(buffer)
 			} else {
-				// FIXME: this will hog memory
-				_, err := io.Copy(filePart, part)
-				if err != nil {
-					return nil, nil, probe.NewError(err)
-				}
+				filePart = part
 			}
 		}
 	}

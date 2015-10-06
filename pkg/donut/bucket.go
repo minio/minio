@@ -444,27 +444,29 @@ func (b bucket) writeObjectData(k, m uint8, writers []io.WriteCloser, objectData
 		var length int
 		inputData := make([]byte, chunkSize)
 		length, e = objectData.Read(inputData)
-		encodedBlocks, err := encoder.Encode(inputData)
-		if err != nil {
-			return 0, 0, err.Trace()
-		}
-		if _, err := hashWriter.Write(inputData[0:length]); err != nil {
-			return 0, 0, probe.NewError(err)
-		}
-		for blockIndex, block := range encodedBlocks {
-			errCh := make(chan error, 1)
-			go func(writer io.Writer, reader io.Reader, errCh chan<- error) {
-				defer close(errCh)
-				_, err := io.Copy(writer, reader)
-				errCh <- err
-			}(writers[blockIndex], bytes.NewReader(block), errCh)
-			if err := <-errCh; err != nil {
-				// Returning error is fine here CleanupErrors() would cleanup writers
+		if length != 0 {
+			encodedBlocks, err := encoder.Encode(inputData[0:length])
+			if err != nil {
+				return 0, 0, err.Trace()
+			}
+			if _, err := hashWriter.Write(inputData[0:length]); err != nil {
 				return 0, 0, probe.NewError(err)
 			}
+			for blockIndex, block := range encodedBlocks {
+				errCh := make(chan error, 1)
+				go func(writer io.Writer, reader io.Reader, errCh chan<- error) {
+					defer close(errCh)
+					_, err := io.Copy(writer, reader)
+					errCh <- err
+				}(writers[blockIndex], bytes.NewReader(block), errCh)
+				if err := <-errCh; err != nil {
+					// Returning error is fine here CleanupErrors() would cleanup writers
+					return 0, 0, probe.NewError(err)
+				}
+			}
+			totalLength += length
+			chunkCount = chunkCount + 1
 		}
-		totalLength += length
-		chunkCount = chunkCount + 1
 	}
 	if e != io.EOF {
 		return 0, 0, probe.NewError(e)
