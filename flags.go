@@ -49,6 +49,12 @@ var (
 		Usage: "Limit for total concurrent requests: [DEFAULT: 16].",
 	}
 
+	anonymousFlag = cli.BoolFlag{
+		Name:  "anonymous",
+		Hide:  true,
+		Usage: "Make server run in anonymous mode where all client connections are accepted.",
+	}
+
 	certFlag = cli.StringFlag{
 		Name:  "cert",
 		Usage: "Provide your domain certificate.",

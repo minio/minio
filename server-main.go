@@ -130,8 +130,8 @@ func startTM(api API) {
 
 // startServer starts an s3 compatible cloud storage server
 func startServer(conf minioConfig) *probe.Error {
-	minioAPI := getNewAPI()
-	apiHandler := getAPIHandler(minioAPI)
+	minioAPI := getNewAPI(conf.Anonymous)
+	apiHandler := getAPIHandler(conf.Anonymous, minioAPI)
 	apiServer, err := configureAPIServer(conf, apiHandler)
 	if err != nil {
 		return err.Trace()
@@ -156,6 +156,7 @@ func getServerConfig(c *cli.Context) minioConfig {
 	return minioConfig{
 		Address:    c.GlobalString("address"),
 		RPCAddress: c.GlobalString("address-server-rpc"),
+		Anonymous:  c.GlobalBool("anonymous"),
 		TLS:        tls,
 		CertFile:   certFile,
 		KeyFile:    keyFile,

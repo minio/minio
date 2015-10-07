@@ -18,11 +18,15 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
+	"encoding/hex"
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +36,11 @@ import (
 )
 
 type MyAPIDonutCacheSuite struct {
-	root string
+	root            string
+	req             *http.Request
+	body            io.ReadSeeker
+	accessKeyID     string
+	secretAccessKey string
 }
 
 var _ = Suite(&MyAPIDonutCacheSuite{})
@@ -51,10 +59,29 @@ func (s *MyAPIDonutCacheSuite) SetUpSuite(c *C) {
 	perr := donut.SaveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	minioAPI := getNewAPI()
-	apiHandler := getAPIHandler(minioAPI)
+	accessKeyID, perr := generateAccessKeyID()
+	c.Assert(perr, IsNil)
+	secretAccessKey, perr := generateSecretAccessKey()
+	c.Assert(perr, IsNil)
+
+	authConf := &AuthConfig{}
+	authConf.Users = make(map[string]*AuthUser)
+	authConf.Users[string(accessKeyID)] = &AuthUser{
+		Name:            "testuser",
+		AccessKeyID:     string(accessKeyID),
+		SecretAccessKey: string(secretAccessKey),
+	}
+	s.accessKeyID = string(accessKeyID)
+	s.secretAccessKey = string(secretAccessKey)
+
+	SetAuthConfigPath(root)
+	perr = SaveConfig(authConf)
+	c.Assert(perr, IsNil)
+
+	minioAPI := getNewAPI(false)
+	httpHandler := getAPIHandler(false, minioAPI)
 	go startTM(minioAPI)
-	testAPIDonutCacheServer = httptest.NewServer(apiHandler)
+	testAPIDonutCacheServer = httptest.NewServer(httpHandler)
 }
 
 func (s *MyAPIDonutCacheSuite) TearDownSuite(c *C) {
@@ -62,8 +89,130 @@ func (s *MyAPIDonutCacheSuite) TearDownSuite(c *C) {
 	testAPIDonutCacheServer.Close()
 }
 
+func (s *MyAPIDonutCacheSuite) newRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
+	t := time.Now().UTC()
+	req, err := http.NewRequest(method, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("x-amz-date", t.Format(iso8601Format))
+	if method == "" {
+		method = "POST"
+	}
+
+	// add Content-Length
+	req.ContentLength = contentLength
+
+	// add body
+	switch {
+	case body == nil:
+		req.Body = nil
+	default:
+		req.Body = ioutil.NopCloser(body)
+	}
+
+	// save for subsequent use
+	hash := func() string {
+		switch {
+		case body == nil:
+			return hex.EncodeToString(sum256([]byte{}))
+		default:
+			sum256Bytes, _ := sum256Reader(body)
+			return hex.EncodeToString(sum256Bytes)
+		}
+	}
+	hashedPayload := hash()
+	req.Header.Set("x-amz-content-sha256", hashedPayload)
+
+	var headers []string
+	vals := make(map[string][]string)
+	for k, vv := range req.Header {
+		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
+			continue // ignored header
+		}
+		headers = append(headers, strings.ToLower(k))
+		vals[strings.ToLower(k)] = vv
+	}
+	headers = append(headers, "host")
+	sort.Strings(headers)
+
+	var canonicalHeaders bytes.Buffer
+	for _, k := range headers {
+		canonicalHeaders.WriteString(k)
+		canonicalHeaders.WriteByte(':')
+		switch {
+		case k == "host":
+			canonicalHeaders.WriteString(req.URL.Host)
+			fallthrough
+		default:
+			for idx, v := range vals[k] {
+				if idx > 0 {
+					canonicalHeaders.WriteByte(',')
+				}
+				canonicalHeaders.WriteString(v)
+			}
+			canonicalHeaders.WriteByte('\n')
+		}
+	}
+
+	signedHeaders := strings.Join(headers, ";")
+
+	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
+	encodedPath, _ := urlEncodeName(req.URL.Path)
+	// convert any space strings back to "+"
+	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
+
+	//
+	// canonicalRequest =
+	//  <HTTPMethod>\n
+	//  <CanonicalURI>\n
+	//  <CanonicalQueryString>\n
+	//  <CanonicalHeaders>\n
+	//  <SignedHeaders>\n
+	//  <HashedPayload>
+	//
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		encodedPath,
+		req.URL.RawQuery,
+		canonicalHeaders.String(),
+		signedHeaders,
+		hashedPayload,
+	}, "\n")
+
+	scope := strings.Join([]string{
+		t.Format(yyyymmdd),
+		"milkyway",
+		"s3",
+		"aws4_request",
+	}, "/")
+
+	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
+	stringToSign = stringToSign + scope + "\n"
+	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+
+	date := sumHMAC([]byte("AWS4"+s.secretAccessKey), []byte(t.Format(yyyymmdd)))
+	region := sumHMAC(date, []byte("milkyway"))
+	service := sumHMAC(region, []byte("s3"))
+	signingKey := sumHMAC(service, []byte("aws4_request"))
+
+	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
+
+	// final Authorization header
+	parts := []string{
+		authHeaderPrefix + " Credential=" + s.accessKeyID + "/" + scope,
+		"SignedHeaders=" + signedHeaders,
+		"Signature=" + signature,
+	}
+	auth := strings.Join(parts, ", ")
+	req.Header.Set("Authorization", auth)
+
+	return req, nil
+}
+
 func (s *MyAPIDonutCacheSuite) TestDeleteBucket(c *C) {
-	request, err := http.NewRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket", nil)
+	request, err := s.newRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := &http.Client{}
@@ -73,7 +222,7 @@ func (s *MyAPIDonutCacheSuite) TestDeleteBucket(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestDeleteObject(c *C) {
-	request, err := http.NewRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket/myobject", nil)
+	request, err := s.newRequest("DELETE", testAPIDonutCacheServer.URL+"/mybucket/myobject", 0, nil)
 	c.Assert(err, IsNil)
 	client := &http.Client{}
 	response, err := client.Do(request)
@@ -82,7 +231,7 @@ func (s *MyAPIDonutCacheSuite) TestDeleteObject(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestNonExistantBucket(c *C) {
-	request, err := http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/nonexistantbucket", nil)
+	request, err := s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/nonexistantbucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -92,7 +241,7 @@ func (s *MyAPIDonutCacheSuite) TestNonExistantBucket(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestEmptyObject(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/emptyobject", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/emptyobject", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -100,7 +249,7 @@ func (s *MyAPIDonutCacheSuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/emptyobject/object", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/emptyobject/object", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -108,7 +257,7 @@ func (s *MyAPIDonutCacheSuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/emptyobject/object", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/emptyobject/object", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -123,7 +272,7 @@ func (s *MyAPIDonutCacheSuite) TestEmptyObject(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestBucket(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/bucket", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/bucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -131,7 +280,7 @@ func (s *MyAPIDonutCacheSuite) TestBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/bucket", nil)
+	request, err = s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/bucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -141,8 +290,8 @@ func (s *MyAPIDonutCacheSuite) TestBucket(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestObject(c *C) {
-	buffer := bytes.NewBufferString("hello world")
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/testobject", nil)
+	buffer := bytes.NewReader([]byte("hello world"))
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/testobject", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -150,7 +299,7 @@ func (s *MyAPIDonutCacheSuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/testobject/object", buffer)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/testobject/object", int64(buffer.Len()), buffer)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -158,7 +307,7 @@ func (s *MyAPIDonutCacheSuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/testobject/object", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/testobject/object", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -173,7 +322,7 @@ func (s *MyAPIDonutCacheSuite) TestObject(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -181,7 +330,7 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -192,8 +341,8 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	//// test object 1
 
 	// get object
-	buffer1 := bytes.NewBufferString("hello one")
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object1", buffer1)
+	buffer1 := bytes.NewReader([]byte("hello one"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -201,7 +350,7 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object1", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object1", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -214,8 +363,8 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
 
-	buffer2 := bytes.NewBufferString("hello two")
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object2", buffer2)
+	buffer2 := bytes.NewReader([]byte("hello two"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object2", int64(buffer2.Len()), buffer2)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -223,7 +372,7 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object2", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object2", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -236,8 +385,8 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello two")))
 
-	buffer3 := bytes.NewBufferString("hello three")
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object3", buffer3)
+	buffer3 := bytes.NewReader([]byte("hello three"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/multipleobjects/object3", int64(buffer3.Len()), buffer3)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -245,7 +394,7 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object3", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/multipleobjects/object3", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -260,7 +409,7 @@ func (s *MyAPIDonutCacheSuite) TestMultipleObjects(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestNotImplemented(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/bucket/object?policy", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/bucket/object?policy", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -271,7 +420,7 @@ func (s *MyAPIDonutCacheSuite) TestNotImplemented(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestHeader(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/bucket/object", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/bucket/object", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -282,7 +431,7 @@ func (s *MyAPIDonutCacheSuite) TestHeader(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestPutBucket(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/put-bucket", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/put-bucket", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -293,7 +442,7 @@ func (s *MyAPIDonutCacheSuite) TestPutBucket(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestPutObject(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/put-object", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/put-object", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -302,7 +451,8 @@ func (s *MyAPIDonutCacheSuite) TestPutObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/put-object/object", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/put-object/object", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -311,7 +461,7 @@ func (s *MyAPIDonutCacheSuite) TestPutObject(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestListBuckets(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -326,7 +476,8 @@ func (s *MyAPIDonutCacheSuite) TestListBuckets(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/innonexistantbucket/object", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/innonexistantbucket/object", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -336,7 +487,7 @@ func (s *MyAPIDonutCacheSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c 
 }
 
 func (s *MyAPIDonutCacheSuite) TestHeadOnObject(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/headonobject", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/headonobject", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -345,14 +496,15 @@ func (s *MyAPIDonutCacheSuite) TestHeadOnObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/headonobject/object1", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/headonobject/object1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/headonobject/object1", nil)
+	request, err = s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/headonobject/object1", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -361,7 +513,7 @@ func (s *MyAPIDonutCacheSuite) TestHeadOnObject(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestHeadOnBucket(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/headonbucket", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/headonbucket", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -370,37 +522,16 @@ func (s *MyAPIDonutCacheSuite) TestHeadOnBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/headonbucket", nil)
+	request, err = s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/headonbucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
-
-/* Enable when we have full working signature v4
-func (s *MyAPIDonutCacheSuite) TestDateFormat(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/dateformat", nil)
-	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
-
-	// set an invalid date
-	request.Header.Set("Date", "asfasdfadf")
-
-	client := http.Client{}
-	response, err := client.Do(request)
-	c.Assert(err, IsNil)
-	verifyError(c, response, "RequestTimeTooSkewed",
-		"The difference between the request time and the server's time is too large.", http.StatusForbidden)
-
-	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
-	response, err = client.Do(request)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-}
-*/
 
 func (s *MyAPIDonutCacheSuite) TestXMLNameNotInBucketListJson(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -415,7 +546,7 @@ func (s *MyAPIDonutCacheSuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestXMLNameNotInObjectListJson(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/xmlnamenotinobjectlistjson", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/xmlnamenotinobjectlistjson", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -424,7 +555,7 @@ func (s *MyAPIDonutCacheSuite) TestXMLNameNotInObjectListJson(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/xmlnamenotinobjectlistjson", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/xmlnamenotinobjectlistjson", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -439,7 +570,7 @@ func (s *MyAPIDonutCacheSuite) TestXMLNameNotInObjectListJson(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -447,7 +578,8 @@ func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists/one", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists/one", int64(buffer1.Len()), buffer1)
 	delete(request.Header, "Content-Type")
 	c.Assert(err, IsNil)
 
@@ -456,14 +588,14 @@ func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/contenttype-persists/one", nil)
+	request, err = s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/contenttype-persists/one", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/contenttype-persists/one", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/contenttype-persists/one", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -472,7 +604,8 @@ func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists/two", bytes.NewBufferString("hello world"))
+	buffer2 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/contenttype-persists/two", int64(buffer2.Len()), buffer2)
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
@@ -481,14 +614,14 @@ func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("HEAD", testAPIDonutCacheServer.URL+"/contenttype-persists/two", nil)
+	request, err = s.newRequest("HEAD", testAPIDonutCacheServer.URL+"/contenttype-persists/two", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/contenttype-persists/two", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/contenttype-persists/two", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -497,7 +630,7 @@ func (s *MyAPIDonutCacheSuite) TestContentTypePersists(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestPartialContent(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/partial-content", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/partial-content", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -505,7 +638,8 @@ func (s *MyAPIDonutCacheSuite) TestPartialContent(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/partial-content/bar", bytes.NewBufferString("Hello World"))
+	buffer1 := bytes.NewReader([]byte("Hello World"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/partial-content/bar", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -514,7 +648,7 @@ func (s *MyAPIDonutCacheSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// prepare request
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/partial-content/bar", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/partial-content/bar", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 	request.Header.Add("Range", "bytes=6-7")
@@ -530,7 +664,7 @@ func (s *MyAPIDonutCacheSuite) TestPartialContent(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors-.", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors-.", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -538,7 +672,7 @@ func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -546,7 +680,7 @@ func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objecthandlererrors", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objecthandlererrors", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -555,7 +689,7 @@ func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors?max-keys=-2", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/objecthandlererrors?max-keys=-2", 0, nil)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -564,7 +698,7 @@ func (s *MyAPIDonutCacheSuite) TestListObjectsHandlerErrors(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket-.", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket-.", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -573,7 +707,7 @@ func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -582,7 +716,7 @@ func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "private")
 
@@ -590,7 +724,7 @@ func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "BucketAlreadyExists", "The requested bucket name is not available.", http.StatusConflict)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket?acl", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/putbucket?acl", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("x-amz-acl", "unknown")
 
@@ -600,7 +734,7 @@ func (s *MyAPIDonutCacheSuite) TestPutBucketErrors(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestGetObjectErrors(c *C) {
-	request, err := http.NewRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors", nil)
+	request, err := s.newRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -608,7 +742,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/getobjecterrors", nil)
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/getobjecterrors", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -616,7 +750,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors/bar", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors/bar", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -624,7 +758,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors-./bar", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/getobjecterrors-./bar", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -634,7 +768,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectErrors(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestGetObjectRangeErrors(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/getobjectrangeerrors", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/getobjectrangeerrors", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -642,7 +776,8 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectRangeErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/getobjectrangeerrors/bar", bytes.NewBufferString("Hello World"))
+	buffer1 := bytes.NewReader([]byte("Hello World"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/getobjectrangeerrors/bar", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -650,7 +785,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectRangeErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/getobjectrangeerrors/bar", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/getobjectrangeerrors/bar", 0, nil)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
 
@@ -661,7 +796,7 @@ func (s *MyAPIDonutCacheSuite) TestGetObjectRangeErrors(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestObjectMultipartAbort(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -669,7 +804,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = http.NewRequest("POST", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploads", bytes.NewBufferString(""))
+	request, err = s.newRequest("POST", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploads", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -683,21 +818,23 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	buffer2 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("DELETE", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID, nil)
+	request, err = s.newRequest("DELETE", testAPIDonutCacheServer.URL+"/objectmultipartabort/object?uploadId="+uploadID, 0, nil)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -706,7 +843,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartAbort(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestBucketMultipartList(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist", bytes.NewBufferString(""))
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -714,7 +851,7 @@ func (s *MyAPIDonutCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = http.NewRequest("POST", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploads", bytes.NewBufferString(""))
+	request, err = s.newRequest("POST", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploads", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -728,21 +865,23 @@ func (s *MyAPIDonutCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	buffer2 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/bucketmultipartlist?uploads", nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/bucketmultipartlist?uploads", 0, nil)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -757,7 +896,7 @@ func (s *MyAPIDonutCacheSuite) TestBucketMultipartList(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist", bytes.NewBufferString(""))
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -765,7 +904,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = http.NewRequest("POST", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploads", bytes.NewBufferString(""))
+	request, err = s.newRequest("POST", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploads", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -779,28 +918,30 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	buffer2 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID, nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?uploadId="+uploadID, 0, nil)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, nil)
+	request, err = s.newRequest("GET", testAPIDonutCacheServer.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, 0, nil)
 	c.Assert(err, IsNil)
 
 	response4, err := client.Do(request)
@@ -809,7 +950,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipartList(c *C) {
 }
 
 func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
-	request, err := http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts", nil)
+	request, err := s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -817,7 +958,7 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = http.NewRequest("POST", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploads", nil)
+	request, err = s.newRequest("POST", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploads", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -833,7 +974,8 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", bytes.NewBufferString("hello world"))
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -841,7 +983,8 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", bytes.NewBufferString("hello world"))
+	buffer2 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -863,26 +1006,15 @@ func (s *MyAPIDonutCacheSuite) TestObjectMultipart(c *C) {
 		},
 	}
 
-	var completeBuffer bytes.Buffer
-	encoder := xml.NewEncoder(&completeBuffer)
-	encoder.Encode(completeUploads)
-
-	request, err = http.NewRequest("POST", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID, &completeBuffer)
+	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, IsNil)
 
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = http.NewRequest("GET", testAPIDonutCacheServer.URL+"/objectmultiparts/object", nil)
+	request, err = s.newRequest("POST", testAPIDonutCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID, int64(len(completeBytes)), bytes.NewReader(completeBytes))
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	object, err := ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	c.Assert(string(object), Equals, ("hello worldhello world"))
 }
 
 func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
