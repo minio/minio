@@ -38,6 +38,9 @@ import (
 //
 // "dataLen" is the length of original source data
 func (e *Erasure) Decode(encodedDataBlocks [][]byte, dataLen int) (decodedData []byte, err error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
 	var source, target **C.uchar
 
 	k := int(e.params.K)

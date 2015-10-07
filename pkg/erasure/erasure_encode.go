@@ -22,6 +22,7 @@ package erasure
 import "C"
 import (
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -42,6 +43,7 @@ type Erasure struct {
 	encodeMatrix, encodeTbls *C.uchar
 	decodeMatrix, decodeTbls *C.uchar
 	decodeIndex              *C.uint32_t
+	mutex                    *sync.Mutex
 }
 
 // ValidateParams creates an Params object.
@@ -85,6 +87,7 @@ func NewErasure(ep *Params) *Erasure {
 		decodeMatrix: nil,
 		decodeTbls:   nil,
 		decodeIndex:  nil,
+		mutex:        new(sync.Mutex),
 	}
 }
 
@@ -110,6 +113,9 @@ func GetEncodedBlockLen(inputLen int, k uint8) (encodedOutputLen int) {
 // Encode erasure codes a block of data in "k" data blocks and "m" parity blocks.
 // Output is [k+m][]blocks of data and parity slices.
 func (e *Erasure) Encode(inputData []byte) (encodedBlocks [][]byte, err error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
 	k := int(e.params.K) // "k" data blocks
 	m := int(e.params.M) // "m" parity blocks
 	n := k + m           // "n" total encoded blocks
