@@ -64,30 +64,32 @@ type APIOperation struct {
 
 // API container for API and also carries OP (operation) channel
 type API struct {
-	OP    chan APIOperation
-	Donut donut.Interface
+	OP        chan APIOperation
+	Donut     donut.Interface
+	Anonymous bool // do not checking for incoming signatures, allow all requests
 }
 
 // getNewAPI instantiate a new minio API
-func getNewAPI() API {
+func getNewAPI(anonymous bool) API {
 	// ignore errors for now
 	d, err := donut.New()
 	fatalIf(err.Trace(), "Instantiating donut failed.", nil)
 
 	return API{
-		OP:    make(chan APIOperation),
-		Donut: d,
+		OP:        make(chan APIOperation),
+		Donut:     d,
+		Anonymous: anonymous,
 	}
 }
 
-// getAPIHandler api handler
-func getAPIHandler(api API) http.Handler {
+func getAPIHandler(anonymous bool, api API) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
-		SignatureHandler,
-		// api.LoggingHandler, // Disabled logging until we bring in external logging support
 		CorsHandler,
+	}
+	if !anonymous {
+		mwHandlers = append(mwHandlers, SignatureHandler)
 	}
 	mux := router.NewRouter()
 	registerAPI(mux, api)

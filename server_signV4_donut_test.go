@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -51,6 +52,22 @@ type MyAPISignatureV4Suite struct {
 var _ = Suite(&MyAPISignatureV4Suite{})
 
 var testSignatureV4Server *httptest.Server
+
+// create a dummy TestNodeDiskMap
+func createTestNodeDiskMap(p string) map[string][]string {
+	nodes := make(map[string][]string)
+	nodes["localhost"] = make([]string, 16)
+	for i := 0; i < len(nodes["localhost"]); i++ {
+		diskPath := filepath.Join(p, strconv.Itoa(i))
+		if _, err := os.Stat(diskPath); err != nil {
+			if os.IsNotExist(err) {
+				os.MkdirAll(diskPath, 0700)
+			}
+		}
+		nodes["localhost"][i] = diskPath
+	}
+	return nodes
+}
 
 func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	root, err := ioutil.TempDir(os.TempDir(), "api-")
@@ -85,8 +102,8 @@ func (s *MyAPISignatureV4Suite) SetUpSuite(c *C) {
 	perr = SaveConfig(authConf)
 	c.Assert(perr, IsNil)
 
-	minioAPI := getNewAPI()
-	httpHandler := getAPIHandler(minioAPI)
+	minioAPI := getNewAPI(false)
+	httpHandler := getAPIHandler(false, minioAPI)
 	go startTM(minioAPI)
 	testSignatureV4Server = httptest.NewServer(httpHandler)
 }
@@ -330,7 +347,7 @@ func (s *MyAPISignatureV4Suite) newRequest(method, urlStr string, contentLength 
 }
 
 func (s *MyAPISignatureV4Suite) TestDeleteBucket(c *C) {
-	request, err := http.NewRequest("DELETE", testSignatureV4Server.URL+"/mybucket", nil)
+	request, err := s.newRequest("DELETE", testSignatureV4Server.URL+"/mybucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := &http.Client{}
@@ -340,7 +357,7 @@ func (s *MyAPISignatureV4Suite) TestDeleteBucket(c *C) {
 }
 
 func (s *MyAPISignatureV4Suite) TestDeleteObject(c *C) {
-	request, err := http.NewRequest("DELETE", testSignatureV4Server.URL+"/mybucket/myobject", nil)
+	request, err := s.newRequest("DELETE", testSignatureV4Server.URL+"/mybucket/myobject", 0, nil)
 	c.Assert(err, IsNil)
 	client := &http.Client{}
 	response, err := client.Do(request)
@@ -807,7 +824,7 @@ func (s *MyAPISignatureV4Suite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testSignatureV4Server.URL+"/objecthandlererrors?max-keys=-2", nil)
+	request, err = s.newRequest("GET", testSignatureV4Server.URL+"/objecthandlererrors?max-keys=-2", 0, nil)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -1059,7 +1076,7 @@ func (s *MyAPISignatureV4Suite) TestObjectMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
-	request, err = http.NewRequest("GET", testSignatureV4Server.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, nil)
+	request, err = s.newRequest("GET", testSignatureV4Server.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, 0, nil)
 	c.Assert(err, IsNil)
 
 	response4, err := client.Do(request)

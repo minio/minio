@@ -32,6 +32,7 @@ type minioConfig struct {
 	Address           string
 	ControllerAddress string
 	RPCAddress        string
+	Anonymous         bool
 	TLS               bool
 	CertFile          string
 	KeyFile           string
@@ -40,7 +41,6 @@ type minioConfig struct {
 
 func init() {
 	// Check for the environment early on and gracefuly report.
-
 	_, err := user.Current()
 	if err != nil {
 		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
@@ -100,6 +100,7 @@ func registerApp() *cli.App {
 	registerFlag(addressControllerFlag)
 	registerFlag(addressServerRPCFlag)
 	registerFlag(ratelimitFlag)
+	registerFlag(anonymousFlag)
 	registerFlag(certFlag)
 	registerFlag(keyFlag)
 	registerFlag(jsonFlag)

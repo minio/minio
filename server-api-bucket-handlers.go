@@ -46,16 +46,12 @@ func (api API) isValidOp(w http.ResponseWriter, req *http.Request) bool {
 	}
 	if _, err = stripAccessKeyID(req.Header.Get("Authorization")); err != nil {
 		if bucketMetadata.ACL.IsPrivate() {
-			return true
-			//uncomment this when we have webcli
-			//writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
-			//return false
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return false
 		}
 		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
-			return true
-			//uncomment this when we have webcli
-			//writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
-			//return false
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return false
 		}
 	}
 	return true
@@ -248,14 +244,16 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	bucket := vars["bucket"]
 
 	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
+	if !api.Anonymous {
+		if _, ok := req.Header["Authorization"]; ok {
+			// Init signature V4 verification
+			var err *probe.Error
+			signature, err = initSignatureV4(req)
+			if err != nil {
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
 		}
 	}
 
@@ -303,6 +301,16 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
+	}
+
+	// if body of request is non-nil then check for validity of Content-Length
+	if req.Body != nil {
+		/// if Content-Length missing, deny the request
+		size := req.Header.Get("Content-Length")
+		if size == "" {
+			writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
+			return
+		}
 	}
 
 	// Here the parameter is the size of the form data that should

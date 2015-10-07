@@ -186,14 +186,16 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
+	if !api.Anonymous {
+		if _, ok := req.Header["Authorization"]; ok {
+			// Init signature V4 verification
+			var err *probe.Error
+			signature, err = initSignatureV4(req)
+			if err != nil {
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
 		}
 	}
 
@@ -338,14 +340,16 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
+	if !api.Anonymous {
+		if _, ok := req.Header["Authorization"]; ok {
+			// Init signature V4 verification
+			var err *probe.Error
+			signature, err = initSignatureV4(req)
+			if err != nil {
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
 		}
 	}
 
@@ -485,16 +489,19 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
 	var signature *signv4.Signature
-	if _, ok := req.Header["Authorization"]; ok {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return
+	if !api.Anonymous {
+		if _, ok := req.Header["Authorization"]; ok {
+			// Init signature V4 verification
+			var err *probe.Error
+			signature, err = initSignatureV4(req)
+			if err != nil {
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
 		}
 	}
+
 	metadata, err := api.Donut.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, req.Body, signature)
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)

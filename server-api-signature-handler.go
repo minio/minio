@@ -110,6 +110,7 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
+		s.handler.ServeHTTP(w, r)
 	}
-	s.handler.ServeHTTP(w, r)
+	writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 }
