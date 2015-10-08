@@ -28,6 +28,7 @@ import (
 // registerAPI - register all the object API handlers to their respective paths
 func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", a.GetBucketACLHandler).Queries("acl", "").Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.PutBucketACLHandler).Queries("acl", "").Methods("PUT")
 	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")

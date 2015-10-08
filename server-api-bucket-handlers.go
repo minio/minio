@@ -403,8 +403,6 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "PutBucketACL failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case donut.BucketNotFound:
@@ -415,6 +413,47 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeSuccessResponse(w)
+}
+
+// GetBucketACLHandler - GET ACL on a Bucket
+// ----------
+// This operation uses acl subresource to the return the ``acl``
+// of a bucket. One must have permission to access the bucket to
+// know its ``acl``. This operation willl return response of 404
+// if bucket not found and 403 for invalid credentials.
+func (api API) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+	// Ticket master block
+	{
+		op := APIOperation{}
+		op.ProceedCh = make(chan struct{})
+		api.OP <- op
+		// block until Ticket master gives us a go
+		<-op.ProceedCh
+	}
+
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket)
+	if err != nil {
+		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
+		switch err.ToGoError().(type) {
+		case donut.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+		case donut.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
+		}
+		return
+	}
+	// generate response
+	response := generateAccessControlPolicyResponse(bucketMetadata.ACL)
+	encodedSuccessResponse := encodeSuccessResponse(response)
+	// write headers
+	setCommonHeaders(w, len(encodedSuccessResponse))
+	// write body
+	w.Write(encodedSuccessResponse)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -440,8 +479,6 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
 		switch err.ToGoError().(type) {
-		case signv4.DoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case donut.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case donut.BucketNameInvalid:

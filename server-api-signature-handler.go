@@ -51,9 +51,9 @@ func isRequestPresignedSignatureV4(req *http.Request) bool {
 func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var signature *signv4.Signature
 	if isRequestSignatureV4(r) {
-		// If the request is not a PUT method handle the verification here.
-		// For PUT and POST requests with payload, send the call upwards for verification
-		if r.Method != "PUT" && r.Method != "POST" {
+		// For PUT and POST requests with payload, send the call upwards for verification.
+		// Or PUT and POST requests without payload, verify here.
+		if (r.Body == nil && (r.Method == "PUT" || r.Method == "POST")) || (r.Method != "PUT" && r.Method != "POST") {
 			// Init signature V4 verification
 			var err *probe.Error
 			signature, err = initSignatureV4(r)
