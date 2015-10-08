@@ -23,7 +23,8 @@ type Command uint8
 const (
 	// CmdNOOP does nothing. It is a default placeholder. Uninitialized variable of this type will point to NOOP command by default.
 	CmdNOOP Command = iota
-	// CmdSignalEnd gracefully ends current task. Never ending tasks (loop over) or Batched jobs will not take the next iteration, but may finish the current state to completion.
+	// CmdSignalEnd gracefully ends current task. Never ending tasks (loop over) or Batched jobs will not take the next iteration,
+	// but may finish the current state to completion.
 	CmdSignalEnd
 	// CmdSignalAbort ends the current task at hand immediately. It may still cleanup dangling issues quickly.
 	CmdSignalAbort
@@ -37,6 +38,7 @@ const (
 	CmdPriorityMedium
 	// CmdPriorityHigh is optimized for speed. This option is ideal for short lived tasks (like meta-data related) that are latency sensitive. Use this option wisely.
 	CmdPriorityHigh
-	// CmdPrioritySuper is an exclusive priority. All tasks with priority lower than Super (including High) are paused temporarily until this task completes. Anytime you consider using this priority level, please seek for approval.
+	// CmdPrioritySuper is an exclusive priority. All tasks with priority lower than Super (including High) are paused
+	// temporarily until this task completes. Anytime you consider using this priority level, please seek for approval.
 	CmdPrioritySuper
 )

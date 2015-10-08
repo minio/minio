@@ -21,20 +21,18 @@ import (
 	"sync"
 )
 
-/* NOTE:
-Task is a private entity. It is created and managed by TaskCtl
-entirely. Only TaskCtl and Handle objects are exposed outside.
-*/
+// NOTE: Task is a private entity. It is created and managed by TaskCtl
+//      entirely. Only TaskCtl and Handle objects are exposed outside.
 
-/* taskRef is a unique reference ID to a task. It is assigned by the
-TaskCtl during the creation of a task. All tasfRef variables are
-named "this". */
+// taskRef is a unique reference ID to a task. It is assigned by the
+// TaskCtl during the creation of a task. All tasfRef variables are
+// named "this".
 type taskRef *list.Element
 
-/* Task is an abstract concept built on top of Go routines and
-channels. Tasks themselves are expected to co-operate and comply with
-the TaskCtl commands.
-*/
+// Task is an abstract concept built on top of Go routines and
+// channels. Tasks themselves are expected to co-operate and comply with
+// the TaskCtl commands.
+
 type task struct {
 	mutex *sync.Mutex
 
@@ -46,14 +44,13 @@ type task struct {
 	closeCh  chan taskRef // Channel to notify the TaskCtl about ending this task.
 }
 
-/* NewTask creates a new task structure and returns a handle to
-it. Only the task controller has access to the task structure. The
-caller routine only receives a handle to its task structure. Task
-handle is like a reference to task self. Caller is expected to listen
-for commands from the task controller and comply with it
-co-operatively.
-this: Task reference is unique identifier assigned by the TaskCtl.
-name: Free form name of the task. Eg. "Late Night Disk Scrubber". */
+// NewTask creates a new task structure and returns a handle to
+// it. Only the task controller has access to the task structure. The
+// caller routine only receives a handle to its task structure. Task
+// handle is like a reference to task self. Caller is expected to listen
+// for commands from the task controller and comply with it co-operatively.
+// this: Task reference is unique identifier assigned by the TaskCtl.
+// name: Free form name of the task. Eg. "Late Night Disk Scrubber".
 func newTask(name string) task {
 	return task{
 		// this: Is set by the TaskCtl's NewTask function.

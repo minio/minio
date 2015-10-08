@@ -29,7 +29,8 @@ type TaskCtl struct {
 	tasks *list.List
 }
 
-// New creates a new TaskCtl to create and control a collection of tasks. Single application can create multiple task controllers to manage different set of tasks separately.
+// New creates a new TaskCtl to create and control a collection of tasks.
+// Single application can create multiple task controllers to manage different set of tasks separately.
 func New(name string) *TaskCtl {
 	return &TaskCtl{
 		mutex: &sync.Mutex{},
@@ -37,7 +38,10 @@ func New(name string) *TaskCtl {
 	}
 }
 
-// NewTask creates a new task structure and returns a handle to it. Only the task controller has access to the task structure. The caller routine only receives a handle to its task structure. Task handle is like a reference to task self. Caller is expected to listen for commands from the task controller and comply with it co-operatively.
+// NewTask creates a new task structure and returns a handle to it. Only the task controller
+// has access to the task structure. The caller routine only receives a handle to its task structure.
+// Task handle is like a reference to task self. Caller is expected to listen for commands from
+// the task controller and comply with it co-operatively.
 func (tc *TaskCtl) NewTask(name string) Handle {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
@@ -45,7 +49,7 @@ func (tc *TaskCtl) NewTask(name string) Handle {
 	// Create a new task.
 	tsk := newTask(name)
 
-	//Register this task in the TaskCtl's tasklist and save the reference.
+	// Register this task in the TaskCtl's tasklist and save the reference.
 	tsk.this = tc.tasks.PushBack(tsk)
 
 	// Free task from the tasklist upon close call.
@@ -79,7 +83,10 @@ func (tc *TaskCtl) Shutdown() {
 		wg.Add(1)
 		thisTask := e.Value.(task) // Make a local copy for go routine.
 		// End tasks in background. Flow of events from here is as follows: thisTask.handle.Close() -> tc.NewTask() -> this.task.close().
-		go func() { thisTask.getHandle().Close(); wg.Done() }()
+		go func() {
+			thisTask.getHandle().Close()
+			wg.Done()
+		}()
 	}
 
 	wg.Wait() // Wait for all tasks to end gracefully.
@@ -105,10 +112,10 @@ func (tc *TaskCtl) Suspend() bool {
 		locTask := e.Value.(task) // Make a local copy for go routine.
 		locI := i                 // local i
 		// Suspend a task in background.
-		go func() {
+		go func(locI int) {
 			defer wg.Done()
 			statusAll[locI] = locTask.command(CmdSignalSuspend)
-		}()
+		}(locI)
 		i++
 	}
 
@@ -139,10 +146,10 @@ func (tc *TaskCtl) Resume() bool {
 		locTask := e.Value.(task) // Make a local copy for go routine.
 		locI := i                 // local i
 		// Resume a task in background.
-		go func() {
+		go func(locI int) {
 			defer wg.Done()
 			statusAll[locI] = locTask.command(CmdSignalResume)
-		}()
+		}(locI)
 		i++
 	}
 	wg.Wait() // Wait for all tasks to resume.
