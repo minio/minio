@@ -222,17 +222,11 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	// uncomment this when we have webcli
-	// without access key credentials one cannot create a bucket
-	// if _, err := StripAccessKeyID(req); err != nil {
-	// 	writeErrorResponse(w, req, AccessDenied,  req.URL.Path)
-	//	return
-	// }
-
-	if isRequestBucketACL(req.URL.Query()) {
-		api.PutBucketACLHandler(w, req)
+	if _, err := stripAccessKeyID(req.Header.Get("Authorization")); err != nil {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
 		return
 	}
+
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {

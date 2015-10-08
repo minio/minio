@@ -192,4 +192,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 // List of not implemented object queries
 var notimplementedObjectResourceNames = map[string]bool{
 	"torrent": true,
+	"acl":     true,
+	"policy":  true,
 }

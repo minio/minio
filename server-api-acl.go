@@ -58,21 +58,13 @@ func getACLType(req *http.Request) ACLType {
 func getACLTypeString(acl ACLType) string {
 	switch acl {
 	case privateACLType:
-		{
-			return "private"
-		}
+		return "private"
 	case publicReadACLType:
-		{
-			return "public-read"
-		}
+		return "public-read"
 	case publicReadWriteACLType:
-		{
-			return "public-read-write"
-		}
+		return "public-read-write"
 	case unsupportedACLType:
-		{
-			return ""
-		}
+		return ""
 	default:
 		return "private"
 	}
