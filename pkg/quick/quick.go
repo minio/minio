@@ -82,6 +82,80 @@ func New(data interface{}) (Config, *probe.Error) {
 	return d, nil
 }
 
+// CheckVersion - loads json and compares the version number provided returns back true or false - any failure
+// is returned as error.
+func CheckVersion(filename string, version string) (bool, *probe.Error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+
+	if runtime.GOOS == "windows" {
+		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
+	}
+	data := struct {
+		Version string
+	}{
+		Version: "",
+	}
+	err = json.Unmarshal(fileData, &data)
+	if err != nil {
+		switch err := err.(type) {
+		case *json.SyntaxError:
+			return false, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+		default:
+			return false, probe.NewError(err)
+		}
+	}
+	config, perr := New(data)
+	if perr != nil {
+		return false, perr.Trace()
+	}
+	if config.Version() != version {
+		return false, nil
+	}
+	return true, nil
+}
+
+// Load - loads json config from filename for the a given struct data
+func Load(filename string, data interface{}) (Config, *probe.Error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	if runtime.GOOS == "windows" {
+		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
+	}
+
+	err = json.Unmarshal(fileData, &data)
+	if err != nil {
+		switch err := err.(type) {
+		case *json.SyntaxError:
+			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+		default:
+			return nil, probe.NewError(err)
+		}
+	}
+
+	config, perr := New(data)
+	if perr != nil {
+		return nil, perr.Trace()
+	}
+
+	return config, nil
+}
+
 // Version returns the current config file format version
 func (d config) Version() string {
 	st := structs.New(d.data)
@@ -125,40 +199,6 @@ func (d config) Save(filename string) *probe.Error {
 	}
 
 	return nil
-}
-
-// Load - loads json config
-func Load(filename string, data interface{}) (Config, *probe.Error) {
-	_, err := os.Stat(filename)
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
-
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
-
-	if runtime.GOOS == "windows" {
-		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
-
-	err = json.Unmarshal(fileData, &data)
-	if err != nil {
-		switch err := err.(type) {
-		case *json.SyntaxError:
-			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
-		default:
-			return nil, probe.NewError(err)
-		}
-	}
-
-	config, perr := New(data)
-	if perr != nil {
-		return nil, perr.Trace()
-	}
-
-	return config, nil
 }
 
 // Load - loads JSON config from file and merge with currently set values

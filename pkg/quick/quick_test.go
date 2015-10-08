@@ -57,6 +57,29 @@ func (s *MySuite) TestCheckData(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *MySuite) TestVersion(c *C) {
+	defer os.RemoveAll("test.json")
+	type myStruct struct {
+		Version  string
+		User     string
+		Password string
+		Folders  []string
+	}
+	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
+	config, err := quick.New(&saveMe)
+	c.Assert(err, IsNil)
+	c.Assert(config, Not(IsNil))
+	config.Save("test.json")
+
+	valid, err := quick.CheckVersion("test.json", "1")
+	c.Assert(err, IsNil)
+	c.Assert(valid, Equals, true)
+
+	valid, err = quick.CheckVersion("test.json", "2")
+	c.Assert(err, IsNil)
+	c.Assert(valid, Equals, false)
+}
+
 func (s *MySuite) TestSaveLoad(c *C) {
 	defer os.RemoveAll("test.json")
 	type myStruct struct {
