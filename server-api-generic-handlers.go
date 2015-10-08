@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/cors"
@@ -113,9 +114,20 @@ func IgnoreResourcesHandler(h http.Handler) http.Handler {
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if ignoreNotImplementedObjectResources(r) || ignoreNotImplementedBucketResources(r) {
-		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
-		return
+	splits := strings.SplitN(r.URL.Path, "/", 3)
+	switch len(splits) {
+	// bucket exists
+	case 2:
+		if ignoreNotImplementedBucketResources(r) {
+			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+			return
+		}
+	// object exists
+	case 3:
+		if ignoreNotImplementedObjectResources(r) {
+			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+			return
+		}
 	}
 	h.handler.ServeHTTP(w, r)
 }

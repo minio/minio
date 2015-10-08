@@ -29,6 +29,7 @@ import (
 func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
+	mux.HandleFunc("/{bucket}", a.PutBucketACLHandler).Queries("acl", "").Methods("PUT")
 	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")
 	mux.HandleFunc("/{bucket}", a.HeadBucketHandler).Methods("HEAD")
 	mux.HandleFunc("/{bucket}", a.PostPolicyBucketHandler).Methods("POST")

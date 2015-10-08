@@ -58,9 +58,3 @@ func isRequestUploads(values url.Values) bool {
 	_, ok := values["uploads"]
 	return ok
 }
-
-// check if req query values carry acl resource
-func isRequestBucketACL(values url.Values) bool {
-	_, ok := values["acl"]
-	return ok
-}
