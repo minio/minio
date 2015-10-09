@@ -17,10 +17,10 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
 
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/probe"
 	signv4 "github.com/minio/minio/pkg/signature"
 )
@@ -73,8 +73,7 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			value := sha256.Sum256([]byte(""))
-			ok, err := signature.DoesSignatureMatch(hex.EncodeToString(value[:]))
+			ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256([]byte(""))))
 			if err != nil {
 				errorIf(err.Trace(), "Unable to verify signature.", nil)
 				writeErrorResponse(w, r, InternalError, r.URL.Path)

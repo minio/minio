@@ -100,7 +100,7 @@ func configureControllerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Se
 
 // startController starts a minio controller
 func startController(conf minioConfig) *probe.Error {
-	rpcServer, err := configureControllerRPC(conf, getControllerRPCHandler())
+	rpcServer, err := configureControllerRPC(conf, getControllerRPCHandler(conf.Anonymous))
 	if err != nil {
 		return err.Trace()
 	}

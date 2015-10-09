@@ -159,7 +159,7 @@ func (s *MyAPIDonutCacheSuite) newRequest(method, urlStr string, contentLength i
 	signedHeaders := strings.Join(headers, ";")
 
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath, _ := urlEncodeName(req.URL.Path)
+	encodedPath := getURLEncodedName(req.URL.Path)
 	// convert any space strings back to "+"
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 

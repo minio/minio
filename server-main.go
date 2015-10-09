@@ -136,7 +136,7 @@ func startServer(conf minioConfig) *probe.Error {
 	if err != nil {
 		return err.Trace()
 	}
-	rpcServer, err := configureServerRPC(conf, getServerRPCHandler())
+	rpcServer, err := configureServerRPC(conf, getServerRPCHandler(conf.Anonymous))
 
 	// start ticket master
 	go startTM(minioAPI)
