@@ -150,6 +150,14 @@ func (s *controllerRPCService) ResetAuth(r *http.Request, args *AuthArgs, reply 
 	return nil
 }
 
+func readAuthConfig() (*AuthConfig, *probe.Error) {
+	authConfig, err := LoadConfig()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	return authConfig, nil
+}
+
 func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
 	u := &url.URL{}
 	if ssl {
@@ -169,7 +177,11 @@ func proxyRequest(method, host string, ssl bool, res interface{}) *probe.Error {
 		Method:  method,
 		Request: ServerArg{},
 	}
-	request, err := newRPCRequest(u.String(), op, nil)
+	authConfig, err := readAuthConfig()
+	if err != nil {
+		return err.Trace()
+	}
+	request, err := newRPCRequest(authConfig, u.String(), op, nil)
 	if err != nil {
 		return err.Trace()
 	}
@@ -216,37 +228,9 @@ func (s *controllerRPCService) DiscoverServers(r *http.Request, args *DiscoverAr
 	defer close(c)
 	for _, host := range args.Hosts {
 		go func(c chan DiscoverRepEntry, host string) {
-			u := &url.URL{}
-			if args.SSL {
-				u.Scheme = "https"
-			} else {
-				u.Scheme = "http"
-			}
-			if args.Port != 0 {
-				u.Host = host + ":" + string(args.Port)
-			} else {
-				u.Host = host + ":9002"
-			}
-			u.Path = "/rpc"
-
-			op := rpcOperation{
-				Method:  "Server.Version",
-				Request: ServerArg{},
-			}
-			versionrep := VersionRep{}
-			request, err := newRPCRequest(u.String(), op, nil)
+			err := proxyRequest("Server.Version", host, args.SSL, rep)
 			if err != nil {
 				c <- DiscoverRepEntry{host, err.ToGoError().Error()}
-				return
-			}
-			var resp *http.Response
-			resp, err = request.Do()
-			if err != nil {
-				c <- DiscoverRepEntry{host, err.ToGoError().Error()}
-				return
-			}
-			if err := json.DecodeClientResponse(resp.Body, &versionrep); err != nil {
-				c <- DiscoverRepEntry{host, err.Error()}
 				return
 			}
 			c <- DiscoverRepEntry{host, ""}

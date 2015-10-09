@@ -25,7 +25,14 @@ import (
 )
 
 // getControllerRPCHandler rpc handler for controller
-func getControllerRPCHandler() http.Handler {
+func getControllerRPCHandler(anonymous bool) http.Handler {
+	var mwHandlers = []MiddlewareHandler{
+		TimeValidityHandler,
+	}
+	if !anonymous {
+		mwHandlers = append(mwHandlers, RPCSignatureHandler)
+	}
+
 	s := jsonrpc.NewServer()
 	codec := json.NewCodec()
 	s.RegisterCodec(codec, "application/json")
@@ -35,5 +42,7 @@ func getControllerRPCHandler() http.Handler {
 	// Add new RPC services here
 	mux.Handle("/rpc", s)
 	mux.Handle("/{file:.*}", http.FileServer(assetFS()))
-	return mux
+
+	rpcHandler := registerCustomMiddleware(mux, mwHandlers...)
+	return rpcHandler
 }

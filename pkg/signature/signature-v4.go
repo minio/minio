@@ -97,7 +97,7 @@ func getURLEncodedName(name string) string {
 }
 
 // getCanonicalHeaders generate a list of request headers with their values
-func (r *Signature) getCanonicalHeaders(signedHeaders map[string][]string) string {
+func (r Signature) getCanonicalHeaders(signedHeaders map[string][]string) string {
 	var headers []string
 	vals := make(map[string][]string)
 	for k, vv := range signedHeaders {
@@ -129,7 +129,7 @@ func (r *Signature) getCanonicalHeaders(signedHeaders map[string][]string) strin
 }
 
 // getSignedHeaders generate a string i.e alphabetically sorted, semicolon-separated list of lowercase request header names
-func (r *Signature) getSignedHeaders(signedHeaders map[string][]string) string {
+func (r Signature) getSignedHeaders(signedHeaders map[string][]string) string {
 	var headers []string
 	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
@@ -190,7 +190,7 @@ func (r *Signature) getCanonicalRequest() string {
 //  <SignedHeaders>\n
 //  <HashedPayload>
 //
-func (r *Signature) getPresignedCanonicalRequest(presignedQuery string) string {
+func (r Signature) getPresignedCanonicalRequest(presignedQuery string) string {
 	rawQuery := strings.Replace(presignedQuery, "+", "%20", -1)
 	encodedPath := getURLEncodedName(r.Request.URL.Path)
 	// convert any space strings back to "+"
@@ -207,7 +207,7 @@ func (r *Signature) getPresignedCanonicalRequest(presignedQuery string) string {
 }
 
 // getScope generate a string of a specific date, an AWS region, and a service
-func (r *Signature) getScope(t time.Time) string {
+func (r Signature) getScope(t time.Time) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
 		"milkyway",
@@ -218,7 +218,7 @@ func (r *Signature) getScope(t time.Time) string {
 }
 
 // getStringToSign a string based on selected query values
-func (r *Signature) getStringToSign(canonicalRequest string, t time.Time) string {
+func (r Signature) getStringToSign(canonicalRequest string, t time.Time) string {
 	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + r.getScope(t) + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sha256.Sum256([]byte(canonicalRequest)))
@@ -226,7 +226,7 @@ func (r *Signature) getStringToSign(canonicalRequest string, t time.Time) string
 }
 
 // getSigningKey hmac seed to calculate final signature
-func (r *Signature) getSigningKey(t time.Time) []byte {
+func (r Signature) getSigningKey(t time.Time) []byte {
 	secret := r.SecretAccessKey
 	date := sumHMAC([]byte("AWS4"+secret), []byte(t.Format(yyyymmdd)))
 	region := sumHMAC(date, []byte("milkyway"))
@@ -236,7 +236,7 @@ func (r *Signature) getSigningKey(t time.Time) []byte {
 }
 
 // getSignature final signature in hexadecimal form
-func (r *Signature) getSignature(signingKey []byte, stringToSign string) string {
+func (r Signature) getSignature(signingKey []byte, stringToSign string) string {
 	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 

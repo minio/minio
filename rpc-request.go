@@ -18,7 +18,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"net/http"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/probe"
@@ -37,18 +42,116 @@ type rpcRequest struct {
 }
 
 // newRPCRequest initiate a new client RPC request
-func newRPCRequest(url string, op rpcOperation, transport http.RoundTripper) (*rpcRequest, *probe.Error) {
+func newRPCRequest(config *AuthConfig, url string, op rpcOperation, transport http.RoundTripper) (*rpcRequest, *probe.Error) {
+	t := time.Now().UTC()
 	params, err := json.EncodeClientRequest(op.Method, op.Request)
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewReader(params))
+
+	body := bytes.NewReader(params)
+	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return nil, probe.NewError(err)
 	}
+	req.Header.Set("x-minio-date", t.Format(iso8601Format))
+
+	// save for subsequent use
+	hash := func() string {
+		sum256Bytes, _ := sum256Reader(body)
+		return hex.EncodeToString(sum256Bytes)
+	}
+
+	hashedPayload := hash()
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-amz-content-sha256", hashedPayload)
+
+	var headers []string
+	vals := make(map[string][]string)
+	for k, vv := range req.Header {
+		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
+			continue // ignored header
+		}
+		headers = append(headers, strings.ToLower(k))
+		vals[strings.ToLower(k)] = vv
+	}
+	headers = append(headers, "host")
+	sort.Strings(headers)
+
+	var canonicalHeaders bytes.Buffer
+	for _, k := range headers {
+		canonicalHeaders.WriteString(k)
+		canonicalHeaders.WriteByte(':')
+		switch {
+		case k == "host":
+			canonicalHeaders.WriteString(req.URL.Host)
+			fallthrough
+		default:
+			for idx, v := range vals[k] {
+				if idx > 0 {
+					canonicalHeaders.WriteByte(',')
+				}
+				canonicalHeaders.WriteString(v)
+			}
+			canonicalHeaders.WriteByte('\n')
+		}
+	}
+
+	signedHeaders := strings.Join(headers, ";")
+
+	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
+	encodedPath := getURLEncodedName(req.URL.Path)
+	// convert any space strings back to "+"
+	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
+
+	//
+	// canonicalRequest =
+	//  <HTTPMethod>\n
+	//  <CanonicalURI>\n
+	//  <CanonicalQueryString>\n
+	//  <CanonicalHeaders>\n
+	//  <SignedHeaders>\n
+	//  <HashedPayload>
+	//
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		encodedPath,
+		req.URL.RawQuery,
+		canonicalHeaders.String(),
+		signedHeaders,
+		hashedPayload,
+	}, "\n")
+
+	scope := strings.Join([]string{
+		t.Format(yyyymmdd),
+		"milkyway",
+		"rpc",
+		"rpc_request",
+	}, "/")
+
+	stringToSign := rpcAuthHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
+	stringToSign = stringToSign + scope + "\n"
+	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+
+	fmt.Println(config)
+	date := sumHMAC([]byte("MINIO"+config.Users["admin"].SecretAccessKey), []byte(t.Format(yyyymmdd)))
+	region := sumHMAC(date, []byte("milkyway"))
+	service := sumHMAC(region, []byte("rpc"))
+	signingKey := sumHMAC(service, []byte("rpc_request"))
+
+	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
+
+	// final Authorization header
+	parts := []string{
+		rpcAuthHeaderPrefix + " Credential=" + config.Users["admin"].AccessKeyID + "/" + scope,
+		"SignedHeaders=" + signedHeaders,
+		"Signature=" + signature,
+	}
+	auth := strings.Join(parts, ", ")
+	req.Header.Set("Authorization", auth)
+
 	rpcReq := &rpcRequest{}
 	rpcReq.req = req
-	rpcReq.req.Header.Set("Content-Type", "application/json")
 	if transport == nil {
 		transport = http.DefaultTransport
 	}

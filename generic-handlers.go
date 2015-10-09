@@ -22,17 +22,23 @@ import (
 	"strings"
 	"time"
 
+	router "github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
 
 // MiddlewareHandler - useful to chain different middleware http.Handler
 type MiddlewareHandler func(http.Handler) http.Handler
 
-type timeHandler struct {
-	handler http.Handler
+func registerCustomMiddleware(mux *router.Router, mwHandlers ...MiddlewareHandler) http.Handler {
+	var f http.Handler
+	f = mux
+	for _, mw := range mwHandlers {
+		f = mw(f)
+	}
+	return f
 }
 
-type validateAuthHandler struct {
+type timeHandler struct {
 	handler http.Handler
 }
 
@@ -52,6 +58,19 @@ func parseDate(req *http.Request) (time.Time, error) {
 		}
 		if _, err := time.Parse(iso8601Format, amzDate); err == nil {
 			return time.Parse(iso8601Format, amzDate)
+		}
+	}
+	minioDate := req.Header.Get(http.CanonicalHeaderKey("x-minio-date"))
+	switch {
+	case minioDate != "":
+		if _, err := time.Parse(time.RFC1123, minioDate); err == nil {
+			return time.Parse(time.RFC1123, minioDate)
+		}
+		if _, err := time.Parse(time.RFC1123Z, minioDate); err == nil {
+			return time.Parse(time.RFC1123Z, minioDate)
+		}
+		if _, err := time.Parse(iso8601Format, minioDate); err == nil {
+			return time.Parse(iso8601Format, minioDate)
 		}
 	}
 	date := req.Header.Get("Date")
@@ -78,7 +97,7 @@ func TimeValidityHandler(h http.Handler) http.Handler {
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
-		if r.Header.Get(http.CanonicalHeaderKey("x-amz-date")) == "" && r.Header.Get("Date") == "" {
+		if r.Header.Get(http.CanonicalHeaderKey("x-amz-date")) == "" && r.Header.Get(http.CanonicalHeaderKey("x-minio-date")) == "" && r.Header.Get("Date") == "" {
 			// there is no way to knowing if this is a valid request, could be a attack reject such clients
 			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return

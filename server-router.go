@@ -50,15 +50,6 @@ func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 }
 
-func registerCustomMiddleware(mux *router.Router, mwHandlers ...MiddlewareHandler) http.Handler {
-	var f http.Handler
-	f = mux
-	for _, mw := range mwHandlers {
-		f = mw(f)
-	}
-	return f
-}
-
 // APIOperation container for individual operations read by Ticket Master
 type APIOperation struct {
 	ProceedCh chan struct{}
@@ -99,12 +90,21 @@ func getAPIHandler(anonymous bool, api API) http.Handler {
 	return apiHandler
 }
 
-func getServerRPCHandler() http.Handler {
+func getServerRPCHandler(anonymous bool) http.Handler {
+	var mwHandlers = []MiddlewareHandler{
+		TimeValidityHandler,
+	}
+	if !anonymous {
+		mwHandlers = append(mwHandlers, RPCSignatureHandler)
+	}
+
 	s := jsonrpc.NewServer()
 	s.RegisterCodec(json.NewCodec(), "application/json")
 	s.RegisterService(new(serverRPCService), "Server")
 	s.RegisterService(new(donutRPCService), "Donut")
 	mux := router.NewRouter()
 	mux.Handle("/rpc", s)
-	return mux
+
+	rpcHandler := registerCustomMiddleware(mux, mwHandlers...)
+	return rpcHandler
 }
