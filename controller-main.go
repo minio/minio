@@ -194,6 +194,7 @@ func getControllerConfig(c *cli.Context) minioConfig {
 		CertFile:          certFile,
 		KeyFile:           keyFile,
 		RateLimit:         c.GlobalInt("ratelimit"),
+		Anonymous:         c.GlobalBool("anonymous"),
 	}
 }
 

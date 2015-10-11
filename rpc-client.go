@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -64,7 +63,7 @@ func newRPCRequest(config *AuthConfig, url string, op rpcOperation, transport ht
 
 	hashedPayload := hash()
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-amz-content-sha256", hashedPayload)
+	req.Header.Set("x-minio-content-sha256", hashedPayload)
 
 	var headers []string
 	vals := make(map[string][]string)
@@ -133,7 +132,6 @@ func newRPCRequest(config *AuthConfig, url string, op rpcOperation, transport ht
 	stringToSign = stringToSign + scope + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
-	fmt.Println(config)
 	date := sumHMAC([]byte("MINIO"+config.Users["admin"].SecretAccessKey), []byte(t.Format(yyyymmdd)))
 	region := sumHMAC(date, []byte("milkyway"))
 	service := sumHMAC(region, []byte("rpc"))
@@ -143,7 +141,7 @@ func newRPCRequest(config *AuthConfig, url string, op rpcOperation, transport ht
 
 	// final Authorization header
 	parts := []string{
-		rpcAuthHeaderPrefix + " Credential=" + config.Users["admin"].AccessKeyID + "/" + scope,
+		rpcAuthHeaderPrefix + " Credential=admin/" + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}

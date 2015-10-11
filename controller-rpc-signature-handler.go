@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -35,7 +36,7 @@ type rpcSignatureHandler struct {
 
 // RPCSignatureHandler to validate authorization header for the incoming request.
 func RPCSignatureHandler(h http.Handler) http.Handler {
-	return signatureHandler{h}
+	return rpcSignatureHandler{h}
 }
 
 type rpcSignature struct {
@@ -114,7 +115,7 @@ func (r rpcSignature) extractSignedHeaders() map[string][]string {
 //  <HashedPayload>
 //
 func (r *rpcSignature) getCanonicalRequest() string {
-	payload := r.Request.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256"))
+	payload := r.Request.Header.Get(http.CanonicalHeaderKey("x-minio-content-sha256"))
 	r.Request.URL.RawQuery = strings.Replace(r.Request.URL.Query().Encode(), "+", "%20", -1)
 	encodedPath := getURLEncodedName(r.Request.URL.Path)
 	// convert any space strings back to "+"
@@ -143,7 +144,7 @@ func (r rpcSignature) getScope(t time.Time) string {
 
 // getStringToSign a string based on selected query values
 func (r rpcSignature) getStringToSign(canonicalRequest string, t time.Time) string {
-	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
+	stringToSign := rpcAuthHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + r.getScope(t) + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sha256.Sum256([]byte(canonicalRequest)))
 	return stringToSign
@@ -236,8 +237,10 @@ func (s rpcSignatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
+		// Copy the buffer back into request body to be read by the RPC service callers
+		r.Body = ioutil.NopCloser(buffer)
 		s.handler.ServeHTTP(w, r)
-		return
+	} else {
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 	}
-	writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 }

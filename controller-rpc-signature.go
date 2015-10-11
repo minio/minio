@@ -78,25 +78,24 @@ func isValidRPCRegion(authHeaderValue string) *probe.Error {
 
 // stripRPCAccessKeyID - strip only access key id from auth header
 func stripRPCAccessKeyID(authHeaderValue string) (string, *probe.Error) {
-	if err := isValidRegion(authHeaderValue); err != nil {
+	if err := isValidRPCRegion(authHeaderValue); err != nil {
 		return "", err.Trace()
 	}
 	credentialElements, err := getRPCCredentialsFromAuth(authHeaderValue)
 	if err != nil {
 		return "", err.Trace()
 	}
-	accessKeyID := credentialElements[0]
-	if !IsValidAccessKey(accessKeyID) {
+	if credentialElements[0] != "admin" {
 		return "", probe.NewError(errAccessKeyIDInvalid)
 	}
-	return accessKeyID, nil
+	return credentialElements[0], nil
 }
 
 // initSignatureRPC initializing rpc signature verification
 func initSignatureRPC(req *http.Request) (*rpcSignature, *probe.Error) {
 	// strip auth from authorization header
 	authHeaderValue := req.Header.Get("Authorization")
-	accessKeyID, err := stripAccessKeyID(authHeaderValue)
+	accessKeyID, err := stripRPCAccessKeyID(authHeaderValue)
 	if err != nil {
 		return nil, err.Trace()
 	}
