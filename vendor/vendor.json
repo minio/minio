@@ -3,163 +3,117 @@
 	"ignore": "",
 	"package": [
 		{
-			"canonical": "github.com/Sirupsen/logrus",
-			"comment": "",
-			"local": "vendor/github.com/Sirupsen/logrus",
+			"path": "github.com/Sirupsen/logrus",
 			"revision": "418b41d23a1bf978c06faea5313ba194650ac088",
 			"revisionTime": "2015-09-08T20:46:18Z"
 		},
 		{
-			"canonical": "github.com/dustin/go-humanize",
-			"comment": "",
-			"local": "vendor/github.com/dustin/go-humanize",
+			"path": "github.com/dustin/go-humanize",
 			"revision": "1c212aae1d02984808182b98b0da7a3e07e4c770",
 			"revisionTime": "2015-08-09T13:14:05-07:00"
 		},
 		{
-			"canonical": "github.com/elazarl/go-bindata-assetfs",
-			"comment": "",
-			"local": "vendor/github.com/elazarl/go-bindata-assetfs",
+			"path": "github.com/elazarl/go-bindata-assetfs",
 			"revision": "d5cac425555ca5cf00694df246e04f05e6a55150",
 			"revisionTime": "2015-08-13T07:46:22+03:00"
 		},
 		{
-			"canonical": "github.com/facebookgo/clock",
-			"comment": "",
-			"local": "vendor/github.com/facebookgo/clock",
+			"path": "github.com/facebookgo/clock",
 			"revision": "600d898af40aa09a7a93ecb9265d87b0504b6f03",
 			"revisionTime": "2015-04-09T18:09:13-07:00"
 		},
 		{
-			"canonical": "github.com/facebookgo/httpdown",
-			"comment": "",
-			"local": "vendor/github.com/facebookgo/httpdown",
+			"path": "github.com/facebookgo/httpdown",
 			"revision": "9229879964ff32fc4e42c7ba6b4745efce39023c",
 			"revisionTime": "2015-08-07T22:21:07Z"
 		},
 		{
-			"canonical": "github.com/facebookgo/stats",
-			"comment": "",
-			"local": "vendor/github.com/facebookgo/stats",
+			"path": "github.com/facebookgo/stats",
 			"revision": "31fb71caf5a4f04c9f8bb3fa8e7c2597ba6eb50a",
 			"revisionTime": "2015-06-12T18:29:15Z"
 		},
 		{
-			"canonical": "github.com/fatih/color",
-			"comment": "",
-			"local": "vendor/github.com/fatih/color",
+			"path": "github.com/fatih/color",
 			"revision": "76d423163af754ff6423d2d9be0057fbf03c57c2",
 			"revisionTime": "2015-08-24T00:44:34+03:00"
 		},
 		{
-			"canonical": "github.com/fatih/structs",
-			"comment": "",
-			"local": "vendor/github.com/fatih/structs",
+			"path": "github.com/fatih/structs",
 			"revision": "a9f7daa9c2729e97450c2da2feda19130a367d8f",
 			"revisionTime": "2015-05-26T09:43:52+03:00"
 		},
 		{
-			"canonical": "github.com/gorilla/context",
-			"comment": "",
-			"local": "vendor/github.com/gorilla/context",
+			"path": "github.com/gorilla/context",
 			"revision": "215affda49addc4c8ef7e2534915df2c8c35c6cd",
 			"revisionTime": "2014-12-17T08:02:51-08:00"
 		},
 		{
-			"canonical": "github.com/gorilla/mux",
-			"comment": "",
-			"local": "vendor/github.com/gorilla/mux",
+			"path": "github.com/gorilla/mux",
 			"revision": "5112c33f3a6ef694c1e5784b68981f08b3f0327c",
 			"revisionTime": "2015-08-11T22:16:22-07:00"
 		},
 		{
-			"canonical": "github.com/gorilla/rpc/v2",
-			"comment": "",
-			"local": "vendor/github.com/gorilla/rpc/v2",
+			"path": "github.com/gorilla/rpc/v2",
 			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
 			"revisionTime": "2015-08-09T21:43:58-07:00"
 		},
 		{
-			"canonical": "github.com/gorilla/rpc/v2/json",
-			"comment": "",
-			"local": "vendor/github.com/gorilla/rpc/v2/json",
+			"path": "github.com/gorilla/rpc/v2/json",
 			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
 			"revisionTime": "2015-08-09T21:43:58-07:00"
 		},
 		{
-			"canonical": "github.com/mattn/go-isatty",
-			"comment": "",
-			"local": "vendor/github.com/mattn/go-isatty",
+			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"
 		},
 		{
-			"canonical": "github.com/minio/cli",
-			"comment": "",
-			"local": "vendor/github.com/minio/cli",
+			"path": "github.com/minio/cli",
 			"revision": "ee386baecc113eef2b8945df429120a5aec319ef",
 			"revisionTime": "2015-08-19T11:23:55-07:00"
 		},
 		{
-			"canonical": "github.com/olekukonko/ts",
-			"comment": "",
-			"local": "vendor/github.com/olekukonko/ts",
+			"path": "github.com/olekukonko/ts",
 			"revision": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8",
 			"revisionTime": "2014-04-12T15:01:45-07:00"
 		},
 		{
-			"canonical": "github.com/rs/cors",
-			"comment": "",
-			"local": "vendor/github.com/rs/cors",
+			"path": "github.com/rs/cors",
 			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
 			"revisionTime": "2015-08-29T22:34:20-07:00"
 		},
 		{
-			"canonical": "github.com/shiena/ansicolor",
-			"comment": "",
-			"local": "vendor/github.com/shiena/ansicolor",
+			"path": "github.com/shiena/ansicolor",
 			"revision": "a5e2b567a4dd6cc74545b8a4f27c9d63b9e7735b",
 			"revisionTime": "2015-07-19T16:15:31+09:00"
 		},
 		{
-			"canonical": "github.com/weekface/mgorus",
-			"comment": "",
-			"local": "vendor/github.com/weekface/mgorus",
+			"path": "github.com/weekface/mgorus",
 			"revision": "9a3ff865bf11d949ab7084198479139d9746c68f",
 			"revisionTime": "2015-09-01T11:57:24+08:00"
 		},
 		{
-			"canonical": "gopkg.in/check.v1",
-			"comment": "",
-			"local": "vendor/gopkg.in/check.v1",
+			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
 		},
 		{
-			"canonical": "gopkg.in/mgo.v2",
-			"comment": "",
-			"local": "vendor/gopkg.in/mgo.v2",
+			"path": "gopkg.in/mgo.v2",
 			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
 			"revisionTime": "2015-08-21T12:30:02-03:00"
 		},
 		{
-			"canonical": "gopkg.in/mgo.v2/bson",
-			"comment": "",
-			"local": "vendor/gopkg.in/mgo.v2/bson",
+			"path": "gopkg.in/mgo.v2/bson",
 			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
 			"revisionTime": "2015-08-21T12:30:02-03:00"
 		},
 		{
-			"canonical": "gopkg.in/mgo.v2/internal/sasl",
-			"comment": "",
-			"local": "vendor/gopkg.in/mgo.v2/internal/sasl",
+			"path": "gopkg.in/mgo.v2/internal/sasl",
 			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
 			"revisionTime": "2015-08-21T12:30:02-03:00"
 		},
 		{
-			"canonical": "gopkg.in/mgo.v2/internal/scram",
-			"comment": "",
-			"local": "vendor/gopkg.in/mgo.v2/internal/scram",
+			"path": "gopkg.in/mgo.v2/internal/scram",
 			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
 			"revisionTime": "2015-08-21T12:30:02-03:00"
 		}
