@@ -1,3 +1,5 @@
+// +build linux darwin freebsd openbsd netbsd dragonfly
+
 /*
  * Minio Cloud Storage, (C) 2015 Minio, Inc.
  *
@@ -89,7 +91,7 @@ func (a *app) wait() {
 // trapSignal wait on listed signals for pre-defined behaviors
 func (a *app) trapSignal(wg *sync.WaitGroup) {
 	ch := make(chan os.Signal, 10)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2, syscall.SIGHUP)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGHUP)
 	for {
 		sig := <-ch
 		switch sig {
@@ -106,8 +108,6 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 				}(s)
 			}
 			return
-		case syscall.SIGUSR2:
-			fallthrough
 		case syscall.SIGHUP:
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
