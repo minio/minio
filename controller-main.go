@@ -115,6 +115,9 @@ func genAuthFirstTime() (*AuthConfig, *probe.Error) {
 	if isAuthConfigFileExists() {
 		return nil, nil
 	}
+	if err := createAuthConfigPath(); err != nil {
+		return nil, err
+	}
 	// Initialize new config, since config file doesn't exist yet
 	config := &AuthConfig{}
 	config.Version = "0.0.1"
