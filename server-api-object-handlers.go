@@ -44,10 +44,6 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	if !api.isValidOp(w, req) {
-		return
-	}
-
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -96,10 +92,6 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 		<-op.ProceedCh
 	}
 
-	if !api.isValidOp(w, req) {
-		return
-	}
-
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -137,10 +129,6 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	var object, bucket string
@@ -243,10 +231,6 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 		<-op.ProceedCh
 	}
 
-	if !api.isValidOp(w, req) {
-		return
-	}
-
 	if !isRequestUploads(req.URL.Query()) {
 		writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
 		return
@@ -286,10 +270,6 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	// get Content-MD5 sent by client and verify if valid
@@ -391,10 +371,6 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		<-op.ProceedCh
 	}
 
-	if !api.isValidOp(w, req) {
-		return
-	}
-
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -425,10 +401,6 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
@@ -476,10 +448,6 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	vars := mux.Vars(req)

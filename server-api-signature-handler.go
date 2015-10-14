@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/probe"
@@ -48,7 +49,21 @@ func isRequestPresignedSignatureV4(req *http.Request) bool {
 	return false
 }
 
+func isRequestPostPolicySignatureV4(req *http.Request) bool {
+	if _, ok := req.Header["Content-Type"]; ok {
+		if strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isRequestPostPolicySignatureV4(r) && r.Method == "POST" {
+		s.handler.ServeHTTP(w, r)
+		return
+	}
+
 	var signature *signv4.Signature
 	if isRequestSignatureV4(r) {
 		// For PUT and POST requests with payload, send the call upwards for verification.
@@ -113,6 +128,7 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handler.ServeHTTP(w, r)
+		return
 	}
 	writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 }
