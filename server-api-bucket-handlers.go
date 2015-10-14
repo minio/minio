@@ -25,38 +25,6 @@ import (
 	signv4 "github.com/minio/minio/pkg/signature"
 )
 
-func (api API) isValidOp(w http.ResponseWriter, req *http.Request) bool {
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-
-	bucketMetadata, err := api.Donut.GetBucketMetadata(bucket)
-	if err != nil {
-		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
-		switch err.ToGoError().(type) {
-		case donut.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
-			return false
-		case donut.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
-			return false
-		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
-			return false
-		}
-	}
-	if _, err = stripAccessKeyID(req.Header.Get("Authorization")); err != nil {
-		if bucketMetadata.ACL.IsPrivate() {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return false
-		}
-		if bucketMetadata.ACL.IsPublicRead() && req.Method == "PUT" {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return false
-		}
-	}
-	return true
-}
-
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
 // -------------------------
 // This operation lists in-progress multipart uploads. An in-progress
@@ -72,10 +40,6 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 		api.OP <- op
 		// block until ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
@@ -124,10 +88,6 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 		api.OP <- op
 		// block until Ticket master gives us a go
 		<-op.ProceedCh
-	}
-
-	if !api.isValidOp(w, req) {
-		return
 	}
 
 	if isRequestUploads(req.URL.Query()) {
