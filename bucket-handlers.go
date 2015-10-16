@@ -22,9 +22,9 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/fs"
 )
 
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
@@ -141,11 +141,6 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
-	if _, err := stripAccessKeyID(req.Header.Get("Authorization")); err != nil {
-		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-		return
-	}
-
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
