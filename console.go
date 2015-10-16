@@ -27,8 +27,7 @@ import (
 type logLevel int
 
 const (
-	levelUnknown logLevel = iota
-	levelPrint
+	levelPrint logLevel = iota + 1
 	levelDebug
 	levelInfo
 	levelError

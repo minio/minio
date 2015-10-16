@@ -1,6 +1,6 @@
-## Minio Server [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+## Minio [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Minio is a minimal cloud storage server written in Golang and licensed under [Apache license v2](./LICENSE). Minio is compatible with Amazon S3 APIs. [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)
+Minio is a minimal cloud storage server for Micro Services & Magnetic Disks. Written in Golang and licensed under [Apache license v2](./LICENSE). Compatible with Amazon S3 APIs. 
 
 ## Minio Client
 
@@ -11,64 +11,54 @@ Minio is a minimal cloud storage server written in Golang and licensed under [Ap
 - [Java Library](https://github.com/minio/minio-java)
 - [Nodejs Library](https://github.com/minio/minio-js)
 - [Python Library](https://github.com/minio/minio-py)
+- [.Net Library](https://github.com/minio/minio-dotnet)
 
-## Server Roadmap
-~~~
-Storage Backend:
-- Donut: Erasure coded backend.
- - Status: Standalone mode complete.
-Storage Operations:
-- Collective:
-  - Status: Work in progress.
+### Install [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)[![Build status](https://ci.appveyor.com/api/projects/status/k61d0v3ritbwm2su?svg=true)](https://ci.appveyor.com/project/harshavardhana/minio)
 
-Storage Management:
-- WebCLI:
-  - Status: Work in progress.
-- Authentication:
-  - Status: Work in progress.
-- Admin Console:
-  - Status: Work in progress.
-- User Console:
-  - Status: Work in progress.
-- Logging:
-  - Status: Work in progress.
-~~~
-
-
-### Install 
-
-<blockquote>
-NOTE: If you happen to compile from source code, following options are not available anymore. Minio master branch is going through lots of rapid changes, documentation will be updated subsequently. 
-</blockquote>
-
-#### GNU/Linux
-
-Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/minio
+#### Linux, OS X, Windows
 
 ~~~
-$ wget https://dl.minio.io:9000/updates/2015/Jun/linux-amd64/minio
-$ chmod +x minio
-$ ./minio mode memory limit 12GB expire 2h
-~~~
-
-#### OS X
-
-Download ``minio`` from https://dl.minio.io:9000/updates/2015/Jun/darwin-amd64/minio
-
-~~~
-$ wget https://dl.minio.io:9000/updates/2015/Jun/darwin-amd64/minio
-$ chmod +x minio
-$ ./minio mode memory limit 12GB expire 2h
+$ go get github.com/minio/minio
 ~~~
 
 ### How to use Minio?
 
-[![asciicast](https://asciinema.org/a/21575.png)](https://asciinema.org/a/21575)
+~~~
+$ minio server
+NAME:
+  minio server - Start Minio cloud storage server.
+
+USAGE:
+  minio server PATH
+
+EXAMPLES:
+  1. Start minio server on Linux.
+      $ minio server /home/shared
+
+  2. Start minio server on Windows.
+      $ minio server C:\MyShare
+
+  3. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
+      $ minio --address 192.168.1.101:9000 /home/shared
+~~~
+
+~~~
+$ minio server ~/Photos
+AccessKey: G5GJRH51R2HSUWYPGIX5  SecretKey: uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
+
+To configure Minio Client.
+
+	$ wget https://dl.minio.io:9000/updates/2015/Oct/darwin-amd64/mc
+	$ chmod 755 mc
+	$ ./mc config host add localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
+	$ ./mc mb localhost/photobucket
+	$ ./mc cp ~/Photos... localhost/photobucket
+
+Starting minio server:
+Listening on http://127.0.0.1:9000
+Listening on http://172.30.2.17:9000
+~~~
 
 ### Contribute to Minio Project
 Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
-
-### Jobs
-If you think in Lisp or Haskell and hack in go, you would blend right in. Send your github link to callhome@minio.io.
-
 

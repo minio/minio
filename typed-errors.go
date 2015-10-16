@@ -68,6 +68,3 @@ var errPolicyAlreadyExpired = errors.New("Policy already expired")
 
 // errPolicyMissingFields means that form values and policy header have some fields missing.
 var errPolicyMissingFields = errors.New("Some fields are missing or do not match in policy")
-
-// errMissingDateHeader means that date header is missing
-var errMissingDateHeader = errors.New("Missing date header on the request")

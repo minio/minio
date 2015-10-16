@@ -9,28 +9,8 @@
 		},
 		{
 			"path": "github.com/dustin/go-humanize",
-			"revision": "1c212aae1d02984808182b98b0da7a3e07e4c770",
-			"revisionTime": "2015-08-09T13:14:05-07:00"
-		},
-		{
-			"path": "github.com/elazarl/go-bindata-assetfs",
-			"revision": "d5cac425555ca5cf00694df246e04f05e6a55150",
-			"revisionTime": "2015-08-13T07:46:22+03:00"
-		},
-		{
-			"path": "github.com/facebookgo/clock",
-			"revision": "600d898af40aa09a7a93ecb9265d87b0504b6f03",
-			"revisionTime": "2015-04-09T18:09:13-07:00"
-		},
-		{
-			"path": "github.com/facebookgo/httpdown",
-			"revision": "9229879964ff32fc4e42c7ba6b4745efce39023c",
-			"revisionTime": "2015-08-07T22:21:07Z"
-		},
-		{
-			"path": "github.com/facebookgo/stats",
-			"revision": "31fb71caf5a4f04c9f8bb3fa8e7c2597ba6eb50a",
-			"revisionTime": "2015-06-12T18:29:15Z"
+			"revision": "c20a8bde38c8f5ba06f6600edf473705c96829d1",
+			"revisionTime": "2015-08-24T01:38:10-07:00"
 		},
 		{
 			"path": "github.com/fatih/color",
@@ -38,29 +18,14 @@
 			"revisionTime": "2015-08-24T00:44:34+03:00"
 		},
 		{
-			"path": "github.com/fatih/structs",
-			"revision": "a9f7daa9c2729e97450c2da2feda19130a367d8f",
-			"revisionTime": "2015-05-26T09:43:52+03:00"
-		},
-		{
 			"path": "github.com/gorilla/context",
-			"revision": "215affda49addc4c8ef7e2534915df2c8c35c6cd",
-			"revisionTime": "2014-12-17T08:02:51-08:00"
+			"revision": "1c83b3eabd45b6d76072b66b746c20815fb2872d",
+			"revisionTime": "2015-08-19T22:12:45-07:00"
 		},
 		{
 			"path": "github.com/gorilla/mux",
-			"revision": "5112c33f3a6ef694c1e5784b68981f08b3f0327c",
-			"revisionTime": "2015-08-11T22:16:22-07:00"
-		},
-		{
-			"path": "github.com/gorilla/rpc/v2",
-			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
-			"revisionTime": "2015-08-09T21:43:58-07:00"
-		},
-		{
-			"path": "github.com/gorilla/rpc/v2/json",
-			"revision": "74aa4b5cceca1188df2c7128f7ede4c92893701e",
-			"revisionTime": "2015-08-09T21:43:58-07:00"
+			"revision": "ee1815431e497d3850809578c93ab6705f1a19f7",
+			"revisionTime": "2015-08-19T22:15:06-07:00"
 		},
 		{
 			"path": "github.com/mattn/go-isatty",
@@ -69,13 +34,43 @@
 		},
 		{
 			"path": "github.com/minio/cli",
-			"revision": "ee386baecc113eef2b8945df429120a5aec319ef",
-			"revisionTime": "2015-08-19T11:23:55-07:00"
+			"revision": "be072a094b77c259fcb232a3bdef6ed26760a5e6",
+			"revisionTime": "2015-10-13T13:54:28-07:00"
 		},
 		{
-			"path": "github.com/olekukonko/ts",
-			"revision": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8",
-			"revisionTime": "2014-04-12T15:01:45-07:00"
+			"path": "github.com/minio/minio-xl/pkg/atomic",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/cpu",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/crypto/sha256",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/crypto/sha512",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/minhttp",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/probe",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
+		},
+		{
+			"path": "github.com/minio/minio-xl/pkg/quick",
+			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
+			"revisionTime": "2015-10-16T10:19:00-07:00"
 		},
 		{
 			"path": "github.com/rs/cors",
@@ -88,34 +83,9 @@
 			"revisionTime": "2015-07-19T16:15:31+09:00"
 		},
 		{
-			"path": "github.com/weekface/mgorus",
-			"revision": "9a3ff865bf11d949ab7084198479139d9746c68f",
-			"revisionTime": "2015-09-01T11:57:24+08:00"
-		},
-		{
 			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
-		},
-		{
-			"path": "gopkg.in/mgo.v2",
-			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
-			"revisionTime": "2015-08-21T12:30:02-03:00"
-		},
-		{
-			"path": "gopkg.in/mgo.v2/bson",
-			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
-			"revisionTime": "2015-08-21T12:30:02-03:00"
-		},
-		{
-			"path": "gopkg.in/mgo.v2/internal/sasl",
-			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
-			"revisionTime": "2015-08-21T12:30:02-03:00"
-		},
-		{
-			"path": "gopkg.in/mgo.v2/internal/scram",
-			"revision": "f4923a569136442e900b8cf5c1a706c0a8b0883c",
-			"revisionTime": "2015-08-21T12:30:02-03:00"
 		}
 	]
 }

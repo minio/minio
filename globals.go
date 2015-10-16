@@ -17,6 +17,5 @@
 package main
 
 var (
-	globalJSONFlag  = false // Json flag set via command line
-	globalDebugFlag = false // Debug flag set via command line
+	globalJSONFlag = false // Json flag set via command line
 )

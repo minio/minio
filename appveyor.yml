@@ -1,0 +1,34 @@
+# version format
+version: "{build}"
+
+# Operating system (build VM template)
+os: Windows Server 2012 R2
+
+clone_folder: c:\gopath\src\github.com\minio\minio
+
+# environment variables
+environment:
+  GOPATH: c:\gopath
+  GO15VENDOREXPERIMENT: 1
+
+# scripts that run after cloning repository
+install:
+  - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
+  - rd C:\Go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.5.1.windows-amd64.zip
+  - 7z x go1.5.1.windows-amd64.zip -oC:\ >nul
+  - go version
+  - go env
+
+# to run your custom scripts instead of automatic MSBuild
+build_script:
+  - go test .
+  - go test -race .
+  - go test github.com/minio/minio/pkg...
+  - go test -race github.com/minio/minio/pkg...
+
+# to disable automatic tests
+test: off
+
+# to disable deployment
+deploy: off

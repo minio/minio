@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2014 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,7 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	jsonrpc "github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json"
-	"github.com/minio/minio/pkg/donut"
+	"github.com/minio/minio/pkg/fs"
 )
 
 // registerAPI - register all the object API handlers to their respective paths
@@ -50,28 +48,21 @@ func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 }
 
-// APIOperation container for individual operations read by Ticket Master
-type APIOperation struct {
-	ProceedCh chan struct{}
-}
-
 // API container for API and also carries OP (operation) channel
 type API struct {
-	OP        chan APIOperation
-	Donut     donut.Interface
-	Anonymous bool // do not checking for incoming signatures, allow all requests
+	Filesystem fs.CloudStorage
+	Anonymous  bool // do not checking for incoming signatures, allow all requests
 }
 
 // getNewAPI instantiate a new minio API
-func getNewAPI(anonymous bool) API {
+func getNewAPI(path string, anonymous bool) API {
 	// ignore errors for now
-	d, err := donut.New()
-	fatalIf(err.Trace(), "Instantiating donut failed.", nil)
+	fs, err := fs.New(path)
+	fatalIf(err.Trace(), "Instantiating filesystem failed.", nil)
 
 	return API{
-		OP:        make(chan APIOperation),
-		Donut:     d,
-		Anonymous: anonymous,
+		Filesystem: fs,
+		Anonymous:  anonymous,
 	}
 }
 
@@ -88,46 +79,4 @@ func getAPIHandler(anonymous bool, api API) http.Handler {
 	registerAPI(mux, api)
 	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
 	return apiHandler
-}
-
-func getServerRPCHandler(anonymous bool) http.Handler {
-	var mwHandlers = []MiddlewareHandler{
-		TimeValidityHandler,
-	}
-	if !anonymous {
-		mwHandlers = append(mwHandlers, RPCSignatureHandler)
-	}
-
-	s := jsonrpc.NewServer()
-	s.RegisterCodec(json.NewCodec(), "application/json")
-	s.RegisterService(new(serverRPCService), "Server")
-	s.RegisterService(new(donutRPCService), "Donut")
-	mux := router.NewRouter()
-	mux.Handle("/rpc", s)
-
-	rpcHandler := registerCustomMiddleware(mux, mwHandlers...)
-	return rpcHandler
-}
-
-// getControllerRPCHandler rpc handler for controller
-func getControllerRPCHandler(anonymous bool) http.Handler {
-	var mwHandlers = []MiddlewareHandler{
-		TimeValidityHandler,
-	}
-	if !anonymous {
-		mwHandlers = append(mwHandlers, RPCSignatureHandler)
-	}
-
-	s := jsonrpc.NewServer()
-	codec := json.NewCodec()
-	s.RegisterCodec(codec, "application/json")
-	s.RegisterCodec(codec, "application/json; charset=UTF-8")
-	s.RegisterService(new(controllerRPCService), "Controller")
-	mux := router.NewRouter()
-	// Add new RPC services here
-	mux.Handle("/rpc", s)
-	mux.Handle("/{file:.*}", http.FileServer(assetFS()))
-
-	rpcHandler := registerCustomMiddleware(mux, mwHandlers...)
-	return rpcHandler
 }

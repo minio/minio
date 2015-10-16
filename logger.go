@@ -21,26 +21,12 @@ import (
 	"reflect"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
-	"github.com/weekface/mgorus"
+	"github.com/minio/minio-xl/pkg/probe"
 )
 
 type fields map[string]interface{}
 
 var log = logrus.New() // Default console logger.
-
-// log2Mongo enables logging to mongodb. Use capped collection to
-func log2Mongo(url, db, collection string) *probe.Error {
-	hooker, e := mgorus.NewHooker(url, db, collection)
-	if e != nil {
-		return probe.NewError(e)
-	}
-
-	log.Hooks.Add(hooker)                   // Add mongodb hook.
-	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
-	log.Level = logrus.InfoLevel            // Minimum log level.
-	return nil
-}
 
 func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 	if err == nil {
@@ -76,12 +62,4 @@ func fatalIf(err *probe.Error, msg string, fields map[string]interface{}) {
 		fields["probe"] = string(jsonErr)
 	}
 	log.WithFields(fields).Fatal(msg)
-}
-
-func audit(msg string, fields logrus.Fields) {
-	if fields == nil {
-		fields = make(map[string]interface{})
-	}
-
-	log.WithFields(fields).Info(msg)
 }

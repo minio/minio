@@ -16,8 +16,7 @@ RUN apt-get update -y && apt-get install -y -q \
 		curl \
 		git \
 		build-essential \
-		ca-certificates \
-		yasm
+		ca-certificates
 
 RUN curl -O -s https://storage.googleapis.com/golang/${GOLANG_TARBALL} && \
 		tar -xzf ${GOLANG_TARBALL} -C ${GOROOT%*go*} && \
@@ -34,6 +33,6 @@ RUN apt-get remove -y build-essential curl git && \
 
 USER minio
 
-EXPOSE 9000 9001
+EXPOSE 9000
 
 CMD ["sh", "-c", "${GOPATH}/bin/minio server"]

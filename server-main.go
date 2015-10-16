@@ -18,35 +18,44 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/minhttp"
-	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio-xl/pkg/minhttp"
+	"github.com/minio/minio-xl/pkg/probe"
 )
 
 var serverCmd = cli.Command{
 	Name:   "server",
-	Usage:  "Start minio server.",
+	Usage:  "Start Minio cloud storage server.",
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Description}}
+  minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}}
+  minio {{.Name}} PATH
 
 EXAMPLES:
-  1. Start minio server
-      $ minio {{.Name}}
+  1. Start minio server on Linux.
+      $ minio {{.Name}} /home/shared
 
+  2. Start minio server on Windows.
+      $ minio {{.Name}} C:\MyShare
+
+  3. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
+      $ minio --address 192.168.1.101:9000 /home/shared
 `,
 }
 
 // configureAPIServer configure a new server instance
-func configureAPIServer(conf minioConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
+func configureAPIServer(conf fsConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           conf.Address,
@@ -88,88 +97,133 @@ func configureAPIServer(conf minioConfig, apiHandler http.Handler) (*http.Server
 		}
 	}
 
+	Println("Starting minio server:")
 	for _, host := range hosts {
 		if conf.TLS {
-			Printf("Starting minio server on: https://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Listening on https://%s:%s\n", host, port)
 		} else {
-			Printf("Starting minio server on: http://%s:%s, PID: %d\n", host, port, os.Getpid())
+			Printf("Listening on http://%s:%s\n", host, port)
 		}
 	}
 	return apiServer, nil
 }
 
-// configureServerRPC configure server rpc port
-func configureServerRPC(conf minioConfig, rpcHandler http.Handler) (*http.Server, *probe.Error) {
-	// Minio server config
-	rpcServer := &http.Server{
-		Addr:           conf.RPCAddress,
-		Handler:        rpcHandler,
-		MaxHeaderBytes: 1 << 20,
-	}
-
-	if conf.TLS {
-		var err error
-		rpcServer.TLSConfig = &tls.Config{}
-		rpcServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		rpcServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
-	}
-	return rpcServer, nil
-}
-
-// Start ticket master
-func startTM(api API) {
-	for {
-		for op := range api.OP {
-			op.ProceedCh <- struct{}{}
-		}
-	}
-}
-
 // startServer starts an s3 compatible cloud storage server
-func startServer(conf minioConfig) *probe.Error {
-	minioAPI := getNewAPI(conf.Anonymous)
+func startServer(conf fsConfig) *probe.Error {
+	minioAPI := getNewAPI(conf.Path, conf.Anonymous)
 	apiHandler := getAPIHandler(conf.Anonymous, minioAPI)
 	apiServer, err := configureAPIServer(conf, apiHandler)
 	if err != nil {
 		return err.Trace()
 	}
-	rpcServer, err := configureServerRPC(conf, getServerRPCHandler(conf.Anonymous))
-
-	// start ticket master
-	go startTM(minioAPI)
-	if err := minhttp.ListenAndServe(apiServer, rpcServer); err != nil {
+	if err := minhttp.ListenAndServe(apiServer); err != nil {
 		return err.Trace()
 	}
 	return nil
 }
 
-func getServerConfig(c *cli.Context) minioConfig {
+func getServerConfig(c *cli.Context) fsConfig {
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		Fatalln("Both certificate and key are required to enable https.")
 	}
 	tls := (certFile != "" && keyFile != "")
-	return minioConfig{
-		Address:    c.GlobalString("address"),
-		RPCAddress: c.GlobalString("address-server-rpc"),
-		Anonymous:  c.GlobalBool("anonymous"),
-		TLS:        tls,
-		CertFile:   certFile,
-		KeyFile:    keyFile,
-		RateLimit:  c.GlobalInt("ratelimit"),
+	return fsConfig{
+		Address:   c.GlobalString("address"),
+		Path:      strings.TrimSpace(c.Args().First()),
+		Anonymous: c.GlobalBool("anonymous"),
+		TLS:       tls,
+		CertFile:  certFile,
+		KeyFile:   keyFile,
+		RateLimit: c.GlobalInt("ratelimit"),
 	}
 }
 
+func getAuth() (*AuthConfig, *probe.Error) {
+	if err := createAuthConfigPath(); err != nil {
+		return nil, err.Trace()
+	}
+	config, err := loadAuthConfig()
+	if err != nil {
+		if os.IsNotExist(err.ToGoError()) {
+			// Initialize new config, since config file doesn't exist yet
+			config := &AuthConfig{}
+			config.Version = "1"
+			config.AccessKeyID = string(mustGenerateAccessKeyID())
+			config.SecretAccessKey = string(mustGenerateSecretAccessKey())
+			if err := saveAuthConfig(config); err != nil {
+				return nil, err.Trace()
+			}
+			return config, nil
+		}
+		return nil, err.Trace()
+	}
+	return config, nil
+}
+
+type accessKeys struct {
+	*AuthConfig
+}
+
+func (a accessKeys) String() string {
+	magenta := color.New(color.FgMagenta, color.Bold).SprintFunc()
+	white := color.New(color.FgWhite, color.Bold).SprintfFunc()
+	return fmt.Sprint(magenta("AccessKey: ") + white(a.AccessKeyID) + "  " + magenta("SecretKey: ") + white(a.SecretAccessKey))
+}
+
+// JSON - json formatted output
+func (a accessKeys) JSON() string {
+	b, err := json.Marshal(a)
+	errorIf(probe.NewError(err), "Unable to marshal json", nil)
+	return string(b)
+}
+
+// fetchAuth first time authorization
+func fetchAuth() *probe.Error {
+	conf, err := getAuth()
+	if err != nil {
+		return err.Trace()
+	}
+	if conf != nil {
+		if globalJSONFlag {
+			Println(accessKeys{conf}.JSON())
+		} else {
+			Println()
+			Println(accessKeys{conf})
+		}
+	}
+	if !globalJSONFlag {
+		Println("\nTo configure Minio Client.")
+		if runtime.GOOS == "windows" {
+			Println("\n\tDownload https://dl.minio.io:9000/updates/2015/Oct/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
+			Println("\t$ mc.exe config host add localhost:9000 " + conf.AccessKeyID + " " + conf.SecretAccessKey)
+			Println("\t$ mc.exe mb localhost/photobucket")
+			Println("\t$ mc.exe cp C:\\Photos... localhost/photobucket")
+		} else {
+			Println("\n\t$ wget https://dl.minio.io:9000/updates/2015/Oct/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
+			Println("\t$ chmod 755 mc")
+			Println("\t$ ./mc config host add localhost:9000 " + conf.AccessKeyID + " " + conf.SecretAccessKey)
+			Println("\t$ ./mc mb localhost/photobucket")
+			Println("\t$ ./mc cp ~/Photos... localhost/photobucket")
+		}
+		Println()
+	}
+	return nil
+}
+
 func serverMain(c *cli.Context) {
-	if c.Args().Present() {
+	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	err := fetchAuth()
+	fatalIf(err.Trace(), "Failed to generate keys for minio.", nil)
+
+	if _, err := os.Stat(c.Args().First()); err != nil {
+		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
+	}
 	apiServerConfig := getServerConfig(c)
-	err := startServer(apiServerConfig)
+	err = startServer(apiServerConfig)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

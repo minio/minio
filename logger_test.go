@@ -22,7 +22,7 @@ import (
 	"errors"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio-xl/pkg/probe"
 
 	. "gopkg.in/check.v1"
 )

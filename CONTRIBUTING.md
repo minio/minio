@@ -12,7 +12,8 @@ $ cd minio
 ```
 
 ### Compiling Minio from source
-Minio uses ``Makefile`` to wrap around some of the limitations of ``go`` build system. To compile Minio source, simply change to your workspace folder and type ``make``.
+Minio uses ``Makefile`` to wrap around some of redundant checks done through command line.
+
 ```sh
 $ make
 Checking if proper environment variables are set.. Done

@@ -2,9 +2,9 @@
 ### Build Dependencies
 This installation document assumes Ubuntu 14.04+ on x86-64 platform.
 
-##### Install Git, GCC, yasm
+##### Install Git, GCC
 ```sh
-$ sudo apt-get install git build-essential yasm
+$ sudo apt-get install git build-essential
 ```
 
 ##### Install Go 1.5+
@@ -39,7 +39,7 @@ $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/maste
 
 ##### Install Git, Python
 ```sh
-$ brew install git python yasm
+$ brew install git python
 ```
 
 ##### Install Go 1.5+

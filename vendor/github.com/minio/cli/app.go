@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,8 +19,10 @@ import (
 type App struct {
 	// The name of the program. Defaults to os.Args[0]
 	Name string
-	// Description of the program.
+	// Usage of the program.
 	Usage string
+	// Description of the program.
+	Description string
 	// Version of the program
 	Version string
 	// List of commands to execute
@@ -290,6 +293,9 @@ func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 		if c != nil {
 			return c.Run(context)
 		}
+		fmt.Fprintf(a.Writer, "Incorrect Usage.\n\n")
+		ShowSubcommandHelp(context)
+		return errors.New("Command not found")
 	}
 
 	// Run default Action

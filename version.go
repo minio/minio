@@ -3,5 +3,5 @@
 
 package main
 
-const minioVersion = "Sat, 19 Sep 2015 06:15:16 GMT"
-const minioReleaseTag = "RELEASE.Sat-19-Sep-2015-06-15-16-GMT"
+const minioVersion = "Sun, 11 Oct 2015 06:14:24 GMT"
+const minioReleaseTag = "RELEASE.Sun-11-Oct-2015-06-14-24-GMT"

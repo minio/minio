@@ -27,16 +27,15 @@ import (
 	"github.com/minio/cli"
 )
 
-// minioConfig - http server config
-type minioConfig struct {
-	Address           string
-	ControllerAddress string
-	RPCAddress        string
-	Anonymous         bool
-	TLS               bool
-	CertFile          string
-	KeyFile           string
-	RateLimit         int
+// fsConfig - fs http server config
+type fsConfig struct {
+	Address   string
+	Path      string
+	Anonymous bool
+	TLS       bool
+	CertFile  string
+	KeyFile   string
+	RateLimit int
 }
 
 func init() {
@@ -90,15 +89,11 @@ func findClosestCommands(command string) []string {
 
 func registerApp() *cli.App {
 	// register all commands
-	registerCommand(donutCmd)
 	registerCommand(serverCmd)
-	registerCommand(controllerCmd)
 	registerCommand(versionCmd)
 
 	// register all flags
 	registerFlag(addressFlag)
-	registerFlag(addressControllerFlag)
-	registerFlag(addressServerRPCFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(anonymousFlag)
 	registerFlag(certFlag)
@@ -107,11 +102,12 @@ func registerApp() *cli.App {
 
 	// set up app
 	app := cli.NewApp()
-	app.Name = "minio"
+	app.Name = "Minio"
 	// hide --version flag, version is a command
 	app.HideVersion = true
 	app.Author = "Minio.io"
-	app.Usage = "Minio Cloud Storage"
+	app.Usage = "Cloud Storage Server for Micro Services & Magnetic Disks."
+	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved to through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic disk. It is ideal for storing large objects with sizes ranging from few MBs to GBs. Minio binary is small enough to be bundled along with the application stack.`
 	app.Flags = flags
 	app.Commands = commands
 
@@ -119,17 +115,21 @@ func registerApp() *cli.App {
   {{.Name}} - {{.Usage}}
 
 USAGE:
-  {{.Name}} {{if .Flags}}[global flags] {{end}}command{{if .Flags}} [command flags]{{end}} [arguments...]
+  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
+
+DESCRIPTION:
+  {{.Description}}
 
 COMMANDS:
   {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
   {{end}}{{if .Flags}}
-GLOBAL FLAGS:
+FLAGS:
   {{range .Flags}}{{.}}
   {{end}}{{end}}
 VERSION:
   ` + minioVersion +
-		`{{range $key, $value := ExtraInfo}}
+		`
+{{range $key, $value := ExtraInfo}}
 {{$key}}:
   {{$value}}
 {{end}}

@@ -163,6 +163,9 @@ func (c Command) startApp(ctx *Context) error {
 	// set CommandNotFound
 	app.CommandNotFound = ctx.App.CommandNotFound
 
+	app.CustomAppHelpTemplate = c.CustomHelpTemplate
+	app.HideVersion = ctx.App.HideVersion
+
 	// set the flags and commands
 	app.Commands = c.Subcommands
 	app.Flags = c.Flags
