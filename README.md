@@ -17,7 +17,7 @@ Micro services environment provisions one Minio server per application instance.
 - [Python Library](https://github.com/minio/minio-py)
 - [.Net Library](https://github.com/minio/minio-dotnet)
 
-### Install [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)[![Build status](https://ci.appveyor.com/api/projects/status/k61d0v3ritbwm2su?svg=true)](https://ci.appveyor.com/project/harshavardhana/minio)
+### Install [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)[![Build status](https://ci.appveyor.com/api/projects/status/royh137dni8yevep/branch/master?svg=true)](https://ci.appveyor.com/project/harshavardhana/minio-qxbjq/branch/master)
 
 #### Linux, OS X, Windows
 
