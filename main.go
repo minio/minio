@@ -106,8 +106,8 @@ func registerApp() *cli.App {
 	// hide --version flag, version is a command
 	app.HideVersion = true
 	app.Author = "Minio.io"
-	app.Usage = "Cloud Storage Server for Micro Services & Magnetic Disks."
-	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved to through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic disk. It is ideal for storing large objects with sizes ranging from few MBs to GBs. Minio binary is small enough to be bundled along with the application stack.`
+	app.Usage = "Cloud Storage Server for Micro Services."
+	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved to through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.`
 	app.Flags = flags
 	app.Commands = commands
 
