@@ -6,7 +6,7 @@ checkdeps:
 
 checkgopath:
 	@echo "Checking if project is at ${GOPATH}"
-	@for miniofspath in $(echo ${GOPATH} | sed 's/:/\n/g'); do if [ ! -d ${mcpath}/src/github.com/minio/minio ]; then echo "Project not found in ${miniofspath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
+	@for miniopath in $(echo ${GOPATH} | sed 's/:/\n/g'); do if [ ! -d ${miniopath}/src/github.com/minio/minio ]; then echo "Project not found in ${miniopath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
 
 getdeps: checkdeps checkgopath
 	@go get github.com/golang/lint/golint && echo "Installed golint:"
@@ -69,3 +69,5 @@ clean:
 	@echo "Cleaning up all the generated files:"
 	@rm -fv cover.out
 	@rm -fv minio
+	@rm -fv minio.test
+	@rm -fv pkg/fs/fs.test

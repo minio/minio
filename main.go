@@ -91,6 +91,7 @@ func registerApp() *cli.App {
 	// register all commands
 	registerCommand(serverCmd)
 	registerCommand(versionCmd)
+	registerCommand(updateCmd)
 
 	// register all flags
 	registerFlag(addressFlag)
