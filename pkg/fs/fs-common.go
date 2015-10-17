@@ -33,13 +33,13 @@ type Metadata struct {
 
 // sortUnique sort a slice in lexical order, removing duplicate elements
 func sortUnique(objects []string) []string {
-	objectMap := make(map[string]string)
-	for _, v := range objects {
-		objectMap[v] = v
-	}
-	var results []string
-	for k := range objectMap {
-		results = append(results, k)
+	results := []string{}
+	seen := make(map[string]string)
+	for _, val := range objects {
+		if _, ok := seen[val]; !ok {
+			results = append(results, val)
+			seen[val] = val
+		}
 	}
 	sort.Strings(results)
 	return results

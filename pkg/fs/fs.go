@@ -17,6 +17,7 @@
 package fs
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"strings"
@@ -93,12 +94,19 @@ func (fs API) DeleteBucket(bucket string) *probe.Error {
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
-	files, err := ioutil.ReadDir(bucketDir)
-	if err != nil {
-		return probe.NewError(err)
+	var errNotEmpty = errors.New("Directory Not empty")
+	isDirNotEmpty := func(fp string, fl os.FileInfo, err error) error {
+		if fl.Mode().IsRegular() || fl.Mode()&os.ModeSymlink == os.ModeSymlink {
+			return errNotEmpty
+		}
+		return ErrSkipDir
 	}
-	if len(files) > 0 {
-		return probe.NewError(BucketNotEmpty{Bucket: bucket})
+	err := WalkUnsorted(bucketDir, isDirNotEmpty)
+	if err != nil {
+		if err == errNotEmpty {
+			return probe.NewError(BucketNotEmpty{Bucket: bucket})
+		}
+		return probe.NewError(err)
 	}
 	if err := os.Remove(bucketDir); err != nil {
 		return probe.NewError(err)
@@ -128,7 +136,6 @@ func (fs API) ListBuckets() ([]BucketMetadata, *probe.Error) {
 				continue
 			}
 		}
-
 		metadata := BucketMetadata{
 			Name:    file.Name(),
 			Created: file.ModTime(),
@@ -263,29 +270,67 @@ func (fs API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]O
 		}
 	}
 
-	// If delimiter is supplied make sure that paging doesn't go deep, treat it as simple directory listing.
-	if resources.Delimiter != "" {
-		files, err := ioutil.ReadDir(filepath.Join(rootPrefix, resources.Prefix))
+	// if delimiter is supplied and not prefix then we are the very top level, list everything and move on.
+	if resources.Delimiter != "" && resources.Prefix == "" {
+		files, err := ioutil.ReadDir(rootPrefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, resources, probe.NewError(ObjectNotFound{Bucket: bucket, Object: resources.Prefix})
+				return nil, resources, probe.NewError(BucketNotFound{Bucket: bucket})
 			}
 			return nil, resources, probe.NewError(err)
 		}
 		for _, fl := range files {
-			prefix := fl.Name()
-			if resources.Prefix != "" {
-				prefix = filepath.Join(resources.Prefix, fl.Name())
-			}
 			p.files = append(p.files, contentInfo{
-				Prefix:   prefix,
+				Prefix:   fl.Name(),
 				Size:     fl.Size(),
 				Mode:     fl.Mode(),
 				ModTime:  fl.ModTime(),
 				FileInfo: fl,
 			})
 		}
-	} else {
+	}
+
+	// If delimiter and prefix is supplied make sure that paging doesn't go deep, treat it as simple directory listing.
+	if resources.Delimiter != "" && resources.Prefix != "" {
+		if !strings.HasSuffix(resources.Prefix, resources.Delimiter) {
+			fl, err := os.Stat(filepath.Join(rootPrefix, resources.Prefix))
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil, resources, probe.NewError(ObjectNotFound{Bucket: bucket, Object: resources.Prefix})
+				}
+				return nil, resources, probe.NewError(err)
+			}
+			p.files = append(p.files, contentInfo{
+				Prefix:   resources.Prefix,
+				Size:     fl.Size(),
+				Mode:     os.ModeDir,
+				ModTime:  fl.ModTime(),
+				FileInfo: fl,
+			})
+		} else {
+			files, err := ioutil.ReadDir(filepath.Join(rootPrefix, resources.Prefix))
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil, resources, probe.NewError(ObjectNotFound{Bucket: bucket, Object: resources.Prefix})
+				}
+				return nil, resources, probe.NewError(err)
+			}
+			for _, fl := range files {
+				prefix := fl.Name()
+				if resources.Prefix != "" {
+					prefix = filepath.Join(resources.Prefix, fl.Name())
+				}
+				p.files = append(p.files, contentInfo{
+					Prefix:   prefix,
+					Size:     fl.Size(),
+					Mode:     fl.Mode(),
+					ModTime:  fl.ModTime(),
+					FileInfo: fl,
+				})
+			}
+		}
+	}
+	if resources.Delimiter == "" {
 		var files []contentInfo
 		getAllFiles := func(fp string, fl os.FileInfo, err error) error {
 			// If any error return back quickly

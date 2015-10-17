@@ -33,9 +33,28 @@ func Walk(root string, walkFn WalkFunc) error {
 	return walk(root, info, walkFn)
 }
 
+// WalkUnsorted walks the file tree rooted at root, calling walkFn for each file or
+// directory in the tree, including root.
+func WalkUnsorted(root string, walkFn WalkFunc) error {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return walkFn(root, nil, err)
+	}
+	return walk(root, info, walkFn)
+}
+
 // readDirNames reads the directory named by dirname and returns
 // a sorted list of directory entries.
 func readDirNames(dirname string) ([]string, error) {
+	names, err := readDirUnsortedNames(dirname)
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func readDirUnsortedNames(dirname string) ([]string, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
@@ -45,7 +64,6 @@ func readDirNames(dirname string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(names)
 	return names, nil
 }
 
@@ -65,6 +83,46 @@ var ErrSkipDir = errors.New("skip this directory")
 // the file named in the call is to be skipped. It is not returned
 // as an error by any function.
 var ErrSkipFile = errors.New("skip this file")
+
+func walkUnsorted(path string, info os.FileInfo, walkFn WalkFunc) error {
+	err := walkFn(path, info, nil)
+	if err != nil {
+		if info.Mode().IsDir() && err == ErrSkipDir {
+			return nil
+		}
+		if info.Mode().IsRegular() && err == ErrSkipFile {
+			return nil
+		}
+		return err
+	}
+
+	if !info.IsDir() {
+		return nil
+	}
+
+	names, err := readDirUnsortedNames(path)
+	if err != nil {
+		return walkFn(path, info, err)
+	}
+	for _, name := range names {
+		filename := filepath.Join(path, name)
+		fileInfo, err := os.Lstat(filename)
+		if err != nil {
+			if err := walkFn(filename, fileInfo, err); err != nil && err != ErrSkipDir && err != ErrSkipFile {
+				return err
+			}
+		} else {
+			err = walk(filename, fileInfo, walkFn)
+			if err != nil {
+				if err == ErrSkipDir || err == ErrSkipFile {
+					return nil
+				}
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 // walk recursively descends path, calling w.
 func walk(path string, info os.FileInfo, walkFn WalkFunc) error {

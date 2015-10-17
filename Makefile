@@ -35,8 +35,8 @@ lint:
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 gocyclo -over 50 *.go
-	@GO15VENDOREXPERIMENT=1 gocyclo -over 50 pkg
+	@GO15VENDOREXPERIMENT=1 gocyclo -over 60 *.go
+	@GO15VENDOREXPERIMENT=1 gocyclo -over 60 pkg
 
 build: getdeps verifiers
 	@echo "Installing minio:" #@GO15VENDOREXPERIMENT=1 deadcode

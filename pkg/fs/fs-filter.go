@@ -40,6 +40,10 @@ func (fs API) filterObjects(bucket string, content contentInfo, resources Bucket
 				if err != nil {
 					return ObjectMetadata{}, resources, err.Trace()
 				}
+				if metadata.Mode.IsDir() {
+					resources.CommonPrefixes = append(resources.CommonPrefixes, name+resources.Delimiter)
+					return ObjectMetadata{}, resources, nil
+				}
 			case delimitedName == content.FileInfo.Name():
 				// Use resources.Prefix to filter out delimited files
 				metadata, err = getMetadata(fs.path, bucket, name)
@@ -62,6 +66,10 @@ func (fs API) filterObjects(bucket string, content contentInfo, resources Bucket
 			metadata, err = getMetadata(fs.path, bucket, name)
 			if err != nil {
 				return ObjectMetadata{}, resources, err.Trace()
+			}
+			if metadata.Mode.IsDir() {
+				resources.CommonPrefixes = append(resources.CommonPrefixes, name+resources.Delimiter)
+				return ObjectMetadata{}, resources, nil
 			}
 		case delimitedName == content.FileInfo.Name():
 			metadata, err = getMetadata(fs.path, bucket, name)
