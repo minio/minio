@@ -34,6 +34,9 @@ func RemoveAllDirs(path string) error {
 		}
 		if fl.Mode().IsDir() {
 			if err := os.Remove(fp); err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
 				return err
 			}
 		}
