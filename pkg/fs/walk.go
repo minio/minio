@@ -23,6 +23,32 @@ import (
 	"sort"
 )
 
+// RemoveAllDirs - removes only itself and all subdirectories
+func RemoveAllDirs(path string) error {
+	allFiles := func(fp string, fl os.FileInfo, err error) error {
+		if fp == path {
+			return nil
+		}
+		if fl.Mode().IsRegular() || fl.Mode()&os.ModeSymlink == os.ModeSymlink {
+			return ErrDirNotEmpty
+		}
+		if fl.Mode().IsDir() {
+			if err := os.Remove(fp); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	err := WalkUnsorted(path, allFiles)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // Walk walks the file tree rooted at root, calling walkFn for each file or
 // directory in the tree, including root.
 func Walk(root string, walkFn WalkFunc) error {
@@ -83,6 +109,10 @@ var ErrSkipDir = errors.New("skip this directory")
 // the file named in the call is to be skipped. It is not returned
 // as an error by any function.
 var ErrSkipFile = errors.New("skip this file")
+
+// ErrDirNotEmpty is used to throw error on directories which have atleast one regular
+// file or a symlink left
+var ErrDirNotEmpty = errors.New("directory not empty")
 
 func walkUnsorted(path string, info os.FileInfo, walkFn WalkFunc) error {
 	err := walkFn(path, info, nil)
