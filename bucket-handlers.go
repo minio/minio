@@ -31,10 +31,23 @@ import (
 // -------------------------
 // This operation lists in-progress multipart uploads. An in-progress
 // multipart upload is a multipart upload that has been initiated,
-// using the Initiate Multipart Upload request, but has not yet been completed or aborted.
-// This operation returns at most 1,000 multipart uploads in the response.
+// using the Initiate Multipart Upload request, but has not yet been
+// completed or aborted. This operation returns at most 1,000 multipart
+// uploads in the response.
 //
 func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
+
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads < 0 {
 		writeErrorResponse(w, req, InvalidMaxUploads, req.URL.Path)
@@ -43,9 +56,6 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 	if resources.MaxUploads == 0 {
 		resources.MaxUploads = maxObjectList
 	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
 
 	resources, err := api.Filesystem.ListMultipartUploads(bucket, resources)
 	if err != nil {
@@ -74,11 +84,17 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 // criteria to return a subset of the objects in a bucket.
 //
 func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
-	if isRequestUploads(req.URL.Query()) {
-		api.ListMultipartUploadsHandler(w, req)
-		return
-	}
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
 
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
 	resources := getBucketResources(req.URL.Query())
 	if resources.Maxkeys < 0 {
 		writeErrorResponse(w, req, InvalidMaxKeys, req.URL.Path)
@@ -87,9 +103,6 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	if resources.Maxkeys == 0 {
 		resources.Maxkeys = maxObjectList
 	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
 
 	objects, resources, err := api.Filesystem.ListObjects(bucket, resources)
 	if err == nil {
@@ -122,6 +135,12 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 	buckets, err := api.Filesystem.ListBuckets()
 	if err == nil {
 		// generate response
@@ -141,6 +160,16 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
@@ -148,13 +177,10 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-
 	var signature *fs.Signature
 	if !api.Anonymous {
-		if _, ok := req.Header["Authorization"]; ok {
-			// Init signature V4 verification
+		// Init signature V4 verification
+		if isRequestSignatureV4(req) {
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
 			if err != nil {
@@ -295,16 +321,22 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 // ----------
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
 func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
 		writeErrorResponse(w, req, NotImplemented, req.URL.Path)
 		return
 	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-
 	err := api.Filesystem.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)})
 	if err != nil {
 		errorIf(err.Trace(), "PutBucketACL failed.", nil)
@@ -330,6 +362,13 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 func (api API) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 
 	bucketMetadata, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
@@ -363,6 +402,15 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
+
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
@@ -383,6 +431,13 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 func (api API) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 
 	err := api.Filesystem.DeleteBucket(bucket)
 	if err != nil {

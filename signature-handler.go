@@ -21,9 +21,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/fs"
 )
 
 type signatureHandler struct {
@@ -56,6 +56,13 @@ func isRequestPostPolicySignatureV4(req *http.Request) bool {
 		}
 	}
 	return false
+}
+
+func isRequestRequiresACLCheck(req *http.Request) bool {
+	if isRequestSignatureV4(req) || isRequestPresignedSignatureV4(req) || isRequestPostPolicySignatureV4(req) {
+		return false
+	}
+	return true
 }
 
 func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -129,5 +136,6 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	// call goes up from here, let ACL's verify the validity of the request
+	s.handler.ServeHTTP(w, r)
 }

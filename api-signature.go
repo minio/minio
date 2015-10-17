@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/fs"
 )
 
 const (

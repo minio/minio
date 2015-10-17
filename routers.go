@@ -27,6 +27,7 @@ import (
 func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.GetBucketACLHandler).Queries("acl", "").Methods("GET")
+	mux.HandleFunc("/{bucket}", a.ListMultipartUploadsHandler).Queries("uploads", "").Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListObjectsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.PutBucketACLHandler).Queries("acl", "").Methods("PUT")
 	mux.HandleFunc("/{bucket}", a.PutBucketHandler).Methods("PUT")
@@ -36,15 +37,12 @@ func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/{bucket}/{object:.*}", a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").Methods("PUT")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}").Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("POST")
-	mux.HandleFunc("/{bucket}/{object:.*}", a.NewMultipartUploadHandler).Methods("POST")
+	mux.HandleFunc("/{bucket}/{object:.*}", a.NewMultipartUploadHandler).Queries("uploads", "").Methods("POST")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}").Methods("DELETE")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.GetObjectHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}/{object:.*}", a.PutObjectHandler).Methods("PUT")
 
-	// not implemented yet
 	mux.HandleFunc("/{bucket}", a.DeleteBucketHandler).Methods("DELETE")
-
-	// unsupported API
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 }
 

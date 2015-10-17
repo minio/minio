@@ -41,7 +41,11 @@ type CloudStorage interface {
 	CreateObject(bucket, object, md5sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error)
 	DeleteObject(bucket, object string) *probe.Error
 
+	// Multipart API
 	Multipart
+
+	// ACL API
+	ACL
 }
 
 // Multipart API
@@ -52,4 +56,11 @@ type Multipart interface {
 	CompleteMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error)
 	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error)
 	ListObjectParts(bucket, object string, objectResources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error)
+}
+
+// ACL API
+type ACL interface {
+	IsPublicBucket(bucket string) bool
+	IsPrivateBucket(bucket string) bool
+	IsReadOnlyBucket(bucket string) bool
 }
