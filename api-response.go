@@ -212,6 +212,12 @@ func writeSuccessResponse(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// writeSuccessNoContent write success headers with http status 204
+func writeSuccessNoContent(w http.ResponseWriter) {
+	setCommonHeaders(w, 0)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // writeErrorRespone write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, resource string) {
 	error := getErrorCode(errorType)

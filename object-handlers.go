@@ -376,8 +376,7 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 		}
 		return
 	}
-	setCommonHeaders(w, 0)
-	w.WriteHeader(http.StatusNoContent)
+	writeSuccessNoContent(w)
 }
 
 // ListObjectPartsHandler - List object parts
@@ -531,4 +530,5 @@ func (api API) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
 	}
+	writeSuccessNoContent(w)
 }
