@@ -260,7 +260,7 @@ func (fs API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]O
 	/// automatically treat "/" delimiter as "\\" delimiter on windows due to its path constraints.
 	if resources.Delimiter == "/" {
 		if runtime.GOOS == "windows" {
-			resources.Delimiter = "\\"
+			resources.Delimiter = string(os.PathSeparator)
 		}
 	}
 
@@ -344,11 +344,11 @@ func (fs API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]O
 			// Split the root prefix from the incoming file pointer
 			realFp := ""
 			if runtime.GOOS == "windows" {
-				if splits := strings.Split(fp, p.root+"\\"); len(splits) > 1 {
+				if splits := strings.Split(fp, (p.root + string(os.PathSeparator))); len(splits) > 1 {
 					realFp = splits[1]
 				}
 			} else {
-				if splits := strings.Split(fp, p.root+"/"); len(splits) > 1 {
+				if splits := strings.Split(fp, (p.root + string(os.PathSeparator))); len(splits) > 1 {
 					realFp = splits[1]
 				}
 			}
@@ -367,11 +367,11 @@ func (fs API) ListObjects(bucket string, resources BucketResourcesMetadata) ([]O
 				if resources.Marker != "" {
 					if realFp != "" {
 						if runtime.GOOS == "windows" {
-							if realFp < strings.Split(resources.Marker, "\\")[0] {
+							if realFp < strings.Split(resources.Marker, string(os.PathSeparator))[0] {
 								return ErrSkipDir
 							}
 						} else {
-							if realFp < strings.Split(resources.Marker, "/")[0] {
+							if realFp < strings.Split(resources.Marker, string(os.PathSeparator))[0] {
 								return ErrSkipDir
 							}
 						}

@@ -118,9 +118,9 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
 	var objectPath string
 	if runtime.GOOS == "windows" {
-		objectPath = rootPath + "\\" + bucket + "\\" + object
+		objectPath = rootPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	} else {
-		objectPath = rootPath + "/" + bucket + "/" + object
+		objectPath = rootPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
 	stat, err := os.Stat(objectPath)
 	if err != nil {
@@ -275,9 +275,9 @@ func (fs API) DeleteObject(bucket, object string) *probe.Error {
 	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
 	var objectPath string
 	if runtime.GOOS == "windows" {
-		objectPath = fs.path + "\\" + bucket + "\\" + object
+		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	} else {
-		objectPath = fs.path + "/" + bucket + "/" + object
+		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
 
 	_, err := os.Stat(objectPath)
