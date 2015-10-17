@@ -48,12 +48,10 @@ func (fs API) filterObjects(bucket string, content contentInfo, resources Bucket
 				}
 				if metadata.Mode.IsDir() {
 					resources.CommonPrefixes = append(resources.CommonPrefixes, name+resources.Delimiter)
-					sortUnique(resources.CommonPrefixes)
 					return ObjectMetadata{}, resources, nil
 				}
 			case delimitedName != "":
 				resources.CommonPrefixes = append(resources.CommonPrefixes, resources.Prefix+delimitedName)
-				sortUnique(resources.CommonPrefixes)
 			}
 		}
 	// Delimiter present and Prefix is absent
@@ -72,12 +70,10 @@ func (fs API) filterObjects(bucket string, content contentInfo, resources Bucket
 			}
 			if metadata.Mode.IsDir() {
 				resources.CommonPrefixes = append(resources.CommonPrefixes, name+resources.Delimiter)
-				sortUnique(resources.CommonPrefixes)
 				return ObjectMetadata{}, resources, nil
 			}
 		case delimitedName != "":
 			resources.CommonPrefixes = append(resources.CommonPrefixes, delimitedName)
-			sortUnique(resources.CommonPrefixes)
 		}
 	// Delimiter is absent and only Prefix is present
 	case resources.Delimiter == "" && resources.Prefix != "":
@@ -94,6 +90,6 @@ func (fs API) filterObjects(bucket string, content contentInfo, resources Bucket
 			return ObjectMetadata{}, resources, err.Trace()
 		}
 	}
-
+	sortUnique(resources.CommonPrefixes)
 	return metadata, resources, nil
 }

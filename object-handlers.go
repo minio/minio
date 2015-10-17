@@ -21,8 +21,8 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/fs"
 )
 
 const (
@@ -38,6 +38,15 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
 
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
 	if err != nil {
@@ -78,6 +87,15 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
+
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
 	if err != nil {
 		switch err.ToGoError().(type) {
@@ -106,6 +124,15 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
 
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
@@ -136,7 +163,7 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 
 	var signature *fs.Signature
 	if !api.Anonymous {
-		if _, ok := req.Header["Authorization"]; ok {
+		if isRequestSignatureV4(req) {
 			// Init signature V4 verification
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
@@ -181,15 +208,18 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 
 // NewMultipartUploadHandler - New multipart upload
 func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
-	if !isRequestUploads(req.URL.Query()) {
-		writeErrorResponse(w, req, MethodNotAllowed, req.URL.Path)
-		return
-	}
-
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	if !api.Anonymous {
+		// Unauthorized multipart uploads are not supported
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 
 	uploadID, err := api.Filesystem.NewMultipartUpload(bucket, object)
 	if err != nil {
@@ -219,17 +249,28 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 
 // PutObjectPartHandler - Upload part
 func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
-	// get Content-MD5 sent by client and verify if valid
-	md5 := req.Header.Get("Content-MD5")
-	if !isValidMD5(md5) {
-		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
-		return
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
 	}
 
 	/// if Content-Length missing, throw away
 	size := req.Header.Get("Content-Length")
 	if size == "" {
 		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
+		return
+	}
+
+	// get Content-MD5 sent by client and verify if valid
+	md5 := req.Header.Get("Content-MD5")
+	if !isValidMD5(md5) {
+		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		return
 	}
 
@@ -249,10 +290,6 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
-
 	uploadID := req.URL.Query().Get("uploadId")
 	partIDString := req.URL.Query().Get("partNumber")
 
@@ -268,7 +305,7 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 
 	var signature *fs.Signature
 	if !api.Anonymous {
-		if _, ok := req.Header["Authorization"]; ok {
+		if isRequestSignatureV4(req) {
 			// Init signature V4 verification
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
@@ -311,6 +348,13 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 
 	err := api.Filesystem.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
@@ -338,6 +382,17 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 
 // ListObjectPartsHandler - List object parts
 func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	if objectResourcesMetadata.PartNumberMarker < 0 {
 		writeErrorResponse(w, req, InvalidPartNumberMarker, req.URL.Path)
@@ -350,10 +405,6 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 	if objectResourcesMetadata.MaxParts == 0 {
 		objectResourcesMetadata.MaxParts = maxPartsList
 	}
-
-	vars := mux.Vars(req)
-	bucket := vars["bucket"]
-	object := vars["object"]
 
 	objectResourcesMetadata, err := api.Filesystem.ListObjectParts(bucket, object, objectResourcesMetadata)
 	if err != nil {
@@ -388,11 +439,17 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 
+	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	var signature *fs.Signature
 	if !api.Anonymous {
-		if _, ok := req.Header["Authorization"]; ok {
+		if isRequestSignatureV4(req) {
 			// Init signature V4 verification
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
@@ -448,6 +505,15 @@ func (api API) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			if api.Filesystem.IsPrivateBucket(bucket) {
+				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+				return
+			}
+		}
+	}
 
 	err := api.Filesystem.DeleteObject(bucket, object)
 	if err != nil {
