@@ -275,7 +275,7 @@ func (s *MyAPIFSCacheSuite) TestDeleteBucket(c *C) {
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
 func (s *MyAPIFSCacheSuite) TestDeleteObject(c *C) {
@@ -300,7 +300,7 @@ func (s *MyAPIFSCacheSuite) TestDeleteObject(c *C) {
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
 func (s *MyAPIFSCacheSuite) TestNonExistantBucket(c *C) {

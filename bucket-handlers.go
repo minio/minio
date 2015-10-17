@@ -452,5 +452,5 @@ func (api API) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	writeSuccessResponse(w)
+	writeSuccessNoContent(w)
 }
