@@ -489,7 +489,6 @@ func (s *MyAPIFSCacheSuite) TestNotImplemented(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
-
 }
 
 func (s *MyAPIFSCacheSuite) TestHeader(c *C) {

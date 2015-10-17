@@ -131,9 +131,13 @@ func IgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 
+const (
+	separator = "/"
+)
+
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	splits := strings.SplitN(r.URL.Path, "/", 3)
+	splits := strings.SplitN(r.URL.Path, separator, 3)
 	switch len(splits) {
 	// bucket exists
 	case 2:
