@@ -90,6 +90,6 @@ func checkGolangRuntimeVersion() {
 	v1 := newVersion(getNormalizedGolangVersion())
 	v2 := newVersion(minGolangRuntimeVersion)
 	if v1.LessThan(v2) {
-		Fatalln("Old Golang runtime version ‘" + v1.String() + "’ detected., ‘mc’ requires minimum go1.5.1 or later.")
+		Fatalln("Old Golang runtime version ‘" + v1.String() + "’ detected., ‘minio’ requires minimum go1.5.1 or later.")
 	}
 }

@@ -18,6 +18,9 @@ package main
 
 import "errors"
 
+// errInvalidArgument means that input argument is invalid
+var errInvalidArgument = errors.New("Invalid Argument")
+
 // errMissingAuthHeader means that Authorization header
 // has missing value or it is empty.
 var errMissingAuthHeaderValue = errors.New("Missing auth header value")

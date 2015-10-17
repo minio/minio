@@ -23,13 +23,10 @@ var versionCmd = cli.Command{
 	Usage:  "Print version",
 	Action: mainVersion,
 	CustomHelpTemplate: `NAME:
-   mc {{.Name}} - {{.Usage}}
+   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-   mc {{.Name}} {{if .Description}}
-
-EXAMPLES:
-
+   minio {{.Name}} {{if .Description}}
 `,
 }
 
