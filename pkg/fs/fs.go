@@ -17,7 +17,6 @@
 package fs
 
 import (
-	"errors"
 	"os"
 	"runtime"
 	"strings"
@@ -94,21 +93,16 @@ func (fs API) DeleteBucket(bucket string) *probe.Error {
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
-	var errNotEmpty = errors.New("Directory Not empty")
-	isDirNotEmpty := func(fp string, fl os.FileInfo, err error) error {
-		if fl.Mode().IsRegular() || fl.Mode()&os.ModeSymlink == os.ModeSymlink {
-			return errNotEmpty
-		}
-		return ErrSkipDir
-	}
-	err := WalkUnsorted(bucketDir, isDirNotEmpty)
-	if err != nil {
-		if err == errNotEmpty {
+	if err := RemoveAllDirs(bucketDir); err != nil {
+		if err == ErrDirNotEmpty || strings.Contains(err.Error(), "directory not empty") {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
 		}
 		return probe.NewError(err)
 	}
 	if err := os.Remove(bucketDir); err != nil {
+		if strings.Contains(err.Error(), "directory not empty") {
+			return probe.NewError(BucketNotEmpty{Bucket: bucket})
+		}
 		return probe.NewError(err)
 	}
 	return nil
