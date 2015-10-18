@@ -39,22 +39,17 @@ var fsType2StringMap = map[string]string{
 	"f15f":     "ecryptfs",
 }
 
-// FSType returns the filesystem type of the underlying mounted filesystem
-func FSType(path string) (string, error) {
+// getFSType returns the filesystem type of the underlying mounted filesystem
+func getFSType(path string) (string, error) {
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(path, &s)
 	if err != nil {
 		return "", err
 	}
-	return getFSType(s.Type), nil
-}
-
-// getFSType - get filesystem type
-func getFSType(fsType int64) string {
-	fsTypeHex := strconv.FormatInt(fsType, 16)
+	fsTypeHex := strconv.FormatInt(s.Type, 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if ok == false {
-		return "UNKNOWN"
+		return "UNKNOWN", nil
 	}
-	return fsTypeString
+	return fsTypeString, nil
 }

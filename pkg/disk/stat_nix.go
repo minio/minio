@@ -23,13 +23,18 @@ import (
 )
 
 // Stat returns total and free bytes available in a directory, e.g. `/`.
-func Stat(path string) (total, free int64, err error) {
+func Stat(path string) (statfs StatFS, err error) {
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(path, &s)
 	if err != nil {
-		return
+		return StatFS{}, err
 	}
-	total = int64(s.Bsize) * int64(s.Blocks)
-	free = int64(s.Bsize) * int64(s.Bfree)
-	return
+	statfs = StatFS{}
+	statfs.Total = int64(s.Bsize) * int64(s.Blocks)
+	statfs.Free = int64(s.Bsize) * int64(s.Bfree)
+	statfs.FSType, err = getFSType(path)
+	if err != nil {
+		return StatFS{}, err
+	}
+	return statfs, nil
 }

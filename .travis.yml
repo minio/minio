@@ -1,13 +1,4 @@
 language: go
-before_install:
-- git clone https://github.com/yasm/yasm
-- cd yasm
-- git checkout v1.2.0
-- "./autogen.sh"
-- "./configure"
-- make
-- export PATH=$PATH:`pwd`
-- cd ..
 script:
 - make test
 - make test GOFLAGS="-race"

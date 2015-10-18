@@ -28,22 +28,17 @@ var fsType2StringMap = map[string]string{
 	"11": "HFS",
 }
 
-// FSType returns the filesystem type of the underlying mounted filesystem
-func FSType(path string) (string, error) {
+// getFSType returns the filesystem type of the underlying mounted filesystem
+func getFSType(path string) (string, error) {
 	s := syscall.Statfs_t{}
 	err := syscall.Statfs(path, &s)
 	if err != nil {
 		return "", err
 	}
-	return getFSType(s.Type), nil
-}
-
-// getFSType - get filesystem type
-func getFSType(fsType uint32) string {
-	fsTypeHex := strconv.FormatUint(uint64(fsType), 16)
+	fsTypeHex := strconv.FormatUint(uint64(s.Type), 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if ok == false {
-		return "UNKNOWN"
+		return "UNKNOWN", nil
 	}
-	return fsTypeString
+	return fsTypeString, nil
 }
