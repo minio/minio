@@ -22,6 +22,7 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
@@ -34,8 +35,9 @@ type serverConfig struct {
 	Anonymous bool   // No signature turn off
 
 	/// FS options
-	Path        string // Path to export for cloud storage
-	MinFreeDisk int64  // Minimum free disk space for filesystem
+	Path        string        // Path to export for cloud storage
+	MinFreeDisk int64         // Minimum free disk space for filesystem
+	Expiry      time.Duration // Set auto expiry for filesystem
 
 	// TLS service
 	TLS      bool   // TLS on when certs are specified

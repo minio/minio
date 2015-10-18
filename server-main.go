@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
@@ -55,6 +56,10 @@ EXAMPLES:
 
   4. Start minio server with minimum free disk threshold to 5%
       $ minio {{.Name}} min-free-disk 5% /home/shared/Pictures
+
+  5. Start minio server with minimum free disk threshold to 15% with auto expiration set to 1h
+      $ minio {{.Name}} min-free-disk 15% expiry 1h /home/shared/Documents
+
 `,
 }
 
@@ -219,7 +224,7 @@ func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
-	if len(c.Args()) > 3 {
+	if len(c.Args()) > 5 {
 		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘mc server help’", nil)
 	}
 	path := strings.TrimSpace(c.Args().Last())
@@ -231,29 +236,53 @@ func checkServerSyntax(c *cli.Context) {
 func serverMain(c *cli.Context) {
 	checkServerSyntax(c)
 
-	err := fetchAuth()
-	fatalIf(err.Trace(), "Failed to generate keys for minio.", nil)
+	perr := fetchAuth()
+	fatalIf(perr.Trace(), "Failed to generate keys for minio.", nil)
 
-	path := strings.TrimSpace(c.Args().Last())
-	// Last argument is always path
-	if _, err := os.Stat(path); err != nil {
-		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
-	}
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
+
 	var minFreeDisk int64
-	// Only if args are greater than or equal to 2 verify if the proper variables are passed.
-	if len(c.Args()) >= 2 {
-		if c.Args().Get(0) == "min-free-disk" {
-			minFreeDisk, err = parsePercentToInt(c.Args().Get(1), 64)
-			fatalIf(err.Trace(c.Args().Get(2)), "Unable to parse minimum free disk parameter.", nil)
+	minFreeDiskSet := false
+
+	var expiration time.Duration
+	expirationSet := false
+
+	args := c.Args()
+	for len(args) >= 2 {
+		switch args.First() {
+		case "min-free-disk":
+			if minFreeDiskSet {
+				fatalIf(probe.NewError(errInvalidArgument), "Minimum free disk should be set only once.", nil)
+			}
+			args = args.Tail()
+			var err *probe.Error
+			minFreeDisk, err = parsePercentToInt(args.First(), 64)
+			fatalIf(err.Trace(args.First()), "Invalid minium free disk size "+args.First()+" passed.", nil)
+			args = args.Tail()
+			minFreeDiskSet = true
+		case "expiry":
+			if expirationSet {
+				fatalIf(probe.NewError(errInvalidArgument), "Expiration should be set only once.", nil)
+			}
+			args = args.Tail()
+			var err error
+			expiration, err = time.ParseDuration(args.First())
+			fatalIf(probe.NewError(err), "Invalid expiration time "+args.First()+" passed.", nil)
+			args = args.Tail()
+			expirationSet = true
+		default:
+			cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
 		}
-		if c.Args().Get(0) != "min-free-disk" {
-			fatalIf(probe.NewError(errInvalidArgument), "Invalid arguments passed. ‘"+strings.Join(c.Args(), " ")+"’", nil)
-		}
+	}
+
+	path := strings.TrimSpace(c.Args().Last())
+	// Last argument is always path
+	if _, err := os.Stat(path); err != nil {
+		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
 	}
 	tls := (certFile != "" && keyFile != "")
 	apiServerConfig := serverConfig{
@@ -261,11 +290,12 @@ func serverMain(c *cli.Context) {
 		Anonymous:   c.GlobalBool("anonymous"),
 		Path:        path,
 		MinFreeDisk: minFreeDisk,
+		Expiry:      expiration,
 		TLS:         tls,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
 		RateLimit:   c.GlobalInt("ratelimit"),
 	}
-	err = startServer(apiServerConfig)
-	errorIf(err.Trace(), "Failed to start the minio server.", nil)
+	perr = startServer(apiServerConfig)
+	errorIf(perr.Trace(), "Failed to start the minio server.", nil)
 }
