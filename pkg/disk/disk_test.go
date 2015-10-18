@@ -34,8 +34,11 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestFree(c *C) {
 	path, err := ioutil.TempDir(os.TempDir(), "minio-")
-	c.Check(err, IsNil)
+	c.Assert(err, IsNil)
 
-	_, _, err = disk.Stat(path)
-	c.Check(err, IsNil)
+	statfs, err := disk.Stat(path)
+	c.Assert(err, IsNil)
+	c.Assert(statfs.Total, Not(Equals), 0)
+	c.Assert(statfs.Free, Not(Equals), 0)
+	c.Assert(statfs.FSType, Not(Equals), "UNKNOWN")
 }
