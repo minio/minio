@@ -32,12 +32,13 @@ import (
 	"github.com/minio/minio-xl/pkg/atomic"
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/disk"
 )
 
 /// Object Operations
 
 // GetObject - GET object
-func (fs API) GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error) {
+func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -91,7 +92,7 @@ func (fs API) GetObject(w io.Writer, bucket, object string, start, length int64)
 }
 
 // GetObjectMetadata - HEAD object
-func (fs API) GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -161,16 +162,25 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
 }
 
 // CreateObject - PUT object
-func (fs API) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
+
+	stfs, err := disk.Stat(fs.path)
+	if err != nil {
+		return ObjectMetadata{}, probe.NewError(err)
+	}
+
+	if int64((float64(stfs.Free)/float64(stfs.Total))*100) <= fs.minFreeDisk {
+		return ObjectMetadata{}, probe.NewError(RootPathFull{Path: fs.path})
+	}
 
 	// check bucket name valid
 	if !IsValidBucket(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	// check bucket exists
-	if _, err := os.Stat(filepath.Join(fs.path, bucket)); os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(fs.path, bucket)); os.IsNotExist(err) {
 		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	// verify object path legal
@@ -181,7 +191,8 @@ func (fs API) CreateObject(bucket, object, expectedMD5Sum string, size int64, da
 	// get object path
 	objectPath := filepath.Join(fs.path, bucket, object)
 	if strings.TrimSpace(expectedMD5Sum) != "" {
-		expectedMD5SumBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+		var expectedMD5SumBytes []byte
+		expectedMD5SumBytes, err = base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if err != nil {
 			// pro-actively close the connection
 			return ObjectMetadata{}, probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
@@ -252,7 +263,7 @@ func (fs API) CreateObject(bucket, object, expectedMD5Sum string, size int64, da
 }
 
 // DeleteObject - delete and object
-func (fs API) DeleteObject(bucket, object string) *probe.Error {
+func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 

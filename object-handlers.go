@@ -33,7 +33,7 @@ const (
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -81,7 +81,7 @@ func (api API) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -119,7 +119,7 @@ func (api API) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -179,6 +179,8 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
+		case fs.RootPathFull:
+			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
 		case fs.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case fs.BucketNameInvalid:
@@ -204,10 +206,10 @@ func (api API) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
 	writeSuccessResponse(w)
 }
 
-/// Multipart API
+/// Multipart CloudStorageAPI
 
 // NewMultipartUploadHandler - New multipart upload
-func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(req)
 	bucket = vars["bucket"]
@@ -225,6 +227,8 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
+		case fs.RootPathFull:
+			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
 		case fs.BucketNameInvalid:
 			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case fs.BucketNotFound:
@@ -248,7 +252,7 @@ func (api API) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Reques
 }
 
 // PutObjectPartHandler - Upload part
-func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -321,6 +325,8 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
+		case fs.RootPathFull:
+			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
 		case fs.InvalidUploadID:
 			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		case fs.BadDigest:
@@ -343,7 +349,7 @@ func (api API) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -356,7 +362,6 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
-
 	err := api.Filesystem.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
@@ -380,7 +385,7 @@ func (api API) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Requ
 }
 
 // ListObjectPartsHandler - List object parts
-func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -433,7 +438,7 @@ func (api API) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) 
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -497,10 +502,10 @@ func (api API) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.R
 	w.Write(encodedSuccessResponse)
 }
 
-/// Delete API
+/// Delete CloudStorageAPI
 
 // DeleteObjectHandler - Delete object
-func (api API) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]

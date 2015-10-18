@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -50,16 +51,19 @@ EXAMPLES:
       $ minio {{.Name}} C:\MyShare
 
   3. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
-      $ minio --address 192.168.1.101:9000 /home/shared
+      $ minio --address 192.168.1.101:9000 {{.Name}} /home/shared
+
+  4. Start minio server with minimum free disk threshold to 5%
+      $ minio --min-free-disk 5% {{.Name}} /home/shared/Pictures
 `,
 }
 
 // configureAPIServer configure a new server instance
-func configureAPIServer(conf fsConfig, apiHandler http.Handler) (*http.Server, *probe.Error) {
+func configureAPIServer(conf serverConfig) (*http.Server, *probe.Error) {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           conf.Address,
-		Handler:        apiHandler,
+		Handler:        getCloudStorageAPIHandler(getNewCloudStorageAPI(conf)),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -109,34 +113,59 @@ func configureAPIServer(conf fsConfig, apiHandler http.Handler) (*http.Server, *
 }
 
 // startServer starts an s3 compatible cloud storage server
-func startServer(conf fsConfig) *probe.Error {
-	minioAPI := getNewAPI(conf.Path, conf.Anonymous)
-	apiHandler := getAPIHandler(conf.Anonymous, minioAPI)
-	apiServer, err := configureAPIServer(conf, apiHandler)
+func startServer(conf serverConfig) *probe.Error {
+	apiServer, err := configureAPIServer(conf)
 	if err != nil {
 		return err.Trace()
 	}
-	if err := minhttp.ListenAndServe(apiServer); err != nil {
+	rateLimit := conf.RateLimit
+	if err := minhttp.ListenAndServeLimited(rateLimit, apiServer); err != nil {
 		return err.Trace()
 	}
 	return nil
 }
 
-func getServerConfig(c *cli.Context) fsConfig {
+// parse input string with percent to int64
+func parsePercentToInt(s string, bitSize int) (int64, *probe.Error) {
+	i := strings.Index(s, "%")
+	if i < 0 {
+		// no percentage string found try to parse the whole string anyways
+		p, err := strconv.ParseInt(s, 10, bitSize)
+		if err != nil {
+			return 0, probe.NewError(err)
+		}
+		return p, nil
+	}
+	p, err := strconv.ParseInt(s[:i], 10, bitSize)
+	if err != nil {
+		return 0, probe.NewError(err)
+	}
+	return p, nil
+}
+
+func getServerConfig(c *cli.Context) serverConfig {
+	path := strings.TrimSpace(c.Args().First())
+	if path == "" {
+		fatalIf(probe.NewError(errInvalidArgument), "Path argument cannot be empty.", nil)
+	}
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
-		Fatalln("Both certificate and key are required to enable https.")
+		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
+	minFreeDisk, err := parsePercentToInt(c.GlobalString("min-free-disk"), 64)
+	fatalIf(err.Trace(c.GlobalString("min-free-disk")), "Unable to parse minimum free disk parameter.", nil)
+
 	tls := (certFile != "" && keyFile != "")
-	return fsConfig{
-		Address:   c.GlobalString("address"),
-		Path:      strings.TrimSpace(c.Args().First()),
-		Anonymous: c.GlobalBool("anonymous"),
-		TLS:       tls,
-		CertFile:  certFile,
-		KeyFile:   keyFile,
-		RateLimit: c.GlobalInt("ratelimit"),
+	return serverConfig{
+		Address:     c.GlobalString("address"),
+		Anonymous:   c.GlobalBool("anonymous"),
+		Path:        path,
+		MinFreeDisk: minFreeDisk,
+		TLS:         tls,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		RateLimit:   c.GlobalInt("ratelimit"),
 	}
 }
 

@@ -82,8 +82,13 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	perr = saveAuthConfig(authConf)
 	c.Assert(perr, IsNil)
 
-	minioAPI := getNewAPI(fsroot, false)
-	httpHandler := getAPIHandler(false, minioAPI)
+	server := serverConfig{
+		Path:        fsroot,
+		MinFreeDisk: 0,
+		Anonymous:   false,
+	}
+	cloudStorageAPI := getNewCloudStorageAPI(server)
+	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 

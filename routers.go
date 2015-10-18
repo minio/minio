@@ -23,8 +23,8 @@ import (
 	"github.com/minio/minio/pkg/fs"
 )
 
-// registerAPI - register all the object API handlers to their respective paths
-func registerAPI(mux *router.Router, a API) {
+// registerCloudStorageAPI - register all the handlers to their respective paths
+func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
 	mux.HandleFunc("/{bucket}", a.GetBucketACLHandler).Queries("acl", "").Methods("GET")
 	mux.HandleFunc("/{bucket}", a.ListMultipartUploadsHandler).Queries("uploads", "").Methods("GET")
@@ -46,35 +46,35 @@ func registerAPI(mux *router.Router, a API) {
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 }
 
-// API container for API and also carries OP (operation) channel
-type API struct {
-	Filesystem fs.CloudStorage
+// CloudStorageAPI container for API and also carries OP (operation) channel
+type CloudStorageAPI struct {
+	Filesystem fs.Filesystem
 	Anonymous  bool // do not checking for incoming signatures, allow all requests
 }
 
-// getNewAPI instantiate a new minio API
-func getNewAPI(path string, anonymous bool) API {
-	// ignore errors for now
-	fs, err := fs.New(path)
+// getNewCloudStorageAPI instantiate a new CloudStorageAPI
+func getNewCloudStorageAPI(conf serverConfig) CloudStorageAPI {
+	fs, err := fs.New()
 	fatalIf(err.Trace(), "Instantiating filesystem failed.", nil)
 
-	return API{
+	fs.SetRootPath(conf.Path)
+	fs.SetMinFreeDisk(conf.MinFreeDisk)
+	return CloudStorageAPI{
 		Filesystem: fs,
-		Anonymous:  anonymous,
+		Anonymous:  conf.Anonymous,
 	}
 }
 
-func getAPIHandler(anonymous bool, api API) http.Handler {
+func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
 		CorsHandler,
 	}
-	if !anonymous {
+	if !api.Anonymous {
 		mwHandlers = append(mwHandlers, SignatureHandler)
 	}
 	mux := router.NewRouter()
-	registerAPI(mux, api)
-	apiHandler := registerCustomMiddleware(mux, mwHandlers...)
-	return apiHandler
+	registerCloudStorageAPI(mux, api)
+	return registerCustomMiddleware(mux, mwHandlers...)
 }

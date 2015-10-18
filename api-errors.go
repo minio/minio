@@ -71,11 +71,7 @@ const (
 	AuthorizationHeaderMalformed
 	MalformedPOSTRequest
 	BucketNotEmpty
-)
-
-// Error codes, non exhaustive list - standard HTTP errors
-const (
-	NotAcceptable = iota + 31
+	RootPathFull
 )
 
 // APIError code to Error structure map
@@ -205,11 +201,6 @@ var errorCodeResponse = map[int]APIError{
 		Description:    "The specified method is not allowed against this resource.",
 		HTTPStatusCode: http.StatusMethodNotAllowed,
 	},
-	NotAcceptable: {
-		Code:           "NotAcceptable",
-		Description:    "The requested resource is only capable of generating content not acceptable according to the Accept headers sent in the request.",
-		HTTPStatusCode: http.StatusNotAcceptable,
-	},
 	InvalidPart: {
 		Code:           "InvalidPart",
 		Description:    "One or more of the specified parts could not be found.",
@@ -234,6 +225,11 @@ var errorCodeResponse = map[int]APIError{
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	RootPathFull: {
+		Code:           "RootPathFull",
+		Description:    "Root path has reached its minimum free disk threshold. Please clear few objects to proceed.",
+		HTTPStatusCode: http.StatusInternalServerError,
 	},
 }
 

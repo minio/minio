@@ -32,7 +32,7 @@ import (
 )
 
 // APITestSuite - collection of API tests
-func APITestSuite(c *check.C, create func() CloudStorage) {
+func APITestSuite(c *check.C, create func() Filesystem) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -51,13 +51,13 @@ func APITestSuite(c *check.C, create func() CloudStorage) {
 	testMultipartObjectAbort(c, create)
 }
 
-func testMakeBucket(c *check.C, create func() CloudStorage) {
+func testMakeBucket(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipartObjectCreation(c *check.C, create func() CloudStorage) {
+func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -95,7 +95,7 @@ func testMultipartObjectCreation(c *check.C, create func() CloudStorage) {
 	c.Assert(objectMetadata.Md5, check.Equals, finalExpectedmd5SumHex)
 }
 
-func testMultipartObjectAbort(c *check.C, create func() CloudStorage) {
+func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -126,7 +126,7 @@ func testMultipartObjectAbort(c *check.C, create func() CloudStorage) {
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipleObjectCreation(c *check.C, create func() CloudStorage) {
+func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 	objects := make(map[string][]byte)
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
@@ -162,7 +162,7 @@ func testMultipleObjectCreation(c *check.C, create func() CloudStorage) {
 	}
 }
 
-func testPaging(c *check.C, create func() CloudStorage) {
+func testPaging(c *check.C, create func() Filesystem) {
 	fs := create()
 	fs.MakeBucket("bucket", "")
 	resources := BucketResourcesMetadata{}
@@ -295,7 +295,7 @@ func testPaging(c *check.C, create func() CloudStorage) {
 	}
 }
 
-func testObjectOverwriteWorks(c *check.C, create func() CloudStorage) {
+func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -321,13 +321,13 @@ func testObjectOverwriteWorks(c *check.C, create func() CloudStorage) {
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "three")
 }
 
-func testNonExistantBucketOperations(c *check.C, create func() CloudStorage) {
+func testNonExistantBucketOperations(c *check.C, create func() Filesystem) {
 	fs := create()
 	_, err := fs.CreateObject("bucket", "object", "", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketMetadata(c *check.C, create func() CloudStorage) {
+func testBucketMetadata(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("string", "")
 	c.Assert(err, check.IsNil)
@@ -337,7 +337,7 @@ func testBucketMetadata(c *check.C, create func() CloudStorage) {
 	c.Assert(metadata.ACL, check.Equals, BucketACL("private"))
 }
 
-func testBucketRecreateFails(c *check.C, create func() CloudStorage) {
+func testBucketRecreateFails(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("string", "")
 	c.Assert(err, check.IsNil)
@@ -345,7 +345,7 @@ func testBucketRecreateFails(c *check.C, create func() CloudStorage) {
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testPutObjectInSubdir(c *check.C, create func() CloudStorage) {
+func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -365,7 +365,7 @@ func testPutObjectInSubdir(c *check.C, create func() CloudStorage) {
 	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, length)
 }
 
-func testListBuckets(c *check.C, create func() CloudStorage) {
+func testListBuckets(c *check.C, create func() Filesystem) {
 	fs := create()
 
 	// test empty list
@@ -397,7 +397,7 @@ func testListBuckets(c *check.C, create func() CloudStorage) {
 	c.Assert(err, check.IsNil)
 }
 
-func testListBucketsOrder(c *check.C, create func() CloudStorage) {
+func testListBucketsOrder(c *check.C, create func() Filesystem) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
@@ -415,7 +415,7 @@ func testListBucketsOrder(c *check.C, create func() CloudStorage) {
 	}
 }
 
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() CloudStorage) {
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesystem) {
 	fs := create()
 	resources := BucketResourcesMetadata{Prefix: "", Maxkeys: 1000}
 	objects, resources, err := fs.ListObjects("bucket", resources)
@@ -424,7 +424,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() CloudSto
 	c.Assert(len(objects), check.Equals, 0)
 }
 
-func testNonExistantObjectInBucket(c *check.C, create func() CloudStorage) {
+func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -442,7 +442,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() CloudStorage) {
 	}
 }
 
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() CloudStorage) {
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -477,7 +477,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() CloudStorag
 	c.Assert(len(byteBuffer2.Bytes()), check.Equals, 0)
 }
 
-func testDefaultContentType(c *check.C, create func() CloudStorage) {
+func testDefaultContentType(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
@@ -489,7 +489,7 @@ func testDefaultContentType(c *check.C, create func() CloudStorage) {
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 }
 
-func testContentMd5Set(c *check.C, create func() CloudStorage) {
+func testContentMd5Set(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)
