@@ -35,7 +35,7 @@ import (
 // completed or aborted. This operation returns at most 1,000 multipart
 // uploads in the response.
 //
-func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -83,7 +83,7 @@ func (api API) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Requ
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
-func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -134,7 +134,7 @@ func (api API) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
-func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 	if !api.Anonymous {
 		if isRequestRequiresACLCheck(req) {
 			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
@@ -159,7 +159,7 @@ func (api API) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
 // PutBucketHandler - PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
-func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -239,7 +239,7 @@ func (api API) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 // ----------
 // This implementation of the POST operation handles object creation with a specified
 // signature policy in multipart/form-data
-func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// if body of request is non-nil then check for validity of Content-Length
 	if req.Body != nil {
 		/// if Content-Length missing, deny the request
@@ -294,6 +294,8 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 	if perr != nil {
 		errorIf(perr.Trace(), "CreateObject failed.", nil)
 		switch perr.ToGoError().(type) {
+		case fs.RootPathFull:
+			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
 		case fs.BucketNotFound:
 			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
 		case fs.BucketNameInvalid:
@@ -320,7 +322,7 @@ func (api API) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request)
 // PutBucketACLHandler - PUT Bucket ACL
 // ----------
 // This implementation of the PUT operation modifies the bucketACL for authenticated request
-func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -359,7 +361,7 @@ func (api API) PutBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 // of a bucket. One must have permission to access the bucket to
 // know its ``acl``. This operation willl return response of 404
 // if bucket not found and 403 for invalid credentials.
-func (api API) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -398,7 +400,7 @@ func (api API) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 // The operation returns a 200 OK if the bucket exists and you
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
-func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
@@ -428,7 +430,7 @@ func (api API) HeadBucketHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 // DeleteBucketHandler - Delete bucket
-func (api API) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 

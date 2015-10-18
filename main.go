@@ -27,15 +27,23 @@ import (
 	"github.com/minio/cli"
 )
 
-// fsConfig - fs http server config
-type fsConfig struct {
-	Address   string
-	Path      string
-	Anonymous bool
-	TLS       bool
-	CertFile  string
-	KeyFile   string
-	RateLimit int
+// serverConfig - http server config
+type serverConfig struct {
+	/// HTTP server options
+	Address   string // Address:Port listening
+	Anonymous bool   // No signature turn off
+
+	/// FS options
+	Path        string // Path to export for cloud storage
+	MinFreeDisk int64  // Minimum free disk space for filesystem
+
+	// TLS service
+	TLS      bool   // TLS on when certs are specified
+	CertFile string // Domain certificate
+	KeyFile  string // Domain key
+
+	/// Advanced HTTP server options
+	RateLimit int // Ratelimited server of incoming connections
 }
 
 func init() {
@@ -95,6 +103,7 @@ func registerApp() *cli.App {
 
 	// register all flags
 	registerFlag(addressFlag)
+	registerFlag(minFreeDiskFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(anonymousFlag)
 	registerFlag(certFlag)

@@ -28,11 +28,17 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
+	minFreeDiskFlag = cli.StringFlag{
+		Name:  "min-free-disk",
+		Value: "10%",
+		Usage: "Minimum free disk space required for cloud storage.",
+	}
+
 	ratelimitFlag = cli.IntFlag{
 		Name:  "ratelimit",
 		Hide:  true,
-		Value: 16,
-		Usage: "Limit for total concurrent requests: [DEFAULT: 16].",
+		Value: 0,
+		Usage: "Limit for total concurrent requests: [DEFAULT: 0].",
 	}
 
 	anonymousFlag = cli.BoolFlag{

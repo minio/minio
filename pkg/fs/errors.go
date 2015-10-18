@@ -65,6 +65,15 @@ func (e UnsupportedFilesystem) Error() string {
 	return "Unsupported filesystem: " + e.Type
 }
 
+// RootPathFull root path out of space
+type RootPathFull struct {
+	Path string
+}
+
+func (e RootPathFull) Error() string {
+	return "Root path " + e.Path + " reached its minimum free disk threshold."
+}
+
 // BucketNotFound bucket does not exist
 type BucketNotFound struct {
 	Bucket string

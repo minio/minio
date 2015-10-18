@@ -33,14 +33,16 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
-	create := func() CloudStorage {
+	create := func() Filesystem {
 		configPath, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
 		SetFSMultipartsConfigPath(filepath.Join(configPath, "multiparts.json"))
 		storageList = append(storageList, path)
-		store, perr := New(path)
+		store, perr := New()
+		store.SetRootPath(path)
+		store.SetMinFreeDisk(0)
 		c.Check(perr, IsNil)
 		return store
 	}

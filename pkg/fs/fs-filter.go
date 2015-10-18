@@ -22,7 +22,7 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
-func (fs API) filterObjects(bucket string, content contentInfo, resources BucketResourcesMetadata) (ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
+func (fs Filesystem) filterObjects(bucket string, content contentInfo, resources BucketResourcesMetadata) (ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
 	var err *probe.Error
 	var metadata ObjectMetadata
 
