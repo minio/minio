@@ -54,7 +54,7 @@ EXAMPLES:
       $ minio --address 192.168.1.101:9000 {{.Name}} /home/shared
 
   4. Start minio server with minimum free disk threshold to 5%
-      $ minio --min-free-disk 5% {{.Name}} /home/shared/Pictures
+      $ minio {{.Name}} min-free-disk 5% /home/shared/Pictures
 `,
 }
 
@@ -143,32 +143,6 @@ func parsePercentToInt(s string, bitSize int) (int64, *probe.Error) {
 	return p, nil
 }
 
-func getServerConfig(c *cli.Context) serverConfig {
-	path := strings.TrimSpace(c.Args().First())
-	if path == "" {
-		fatalIf(probe.NewError(errInvalidArgument), "Path argument cannot be empty.", nil)
-	}
-	certFile := c.GlobalString("cert")
-	keyFile := c.GlobalString("key")
-	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
-		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
-	}
-	minFreeDisk, err := parsePercentToInt(c.GlobalString("min-free-disk"), 64)
-	fatalIf(err.Trace(c.GlobalString("min-free-disk")), "Unable to parse minimum free disk parameter.", nil)
-
-	tls := (certFile != "" && keyFile != "")
-	return serverConfig{
-		Address:     c.GlobalString("address"),
-		Anonymous:   c.GlobalBool("anonymous"),
-		Path:        path,
-		MinFreeDisk: minFreeDisk,
-		TLS:         tls,
-		CertFile:    certFile,
-		KeyFile:     keyFile,
-		RateLimit:   c.GlobalInt("ratelimit"),
-	}
-}
-
 func getAuth() (*AuthConfig, *probe.Error) {
 	if err := createAuthConfigPath(); err != nil {
 		return nil, err.Trace()
@@ -241,18 +215,57 @@ func fetchAuth() *probe.Error {
 	return nil
 }
 
-func serverMain(c *cli.Context) {
+func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
+	if len(c.Args()) > 3 {
+		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘mc server help’", nil)
+	}
+	path := strings.TrimSpace(c.Args().Last())
+	if path == "" {
+		fatalIf(probe.NewError(errInvalidArgument), "Path argument cannot be empty.", nil)
+	}
+}
+
+func serverMain(c *cli.Context) {
+	checkServerSyntax(c)
 
 	err := fetchAuth()
 	fatalIf(err.Trace(), "Failed to generate keys for minio.", nil)
 
-	if _, err := os.Stat(c.Args().First()); err != nil {
+	path := strings.TrimSpace(c.Args().Last())
+	// Last argument is always path
+	if _, err := os.Stat(path); err != nil {
 		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
 	}
-	apiServerConfig := getServerConfig(c)
+	certFile := c.GlobalString("cert")
+	keyFile := c.GlobalString("key")
+	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
+		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
+	}
+	var minFreeDisk int64
+	// Only if args are greater than or equal to 2 verify if the proper variables are passed.
+	if len(c.Args()) >= 2 {
+		if c.Args().Get(0) == "min-free-disk" {
+			minFreeDisk, err = parsePercentToInt(c.Args().Get(1), 64)
+			fatalIf(err.Trace(c.Args().Get(2)), "Unable to parse minimum free disk parameter.", nil)
+		}
+		if c.Args().Get(0) != "min-free-disk" {
+			fatalIf(probe.NewError(errInvalidArgument), "Invalid arguments passed. ‘"+strings.Join(c.Args(), " ")+"’", nil)
+		}
+	}
+	tls := (certFile != "" && keyFile != "")
+	apiServerConfig := serverConfig{
+		Address:     c.GlobalString("address"),
+		Anonymous:   c.GlobalBool("anonymous"),
+		Path:        path,
+		MinFreeDisk: minFreeDisk,
+		TLS:         tls,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		RateLimit:   c.GlobalInt("ratelimit"),
+	}
 	err = startServer(apiServerConfig)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }
