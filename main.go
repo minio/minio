@@ -32,6 +32,7 @@ import (
 type serverConfig struct {
 	/// HTTP server options
 	Address   string // Address:Port listening
+	AccessLog bool   // Enable access log handler
 	Anonymous bool   // No signature turn off
 
 	/// FS options
@@ -105,6 +106,7 @@ func registerApp() *cli.App {
 
 	// register all flags
 	registerFlag(addressFlag)
+	registerFlag(accessLogFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(anonymousFlag)
 	registerFlag(certFlag)

@@ -289,6 +289,7 @@ func serverMain(c *cli.Context) {
 	tls := (certFile != "" && keyFile != "")
 	apiServerConfig := serverConfig{
 		Address:     c.GlobalString("address"),
+		AccessLog:   c.GlobalBool("enable-accesslog"),
 		Anonymous:   c.GlobalBool("anonymous"),
 		Path:        path,
 		MinFreeDisk: minFreeDisk,

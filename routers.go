@@ -23,6 +23,13 @@ import (
 	"github.com/minio/minio/pkg/fs"
 )
 
+// CloudStorageAPI container for API and also carries OP (operation) channel
+type CloudStorageAPI struct {
+	Filesystem fs.Filesystem
+	Anonymous  bool // do not checking for incoming signatures, allow all requests
+	AccessLog  bool // if true log all incoming request
+}
+
 // registerCloudStorageAPI - register all the handlers to their respective paths
 func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	mux.HandleFunc("/", a.ListBucketsHandler).Methods("GET")
@@ -46,12 +53,6 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	mux.HandleFunc("/{bucket}/{object:.*}", a.DeleteObjectHandler).Methods("DELETE")
 }
 
-// CloudStorageAPI container for API and also carries OP (operation) channel
-type CloudStorageAPI struct {
-	Filesystem fs.Filesystem
-	Anonymous  bool // do not checking for incoming signatures, allow all requests
-}
-
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI
 func getNewCloudStorageAPI(conf serverConfig) CloudStorageAPI {
 	fs, err := fs.New()
@@ -65,6 +66,7 @@ func getNewCloudStorageAPI(conf serverConfig) CloudStorageAPI {
 	return CloudStorageAPI{
 		Filesystem: fs,
 		Anonymous:  conf.Anonymous,
+		AccessLog:  conf.AccessLog,
 	}
 }
 
@@ -76,6 +78,9 @@ func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 	}
 	if !api.Anonymous {
 		mwHandlers = append(mwHandlers, SignatureHandler)
+	}
+	if api.AccessLog {
+		mwHandlers = append(mwHandlers, AccessLogHandler)
 	}
 	mux := router.NewRouter()
 	registerCloudStorageAPI(mux, api)
