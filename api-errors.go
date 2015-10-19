@@ -228,7 +228,7 @@ var errorCodeResponse = map[int]APIError{
 	},
 	RootPathFull: {
 		Code:           "RootPathFull",
-		Description:    "Root path has reached its minimum free disk threshold. Please clear few objects to proceed.",
+		Description:    "Root path has reached its minimum free disk threshold. Please delete few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 }

@@ -247,6 +247,8 @@ func serverMain(c *cli.Context) {
 
 	var minFreeDisk int64
 	minFreeDiskSet := false
+	// Default
+	minFreeDisk = 10
 
 	var expiration time.Duration
 	expirationSet := false
