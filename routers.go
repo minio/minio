@@ -59,6 +59,9 @@ func getNewCloudStorageAPI(conf serverConfig) CloudStorageAPI {
 
 	fs.SetRootPath(conf.Path)
 	fs.SetMinFreeDisk(conf.MinFreeDisk)
+	if conf.Expiry > 0 {
+		go fs.AutoExpiryThread(conf.Expiry)
+	}
 	return CloudStorageAPI{
 		Filesystem: fs,
 		Anonymous:  conf.Anonymous,
