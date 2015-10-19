@@ -28,6 +28,12 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
+	accessLogFlag = cli.BoolFlag{
+		Name:  "enable-accesslog",
+		Hide:  true,
+		Usage: "Enable access logs for all incoming HTTP request.",
+	}
+
 	ratelimitFlag = cli.IntFlag{
 		Name:  "ratelimit",
 		Hide:  true,
