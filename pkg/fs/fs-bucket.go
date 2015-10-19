@@ -98,7 +98,9 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		return probe.NewError(err)
 	}
 
-	if int64((float64(stfs.Free)/float64(stfs.Total))*100) <= fs.minFreeDisk {
+	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
+	availableDiskSpace := (float64(stfs.Free) / (float64(stfs.Total) - (0.05 * float64(stfs.Total)))) * 100
+	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return probe.NewError(RootPathFull{Path: fs.path})
 	}
 
