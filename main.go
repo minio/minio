@@ -103,7 +103,6 @@ func registerApp() *cli.App {
 
 	// register all flags
 	registerFlag(addressFlag)
-	registerFlag(minFreeDiskFlag)
 	registerFlag(ratelimitFlag)
 	registerFlag(anonymousFlag)
 	registerFlag(certFlag)

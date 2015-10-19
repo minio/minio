@@ -111,7 +111,7 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	bucketDir := filepath.Join(fs.path, bucket)
 
 	// check if bucket exists
-	if _, err := os.Stat(bucketDir); err == nil {
+	if _, err = os.Stat(bucketDir); err == nil {
 		return probe.NewError(BucketExists{
 			Bucket: bucket,
 		})
