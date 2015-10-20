@@ -22,32 +22,10 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 )
-
-// serverConfig - http server config
-type serverConfig struct {
-	/// HTTP server options
-	Address   string // Address:Port listening
-	AccessLog bool   // Enable access log handler
-	Anonymous bool   // No signature turn off
-
-	/// FS options
-	Path        string        // Path to export for cloud storage
-	MinFreeDisk int64         // Minimum free disk space for filesystem
-	Expiry      time.Duration // Set auto expiry for filesystem
-
-	// TLS service
-	TLS      bool   // TLS on when certs are specified
-	CertFile string // Domain certificate
-	KeyFile  string // Domain key
-
-	/// Advanced HTTP server options
-	RateLimit int // Ratelimited server of incoming connections
-}
 
 func init() {
 	// Check for the environment early on and gracefuly report.
@@ -62,6 +40,11 @@ func init() {
 
 	// Check if minio was compiled using a supported version of Golang.
 	checkGolangRuntimeVersion()
+}
+
+func migrate() {
+	// Migrate config file
+	migrateConfig()
 }
 
 // Tries to get os/arch/platform specific information
@@ -101,6 +84,7 @@ func findClosestCommands(command string) []string {
 func registerApp() *cli.App {
 	// register all commands
 	registerCommand(serverCmd)
+	registerCommand(configCmd)
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)
 
@@ -166,6 +150,7 @@ func main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		globalJSONFlag = c.GlobalBool("json")
+		migrate()
 		return nil
 	}
 	app.ExtraInfo = func() map[string]string {
