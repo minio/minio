@@ -46,7 +46,7 @@ func getFSType(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fsTypeHex := strconv.FormatInt(s.Type, 16)
+	fsTypeHex := strconv.FormatInt(int64(s.Type), 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if ok == false {
 		return "UNKNOWN", nil

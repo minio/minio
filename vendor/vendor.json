@@ -39,38 +39,38 @@
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/atomic",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/cpu",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/crypto/sha256",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/crypto/sha512",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/minhttp",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/probe",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/quick",
-			"revision": "fc18620590fdb28b9e371a8cb036e9470c1cf39c",
-			"revisionTime": "2015-10-16T10:19:00-07:00"
+			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
+			"revisionTime": "2015-10-20T11:16:42-07:00"
 		},
 		{
 			"path": "github.com/rs/cors",
