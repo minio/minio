@@ -42,7 +42,7 @@ var serverCmd = cli.Command{
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} PATH
+  minio {{.Name}} [OPTIONS] PATH
 
 EXAMPLES:
   1. Start minio server on Linux.

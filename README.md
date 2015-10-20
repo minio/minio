@@ -28,22 +28,27 @@ $ go get github.com/minio/minio
 ### How to use Minio?
 
 ~~~
-$ minio server
 NAME:
   minio server - Start Minio cloud storage server.
 
 USAGE:
-  minio server PATH
+  minio server [OPTIONS] PATH
 
 EXAMPLES:
   1. Start minio server on Linux.
-      $ minio server /home/shared
+        $ minio server /home/shared
 
   2. Start minio server on Windows.
-      $ minio server C:\MyShare
+        $ minio server C:\MyShare
 
   3. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
-      $ minio --address 192.168.1.101:9000 /home/shared
+        $ minio --address 192.168.1.101:9000 server /home/shared
+
+  4. Start minio server with minimum free disk threshold to 5%
+        $ minio server min-free-disk 5% /home/shared/Pictures
+
+  5. Start minio server with minimum free disk threshold to 15% with auto expiration set to 1h
+        $ minio server min-free-disk 15% expiry 1h /home/shared/Documents
 ~~~
 
 ~~~
@@ -52,7 +57,7 @@ AccessKey: G5GJRH51R2HSUWYPGIX5  SecretKey: uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gF
 
 To configure Minio Client.
 
-	$ wget https://dl.minio.io:9000/updates/2015/Oct/darwin-amd64/mc
+	$ wget https://dl.minio.io:9000/updates/2015/Oct/linux-amd64/mc
 	$ chmod 755 mc
 	$ ./mc config host add localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
 	$ ./mc mb localhost/photobucket
