@@ -18,10 +18,10 @@ import (
 	"github.com/minio/minio-xl/pkg/cpu"
 )
 
-// The size of a SHA512 checksum in bytes.
+// Size - The size of a SHA512 checksum in bytes.
 const Size = 64
 
-// The blocksize of SHA512 in bytes.
+// BlockSize - The blocksize of SHA512 in bytes.
 const BlockSize = 128
 
 const (
