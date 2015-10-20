@@ -157,6 +157,9 @@ is_supported_arch() {
         "x86_64")
             supported=1
             ;;
+        "arm"*)
+            supported=1
+            ;;
         *)
             supported=0
             ;;
