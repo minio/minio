@@ -16,7 +16,12 @@
 
 package main
 
-import "github.com/minio/cli"
+import (
+	"fmt"
+
+	"github.com/minio/cli"
+	"github.com/minio/minio-xl/pkg/probe"
+)
 
 // Configure logger
 var configLoggerCmd = cli.Command{
@@ -32,47 +37,120 @@ USAGE:
 `,
 }
 
+// Inherit at one place
+type config struct {
+	*configV2
+}
+
+func (c *config) IsFileLoggingEnabled() bool {
+	if c.FileLogger.Filename != "" {
+		return true
+	}
+	return false
+}
+
+func (c *config) IsSysloggingEnabled() bool {
+	if c.SyslogLogger.Network != "" && c.SyslogLogger.Addr != "" {
+		return true
+	}
+	return false
+}
+
+func (c *config) IsMongoLoggingEnabled() bool {
+	if c.MongoLogger.Addr != "" && c.MongoLogger.DB != "" && c.MongoLogger.Collection != "" {
+		return true
+	}
+	return false
+}
+
+func (c *config) String() string {
+	str := fmt.Sprintf("Mongo -> Addr: %s, DB: %s, Collection: %s\n", c.MongoLogger.Addr, c.MongoLogger.DB, c.MongoLogger.Collection)
+	str = str + fmt.Sprintf("Syslog -> Addr: %s, Network: %s\n", c.SyslogLogger.Addr, c.SyslogLogger.Network)
+	str = str + fmt.Sprintf("File -> Filename: %s", c.FileLogger.Filename)
+	return str
+}
+
 func mainConfigLogger(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "logger", 1) // last argument is exit code
 	}
-	if ctx.Args().Get(0) == "mongo" {
-		enableLog2Mongo(ctx.Args().Tail())
-	}
-	if ctx.Args().Get(0) == "syslog" {
-		enableLog2Syslog(ctx.Args().Tail())
-	}
-	if ctx.Args().Get(0) == "file" {
-		enableLog2File(ctx.Args().Tail())
-	}
-}
-
-func enableLog2Mongo(args cli.Args) {
-	config, err := loadConfigV2()
+	conf, err := loadConfigV2()
 	fatalIf(err.Trace(), "Unable to load config", nil)
 
-	config.MongoLogger.Addr = args.Get(0)
-	config.MongoLogger.DB = args.Get(1)
-	config.MongoLogger.Collection = args.Get(2)
+	if ctx.Args().Get(0) == "add" {
+		args := ctx.Args().Tail()
+		if args.Get(0) == "mongo" {
+			enableLog2Mongo(&config{conf}, args.Tail())
+		}
+		if args.Get(0) == "syslog" {
+			enableLog2Syslog(&config{conf}, args.Tail())
+		}
+		if args.Get(0) == "file" {
+			enableLog2File(&config{conf}, args.Tail())
+		}
+	}
+	if ctx.Args().Get(0) == "remove" {
+		args := ctx.Args().Tail()
+		if args.Get(0) == "mongo" {
+			conf.MongoLogger.Addr = ""
+			conf.MongoLogger.DB = ""
+			conf.MongoLogger.Collection = ""
+			err := saveConfig(conf)
+			fatalIf(err.Trace(), "Unable to save config.", nil)
+		}
+		if args.Get(0) == "syslog" {
+			conf.SyslogLogger.Network = ""
+			conf.SyslogLogger.Addr = ""
+			err := saveConfig(conf)
+			fatalIf(err.Trace(), "Unable to save config.", nil)
+		}
+		if args.Get(0) == "file" {
+			conf.FileLogger.Filename = ""
+			err := saveConfig(conf)
+			fatalIf(err.Trace(), "Unable to save config.", nil)
+		}
+	}
+	if ctx.Args().Get(0) == "list" {
+		Println(&config{conf})
+	}
+}
 
-	err = saveConfig(config)
+func enableLog2Mongo(conf *config, args cli.Args) {
+	if conf.IsFileLoggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "File logging already enabled. Please remove before enabling mongo.", nil)
+	}
+	if conf.IsSysloggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "Syslog logging already enabled. Please remove before enabling mongo.", nil)
+	}
+	conf.MongoLogger.Addr = args.Get(0)
+	conf.MongoLogger.DB = args.Get(1)
+	conf.MongoLogger.Collection = args.Get(2)
+
+	err := saveConfig(conf.configV2)
 	fatalIf(err.Trace(), "Unable to save config.", nil)
 }
 
-func enableLog2Syslog(args cli.Args) {
-	config, err := loadConfigV2()
-	fatalIf(err.Trace(), "Unable to load config.", nil)
-
-	config.SyslogLogger.Addr = args.Get(0)
-	config.SyslogLogger.Network = args.Get(1)
-	err = saveConfig(config)
+func enableLog2Syslog(conf *config, args cli.Args) {
+	if conf.IsFileLoggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "File logging already enabled. Please remove before enabling syslog.", nil)
+	}
+	if conf.IsMongoLoggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "Mongo logging already enabled. Please remove before enabling syslog.", nil)
+	}
+	conf.SyslogLogger.Addr = args.Get(0)
+	conf.SyslogLogger.Network = args.Get(1)
+	err := saveConfig(conf.configV2)
 	fatalIf(err.Trace(), "Unable to save config.", nil)
 }
 
-func enableLog2File(args cli.Args) {
-	config, err := loadConfigV2()
-	fatalIf(err.Trace(), "Unable to load config.", nil)
-	config.FileLogger.Filename = args.Get(0)
-	err = saveConfig(config)
+func enableLog2File(conf *config, args cli.Args) {
+	if conf.IsSysloggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "Syslog logging already enabled. Please remove before enabling file.", nil)
+	}
+	if conf.IsMongoLoggingEnabled() {
+		fatalIf(probe.NewError(errInvalidArgument), "Mongo logging already enabled. Please remove before enabling file.", nil)
+	}
+	conf.FileLogger.Filename = args.Get(0)
+	err := saveConfig(conf.configV2)
 	fatalIf(err.Trace(), "Unable to save config.", nil)
 }
