@@ -28,6 +28,12 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
+	loggerFlag = cli.StringFlag{
+		Name:  "logger",
+		Value: "none",
+		Usage: "Choose type of logging. Available options are [‘file’, ‘mongo’, ‘syslog’]",
+	}
+
 	accessLogFlag = cli.BoolFlag{
 		Name:  "enable-accesslog",
 		Hide:  true,

@@ -70,24 +70,24 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	secretAccessKey, perr := generateSecretAccessKey()
 	c.Assert(perr, IsNil)
 
-	authConf := &AuthConfig{}
-	authConf.AccessKeyID = string(accessKeyID)
-	authConf.SecretAccessKey = string(secretAccessKey)
+	conf := newConfigV2()
+	conf.Credentials.AccessKeyID = string(accessKeyID)
+	conf.Credentials.SecretAccessKey = string(secretAccessKey)
 	s.accessKeyID = string(accessKeyID)
 	s.secretAccessKey = string(secretAccessKey)
 
 	// do this only once here
 	customConfigPath = root
 
-	perr = saveAuthConfig(authConf)
+	perr = saveConfig(conf)
 	c.Assert(perr, IsNil)
 
-	server := serverConfig{
+	cloudServer := cloudServerConfig{
 		Path:        fsroot,
 		MinFreeDisk: 0,
 		Anonymous:   false,
 	}
-	cloudStorageAPI := getNewCloudStorageAPI(server)
+	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
 	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }

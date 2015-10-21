@@ -54,7 +54,7 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 }
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI
-func getNewCloudStorageAPI(conf serverConfig) CloudStorageAPI {
+func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fs, err := fs.New()
 	fatalIf(err.Trace(), "Instantiating filesystem failed.", nil)
 

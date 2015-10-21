@@ -105,17 +105,17 @@ func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
-	authConfig, err := loadAuthConfig()
+	config, err := loadConfigV2()
 	if err != nil {
 		return nil, err.Trace()
 	}
 	authFields := strings.Split(strings.TrimSpace(authHeaderValue), ",")
 	signedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
 	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
-	if authConfig.AccessKeyID == accessKeyID {
+	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
-			AccessKeyID:     authConfig.AccessKeyID,
-			SecretAccessKey: authConfig.SecretAccessKey,
+			AccessKeyID:     config.Credentials.AccessKeyID,
+			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Signature:       signature,
 			SignedHeaders:   signedHeaders,
 			Request:         req,
@@ -210,14 +210,14 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *pr
 	if !isValidAccessKey(accessKeyID) {
 		return nil, probe.NewError(errAccessKeyIDInvalid)
 	}
-	authConfig, perr := loadAuthConfig()
+	config, perr := loadConfigV2()
 	if perr != nil {
 		return nil, perr.Trace()
 	}
-	if authConfig.AccessKeyID == accessKeyID {
+	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
-			AccessKeyID:     authConfig.AccessKeyID,
-			SecretAccessKey: authConfig.SecretAccessKey,
+			AccessKeyID:     config.Credentials.AccessKeyID,
+			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Signature:       formValues["X-Amz-Signature"],
 			PresignedPolicy: formValues["Policy"],
 		}
@@ -236,16 +236,16 @@ func initPresignedSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	if !isValidAccessKey(accessKeyID) {
 		return nil, probe.NewError(errAccessKeyIDInvalid)
 	}
-	authConfig, err := loadAuthConfig()
+	config, err := loadConfigV2()
 	if err != nil {
 		return nil, err.Trace()
 	}
 	signedHeaders := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-SignedHeaders")), ";")
 	signature := strings.TrimSpace(req.URL.Query().Get("X-Amz-Signature"))
-	if authConfig.AccessKeyID == accessKeyID {
+	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
-			AccessKeyID:     authConfig.AccessKeyID,
-			SecretAccessKey: authConfig.SecretAccessKey,
+			AccessKeyID:     config.Credentials.AccessKeyID,
+			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Signature:       signature,
 			SignedHeaders:   signedHeaders,
 			Presigned:       true,

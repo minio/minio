@@ -63,8 +63,29 @@ EXAMPLES:
 `,
 }
 
+// cloudServerConfig - http server config
+type cloudServerConfig struct {
+	/// HTTP server options
+	Address   string // Address:Port listening
+	AccessLog bool   // Enable access log handler
+	Anonymous bool   // No signature turn off
+
+	/// FS options
+	Path        string        // Path to export for cloud storage
+	MinFreeDisk int64         // Minimum free disk space for filesystem
+	Expiry      time.Duration // Set auto expiry for filesystem
+
+	// TLS service
+	TLS      bool   // TLS on when certs are specified
+	CertFile string // Domain certificate
+	KeyFile  string // Domain key
+
+	/// Advanced HTTP server options
+	RateLimit int // Ratelimited server of incoming connections
+}
+
 // configureAPIServer configure a new server instance
-func configureAPIServer(conf serverConfig) (*http.Server, *probe.Error) {
+func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           conf.Address,
@@ -118,7 +139,7 @@ func configureAPIServer(conf serverConfig) (*http.Server, *probe.Error) {
 }
 
 // startServer starts an s3 compatible cloud storage server
-func startServer(conf serverConfig) *probe.Error {
+func startServer(conf cloudServerConfig) *probe.Error {
 	apiServer, err := configureAPIServer(conf)
 	if err != nil {
 		return err.Trace()
@@ -148,19 +169,19 @@ func parsePercentToInt(s string, bitSize int) (int64, *probe.Error) {
 	return p, nil
 }
 
-func getAuth() (*AuthConfig, *probe.Error) {
-	if err := createAuthConfigPath(); err != nil {
+func getAuth() (*configV2, *probe.Error) {
+	if err := createConfigPath(); err != nil {
 		return nil, err.Trace()
 	}
-	config, err := loadAuthConfig()
+	config, err := loadConfigV2()
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
 			// Initialize new config, since config file doesn't exist yet
-			config := &AuthConfig{}
-			config.Version = "1"
-			config.AccessKeyID = string(mustGenerateAccessKeyID())
-			config.SecretAccessKey = string(mustGenerateSecretAccessKey())
-			if err := saveAuthConfig(config); err != nil {
+			config := &configV2{}
+			config.Version = "2"
+			config.Credentials.AccessKeyID = string(mustGenerateAccessKeyID())
+			config.Credentials.SecretAccessKey = string(mustGenerateSecretAccessKey())
+			if err := saveConfig(config); err != nil {
 				return nil, err.Trace()
 			}
 			return config, nil
@@ -171,13 +192,13 @@ func getAuth() (*AuthConfig, *probe.Error) {
 }
 
 type accessKeys struct {
-	*AuthConfig
+	*configV2
 }
 
 func (a accessKeys) String() string {
 	magenta := color.New(color.FgMagenta, color.Bold).SprintFunc()
 	white := color.New(color.FgWhite, color.Bold).SprintfFunc()
-	return fmt.Sprint(magenta("AccessKey: ") + white(a.AccessKeyID) + "  " + magenta("SecretKey: ") + white(a.SecretAccessKey))
+	return fmt.Sprint(magenta("AccessKey: ") + white(a.Credentials.AccessKeyID) + "  " + magenta("SecretKey: ") + white(a.Credentials.SecretAccessKey))
 }
 
 // JSON - json formatted output
@@ -205,13 +226,13 @@ func fetchAuth() *probe.Error {
 		Println("\nTo configure Minio Client.")
 		if runtime.GOOS == "windows" {
 			Println("\n\tDownload https://dl.minio.io:9000/updates/2015/Oct/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
-			Println("\t$ mc.exe config host add localhost:9000 " + conf.AccessKeyID + " " + conf.SecretAccessKey)
+			Println("\t$ mc.exe config host add localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 			Println("\t$ mc.exe mb localhost/photobucket")
 			Println("\t$ mc.exe cp C:\\Photos... localhost/photobucket")
 		} else {
 			Println("\n\t$ wget https://dl.minio.io:9000/updates/2015/Oct/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
 			Println("\t$ chmod 755 mc")
-			Println("\t$ ./mc config host add localhost:9000 " + conf.AccessKeyID + " " + conf.SecretAccessKey)
+			Println("\t$ ./mc config host add localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 			Println("\t$ ./mc mb localhost/photobucket")
 			Println("\t$ ./mc cp ~/Photos... localhost/photobucket")
 		}
@@ -287,7 +308,7 @@ func serverMain(c *cli.Context) {
 		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
 	}
 	tls := (certFile != "" && keyFile != "")
-	apiServerConfig := serverConfig{
+	apiServerConfig := cloudServerConfig{
 		Address:     c.GlobalString("address"),
 		AccessLog:   c.GlobalBool("enable-accesslog"),
 		Anonymous:   c.GlobalBool("anonymous"),

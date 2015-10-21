@@ -33,8 +33,8 @@ type syslogHook struct {
 	syslogRaddr   string
 }
 
-func log2Syslog(network, raddr string, priority syslog.Priority, tag string) *probe.Error {
-	syslogHook, e := newSyslog(network, raddr, priority, tag)
+func log2Syslog(network, raddr string) *probe.Error {
+	syslogHook, e := newSyslog(network, raddr, syslog.LOG_ERR, "MINIO")
 	if e != nil {
 		return probe.NewError(e)
 	}
@@ -44,9 +44,7 @@ func log2Syslog(network, raddr string, priority syslog.Priority, tag string) *pr
 	return nil
 }
 
-// newSyslog - Creates a hook to be added to an instance of logger. This is called with
-// `hook, err := NewSyslogHook("udp", "localhost:514", syslog.LOG_DEBUG, "")`
-// `if err == nil { log.Hooks.Add(hook) }`
+// newSyslog - Creates a hook to be added to an instance of logger.
 func newSyslog(network, raddr string, priority syslog.Priority, tag string) (*syslogHook, error) {
 	w, err := syslog.Dial(network, raddr, priority, tag)
 	return &syslogHook{w, network, raddr}, err
