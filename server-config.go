@@ -17,7 +17,9 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -52,6 +54,58 @@ type configV2 struct {
 	FileLogger struct {
 		Filename string `json:"filename"`
 	} `json:"fileLogger"`
+}
+
+func (c *configV2) IsFileLoggingEnabled() bool {
+	if c.FileLogger.Filename != "" {
+		return true
+	}
+	return false
+}
+
+func (c *configV2) IsSysloggingEnabled() bool {
+	if c.SyslogLogger.Network != "" && c.SyslogLogger.Addr != "" {
+		return true
+	}
+	return false
+}
+
+func (c *configV2) IsMongoLoggingEnabled() bool {
+	if c.MongoLogger.Addr != "" && c.MongoLogger.DB != "" && c.MongoLogger.Collection != "" {
+		return true
+	}
+	return false
+}
+
+func (c *configV2) String() string {
+	str := fmt.Sprintf("Mongo -> Addr: %s, DB: %s, Collection: %s\n", c.MongoLogger.Addr, c.MongoLogger.DB, c.MongoLogger.Collection)
+	str = str + fmt.Sprintf("Syslog -> Addr: %s, Network: %s\n", c.SyslogLogger.Addr, c.SyslogLogger.Network)
+	str = str + fmt.Sprintf("File -> Filename: %s", c.FileLogger.Filename)
+	return str
+}
+
+func (c *configV2) JSON() string {
+	type logger struct {
+		MongoLogger struct {
+			Addr       string `json:"addr"`
+			DB         string `json:"db"`
+			Collection string `json:"collection"`
+		} `json:"mongoLogger"`
+		SyslogLogger struct {
+			Network string `json:"network"`
+			Addr    string `json:"addr"`
+		} `json:"syslogLogger"`
+		FileLogger struct {
+			Filename string `json:"filename"`
+		} `json:"fileLogger"`
+	}
+	loggerBytes, err := json.Marshal(logger{
+		MongoLogger:  c.MongoLogger,
+		SyslogLogger: c.SyslogLogger,
+		FileLogger:   c.FileLogger,
+	})
+	fatalIf(probe.NewError(err), "Unable to marshal logger struct into JSON.", nil)
+	return string(loggerBytes)
 }
 
 // getConfigPath get users config path

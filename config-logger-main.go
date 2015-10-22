@@ -17,7 +17,7 @@
 package main
 
 import (
-	"fmt"
+	"runtime"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-xl/pkg/probe"
@@ -32,42 +32,31 @@ var configLoggerCmd = cli.Command{
    minio config {{.Name}} - {{.Usage}}
 
 USAGE:
-   minio config {{.Name}}
+   minio config {{.Name}} OPERATION [ARGS...]
 
+   OPERATION = add | list | remove
+
+EXAMPLES:
+   1. Configure new mongo logger.
+      $ minio config {{.Name}} add mongo localhost:28710 mydb mylogger
+
+   2. Configure new syslog logger. NOTE: syslog logger is not supported on windows.
+      $ minio config {{.Name}} add syslog localhost:554 udp
+
+   3. Configure new file logger. "/var/log" should be writable by user.
+      $ minio config {{.Name}} add file /var/log/minio.log
+
+   4. List currently configured logger.
+      $ minio config {{.Name}} list
+
+   5. Remove/Reset a configured logger.
+      $ minio config {{.Name}} remove mongo
 `,
 }
 
 // Inherit at one place
 type config struct {
 	*configV2
-}
-
-func (c *config) IsFileLoggingEnabled() bool {
-	if c.FileLogger.Filename != "" {
-		return true
-	}
-	return false
-}
-
-func (c *config) IsSysloggingEnabled() bool {
-	if c.SyslogLogger.Network != "" && c.SyslogLogger.Addr != "" {
-		return true
-	}
-	return false
-}
-
-func (c *config) IsMongoLoggingEnabled() bool {
-	if c.MongoLogger.Addr != "" && c.MongoLogger.DB != "" && c.MongoLogger.Collection != "" {
-		return true
-	}
-	return false
-}
-
-func (c *config) String() string {
-	str := fmt.Sprintf("Mongo -> Addr: %s, DB: %s, Collection: %s\n", c.MongoLogger.Addr, c.MongoLogger.DB, c.MongoLogger.Collection)
-	str = str + fmt.Sprintf("Syslog -> Addr: %s, Network: %s\n", c.SyslogLogger.Addr, c.SyslogLogger.Network)
-	str = str + fmt.Sprintf("File -> Filename: %s", c.FileLogger.Filename)
-	return str
 }
 
 func mainConfigLogger(ctx *cli.Context) {
@@ -83,6 +72,9 @@ func mainConfigLogger(ctx *cli.Context) {
 			enableLog2Mongo(&config{conf}, args.Tail())
 		}
 		if args.Get(0) == "syslog" {
+			if runtime.GOOS == "windows" {
+				fatalIf(probe.NewError(errInvalidArgument), "Syslog is not supported on windows.", nil)
+			}
 			enableLog2Syslog(&config{conf}, args.Tail())
 		}
 		if args.Get(0) == "file" {
@@ -99,6 +91,9 @@ func mainConfigLogger(ctx *cli.Context) {
 			fatalIf(err.Trace(), "Unable to save config.", nil)
 		}
 		if args.Get(0) == "syslog" {
+			if runtime.GOOS == "windows" {
+				fatalIf(probe.NewError(errInvalidArgument), "Syslog is not supported on windows.", nil)
+			}
 			conf.SyslogLogger.Network = ""
 			conf.SyslogLogger.Addr = ""
 			err := saveConfig(conf)
@@ -111,7 +106,11 @@ func mainConfigLogger(ctx *cli.Context) {
 		}
 	}
 	if ctx.Args().Get(0) == "list" {
-		Println(&config{conf})
+		if globalJSONFlag {
+			Println(conf.JSON())
+			return
+		}
+		Println(conf)
 	}
 }
 
