@@ -118,6 +118,7 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	// Do not use filepath.Join() since filepath.Join strips off any object names with '/', use them as is
 	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
 	var objectPath string
+	// For windows use its special os.PathSeparator == "\\"
 	if runtime.GOOS == "windows" {
 		objectPath = rootPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	} else {
@@ -131,6 +132,9 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 		return ObjectMetadata{}, probe.NewError(err)
 	}
 	contentType := "application/octet-stream"
+	if runtime.GOOS == "windows" {
+		object = sanitizeWindowsPath(object)
+	}
 	metadata := ObjectMetadata{
 		Bucket:      bucket,
 		Object:      object,

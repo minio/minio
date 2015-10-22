@@ -219,11 +219,17 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 	}
 
 	p.root = rootPrefix
-	/// automatically treat "/" delimiter as "\\" delimiter on windows due to its path constraints.
+	/// automatically treat incoming "/" as "\\" on windows due to its path constraints.
 	if runtime.GOOS == "windows" {
-		resources.Prefix = strings.Replace(resources.Prefix, "/", string(os.PathSeparator), -1)
-		resources.Delimiter = strings.Replace(resources.Delimiter, "/", string(os.PathSeparator), -1)
-		resources.Marker = strings.Replace(resources.Marker, "/", string(os.PathSeparator), -1)
+		if resources.Prefix != "" {
+			resources.Prefix = strings.Replace(resources.Prefix, "/", string(os.PathSeparator), -1)
+		}
+		if resources.Delimiter != "" {
+			resources.Delimiter = strings.Replace(resources.Delimiter, "/", string(os.PathSeparator), -1)
+		}
+		if resources.Marker != "" {
+			resources.Marker = strings.Replace(resources.Marker, "/", string(os.PathSeparator), -1)
+		}
 	}
 
 	// if delimiter is supplied and not prefix then we are the very top level, list everything and move on.
@@ -318,7 +324,11 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 			// has the prefix if it does not skip the directory.
 			if fl.Mode().IsDir() {
 				if resources.Prefix != "" {
-					if !strings.HasPrefix(fp, filepath.Join(p.root, resources.Prefix)) {
+					// Skip the directory on following situations
+					// - when prefix is part of file pointer along with the root path
+					// - when file pointer is part of the prefix along with root path
+					if !strings.HasPrefix(fp, filepath.Join(p.root, resources.Prefix)) &&
+						!strings.HasPrefix(filepath.Join(p.root, resources.Prefix), fp) {
 						return ErrSkipDir
 					}
 				}
@@ -328,6 +338,7 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 			if fl.Mode().IsDir() {
 				if resources.Marker != "" {
 					if realFp != "" {
+						// For windows split with its own os.PathSeparator
 						if runtime.GOOS == "windows" {
 							if realFp < strings.Split(resources.Marker, string(os.PathSeparator))[0] {
 								return ErrSkipDir
@@ -427,10 +438,18 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 			if err != nil {
 				return nil, resources, err.Trace()
 			}
+			// If windows replace all the incoming paths to API compatible paths
+			if runtime.GOOS == "windows" {
+				metadata.Object = sanitizeWindowsPath(metadata.Object)
+			}
 			if metadata.Bucket != "" {
 				metadataList = append(metadataList, metadata)
 			}
 		}
+	}
+	// Sanitize common prefixes back into API compatible paths
+	if runtime.GOOS == "windows" {
+		resources.CommonPrefixes = sanitizeWindowsPaths(resources.CommonPrefixes...)
 	}
 	return metadataList, resources, nil
 }
