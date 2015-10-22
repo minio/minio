@@ -111,11 +111,11 @@ func registerApp() *cli.App {
 	app.CustomAppHelpTemplate = `NAME:
   {{.Name}} - {{.Usage}}
 
-USAGE:
-  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
-
 DESCRIPTION:
   {{.Description}}
+
+USAGE:
+  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
 
 COMMANDS:
   {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
