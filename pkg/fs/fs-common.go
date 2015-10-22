@@ -31,6 +31,20 @@ type Metadata struct {
 	ContentType string
 }
 
+// sanitizeWindowsPath - sanitize a path
+func sanitizeWindowsPath(path string) string {
+	return strings.Replace(path, "\\", "/", -1)
+}
+
+// sanitizeWindowsPaths - sanitize some windows paths
+func sanitizeWindowsPaths(paths ...string) []string {
+	var results []string
+	for _, path := range paths {
+		results = append(results, sanitizeWindowsPath(path))
+	}
+	return results
+}
+
 // sortUnique sort a slice in lexical order, removing duplicate elements
 func sortUnique(objects []string) []string {
 	results := []string{}

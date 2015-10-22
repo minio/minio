@@ -228,13 +228,13 @@ func testPaging(c *check.C, create func() Filesystem) {
 		c.Assert(err, check.IsNil)
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
-		resources.Delimiter = "\\"
-		resources.Prefix = "this\\is\\"
+		resources.Delimiter = "/"
+		resources.Prefix = "this/is/"
 		resources.Maxkeys = 10
 		objects, resources, err = fs.ListObjects("bucket", resources)
 		c.Assert(err, check.IsNil)
 		c.Assert(len(objects), check.Equals, 1)
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "this\\is\\also\\")
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/is/also/")
 	}
 	time.Sleep(time.Second)
 
@@ -242,7 +242,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 	{
 		var prefixes []string
 		resources.CommonPrefixes = prefixes // allocate new everytime
-		resources.Delimiter = "\\"
+		resources.Delimiter = "/"
 		resources.Prefix = ""
 		resources.Maxkeys = 1000
 		objects, resources, err = fs.ListObjects("bucket", resources)
@@ -252,7 +252,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 		c.Assert(objects[2].Object, check.Equals, "obj0")
 		c.Assert(objects[3].Object, check.Equals, "obj1")
 		c.Assert(objects[4].Object, check.Equals, "obj10")
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "this\\")
+		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
 	}
 
 	// check results with Marker
