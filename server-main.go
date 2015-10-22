@@ -168,8 +168,30 @@ func parsePercentToInt(s string, bitSize int) (int64, *probe.Error) {
 	}
 	return p, nil
 }
+func setLogger(conf *configV2) *probe.Error {
+	if conf.IsMongoLoggingEnabled() {
+		err := log2Mongo(conf.MongoLogger.Addr, conf.MongoLogger.DB, conf.MongoLogger.Collection)
+		if err != nil {
+			return err.Trace()
+		}
+	}
+	if conf.IsSysloggingEnabled() {
+		err := log2Syslog(conf.SyslogLogger.Network, conf.SyslogLogger.Addr)
+		if err != nil {
+			return err.Trace()
+		}
+	}
+	if conf.IsFileLoggingEnabled() {
+		err := log2File(conf.FileLogger.Filename)
+		if err != nil {
+			return err.Trace()
+		}
+	}
+	return nil
+}
 
-func getAuth() (*configV2, *probe.Error) {
+// Generates config if it doesn't exist, otherwise returns back the saved ones.
+func getConfig() (*configV2, *probe.Error) {
 	if err := createConfigPath(); err != nil {
 		return nil, err.Trace()
 	}
@@ -208,10 +230,13 @@ func (a accessKeys) JSON() string {
 	return string(b)
 }
 
-// fetchAuth first time authorization
-func fetchAuth() *probe.Error {
-	conf, err := getAuth()
+// initServer initialize server
+func initServer() *probe.Error {
+	conf, err := getConfig()
 	if err != nil {
+		return err.Trace()
+	}
+	if err := setLogger(conf); err != nil {
 		return err.Trace()
 	}
 	if conf != nil {
@@ -257,8 +282,8 @@ func checkServerSyntax(c *cli.Context) {
 func serverMain(c *cli.Context) {
 	checkServerSyntax(c)
 
-	perr := fetchAuth()
-	fatalIf(perr.Trace(), "Failed to generate keys for minio.", nil)
+	perr := initServer()
+	fatalIf(perr.Trace(), "Failed to read config for minio.", nil)
 
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
