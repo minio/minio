@@ -42,7 +42,10 @@ var serverCmd = cli.Command{
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [OPTIONS] PATH
+  minio {{.Name}} [OPTION VALUE] PATH
+
+  OPTION = expiry        VALUE = NN[h|m|s] [DEFAULT=Unlimited]
+  OPTION = min-free-disk VALUE = NN% [DEFAULT: 10%]
 
 EXAMPLES:
   1. Start minio server on Linux.
