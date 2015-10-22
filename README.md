@@ -27,12 +27,15 @@ $ go get -u github.com/minio/minio
 
 ### How to use Minio?
 
-~~~
+```
 NAME:
   minio server - Start Minio cloud storage server.
 
 USAGE:
-  minio server [OPTIONS] PATH
+  minio server [OPTION VALUE] PATH
+
+  OPTION = expiry        VALUE = NN[h|m|s] [DEFAULT=Unlimited]
+  OPTION = min-free-disk VALUE = NN% [DEFAULT: 10%]
 
 EXAMPLES:
   1. Start minio server on Linux.
@@ -49,7 +52,9 @@ EXAMPLES:
 
   5. Start minio server with minimum free disk threshold to 15% with auto expiration set to 1h
         $ minio server min-free-disk 15% expiry 1h /home/shared/Documents
-~~~
+```
+
+#### Start Minio server.
 
 ~~~
 $ minio server ~/Photos
@@ -67,6 +72,10 @@ Starting minio server:
 Listening on http://127.0.0.1:9000
 Listening on http://172.30.2.17:9000
 ~~~
+
+#### How to use AWS SDK with Minio?
+
+Please follow the documentation here - [Using aws-sdk-go with Minio server](./AWS-SDK-GO.md)
 
 ### Contribute to Minio Project
 Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
