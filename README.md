@@ -22,7 +22,7 @@ Micro services environment provisions one Minio server per application instance.
 #### Linux, OS X, Windows
 
 ~~~
-$ go get github.com/minio/minio
+$ go get -u github.com/minio/minio
 ~~~
 
 ### How to use Minio?
