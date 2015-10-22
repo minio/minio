@@ -220,10 +220,10 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 
 	p.root = rootPrefix
 	/// automatically treat "/" delimiter as "\\" delimiter on windows due to its path constraints.
-	if resources.Delimiter == "/" {
-		if runtime.GOOS == "windows" {
-			resources.Delimiter = string(os.PathSeparator)
-		}
+	if runtime.GOOS == "windows" {
+		resources.Prefix = strings.Replace(resources.Prefix, "/", string(os.PathSeparator), -1)
+		resources.Delimiter = strings.Replace(resources.Delimiter, "/", string(os.PathSeparator), -1)
+		resources.Marker = strings.Replace(resources.Marker, "/", string(os.PathSeparator), -1)
 	}
 
 	// if delimiter is supplied and not prefix then we are the very top level, list everything and move on.
