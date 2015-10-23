@@ -45,18 +45,23 @@ func sanitizeWindowsPaths(paths ...string) []string {
 	return results
 }
 
-// sortUnique sort a slice in lexical order, removing duplicate elements
-func sortUnique(objects []string) []string {
-	results := []string{}
-	seen := make(map[string]string)
-	for _, val := range objects {
-		if _, ok := seen[val]; !ok {
-			results = append(results, val)
-			seen[val] = val
-		}
+// sortUnique returns n, the number of distinct elements in data in sorted order.
+func sortUnique(data sort.Interface) (n int) {
+	if n = data.Len(); n < 2 {
+		return n
 	}
-	sort.Strings(results)
-	return results
+	sort.Sort(data)
+	a, b := 0, 1
+	for b < n {
+		if data.Less(a, b) {
+			a++
+			if a != b {
+				data.Swap(a, b)
+			}
+		}
+		b++
+	}
+	return a + 1
 }
 
 type contentInfo struct {

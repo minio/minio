@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/minio/minio-xl/pkg/probe"
@@ -356,6 +357,6 @@ func (fs Filesystem) filterObjects(bucket string, content contentInfo, resources
 			return ObjectMetadata{}, resources, err.Trace()
 		}
 	}
-	sortUnique(resources.CommonPrefixes)
+	sortUnique(sort.StringSlice(resources.CommonPrefixes))
 	return metadata, resources, nil
 }
