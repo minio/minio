@@ -25,6 +25,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/minio-xl/pkg/probe"
 )
 
 func init() {
@@ -147,6 +148,9 @@ VERSION:
 }
 
 func main() {
+	// Set projet's root source path.
+	probe.SetRoot()
+
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		globalJSONFlag = c.GlobalBool("json")
