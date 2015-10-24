@@ -29,6 +29,19 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+// Root path to the project's source.
+var rootPath string
+
+// SetRoot sets the project's root path. Root path is automatically
+// determined from the calling function's source file location. It is
+// typically called from the main() function.
+func SetRoot() {
+	// Catch the calling function's source file path.
+	_, file, _, _ := runtime.Caller(1)
+	// Save the directory alone.
+	rootPath = filepath.Dir(file)
+}
+
 // GetSysInfo returns useful system statistics.
 func GetSysInfo() map[string]string {
 	host, err := os.Hostname()
@@ -113,7 +126,7 @@ func (e *Error) trace(fields ...string) *Error {
 	pc, file, line, _ := runtime.Caller(2)
 	function := runtime.FuncForPC(pc).Name()
 	_, function = filepath.Split(function)
-	file = "..." + strings.TrimPrefix(file, os.Getenv("GOPATH")) // trim gopathSource from file
+	file = strings.TrimPrefix(file, rootPath+string(os.PathSeparator)) // trims project's root path.
 	tp := TracePoint{}
 	if len(fields) > 0 {
 		tp = TracePoint{Line: line, Filename: file, Function: function, Env: map[string][]string{"Tags": fields}}
