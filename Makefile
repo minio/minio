@@ -57,11 +57,14 @@ version:
 	@echo "Generating new version.go"
 	@GO15VENDOREXPERIMENT=1 go run buildscripts/genversion.go
 
-pkg-remove:
-	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)
-
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 govendor add $(PKG)
+
+pkg-update:
+	@GO15VENDOREXPERIMENT=1 govendor update $(PKG)
+
+pkg-remove:
+	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)
 
 install: gomake-all
 
