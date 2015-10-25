@@ -148,8 +148,8 @@ VERSION:
 }
 
 func main() {
-	// Set projet's root source path.
-	probe.SetRoot()
+	probe.Init() // Set project's root source path.
+	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {

@@ -29,17 +29,32 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-// Root path to the project's source.
-var rootPath string
+var (
+	// Root path to the project's source.
+	rootPath string
+	// App specific info to be included  reporting.
+	appInfo map[string]string
+)
 
-// SetRoot sets the project's root path. Root path is automatically
-// determined from the calling function's source file location. It is
-// typically called from the main() function.
-func SetRoot() {
+// Init initializes probe. It is typically called once from the main()
+// function or at least from any source file placed at the top level
+// source directory.
+func Init() {
+	// Root path is automatically determined from the calling function's source file location.
 	// Catch the calling function's source file path.
 	_, file, _, _ := runtime.Caller(1)
 	// Save the directory alone.
 	rootPath = filepath.Dir(file)
+
+	appInfo = make(map[string]string)
+}
+
+// SetAppInfo sets app speific key:value to report additionally during call trace dump.
+// Eg. SetAppInfo("ReleaseTag", "RELEASE_42_0")
+//     SetAppInfo("Version", "42.0")
+//     SetAppInfo("Commit", "00611fb")
+func SetAppInfo(key, value string) {
+	appInfo[key] = value
 }
 
 // GetSysInfo returns useful system statistics.
@@ -102,7 +117,7 @@ func NewError(e error) *Error {
 		return nil
 	}
 	Err := Error{lock: sync.RWMutex{}, Cause: e, CallTrace: []TracePoint{}, SysInfo: GetSysInfo()}
-	return Err.trace()
+	return Err.trace() // Skip NewError and only instead register the NewError's caller.
 }
 
 // Trace records the point at which it is invoked.
@@ -118,7 +133,8 @@ func (e *Error) Trace(fields ...string) *Error {
 	return e.trace(fields...)
 }
 
-// Internal trace - records the point at which it is invoked.
+// trace records caller's caller. It is intended for probe's own
+// internal use. Take a look at probe.NewError for example.
 func (e *Error) trace(fields ...string) *Error {
 	if e == nil {
 		return nil
@@ -182,7 +198,13 @@ func (e *Error) String() string {
 			}
 		}
 
-		str += "\n" + " Host:" + e.SysInfo["host.name"] + " | "
+		str += "\n "
+
+		for key, value := range appInfo {
+			str += key + ":" + value + " | "
+		}
+
+		str += "Host:" + e.SysInfo["host.name"] + " | "
 		str += "OS:" + e.SysInfo["host.os"] + " | "
 		str += "Arch:" + e.SysInfo["host.arch"] + " | "
 		str += "Lang:" + e.SysInfo["host.lang"] + " | "
