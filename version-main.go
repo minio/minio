@@ -20,7 +20,7 @@ import "github.com/minio/cli"
 
 var versionCmd = cli.Command{
 	Name:   "version",
-	Usage:  "Print version",
+	Usage:  "Print version.",
 	Action: mainVersion,
 	CustomHelpTemplate: `NAME:
    minio {{.Name}} - {{.Usage}}
@@ -33,4 +33,5 @@ USAGE:
 func mainVersion(ctxx *cli.Context) {
 	Println("Version: " + minioVersion)
 	Println("Release-Tag: " + minioReleaseTag)
+	Println("Commit-ID: " + minioCommitID)
 }
