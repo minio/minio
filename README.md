@@ -4,7 +4,7 @@ Minio is a minimal cloud storage server for Micro Services. Written in Golang an
 
 ## Description
 
-Micro services environment provisions one Minio server per application instance. Scalability is achieved to through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks. 
+Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks. 
 
 ## Minio Client
 
