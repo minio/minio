@@ -53,7 +53,7 @@ $ mkdir -p $HOME/go
 
 ##### Setup GOROOT and GOPATH
 
-Add the following exports to your ``~/.bashrc``. Environment variable GOROOT specifies the location of your golang binaries
+Add the following exports to your ``~/.bash_profile``. Environment variable GOROOT specifies the location of your golang binaries
 and GOPATH specifies the location of your project workspace.
 
 ```sh
