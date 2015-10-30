@@ -18,10 +18,30 @@ package fs
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/minio/minio-xl/pkg/probe"
 )
+
+// Check if a directory is empty
+func isDirEmpty(dirname string) (bool, *probe.Error) {
+	f, err := os.Open(dirname)
+	defer f.Close()
+	if err != nil {
+		return false, probe.NewError(err)
+	}
+	names, err := f.Readdirnames(1)
+	if err != nil && err != io.EOF {
+		return false, probe.NewError(err)
+	}
+	if len(names) > 0 {
+		return false, nil
+	}
+	return true, nil
+}
 
 // RemoveAllDirs - removes only itself and all subdirectories
 func RemoveAllDirs(path string) error {

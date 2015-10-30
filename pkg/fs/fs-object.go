@@ -268,6 +268,37 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	return newObject, nil
 }
 
+func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error {
+	if basePath == deletePath {
+		return nil
+	}
+
+	fi, err := os.Stat(deletePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		}
+		return probe.NewError(err)
+	}
+	if fi.IsDir() {
+		empty, err := isDirEmpty(deletePath)
+		if err != nil {
+			return err.Trace()
+		}
+		if !empty {
+			return nil
+		}
+	}
+
+	if err := os.Remove(deletePath); err != nil {
+		return probe.NewError(err)
+	}
+	if err := deleteObjectPath(basePath, filepath.Dir(deletePath), bucket, object); err != nil {
+		return err.Trace()
+	}
+	return nil
+}
+
 // DeleteObject - delete and object
 func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 	fs.lock.Lock()
@@ -278,6 +309,7 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
+	bucketPath := filepath.Join(fs.path, bucket)
 	// check bucket exists
 	if _, err := os.Stat(filepath.Join(fs.path, bucket)); os.IsNotExist(err) {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
@@ -296,16 +328,12 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 	} else {
 		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
-
-	_, err := os.Stat(objectPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		}
-		return probe.NewError(err)
+	err := deleteObjectPath(bucketPath, objectPath, bucket, object)
+	if os.IsNotExist(err.ToGoError()) {
+		return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 	}
-	if err := os.Remove(objectPath); err != nil {
-		return probe.NewError(err)
+	if err != nil {
+		return err.Trace()
 	}
 	return nil
 }
