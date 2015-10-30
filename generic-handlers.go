@@ -120,7 +120,12 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // CorsHandler handler for CORS (Cross Origin Resource Sharing)
 func CorsHandler(h http.Handler) http.Handler {
-	return cors.Default().Handler(h)
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "HEAD", "POST"},
+		AllowedHeaders: []string{"*"},
+	})
+	return c.Handler(h)
 }
 
 // IgnoreResourcesHandler -
