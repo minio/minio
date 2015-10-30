@@ -43,35 +43,6 @@ func isDirEmpty(dirname string) (bool, *probe.Error) {
 	return true, nil
 }
 
-// RemoveAllDirs - removes only itself and all subdirectories
-func RemoveAllDirs(path string) error {
-	allFiles := func(fp string, fl os.FileInfo, err error) error {
-		if fp == path {
-			return nil
-		}
-		if fl.Mode().IsRegular() || fl.Mode()&os.ModeSymlink == os.ModeSymlink {
-			return ErrDirNotEmpty
-		}
-		if fl.Mode().IsDir() {
-			if err := os.Remove(fp); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return err
-			}
-		}
-		return nil
-	}
-	err := WalkUnsorted(path, allFiles)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
 // Walk walks the file tree rooted at root, calling walkFn for each file or
 // directory in the tree, including root.
 func Walk(root string, walkFn WalkFunc) error {

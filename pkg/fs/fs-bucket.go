@@ -41,12 +41,6 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
-	if err := RemoveAllDirs(bucketDir); err != nil {
-		if err == ErrDirNotEmpty || strings.Contains(err.Error(), "directory not empty") {
-			return probe.NewError(BucketNotEmpty{Bucket: bucket})
-		}
-		return probe.NewError(err)
-	}
 	if err := os.Remove(bucketDir); err != nil {
 		if strings.Contains(err.Error(), "directory not empty") {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
