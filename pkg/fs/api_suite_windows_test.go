@@ -333,8 +333,7 @@ func testBucketMetadata(c *check.C, create func() Filesystem) {
 
 	metadata, err := fs.GetBucketMetadata("string")
 	c.Assert(err, check.IsNil)
-	// On windows everything directory is always in public-read-write mode -- TODO need to handle this
-	c.Assert(metadata.ACL, check.Equals, BucketACL("public-read-write"))
+	c.Assert(metadata.ACL, check.Equals, BucketACL("private"))
 }
 
 func testBucketRecreateFails(c *check.C, create func() Filesystem) {

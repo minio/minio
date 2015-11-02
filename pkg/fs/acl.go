@@ -16,46 +16,35 @@
 
 package fs
 
-import (
-	"os"
-	"path/filepath"
-)
-
 // IsPrivateBucket - is private bucket
 func (fs Filesystem) IsPrivateBucket(bucket string) bool {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	// get bucket path
-	bucketDir := filepath.Join(fs.path, bucket)
-	fi, err := os.Stat(bucketDir)
-	if err != nil {
+	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	if !ok {
 		return true
 	}
-	return permToACL(fi.Mode()).IsPrivate()
+	return bucketMetadata.ACL.IsPrivate()
 }
 
 // IsPublicBucket - is public bucket
 func (fs Filesystem) IsPublicBucket(bucket string) bool {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	// get bucket path
-	bucketDir := filepath.Join(fs.path, bucket)
-	fi, err := os.Stat(bucketDir)
-	if err != nil {
+	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	if !ok {
 		return true
 	}
-	return permToACL(fi.Mode()).IsPublicReadWrite()
+	return bucketMetadata.ACL.IsPublicReadWrite()
 }
 
 // IsReadOnlyBucket - is read only bucket
 func (fs Filesystem) IsReadOnlyBucket(bucket string) bool {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	// get bucket path
-	bucketDir := filepath.Join(fs.path, bucket)
-	fi, err := os.Stat(bucketDir)
-	if err != nil {
+	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	if !ok {
 		return true
 	}
-	return permToACL(fi.Mode()).IsPublicRead()
+	return bucketMetadata.ACL.IsPublicRead()
 }

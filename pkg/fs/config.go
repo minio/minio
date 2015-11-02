@@ -24,7 +24,19 @@ import (
 	"github.com/minio/minio-xl/pkg/quick"
 )
 
-func getFSMultipartConfigPath() (string, *probe.Error) {
+func getFSBucketsConfigPath() (string, *probe.Error) {
+	if customBucketsConfigPath != "" {
+		return customBucketsConfigPath, nil
+	}
+	u, err := user.Current()
+	if err != nil {
+		return "", probe.NewError(err)
+	}
+	fsBucketsConfigPath := filepath.Join(u.HomeDir, ".minio", "buckets.json")
+	return fsBucketsConfigPath, nil
+}
+
+func getFSMultipartsSessionConfigPath() (string, *probe.Error) {
 	if customMultipartsConfigPath != "" {
 		return customMultipartsConfigPath, nil
 	}
@@ -32,16 +44,16 @@ func getFSMultipartConfigPath() (string, *probe.Error) {
 	if err != nil {
 		return "", probe.NewError(err)
 	}
-	fsMultipartsConfigPath := filepath.Join(u.HomeDir, ".minio", "multiparts.json")
+	fsMultipartsConfigPath := filepath.Join(u.HomeDir, ".minio", "multiparts-session.json")
 	return fsMultipartsConfigPath, nil
 }
 
 // internal variable only accessed via get/set methods
-var customConfigPath, customMultipartsConfigPath string
+var customMultipartsConfigPath, customBucketsConfigPath string
 
-// SetFSConfigPath - set custom fs config path
-func SetFSConfigPath(configPath string) {
-	customConfigPath = configPath
+// SetFSBucketsConfigPath - set custom fs buckets config path
+func SetFSBucketsConfigPath(configPath string) {
+	customBucketsConfigPath = configPath
 }
 
 // SetFSMultipartsConfigPath - set custom multiparts session config path
@@ -51,7 +63,7 @@ func SetFSMultipartsConfigPath(configPath string) {
 
 // SaveMultipartsSession - save multiparts
 func SaveMultipartsSession(multiparts *Multiparts) *probe.Error {
-	fsMultipartsConfigPath, err := getFSMultipartConfigPath()
+	fsMultipartsConfigPath, err := getFSMultipartsSessionConfigPath()
 	if err != nil {
 		return err.Trace()
 	}
@@ -65,9 +77,25 @@ func SaveMultipartsSession(multiparts *Multiparts) *probe.Error {
 	return nil
 }
 
+// SaveBucketsMetadata - save metadata of all buckets
+func SaveBucketsMetadata(buckets *Buckets) *probe.Error {
+	fsBucketsConfigPath, err := getFSBucketsConfigPath()
+	if err != nil {
+		return err.Trace()
+	}
+	qc, err := quick.New(buckets)
+	if err != nil {
+		return err.Trace()
+	}
+	if err := qc.Save(fsBucketsConfigPath); err != nil {
+		return err.Trace()
+	}
+	return nil
+}
+
 // loadMultipartsSession load multipart session file
 func loadMultipartsSession() (*Multiparts, *probe.Error) {
-	fsMultipartsConfigPath, err := getFSMultipartConfigPath()
+	fsMultipartsConfigPath, err := getFSMultipartsSessionConfigPath()
 	if err != nil {
 		return nil, err.Trace()
 	}
@@ -82,4 +110,23 @@ func loadMultipartsSession() (*Multiparts, *probe.Error) {
 		return nil, err.Trace()
 	}
 	return qc.Data().(*Multiparts), nil
+}
+
+// loadBucketsMetadata load buckets metadata file
+func loadBucketsMetadata() (*Buckets, *probe.Error) {
+	fsBucketsConfigPath, err := getFSBucketsConfigPath()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	buckets := &Buckets{}
+	buckets.Version = "1"
+	buckets.Metadata = make(map[string]*BucketMetadata)
+	qc, err := quick.New(buckets)
+	if err != nil {
+		return nil, err.Trace()
+	}
+	if err := qc.Load(fsBucketsConfigPath); err != nil {
+		return nil, err.Trace()
+	}
+	return qc.Data().(*Buckets), nil
 }
