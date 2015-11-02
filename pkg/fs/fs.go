@@ -30,6 +30,13 @@ type Filesystem struct {
 	minFreeDisk int64
 	lock        *sync.Mutex
 	multiparts  *Multiparts
+	buckets     *Buckets
+}
+
+// Buckets holds acl information
+type Buckets struct {
+	Version  string `json:"version"`
+	Metadata map[string]*BucketMetadata
 }
 
 // MultipartSession holds active session information
@@ -65,8 +72,24 @@ func New() (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
+	var buckets *Buckets
+	buckets, err = loadBucketsMetadata()
+	if err != nil {
+		if os.IsNotExist(err.ToGoError()) {
+			buckets = &Buckets{
+				Version:  "1",
+				Metadata: make(map[string]*BucketMetadata),
+			}
+			if err := SaveBucketsMetadata(buckets); err != nil {
+				return Filesystem{}, err.Trace()
+			}
+		} else {
+			return Filesystem{}, err.Trace()
+		}
+	}
 	a := Filesystem{lock: new(sync.Mutex)}
 	a.multiparts = multiparts
+	a.buckets = buckets
 	return a, nil
 }
 

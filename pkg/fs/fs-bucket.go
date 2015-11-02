@@ -38,7 +38,13 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	}
 	bucketDir := filepath.Join(fs.path, bucket)
 	// check bucket exists
-	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
+	if _, err := os.Stat(bucketDir); err != nil {
+		if os.IsNotExist(err) {
+			return probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return probe.NewError(err)
+	}
+	if _, ok := fs.buckets.Metadata[bucket]; !ok {
 		return probe.NewError(BucketNotFound{Bucket: bucket})
 	}
 	if err := os.Remove(bucketDir); err != nil {
@@ -46,6 +52,10 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
 		}
 		return probe.NewError(err)
+	}
+	delete(fs.buckets.Metadata, bucket)
+	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+		return err.Trace(bucket)
 	}
 	return nil
 }
@@ -102,9 +112,12 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
+	if !IsValidBucketACL(acl) {
+		return probe.NewError(InvalidACL{ACL: acl})
+	}
+
 	// get bucket path
 	bucketDir := filepath.Join(fs.path, bucket)
-
 	// check if bucket exists
 	if _, err = os.Stat(bucketDir); err == nil {
 		return probe.NewError(BucketExists{
@@ -113,9 +126,29 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	}
 
 	// make bucket
-	err = os.Mkdir(bucketDir, aclToPerm(acl))
+	err = os.Mkdir(bucketDir, 0700)
 	if err != nil {
 		return probe.NewError(err)
+	}
+
+	bucketMetadata := &BucketMetadata{}
+	fi, err := os.Stat(bucketDir)
+	// check if bucket exists
+	if err != nil {
+		if os.IsNotExist(err) {
+			return probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return probe.NewError(err)
+	}
+	if strings.TrimSpace(acl) == "" {
+		acl = "private"
+	}
+	bucketMetadata.Name = fi.Name()
+	bucketMetadata.Created = fi.ModTime()
+	bucketMetadata.ACL = BucketACL(acl)
+	fs.buckets.Metadata[bucket] = bucketMetadata
+	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+		return err.Trace(bucket)
 	}
 	return nil
 }
@@ -129,48 +162,22 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 	}
 	// get bucket path
 	bucketDir := filepath.Join(fs.path, bucket)
-	bucketMetadata := BucketMetadata{}
 	fi, err := os.Stat(bucketDir)
-	// check if bucket exists
-	if os.IsNotExist(err) {
-		return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
-	}
 	if err != nil {
+		// check if bucket exists
+		if os.IsNotExist(err) {
+			return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+		}
 		return BucketMetadata{}, probe.NewError(err)
 	}
-
-	bucketMetadata.Name = fi.Name()
-	bucketMetadata.Created = fi.ModTime()
-	bucketMetadata.ACL = permToACL(fi.Mode())
-	return bucketMetadata, nil
-}
-
-// permToACL - convert perm to meaningful ACL
-func permToACL(mode os.FileMode) BucketACL {
-	switch mode.Perm() {
-	case os.FileMode(0700):
-		return BucketACL("private")
-	case os.FileMode(0500):
-		return BucketACL("public-read")
-	case os.FileMode(0777):
-		return BucketACL("public-read-write")
-	default:
-		return BucketACL("private")
+	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	if !ok {
+		bucketMetadata = &BucketMetadata{}
+		bucketMetadata.Name = fi.Name()
+		bucketMetadata.Created = fi.ModTime()
+		bucketMetadata.ACL = BucketACL("private")
 	}
-}
-
-// aclToPerm - convert acl to filesystem mode
-func aclToPerm(acl string) os.FileMode {
-	switch acl {
-	case "private":
-		return os.FileMode(0700)
-	case "public-read":
-		return os.FileMode(0500)
-	case "public-read-write":
-		return os.FileMode(0777)
-	default:
-		return os.FileMode(0700)
-	}
+	return *bucketMetadata, nil
 }
 
 // SetBucketMetadata - set bucket metadata
@@ -184,11 +191,28 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
 	}
-	// get bucket path
+	if strings.TrimSpace(acl) == "" {
+		acl = "private"
+	}
 	bucketDir := filepath.Join(fs.path, bucket)
-	err := os.Chmod(bucketDir, aclToPerm(acl))
+	fi, err := os.Stat(bucketDir)
 	if err != nil {
+		// check if bucket exists
+		if os.IsNotExist(err) {
+			return probe.NewError(BucketNotFound{Bucket: bucket})
+		}
 		return probe.NewError(err)
+	}
+	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	if !ok {
+		bucketMetadata = &BucketMetadata{}
+		bucketMetadata.Name = fi.Name()
+		bucketMetadata.Created = fi.ModTime()
+	}
+	bucketMetadata.ACL = BucketACL(acl)
+	fs.buckets.Metadata[bucket] = bucketMetadata
+	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+		return err.Trace(bucket)
 	}
 	return nil
 }
