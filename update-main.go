@@ -90,7 +90,7 @@ func (u updateMessage) JSON() string {
 }
 
 func getExperimentalUpdate() {
-	current, e := time.Parse(http.TimeFormat, minioVersion)
+	current, e := time.Parse(time.RFC3339, minioVersion)
 	fatalIf(probe.NewError(e), "Unable to parse Version string as time.", nil)
 
 	if current.IsZero() {
@@ -133,7 +133,7 @@ func getExperimentalUpdate() {
 }
 
 func getReleaseUpdate() {
-	current, e := time.Parse(http.TimeFormat, minioVersion)
+	current, e := time.Parse(time.RFC3339, minioVersion)
 	fatalIf(probe.NewError(e), "Unable to parse Version string as time.", nil)
 
 	if current.IsZero() {
