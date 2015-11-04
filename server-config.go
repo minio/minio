@@ -24,6 +24,7 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"github.com/fatih/color"
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio-xl/pkg/quick"
 )
@@ -78,9 +79,19 @@ func (c *configV2) IsMongoLoggingEnabled() bool {
 }
 
 func (c *configV2) String() string {
-	str := fmt.Sprintf("Mongo -> Addr: %s, DB: %s, Collection: %s\n", c.MongoLogger.Addr, c.MongoLogger.DB, c.MongoLogger.Collection)
-	str = str + fmt.Sprintf("Syslog -> Addr: %s, Network: %s\n", c.SyslogLogger.Addr, c.SyslogLogger.Network)
-	str = str + fmt.Sprintf("File -> Filename: %s", c.FileLogger.Filename)
+	white := color.New(color.FgWhite, color.Bold).SprintfFunc()
+	var str string
+	if c.IsMongoLoggingEnabled() {
+		str = fmt.Sprintf("Mongo -> %s", white("Addr: %s, DB: %s, Collection: %s",
+			c.MongoLogger.Addr, c.MongoLogger.DB, c.MongoLogger.Collection))
+	}
+	if c.IsSysloggingEnabled() {
+		str = fmt.Sprintf("Syslog -> %s", white("Addr: %s, Network: %s",
+			c.SyslogLogger.Addr, c.SyslogLogger.Network))
+	}
+	if c.IsFileLoggingEnabled() {
+		str = fmt.Sprintf("File -> %s", white("Filename: %s", c.FileLogger.Filename))
+	}
 	return str
 }
 

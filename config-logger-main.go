@@ -116,40 +116,52 @@ func mainConfigLogger(ctx *cli.Context) {
 
 func enableLog2Mongo(conf *config, args cli.Args) {
 	if conf.IsFileLoggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "File logging already enabled. Please remove before enabling mongo.", nil)
+		Infoln("File logging already enabled. Removing automatically by enabling mongo.")
+		conf.FileLogger.Filename = ""
 	}
 	if conf.IsSysloggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "Syslog logging already enabled. Please remove before enabling mongo.", nil)
+		Infoln("Syslog logging already enabled. Removing automatically by enabling mongo.")
+		conf.SyslogLogger.Addr = ""
+		conf.SyslogLogger.Network = ""
 	}
 	conf.MongoLogger.Addr = args.Get(0)
 	conf.MongoLogger.DB = args.Get(1)
 	conf.MongoLogger.Collection = args.Get(2)
 
 	err := saveConfig(conf.configV2)
-	fatalIf(err.Trace(), "Unable to save config.", nil)
+	fatalIf(err.Trace(), "Unable to save mongo logging config.", nil)
 }
 
 func enableLog2Syslog(conf *config, args cli.Args) {
 	if conf.IsFileLoggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "File logging already enabled. Please remove before enabling syslog.", nil)
+		Infoln("File logging already enabled. Removing automatically by enabling syslog.")
+		conf.FileLogger.Filename = ""
 	}
 	if conf.IsMongoLoggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "Mongo logging already enabled. Please remove before enabling syslog.", nil)
+		Infoln("Mongo logging already enabled. Removing automatically by enabling syslog.")
+		conf.MongoLogger.Addr = ""
+		conf.MongoLogger.DB = ""
+		conf.MongoLogger.Collection = ""
 	}
 	conf.SyslogLogger.Addr = args.Get(0)
 	conf.SyslogLogger.Network = args.Get(1)
 	err := saveConfig(conf.configV2)
-	fatalIf(err.Trace(), "Unable to save config.", nil)
+	fatalIf(err.Trace(), "Unable to save syslog config.", nil)
 }
 
 func enableLog2File(conf *config, args cli.Args) {
 	if conf.IsSysloggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "Syslog logging already enabled. Please remove before enabling file.", nil)
+		Infoln("Syslog logging already enabled. Removing automatically by enabling file logging.")
+		conf.SyslogLogger.Addr = ""
+		conf.SyslogLogger.Network = ""
 	}
 	if conf.IsMongoLoggingEnabled() {
-		fatalIf(probe.NewError(errInvalidArgument), "Mongo logging already enabled. Please remove before enabling file.", nil)
+		Infoln("Mongo logging already enabled. Removing automatically by enabling file logging.")
+		conf.MongoLogger.Addr = ""
+		conf.MongoLogger.DB = ""
+		conf.MongoLogger.Collection = ""
 	}
 	conf.FileLogger.Filename = args.Get(0)
 	err := saveConfig(conf.configV2)
-	fatalIf(err.Trace(), "Unable to save config.", nil)
+	fatalIf(err.Trace(), "Unable to save file logging config.", nil)
 }
