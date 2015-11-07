@@ -26,9 +26,10 @@ build_script:
   - go test -race .
   - go test github.com/minio/minio/pkg...
   - go test -race github.com/minio/minio/pkg...
-  - go run buildscripts/gen-ldflags.go > temp.txt
-  - set /p LDFLAGS=<temp.txt
-  - go build --ldflags %LDFLAGS% -o %GOPATH%\bin\minio.exe
+  # FIXME: appveyor build has errors related to LDFLAGS
+  # - go run buildscripts/gen-ldflags.go > temp.txt
+  # - set /p LDFLAGS=<temp.txt
+  # - go build --ldflags %LDFLAGS% -o %GOPATH%\bin\minio.exe
 
 # to disable automatic tests
 test: off
