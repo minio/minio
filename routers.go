@@ -32,9 +32,12 @@ type CloudStorageAPI struct {
 
 // registerCloudStorageAPI - register all the handlers to their respective paths
 func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
+	// root Router
 	root := mux.NewRoute().PathPrefix("/").Subrouter()
+	// Bucket router
 	bucket := root.PathPrefix("/{bucket}").Subrouter()
 
+	// Object operations
 	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
 	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
@@ -45,6 +48,7 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectHandler)
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
 
+	// Bucket operations
 	bucket.Methods("GET").HandlerFunc(a.GetBucketACLHandler).Queries("acl", "")
 	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
 	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
@@ -54,13 +58,14 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	bucket.Methods("POST").HandlerFunc(a.PostPolicyBucketHandler)
 	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
 
+	// Root operation
 	root.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI
 func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fs, err := fs.New()
-	fatalIf(err.Trace(), "Instantiating filesystem failed.", nil)
+	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
 	fs.SetRootPath(conf.Path)
 	fs.SetMinFreeDisk(conf.MinFreeDisk)
