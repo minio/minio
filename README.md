@@ -77,6 +77,8 @@ Listening on http://172.30.2.17:9000
 
 Please follow the documentation here - [Using aws-sdk-go with Minio server](./AWS-SDK-GO.md)
 
-### Contribute to Minio Project
+## Contribute to Minio Project
 Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
 
+### Jobs
+If you think in Lisp or Haskell and hack in go, you would blend right in. Send your github link to callhome@minio.io.
