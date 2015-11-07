@@ -156,6 +156,9 @@ func main() {
 	probe.Init() // Set project's root source path.
 	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 	probe.SetAppInfo("Commit-ID", minioShortCommitID)
+	if os.Getenv("DOCKERIMAGE") == "1" {
+		probe.SetAppInfo("Docker-Image", "true")
+	}
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
