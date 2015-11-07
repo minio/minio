@@ -1,4 +1,6 @@
 LDFLAGS = $(shell go run buildscripts/gen-ldflags.go)
+DOCKER_LDFLAGS = '-extldflags "-static"'
+TAG = latest
 
 all: install
 
@@ -53,7 +55,7 @@ test: build
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
-	@GO15VENDOREXPERIMENT=1 go build -ldflags $(LDFLAGS) -o $(GOPATH)/bin/minio
+	@GO15VENDOREXPERIMENT=1 go build --ldflags $(LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 govendor add $(PKG)
@@ -65,6 +67,14 @@ pkg-remove:
 	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)
 
 install: gomake-all
+
+dockerimage: install
+	@echo "Building docker image:" minio:$(TAG)
+	@GO15VENDOREXPERIMENT=1 go build --ldflags $(LDFLAGS) --ldflags $(DOCKER_LDFLAGS) -o minio.dockerimage
+	@mkdir -p export
+	@docker build --rm --tag=minio:$(TAG) .
+	@rmdir export
+	@rm minio.dockerimage
 
 clean:
 	@echo "Cleaning up all the generated files:"

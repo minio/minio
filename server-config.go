@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/fatih/color"
@@ -124,9 +123,9 @@ func getConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
-	u, err := user.Current()
+	u, err := userCurrent()
 	if err != nil {
-		return "", probe.NewError(err)
+		return "", err.Trace()
 	}
 	configPath := filepath.Join(u.HomeDir, ".minio")
 	return configPath, nil

@@ -17,6 +17,7 @@
 package fs
 
 import (
+	"os"
 	"os/user"
 	"path/filepath"
 
@@ -24,13 +25,33 @@ import (
 	"github.com/minio/minio-xl/pkg/quick"
 )
 
+// workaround for docker images with fully static binary.
+// for static binaries NSS library will not be a part of the static binary
+// hence user.Current() fails
+// more here : http://gnu.ist.utl.pt/software/libc/FAQ.html
+// FAQ says : NSS (for details just type `info libc "Name Service Switch"') won't work properly without shared libraries
+func userCurrent() (*user.User, *probe.Error) {
+	if os.Getenv("DOCKERIMAGE") == "1" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
+	}
+	user, err := user.Current()
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+	return user, nil
+}
+
 func getFSBucketsConfigPath() (string, *probe.Error) {
 	if customBucketsConfigPath != "" {
 		return customBucketsConfigPath, nil
 	}
-	u, err := user.Current()
+	u, err := userCurrent()
 	if err != nil {
-		return "", probe.NewError(err)
+		return "", err.Trace()
 	}
 	fsBucketsConfigPath := filepath.Join(u.HomeDir, ".minio", "buckets.json")
 	return fsBucketsConfigPath, nil
@@ -40,9 +61,9 @@ func getFSMultipartsSessionConfigPath() (string, *probe.Error) {
 	if customMultipartsConfigPath != "" {
 		return customMultipartsConfigPath, nil
 	}
-	u, err := user.Current()
+	u, err := userCurrent()
 	if err != nil {
-		return "", probe.NewError(err)
+		return "", err.Trace()
 	}
 	fsMultipartsConfigPath := filepath.Join(u.HomeDir, ".minio", "multiparts-session.json")
 	return fsMultipartsConfigPath, nil

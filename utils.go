@@ -18,8 +18,12 @@ package main
 
 import (
 	"encoding/base64"
+	"os"
+	"os/user"
 	"strconv"
 	"strings"
+
+	"github.com/minio/minio-xl/pkg/probe"
 )
 
 // isValidMD5 - verify if valid md5
@@ -50,4 +54,24 @@ func isMaxObjectSize(size string) bool {
 		return true
 	}
 	return false
+}
+
+// workaround for docker images with fully static binary.
+// for static binaries NSS library will not be a part of the static binary
+// hence user.Current() fails
+// more here : http://gnu.ist.utl.pt/software/libc/FAQ.html
+// FAQ says : NSS (for details just type `info libc "Name Service Switch"') won't work properly without shared libraries
+func userCurrent() (*user.User, *probe.Error) {
+	if os.Getenv("DOCKERIMAGE") == "1" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
+	}
+	user, err := user.Current()
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+	return user, nil
 }

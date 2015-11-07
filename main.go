@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"runtime"
 	"strconv"
 
@@ -29,18 +28,24 @@ import (
 )
 
 func init() {
+	// Check if minio was compiled using a supported version of Golang.
+	checkGolangRuntimeVersion()
+
 	// Check for the environment early on and gracefuly report.
-	_, err := user.Current()
+	_, err := userCurrent()
 	if err != nil {
 		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
+	}
+
+	if os.Getenv("DOCKERIMAGE") == "1" {
+		// the further checks are ignored for docker image
+		return
 	}
 
 	if os.Geteuid() == 0 {
 		Fatalln("Please run ‘minio’ as a non-root user.")
 	}
 
-	// Check if minio was compiled using a supported version of Golang.
-	checkGolangRuntimeVersion()
 }
 
 func migrate() {
