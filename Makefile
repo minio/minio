@@ -1,5 +1,6 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
-DOCKER_LDFLAGS := $(LDFLAGS) -extldflags "-static"
+DOCKER_LDFLAGS := '$(LDFLAGS) -extldflags "-static"'
+BUILD_LDFLAGS := '$(LDFLAGS)'
 TAG := latest
 
 all: install
@@ -11,7 +12,7 @@ checkdeps:
 checkgopath:
 	@echo "Checking if project is at ${GOPATH}"
 	@for miniopath in $(echo ${GOPATH} | sed 's/:/\n/g'); do if [ ! -d ${miniopath}/src/github.com/minio/minio ]; then echo "Project not found in ${miniopath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
-	@echo "Setting LDFLAGS: ${LDFLAGS}"
+	@echo "Setting BUILD_LDFLAGS: ${BUILD_LDFLAGS}"
 
 getdeps: checkdeps checkgopath
 	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
@@ -55,7 +56,7 @@ test: build
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
-	@GO15VENDOREXPERIMENT=1 go build --ldflags '$(LDFLAGS)' -o $(GOPATH)/bin/minio
+	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 govendor add $(PKG)
@@ -70,7 +71,7 @@ install: gomake-all
 
 dockerimage: install
 	@echo "Building docker image:" minio:$(TAG)
-	@GO15VENDOREXPERIMENT=1 go build --ldflags '$(DOCKER_LDFLAGS)' -o minio.dockerimage
+	@GO15VENDOREXPERIMENT=1 go build --ldflags $(DOCKER_LDFLAGS) -o minio.dockerimage
 	@mkdir -p export
 	@docker build --rm --tag=minio:$(TAG) .
 	@rmdir export
