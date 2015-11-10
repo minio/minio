@@ -130,6 +130,31 @@ type BucketResourcesMetadata struct {
 	CommonPrefixes []string
 }
 
+type ListObjectsReq struct {
+	Bucket    string
+	Prefix    string
+	Marker    string
+	Delimiter string
+	MaxKeys   int
+}
+
+type ListObjectsResp struct {
+	IsTruncated bool
+	NextMarker  string
+	Objects     []ObjectMetadata
+	Prefixes    []string
+}
+
+type listServiceReq struct {
+	req    ListObjectsReq
+	respCh chan ListObjectsResp
+}
+
+type listWorkerReq struct {
+	req    ListObjectsReq
+	respCh chan ListObjectsResp
+}
+
 // CompletePart - completed part container
 type CompletePart struct {
 	PartNumber int

@@ -92,7 +92,8 @@ func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyRe
 }
 
 // generates an ListObjects response for the said bucket with other enumerated options.
-func generateListObjectsResponse(bucket string, objects []fs.ObjectMetadata, bucketResources fs.BucketResourcesMetadata) ListObjectsResponse {
+// func generateListObjectsResponse(bucket string, objects []fs.ObjectMetadata, bucketResources fs.BucketResourcesMetadata) ListObjectsResponse {
+func generateListObjectsResponse(bucket string, req fs.ListObjectsReq, resp fs.ListObjectsResp) ListObjectsResponse {
 	var contents []*Object
 	var prefixes []*CommonPrefix
 	var owner = Owner{}
@@ -101,7 +102,7 @@ func generateListObjectsResponse(bucket string, objects []fs.ObjectMetadata, buc
 	owner.ID = "minio"
 	owner.DisplayName = "minio"
 
-	for _, object := range objects {
+	for _, object := range resp.Objects {
 		var content = &Object{}
 		if object.Object == "" {
 			continue
@@ -117,13 +118,15 @@ func generateListObjectsResponse(bucket string, objects []fs.ObjectMetadata, buc
 	// TODO - support EncodingType in xml decoding
 	data.Name = bucket
 	data.Contents = contents
-	data.MaxKeys = bucketResources.Maxkeys
-	data.Prefix = bucketResources.Prefix
-	data.Delimiter = bucketResources.Delimiter
-	data.Marker = bucketResources.Marker
-	data.NextMarker = bucketResources.NextMarker
-	data.IsTruncated = bucketResources.IsTruncated
-	for _, prefix := range bucketResources.CommonPrefixes {
+
+	data.MaxKeys = req.MaxKeys
+	data.Prefix = req.Prefix
+	data.Delimiter = req.Delimiter
+	data.Marker = req.Marker
+
+	data.NextMarker = resp.NextMarker
+	data.IsTruncated = resp.IsTruncated
+	for _, prefix := range resp.Prefixes {
 		var prefixItem = &CommonPrefix{}
 		prefixItem.Prefix = prefix
 		prefixes = append(prefixes, prefixItem)

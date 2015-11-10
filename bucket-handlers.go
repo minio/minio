@@ -137,10 +137,16 @@ func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.R
 		resources.Maxkeys = maxObjectList
 	}
 
-	objects, resources, err := api.Filesystem.ListObjects(bucket, resources)
+	listReq := fs.ListObjectsReq{
+		Prefix:    resources.Prefix,
+		Marker:    resources.Marker,
+		Delimiter: resources.Delimiter,
+		MaxKeys:   resources.Maxkeys,
+	}
+	listResp, err := api.Filesystem.ListObjects(bucket, listReq)
 	if err == nil {
-		// Generate response
-		response := generateListObjectsResponse(bucket, objects, resources)
+		// generate response
+		response := generateListObjectsResponse(bucket, listReq, listResp)
 		encodedSuccessResponse := encodeSuccessResponse(response)
 		// Write headers
 		setCommonHeaders(w)

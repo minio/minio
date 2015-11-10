@@ -27,12 +27,14 @@ import (
 
 // Filesystem - local variables
 type Filesystem struct {
-	path        string
-	minFreeDisk int64
-	maxBuckets  int
-	lock        *sync.Mutex
-	multiparts  *Multiparts
-	buckets     *Buckets
+	path             string
+	minFreeDisk      int64
+	maxBuckets       int
+	lock             *sync.Mutex
+	multiparts       *Multiparts
+	buckets          *Buckets
+	listServiceReqCh chan<- listServiceReq
+	timeoutReqCh     chan<- ListObjectsReq
 }
 
 // Buckets holds acl information
@@ -92,11 +94,10 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
-	fs := Filesystem{lock: new(sync.Mutex)}
-	fs.path = rootPath
-	fs.multiparts = multiparts
-	fs.buckets = buckets
-
+	a := Filesystem{lock: new(sync.Mutex)}
+	a.path = rootPath
+	a.multiparts = multiparts
+	a.buckets = buckets
 	/// Defaults
 
 	// maximum buckets to be listed from list buckets.
@@ -104,6 +105,10 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 10
 
+	err = fs.startListService()
+	if err != nil {
+		return Filesystem{}, err.Trace(rootPath)
+	}
 	// Return here.
 	return fs, nil
 }
