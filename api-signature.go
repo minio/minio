@@ -40,18 +40,20 @@ func getCredentialsFromAuth(authValue string) ([]string, *probe.Error) {
 	if authValue == "" {
 		return nil, probe.NewError(errMissingAuthHeaderValue)
 	}
+	// replace all spaced strings
+	authValue = strings.Replace(authValue, " ", "", -1)
+	if !strings.HasPrefix(authValue, authHeaderPrefix) {
+		return nil, probe.NewError(errMissingFieldsAuthHeader)
+	}
+	if !strings.HasPrefix(strings.TrimPrefix(authValue, authHeaderPrefix), "Credential") {
+		return nil, probe.NewError(errInvalidAuthHeaderPrefix)
+	}
+	authValue = strings.TrimPrefix(authValue, authHeaderPrefix)
 	authFields := strings.Split(strings.TrimSpace(authValue), ",")
 	if len(authFields) != 3 {
 		return nil, probe.NewError(errInvalidAuthHeaderValue)
 	}
-	authPrefixFields := strings.Fields(authFields[0])
-	if len(authPrefixFields) != 2 {
-		return nil, probe.NewError(errMissingFieldsAuthHeader)
-	}
-	if authPrefixFields[0] != authHeaderPrefix {
-		return nil, probe.NewError(errInvalidAuthHeaderPrefix)
-	}
-	credentials := strings.Split(strings.TrimSpace(authPrefixFields[1]), "=")
+	credentials := strings.Split(strings.TrimSpace(authFields[0]), "=")
 	if len(credentials) != 2 {
 		return nil, probe.NewError(errMissingFieldsCredentialTag)
 	}
