@@ -63,6 +63,17 @@ func WalkUnsorted(root string, walkFn WalkFunc) error {
 	return walk(root, info, walkFn)
 }
 
+// getRealName - gets the proper filename for sorting purposes
+// Readdir() filters out directory names without separators, add
+// them back for proper sorting results.
+func getRealName(info os.FileInfo) string {
+	if info.IsDir() {
+		// Make sure directory has its end separator.
+		return info.Name() + string(os.PathSeparator)
+	}
+	return info.Name()
+}
+
 // readDirNames reads the directory named by dirname and returns
 // a sorted list of directory entries.
 func readDirNames(dirname string) ([]string, error) {
@@ -79,10 +90,14 @@ func readDirUnsortedNames(dirname string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	names, err := f.Readdirnames(-1)
+	nameInfos, err := f.Readdir(-1)
 	f.Close()
 	if err != nil {
 		return nil, err
+	}
+	var names []string
+	for _, nameInfo := range nameInfos {
+		names = append(names, getRealName(nameInfo))
 	}
 	return names, nil
 }
