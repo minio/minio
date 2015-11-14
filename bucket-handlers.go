@@ -41,10 +41,8 @@ func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, re
 
 	if !api.Anonymous {
 		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
 		}
 	}
 

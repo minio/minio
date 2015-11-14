@@ -127,7 +127,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 
 	if !api.Anonymous {
 		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
+			if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
 				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
 				return
 			}
@@ -512,7 +512,7 @@ func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.
 
 	if !api.Anonymous {
 		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
+			if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
 				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
 				return
 			}
