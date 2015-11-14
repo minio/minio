@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"os"
 	"os/user"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -56,11 +57,9 @@ func isMaxObjectSize(size string) bool {
 	return false
 }
 
-// workaround for docker images with fully static binary.
-// for static binaries NSS library will not be a part of the static binary
-// hence user.Current() fails
-// more here : http://gnu.ist.utl.pt/software/libc/FAQ.html
-// FAQ says : NSS (for details just type `info libc "Name Service Switch"') won't work properly without shared libraries
+// Workaround for docker images with fully static binary and 32bit linux operating systems.
+// For static binaries NSS library will not be a part of the static binary hence user.Current() fails.
+// For 32bit linux CGO is not enabled so it will not provide linux specific codebase.
 func userCurrent() (*user.User, *probe.Error) {
 	if os.Getenv("DOCKERIMAGE") == "1" {
 		wd, err := os.Getwd()
@@ -68,6 +67,15 @@ func userCurrent() (*user.User, *probe.Error) {
 			return nil, probe.NewError(err)
 		}
 		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
+	}
+	if runtime.GOARCH == "386" && runtime.GOOS == "linux" {
+		return &user.User{
+			Uid:      strconv.Itoa(os.Getuid()),
+			Gid:      strconv.Itoa(os.Getgid()),
+			Username: os.Getenv("USER"),
+			Name:     os.Getenv("USER"),
+			HomeDir:  os.Getenv("HOME"),
+		}, nil
 	}
 	user, err := user.Current()
 	if err != nil {
