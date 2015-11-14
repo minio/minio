@@ -19,11 +19,49 @@ Micro services environment provisions one Minio server per application instance.
 
 ### Install [![Build Status](https://travis-ci.org/minio/minio.svg?branch=master)](https://travis-ci.org/minio/minio)[![Build status](https://ci.appveyor.com/api/projects/status/royh137dni8yevep/branch/master?svg=true)](https://ci.appveyor.com/project/harshavardhana/minio-qxbjq/branch/master)
 
-#### Linux, OS X, Windows
+#### GNU/Linux
+
+Download ``minio`` for:
+
+- ``64-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-amd64/minio
+- ``32-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-386/minio
+- ``32-bit ARM`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-arm/minio
 
 ~~~
-$ go get -u github.com/minio/minio
+$ chmod +x minio
+$ ./minio help
 ~~~
+
+#### OS X
+
+Download ``minio`` from https://dl.minio.io:9000/updates/minio/2015/Nov/darwin-amd64/minio
+
+~~~
+$ chmod 755 minio
+$ ./minio help
+~~~
+
+#### Microsoft Windows
+
+Download ``minio`` for:
+
+- ``64-bit`` from https://dl.minio.io:9000/updates/minio/2015/Nov/windows-amd64/minio.exe
+- ``32-bit`` from https://dl.minio.io:9000/updates/minio/2015/Nov/windows-386/minio.exe
+
+~~~
+C:\Users\Username\Downloads> minio.exe help
+~~~
+
+#### Source
+<blockquote>
+NOTE: Source installation is intended for only developers and advanced users. ‘minio update’ continous delivery mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio.
+</blockquote>
+
+If you do not have a working Golang environment, please follow [Install Golang](./INSTALLGO.md).
+
+```sh
+$ go get -u github.com/minio/minio
+```
 
 ### How to use Minio?
 
@@ -62,7 +100,7 @@ AccessKey: G5GJRH51R2HSUWYPGIX5  SecretKey: uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gF
 
 To configure Minio Client.
 
-	$ wget https://dl.minio.io:9000/updates/2015/Oct/linux-amd64/mc
+	$ wget https://dl.minio.io:9000/updates/2015/Nov/linux-amd64/mc
 	$ chmod 755 mc
 	$ ./mc config host add localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
 	$ ./mc mb localhost/photobucket
