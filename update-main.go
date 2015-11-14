@@ -106,7 +106,7 @@ func getExperimentalUpdate() {
 	e = decoder.Decode(&experimentals)
 	fatalIf(probe.NewError(e), "Unable to decode experimental update notification.", nil)
 
-	latest, e := time.Parse(http.TimeFormat, experimentals.BuildDate)
+	latest, e := time.Parse(time.RFC3339, experimentals.BuildDate)
 	fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
 
 	if latest.IsZero() {
@@ -117,7 +117,9 @@ func getExperimentalUpdate() {
 	if err != nil {
 		fatalIf(probe.NewError(err), "Unable to parse URL: "+minioExperimentalURL, nil)
 	}
-	downloadURL := minioExperimentalURLParse.Scheme + "://" + minioExperimentalURLParse.Host + "/" + experimentals.Platforms[runtime.GOOS]
+	downloadURL := minioExperimentalURLParse.Scheme + "://" +
+		minioExperimentalURLParse.Host + "/" + experimentals.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
+
 	updateMessage := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
@@ -148,7 +150,7 @@ func getReleaseUpdate() {
 	e = decoder.Decode(&releases)
 	fatalIf(probe.NewError(e), "Unable to decode update notification.", nil)
 
-	latest, e := time.Parse(http.TimeFormat, releases.BuildDate)
+	latest, e := time.Parse(time.RFC3339, releases.BuildDate)
 	fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
 
 	if latest.IsZero() {
@@ -159,7 +161,8 @@ func getReleaseUpdate() {
 	if err != nil {
 		fatalIf(probe.NewError(err), "Unable to parse URL: "+minioUpdateURL, nil)
 	}
-	downloadURL := minioUpdateURLParse.Scheme + "://" + minioUpdateURLParse.Host + "/" + releases.Platforms[runtime.GOOS]
+	downloadURL := minioUpdateURLParse.Scheme +
+		"://" + minioUpdateURLParse.Host + "/" + releases.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
 	updateMessage := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
