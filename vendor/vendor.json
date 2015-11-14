@@ -49,13 +49,13 @@
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/crypto/sha256",
-			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
-			"revisionTime": "2015-10-20T11:16:42-07:00"
+			"revision": "a4e6504a5f94cf43bdbe3dec1a622317031b145d",
+			"revisionTime": "2015-11-14T00:48:52-08:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/crypto/sha512",
-			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
-			"revisionTime": "2015-10-20T11:16:42-07:00"
+			"revision": "a4e6504a5f94cf43bdbe3dec1a622317031b145d",
+			"revisionTime": "2015-11-14T00:48:52-08:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/minhttp",
