@@ -207,7 +207,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 
 	// write object
-	file, err := atomic.FileCreate(objectPath)
+	file, err := atomic.FileCreateWithPrefix(objectPath, "")
 	if err != nil {
 		return ObjectMetadata{}, probe.NewError(err)
 	}
@@ -250,7 +250,6 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
-	file.File.Sync()
 	file.Close()
 
 	st, err := os.Stat(objectPath)

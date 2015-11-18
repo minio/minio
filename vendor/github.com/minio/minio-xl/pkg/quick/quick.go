@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	"github.com/fatih/structs"
+	"github.com/minio/minio-xl/pkg/atomic"
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
@@ -193,7 +194,15 @@ func (d config) Save(filename string) *probe.Error {
 		jsonData = []byte(strings.Replace(string(jsonData), "\n", "\r\n", -1))
 	}
 
-	err = ioutil.WriteFile(filename, jsonData, 0600)
+	atomicFile, err := atomic.FileCreate(filename)
+	if err != nil {
+		return probe.NewError(err)
+	}
+	_, err = atomicFile.Write(jsonData)
+	if err != nil {
+		return probe.NewError(err)
+	}
+	err = atomicFile.Close()
 	if err != nil {
 		return probe.NewError(err)
 	}
