@@ -39,8 +39,8 @@
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/atomic",
-			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
-			"revisionTime": "2015-10-20T11:16:42-07:00"
+			"revision": "008404af67dcf66bdde580245cd43951b425ed39",
+			"revisionTime": "2015-11-17T16:21:42-08:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/cpu",
@@ -69,8 +69,8 @@
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/quick",
-			"revision": "a5fc6d2430ba2ebcab31b938ab02a42bac85dc2e",
-			"revisionTime": "2015-10-20T11:16:42-07:00"
+			"revision": "008404af67dcf66bdde580245cd43951b425ed39",
+			"revisionTime": "2015-11-17T16:21:42-08:00"
 		},
 		{
 			"path": "github.com/rs/cors",

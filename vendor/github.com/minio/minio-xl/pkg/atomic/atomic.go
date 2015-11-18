@@ -33,6 +33,11 @@ type File struct {
 
 // Close the file replacing, returns an error if any
 func (f *File) Close() error {
+	// sync to the disk
+	err := f.Sync()
+	if err != nil {
+		return err
+	}
 	// close the embedded fd
 	if err := f.File.Close(); err != nil {
 		return err
@@ -58,12 +63,18 @@ func (f *File) CloseAndPurge() error {
 
 // FileCreate creates a new file at filePath for atomic writes, it also creates parent directories if they don't exist
 func FileCreate(filePath string) (*File, error) {
+	return FileCreateWithPrefix(filePath, "$deleteme.")
+}
+
+// FileCreateWithPrefix creates a new file at filePath for atomic writes, it also creates parent directories if they don't exist
+// prefix specifies the prefix of the temporary files so that cleaning stale temp files is easy
+func FileCreateWithPrefix(filePath string, prefix string) (*File, error) {
 	// if parent directories do not exist, ioutil.TempFile doesn't create them
 	// handle such a case with os.MkdirAll()
 	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return nil, err
 	}
-	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath))
+	f, err := ioutil.TempFile(filepath.Dir(filePath), prefix+filepath.Base(filePath))
 	if err != nil {
 		return nil, err
 	}

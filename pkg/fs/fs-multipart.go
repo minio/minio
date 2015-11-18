@@ -276,7 +276,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 
 	objectPath := filepath.Join(bucketPath, object)
 	partPath := objectPath + fmt.Sprintf("$%d", partID)
-	partFile, err := atomic.FileCreate(partPath)
+	partFile, err := atomic.FileCreateWithPrefix(partPath, "")
 	if err != nil {
 		return "", probe.NewError(err)
 	}
@@ -307,7 +307,6 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 			return "", probe.NewError(SignatureDoesNotMatch{})
 		}
 	}
-	partFile.File.Sync()
 	partFile.Close()
 
 	fi, err := os.Stat(partPath)
@@ -374,7 +373,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 	}
 
 	objectPath := filepath.Join(bucketPath, object)
-	file, err := atomic.FileCreate(objectPath)
+	file, err := atomic.FileCreateWithPrefix(objectPath, "")
 	if err != nil {
 		return ObjectMetadata{}, probe.NewError(err)
 	}
@@ -430,7 +429,6 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		file.CloseAndPurge()
 		return ObjectMetadata{}, err.Trace()
 	}
-	file.File.Sync()
 	file.Close()
 
 	st, err := os.Stat(objectPath)
