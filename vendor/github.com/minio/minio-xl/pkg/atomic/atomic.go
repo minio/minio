@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // File container provided for atomic file writes
@@ -31,13 +32,20 @@ type File struct {
 	file string
 }
 
-// Close the file replacing, returns an error if any
-func (f *File) Close() error {
+// CloseAndSync sync file to disk and close, returns an error if any
+func (f *File) CloseAndSync() error {
 	// sync to the disk
-	err := f.Sync()
-	if err != nil {
+	if err := f.File.Sync(); err != nil {
 		return err
 	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Close the file, returns an error if any
+func (f *File) Close() error {
 	// close the embedded fd
 	if err := f.File.Close(); err != nil {
 		return err
@@ -74,6 +82,7 @@ func FileCreateWithPrefix(filePath string, prefix string) (*File, error) {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return nil, err
 	}
+	prefix = strings.TrimSpace(prefix)
 	f, err := ioutil.TempFile(filepath.Dir(filePath), prefix+filepath.Base(filePath))
 	if err != nil {
 		return nil, err
