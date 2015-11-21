@@ -193,6 +193,15 @@ func (a Args) Tail() Args {
 	return []string{}
 }
 
+// Head - Return the rest of the arguments (not the last one)
+// or else an empty string slice
+func (a Args) Head() Args {
+	if len(a) == 1 {
+		return a
+	}
+	return []string(a)[:len(a)-1]
+}
+
 // Present - Checks if there are any arguments present
 func (a Args) Present() bool {
 	return len(a) != 0
