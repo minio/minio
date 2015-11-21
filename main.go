@@ -27,6 +27,29 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
+// Help template for minio.
+var minioHelpTemplate = `NAME:
+  {{.Name}} - {{.Usage}}
+
+DESCRIPTION:
+  {{.Description}}
+
+USAGE:
+  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
+
+COMMANDS:
+  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .Flags}}
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}{{end}}
+VERSION:
+  ` + minioVersion +
+	`{{ "\n"}}{{range $key, $value := ExtraInfo}}
+{{$key}}:
+  {{$value}}
+{{end}}`
+
 func init() {
 	// Check if minio was compiled using a supported version of Golang.
 	checkGolangRuntimeVersion()
@@ -106,37 +129,12 @@ func registerApp() *cli.App {
 	// set up app
 	app := cli.NewApp()
 	app.Name = "Minio"
-	// hide --version flag, version is a command
-	app.HideVersion = true
 	app.Author = "Minio.io"
 	app.Usage = "Cloud Storage Server for Micro Services."
 	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.`
 	app.Flags = flags
 	app.Commands = commands
-
-	app.CustomAppHelpTemplate = `NAME:
-  {{.Name}} - {{.Usage}}
-
-DESCRIPTION:
-  {{.Description}}
-
-USAGE:
-  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
-
-COMMANDS:
-  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-  {{end}}{{if .Flags}}
-FLAGS:
-  {{range .Flags}}{{.}}
-  {{end}}{{end}}
-VERSION:
-  ` + minioVersion +
-		`
-{{range $key, $value := ExtraInfo}}
-{{$key}}:
-  {{$value}}
-{{end}}
-`
+	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
 		msg := fmt.Sprintf("‘%s’ is not a minio sub-command. See ‘minio help’.", command)
 		closestCommands := findClosestCommands(command)

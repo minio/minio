@@ -160,7 +160,11 @@ func ShowCommandHelp(c *Context, command string) {
 				app.Commands = append(app.Commands, command)
 			}
 		}
-		HelpPrinter(DefaultSubcommandHelpTemplate, app)
+		if app.CustomAppHelpTemplate != "" {
+			HelpPrinter(app.CustomAppHelpTemplate, app)
+		} else {
+			HelpPrinter(DefaultSubcommandHelpTemplate, app)
+		}
 		return
 	}
 

@@ -34,8 +34,6 @@ type Command struct {
 	Flags []Flag
 	// Treat all flags as normal arguments if true
 	SkipFlagParsing bool
-	// Boolean to hide built-in help command
-	HideHelp bool
 	// Boolean to hide this command from help or completion
 	Hide bool
 	// CustomHelpTemplate the text template for the command help topic.
@@ -48,14 +46,6 @@ type Command struct {
 func (c Command) Run(ctx *Context) error {
 	if len(c.Subcommands) > 0 || c.Before != nil || c.After != nil {
 		return c.startApp(ctx)
-	}
-
-	if !c.HideHelp && (HelpFlag != BoolFlag{}) {
-		// append help to flags
-		c.Flags = append(
-			c.Flags,
-			HelpFlag,
-		)
 	}
 
 	if ctx.App.EnableBashCompletion {
@@ -96,9 +86,13 @@ func (c Command) Run(ctx *Context) error {
 	}
 
 	if err != nil {
-		fmt.Fprint(ctx.App.Writer, "Incorrect Usage.\n\n")
+		if len(ctx.Args().Tail()) > 1 {
+			fmt.Fprint(ctx.App.Writer, fmt.Sprintf("Unknown flags. ‘%s’\n\n", strings.Join(ctx.Args().Tail(), ", ")))
+		} else {
+			fmt.Fprint(ctx.App.Writer, fmt.Sprintf("Unknown flag. ‘%s’\n\n", ctx.Args().Tail()[0]))
+		}
 		ShowCommandHelp(ctx, c.Name)
-		fmt.Fprintln(ctx.App.Writer)
+		fmt.Fprint(ctx.App.Writer, "")
 		return err
 	}
 
@@ -107,7 +101,7 @@ func (c Command) Run(ctx *Context) error {
 		fmt.Fprintln(ctx.App.Writer, nerr)
 		fmt.Fprintln(ctx.App.Writer)
 		ShowCommandHelp(ctx, c.Name)
-		fmt.Fprintln(ctx.App.Writer)
+		fmt.Fprint(ctx.App.Writer, "")
 		return nerr
 	}
 	context := NewContext(ctx.App, set, ctx.globalSet)
@@ -162,14 +156,11 @@ func (c Command) startApp(ctx *Context) error {
 
 	// set CommandNotFound
 	app.CommandNotFound = ctx.App.CommandNotFound
-
 	app.CustomAppHelpTemplate = c.CustomHelpTemplate
-	app.HideVersion = ctx.App.HideVersion
 
 	// set the flags and commands
 	app.Commands = c.Subcommands
 	app.Flags = c.Flags
-	app.HideHelp = c.HideHelp
 
 	// bash completion
 	app.EnableBashCompletion = ctx.App.EnableBashCompletion
@@ -185,6 +176,5 @@ func (c Command) startApp(ctx *Context) error {
 	} else {
 		app.Action = helpSubcommand.Action
 	}
-
 	return app.RunAsSubcommand(ctx)
 }
