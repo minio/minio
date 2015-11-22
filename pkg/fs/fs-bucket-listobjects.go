@@ -69,6 +69,9 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 			return nil, resources, probe.NewError(err)
 		}
 		for _, fl := range files {
+			if strings.HasSuffix(fl.Name(), "$multiparts") {
+				continue
+			}
 			p.files = append(p.files, contentInfo{
 				Prefix:   fl.Name(),
 				Size:     fl.Size(),
@@ -105,6 +108,9 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 				return nil, resources, probe.NewError(err)
 			}
 			for _, fl := range files {
+				if strings.HasSuffix(fl.Name(), "$multiparts") {
+					continue
+				}
 				prefix := fl.Name()
 				if resources.Prefix != "" {
 					prefix = filepath.Join(resources.Prefix, fl.Name())
