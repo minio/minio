@@ -23,11 +23,11 @@ import (
 )
 
 func main() {
-	// Create an S3 service object in the "milkyway" region
+	// Create an S3 service object in the default region.
 	s3Client := s3.New(&aws.Config{
 		Credentials:      credentials.NewStaticCredentials("<YOUR-ACCESS-ID>", "<YOUR-SECRET-ID>", ""),
 		Endpoint:         aws.String("http://localhost:9000"),
-		Region:           aws.String("milkyway"),
+		Region:           aws.String("us-east-1"),
 		DisableSSL:       aws.Bool(true),
 		S3ForcePathStyle: aws.Bool(true),
 	})

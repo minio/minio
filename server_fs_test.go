@@ -234,7 +234,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
-		"milkyway",
+		"us-east-1",
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -244,7 +244,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
 	date := sumHMAC([]byte("AWS4"+s.secretAccessKey), []byte(t.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("milkyway"))
+	region := sumHMAC(date, []byte("us-east-1"))
 	service := sumHMAC(region, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 
