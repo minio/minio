@@ -213,7 +213,7 @@ var errorCodeResponse = map[int]APIError{
 	},
 	AuthorizationHeaderMalformed: {
 		Code:           "AuthorizationHeaderMalformed",
-		Description:    "The authorization header is malformed; the region is wrong; expecting 'milkyway'.",
+		Description:    "The authorization header is malformed; the region is wrong; expecting 'us-east-1'.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	MalformedPOSTRequest: {

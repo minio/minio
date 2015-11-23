@@ -77,7 +77,7 @@ func isValidRegion(authHeaderValue string) *probe.Error {
 		return err.Trace()
 	}
 	region := credentialElements[2]
-	if region != "milkyway" {
+	if region != "us-east-1" {
 		return probe.NewError(errInvalidRegion)
 	}
 	return nil
