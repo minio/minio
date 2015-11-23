@@ -19,18 +19,21 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 func main() {
-	// Create an S3 service object in the default region.
-	s3Client := s3.New(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials("<YOUR-ACCESS-ID>", "<YOUR-SECRET-ID>", ""),
+	newSession := session.New()
+	s3Config := &aws.Config{
+		Credentials: credentials.NewStaticCredentials("<YOUR-ACCESS-KEY-ID>", "<YOUR-SECRET-ACCESS-KEY", ""),
 		Endpoint:         aws.String("http://localhost:9000"),
 		Region:           aws.String("us-east-1"),
 		DisableSSL:       aws.Bool(true),
 		S3ForcePathStyle: aws.Bool(true),
-	})
+	}
+	// Create an S3 service object in the default region.
+	s3Client := s3.New(newSession, s3Config)
 
 	cparams := &s3.CreateBucketInput{
 		Bucket: aws.String("newbucket"), // Required
