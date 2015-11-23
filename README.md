@@ -60,7 +60,7 @@ NOTE: Source installation is intended for only developers and advanced users. â€
 If you do not have a working Golang environment, please follow [Install Golang](./INSTALLGO.md).
 
 ```sh
-$ go get -u github.com/minio/minio
+$ GO15VENDOREXPERIMENT=1 go get -u github.com/minio/minio
 ```
 
 ### How to use Minio?
@@ -102,9 +102,9 @@ To configure Minio Client.
 
 	$ wget https://dl.minio.io:9000/updates/2015/Nov/linux-amd64/mc
 	$ chmod 755 mc
-	$ ./mc config host add localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
-	$ ./mc mb localhost/photobucket
-	$ ./mc cp ~/Photos... localhost/photobucket
+	$ ./mc config host add http://localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
+	$ ./mc mb localhost:9000/photobucket
+	$ ./mc cp ~/Photos... localhost:9000/photobucket
 
 Starting minio server:
 Listening on http://127.0.0.1:9000
