@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -30,177 +29,152 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
+// command specific flags.
+var (
+	updateFlags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "help, h",
+			Usage: "Help for update.",
+		},
+		cli.BoolFlag{
+			Name:  "experimental, E",
+			Usage: "Check experimental update.",
+		},
+	}
+)
+
 // Check for new software updates.
 var updateCmd = cli.Command{
 	Name:   "update",
-	Usage:  "Check for new software updates.",
+	Usage:  "Check for a new software update.",
 	Action: mainUpdate,
+	Flags:  updateFlags,
 	CustomHelpTemplate: `Name:
    minio {{.Name}} - {{.Usage}}
 
 USAGE:
-   minio {{.Name}} release
-   minio {{.Name}} experimental
+   minio {{.Name}} [FLAGS]
 
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
 EXAMPLES:
-   1. Check for new official releases
-      $ minio {{.Name}} release
+   1. Check for any new official release.
+      $ minio {{.Name}}
 
-   2. Check for new experimental releases
-      $ minio {{.Name}} experimental
+   2. Check for any new experimental release.
+      $ minio {{.Name}} --experimental
 `,
 }
 
-// updates container to hold updates json
-type updates struct {
+// update URL endpoints.
+const (
+	minioUpdateStableURL       = "https://dl.minio.io:9000/updates/updates.json"
+	minioUpdateExperimentalURL = "https://dl.minio.io:9000/updates/experimental.json"
+)
+
+// minioUpdates container to hold updates json.
+type minioUpdates struct {
 	BuildDate string
 	Platforms map[string]string
 }
 
-// updateMessage container to hold update messages
+// updateMessage container to hold update messages.
 type updateMessage struct {
+	Status   string `json:"status"`
 	Update   bool   `json:"update"`
 	Download string `json:"downloadURL"`
 	Version  string `json:"version"`
 }
 
-// String colorized update message
+// String colorized update message.
 func (u updateMessage) String() string {
-	if u.Update {
-		var msg string
-		if runtime.GOOS == "windows" {
-			msg = "Download " + u.Download
-		} else {
-			msg = "Download " + u.Download
-		}
-		msg, err := colorizeUpdateMessage(msg)
-		fatalIf(err.Trace(msg), "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
-		return msg
+	if !u.Update {
+		updateMessage := color.New(color.FgGreen, color.Bold).SprintfFunc()
+		return updateMessage("You are already running the most recent version of ‘minio’.")
 	}
-	updateMessage := color.New(color.FgGreen, color.Bold).SprintfFunc()
-	return updateMessage("You are already running the most recent version of ‘minio’.")
+	var msg string
+	if runtime.GOOS == "windows" {
+		msg = "Download " + u.Download
+	} else {
+		msg = "Download " + u.Download
+	}
+	msg, err := colorizeUpdateMessage(msg)
+	fatalIf(err.Trace(msg), "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
+	return msg
 }
 
-// JSON jsonified update message
+// JSON jsonified update message.
 func (u updateMessage) JSON() string {
+	u.Status = "success"
 	updateMessageJSONBytes, err := json.Marshal(u)
 	fatalIf(probe.NewError(err), "Unable to marshal into JSON.", nil)
 
 	return string(updateMessageJSONBytes)
 }
 
-func getExperimentalUpdate() {
+// verify updates for releases.
+func getReleaseUpdate(updateURL string) {
+	data, e := http.Get(updateURL)
+	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+updateURL+"’.", nil)
+
+	if minioVersion == "UNOFFICIAL.GOGET" {
+		fatalIf(probe.NewError(errors.New("")),
+			"Update mechanism is not supported for ‘go get’ based binary builds.  Please download official releases from https://minio.io/#minio", nil)
+	}
+
 	current, e := time.Parse(time.RFC3339, minioVersion)
-	fatalIf(probe.NewError(e), "Unable to parse Version string as time.", nil)
+	fatalIf(probe.NewError(e), "Unable to parse version string as time.", nil)
 
 	if current.IsZero() {
-		fatalIf(probe.NewError(errors.New("")), "Experimental updates are not supported for custom build. Version field is empty. Please download official releases from https://dl.minio.io:9000", nil)
+		fatalIf(probe.NewError(errors.New("")),
+			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
 	}
 
-	resp, err := http.Get(minioExperimentalURL)
-	fatalIf(probe.NewError(err), "Unable to initalize experimental URL.", nil)
-
-	var experimentals updates
-	decoder := json.NewDecoder(resp.Body)
-	defer resp.Body.Close()
-	e = decoder.Decode(&experimentals)
-	fatalIf(probe.NewError(e), "Unable to decode experimental update notification.", nil)
-
-	latest, e := time.Parse(time.RFC3339, experimentals.BuildDate)
-	fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
-
-	if latest.IsZero() {
-		fatalIf(probe.NewError(errors.New("")), "Unable to validate any experimental update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
-	}
-
-	minioExperimentalURLParse, err := url.Parse(minioExperimentalURL)
-	if err != nil {
-		fatalIf(probe.NewError(err), "Unable to parse URL: "+minioExperimentalURL, nil)
-	}
-	downloadURL := minioExperimentalURLParse.Scheme + "://" +
-		minioExperimentalURLParse.Host + "/" + experimentals.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
-
-	updateMessage := updateMessage{
-		Download: downloadURL,
-		Version:  minioVersion,
-	}
-	if latest.After(current) {
-		updateMessage.Update = true
-	}
-	if globalJSONFlag {
-		Println(updateMessage.JSON())
-	} else {
-		Println(updateMessage)
-	}
-}
-
-func getReleaseUpdate() {
-	current, e := time.Parse(time.RFC3339, minioVersion)
-	fatalIf(probe.NewError(e), "Unable to parse Version string as time.", nil)
-
-	if current.IsZero() {
-		fatalIf(probe.NewError(errors.New("")), "Updates not supported for custom build. Version field is empty. Please download official releases from https://dl.minio.io:9000", nil)
-	}
-
-	resp, err := http.Get(minioUpdateURL)
-	fatalIf(probe.NewError(err), "Unable to initalize experimental URL.", nil)
-
-	var releases updates
-	decoder := json.NewDecoder(resp.Body)
-	e = decoder.Decode(&releases)
+	var updates minioUpdates
+	decoder := json.NewDecoder(data.Body)
+	e = decoder.Decode(&updates)
 	fatalIf(probe.NewError(e), "Unable to decode update notification.", nil)
 
-	latest, e := time.Parse(time.RFC3339, releases.BuildDate)
-	fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
+	latest, e := time.Parse(time.RFC3339, updates.BuildDate)
+	if e != nil {
+		latest, e = time.Parse(http.TimeFormat, updates.BuildDate)
+		fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
+	}
 
 	if latest.IsZero() {
-		fatalIf(probe.NewError(errors.New("")), "Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
+		fatalIf(probe.NewError(errors.New("")),
+			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
 	}
 
-	minioUpdateURLParse, err := url.Parse(minioUpdateURL)
+	updateURLParse, err := url.Parse(updateURL)
 	if err != nil {
-		fatalIf(probe.NewError(err), "Unable to parse URL: "+minioUpdateURL, nil)
+		fatalIf(probe.NewError(err), "Unable to parse URL: "+updateURL, nil)
 	}
-	downloadURL := minioUpdateURLParse.Scheme +
-		"://" + minioUpdateURLParse.Host + "/" + releases.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
-	updateMessage := updateMessage{
+	downloadURL := updateURLParse.Scheme + "://" +
+		updateURLParse.Host + "/" + updates.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
+
+	updateMsg := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
 	}
 	if latest.After(current) {
-		updateMessage.Update = true
+		updateMsg.Update = true
 	}
 
 	if globalJSONFlag {
-		Println(updateMessage.JSON())
+		Println(updateMsg.JSON())
 	} else {
-		Println(updateMessage)
+		Println(updateMsg)
 	}
 }
 
-const (
-	minioUpdateURL       = "https://dl.minio.io:9000/updates/minio/updates.json"
-	minioExperimentalURL = "https://dl.minio.io:9000/updates/minio/experimental.json"
-)
-
-func checkUpdateSyntax(ctx *cli.Context) {
-	if ctx.Args().First() == "help" || !ctx.Args().Present() {
-		cli.ShowCommandHelpAndExit(ctx, "update", 1) // last argument is exit code
-	}
-	arg := strings.TrimSpace(ctx.Args().First())
-	if arg != "release" && arg != "experimental" {
-		fatalIf(probe.NewError(errInvalidArgument), "Unrecognized argument provided.", nil)
-	}
-}
-
-// mainUpdate -
+// main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
-	checkUpdateSyntax(ctx)
-	arg := strings.TrimSpace(ctx.Args().First())
-	switch arg {
-	case "release":
-		getReleaseUpdate()
-	case "experimental":
-		getExperimentalUpdate()
+	// Check for update.
+	if ctx.Bool("experimental") {
+		getReleaseUpdate(minioUpdateExperimentalURL)
+	} else {
+		getReleaseUpdate(minioUpdateStableURL)
 	}
 }

@@ -81,6 +81,6 @@ func colorizeUpdateMessage(updateString string) (string, *probe.Error) {
 			sideBar + line2InColor + spacePaddingLine2 + sideBar + "\n" +
 			bottom + "\n"
 	}
-	// finally print the message
+	// return the final message
 	return message, nil
 }
