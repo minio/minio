@@ -70,10 +70,12 @@ pkg-remove:
 install: gomake-all
 
 dockerimage: install
+	@echo "Checking if docker is installed."
+	@if [ ! -e /usr/bin/docker ]; then echo "Docker not installed, cannot build docker image. Please install 'sudo apt-get install docker.io'" && exit 1; fi
 	@echo "Building docker image:" minio:$(TAG)
 	@GO15VENDOREXPERIMENT=1 go build --ldflags $(DOCKER_LDFLAGS) -o minio.dockerimage
 	@mkdir -p export
-	@docker build --rm --tag=minio:$(TAG) .
+	@sudo docker build --rm --tag=minio/minio:$(TAG) .
 	@rmdir export
 	@rm minio.dockerimage
 
