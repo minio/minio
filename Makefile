@@ -79,6 +79,9 @@ dockerimage: install
 	@rmdir export
 	@rm minio.dockerimage
 
+release:
+	@./release.sh
+
 clean:
 	@echo "Cleaning up all the generated files:"
 	@rm -fv cover.out
