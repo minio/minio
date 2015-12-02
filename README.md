@@ -4,7 +4,7 @@ Minio is a minimal cloud storage server for Micro Services. Written in Golang an
 
 ## Description
 
-Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks. 
+Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.
 
 ## Minio Client
 
@@ -23,9 +23,9 @@ Micro services environment provisions one Minio server per application instance.
 
 Download ``minio`` for:
 
-- ``64-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-amd64/minio
-- ``32-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-386/minio
-- ``32-bit ARM`` from https://dl.minio.io:9000/updates/minio/2015/Nov/linux-arm/minio
+- ``64-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-amd64/minio
+- ``32-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-386/minio
+- ``32-bit ARM`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-arm/minio
 
 ~~~
 $ chmod +x minio
@@ -34,7 +34,7 @@ $ ./minio help
 
 #### OS X
 
-Download ``minio`` from https://dl.minio.io:9000/updates/minio/2015/Nov/darwin-amd64/minio
+Download ``minio`` from https://dl.minio.io:9000/updates/minio/2015/Dec/darwin-amd64/minio
 
 ~~~
 $ chmod 755 minio
@@ -45,8 +45,8 @@ $ ./minio help
 
 Download ``minio`` for:
 
-- ``64-bit`` from https://dl.minio.io:9000/updates/minio/2015/Nov/windows-amd64/minio.exe
-- ``32-bit`` from https://dl.minio.io:9000/updates/minio/2015/Nov/windows-386/minio.exe
+- ``64-bit`` from https://dl.minio.io:9000/updates/minio/2015/Dec/windows-amd64/minio.exe
+- ``32-bit`` from https://dl.minio.io:9000/updates/minio/2015/Dec/windows-386/minio.exe
 
 ~~~
 C:\Users\Username\Downloads> minio.exe help
