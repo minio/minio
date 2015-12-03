@@ -19,13 +19,18 @@
 package contentdb
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"encoding/json"
 )
 
 var (
+	// Internal lock.
+	mutex = &sync.Mutex{}
+
 	// Make note of initialization.
 	isInitialized = false
 
@@ -78,20 +83,26 @@ func loadDB() error {
 
 // Init initializes contentdb for lookups. JSON structure is parsed into a simple map of extension and content-type.
 func Init() error {
-	var e error
-	extDB = make(map[string]string)
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	if !isInitialized {
-		e = loadDB()
+		var e error
+		extDB = make(map[string]string)
+
+		if !isInitialized {
+			e = loadDB()
+		}
+		isInitialized = true
+		return e
 	}
-	isInitialized = true
-	return e
+	return nil
 }
 
 // Lookup returns matching content-type for known types of file extensions.
 func Lookup(extension string) (contentType string, e error) {
 	if !isInitialized {
-		e = Init()
+		return "", errors.New("contentdb is not initialized.")
 	}
 
 	return extDB[extension], e
@@ -99,11 +110,9 @@ func Lookup(extension string) (contentType string, e error) {
 
 // MustLookup returns matching content-type for known types of file extensions. In case of error, it panics.
 func MustLookup(extension string) (contentType string) {
-	if !isInitialized {
-		if e := Init(); e != nil {
-			panic(fmt.Sprintf("Error loading contentdb: %s\n", e))
-		}
+	var e error
+	if contentType, e = Lookup(extension); e != nil {
+		panic(fmt.Sprintf("Lookup failed: %s\n", e))
 	}
-
-	return extDB[extension]
+	return contentType
 }
