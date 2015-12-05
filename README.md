@@ -52,6 +52,16 @@ Download ``minio`` for:
 C:\Users\Username\Downloads> minio.exe help
 ~~~
 
+#### Docker container 
+
+Download ``minio`` for docker. 
+
+~~~
+$ docker pull minio/minio
+~~~
+
+Read more here on [How to configure data volume containers for Minio?](./Docker.md)
+
 #### Source
 <blockquote>
 NOTE: Source installation is intended for only developers and advanced users. ‘minio update’ continous delivery mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio.
