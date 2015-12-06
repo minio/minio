@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -59,20 +58,6 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	fsroot, err := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(err, IsNil)
 
-	fs.SetFSMultipartsConfigPath(filepath.Join(root, "multiparts-session.json"))
-	fs.SetFSBucketsConfigPath(filepath.Join(root, "buckets.json"))
-	multiparts := &fs.Multiparts{}
-	multiparts.Version = "1"
-	multiparts.ActiveSession = make(map[string]*fs.MultipartSession)
-	perr := fs.SaveMultipartsSession(multiparts)
-	c.Assert(perr, IsNil)
-
-	buckets := &fs.Buckets{}
-	buckets.Version = "1"
-	buckets.Metadata = make(map[string]*fs.BucketMetadata)
-	perr = fs.SaveBucketsMetadata(buckets)
-	c.Assert(perr, IsNil)
-
 	accessKeyID, perr := generateAccessKeyID()
 	c.Assert(perr, IsNil)
 	secretAccessKey, perr := generateSecretAccessKey()
@@ -85,7 +70,7 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	s.secretAccessKey = string(secretAccessKey)
 
 	// do this only once here
-	customConfigPath = root
+	setGlobalConfigPath(root)
 
 	perr = saveConfig(conf)
 	c.Assert(perr, IsNil)

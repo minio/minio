@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"runtime"
 	"strconv"
 
@@ -55,9 +56,9 @@ func init() {
 	checkGolangRuntimeVersion()
 
 	// Check for the environment early on and gracefuly report.
-	_, err := userCurrent()
+	_, err := user.Current()
 	if err != nil {
-		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
+
 	}
 
 	if os.Getenv("DOCKERIMAGE") == "1" {
@@ -118,6 +119,7 @@ func registerApp() *cli.App {
 	registerCommand(updateCmd)
 
 	// register all flags
+	registerFlag(configFolderFlag)
 	registerFlag(addressFlag)
 	registerFlag(accessLogFlag)
 	registerFlag(rateLimitFlag)
@@ -146,8 +148,17 @@ func registerApp() *cli.App {
 		}
 		Fatalln(msg)
 	}
-
 	return app
+}
+
+func checkMainSyntax(c *cli.Context) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
+	}
+	if configPath == "" {
+		Fatalf("Config folder cannot be empty, please specify --config-folder <foldername>.")
+	}
 }
 
 func main() {
@@ -160,8 +171,15 @@ func main() {
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
-		globalJSONFlag = c.GlobalBool("json")
+		// Sets new config folder.
+		setGlobalConfigPath(c.GlobalString("config-folder"))
+
+		// Valid input arguments to main.
+		checkMainSyntax(c)
+
+		// Migrate any old version of config / state files to newer format.
 		migrate()
+
 		return nil
 	}
 	app.ExtraInfo = func() map[string]string {

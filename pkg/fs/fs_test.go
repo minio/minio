@@ -19,7 +19,6 @@ package fs
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -34,15 +33,10 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
 	create := func() Filesystem {
-		configPath, err := ioutil.TempDir(os.TempDir(), "minio-")
-		c.Check(err, IsNil)
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
-		SetFSMultipartsConfigPath(filepath.Join(configPath, "multiparts-session.json"))
-		SetFSBucketsConfigPath(filepath.Join(configPath, "buckets.json"))
 		storageList = append(storageList, path)
-		store, perr := New()
-		store.SetRootPath(path)
+		store, perr := New(path)
 		store.SetMinFreeDisk(0)
 		c.Check(perr, IsNil)
 		return store

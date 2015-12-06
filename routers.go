@@ -64,10 +64,9 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI
 func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
-	fs, err := fs.New()
+	fs, err := fs.New(conf.Path)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
-	fs.SetRootPath(conf.Path)
 	fs.SetMinFreeDisk(conf.MinFreeDisk)
 	if conf.Expiry > 0 {
 		go fs.AutoExpiryThread(conf.Expiry)

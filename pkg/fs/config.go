@@ -17,52 +17,22 @@
 package fs
 
 import (
-	"os"
-	"os/user"
 	"path/filepath"
-	"runtime"
-	"strconv"
 
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio-xl/pkg/quick"
+	"github.com/minio/minio/pkg/user"
 )
-
-// Workaround for docker images with fully static binary and 32bit linux operating systems.
-// For static binaries NSS library will not be a part of the static binary hence user.Current() fails.
-// For 32bit linux CGO is not enabled so it will not provide linux specific codebase.
-func userCurrent() (*user.User, *probe.Error) {
-	if os.Getenv("DOCKERIMAGE") == "1" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
-		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
-	}
-	if runtime.GOARCH == "386" && runtime.GOOS == "linux" {
-		return &user.User{
-			Uid:      strconv.Itoa(os.Getuid()),
-			Gid:      strconv.Itoa(os.Getgid()),
-			Username: os.Getenv("USER"),
-			Name:     os.Getenv("USER"),
-			HomeDir:  os.Getenv("HOME"),
-		}, nil
-	}
-	user, err := user.Current()
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
-	return user, nil
-}
 
 func getFSBucketsConfigPath() (string, *probe.Error) {
 	if customBucketsConfigPath != "" {
 		return customBucketsConfigPath, nil
 	}
-	u, err := userCurrent()
-	if err != nil {
-		return "", err.Trace()
+	homeDir, e := user.HomeDir()
+	if e != nil {
+		return "", probe.NewError(e)
 	}
-	fsBucketsConfigPath := filepath.Join(u.HomeDir, ".minio", "buckets.json")
+	fsBucketsConfigPath := filepath.Join(homeDir, ".minio", "$buckets.json")
 	return fsBucketsConfigPath, nil
 }
 
@@ -70,29 +40,29 @@ func getFSMultipartsSessionConfigPath() (string, *probe.Error) {
 	if customMultipartsConfigPath != "" {
 		return customMultipartsConfigPath, nil
 	}
-	u, err := userCurrent()
-	if err != nil {
-		return "", err.Trace()
+	homeDir, e := user.HomeDir()
+	if e != nil {
+		return "", probe.NewError(e)
 	}
-	fsMultipartsConfigPath := filepath.Join(u.HomeDir, ".minio", "multiparts-session.json")
+	fsMultipartsConfigPath := filepath.Join(homeDir, ".minio", "$multiparts-session.json")
 	return fsMultipartsConfigPath, nil
 }
 
 // internal variable only accessed via get/set methods
 var customMultipartsConfigPath, customBucketsConfigPath string
 
-// SetFSBucketsConfigPath - set custom fs buckets config path
-func SetFSBucketsConfigPath(configPath string) {
+// setFSBucketsConfigPath - set custom fs buckets config path
+func setFSBucketsConfigPath(configPath string) {
 	customBucketsConfigPath = configPath
 }
 
 // SetFSMultipartsConfigPath - set custom multiparts session config path
-func SetFSMultipartsConfigPath(configPath string) {
+func setFSMultipartsConfigPath(configPath string) {
 	customMultipartsConfigPath = configPath
 }
 
-// SaveMultipartsSession - save multiparts
-func SaveMultipartsSession(multiparts *Multiparts) *probe.Error {
+// saveMultipartsSession - save multiparts
+func saveMultipartsSession(multiparts *Multiparts) *probe.Error {
 	fsMultipartsConfigPath, err := getFSMultipartsSessionConfigPath()
 	if err != nil {
 		return err.Trace()
@@ -107,8 +77,8 @@ func SaveMultipartsSession(multiparts *Multiparts) *probe.Error {
 	return nil
 }
 
-// SaveBucketsMetadata - save metadata of all buckets
-func SaveBucketsMetadata(buckets *Buckets) *probe.Error {
+// saveBucketsMetadata - save metadata of all buckets
+func saveBucketsMetadata(buckets *Buckets) *probe.Error {
 	fsBucketsConfigPath, err := getFSBucketsConfigPath()
 	if err != nil {
 		return err.Trace()

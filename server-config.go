@@ -26,6 +26,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio-xl/pkg/quick"
+	"github.com/minio/minio/pkg/user"
 )
 
 // configV1
@@ -118,17 +119,31 @@ func (c *configV2) JSON() string {
 	return string(loggerBytes)
 }
 
+// configPath for custom config path only for testing purposes
+var customConfigPath string
+
+// Sets a new config path.
+func setGlobalConfigPath(configPath string) {
+	customConfigPath = configPath
+}
+
 // getConfigPath get users config path
 func getConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
-	u, err := userCurrent()
-	if err != nil {
-		return "", err.Trace()
+	homeDir, e := user.HomeDir()
+	if e != nil {
+		return "", probe.NewError(e)
 	}
-	configPath := filepath.Join(u.HomeDir, ".minio")
+	configPath := filepath.Join(homeDir, ".minio")
 	return configPath, nil
+}
+
+func mustGetConfigPath() string {
+	configPath, err := getConfigPath()
+	fatalIf(err.Trace(), "Unable to get config path.", nil)
+	return configPath
 }
 
 // createConfigPath create users config path
@@ -157,9 +172,7 @@ func isConfigFileExists() bool {
 // mustGetConfigFile always get users config file, if not panic
 func mustGetConfigFile() string {
 	configFile, err := getConfigFile()
-	if err != nil {
-		panic(err)
-	}
+	fatalIf(err.Trace(), "Unable to get config file.", nil)
 	return configFile
 }
 
@@ -171,9 +184,6 @@ func getConfigFile() (string, *probe.Error) {
 	}
 	return filepath.Join(configPath, "config.json"), nil
 }
-
-// configPath for custom config path only for testing purposes
-var customConfigPath string
 
 // saveConfig save config
 func saveConfig(a *configV2) *probe.Error {

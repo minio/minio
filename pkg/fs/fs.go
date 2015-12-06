@@ -18,6 +18,7 @@ package fs
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -54,7 +55,10 @@ type Multiparts struct {
 }
 
 // New instantiate a new donut
-func New() (Filesystem, *probe.Error) {
+func New(rootPath string) (Filesystem, *probe.Error) {
+	setFSBucketsConfigPath(filepath.Join(rootPath, "$buckets.json"))
+	setFSMultipartsConfigPath(filepath.Join(rootPath, "$multiparts-session.json"))
+
 	var err *probe.Error
 	// load multiparts session from disk
 	var multiparts *Multiparts
@@ -65,7 +69,7 @@ func New() (Filesystem, *probe.Error) {
 				Version:       "1",
 				ActiveSession: make(map[string]*MultipartSession),
 			}
-			if err := SaveMultipartsSession(multiparts); err != nil {
+			if err := saveMultipartsSession(multiparts); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {
@@ -80,7 +84,7 @@ func New() (Filesystem, *probe.Error) {
 				Version:  "1",
 				Metadata: make(map[string]*BucketMetadata),
 			}
-			if err := SaveBucketsMetadata(buckets); err != nil {
+			if err := saveBucketsMetadata(buckets); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {
@@ -88,16 +92,10 @@ func New() (Filesystem, *probe.Error) {
 		}
 	}
 	a := Filesystem{lock: new(sync.Mutex)}
+	a.path = rootPath
 	a.multiparts = multiparts
 	a.buckets = buckets
 	return a, nil
-}
-
-// SetRootPath - set root path
-func (fs *Filesystem) SetRootPath(path string) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
-	fs.path = path
 }
 
 // SetMinFreeDisk - set min free disk

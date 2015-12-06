@@ -54,7 +54,7 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 		return probe.NewError(err)
 	}
 	delete(fs.buckets.Metadata, bucket)
-	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+	if err := saveBucketsMetadata(fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil
@@ -147,7 +147,7 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	bucketMetadata.Created = fi.ModTime()
 	bucketMetadata.ACL = BucketACL(acl)
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+	if err := saveBucketsMetadata(fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil
@@ -211,7 +211,7 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 	}
 	bucketMetadata.ACL = BucketACL(acl)
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	if err := SaveBucketsMetadata(fs.buckets); err != nil {
+	if err := saveBucketsMetadata(fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil

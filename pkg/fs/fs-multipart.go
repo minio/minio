@@ -201,7 +201,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 	if err != nil {
 		return "", probe.NewError(err)
 	}
-	if err := SaveMultipartsSession(fs.multiparts); err != nil {
+	if err := saveMultipartsSession(fs.multiparts); err != nil {
 		return "", err.Trace()
 	}
 	return uploadID, nil
@@ -419,7 +419,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		file.CloseAndPurge()
 		return ObjectMetadata{}, probe.NewError(err)
 	}
-	if err := SaveMultipartsSession(fs.multiparts); err != nil {
+	if err := saveMultipartsSession(fs.multiparts); err != nil {
 		file.CloseAndPurge()
 		return ObjectMetadata{}, err.Trace()
 	}
