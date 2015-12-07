@@ -165,9 +165,12 @@ func IsValidBucketACL(acl string) bool {
 	}
 }
 
-// IsValidBucket - verify bucket name in accordance with
+// IsValidBucketName - verify bucket name in accordance with
 //  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
-func IsValidBucket(bucket string) bool {
+func IsValidBucketName(bucket string) bool {
+	if strings.TrimSpace(bucket) == "" {
+		return false
+	}
 	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
 	}
@@ -178,7 +181,7 @@ func IsValidBucket(bucket string) bool {
 		return false
 	}
 	// We don't support buckets with '.' in them
-	match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+[a-zA-Z0-9]$", bucket)
+	match, _ := regexp.MatchString("^[a-zA-Z0-9][a-zA-Z0-9\\-]+[a-zA-Z0-9]$", bucket)
 	return match
 }
 

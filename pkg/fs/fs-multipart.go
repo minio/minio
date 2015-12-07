@@ -56,7 +56,7 @@ func (fs Filesystem) isValidUploadID(object, uploadID string) bool {
 func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	bucketPath := filepath.Join(fs.path, bucket)
@@ -153,7 +153,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 		return "", probe.NewError(RootPathFull{Path: fs.path})
 	}
 
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
@@ -234,7 +234,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 		return "", probe.NewError(errors.New("invalid part id, cannot be zero or less than zero"))
 	}
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -344,7 +344,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 	defer fs.lock.Unlock()
 
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -446,7 +446,7 @@ func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectReso
 	defer fs.lock.Unlock()
 
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return ObjectResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -515,7 +515,7 @@ func (fs Filesystem) AbortMultipartUpload(bucket, object, uploadID string) *prob
 	defer fs.lock.Unlock()
 
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 

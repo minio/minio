@@ -31,7 +31,7 @@ import (
 func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return nil, resources, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if resources.Prefix != "" && IsValidObjectName(resources.Prefix) == false {
