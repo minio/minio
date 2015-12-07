@@ -156,6 +156,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		var err error
 		sizeInt64, err = strconv.ParseInt(size, 10, 64)
 		if err != nil {
+			errorIf(probe.NewError(err), "Parsing Content-Length failed.", nil)
 			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
 			return
 		}
@@ -289,6 +290,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		var err error
 		sizeInt64, err = strconv.ParseInt(size, 10, 64)
 		if err != nil {
+			errorIf(probe.NewError(err), "Parsing Content-Length failed.", nil)
 			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
 			return
 		}

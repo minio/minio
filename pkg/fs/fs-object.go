@@ -43,7 +43,7 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 	defer fs.lock.Unlock()
 
 	// validate bucket
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return 0, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -96,7 +96,7 @@ func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -182,7 +182,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	// check bucket exists
@@ -304,7 +304,7 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 	defer fs.lock.Unlock()
 
 	// check bucket name valid
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 

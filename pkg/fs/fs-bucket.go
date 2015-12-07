@@ -33,7 +33,7 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	// verify bucket path legal
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	bucketDir := filepath.Join(fs.path, bucket)
@@ -78,7 +78,7 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 		}
 		if file.IsDir() {
 			// if directories found with odd names, skip them too
-			if !IsValidBucket(file.Name()) {
+			if !IsValidBucketName(file.Name()) {
 				continue
 			}
 		}
@@ -108,7 +108,7 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	}
 
 	// verify bucket path legal
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -157,7 +157,7 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	// get bucket path
@@ -184,7 +184,7 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	if !IsValidBucket(bucket) {
+	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	acl := metadata["acl"]
