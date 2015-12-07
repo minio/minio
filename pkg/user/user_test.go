@@ -14,14 +14,28 @@
  * limitations under the License.
  */
 
-package disk
+package user_test
 
-// StatFS stat fs struct is container which holds following values
-// Total - total size of the volume / disk
-// Free - free size of the volume / disk
-// FSType - file system type string
-type StatFS struct {
-	Total  int64
-	Free   int64
-	FSType string
+import (
+	"testing"
+
+	"github.com/minio/minio/pkg/user"
+
+	. "gopkg.in/check.v1"
+)
+
+func Test(t *testing.T) { TestingT(t) }
+
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
+
+func (s *MySuite) TestUser(c *C) {
+	_, err := user.Current()
+	c.Assert(err, IsNil)
+}
+
+func (s *MySuite) TestHomeDir(c *C) {
+	_, err := user.HomeDir()
+	c.Assert(err, IsNil)
 }
