@@ -136,26 +136,39 @@ func IgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 
-const (
-	separator = "/"
-)
-
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	splits := strings.SplitN(r.URL.Path, separator, 3)
-	switch len(splits) {
-	// bucket exists
-	case 2:
+	// Skip the first element which is usally '/' and split the rest.
+	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
+
+	// Save bucketName and objectName extracted from url Path.
+	var bucketName, objectName string
+	if len(splits) == 1 {
+		bucketName = splits[0]
+	}
+	if len(splits) == 2 {
+		bucketName = splits[0]
+		objectName = splits[1]
+	}
+	// If bucketName is present and not objectName check for bucket
+	// level resource queries.
+	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
 			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
 			return
 		}
-	// object exists
-	case 3:
+	}
+	// If bucketName and objectName are present check for its resource queries.
+	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
 			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
 			return
 		}
+	}
+	// A put method on path "/" doesn't make sense, ignore it.
+	if r.Method == "PUT" && r.URL.Path == "/" {
+		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+		return
 	}
 	h.handler.ServeHTTP(w, r)
 }
