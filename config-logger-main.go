@@ -106,10 +106,6 @@ func mainConfigLogger(ctx *cli.Context) {
 		}
 	}
 	if ctx.Args().Get(0) == "list" {
-		if globalJSONFlag {
-			Println(conf.JSON())
-			return
-		}
 		Println(conf)
 	}
 }

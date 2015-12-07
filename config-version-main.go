@@ -16,12 +16,7 @@
 
 package main
 
-import (
-	"encoding/json"
-
-	"github.com/minio/cli"
-	"github.com/minio/minio-xl/pkg/probe"
-)
+import "github.com/minio/cli"
 
 // Print config version.
 var configVersionCmd = cli.Command{
@@ -48,15 +43,5 @@ func mainConfigVersion(ctx *cli.Context) {
 	// convert interface{} back to its original struct
 	newConf := config
 	type Version string
-	if globalJSONFlag {
-		tB, e := json.Marshal(
-			struct {
-				Version Version `json:"version"`
-			}{Version: Version(newConf.Version)},
-		)
-		fatalIf(probe.NewError(e), "Unable to construct version string.", nil)
-		Println(string(tB))
-		return
-	}
 	Println(newConf.Version)
 }

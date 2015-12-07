@@ -18,13 +18,8 @@ package main
 
 import (
 	"encoding/base64"
-	"os"
-	"os/user"
-	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/minio/minio-xl/pkg/probe"
 )
 
 // isValidMD5 - verify if valid md5
@@ -55,31 +50,4 @@ func isMaxObjectSize(size string) bool {
 		return true
 	}
 	return false
-}
-
-// Workaround for docker images with fully static binary and 32bit linux operating systems.
-// For static binaries NSS library will not be a part of the static binary hence user.Current() fails.
-// For 32bit linux CGO is not enabled so it will not provide linux specific codebase.
-func userCurrent() (*user.User, *probe.Error) {
-	if os.Getenv("DOCKERIMAGE") == "1" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
-		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
-	}
-	if runtime.GOARCH == "386" && runtime.GOOS == "linux" {
-		return &user.User{
-			Uid:      strconv.Itoa(os.Getuid()),
-			Gid:      strconv.Itoa(os.Getgid()),
-			Username: os.Getenv("USER"),
-			Name:     os.Getenv("USER"),
-			HomeDir:  os.Getenv("HOME"),
-		}, nil
-	}
-	user, err := user.Current()
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
-	return user, nil
 }

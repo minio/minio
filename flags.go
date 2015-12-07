@@ -22,6 +22,12 @@ import "github.com/minio/cli"
 var flags = []cli.Flag{}
 
 var (
+	configFolderFlag = cli.StringFlag{
+		Name:  "config-folder, C",
+		Value: mustGetConfigPath(),
+		Usage: "Path to configuration folder.",
+	}
+
 	addressFlag = cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",

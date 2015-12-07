@@ -102,7 +102,7 @@ func Init() error {
 // Lookup returns matching content-type for known types of file extensions.
 func Lookup(extension string) (contentType string, e error) {
 	if !isInitialized {
-		return "", errors.New("contentdb is not initialized.")
+		return "", errors.New("contentdb is not initialized")
 	}
 
 	return extDB[extension], e

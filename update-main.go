@@ -162,11 +162,7 @@ func getReleaseUpdate(updateURL string) {
 		updateMsg.Update = true
 	}
 
-	if globalJSONFlag {
-		Println(updateMsg.JSON())
-	} else {
-		Println(updateMsg)
-	}
+	Println(updateMsg)
 }
 
 // main entry point for update command.
