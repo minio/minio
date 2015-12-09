@@ -30,12 +30,14 @@ type APIError struct {
 
 // APIErrorResponse - error response format
 type APIErrorResponse struct {
-	XMLName   xml.Name `xml:"Error" json:"-"`
-	Code      string
-	Message   string
-	Resource  string
-	RequestID string `xml:"RequestId"`
-	HostID    string `xml:"HostId"`
+	XMLName    xml.Name `xml:"Error" json:"-"`
+	Code       string
+	Message    string
+	Key        string
+	BucketName string
+	Resource   string
+	RequestID  string `xml:"RequestId"`
+	HostID     string `xml:"HostId"`
 }
 
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
@@ -70,6 +72,7 @@ const (
 	InvalidPartOrder
 	AuthorizationHeaderMalformed
 	MalformedPOSTRequest
+	SignatureVersionNotSupported
 	BucketNotEmpty
 	RootPathFull
 )
@@ -219,6 +222,11 @@ var errorCodeResponse = map[int]APIError{
 	MalformedPOSTRequest: {
 		Code:           "MalformedPOSTRequest",
 		Description:    "The body of your POST request is not well-formed multipart/form-data.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	SignatureVersionNotSupported: {
+		Code:           "InvalidRequest",
+		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	BucketNotEmpty: {

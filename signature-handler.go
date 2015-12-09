@@ -37,7 +37,9 @@ func SignatureHandler(h http.Handler) http.Handler {
 
 func isRequestSignatureV4(req *http.Request) bool {
 	if _, ok := req.Header["Authorization"]; ok {
-		return ok
+		if strings.HasPrefix(req.Header.Get("Authorization"), authHeaderPrefix) {
+			return ok
+		}
 	}
 	return false
 }

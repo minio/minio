@@ -80,9 +80,10 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 
 func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
+		CorsHandler,
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
-		CorsHandler,
+		IgnoreSignatureV2RequestHandler,
 	}
 	if !api.Anonymous {
 		mwHandlers = append(mwHandlers, SignatureHandler)

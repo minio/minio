@@ -126,11 +126,28 @@ Listening on http://172.30.2.17:9000
 Please follow the documentation here - [Using aws-sdk-go with Minio server](./AWS-SDK-GO.md)
 
 #### How to use s3cmd with Minio?
-<blockquote>
-Even with Signature version '4' enabled, 's3cmd' falls back to Signature version '2' for listing your buckets. Since minio server is only Signature version '4' listing your buckets with Signature version '2' fails. We have no immediate plans on supporting Signature version '2'. Please follow https://github.com/minio/minio/issues/987 to know more on this issue.
-</blockquote>
 
-`s3cmd` is currently not supported.
+Edit the following fields in your s3cmd configuration file. ~/.s3cfg
+
+```
+host_base = localhost:9000
+host_bucket = localhost:9000
+access_key = YOUR_ACCESS_KEY_HERE
+secret_key = YOUR_SECRET_KEY_HERE
+```
+
+To list your buckets.
+```
+$ s3cmd --region us-east-1 ls s3://
+2015-12-09 16:12  s3://testbbucket
+```
+
+To list contents inside buckets.
+```
+$ s3cmd --region us-east-1 ls s3://testbucket/
+                       DIR   s3://testbucket/test/
+2015-12-09 16:05    138504   s3://testbucket/newfile
+```
 
 ## Contribute to Minio Project
 Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
