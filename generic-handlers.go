@@ -46,6 +46,10 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
+type ignoreSignatureV2RequestHandler struct {
+	handler http.Handler
+}
+
 func parseDate(req *http.Request) (time.Time, error) {
 	amzDate := req.Header.Get(http.CanonicalHeaderKey("x-amz-date"))
 	switch {
@@ -126,6 +130,23 @@ func CorsHandler(h http.Handler) http.Handler {
 		AllowedHeaders: []string{"*"},
 	})
 	return c.Handler(h)
+}
+
+// IgnoreSignatureV2RequestHandler -
+// Verify if authorization header has signature version '2', reject it cleanly.
+func IgnoreSignatureV2RequestHandler(h http.Handler) http.Handler {
+	return ignoreSignatureV2RequestHandler{h}
+}
+
+// Ignore signature version '2' ServerHTTP() wrapper.
+func (h ignoreSignatureV2RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Header["Authorization"]; ok {
+		if !strings.HasPrefix(r.Header.Get("Authorization"), authHeaderPrefix) {
+			writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
+			return
+		}
+	}
+	h.handler.ServeHTTP(w, r)
 }
 
 // IgnoreResourcesHandler -

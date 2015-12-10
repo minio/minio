@@ -57,6 +57,7 @@ func setCommonHeaders(w http.ResponseWriter, contentLength int) {
 func encodeErrorResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
 	// write common headers
+	bytesBuffer.WriteString(xml.Header)
 	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
 	return bytesBuffer.Bytes()
@@ -92,6 +93,7 @@ func setObjectHeaders(w http.ResponseWriter, metadata fs.ObjectMetadata, content
 
 func encodeSuccessResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
+	bytesBuffer.WriteString(xml.Header)
 	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
 	return bytesBuffer.Bytes()
