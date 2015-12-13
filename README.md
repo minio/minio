@@ -23,9 +23,9 @@ Micro services environment provisions one Minio server per application instance.
 
 Download ``minio`` for:
 
-- ``64-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-amd64/minio
-- ``32-bit Intel`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-386/minio
-- ``32-bit ARM`` from https://dl.minio.io:9000/updates/minio/2015/Dec/linux-arm/minio
+- ``64-bit Intel`` from https://dl.minio.io/server/minio/release/linux-amd64/minio
+- ``32-bit Intel`` from https://dl.minio.io/server/minio/release/linux-386/minio
+- ``32-bit ARM`` from https://dl.minio.io/server/minio/release/linux-arm/minio
 
 ~~~
 $ chmod +x minio
@@ -34,7 +34,7 @@ $ ./minio help
 
 #### OS X
 
-Download ``minio`` from https://dl.minio.io:9000/updates/minio/2015/Dec/darwin-amd64/minio
+Download ``minio`` from https://dl.minio.io/server/minio/release/darwin-amd64/minio
 
 ~~~
 $ chmod 755 minio
@@ -45,8 +45,8 @@ $ ./minio help
 
 Download ``minio`` for:
 
-- ``64-bit`` from https://dl.minio.io:9000/updates/minio/2015/Dec/windows-amd64/minio.exe
-- ``32-bit`` from https://dl.minio.io:9000/updates/minio/2015/Dec/windows-386/minio.exe
+- ``64-bit`` from https://dl.minio.io/server/minio/release/windows-amd64/minio.exe
+- ``32-bit`` from https://dl.minio.io/server/minio/release/windows-386/minio.exe
 
 ~~~
 C:\Users\Username\Downloads> minio.exe help
@@ -110,7 +110,7 @@ AccessKey: G5GJRH51R2HSUWYPGIX5  SecretKey: uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gF
 
 To configure Minio Client.
 
-	$ wget https://dl.minio.io:9000/updates/2015/Nov/linux-amd64/mc
+	$ wget https://dl.minio.io/client/mc/release/linux-amd64/mc
 	$ chmod 755 mc
 	$ ./mc config host add http://localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
 	$ ./mc mb localhost:9000/photobucket

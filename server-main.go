@@ -248,12 +248,12 @@ func initServer() *probe.Error {
 	}
 	Println("\nTo configure Minio Client.")
 	if runtime.GOOS == "windows" {
-		Println("\n\tDownload https://dl.minio.io:9000/updates/2015/Nov/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
+		Println("\n\tDownload https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
 		Println("\t$ mc.exe config host add http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 		Println("\t$ mc.exe mb localhost/photobucket")
 		Println("\t$ mc.exe cp C:\\Photos... localhost/photobucket")
 	} else {
-		Println("\n\t$ wget https://dl.minio.io:9000/updates/2015/Nov/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
+		Println("\n\t$ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
 		Println("\t$ chmod 755 mc")
 		Println("\t$ ./mc config host add http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 		Println("\t$ ./mc mb localhost/photobucket")
