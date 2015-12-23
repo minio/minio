@@ -19,9 +19,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
-	"net/url"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -69,8 +70,8 @@ EXAMPLES:
 
 // update URL endpoints.
 const (
-	minioUpdateStableURL       = "https://dl.minio.io:9000/updates/updates.json"
-	minioUpdateExperimentalURL = "https://dl.minio.io:9000/updates/experimental.json"
+	minioUpdateStableURL       = "https://dl.minio.io/server/minio/release/"
+	minioUpdateExperimentalURL = "https://dl.minio.io/server/minio/experimental/"
 )
 
 // minioUpdates container to hold updates json.
@@ -113,10 +114,41 @@ func (u updateMessage) JSON() string {
 	return string(updateMessageJSONBytes)
 }
 
+func parseReleaseData(data string) (time.Time, *probe.Error) {
+	releaseStr := strings.Fields(data)
+	if len(releaseStr) < 2 {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed"))
+	}
+	releaseDate := releaseStr[1]
+	releaseDateSplits := strings.SplitN(releaseDate, ".", 3)
+	if len(releaseDateSplits) < 3 {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed"))
+	}
+	if releaseDateSplits[0] != "minio" {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing minio tag"))
+	}
+	if releaseDateSplits[1] != "OFFICIAL" {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing OFFICIAL tag"))
+	}
+	dateSplits := strings.SplitN(releaseDateSplits[2], "T", 2)
+	if len(dateSplits) < 2 {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed, not in modified RFC3359 form"))
+	}
+	dateSplits[1] = strings.Replace(dateSplits[1], "-", ":", -1)
+	date := strings.Join(dateSplits, "T")
+
+	parsedDate, e := time.Parse(time.RFC3339, date)
+	if e != nil {
+		return time.Time{}, probe.NewError(e)
+	}
+	return parsedDate, nil
+}
+
 // verify updates for releases.
 func getReleaseUpdate(updateURL string) {
-	data, e := http.Get(updateURL)
-	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+updateURL+"’.", nil)
+	newUpdateURL := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH + "/minio.shasum"
+	data, e := http.Get(newUpdateURL)
+	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
 
 	if minioVersion == "UNOFFICIAL.GOGET" {
 		fatalIf(probe.NewError(errors.New("")),
@@ -131,29 +163,23 @@ func getReleaseUpdate(updateURL string) {
 			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
 	}
 
-	var updates minioUpdates
-	decoder := json.NewDecoder(data.Body)
-	e = decoder.Decode(&updates)
-	fatalIf(probe.NewError(e), "Unable to decode update notification.", nil)
+	body, e := ioutil.ReadAll(data.Body)
+	fatalIf(probe.NewError(e), "Fetching updates failed. Please try again.", nil)
 
-	latest, e := time.Parse(time.RFC3339, updates.BuildDate)
-	if e != nil {
-		latest, e = time.Parse(http.TimeFormat, updates.BuildDate)
-		fatalIf(probe.NewError(e), "Unable to parse BuildDate.", nil)
-	}
+	latest, err := parseReleaseData(string(body))
+	fatalIf(err.Trace(updateURL), "Please report this issue at https://github.com/minio/minio/issues.", nil)
 
 	if latest.IsZero() {
 		fatalIf(probe.NewError(errors.New("")),
 			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
 	}
 
-	updateURLParse, err := url.Parse(updateURL)
-	if err != nil {
-		fatalIf(probe.NewError(err), "Unable to parse URL: "+updateURL, nil)
+	var downloadURL string
+	if runtime.GOOS == "windows" {
+		downloadURL = updateURL + runtime.GOOS + "-" + runtime.GOARCH + "/minio.exe"
+	} else {
+		downloadURL = updateURL + runtime.GOOS + "-" + runtime.GOARCH + "/minio"
 	}
-	downloadURL := updateURLParse.Scheme + "://" +
-		updateURLParse.Host + "/" + updates.Platforms[runtime.GOOS+"-"+runtime.GOARCH]
-
 	updateMsg := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
@@ -161,7 +187,6 @@ func getReleaseUpdate(updateURL string) {
 	if latest.After(current) {
 		updateMsg.Update = true
 	}
-
 	Println(updateMsg)
 }
 
