@@ -49,6 +49,7 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
 
 	// Bucket operations
+	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
 	bucket.Methods("GET").HandlerFunc(a.GetBucketACLHandler).Queries("acl", "")
 	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
 	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)

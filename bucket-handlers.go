@@ -27,6 +27,41 @@ import (
 	"github.com/minio/minio/pkg/fs"
 )
 
+// GetBucketLocationHandler - GET Bucket location.
+// -------------------------
+// This operation returns bucket location.
+func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	bucket := vars["bucket"]
+
+	if !api.Anonymous {
+		if isRequestRequiresACLCheck(req) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
+	_, err := api.Filesystem.GetBucketMetadata(bucket)
+	if err != nil {
+		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
+		switch err.ToGoError().(type) {
+		case fs.BucketNotFound:
+			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+		case fs.BucketNameInvalid:
+			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+		default:
+			writeErrorResponse(w, req, InternalError, req.URL.Path)
+		}
+	}
+
+	// TODO: Location value for LocationResponse is deliberately not used, until
+	//       we bring in a mechanism of configurable regions. For the time being
+	//       default region is empty i.e 'us-east-1'.
+	encodedSuccessResponse := encodeSuccessResponse(LocationResponse{}) // generate response
+	setCommonHeaders(w, len(encodedSuccessResponse))                    // write headers
+	w.Write(encodedSuccessResponse)                                     // write body
+}
+
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
 // -------------------------
 // This operation lists in-progress multipart uploads. An in-progress
