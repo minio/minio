@@ -18,12 +18,18 @@ package main
 
 import "encoding/xml"
 
-// Limit number of objects in a given response
+// Limit number of objects in a given response.
 const (
 	maxObjectList = 1000
 )
 
-// AccessControlPolicyResponse - format for get bucket acl response
+// LocationResponse - format for location response.
+type LocationResponse struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint" json:"-"`
+	Location string   `xml:",chardata"`
+}
+
+// AccessControlPolicyResponse - format for get bucket acl response.
 type AccessControlPolicyResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
 
@@ -33,7 +39,7 @@ type AccessControlPolicyResponse struct {
 	Owner Owner
 }
 
-// Grant container for grantee and permission
+// Grant container for grantee and permission.
 type Grant struct {
 	Grantee struct {
 		ID           string
@@ -45,7 +51,7 @@ type Grant struct {
 	Permission string
 }
 
-// ListObjectsResponse - format for list objects response
+// ListObjectsResponse - format for list objects response.
 type ListObjectsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
 
@@ -75,7 +81,7 @@ type ListObjectsResponse struct {
 	Prefix     string
 }
 
-// Part container for part metadata
+// Part container for part metadata.
 type Part struct {
 	PartNumber   int
 	ETag         string
@@ -83,7 +89,7 @@ type Part struct {
 	Size         int64
 }
 
-// ListPartsResponse - format for list parts response
+// ListPartsResponse - format for list parts response.
 type ListPartsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
 
@@ -102,11 +108,11 @@ type ListPartsResponse struct {
 	MaxParts             int
 	IsTruncated          bool
 
-	// List of parts
+	// List of parts.
 	Part []*Part
 }
 
-// ListMultipartUploadsResponse - format for list multipart uploads response
+// ListMultipartUploadsResponse - format for list multipart uploads response.
 type ListMultipartUploadsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
 
