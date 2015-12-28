@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/base64"
-	"strconv"
 	"strings"
 )
 
@@ -36,17 +35,13 @@ func isValidMD5(md5 string) bool {
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
 const (
-	// maximum object size per PUT request is 5GB
+	// maximum object size per PUT request is 5GiB
 	maxObjectSize = 1024 * 1024 * 1024 * 5
 )
 
 // isMaxObjectSize - verify if max object size
-func isMaxObjectSize(size string) bool {
-	i, err := strconv.ParseInt(size, 10, 64)
-	if err != nil {
-		return true
-	}
-	if i > maxObjectSize {
+func isMaxObjectSize(size int64) bool {
+	if size > maxObjectSize {
 		return true
 	}
 	return false

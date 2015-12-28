@@ -140,9 +140,9 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
 		return
 	}
-	/// if Content-Length missing, deny the request
-	size := req.Header.Get("Content-Length")
-	if size == "" {
+	/// if Content-Length is unknown/missing, deny the request
+	size := req.ContentLength
+	if size == -1 {
 		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 		return
 	}
@@ -150,16 +150,6 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		return
-	}
-	var sizeInt64 int64
-	{
-		var err error
-		sizeInt64, err = strconv.ParseInt(size, 10, 64)
-		if err != nil {
-			errorIf(probe.NewError(err), "Parsing Content-Length failed.", nil)
-			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
-			return
-		}
 	}
 
 	var signature *fs.Signature
@@ -176,7 +166,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, sizeInt64, req.Body, signature)
+	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, req.Body, signature)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -265,13 +255,6 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		}
 	}
 
-	/// if Content-Length missing, throw away
-	size := req.Header.Get("Content-Length")
-	if size == "" {
-		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
-		return
-	}
-
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
@@ -279,21 +262,17 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		return
 	}
 
+	/// if Content-Length is unknown/missing, throw away
+	size := req.ContentLength
+	if size == -1 {
+		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
+		return
+	}
+
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		return
-	}
-
-	var sizeInt64 int64
-	{
-		var err error
-		sizeInt64, err = strconv.ParseInt(size, 10, 64)
-		if err != nil {
-			errorIf(probe.NewError(err), "Parsing Content-Length failed.", nil)
-			writeErrorResponse(w, req, InvalidRequest, req.URL.Path)
-			return
-		}
 	}
 
 	uploadID := req.URL.Query().Get("uploadId")
@@ -323,7 +302,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		}
 	}
 
-	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, sizeInt64, req.Body, signature)
+	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, req.Body, signature)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {

@@ -226,8 +226,8 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 
 	// if body of request is non-nil then check for validity of Content-Length
 	if req.Body != nil {
-		/// if Content-Length missing, deny the request
-		if req.Header.Get("Content-Length") == "" {
+		/// if Content-Length is unknown/missing, deny the request
+		if req.ContentLength == -1 {
 			writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 			return
 		}
@@ -275,9 +275,8 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *http.Request) {
 	// if body of request is non-nil then check for validity of Content-Length
 	if req.Body != nil {
-		/// if Content-Length missing, deny the request
-		size := req.Header.Get("Content-Length")
-		if size == "" {
+		/// if Content-Length is unknown/missing, deny the request
+		if req.ContentLength == -1 {
 			writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 			return
 		}
