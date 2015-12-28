@@ -475,7 +475,7 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 		}
 		return
 	}
-	response := generateCompleteMultpartUploadResponse(bucket, object, "", metadata.Md5)
+	response := generateCompleteMultpartUploadResponse(bucket, object, req.URL.String(), metadata.Md5)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
 	setCommonHeaders(w, len(encodedSuccessResponse))
