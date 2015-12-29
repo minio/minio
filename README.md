@@ -138,13 +138,13 @@ secret_key = YOUR_SECRET_KEY_HERE
 
 To list your buckets.
 ```
-$ s3cmd --region us-east-1 ls s3://
+$ s3cmd ls s3://
 2015-12-09 16:12  s3://testbbucket
 ```
 
 To list contents inside buckets.
 ```
-$ s3cmd --region us-east-1 ls s3://testbucket/
+$ s3cmd ls s3://testbucket/
                        DIR   s3://testbucket/test/
 2015-12-09 16:05    138504   s3://testbucket/newfile
 ```
