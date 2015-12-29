@@ -57,12 +57,6 @@ func getCredentialsFromAuth(authValue string) ([]string, *probe.Error) {
 	if len(credentials) != 2 {
 		return nil, probe.NewError(errMissingFieldsCredentialTag)
 	}
-	if len(strings.Split(strings.TrimSpace(authFields[1]), "=")) != 2 {
-		return nil, probe.NewError(errMissingFieldsSignedHeadersTag)
-	}
-	if len(strings.Split(strings.TrimSpace(authFields[2]), "=")) != 2 {
-		return nil, probe.NewError(errMissingFieldsSignatureTag)
-	}
 	credentialElements := strings.Split(strings.TrimSpace(credentials[1]), "/")
 	if len(credentialElements) != 5 {
 		return nil, probe.NewError(errCredentialTagMalformed)
@@ -70,24 +64,55 @@ func getCredentialsFromAuth(authValue string) ([]string, *probe.Error) {
 	return credentialElements, nil
 }
 
-// verify if authHeader value has valid region
-func isValidRegion(authHeaderValue string) *probe.Error {
-	credentialElements, err := getCredentialsFromAuth(authHeaderValue)
-	if err != nil {
-		return err.Trace()
+func getSignatureFromAuth(authHeaderValue string) (string, *probe.Error) {
+	authValue := strings.TrimPrefix(authHeaderValue, authHeaderPrefix)
+	authFields := strings.Split(strings.TrimSpace(authValue), ",")
+	if len(authFields) != 3 {
+		return "", probe.NewError(errInvalidAuthHeaderValue)
 	}
-	region := credentialElements[2]
-	if region != "us-east-1" {
+	if len(strings.Split(strings.TrimSpace(authFields[2]), "=")) != 2 {
+		return "", probe.NewError(errMissingFieldsSignatureTag)
+	}
+	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
+	return signature, nil
+}
+
+func getSignedHeadersFromAuth(authHeaderValue string) ([]string, *probe.Error) {
+	authValue := strings.TrimPrefix(authHeaderValue, authHeaderPrefix)
+	authFields := strings.Split(strings.TrimSpace(authValue), ",")
+	if len(authFields) != 3 {
+		return nil, probe.NewError(errInvalidAuthHeaderValue)
+	}
+	if len(strings.Split(strings.TrimSpace(authFields[1]), "=")) != 2 {
+		return nil, probe.NewError(errMissingFieldsSignedHeadersTag)
+	}
+	signedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
+	return signedHeaders, nil
+}
+
+// verify if region value is valid.
+func isValidRegion(region string) *probe.Error {
+	if region != "us-east-1" && region != "US" {
 		return probe.NewError(errInvalidRegion)
 	}
 	return nil
 }
 
-// stripAccessKeyID - strip only access key id from auth header
-func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
-	if err := isValidRegion(authHeaderValue); err != nil {
-		return "", err.Trace()
+// stripRegion - strip only region from auth header.
+func stripRegion(authHeaderValue string) (string, *probe.Error) {
+	credentialElements, err := getCredentialsFromAuth(authHeaderValue)
+	if err != nil {
+		return "", err.Trace(authHeaderValue)
 	}
+	region := credentialElements[2]
+	if err = isValidRegion(region); err != nil {
+		return "", err.Trace(authHeaderValue)
+	}
+	return region, nil
+}
+
+// stripAccessKeyID - strip only access key id from auth header.
+func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
 	credentialElements, err := getCredentialsFromAuth(authHeaderValue)
 	if err != nil {
 		return "", err.Trace()
@@ -99,25 +124,36 @@ func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
 	return accessKeyID, nil
 }
 
-// initSignatureV4 initializing signature verification
+// initSignatureV4 initializing signature verification.
 func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
-	// strip auth from authorization header
+	// strip auth from authorization header.
 	authHeaderValue := req.Header.Get("Authorization")
+
+	region, err := stripRegion(authHeaderValue)
+	if err != nil {
+		return nil, err.Trace(authHeaderValue)
+	}
 	accessKeyID, err := stripAccessKeyID(authHeaderValue)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err.Trace(authHeaderValue)
+	}
+	signature, err := getSignatureFromAuth(authHeaderValue)
+	if err != nil {
+		return nil, err.Trace(authHeaderValue)
+	}
+	signedHeaders, err := getSignedHeadersFromAuth(authHeaderValue)
+	if err != nil {
+		return nil, err.Trace(authHeaderValue)
 	}
 	config, err := loadConfigV2()
 	if err != nil {
 		return nil, err.Trace()
 	}
-	authFields := strings.Split(strings.TrimSpace(authHeaderValue), ",")
-	signedHeaders := strings.Split(strings.Split(strings.TrimSpace(authFields[1]), "=")[1], ";")
-	signature := strings.Split(strings.TrimSpace(authFields[2]), "=")[1]
 	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
+			Region:          region,
 			Signature:       signature,
 			SignedHeaders:   signedHeaders,
 			Request:         req,
@@ -216,10 +252,12 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *pr
 	if perr != nil {
 		return nil, perr.Trace()
 	}
+	region := credentialElements[2]
 	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
+			Region:          region,
 			Signature:       formValues["X-Amz-Signature"],
 			PresignedPolicy: formValues["Policy"],
 		}
@@ -242,12 +280,14 @@ func initPresignedSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	if err != nil {
 		return nil, err.Trace()
 	}
+	region := credentialElements[2]
 	signedHeaders := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-SignedHeaders")), ";")
 	signature := strings.TrimSpace(req.URL.Query().Get("X-Amz-Signature"))
 	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
+			Region:          region,
 			Signature:       signature,
 			SignedHeaders:   signedHeaders,
 			Presigned:       true,

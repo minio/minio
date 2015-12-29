@@ -100,10 +100,19 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 				FileInfo: fl,
 			})
 		} else {
-			files, err := ioutil.ReadDir(filepath.Join(rootPrefix, resources.Prefix))
+			var prefixPath string
+			if runtime.GOOS == "windows" {
+				prefixPath = rootPrefix + string(os.PathSeparator) + resources.Prefix
+			} else {
+				prefixPath = rootPrefix + string(os.PathSeparator) + resources.Prefix
+			}
+			files, err := ioutil.ReadDir(prefixPath)
 			if err != nil {
-				if os.IsNotExist(err) {
-					return nil, resources, probe.NewError(ObjectNotFound{Bucket: bucket, Object: resources.Prefix})
+				switch err := err.(type) {
+				case *os.PathError:
+					if err.Op == "open" {
+						return nil, resources, probe.NewError(ObjectNotFound{Bucket: bucket, Object: resources.Prefix})
+					}
 				}
 				return nil, resources, probe.NewError(err)
 			}

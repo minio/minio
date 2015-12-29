@@ -37,6 +37,7 @@ import (
 type Signature struct {
 	AccessKeyID     string
 	SecretAccessKey string
+	Region          string
 	Presigned       bool
 	PresignedPolicy string
 	SignedHeaders   []string
@@ -210,7 +211,7 @@ func (r Signature) getPresignedCanonicalRequest(presignedQuery string) string {
 func (r Signature) getScope(t time.Time) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
-		"us-east-1",
+		r.Region,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -229,7 +230,7 @@ func (r Signature) getStringToSign(canonicalRequest string, t time.Time) string 
 func (r Signature) getSigningKey(t time.Time) []byte {
 	secret := r.SecretAccessKey
 	date := sumHMAC([]byte("AWS4"+secret), []byte(t.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
+	region := sumHMAC(date, []byte(r.Region))
 	service := sumHMAC(region, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 	return signingKey
