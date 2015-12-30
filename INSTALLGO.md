@@ -23,9 +23,20 @@ Add the following exports to your ``~/.bashrc``. Environment variable GOROOT spe
 and GOPATH specifies the location of your project workspace.
 
 ```sh
-$ export GOROOT=${HOME}/bin/go
-$ export GOPATH=${HOME}/go
-$ export PATH=$PATH:${HOME}/bin/go/bin:${GOPATH}/bin
+export GOROOT=${HOME}/bin/go
+export GOPATH=${HOME}/go
+export PATH=$PATH:${HOME}/bin/go/bin:${GOPATH}/bin
+```
+##### Source the new enviornment
+
+```sh
+$ source ~/.bashrc
+```
+
+##### Testing it all
+
+```sh
+$ go env
 ```
 
 ## OS X (Yosemite) 10.10
@@ -57,8 +68,17 @@ Add the following exports to your ``~/.bash_profile``. Environment variable GORO
 and GOPATH specifies the location of your project workspace.
 
 ```sh
-$ export GOPATH=${HOME}/go
-$ export GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
-$ export GOROOT=$(brew --prefix)/Cellar/go/${GOVERSION}/libexec
-$ export PATH=$PATH:${GOPATH}/bin
+export GOPATH=${HOME}/go
+export GOVERSION=$(brew list go | head -n 1 | cut -d '/' -f 6)
+export GOROOT=$(brew --prefix)/Cellar/go/${GOVERSION}/libexec
+export PATH=$PATH:${GOPATH}/bin
+```
+##### Source the new enviornment
+```sh
+$ source ~/.bash_profile
+```
+##### Testing it all
+
+```sh
+$ go env
 ```
