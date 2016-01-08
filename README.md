@@ -29,7 +29,7 @@ Download ``minio`` for:
 
 ~~~
 $ chmod +x minio
-$ ./minio help
+$ ./minio --help
 ~~~
 
 #### OS X
@@ -38,7 +38,7 @@ Download ``minio`` from https://dl.minio.io/server/minio/release/darwin-amd64/mi
 
 ~~~
 $ chmod 755 minio
-$ ./minio help
+$ ./minio --help
 ~~~
 
 #### Microsoft Windows
@@ -49,7 +49,7 @@ Download ``minio`` for:
 - ``32-bit`` from https://dl.minio.io/server/minio/release/windows-386/minio.exe
 
 ~~~
-C:\Users\Username\Downloads> minio.exe help
+C:\Users\Username\Downloads> minio.exe --help
 ~~~
 
 #### Docker container 
