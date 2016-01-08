@@ -206,15 +206,20 @@ func generateListMultipartUploadsResponse(bucket string, metadata fs.BucketMulti
 	return listMultipartUploadsResponse
 }
 
-// writeSuccessResponse write success headers
-func writeSuccessResponse(w http.ResponseWriter) {
-	setCommonHeaders(w, 0)
-	w.WriteHeader(http.StatusOK)
+// writeSuccessResponse write success headers and response if any.
+func writeSuccessResponse(w http.ResponseWriter, response []byte) {
+	setCommonHeaders(w)
+	if response == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Write(response)
+	w.(http.Flusher).Flush()
 }
 
 // writeSuccessNoContent write success headers with http status 204
 func writeSuccessNoContent(w http.ResponseWriter) {
-	setCommonHeaders(w, 0)
+	setCommonHeaders(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -225,12 +230,13 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int,
 	errorResponse := getErrorResponse(error, resource)
 	encodedErrorResponse := encodeErrorResponse(errorResponse)
 	// set common headers
-	setCommonHeaders(w, len(encodedErrorResponse))
+	setCommonHeaders(w)
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
 	// HEAD should have no body, do not attempt to write to it
 	if req.Method != "HEAD" {
 		// write error body
 		w.Write(encodedErrorResponse)
+		w.(http.Flusher).Flush()
 	}
 }

@@ -194,7 +194,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		return
 	}
 	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 /// Multipart CloudStorageAPI
@@ -237,9 +237,9 @@ func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req 
 	response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, len(encodedSuccessResponse))
-	// write body
-	w.Write(encodedSuccessResponse)
+	setCommonHeaders(w)
+	// write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // PutObjectPartHandler - Upload part
@@ -326,7 +326,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		return
 	}
 	w.Header().Set("ETag", "\""+calculatedMD5+"\"")
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
@@ -412,10 +412,10 @@ func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *ht
 	}
 	response := generateListPartsResponse(objectResourcesMetadata)
 	encodedSuccessResponse := encodeSuccessResponse(response)
-	// write headers
-	setCommonHeaders(w, len(encodedSuccessResponse))
-	// write body
-	w.Write(encodedSuccessResponse)
+	// write headers.
+	setCommonHeaders(w)
+	// write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
@@ -478,9 +478,9 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 	response := generateCompleteMultpartUploadResponse(bucket, object, req.URL.String(), metadata.Md5)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
-	setCommonHeaders(w, len(encodedSuccessResponse))
-	// write body
-	w.Write(encodedSuccessResponse)
+	setCommonHeaders(w)
+	// write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 /// Delete CloudStorageAPI

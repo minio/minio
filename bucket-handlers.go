@@ -58,8 +58,8 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 	//       we bring in a mechanism of configurable regions. For the time being
 	//       default region is empty i.e 'us-east-1'.
 	encodedSuccessResponse := encodeSuccessResponse(LocationResponse{}) // generate response
-	setCommonHeaders(w, len(encodedSuccessResponse))                    // write headers
-	w.Write(encodedSuccessResponse)                                     // write body
+	setCommonHeaders(w)                                                 // write headers
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
@@ -104,10 +104,10 @@ func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, re
 	// generate response
 	response := generateListMultipartUploadsResponse(bucket, resources)
 	encodedSuccessResponse := encodeSuccessResponse(response)
-	// write headers
-	setCommonHeaders(w, len(encodedSuccessResponse))
-	// write body
-	w.Write(encodedSuccessResponse)
+	// write headers.
+	setCommonHeaders(w)
+	// write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // ListObjectsHandler - GET Bucket (List Objects)
@@ -139,13 +139,13 @@ func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.R
 
 	objects, resources, err := api.Filesystem.ListObjects(bucket, resources)
 	if err == nil {
-		// generate response
+		// Generate response
 		response := generateListObjectsResponse(bucket, objects, resources)
 		encodedSuccessResponse := encodeSuccessResponse(response)
-		// write headers
-		setCommonHeaders(w, len(encodedSuccessResponse))
-		// write body
-		w.Write(encodedSuccessResponse)
+		// Write headers
+		setCommonHeaders(w)
+		// Write success response.
+		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
 	switch err.ToGoError().(type) {
@@ -180,9 +180,9 @@ func (api CloudStorageAPI) ListBucketsHandler(w http.ResponseWriter, req *http.R
 		response := generateListBucketsResponse(buckets)
 		encodedSuccessResponse := encodeSuccessResponse(response)
 		// write headers
-		setCommonHeaders(w, len(encodedSuccessResponse))
+		setCommonHeaders(w)
 		// write response
-		w.Write(encodedSuccessResponse)
+		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
 	errorIf(err.Trace(), "ListBuckets failed.", nil)
@@ -265,7 +265,7 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 	}
 	// Make sure to add Location information here only for bucket
 	w.Header().Set("Location", "/"+bucket)
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 // PostPolicyBucketHandler - POST policy
@@ -348,7 +348,7 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 		return
 	}
 	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 // PutBucketACLHandler - PUT Bucket ACL
@@ -384,7 +384,7 @@ func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.
 		}
 		return
 	}
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 // GetBucketACLHandler - GET ACL on a Bucket
@@ -417,13 +417,13 @@ func (api CloudStorageAPI) GetBucketACLHandler(w http.ResponseWriter, req *http.
 		}
 		return
 	}
-	// generate response
+	// Generate response
 	response := generateAccessControlPolicyResponse(bucketMetadata.ACL)
 	encodedSuccessResponse := encodeSuccessResponse(response)
-	// write headers
-	setCommonHeaders(w, len(encodedSuccessResponse))
-	// write body
-	w.Write(encodedSuccessResponse)
+	// Write headers
+	setCommonHeaders(w)
+	// Write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -458,7 +458,7 @@ func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Re
 		}
 		return
 	}
-	writeSuccessResponse(w)
+	writeSuccessResponse(w, nil)
 }
 
 // DeleteBucketHandler - Delete bucket
