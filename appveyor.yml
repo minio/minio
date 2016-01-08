@@ -14,9 +14,6 @@ environment:
 # scripts that run after cloning repository
 install:
   - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
-  - rd C:\Go /s /q
-  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.5.1.windows-amd64.zip
-  - 7z x go1.5.1.windows-amd64.zip -oC:\ >nul
   - go version
   - go env
 

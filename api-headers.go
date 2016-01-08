@@ -32,7 +32,7 @@ import (
 // Static alphaNumeric table used for generating unique request ids
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-// generateRequestID generate request id
+// generateRequestID - Generate request id
 func generateRequestID() []byte {
 	alpha := make([]byte, 16)
 	rand.Read(alpha)
@@ -43,14 +43,11 @@ func generateRequestID() []byte {
 }
 
 // Write http common headers
-func setCommonHeaders(w http.ResponseWriter, contentLength int) {
-	// set unique request ID for each reply
+func setCommonHeaders(w http.ResponseWriter) {
+	// Set unique request ID for each reply.
 	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
 	w.Header().Set("Server", ("Minio/" + minioReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Connection", "close")
-	// should be set to '0' by default
-	w.Header().Set("Content-Length", strconv.Itoa(contentLength))
 }
 
 // Write error response headers
@@ -68,12 +65,15 @@ func setObjectHeaders(w http.ResponseWriter, metadata fs.ObjectMetadata, content
 	// set common headers
 	if contentRange != nil {
 		if contentRange.length > 0 {
-			setCommonHeaders(w, int(contentRange.length))
+			w.Header().Set("Content-Length", strconv.FormatInt(contentRange.length, 10))
+			setCommonHeaders(w)
 		} else {
-			setCommonHeaders(w, int(metadata.Size))
+			w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
+			setCommonHeaders(w)
 		}
 	} else {
-		setCommonHeaders(w, int(metadata.Size))
+		w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
+		setCommonHeaders(w)
 	}
 	// set object headers
 	lastModified := metadata.Created.Format(http.TimeFormat)
