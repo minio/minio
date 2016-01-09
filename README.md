@@ -121,13 +121,54 @@ Listening on http://127.0.0.1:9000
 Listening on http://172.30.2.17:9000
 ~~~
 
+#### How to use AWS CLI with Minio?
+
+<blockquote>
+This section assumes that you have already installed aws-cli, if not please visit https://aws.amazon.com/cli/
+</blockquote>
+
+To configure `aws-cli`, type `aws configure` and follow below steps.
+
+```
+$ aws configure
+AWS Access Key ID [None]: YOUR_ACCESS_KEY_HERE
+AWS Secret Access Key [None]: YOUR_SECRET_KEY_HERE
+Default region name [None]: us-east-1
+Default output format [None]: ENTER
+```
+
+Additionally enable `aws-cli` to use AWS Signature Version '4' for Minio server.
+
+```
+$ aws configure set default.s3.signature_version s3v4
+```
+
+To list your buckets.
+```
+$ aws --endpoint-url http://localhost:9000 s3 ls
+2016-01-07 16:38:23 testbucket
+```
+
+To list contents inside bucket.
+```
+$ aws --endpoint-url http://localhost:9000 s3 ls testbucket
+                           PRE test/
+2015-12-17 08:46:41   12232928 vim
+2016-01-07 16:38:23   32232928 emacs
+2015-12-09 08:05:24     138504 s3cmd
+```
+
 #### How to use AWS SDK with Minio?
 
 Please follow the documentation here - [Using aws-sdk-go with Minio server](./AWS-SDK-GO.md)
 
 #### How to use s3cmd with Minio?
 
-Edit the following fields in your s3cmd configuration file. ~/.s3cfg
+<blockquote>
+This section assumes that you have already installed s3cmd, if not please visit http://s3tools.org/s3cmd
+</blockquote>
+
+Edit the following fields in your s3cmd configuration file `~/.s3cfg` .
 
 ```
 host_base = localhost:9000
