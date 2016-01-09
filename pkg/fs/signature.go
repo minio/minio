@@ -146,6 +146,27 @@ func (r Signature) extractSignedHeaders() map[string][]string {
 	for _, header := range r.SignedHeaders {
 		val, ok := r.Request.Header[http.CanonicalHeaderKey(header)]
 		if !ok {
+			// Golang http server strips off 'Expect' header, if the
+			// client sent this as part of signed headers we need to
+			// handle otherwise we would see a signature mismatch.
+			// `aws-cli` sets this as part of signed headers which is
+			// a bad idea since servers trying to implement AWS
+			// Signature version '4' will all encounter this issue.
+			//
+			// According to
+			// http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.20
+			// Expect header is always of form:
+			//
+			//   Expect       =  "Expect" ":" 1#expectation
+			//   expectation  =  "100-continue" | expectation-extension
+			//
+			// So it safe to assume that '100-continue' is what would
+			// be sent, for the time being keep this work around.
+			// Adding a *TODO* to remove this later when Golang server
+			// doesn't filter out the 'Expect' header.
+			if header == "expect" {
+				extractedSignedHeadersMap[header] = []string{"100-continue"}
+			}
 			// if not found continue, we will fail later
 			continue
 		}
