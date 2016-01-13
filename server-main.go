@@ -250,14 +250,14 @@ func initServer() *probe.Error {
 	if runtime.GOOS == "windows" {
 		Println("\n\tDownload https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
 		Println("\t$ mc.exe config host add http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
-		Println("\t$ mc.exe mb localhost/photobucket")
-		Println("\t$ mc.exe cp C:\\Photos... localhost/photobucket")
+		Println("\t$ mc.exe mb localhost:9000/photobucket")
+		Println("\t$ mc.exe cp --recursive C:\\Photos localhost:9000/photobucket")
 	} else {
 		Println("\n\t$ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
 		Println("\t$ chmod 755 mc")
 		Println("\t$ ./mc config host add http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
-		Println("\t$ ./mc mb localhost/photobucket")
-		Println("\t$ ./mc cp ~/Photos... localhost/photobucket")
+		Println("\t$ ./mc mb localhost:9000/photobucket")
+		Println("\t$ ./mc cp --recursive ~/Photos localhost:9000/photobucket")
 	}
 	Println()
 	return nil
