@@ -1,4 +1,5 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
+DOCKER_BIN := $(shell which docker)
 DOCKER_LDFLAGS := '$(LDFLAGS) -extldflags "-static"'
 BUILD_LDFLAGS := '$(LDFLAGS)'
 TAG := latest
@@ -13,6 +14,10 @@ checkgopath:
 	@echo "Checking if project is at ${GOPATH}"
 	@for miniopath in $(echo ${GOPATH} | sed 's/:/\n/g'); do if [ ! -d ${miniopath}/src/github.com/minio/minio ]; then echo "Project not found in ${miniopath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
 	@echo "Setting BUILD_LDFLAGS: ${BUILD_LDFLAGS}"
+
+checkdocker:
+	@echo "Checking if docker is installed.. "
+	@if [ -z ${DOCKER_BIN} ]; then echo "Docker not installed, cannot build docker image. Please install 'sudo apt-get install docker.io'" && exit 1; else echo "Docker installed at ${DOCKER_BIN}."; fi;
 
 getdeps: checkdeps checkgopath
 	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
@@ -69,9 +74,7 @@ pkg-remove:
 
 install: gomake-all
 
-dockerimage: install
-	@echo "Checking if docker is installed."
-	@if [ ! -e /usr/bin/docker ]; then echo "Docker not installed, cannot build docker image. Please install 'sudo apt-get install docker.io'" && exit 1; fi
+dockerimage: checkdocker verifiers
 	@echo "Building docker image:" minio:$(TAG)
 	@GO15VENDOREXPERIMENT=1 go build --ldflags $(DOCKER_LDFLAGS) -o minio.dockerimage
 	@mkdir -p export
