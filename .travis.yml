@@ -1,10 +1,24 @@
+sudo: false
 language: go
+
+os:
+- linux
+- osx
+
+osx_image: xcode7.2
+
+env:
+- ARCH=x86_64
+- ARCH=i686
+
 script:
 - make test
 - make test GOFLAGS="-race"
-sudo: false
+
 go:
-- 1.5.1
+- 1.5.2
+- 1.5.3
+
 notifications:
   slack:
     secure: K9tsn5MvrCAxuEZTxn+m3Kq1K2NG2xMEJFSv/sTp+RQBW7TslPHzv859GsIvrm8mU1y1btOU9RlOzqrRUczI5cJpE8IL1oljPZbXrIXgetE0kbsw0Wpy99g27UQ2VGp933WDu8tfj7zU4cZv+BI0RltNLwqYO6GWXmcWP0IueCU=
