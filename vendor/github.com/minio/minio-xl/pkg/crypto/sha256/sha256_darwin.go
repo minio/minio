@@ -1,3 +1,6 @@
+// +build 386 amd64 arm
+// +build darwin
+
 /*
  * Minio Cloud Storage, (C) 2014 Minio, Inc.
  *

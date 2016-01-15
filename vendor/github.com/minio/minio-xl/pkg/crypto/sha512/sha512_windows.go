@@ -1,5 +1,8 @@
+// +build 386 amd64 arm
+// +build windows
+
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2014 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +17,30 @@
  * limitations under the License.
  */
 
-package sha256
+package sha512
 
 import (
 	"hash"
 	"io"
 
-	"crypto/sha256"
+	"crypto/sha512"
 )
 
-// Sum256 - single caller sha256 helper
-func Sum256(data []byte) []byte {
-	d := sha256.New()
+// The size of a SHA512 checksum in bytes.
+const (
+	Size = sha512.Size
+)
+
+// Sum512 - single caller sha512 helper
+func Sum512(data []byte) []byte {
+	d := sha512.New()
 	d.Write(data)
 	return d.Sum(nil)
 }
 
-// Sum - io.Reader based streaming sha256 helper
+// Sum - io.Reader based streaming sha512 helper
 func Sum(reader io.Reader) ([]byte, error) {
-	d := sha256.New()
+	d := sha512.New()
 	var err error
 	for err == nil {
 		length := 0
@@ -47,7 +55,7 @@ func Sum(reader io.Reader) ([]byte, error) {
 	return d.Sum(nil), nil
 }
 
-// New returns a new hash.Hash computing SHA256.
+// New returns a new hash.Hash computing SHA512.
 func New() hash.Hash {
-	return sha256.New()
+	return sha512.New()
 }

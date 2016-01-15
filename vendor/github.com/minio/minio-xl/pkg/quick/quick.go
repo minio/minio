@@ -72,8 +72,7 @@ func CheckData(data interface{}) *probe.Error {
 
 // New - instantiate a new config
 func New(data interface{}) (Config, *probe.Error) {
-	err := CheckData(data)
-	if err != nil {
+	if err := CheckData(data); err != nil {
 		return nil, err.Trace()
 	}
 
@@ -86,14 +85,14 @@ func New(data interface{}) (Config, *probe.Error) {
 // CheckVersion - loads json and compares the version number provided returns back true or false - any failure
 // is returned as error.
 func CheckVersion(filename string, version string) (bool, *probe.Error) {
-	_, err := os.Stat(filename)
-	if err != nil {
-		return false, probe.NewError(err)
+	_, e := os.Stat(filename)
+	if e != nil {
+		return false, probe.NewError(e)
 	}
 
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return false, probe.NewError(err)
+	fileData, e := ioutil.ReadFile(filename)
+	if e != nil {
+		return false, probe.NewError(e)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -104,18 +103,18 @@ func CheckVersion(filename string, version string) (bool, *probe.Error) {
 	}{
 		Version: "",
 	}
-	err = json.Unmarshal(fileData, &data)
-	if err != nil {
-		switch err := err.(type) {
+	e = json.Unmarshal(fileData, &data)
+	if e != nil {
+		switch e := e.(type) {
 		case *json.SyntaxError:
-			return false, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+			return false, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
 		default:
-			return false, probe.NewError(err)
+			return false, probe.NewError(e)
 		}
 	}
-	config, perr := New(data)
-	if perr != nil {
-		return false, perr.Trace()
+	config, err := New(data)
+	if err != nil {
+		return false, err.Trace()
 	}
 	if config.Version() != version {
 		return false, nil
@@ -125,33 +124,33 @@ func CheckVersion(filename string, version string) (bool, *probe.Error) {
 
 // Load - loads json config from filename for the a given struct data
 func Load(filename string, data interface{}) (Config, *probe.Error) {
-	_, err := os.Stat(filename)
-	if err != nil {
-		return nil, probe.NewError(err)
+	_, e := os.Stat(filename)
+	if e != nil {
+		return nil, probe.NewError(e)
 	}
 
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, probe.NewError(err)
+	fileData, e := ioutil.ReadFile(filename)
+	if e != nil {
+		return nil, probe.NewError(e)
 	}
 
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
 
-	err = json.Unmarshal(fileData, &data)
-	if err != nil {
-		switch err := err.(type) {
+	e = json.Unmarshal(fileData, &data)
+	if e != nil {
+		switch e := e.(type) {
 		case *json.SyntaxError:
-			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
 		default:
-			return nil, probe.NewError(err)
+			return nil, probe.NewError(e)
 		}
 	}
 
-	config, perr := New(data)
-	if perr != nil {
-		return nil, perr.Trace()
+	config, err := New(data)
+	if err != nil {
+		return nil, err.Trace()
 	}
 
 	return config, nil
@@ -174,6 +173,25 @@ func (d config) Version() string {
 	return ""
 }
 
+// writeFile writes data to a file named by filename.
+// If the file does not exist, writeFile creates it;
+// otherwise writeFile truncates it before writing.
+func writeFile(filename string, data []byte) *probe.Error {
+	atomicFile, e := atomic.FileCreate(filename)
+	if e != nil {
+		return probe.NewError(e)
+	}
+	_, e = atomicFile.Write(data)
+	if e != nil {
+		return probe.NewError(e)
+	}
+	e = atomicFile.Close()
+	if e != nil {
+		return probe.NewError(e)
+	}
+	return nil
+}
+
 // String converts JSON config to printable string
 func (d config) String() string {
 	configBytes, _ := json.MarshalIndent(d.data, "", "\t")
@@ -185,29 +203,42 @@ func (d config) Save(filename string) *probe.Error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	jsonData, err := json.MarshalIndent(d.data, "", "\t")
-	if err != nil {
-		return probe.NewError(err)
+	// Check for existing file, if yes create a backup.
+	st, e := os.Stat(filename)
+	// If file exists and stat failed return here.
+	if e != nil && !os.IsNotExist(e) {
+		return probe.NewError(e)
+	}
+	// File exists and proceed to take backup.
+	if e == nil {
+		// File exists and is not a regular file return error.
+		if !st.Mode().IsRegular() {
+			return probe.NewError(fmt.Errorf("%s is not a regular file", filename))
+		}
+		// Read old data.
+		var oldData []byte
+		oldData, e = ioutil.ReadFile(filename)
+		if e != nil {
+			return probe.NewError(e)
+		}
+		// Save read data to the backup file.
+		if err := writeFile(filename+".old", oldData); err != nil {
+			return err.Trace(filename + ".old")
+		}
+	}
+	// Proceed to create or overwrite file.
+	jsonData, e := json.MarshalIndent(d.data, "", "\t")
+	if e != nil {
+		return probe.NewError(e)
 	}
 
 	if runtime.GOOS == "windows" {
 		jsonData = []byte(strings.Replace(string(jsonData), "\n", "\r\n", -1))
 	}
 
-	atomicFile, err := atomic.FileCreate(filename)
-	if err != nil {
-		return probe.NewError(err)
-	}
-	_, err = atomicFile.Write(jsonData)
-	if err != nil {
-		return probe.NewError(err)
-	}
-	err = atomicFile.Close()
-	if err != nil {
-		return probe.NewError(err)
-	}
-
-	return nil
+	// Save data.
+	err := writeFile(filename, jsonData)
+	return err.Trace(filename)
 }
 
 // Load - loads JSON config from file and merge with currently set values
@@ -215,14 +246,14 @@ func (d *config) Load(filename string) *probe.Error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	_, err := os.Stat(filename)
-	if err != nil {
-		return probe.NewError(err)
+	_, e := os.Stat(filename)
+	if e != nil {
+		return probe.NewError(e)
 	}
 
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return probe.NewError(err)
+	fileData, e := ioutil.ReadFile(filename)
+	if e != nil {
+		return probe.NewError(e)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -235,18 +266,18 @@ func (d *config) Load(filename string) *probe.Error {
 		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
 	}
 
-	err = json.Unmarshal(fileData, d.data)
-	if err != nil {
-		switch err := err.(type) {
+	e = json.Unmarshal(fileData, d.data)
+	if e != nil {
+		switch e := e.(type) {
 		case *json.SyntaxError:
-			return probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), err))
+			return probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
 		default:
-			return probe.NewError(err)
+			return probe.NewError(e)
 		}
 	}
 
 	if err := CheckData(d.data); err != nil {
-		return err.Trace()
+		return err.Trace(filename)
 	}
 
 	if (*d).Version() != f.Value() {

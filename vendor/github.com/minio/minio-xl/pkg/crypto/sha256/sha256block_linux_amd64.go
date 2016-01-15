@@ -1,4 +1,4 @@
-// +build amd64
+// +build amd64,cgo
 
 //
 // Minio Cloud Storage, (C) 2015 Minio, Inc.
