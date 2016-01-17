@@ -42,6 +42,7 @@ type configV2 struct {
 	Credentials struct {
 		AccessKeyID     string `json:"accessKeyId"`
 		SecretAccessKey string `json:"secretAccessKey"`
+		Region          string `json:"region"`
 	} `json:"credentials"`
 	MongoLogger struct {
 		Addr       string `json:"addr"`
@@ -249,6 +250,7 @@ func newConfigV2() *configV2 {
 	config.Version = "2"
 	config.Credentials.AccessKeyID = ""
 	config.Credentials.SecretAccessKey = ""
+	config.Credentials.Region = "us-east-1"
 	config.MongoLogger.Addr = ""
 	config.MongoLogger.DB = ""
 	config.MongoLogger.Collection = ""

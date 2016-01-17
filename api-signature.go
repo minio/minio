@@ -90,9 +90,12 @@ func getSignedHeadersFromAuth(authHeaderValue string) ([]string, *probe.Error) {
 	return signedHeaders, nil
 }
 
-// verify if region value is valid.
-func isValidRegion(region string) *probe.Error {
-	if region != "us-east-1" && region != "US" {
+// verify if region value is valid with configured minioRegion.
+func isValidRegion(region string, minioRegion string) *probe.Error {
+	if minioRegion == "" {
+		minioRegion = "us-east-1"
+	}
+	if region != minioRegion && region != "US" {
 		return probe.NewError(errInvalidRegion)
 	}
 	return nil
@@ -105,9 +108,6 @@ func stripRegion(authHeaderValue string) (string, *probe.Error) {
 		return "", err.Trace(authHeaderValue)
 	}
 	region := credentialElements[2]
-	if err = isValidRegion(region); err != nil {
-		return "", err.Trace(authHeaderValue)
-	}
 	return region, nil
 }
 
@@ -129,10 +129,20 @@ func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	// strip auth from authorization header.
 	authHeaderValue := req.Header.Get("Authorization")
 
+	config, err := loadConfigV2()
+	if err != nil {
+		return nil, err.Trace()
+	}
+
 	region, err := stripRegion(authHeaderValue)
 	if err != nil {
 		return nil, err.Trace(authHeaderValue)
 	}
+
+	if err = isValidRegion(region, config.Credentials.Region); err != nil {
+		return nil, err.Trace(authHeaderValue)
+	}
+
 	accessKeyID, err := stripAccessKeyID(authHeaderValue)
 	if err != nil {
 		return nil, err.Trace(authHeaderValue)
@@ -144,10 +154,6 @@ func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	signedHeaders, err := getSignedHeadersFromAuth(authHeaderValue)
 	if err != nil {
 		return nil, err.Trace(authHeaderValue)
-	}
-	config, err := loadConfigV2()
-	if err != nil {
-		return nil, err.Trace()
 	}
 	if config.Credentials.AccessKeyID == accessKeyID {
 		signature := &fs.Signature{

@@ -78,7 +78,7 @@ type cloudServerConfig struct {
 	MinFreeDisk int64         // Minimum free disk space for filesystem
 	Expiry      time.Duration // Set auto expiry for filesystem
 
-	// TLS service
+	/// TLS service
 	TLS      bool   // TLS on when certs are specified
 	CertFile string // Domain certificate
 	KeyFile  string // Domain key
@@ -206,6 +206,7 @@ func getConfig() (*configV2, *probe.Error) {
 			config.Version = "2"
 			config.Credentials.AccessKeyID = string(mustGenerateAccessKeyID())
 			config.Credentials.SecretAccessKey = string(mustGenerateSecretAccessKey())
+			config.Credentials.Region = "us-east-1"
 			if err := saveConfig(config); err != nil {
 				return nil, err.Trace()
 			}
