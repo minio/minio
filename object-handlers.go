@@ -159,9 +159,20 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
 			if err != nil {
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
+				switch err.ToGoError() {
+				case errInvalidRegion:
+					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+					return
+				case errAccessKeyIDInvalid:
+					errorIf(err.Trace(), "Invalid access key id.", nil)
+					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+					return
+				default:
+					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+					writeErrorResponse(w, req, InternalError, req.URL.Path)
+					return
+				}
 			}
 		}
 	}
@@ -295,9 +306,20 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
 			if err != nil {
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
+				switch err.ToGoError() {
+				case errInvalidRegion:
+					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+					return
+				case errAccessKeyIDInvalid:
+					errorIf(err.Trace(), "Invalid access key id.", nil)
+					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+					return
+				default:
+					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+					writeErrorResponse(w, req, InternalError, req.URL.Path)
+					return
+				}
 			}
 		}
 	}
@@ -439,9 +461,20 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 			var err *probe.Error
 			signature, err = initSignatureV4(req)
 			if err != nil {
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
+				switch err.ToGoError() {
+				case errInvalidRegion:
+					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+					return
+				case errAccessKeyIDInvalid:
+					errorIf(err.Trace(), "Invalid access key id.", nil)
+					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+					return
+				default:
+					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+					writeErrorResponse(w, req, InternalError, req.URL.Path)
+					return
+				}
 			}
 		}
 	}
