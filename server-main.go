@@ -202,12 +202,12 @@ func getConfig() (*configV2, *probe.Error) {
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
 			// Initialize new config, since config file doesn't exist yet
-			config := &configV2{}
+			config = &configV2{}
 			config.Version = "2"
 			config.Credentials.AccessKeyID = string(mustGenerateAccessKeyID())
 			config.Credentials.SecretAccessKey = string(mustGenerateSecretAccessKey())
 			config.Credentials.Region = "us-east-1"
-			if err := saveConfig(config); err != nil {
+			if err = saveConfig(config); err != nil {
 				return nil, err.Trace()
 			}
 			return config, nil
