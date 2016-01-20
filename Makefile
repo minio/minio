@@ -41,13 +41,13 @@ fmt:
 
 lint:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 golint *.go
-	@GO15VENDOREXPERIMENT=1 golint github.com/minio/minio/pkg...
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint github.com/minio/minio/pkg...
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 gocyclo -over 65 *.go
-	@GO15VENDOREXPERIMENT=1 gocyclo -over 65 pkg
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
 
 build: getdeps verifiers
 	@echo "Installing minio:"
