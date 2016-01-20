@@ -52,6 +52,7 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 		default:
 			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}
+		return
 	}
 
 	// TODO: Location value for LocationResponse is deliberately not used, until
@@ -128,25 +129,21 @@ func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.R
 			}
 		}
 	}
-	resources := getBucketResources(req.URL.Query())
-	if resources.Maxkeys < 0 {
+
+	// TODO handle encoding type.
+	prefix, marker, delimiter, maxkeys, _ := getBucketResources(req.URL.Query())
+	if maxkeys < 0 {
 		writeErrorResponse(w, req, InvalidMaxKeys, req.URL.Path)
 		return
 	}
-	if resources.Maxkeys == 0 {
-		resources.Maxkeys = maxObjectList
+	if maxkeys == 0 {
+		maxkeys = maxObjectList
 	}
 
-	listReq := fs.ListObjectsReq{
-		Prefix:    resources.Prefix,
-		Marker:    resources.Marker,
-		Delimiter: resources.Delimiter,
-		MaxKeys:   resources.Maxkeys,
-	}
-	listResp, err := api.Filesystem.ListObjects(bucket, listReq)
+	listResp, err := api.Filesystem.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
 	if err == nil {
 		// generate response
-		response := generateListObjectsResponse(bucket, listReq, listResp)
+		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listResp)
 		encodedSuccessResponse := encodeSuccessResponse(response)
 		// Write headers
 		setCommonHeaders(w)

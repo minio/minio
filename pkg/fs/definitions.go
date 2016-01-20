@@ -118,19 +118,15 @@ type BucketMultipartResourcesMetadata struct {
 	CommonPrefixes     []string
 }
 
-// BucketResourcesMetadata - various types of bucket resources
-type BucketResourcesMetadata struct {
-	Prefix         string
-	Marker         string
-	NextMarker     string
-	Maxkeys        int
-	EncodingType   string
-	Delimiter      string
-	IsTruncated    bool
-	CommonPrefixes []string
+// ListObjectsResult - container for list object request results.
+type ListObjectsResult struct {
+	IsTruncated bool
+	NextMarker  string
+	Objects     []ObjectMetadata
+	Prefixes    []string
 }
 
-type ListObjectsReq struct {
+type listObjectsReq struct {
 	Bucket    string
 	Prefix    string
 	Marker    string
@@ -138,21 +134,14 @@ type ListObjectsReq struct {
 	MaxKeys   int
 }
 
-type ListObjectsResp struct {
-	IsTruncated bool
-	NextMarker  string
-	Objects     []ObjectMetadata
-	Prefixes    []string
-}
-
 type listServiceReq struct {
-	req    ListObjectsReq
-	respCh chan ListObjectsResp
+	req    listObjectsReq
+	respCh chan ListObjectsResult
 }
 
 type listWorkerReq struct {
-	req    ListObjectsReq
-	respCh chan ListObjectsResp
+	req    listObjectsReq
+	respCh chan ListObjectsResult
 }
 
 // CompletePart - completed part container

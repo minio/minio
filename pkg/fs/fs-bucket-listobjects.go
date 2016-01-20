@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package fs
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,74 +26,88 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
-func (fs Filesystem) listWorker(startReq ListObjectsReq) (chan<- listWorkerReq, *probe.Error) {
-	Separator := string(os.PathSeparator)
+func (fs Filesystem) listWorker(startReq listObjectsReq) (chan<- listWorkerReq, *probe.Error) {
 	bucket := startReq.Bucket
 	prefix := startReq.Prefix
 	marker := startReq.Marker
 	delimiter := startReq.Delimiter
-	quit := make(chan bool)
-	if marker != "" {
-		return nil, probe.NewError(errors.New("Not supported"))
-	}
-	if delimiter != "" && delimiter != Separator {
-		return nil, probe.NewError(errors.New("Not supported"))
-	}
+	quitWalker := make(chan bool)
 	reqCh := make(chan listWorkerReq)
 	walkerCh := make(chan ObjectMetadata)
 	go func() {
-		rootPath := filepath.Join(fs.path, bucket, prefix)
-		stripPath := filepath.Join(fs.path, bucket) + Separator
+		var rootPath string
+		bucketPath := filepath.Join(fs.path, bucket)
+		trimBucketPathPrefix := bucketPath + string(os.PathSeparator)
+		prefixPath := trimBucketPathPrefix + prefix
+		st, err := os.Stat(prefixPath)
+		if err != nil && os.IsNotExist(err) {
+			rootPath = bucketPath
+		} else {
+			if st.IsDir() && !strings.HasSuffix(prefix, delimiter) {
+				rootPath = bucketPath
+			} else {
+				rootPath = prefixPath
+			}
+		}
 		filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 			if path == rootPath {
 				return nil
 			}
 			if info.IsDir() {
-				path = path + Separator
+				path = path + string(os.PathSeparator)
 			}
-			objectName := strings.TrimPrefix(path, stripPath)
-			object := ObjectMetadata{
-				Object:  objectName,
-				Created: info.ModTime(),
-				Mode:    info.Mode(),
-				Size:    info.Size(),
-			}
-			select {
-			case walkerCh <- object:
-				// do nothings
-			case <-quit:
-				fmt.Println("walker got quit")
-				// returning error ends the Walk()
-				return errors.New("Ending")
-			}
-			if delimiter == Separator && info.IsDir() {
-				return filepath.SkipDir
+			objectName := strings.TrimPrefix(path, trimBucketPathPrefix)
+			if strings.HasPrefix(objectName, prefix) {
+				if marker >= objectName {
+					return nil
+				}
+				object := ObjectMetadata{
+					Object:  objectName,
+					Created: info.ModTime(),
+					Mode:    info.Mode(),
+					Size:    info.Size(),
+				}
+				select {
+				case walkerCh <- object:
+					// Do nothing
+				case <-quitWalker:
+					// Returning error ends the Walk()
+					return errors.New("Ending")
+				}
+				if delimiter != "" && info.IsDir() {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		})
 		close(walkerCh)
 	}()
 	go func() {
-		resp := ListObjectsResp{}
+		resp := ListObjectsResult{}
 		for {
 			select {
 			case <-time.After(10 * time.Second):
-				fmt.Println("worker got timeout")
-				quit <- true
-				timeoutReq := ListObjectsReq{bucket, prefix, marker, delimiter, 0}
-				fmt.Println("after timeout", fs)
+				quitWalker <- true
+				timeoutReq := listObjectsReq{bucket, prefix, marker, delimiter, 0}
 				fs.timeoutReqCh <- timeoutReq
 				// FIXME: can there be a race such that sender on reqCh panics?
 				return
-			case req := <-reqCh:
-				resp = ListObjectsResp{}
+			case req, ok := <-reqCh:
+				if !ok {
+					return
+				}
+				resp = ListObjectsResult{}
 				resp.Objects = make([]ObjectMetadata, 0)
 				resp.Prefixes = make([]string, 0)
 				count := 0
 				for object := range walkerCh {
+					if count == req.req.MaxKeys {
+						resp.IsTruncated = true
+						break
+					}
 					if object.Mode.IsDir() {
 						if delimiter == "" {
-							// skip directories for recursive list
+							// Skip directories for recursive list
 							continue
 						}
 						resp.Prefixes = append(resp.Prefixes, object.Object)
@@ -103,13 +116,7 @@ func (fs Filesystem) listWorker(startReq ListObjectsReq) (chan<- listWorkerReq, 
 					}
 					resp.NextMarker = object.Object
 					count++
-					if count == req.req.MaxKeys {
-						resp.IsTruncated = true
-						break
-					}
 				}
-				fmt.Println("response objects: ", len(resp.Objects))
-				marker = resp.NextMarker
 				req.respCh <- resp
 			}
 		}
@@ -118,9 +125,8 @@ func (fs Filesystem) listWorker(startReq ListObjectsReq) (chan<- listWorkerReq, 
 }
 
 func (fs *Filesystem) startListService() *probe.Error {
-	fmt.Println("startListService starting")
 	listServiceReqCh := make(chan listServiceReq)
-	timeoutReqCh := make(chan ListObjectsReq)
+	timeoutReqCh := make(chan listObjectsReq)
 	reqToListWorkerReqCh := make(map[string](chan<- listWorkerReq))
 	reqToStr := func(bucket string, prefix string, marker string, delimiter string) string {
 		return strings.Join([]string{bucket, prefix, marker, delimiter}, ":")
@@ -129,7 +135,6 @@ func (fs *Filesystem) startListService() *probe.Error {
 		for {
 			select {
 			case timeoutReq := <-timeoutReqCh:
-				fmt.Println("listservice got timeout on ", timeoutReq)
 				reqStr := reqToStr(timeoutReq.Bucket, timeoutReq.Prefix, timeoutReq.Marker, timeoutReq.Delimiter)
 				listWorkerReqCh, ok := reqToListWorkerReqCh[reqStr]
 				if ok {
@@ -137,27 +142,22 @@ func (fs *Filesystem) startListService() *probe.Error {
 				}
 				delete(reqToListWorkerReqCh, reqStr)
 			case serviceReq := <-listServiceReqCh:
-				fmt.Println("serviceReq received", serviceReq)
-				fmt.Println("sending to listservicereqch", fs)
-
 				reqStr := reqToStr(serviceReq.req.Bucket, serviceReq.req.Prefix, serviceReq.req.Marker, serviceReq.req.Delimiter)
 				listWorkerReqCh, ok := reqToListWorkerReqCh[reqStr]
 				if !ok {
 					var err *probe.Error
 					listWorkerReqCh, err = fs.listWorker(serviceReq.req)
 					if err != nil {
-						fmt.Println("listWorker returned error", err)
-						serviceReq.respCh <- ListObjectsResp{}
+						serviceReq.respCh <- ListObjectsResult{}
 						return
 					}
 					reqToListWorkerReqCh[reqStr] = listWorkerReqCh
 				}
-				respCh := make(chan ListObjectsResp)
+				respCh := make(chan ListObjectsResult)
 				listWorkerReqCh <- listWorkerReq{serviceReq.req, respCh}
 				resp, ok := <-respCh
 				if !ok {
-					serviceReq.respCh <- ListObjectsResp{}
-					fmt.Println("listWorker resp was not ok")
+					serviceReq.respCh <- ListObjectsResult{}
 					return
 				}
 				delete(reqToListWorkerReqCh, reqStr)
@@ -177,13 +177,12 @@ func (fs *Filesystem) startListService() *probe.Error {
 }
 
 // ListObjects -
-func (fs Filesystem) ListObjects(bucket string, req ListObjectsReq) (ListObjectsResp, *probe.Error) {
+func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
-	Separator := string(os.PathSeparator)
 	if !IsValidBucketName(bucket) {
-		return ListObjectsResp{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ListObjectsResult{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
@@ -191,39 +190,34 @@ func (fs Filesystem) ListObjects(bucket string, req ListObjectsReq) (ListObjects
 	// check bucket exists
 	if _, e := os.Stat(rootPrefix); e != nil {
 		if os.IsNotExist(e) {
-			return ListObjectsResp{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return ListObjectsResult{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return ListObjectsResp{}, probe.NewError(e)
+		return ListObjectsResult{}, probe.NewError(e)
 	}
 
-	canonicalize := func(str string) string {
-		return strings.Replace(str, "/", string(os.PathSeparator), -1)
-	}
-	decanonicalize := func(str string) string {
-		return strings.Replace(str, string(os.PathSeparator), "/", -1)
-	}
-
+	req := listObjectsReq{}
 	req.Bucket = bucket
-	req.Prefix = canonicalize(req.Prefix)
-	req.Marker = canonicalize(req.Marker)
-	req.Delimiter = canonicalize(req.Delimiter)
+	req.Prefix = filepath.FromSlash(prefix)
+	req.Marker = filepath.FromSlash(marker)
+	req.Delimiter = filepath.FromSlash(delimiter)
+	req.MaxKeys = maxKeys
 
-	if req.Delimiter != "" && req.Delimiter != Separator {
-		return ListObjectsResp{}, probe.NewError(errors.New("not supported"))
-	}
-
-	respCh := make(chan ListObjectsResp)
+	respCh := make(chan ListObjectsResult)
 	fs.listServiceReqCh <- listServiceReq{req, respCh}
 	resp := <-respCh
 
 	for i := 0; i < len(resp.Prefixes); i++ {
-		resp.Prefixes[i] = decanonicalize(resp.Prefixes[i])
+		resp.Prefixes[i] = filepath.ToSlash(resp.Prefixes[i])
 	}
 	for i := 0; i < len(resp.Objects); i++ {
-		resp.Objects[i].Object = decanonicalize(resp.Objects[i].Object)
+		resp.Objects[i].Object = filepath.ToSlash(resp.Objects[i].Object)
 	}
 	if req.Delimiter == "" {
-		// unset NextMaker for recursive list
+		// This element is set only if you have delimiter set.
+		// If response does not include the NextMaker and it is
+		// truncated, you can use the value of the last Key in the
+		// response as the marker in the subsequent request to get the
+		// next set of object keys.
 		resp.NextMarker = ""
 	}
 	return resp, nil

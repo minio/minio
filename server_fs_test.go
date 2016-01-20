@@ -126,16 +126,17 @@ var ignoredHeaders = map[string]bool{
 }
 
 func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
+	if method == "" {
+		method = "POST"
+	}
 	t := time.Now().UTC()
+
 	req, err := http.NewRequest(method, urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("x-amz-date", t.Format(iso8601Format))
-	if method == "" {
-		method = "POST"
-	}
 
 	// add Content-Length
 	req.ContentLength = contentLength

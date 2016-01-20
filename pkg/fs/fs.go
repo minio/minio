@@ -34,7 +34,7 @@ type Filesystem struct {
 	multiparts       *Multiparts
 	buckets          *Buckets
 	listServiceReqCh chan<- listServiceReq
-	timeoutReqCh     chan<- ListObjectsReq
+	timeoutReqCh     chan<- listObjectsReq
 }
 
 // Buckets holds acl information
@@ -94,10 +94,10 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
-	a := Filesystem{lock: new(sync.Mutex)}
-	a.path = rootPath
-	a.multiparts = multiparts
-	a.buckets = buckets
+	fs := Filesystem{lock: new(sync.Mutex)}
+	fs.path = rootPath
+	fs.multiparts = multiparts
+	fs.buckets = buckets
 	/// Defaults
 
 	// maximum buckets to be listed from list buckets.
@@ -105,6 +105,7 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 10
 
+	// Start list goroutine.
 	err = fs.startListService()
 	if err != nil {
 		return Filesystem{}, err.Trace(rootPath)

@@ -92,8 +92,7 @@ func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyRe
 }
 
 // generates an ListObjects response for the said bucket with other enumerated options.
-// func generateListObjectsResponse(bucket string, objects []fs.ObjectMetadata, bucketResources fs.BucketResourcesMetadata) ListObjectsResponse {
-func generateListObjectsResponse(bucket string, req fs.ListObjectsReq, resp fs.ListObjectsResp) ListObjectsResponse {
+func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKeys int, resp fs.ListObjectsResult) ListObjectsResponse {
 	var contents []*Object
 	var prefixes []*CommonPrefix
 	var owner = Owner{}
@@ -119,10 +118,10 @@ func generateListObjectsResponse(bucket string, req fs.ListObjectsReq, resp fs.L
 	data.Name = bucket
 	data.Contents = contents
 
-	data.MaxKeys = req.MaxKeys
-	data.Prefix = req.Prefix
-	data.Delimiter = req.Delimiter
-	data.Marker = req.Marker
+	data.Prefix = prefix
+	data.Marker = marker
+	data.Delimiter = delimiter
+	data.MaxKeys = maxKeys
 
 	data.NextMarker = resp.NextMarker
 	data.IsTruncated = resp.IsTruncated
