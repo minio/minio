@@ -8,6 +8,11 @@
 			"revisionTime": "2015-09-08T20:46:18Z"
 		},
 		{
+			"path": "github.com/dgrijalva/jwt-go",
+			"revision": "afef698c326bfd906b11659432544e5aae441d44",
+			"revisionTime": "2015-12-30T10:00:00-08:00"
+		},
+		{
 			"path": "github.com/dustin/go-humanize",
 			"revision": "c20a8bde38c8f5ba06f6600edf473705c96829d1",
 			"revisionTime": "2015-08-24T01:38:10-07:00"
@@ -81,6 +86,16 @@
 			"path": "github.com/shiena/ansicolor",
 			"revision": "a5e2b567a4dd6cc74545b8a4f27c9d63b9e7735b",
 			"revisionTime": "2015-07-19T16:15:31+09:00"
+		},
+		{
+			"path": "golang.org/x/crypto/bcrypt",
+			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
+			"revisionTime": "2015-11-30T17:07:01-05:00"
+		},
+		{
+			"path": "golang.org/x/crypto/blowfish",
+			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
+			"revisionTime": "2015-11-30T17:07:01-05:00"
 		},
 		{
 			"path": "gopkg.in/check.v1",

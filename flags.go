@@ -34,6 +34,13 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
+	webAddressFlag = cli.StringFlag{
+		Name:  "web-address",
+		Value: ":9001",
+		Hide:  true,
+		Usage: "WEBADDRESS:PORT for cloud storage access.",
+	}
+
 	accessLogFlag = cli.BoolFlag{
 		Name:  "enable-accesslog",
 		Hide:  true,

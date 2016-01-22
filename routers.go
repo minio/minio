@@ -23,11 +23,41 @@ import (
 	"github.com/minio/minio/pkg/fs"
 )
 
-// CloudStorageAPI container for API and also carries OP (operation) channel
+// CloudStorageAPI container for S3 compatible API.
 type CloudStorageAPI struct {
 	Filesystem fs.Filesystem
 	Anonymous  bool // do not checking for incoming signatures, allow all requests
 	AccessLog  bool // if true log all incoming request
+}
+
+// WebAPI container for Web API.
+type WebAPI struct {
+	Anonymous bool
+	AccessLog bool
+}
+
+// registerWebAPI - register all the handlers to their respective paths
+func registerWebAPI(mux *router.Router, w WebAPI) {
+	// root Router
+	root := mux.NewRoute().PathPrefix("/").Subrouter()
+	root.Methods("POST").Path("/login").HandlerFunc(w.LoginHandler)
+	root.Methods("GET").Path("/logout").HandlerFunc(w.LogoutHandler)
+	root.Methods("GET").Path("/login-refresh-token").HandlerFunc(w.RefreshTokenHandler)
+}
+
+func getWebAPIHandler(web WebAPI) http.Handler {
+	var mwHandlers = []MiddlewareHandler{
+		CorsHandler, // CORS added only for testing purposes.
+	}
+	if !web.Anonymous {
+		mwHandlers = append(mwHandlers, AuthHandler)
+	}
+	if web.AccessLog {
+		mwHandlers = append(mwHandlers, AccessLogHandler)
+	}
+	mux := router.NewRouter()
+	registerWebAPI(mux, web)
+	return registerCustomMiddleware(mux, mwHandlers...)
 }
 
 // registerCloudStorageAPI - register all the handlers to their respective paths
@@ -63,7 +93,15 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	root.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
-// getNewCloudStorageAPI instantiate a new CloudStorageAPI
+// getNewWebAPI instantiate a new WebAPI.
+func getNewWebAPI(conf cloudServerConfig) WebAPI {
+	return WebAPI{
+		Anonymous: conf.Anonymous,
+		AccessLog: conf.AccessLog,
+	}
+}
+
+// getNewCloudStorageAPI instantiate a new CloudStorageAPI.
 func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fs, err := fs.New(conf.Path)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)

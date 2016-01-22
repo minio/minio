@@ -69,9 +69,10 @@ EXAMPLES:
 // cloudServerConfig - http server config
 type cloudServerConfig struct {
 	/// HTTP server options
-	Address   string // Address:Port listening
-	AccessLog bool   // Enable access log handler
-	Anonymous bool   // No signature turn off
+	Address    string // Address:Port listening
+	WebAddress string // WebAddress:Port listening
+	AccessLog  bool   // Enable access log handler
+	Anonymous  bool   // No signature turn off
 
 	/// FS options
 	Path        string        // Path to export for cloud storage
@@ -85,6 +86,59 @@ type cloudServerConfig struct {
 
 	/// Advanced HTTP server options
 	RateLimit int // Ratelimited server of incoming connections
+}
+
+func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
+	// Minio server config
+	webServer := &http.Server{
+		Addr:           conf.WebAddress,
+		Handler:        getWebAPIHandler(getNewWebAPI(conf)),
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	if conf.TLS {
+		var err error
+		webServer.TLSConfig = &tls.Config{}
+		webServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		webServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+	}
+
+	host, port, err := net.SplitHostPort(conf.WebAddress)
+	if err != nil {
+		return nil, probe.NewError(err)
+	}
+
+	var hosts []string
+	switch {
+	case host != "":
+		hosts = append(hosts, host)
+	default:
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return nil, probe.NewError(err)
+		}
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				host := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(host); ip.To4() != nil {
+					hosts = append(hosts, host)
+				}
+			}
+		}
+	}
+
+	Println("Starting minio web server:")
+	for _, host := range hosts {
+		if conf.TLS {
+			Printf("Listening on https://%s:%s\n", host, port)
+		} else {
+			Printf("Listening on http://%s:%s\n", host, port)
+		}
+	}
+	return webServer, nil
 }
 
 // configureAPIServer configure a new server instance
@@ -147,8 +201,12 @@ func startServer(conf cloudServerConfig) *probe.Error {
 	if err != nil {
 		return err.Trace()
 	}
+	webServer, err := configureWebServer(conf)
+	if err != nil {
+		return err.Trace()
+	}
 	rateLimit := conf.RateLimit
-	if err := minhttp.ListenAndServeLimited(rateLimit, apiServer); err != nil {
+	if err := minhttp.ListenAndServeLimited(rateLimit, apiServer, webServer); err != nil {
 		return err.Trace()
 	}
 	return nil
@@ -333,6 +391,7 @@ func serverMain(c *cli.Context) {
 	tls := (certFile != "" && keyFile != "")
 	apiServerConfig := cloudServerConfig{
 		Address:     c.GlobalString("address"),
+		WebAddress:  c.GlobalString("web-address"),
 		AccessLog:   c.GlobalBool("enable-accesslog"),
 		Anonymous:   c.GlobalBool("anonymous"),
 		Path:        path,
