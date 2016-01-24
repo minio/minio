@@ -33,6 +33,16 @@
 			"revisionTime": "2015-08-19T22:15:06-07:00"
 		},
 		{
+			"path": "github.com/gorilla/rpc/v2",
+			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
+			"revisionTime": "2015-11-05T07:45:51+08:00"
+		},
+		{
+			"path": "github.com/gorilla/rpc/v2/json",
+			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
+			"revisionTime": "2015-11-05T07:45:51+08:00"
+		},
+		{
 			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"
@@ -41,6 +51,11 @@
 			"path": "github.com/minio/cli",
 			"revision": "c4a07c7b68db77ccd119183fb1d01dd5972434ab",
 			"revisionTime": "2015-11-18T20:00:48-08:00"
+		},
+		{
+			"path": "github.com/minio/minio-go",
+			"revision": "412df729f2c19ce60895770403f266cf5eac56f7",
+			"revisionTime": "2016-01-22T16:23:42-08:00"
 		},
 		{
 			"path": "github.com/minio/minio-xl/pkg/atomic",

@@ -19,8 +19,9 @@ func AuthHandler(h http.Handler) http.Handler {
 
 // Ignore request if authorization header is not valid.
 func (h authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For login attempts please issue a new token.
-	if r.Method == "POST" && r.URL.Path == "/login-token" {
+	// Let the top level caller handle if the requests should be
+	// allowed.
+	if r.Header.Get("Authorization") == "" {
 		h.handler.ServeHTTP(w, r)
 		return
 	}

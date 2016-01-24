@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	jsonrpc "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio/pkg/fs"
 )
 
@@ -32,22 +34,16 @@ type CloudStorageAPI struct {
 
 // WebAPI container for Web API.
 type WebAPI struct {
-	Anonymous bool
-	AccessLog bool
+	Anonymous       bool
+	AccessLog       bool
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
-// registerWebAPI - register all the handlers to their respective paths
-func registerWebAPI(mux *router.Router, w WebAPI) {
-	// root Router
-	root := mux.NewRoute().PathPrefix("/").Subrouter()
-	root.Methods("POST").Path("/login").HandlerFunc(w.LoginHandler)
-	root.Methods("GET").Path("/logout").HandlerFunc(w.LogoutHandler)
-	root.Methods("GET").Path("/login-refresh-token").HandlerFunc(w.RefreshTokenHandler)
-}
-
-func getWebAPIHandler(web WebAPI) http.Handler {
+func getWebAPIHandler(web *WebAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
-		CorsHandler, // CORS added only for testing purposes.
+		TimeValidityHandler, // Validate time.
+		CorsHandler,         // CORS added only for testing purposes.
 	}
 	if !web.Anonymous {
 		mwHandlers = append(mwHandlers, AuthHandler)
@@ -55,8 +51,17 @@ func getWebAPIHandler(web WebAPI) http.Handler {
 	if web.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
 	}
+
+	s := jsonrpc.NewServer()
+	codec := json.NewCodec()
+	s.RegisterCodec(codec, "application/json")
+	s.RegisterCodec(codec, "application/json; charset=UTF-8")
+	s.RegisterService(web, "Web")
 	mux := router.NewRouter()
-	registerWebAPI(mux, web)
+	// Add new RPC services here
+	mux.Handle("/rpc", s)
+	// Enable this when we add assets.
+	// mux.Handle("/{file:.*}", http.FileServer(assetFS()))
 	return registerCustomMiddleware(mux, mwHandlers...)
 }
 
@@ -94,11 +99,14 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 }
 
 // getNewWebAPI instantiate a new WebAPI.
-func getNewWebAPI(conf cloudServerConfig) WebAPI {
-	return WebAPI{
+func getNewWebAPI(conf cloudServerConfig) *WebAPI {
+	web := &WebAPI{
 		Anonymous: conf.Anonymous,
 		AccessLog: conf.AccessLog,
 	}
+	web.AccessKeyID = conf.AccessKeyID
+	web.SecretAccessKey = conf.SecretAccessKey
+	return web
 }
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI.

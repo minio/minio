@@ -74,6 +74,10 @@ type cloudServerConfig struct {
 	AccessLog  bool   // Enable access log handler
 	Anonymous  bool   // No signature turn off
 
+	// Credentials.
+	AccessKeyID     string // Access key id.
+	SecretAccessKey string // Secret access key.
+
 	/// FS options
 	Path        string        // Path to export for cloud storage
 	MinFreeDisk int64         // Minimum free disk space for filesystem
@@ -293,13 +297,13 @@ func (a accessKeys) JSON() string {
 }
 
 // initServer initialize server
-func initServer() *probe.Error {
+func initServer() (*configV2, *probe.Error) {
 	conf, err := getConfig()
 	if err != nil {
-		return err.Trace()
+		return nil, err.Trace()
 	}
 	if err := setLogger(conf); err != nil {
-		return err.Trace()
+		return nil, err.Trace()
 	}
 	if conf != nil {
 		Println()
@@ -319,7 +323,7 @@ func initServer() *probe.Error {
 		Println("\t$ ./mc cp --recursive ~/Photos localhost:9000/photobucket")
 	}
 	Println()
-	return nil
+	return conf, nil
 }
 
 func checkServerSyntax(c *cli.Context) {
@@ -338,7 +342,7 @@ func checkServerSyntax(c *cli.Context) {
 func serverMain(c *cli.Context) {
 	checkServerSyntax(c)
 
-	perr := initServer()
+	conf, perr := initServer()
 	fatalIf(perr.Trace(), "Failed to read config for minio.", nil)
 
 	certFile := c.GlobalString("cert")
@@ -390,17 +394,19 @@ func serverMain(c *cli.Context) {
 	}
 	tls := (certFile != "" && keyFile != "")
 	apiServerConfig := cloudServerConfig{
-		Address:     c.GlobalString("address"),
-		WebAddress:  c.GlobalString("web-address"),
-		AccessLog:   c.GlobalBool("enable-accesslog"),
-		Anonymous:   c.GlobalBool("anonymous"),
-		Path:        path,
-		MinFreeDisk: minFreeDisk,
-		Expiry:      expiration,
-		TLS:         tls,
-		CertFile:    certFile,
-		KeyFile:     keyFile,
-		RateLimit:   c.GlobalInt("ratelimit"),
+		Address:         c.GlobalString("address"),
+		WebAddress:      c.GlobalString("web-address"),
+		AccessLog:       c.GlobalBool("enable-accesslog"),
+		Anonymous:       c.GlobalBool("anonymous"),
+		AccessKeyID:     conf.Credentials.AccessKeyID,
+		SecretAccessKey: conf.Credentials.SecretAccessKey,
+		Path:            path,
+		MinFreeDisk:     minFreeDisk,
+		Expiry:          expiration,
+		TLS:             tls,
+		CertFile:        certFile,
+		KeyFile:         keyFile,
+		RateLimit:       c.GlobalInt("ratelimit"),
 	}
 	perr = startServer(apiServerConfig)
 	errorIf(perr.Trace(), "Failed to start the minio server.", nil)

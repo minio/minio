@@ -45,14 +45,10 @@ func (b *JWTAuthBackend) GenerateToken(userName string) (string, error) {
 }
 
 // Authenticate -
-func (b *JWTAuthBackend) Authenticate(user *User) bool {
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF"), 10)
-	testUser := User{
-		Username: "WLGDGYAQYIGI833EV05A",
-		Password: string(hashedPassword),
-	}
-	if user.Username == testUser.Username {
-		return bcrypt.CompareHashAndPassword([]byte(testUser.Password), []byte(user.Password)) == nil
+func (b *JWTAuthBackend) Authenticate(args *LoginArgs, accessKeyID, secretAccessKey string) bool {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(secretAccessKey), 10)
+	if args.Username == accessKeyID {
+		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(args.Password)) == nil
 	}
 	return false
 }
@@ -69,9 +65,8 @@ func (b *JWTAuthBackend) getTokenRemainingValidity(timestamp interface{}) int {
 	return expireOffset
 }
 
-// Logout - logout
-func (b *JWTAuthBackend) Logout(tokenString string, token *jwt.Token) error {
-	b.getTokenRemainingValidity(token.Claims["exp"])
+// Logout - logout is not implemented yet.
+func (b *JWTAuthBackend) Logout(tokenString string) error {
 	return nil
 }
 

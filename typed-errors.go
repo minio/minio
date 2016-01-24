@@ -18,6 +18,9 @@ package main
 
 import "errors"
 
+// errUnAuthorizedRequest - un authorized request.
+var errUnAuthorizedRequest = errors.New("Unauthorized request")
+
 // errSysLogNotSupported - this message is only meaningful on windows
 var errSysLogNotSupported = errors.New("Syslog logger not supported on windows")
 
