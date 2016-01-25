@@ -11,10 +11,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// JWTAuthBackend - jwt auth backend
-type JWTAuthBackend struct {
-	privateKey *rsa.PrivateKey
-	PublicKey  *rsa.PublicKey
+// JWT - jwt auth backend
+type JWT struct {
+	privateKey      *rsa.PrivateKey
+	PublicKey       *rsa.PublicKey
+	accessKeyID     string
+	secretAccessKey string
 }
 
 const (
@@ -23,16 +25,22 @@ const (
 )
 
 // InitJWT - init.
-func InitJWT() *JWTAuthBackend {
-	authBackendInstance := &JWTAuthBackend{
+func InitJWT() *JWT {
+	jwt := &JWT{
 		privateKey: getPrivateKey(),
 		PublicKey:  getPublicKey(),
 	}
-	return authBackendInstance
+	config, err := loadConfigV2()
+	fatalIf(err.Trace("JWT"), "Unable to load configuration file.", nil)
+
+	// Save access, secret keys.
+	jwt.accessKeyID = config.Credentials.AccessKeyID
+	jwt.secretAccessKey = config.Credentials.SecretAccessKey
+	return jwt
 }
 
 // GenerateToken -
-func (b *JWTAuthBackend) GenerateToken(userName string) (string, error) {
+func (b *JWT) GenerateToken(userName string) (string, error) {
 	token := jwt.New(jwt.SigningMethodRS512)
 	token.Claims["exp"] = time.Now().Add(time.Hour * time.Duration(jwtExpirationDelta)).Unix()
 	token.Claims["iat"] = time.Now().Unix()
@@ -45,16 +53,16 @@ func (b *JWTAuthBackend) GenerateToken(userName string) (string, error) {
 }
 
 // Authenticate -
-func (b *JWTAuthBackend) Authenticate(args *LoginArgs, accessKeyID, secretAccessKey string) bool {
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(secretAccessKey), 10)
-	if args.Username == accessKeyID {
+func (b *JWT) Authenticate(args *LoginArgs) bool {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(b.secretAccessKey), 10)
+	if args.Username == b.accessKeyID {
 		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(args.Password)) == nil
 	}
 	return false
 }
 
 //
-func (b *JWTAuthBackend) getTokenRemainingValidity(timestamp interface{}) int {
+func (b *JWT) getTokenRemainingValidity(timestamp interface{}) int {
 	if validity, ok := timestamp.(float64); ok {
 		tm := time.Unix(int64(validity), 0)
 		remainer := tm.Sub(time.Now())
@@ -66,7 +74,7 @@ func (b *JWTAuthBackend) getTokenRemainingValidity(timestamp interface{}) int {
 }
 
 // Logout - logout is not implemented yet.
-func (b *JWTAuthBackend) Logout(tokenString string) error {
+func (b *JWT) Logout(tokenString string) error {
 	return nil
 }
 

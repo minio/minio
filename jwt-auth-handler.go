@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
 type authHandler struct {
@@ -25,12 +25,12 @@ func (h authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handler.ServeHTTP(w, r)
 		return
 	}
-	authBackend := InitJWT()
-	token, err := jwt.ParseFromRequest(r, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+	jwt := InitJWT()
+	token, err := jwtgo.ParseFromRequest(r, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return authBackend.PublicKey, nil
+		return jwt.PublicKey, nil
 	})
 	if err != nil || !token.Valid {
 		w.WriteHeader(http.StatusUnauthorized)
