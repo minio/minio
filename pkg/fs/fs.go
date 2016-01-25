@@ -29,6 +29,7 @@ import (
 type Filesystem struct {
 	path        string
 	minFreeDisk int64
+	maxBuckets  int
 	lock        *sync.Mutex
 	multiparts  *Multiparts
 	buckets     *Buckets
@@ -91,11 +92,20 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
-	a := Filesystem{lock: new(sync.Mutex)}
-	a.path = rootPath
-	a.multiparts = multiparts
-	a.buckets = buckets
-	return a, nil
+	fs := Filesystem{lock: new(sync.Mutex)}
+	fs.path = rootPath
+	fs.multiparts = multiparts
+	fs.buckets = buckets
+
+	/// Defaults
+
+	// maximum buckets to be listed from list buckets.
+	fs.maxBuckets = 100
+	// minium free disk required for i/o operations to succeed.
+	fs.minFreeDisk = 10
+
+	// Return here.
+	return fs, nil
 }
 
 // SetMinFreeDisk - set min free disk
@@ -103,4 +113,14 @@ func (fs *Filesystem) SetMinFreeDisk(minFreeDisk int64) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	fs.minFreeDisk = minFreeDisk
+}
+
+// SetMaxBuckets - set total number of buckets supported, default is 100.
+func (fs *Filesystem) SetMaxBuckets(maxBuckets int) {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
+	if maxBuckets == 0 {
+		maxBuckets = 100
+	}
+	fs.maxBuckets = maxBuckets
 }

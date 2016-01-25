@@ -17,13 +17,15 @@
 package fs
 
 import (
-	"io/ioutil"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/ioutils"
 )
 
 /// Bucket Operations
@@ -36,22 +38,20 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
+	bucket = fs.denormalizeBucket(bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
 	// check bucket exists
-	if _, err := os.Stat(bucketDir); err != nil {
-		if os.IsNotExist(err) {
+	if _, e := os.Stat(bucketDir); e != nil {
+		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
-	if _, ok := fs.buckets.Metadata[bucket]; !ok {
-		return probe.NewError(BucketNotFound{Bucket: bucket})
-	}
-	if err := os.Remove(bucketDir); err != nil {
-		if strings.Contains(err.Error(), "directory not empty") {
+	if e := os.Remove(bucketDir); e != nil {
+		if strings.Contains(e.Error(), "directory not empty") {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
 		}
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
 	delete(fs.buckets.Metadata, bucket)
 	if err := saveBucketsMetadata(fs.buckets); err != nil {
@@ -60,34 +60,50 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	return nil
 }
 
+func removeDuplicateBuckets(elements []BucketMetadata) (result []BucketMetadata) {
+	// Use map to record duplicates as we find them.
+	duplicates := make(map[string]struct{})
+	for _, element := range elements {
+		if _, ok := duplicates[element.Name]; !ok {
+			duplicates[element.Name] = struct{}{}
+			result = append(result, element)
+		}
+	}
+	return result
+}
+
 // ListBuckets - Get service
 func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
-	files, err := ioutil.ReadDir(fs.path)
-	if err != nil {
+	files, err := ioutils.ReadDirN(fs.path, fs.maxBuckets)
+	if err != nil && err != io.EOF {
 		return []BucketMetadata{}, probe.NewError(err)
 	}
-
+	if err == io.EOF {
+		fmt.Printf("Truncating the bucket list to %d entries only.", fs.maxBuckets)
+	}
 	var metadataList []BucketMetadata
 	for _, file := range files {
 		if !file.IsDir() {
 			// if files found ignore them
 			continue
 		}
+		dirName := strings.ToLower(file.Name())
 		if file.IsDir() {
 			// if directories found with odd names, skip them too
-			if !IsValidBucketName(file.Name()) {
+			if !IsValidBucketName(dirName) {
 				continue
 			}
 		}
 		metadata := BucketMetadata{
-			Name:    file.Name(),
+			Name:    dirName,
 			Created: file.ModTime(),
 		}
 		metadataList = append(metadataList, metadata)
 	}
+	metadataList = removeDuplicateBuckets(metadataList)
 	return metadataList, nil
 }
 
@@ -96,13 +112,13 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
-	stfs, err := disk.Stat(fs.path)
+	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return probe.NewError(err)
 	}
 
 	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := (float64(stfs.Free) / (float64(stfs.Total) - (0.05 * float64(stfs.Total)))) * 100
+	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return probe.NewError(RootPathFull{Path: fs.path})
 	}
@@ -116,29 +132,26 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		return probe.NewError(InvalidACL{ACL: acl})
 	}
 
+	bucket = fs.denormalizeBucket(bucket)
 	// get bucket path
 	bucketDir := filepath.Join(fs.path, bucket)
-	// check if bucket exists
-	if _, err = os.Stat(bucketDir); err == nil {
-		return probe.NewError(BucketExists{
-			Bucket: bucket,
-		})
+	if _, e := os.Stat(bucketDir); e == nil {
+		return probe.NewError(BucketExists{Bucket: bucket})
 	}
 
 	// make bucket
-	err = os.Mkdir(bucketDir, 0700)
-	if err != nil {
+	if e := os.Mkdir(bucketDir, 0700); e != nil {
 		return probe.NewError(err)
 	}
 
 	bucketMetadata := &BucketMetadata{}
-	fi, err := os.Stat(bucketDir)
+	fi, e := os.Stat(bucketDir)
 	// check if bucket exists
-	if err != nil {
-		if os.IsNotExist(err) {
+	if e != nil {
+		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
 	if strings.TrimSpace(acl) == "" {
 		acl = "private"
@@ -153,6 +166,19 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	return nil
 }
 
+func (fs Filesystem) denormalizeBucket(bucket string) string {
+	buckets, err := ioutils.ReadDirNamesN(fs.path, fs.maxBuckets)
+	if err != nil {
+		return bucket
+	}
+	for _, b := range buckets {
+		if strings.ToLower(b) == bucket {
+			return b
+		}
+	}
+	return bucket
+}
+
 // GetBucketMetadata - get bucket metadata
 func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
 	fs.lock.Lock()
@@ -160,15 +186,18 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 	if !IsValidBucketName(bucket) {
 		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
+
+	bucket = fs.denormalizeBucket(bucket)
+
 	// get bucket path
 	bucketDir := filepath.Join(fs.path, bucket)
-	fi, err := os.Stat(bucketDir)
-	if err != nil {
+	fi, e := os.Stat(bucketDir)
+	if e != nil {
 		// check if bucket exists
-		if os.IsNotExist(err) {
+		if os.IsNotExist(e) {
 			return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return BucketMetadata{}, probe.NewError(err)
+		return BucketMetadata{}, probe.NewError(e)
 	}
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	if !ok {
@@ -194,14 +223,15 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 	if strings.TrimSpace(acl) == "" {
 		acl = "private"
 	}
+	bucket = fs.denormalizeBucket(bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
-	fi, err := os.Stat(bucketDir)
-	if err != nil {
+	fi, e := os.Stat(bucketDir)
+	if e != nil {
 		// check if bucket exists
-		if os.IsNotExist(err) {
+		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	if !ok {

@@ -38,6 +38,8 @@ func (fs Filesystem) ListObjects(bucket string, resources BucketResourcesMetadat
 		return nil, resources, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: resources.Prefix})
 	}
 
+	bucket = fs.denormalizeBucket(bucket)
+
 	p := bucketDir{}
 	rootPrefix := filepath.Join(fs.path, bucket)
 	// check bucket exists
