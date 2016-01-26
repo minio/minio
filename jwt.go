@@ -1,35 +1,60 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io/ioutil"
 	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio-xl/pkg/probe"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // JWT - jwt auth backend
 type JWT struct {
+	// Public value.
+	PublicKey *rsa.PublicKey
+	// private values.
 	privateKey      *rsa.PrivateKey
-	PublicKey       *rsa.PublicKey
 	accessKeyID     string
 	secretAccessKey string
 }
 
 const (
 	jwtExpirationDelta = 10
-	expireOffset       = 3600
 )
 
-// InitJWT - init.
+// InitJWT - initialize.
 func InitJWT() *JWT {
 	jwt := &JWT{
 		privateKey: getPrivateKey(),
-		PublicKey:  getPublicKey(),
 	}
+	// Validate if public key is of algorithm *rsa.PublicKey.
+	var ok bool
+	jwt.PublicKey, ok = jwt.privateKey.Public().(*rsa.PublicKey)
+	if !ok {
+		fatalIf(probe.NewError(errors.New("")), "Unsupported type of public key algorithm found.", nil)
+	}
+	// Load credentials configuration.
 	config, err := loadConfigV2()
 	fatalIf(err.Trace("JWT"), "Unable to load configuration file.", nil)
 
@@ -39,9 +64,10 @@ func InitJWT() *JWT {
 	return jwt
 }
 
-// GenerateToken -
+// GenerateToken - generates a new Json Web Token based on the incoming user id.
 func (b *JWT) GenerateToken(userName string) (string, error) {
-	token := jwt.New(jwt.SigningMethodRS512)
+	token := jwtgo.New(jwtgo.SigningMethodRS512)
+	// Token expires in 10hrs.
 	token.Claims["exp"] = time.Now().Add(time.Hour * time.Duration(jwtExpirationDelta)).Unix()
 	token.Claims["iat"] = time.Now().Unix()
 	token.Claims["sub"] = userName
@@ -52,32 +78,16 @@ func (b *JWT) GenerateToken(userName string) (string, error) {
 	return tokenString, nil
 }
 
-// Authenticate -
-func (b *JWT) Authenticate(args *LoginArgs) bool {
+// Authenticate - authenticates the username and password.
+func (b *JWT) Authenticate(username, password string) bool {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(b.secretAccessKey), 10)
-	if args.Username == b.accessKeyID {
-		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(args.Password)) == nil
+	if username == b.accessKeyID {
+		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
 	}
 	return false
 }
 
-//
-func (b *JWT) getTokenRemainingValidity(timestamp interface{}) int {
-	if validity, ok := timestamp.(float64); ok {
-		tm := time.Unix(int64(validity), 0)
-		remainer := tm.Sub(time.Now())
-		if remainer > 0 {
-			return int(remainer.Seconds() + expireOffset)
-		}
-	}
-	return expireOffset
-}
-
-// Logout - logout is not implemented yet.
-func (b *JWT) Logout(tokenString string) error {
-	return nil
-}
-
+// getPrivateKey - get the generated private key.
 func getPrivateKey() *rsa.PrivateKey {
 	pemBytes, err := ioutil.ReadFile(mustGetPrivateKeyPath())
 	if err != nil {
@@ -89,23 +99,4 @@ func getPrivateKey() *rsa.PrivateKey {
 		panic(err)
 	}
 	return privateKeyImported
-}
-
-func getPublicKey() *rsa.PublicKey {
-	pemBytes, err := ioutil.ReadFile(mustGetPublicKeyPath())
-	if err != nil {
-		panic(err)
-	}
-	data, _ := pem.Decode([]byte(pemBytes))
-	publicKeyImported, err := x509.ParsePKIXPublicKey(data.Bytes)
-	if err != nil {
-		panic(err)
-	}
-
-	rsaPub, ok := publicKeyImported.(*rsa.PublicKey)
-	if !ok {
-		panic(err)
-	}
-
-	return rsaPub
 }
