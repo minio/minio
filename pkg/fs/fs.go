@@ -101,7 +101,7 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	/// Defaults
 
 	// maximum buckets to be listed from list buckets.
-	fs.maxBuckets = 100
+	fs.maxBuckets = 1000
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 10
 

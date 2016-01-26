@@ -27,14 +27,24 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 )
 
+// listObjectsParams - list objects input parameters.
 type listObjectsParams struct {
-	Bucket    string
-	Prefix    string
-	Marker    string
+	// Bucket name to list the objects for.
+	Bucket string
+	// list all objects with this parameter as common prefix.
+	Prefix string
+	// list all objects starting with object after marker in
+	// lexicographical order.
+	Marker string
+	// list all objects until the first occurrence of the delimtier
+	// after the prefix.
 	Delimiter string
-	MaxKeys   int
+	// maximum number of objects returned per listObjects()
+	// operation.
+	MaxKeys int
 }
 
+// listServiceReq
 type listServiceReq struct {
 	reqParams listObjectsParams
 	respCh    chan ListObjectsResult
@@ -44,8 +54,7 @@ type listWorkerReq struct {
 	respCh chan ListObjectsResult
 }
 
-// listObjects - list objects lists objects upto maxKeys for a given
-// prefix.
+// listObjects - list objects lists objects upto maxKeys for a given prefix.
 func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (chan<- listWorkerReq, *probe.Error) {
 	quitWalker := make(chan bool)
 	reqCh := make(chan listWorkerReq)
@@ -67,7 +76,7 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				walkPath = prefixPath
 			}
 		}
-		filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
+		Walk(walkPath, func(path string, info os.FileInfo, err error) error {
 			// We don't need to list the walk path.
 			if path == walkPath {
 				return nil
@@ -99,7 +108,7 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				// If delimiter is set, we stop if current path is a
 				// directory.
 				if delimiter != "" && info.IsDir() {
-					return filepath.SkipDir
+					return ErrSkipDir
 				}
 			}
 			return nil
