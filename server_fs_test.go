@@ -974,6 +974,29 @@ func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
 }
 
+func (s *MyAPIFSCacheSuite) TestValidateObjectMultipartUploadID(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartlist-uploadid", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	request, err = s.newRequest("POST", testAPIFSCacheServer.URL+"/objectmultipartlist-uploadid/directory1/directory2/object?uploads", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+}
+
 func (s *MyAPIFSCacheSuite) TestObjectMultipartList(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartlist", 0, nil)
 	c.Assert(err, IsNil)

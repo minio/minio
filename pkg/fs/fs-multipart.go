@@ -173,13 +173,13 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 	objectPath := filepath.Join(bucketPath, object)
 	objectDir := filepath.Dir(objectPath)
 	if _, e := os.Stat(objectDir); e != nil {
-		if os.IsNotExist(e) {
-			e = os.MkdirAll(objectDir, 0700)
-			if e != nil {
-				return "", probe.NewError(e)
-			}
+		if !os.IsNotExist(e) {
+			return "", probe.NewError(e)
 		}
-		return "", probe.NewError(e)
+		e = os.MkdirAll(objectDir, 0700)
+		if e != nil {
+			return "", probe.NewError(e)
+		}
 	}
 
 	id := []byte(strconv.FormatInt(rand.Int63(), 10) + bucket + object + time.Now().String())
@@ -192,7 +192,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 	}
 	defer multiPartfile.Close()
 
-	mpartSession := new(MultipartSession)
+	mpartSession := &MultipartSession{}
 	mpartSession.TotalParts = 0
 	mpartSession.UploadID = uploadID
 	mpartSession.Initiated = time.Now().UTC()
