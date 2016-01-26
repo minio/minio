@@ -40,8 +40,8 @@ type CloudStorageAPI struct {
 
 // WebAPI container for Web API.
 type WebAPI struct {
-	// Do not check for incoming authorization header.
-	Anonymous bool
+	// FSPath filesystem path.
+	FSPath string
 	// Once true log all incoming request.
 	AccessLog bool
 	// Minio client instance.
@@ -52,9 +52,6 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler, // Validate time.
 		CorsHandler,         // CORS added only for testing purposes.
-	}
-	if !web.Anonymous {
-		mwHandlers = append(mwHandlers, AuthHandler)
 	}
 	if web.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
@@ -120,7 +117,7 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
 	web := &WebAPI{
-		Anonymous: conf.Anonymous,
+		FSPath:    conf.Path,
 		AccessLog: conf.AccessLog,
 		Client:    client,
 	}
