@@ -23,11 +23,11 @@ import (
 	"unsafe"
 )
 
-// Stat returns total and free bytes available in a directory, e.g. `C:\`.
+// GetInfo returns total and free bytes available in a directory, e.g. `C:\`.
 // It returns free space available to the user (including quota limitations)
 //
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
-func Stat(path string) (statfs StatFS, err error) {
+func GetInfo(path string) (info Info, err error) {
 	dll := syscall.MustLoadDLL("kernel32.dll")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
 	// Retrieves information about the amount of space that is available on a disk volume,
@@ -50,9 +50,9 @@ func Stat(path string) (statfs StatFS, err error) {
 		uintptr(unsafe.Pointer(&lpFreeBytesAvailable)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfBytes)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfFreeBytes)))
-	statfs = StatFS{}
-	statfs.Total = int64(lpTotalNumberOfBytes)
-	statfs.Free = int64(lpFreeBytesAvailable)
-	statfs.FSType = getFSType(path)
-	return statfs, nil
+	info = Info{}
+	info.Total = int64(lpTotalNumberOfBytes)
+	info.Free = int64(lpFreeBytesAvailable)
+	info.FSType = getFSType(path)
+	return info, nil
 }

@@ -22,19 +22,19 @@ import (
 	"syscall"
 )
 
-// Stat returns total and free bytes available in a directory, e.g. `/`.
-func Stat(path string) (statfs StatFS, err error) {
+// GetInfo returns total and free bytes available in a directory, e.g. `/`.
+func GetInfo(path string) (info Info, err error) {
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(path, &s)
 	if err != nil {
-		return StatFS{}, err
+		return Info{}, err
 	}
-	statfs = StatFS{}
-	statfs.Total = int64(s.Bsize) * int64(s.Blocks)
-	statfs.Free = int64(s.Bsize) * int64(s.Bfree)
-	statfs.FSType, err = getFSType(path)
+	info = Info{}
+	info.Total = int64(s.Bsize) * int64(s.Blocks)
+	info.Free = int64(s.Bsize) * int64(s.Bfree)
+	info.FSType, err = getFSType(path)
 	if err != nil {
-		return StatFS{}, err
+		return Info{}, err
 	}
-	return statfs, nil
+	return info, nil
 }

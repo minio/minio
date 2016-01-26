@@ -17,17 +17,60 @@
 package main
 
 import (
+	"net"
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	jsonrpc "github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json"
+	"github.com/minio/minio-go"
+	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/fs"
 )
 
-// CloudStorageAPI container for API and also carries OP (operation) channel
+// CloudStorageAPI container for S3 compatible API.
 type CloudStorageAPI struct {
+	// Do not check for incoming signatures, allow all requests.
+	Anonymous bool
+	// Once true log all incoming requests.
+	AccessLog bool
+	// Filesystem instance.
 	Filesystem fs.Filesystem
-	Anonymous  bool // do not checking for incoming signatures, allow all requests
-	AccessLog  bool // if true log all incoming request
+}
+
+// WebAPI container for Web API.
+type WebAPI struct {
+	// Do not check for incoming authorization header.
+	Anonymous bool
+	// Once true log all incoming request.
+	AccessLog bool
+	// Minio client instance.
+	Client minio.CloudStorageClient
+}
+
+func getWebAPIHandler(web *WebAPI) http.Handler {
+	var mwHandlers = []MiddlewareHandler{
+		TimeValidityHandler, // Validate time.
+		CorsHandler,         // CORS added only for testing purposes.
+	}
+	if !web.Anonymous {
+		mwHandlers = append(mwHandlers, AuthHandler)
+	}
+	if web.AccessLog {
+		mwHandlers = append(mwHandlers, AccessLogHandler)
+	}
+
+	s := jsonrpc.NewServer()
+	codec := json.NewCodec()
+	s.RegisterCodec(codec, "application/json")
+	s.RegisterCodec(codec, "application/json; charset=UTF-8")
+	s.RegisterService(web, "Web")
+	mux := router.NewRouter()
+	// Add new RPC services here
+	mux.Handle("/rpc", s)
+	// Enable this when we add assets.
+	// mux.Handle("/{file:.*}", http.FileServer(assetFS()))
+	return registerCustomMiddleware(mux, mwHandlers...)
 }
 
 // registerCloudStorageAPI - register all the handlers to their respective paths
@@ -63,7 +106,28 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	root.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
-// getNewCloudStorageAPI instantiate a new CloudStorageAPI
+// getNewWebAPI instantiate a new WebAPI.
+func getNewWebAPI(conf cloudServerConfig) *WebAPI {
+	// Split host port.
+	_, port, e := net.SplitHostPort(conf.Address)
+	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
+
+	// Default host to 'localhost'.
+	host := "localhost"
+
+	// Initialize minio client for AWS Signature Version '4'
+	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, true)
+	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
+
+	web := &WebAPI{
+		Anonymous: conf.Anonymous,
+		AccessLog: conf.AccessLog,
+		Client:    client,
+	}
+	return web
+}
+
+// getNewCloudStorageAPI instantiate a new CloudStorageAPI.
 func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fs, err := fs.New(conf.Path)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)

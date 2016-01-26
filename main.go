@@ -121,6 +121,7 @@ func registerApp() *cli.App {
 	// register all flags
 	registerFlag(configFolderFlag)
 	registerFlag(addressFlag)
+	registerFlag(webAddressFlag)
 	registerFlag(accessLogFlag)
 	registerFlag(rateLimitFlag)
 	registerFlag(anonymousFlag)

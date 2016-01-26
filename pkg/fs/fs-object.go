@@ -52,7 +52,16 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 		return 0, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	objectPath := filepath.Join(fs.path, bucket, object)
+	bucket = fs.denormalizeBucket(bucket)
+	bucketPath := filepath.Join(fs.path, bucket)
+	if _, e := os.Stat(bucketPath); e != nil {
+		if os.IsNotExist(e) {
+			return 0, probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return 0, probe.NewError(e)
+	}
+
+	objectPath := filepath.Join(bucketPath, object)
 	filestat, err := os.Stat(objectPath)
 	switch err := err.(type) {
 	case nil:
@@ -170,13 +179,13 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
-	stfs, err := disk.Stat(fs.path)
+	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return ObjectMetadata{}, probe.NewError(err)
 	}
 
 	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := (float64(stfs.Free) / (float64(stfs.Total) - (0.05 * float64(stfs.Total)))) * 100
+	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return ObjectMetadata{}, probe.NewError(RootPathFull{Path: fs.path})
 	}
@@ -185,9 +194,14 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	// check bucket exists
-	if _, err = os.Stat(filepath.Join(fs.path, bucket)); os.IsNotExist(err) {
-		return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+
+	bucket = fs.denormalizeBucket(bucket)
+	bucketPath := filepath.Join(fs.path, bucket)
+	if _, e := os.Stat(bucketPath); e != nil {
+		if os.IsNotExist(e) {
+			return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return ObjectMetadata{}, probe.NewError(e)
 	}
 	// verify object path legal
 	if !IsValidObjectName(object) {
@@ -195,7 +209,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 
 	// get object path
-	objectPath := filepath.Join(fs.path, bucket, object)
+	objectPath := filepath.Join(bucketPath, object)
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		var expectedMD5SumBytes []byte
 		expectedMD5SumBytes, err = base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
@@ -308,10 +322,14 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
+	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	// check bucket exists
-	if _, err := os.Stat(filepath.Join(fs.path, bucket)); os.IsNotExist(err) {
-		return probe.NewError(BucketNotFound{Bucket: bucket})
+	if _, e := os.Stat(bucketPath); e != nil {
+		if os.IsNotExist(e) {
+			return probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return probe.NewError(e)
 	}
 
 	// verify object path legal
