@@ -53,7 +53,6 @@ const (
 	InvalidBucketName
 	InvalidDigest
 	InvalidRange
-	InvalidRequest
 	InvalidMaxKeys
 	InvalidMaxUploads
 	InvalidMaxParts

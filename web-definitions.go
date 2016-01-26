@@ -23,6 +23,9 @@ type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
 }
 
+// DiskInfoArgs - disk info args.
+type DiskInfoArgs struct{}
+
 // ListBucketsArgs - list bucket args.
 type ListBucketsArgs struct{}
 

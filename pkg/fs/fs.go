@@ -27,12 +27,14 @@ import (
 
 // Filesystem - local variables
 type Filesystem struct {
-	path        string
-	minFreeDisk int64
-	maxBuckets  int
-	lock        *sync.Mutex
-	multiparts  *Multiparts
-	buckets     *Buckets
+	path             string
+	minFreeDisk      int64
+	maxBuckets       int
+	lock             *sync.Mutex
+	multiparts       *Multiparts
+	buckets          *Buckets
+	listServiceReqCh chan<- listServiceReq
+	timeoutReqCh     chan<- uint32
 }
 
 // Buckets holds acl information
@@ -96,14 +98,17 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	fs.path = rootPath
 	fs.multiparts = multiparts
 	fs.buckets = buckets
-
 	/// Defaults
 
 	// maximum buckets to be listed from list buckets.
-	fs.maxBuckets = 100
+	fs.maxBuckets = 1000
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 10
 
+	// Start list goroutine.
+	if err = fs.listObjectsService(); err != nil {
+		return Filesystem{}, err.Trace(rootPath)
+	}
 	// Return here.
 	return fs, nil
 }

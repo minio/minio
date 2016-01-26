@@ -74,12 +74,6 @@ const (
 	minioUpdateExperimentalURL = "https://dl.minio.io/server/minio/experimental/"
 )
 
-// minioUpdates container to hold updates json.
-type minioUpdates struct {
-	BuildDate string
-	Platforms map[string]string
-}
-
 // updateMessage container to hold update messages.
 type updateMessage struct {
 	Status   string `json:"status"`

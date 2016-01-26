@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-package disk_test
+package ioutils_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/ioutils"
 
 	. "gopkg.in/check.v1"
 )
@@ -32,14 +34,21 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) TestFree(c *C) {
+func (s *MySuite) TestIoutils(c *C) {
 	path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	c.Assert(err, IsNil)
 	defer os.RemoveAll(path)
-	c.Assert(err, IsNil)
 
-	di, err := disk.GetInfo(path)
+	var count int
+	for count < 102 {
+		count++
+		err = os.MkdirAll(filepath.Join(path, fmt.Sprintf("minio-%d", count)), 0700)
+		c.Assert(err, IsNil)
+	}
+	dirs, err := ioutils.ReadDirN(path, 100)
 	c.Assert(err, IsNil)
-	c.Assert(di.Total, Not(Equals), 0)
-	c.Assert(di.Free, Not(Equals), 0)
-	c.Assert(di.FSType, Not(Equals), "UNKNOWN")
+	c.Assert(len(dirs), Equals, 100)
+	dirNames, err := ioutils.ReadDirNamesN(path, 100)
+	c.Assert(err, IsNil)
+	c.Assert(len(dirNames), Equals, 100)
 }

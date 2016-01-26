@@ -22,6 +22,7 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio/pkg/disk"
 )
 
 // isAuthenticated validates if any incoming request to be a valid JWT
@@ -38,6 +39,19 @@ func isAuthenticated(req *http.Request) bool {
 		return false
 	}
 	return tokenRequest.Valid
+}
+
+// DiskInfo - get disk statistics.
+func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *disk.Info) error {
+	if !isAuthenticated(r) {
+		return errUnAuthorizedRequest
+	}
+	info, err := disk.GetInfo(web.FSPath)
+	if err != nil {
+		return err
+	}
+	*reply = info
+	return nil
 }
 
 // MakeBucket - make a bucket.

@@ -24,12 +24,12 @@ import (
 )
 
 // parse bucket url queries
-func getBucketResources(values url.Values) (v fs.BucketResourcesMetadata) {
-	v.Prefix = values.Get("prefix")
-	v.Marker = values.Get("marker")
-	v.Maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
-	v.Delimiter = values.Get("delimiter")
-	v.EncodingType = values.Get("encoding-type")
+func getBucketResources(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType string) {
+	prefix = values.Get("prefix")
+	marker = values.Get("marker")
+	delimiter = values.Get("delimiter")
+	maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
+	encodingType = values.Get("encoding-type")
 	return
 }
 
