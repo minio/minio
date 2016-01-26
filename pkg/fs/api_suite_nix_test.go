@@ -165,59 +165,50 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 func testPaging(c *check.C, create func() Filesystem) {
 	fs := create()
 	fs.MakeBucket("bucket", "")
-	resources := BucketResourcesMetadata{}
-	objects, resources, err := fs.ListObjects("bucket", resources)
+	result, err := fs.ListObjects("bucket", "", "", "", 0)
 	c.Assert(err, check.IsNil)
-	c.Assert(len(objects), check.Equals, 0)
-	c.Assert(resources.IsTruncated, check.Equals, false)
+	c.Assert(len(result.Objects), check.Equals, 0)
+	c.Assert(result.IsTruncated, check.Equals, false)
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
-		resources.Maxkeys = 5
-		resources.Prefix = ""
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "", "", "", 5)
 		c.Assert(err, check.IsNil)
-		c.Assert(len(objects), check.Equals, i+1)
-		c.Assert(resources.IsTruncated, check.Equals, false)
+		c.Assert(len(result.Objects), check.Equals, i+1)
+		c.Assert(result.IsTruncated, check.Equals, false)
 	}
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
-		resources.Maxkeys = 5
-		resources.Prefix = ""
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "", "", "", 5)
 		c.Assert(err, check.IsNil)
-		c.Assert(len(objects), check.Equals, 5)
-		c.Assert(resources.IsTruncated, check.Equals, true)
+		c.Assert(len(result.Objects), check.Equals, 5)
+		c.Assert(result.IsTruncated, check.Equals, true)
 	}
 	// check paging with prefix at end returns less objects
 	{
 		_, err = fs.CreateObject("bucket", "newPrefix", "", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
 		c.Assert(err, check.IsNil)
-		fs.CreateObject("bucket", "newPrefix2", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
+		_, err = fs.CreateObject("bucket", "newPrefix2", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
-		resources.Prefix = "new"
-		resources.Maxkeys = 5
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
-		c.Assert(len(objects), check.Equals, 2)
+		c.Assert(len(result.Objects), check.Equals, 2)
 	}
 
 	// check ordering of pages
 	{
-		resources.Prefix = ""
-		resources.Maxkeys = 1000
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "", "", "", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(objects[1].Object, check.Equals, "newPrefix2")
-		c.Assert(objects[2].Object, check.Equals, "obj0")
-		c.Assert(objects[3].Object, check.Equals, "obj1")
-		c.Assert(objects[4].Object, check.Equals, "obj10")
+		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[2].Object, check.Equals, "obj0")
+		c.Assert(result.Objects[3].Object, check.Equals, "obj1")
+		c.Assert(result.Objects[4].Object, check.Equals, "obj10")
 	}
 
 	// check delimited results with delimiter and prefix
@@ -226,72 +217,49 @@ func testPaging(c *check.C, create func() Filesystem) {
 		c.Assert(err, check.IsNil)
 		_, err = fs.CreateObject("bucket", "this/is/also/a/delimited/file", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
-		var prefixes []string
-		resources.CommonPrefixes = prefixes // allocate new everytime
-		resources.Delimiter = "/"
-		resources.Prefix = "this/is/"
-		resources.Maxkeys = 10
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "this/is/", "", "/", 10)
 		c.Assert(err, check.IsNil)
-		c.Assert(len(objects), check.Equals, 1)
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/is/also/")
+		c.Assert(len(result.Objects), check.Equals, 1)
+		c.Assert(result.Prefixes[0], check.Equals, "this/is/also/")
 	}
 	time.Sleep(time.Second)
 
 	// check delimited results with delimiter without prefix
 	{
-		var prefixes []string
-		resources.CommonPrefixes = prefixes // allocate new everytime
-		resources.Delimiter = "/"
-		resources.Prefix = ""
-		resources.Maxkeys = 1000
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "", "", "/", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(objects[1].Object, check.Equals, "newPrefix2")
-		c.Assert(objects[2].Object, check.Equals, "obj0")
-		c.Assert(objects[3].Object, check.Equals, "obj1")
-		c.Assert(objects[4].Object, check.Equals, "obj10")
-		c.Assert(resources.CommonPrefixes[0], check.Equals, "this/")
+		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[2].Object, check.Equals, "obj0")
+		c.Assert(result.Objects[3].Object, check.Equals, "obj1")
+		c.Assert(result.Objects[4].Object, check.Equals, "obj10")
+		c.Assert(result.Prefixes[0], check.Equals, "this/")
 	}
 
 	// check results with Marker
 	{
-		var prefixes []string
-		resources.CommonPrefixes = prefixes // allocate new everytime
-		resources.Prefix = ""
-		resources.Marker = "newPrefix"
-		resources.Delimiter = ""
-		resources.Maxkeys = 3
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "", "newPrefix", "", 3)
 		c.Assert(err, check.IsNil)
-		c.Assert(objects[0].Object, check.Equals, "newPrefix2")
-		c.Assert(objects[1].Object, check.Equals, "obj0")
-		c.Assert(objects[2].Object, check.Equals, "obj1")
+		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[1].Object, check.Equals, "obj0")
+		c.Assert(result.Objects[2].Object, check.Equals, "obj1")
 	}
 	// check ordering of results with prefix
 	{
-		resources.Prefix = "obj"
-		resources.Delimiter = ""
-		resources.Marker = ""
-		resources.Maxkeys = 1000
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "obj", "", "", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(objects[0].Object, check.Equals, "obj0")
-		c.Assert(objects[1].Object, check.Equals, "obj1")
-		c.Assert(objects[2].Object, check.Equals, "obj10")
-		c.Assert(objects[3].Object, check.Equals, "obj2")
-		c.Assert(objects[4].Object, check.Equals, "obj3")
+		c.Assert(result.Objects[0].Object, check.Equals, "obj0")
+		c.Assert(result.Objects[1].Object, check.Equals, "obj1")
+		c.Assert(result.Objects[2].Object, check.Equals, "obj10")
+		c.Assert(result.Objects[3].Object, check.Equals, "obj2")
+		c.Assert(result.Objects[4].Object, check.Equals, "obj3")
 	}
 	// check ordering of results with prefix and no paging
 	{
-		resources.Prefix = "new"
-		resources.Marker = ""
-		resources.Maxkeys = 5
-		objects, resources, err = fs.ListObjects("bucket", resources)
+		result, err = fs.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
-		c.Assert(objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(objects[1].Object, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
 	}
 }
 
@@ -417,11 +385,10 @@ func testListBucketsOrder(c *check.C, create func() Filesystem) {
 
 func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesystem) {
 	fs := create()
-	resources := BucketResourcesMetadata{Prefix: "", Maxkeys: 1000}
-	objects, resources, err := fs.ListObjects("bucket", resources)
+	result, err := fs.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(resources.IsTruncated, check.Equals, false)
-	c.Assert(len(objects), check.Equals, 0)
+	c.Assert(result.IsTruncated, check.Equals, false)
+	c.Assert(len(result.Objects), check.Equals, 0)
 }
 
 func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {

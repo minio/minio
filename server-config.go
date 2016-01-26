@@ -159,24 +159,6 @@ func createConfigPath() *probe.Error {
 	return nil
 }
 
-// isAuthConfigFileExists is auth config file exists?
-func isConfigFileExists() bool {
-	if _, err := os.Stat(mustGetConfigFile()); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-		panic(err)
-	}
-	return true
-}
-
-// mustGetConfigFile always get users config file, if not panic
-func mustGetConfigFile() string {
-	configFile, err := getConfigFile()
-	fatalIf(err.Trace(), "Unable to get config file.", nil)
-	return configFile
-}
-
 // getConfigFile get users config file
 func getConfigFile() (string, *probe.Error) {
 	configPath, err := getConfigPath()
