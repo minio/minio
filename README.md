@@ -151,7 +151,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls
 
 To list contents inside bucket.
 ```
-$ aws --endpoint-url http://localhost:9000 s3 ls testbucket
+$ aws --endpoint-url http://localhost:9000 s3 ls s3://testbucket
                            PRE test/
 2015-12-17 08:46:41   12232928 vim
 2016-01-07 16:38:23   32232928 emacs
