@@ -126,24 +126,6 @@ type ListObjectsResult struct {
 	Prefixes    []string
 }
 
-type listObjectsReq struct {
-	Bucket    string
-	Prefix    string
-	Marker    string
-	Delimiter string
-	MaxKeys   int
-}
-
-type listServiceReq struct {
-	req    listObjectsReq
-	respCh chan ListObjectsResult
-}
-
-type listWorkerReq struct {
-	req    listObjectsReq
-	respCh chan ListObjectsResult
-}
-
 // CompletePart - completed part container
 type CompletePart struct {
 	PartNumber int

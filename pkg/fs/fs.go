@@ -34,7 +34,7 @@ type Filesystem struct {
 	multiparts       *Multiparts
 	buckets          *Buckets
 	listServiceReqCh chan<- listServiceReq
-	timeoutReqCh     chan<- listObjectsReq
+	timeoutReqCh     chan<- uint32
 }
 
 // Buckets holds acl information
@@ -106,8 +106,7 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	fs.minFreeDisk = 10
 
 	// Start list goroutine.
-	err = fs.startListService()
-	if err != nil {
+	if err = fs.listObjectsService(); err != nil {
 		return Filesystem{}, err.Trace(rootPath)
 	}
 	// Return here.
