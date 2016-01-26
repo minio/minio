@@ -113,6 +113,15 @@ func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *
 		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: bucket})
 	}
 
+	bucket = fs.denormalizeBucket(bucket)
+	bucketPath := filepath.Join(fs.path, bucket)
+	if _, e := os.Stat(bucketPath); e != nil {
+		if os.IsNotExist(e) {
+			return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		return ObjectMetadata{}, probe.NewError(e)
+	}
+
 	metadata, err := getMetadata(fs.path, bucket, object)
 	if err != nil {
 		return ObjectMetadata{}, err.Trace(bucket, object)
