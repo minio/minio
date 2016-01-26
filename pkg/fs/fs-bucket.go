@@ -48,6 +48,12 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 		return probe.NewError(e)
 	}
 	if e := os.Remove(bucketDir); e != nil {
+		// On windows the string is slightly different, handle it here.
+		if strings.Contains(e.Error(), "directory is not empty") {
+			return probe.NewError(BucketNotEmpty{Bucket: bucket})
+		}
+		// Hopefully for all other operating systems, this is
+		// assumed to be consistent.
 		if strings.Contains(e.Error(), "directory not empty") {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
 		}
