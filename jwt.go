@@ -17,11 +17,7 @@
 package main
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
-	"io/ioutil"
+	"bytes"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -31,72 +27,47 @@ import (
 
 // JWT - jwt auth backend
 type JWT struct {
-	// Public value.
-	PublicKey *rsa.PublicKey
-	// private values.
-	privateKey      *rsa.PrivateKey
-	accessKeyID     string
-	secretAccessKey string
+	accessKeyID     []byte
+	secretAccessKey []byte
 }
 
+// Default - each token expires in 10hrs.
 const (
-	jwtExpirationDelta = 10
+	tokenExpires time.Duration = 10
 )
 
 // InitJWT - initialize.
 func InitJWT() *JWT {
-	jwt := &JWT{
-		privateKey: getPrivateKey(),
-	}
-	// Validate if public key is of algorithm *rsa.PublicKey.
-	var ok bool
-	jwt.PublicKey, ok = jwt.privateKey.Public().(*rsa.PublicKey)
-	if !ok {
-		fatalIf(probe.NewError(errors.New("")), "Unsupported type of public key algorithm found.", nil)
-	}
-	// Load credentials configuration.
+	jwt := &JWT{}
+	// Load credentials.
 	config, err := loadConfigV2()
 	fatalIf(err.Trace("JWT"), "Unable to load configuration file.", nil)
 
 	// Save access, secret keys.
-	jwt.accessKeyID = config.Credentials.AccessKeyID
-	jwt.secretAccessKey = config.Credentials.SecretAccessKey
+	jwt.accessKeyID = []byte(config.Credentials.AccessKeyID)
+	jwt.secretAccessKey = []byte(config.Credentials.SecretAccessKey)
 	return jwt
 }
 
 // GenerateToken - generates a new Json Web Token based on the incoming user id.
-func (b *JWT) GenerateToken(userName string) (string, error) {
-	token := jwtgo.New(jwtgo.SigningMethodRS512)
+func (jwt *JWT) GenerateToken(userName string) (string, *probe.Error) {
+	token := jwtgo.New(jwtgo.SigningMethodHS512)
 	// Token expires in 10hrs.
-	token.Claims["exp"] = time.Now().Add(time.Hour * time.Duration(jwtExpirationDelta)).Unix()
+	token.Claims["exp"] = time.Now().Add(time.Hour * tokenExpires).Unix()
 	token.Claims["iat"] = time.Now().Unix()
 	token.Claims["sub"] = userName
-	tokenString, err := token.SignedString(b.privateKey)
-	if err != nil {
-		return "", err
+	tokenString, e := token.SignedString(jwt.secretAccessKey)
+	if e != nil {
+		return "", probe.NewError(e)
 	}
 	return tokenString, nil
 }
 
-// Authenticate - authenticates the username and password.
-func (b *JWT) Authenticate(username, password string) bool {
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(b.secretAccessKey), 10)
-	if username == b.accessKeyID {
-		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
+// Authenticate - authenticates incoming username and password.
+func (jwt *JWT) Authenticate(userName, password string) bool {
+	if !bytes.Equal([]byte(userName), jwt.accessKeyID) {
+		return false
 	}
-	return false
-}
-
-// getPrivateKey - get the generated private key.
-func getPrivateKey() *rsa.PrivateKey {
-	pemBytes, err := ioutil.ReadFile(mustGetPrivateKeyPath())
-	if err != nil {
-		panic(err)
-	}
-	data, _ := pem.Decode([]byte(pemBytes))
-	privateKeyImported, err := x509.ParsePKCS1PrivateKey(data.Bytes)
-	if err != nil {
-		panic(err)
-	}
-	return privateKeyImported
+	hashedPassword, _ := bcrypt.GenerateFromPassword(jwt.secretAccessKey, bcrypt.DefaultCost)
+	return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
 }

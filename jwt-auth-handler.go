@@ -43,13 +43,13 @@ func (h authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Validate Authorization header to be valid.
 	jwt := InitJWT()
-	token, err := jwtgo.ParseFromRequest(r, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
+	token, e := jwtgo.ParseFromRequest(r, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwt.PublicKey, nil
+		return jwt.secretAccessKey, nil
 	})
-	if err != nil || !token.Valid {
+	if e != nil || !token.Valid {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

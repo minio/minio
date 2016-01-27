@@ -162,7 +162,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
-	if _, e := os.Stat(bucketPath); e != nil {
+	if _, e = os.Stat(bucketPath); e != nil {
 		// check bucket exists
 		if os.IsNotExist(e) {
 			return "", probe.NewError(BucketNotFound{Bucket: bucket})
@@ -172,7 +172,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 
 	objectPath := filepath.Join(bucketPath, object)
 	objectDir := filepath.Dir(objectPath)
-	if _, e := os.Stat(objectDir); e != nil {
+	if _, e = os.Stat(objectDir); e != nil {
 		if !os.IsNotExist(e) {
 			return "", probe.NewError(e)
 		}
