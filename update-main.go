@@ -140,7 +140,8 @@ func parseReleaseData(data string) (time.Time, *probe.Error) {
 
 // verify updates for releases.
 func getReleaseUpdate(updateURL string) {
-	newUpdateURL := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH + "/minio.shasum"
+	newUpdateURLPrefix := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH
+	newUpdateURL := newUpdateURLPrefix + "/minio.shasum"
 	data, e := http.Get(newUpdateURL)
 	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
 
@@ -170,9 +171,9 @@ func getReleaseUpdate(updateURL string) {
 
 	var downloadURL string
 	if runtime.GOOS == "windows" {
-		downloadURL = updateURL + runtime.GOOS + "-" + runtime.GOARCH + "/minio.exe"
+		downloadURL = newUpdateURLPrefix + "/minio.exe"
 	} else {
-		downloadURL = updateURL + runtime.GOOS + "-" + runtime.GOARCH + "/minio"
+		downloadURL = newUpdateURLPrefix + "/minio"
 	}
 	updateMsg := updateMessage{
 		Download: downloadURL,
