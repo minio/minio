@@ -19,6 +19,7 @@ package fs
 import (
 	"errors"
 	"hash/fnv"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -259,10 +260,16 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		return ListObjectsResult{}, probe.NewError(e)
 	}
 
+	// Unescape the marker values.
+	markerUnescaped, e := url.QueryUnescape(marker)
+	if e != nil {
+		return ListObjectsResult{}, probe.NewError(e)
+	}
+
 	reqParams := listObjectsParams{}
 	reqParams.Bucket = bucket
 	reqParams.Prefix = filepath.FromSlash(prefix)
-	reqParams.Marker = filepath.FromSlash(marker)
+	reqParams.Marker = filepath.FromSlash(markerUnescaped)
 	reqParams.Delimiter = filepath.FromSlash(delimiter)
 	reqParams.MaxKeys = maxKeys
 
