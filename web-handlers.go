@@ -18,10 +18,13 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio-go"
+	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -29,13 +32,13 @@ import (
 // authenticated request.
 func isAuthenticated(req *http.Request) bool {
 	jwt := InitJWT()
-	tokenRequest, err := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
+	tokenRequest, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwt.PublicKey, nil
+		return jwt.secretAccessKey, nil
 	})
-	if err != nil {
+	if e != nil {
 		return false
 	}
 	return tokenRequest.Valid
@@ -46,9 +49,9 @@ func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *disk.Inf
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-	info, err := disk.GetInfo(web.FSPath)
-	if err != nil {
-		return err
+	info, e := disk.GetInfo(web.FSPath)
+	if e != nil {
+		return e
 	}
 	*reply = info
 	return nil
@@ -67,9 +70,9 @@ func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *[]
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-	buckets, err := web.Client.ListBuckets()
-	if err != nil {
-		return err
+	buckets, e := web.Client.ListBuckets()
+	if e != nil {
+		return e
 	}
 	for _, bucket := range buckets {
 		*reply = append(*reply, BucketInfo{
@@ -101,16 +104,60 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]
 	return nil
 }
 
-// GetObjectURL - get object url.
+func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
+	if targetHost != "" {
+		_, port, e := net.SplitHostPort(apiAddress)
+		if e != nil {
+			return "", probe.NewError(e)
+		}
+		host, _, e := net.SplitHostPort(targetHost)
+		if e != nil {
+			return "", probe.NewError(e)
+		}
+		targetHost = net.JoinHostPort(host, port)
+	}
+	return targetHost, nil
+}
+
+// PutObjectURL - generates url for upload access.
+func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *string) error {
+	if !isAuthenticated(r) {
+		return errUnAuthorizedRequest
+	}
+	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
+	if err != nil {
+		return probe.WrapError(err)
+	}
+	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	if e != nil {
+		return e
+	}
+	signedURLStr, e := client.PresignedPutObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
+	if e != nil {
+		return e
+	}
+	*reply = signedURLStr
+	return nil
+}
+
+// GetObjectURL - generates url for download access.
 func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *string) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-	urlStr, err := web.Client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
+	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
-		return err
+		return probe.WrapError(err)
 	}
-	*reply = urlStr
+	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	if e != nil {
+		return e
+	}
+	signedURLStr, e := client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
+	if e != nil {
+		return e
+	}
+	*reply = signedURLStr
 	return nil
 }
 
@@ -120,7 +167,7 @@ func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *AuthToken) err
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {
-			return err
+			return probe.WrapError(err.Trace())
 		}
 		reply.Token = token
 		return nil
@@ -134,7 +181,7 @@ func (web *WebAPI) RefreshToken(r *http.Request, args *LoginArgs, reply *AuthTok
 		jwt := InitJWT()
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {
-			return err
+			return probe.WrapError(err.Trace())
 		}
 		reply.Token = token
 		return nil

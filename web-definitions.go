@@ -53,8 +53,16 @@ type ObjectInfo struct {
 	Size int64 `json:"size"`
 }
 
-// GetObjectURLArgs - get object url.
+// PutObjectURLArgs - args to generate url for upload access.
+type PutObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
+}
+
+// GetObjectURLArgs - args to generate url for download access.
 type GetObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
 	BucketName string `json:"bucketName"`
 	ObjectName string `json:"objectName"`
 }

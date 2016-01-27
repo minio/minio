@@ -46,12 +46,20 @@ type WebAPI struct {
 	AccessLog bool
 	// Minio client instance.
 	Client minio.CloudStorageClient
+
+	// private params.
+	inSecure   bool   // Enabled if TLS is false.
+	apiAddress string // api destination address.
+	// accessKeys kept to be used internally.
+	accessKeyID     string
+	secretAccessKey string
 }
 
 func getWebAPIHandler(web *WebAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler, // Validate time.
 		CorsHandler,         // CORS added only for testing purposes.
+		AuthHandler,         // Authentication handler for verifying tokens.
 	}
 	if web.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
@@ -106,20 +114,27 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 // getNewWebAPI instantiate a new WebAPI.
 func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	// Split host port.
-	_, port, e := net.SplitHostPort(conf.Address)
+	host, port, e := net.SplitHostPort(conf.Address)
 	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
 
-	// Default host to 'localhost'.
-	host := "localhost"
+	// Default host is 'localhost', if no host present.
+	if host == "" {
+		host = "localhost"
+	}
 
 	// Initialize minio client for AWS Signature Version '4'
-	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, true)
+	inSecure := !conf.TLS // Insecure true when TLS is false.
+	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
 	web := &WebAPI{
-		FSPath:    conf.Path,
-		AccessLog: conf.AccessLog,
-		Client:    client,
+		FSPath:          conf.Path,
+		AccessLog:       conf.AccessLog,
+		Client:          client,
+		inSecure:        inSecure,
+		apiAddress:      conf.Address,
+		accessKeyID:     conf.AccessKeyID,
+		secretAccessKey: conf.SecretAccessKey,
 	}
 	return web
 }
