@@ -58,8 +58,8 @@ type WebAPI struct {
 func getWebAPIHandler(web *WebAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
 		TimeValidityHandler, // Validate time.
-		CorsHandler,         // CORS added only for testing purposes.
 		AuthHandler,         // Authentication handler for verifying tokens.
+		CorsHandler,         // CORS added only for testing purposes.
 	}
 	if web.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
@@ -157,7 +157,6 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 
 func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
-		CorsHandler,
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
 		IgnoreSignatureV2RequestHandler,
@@ -168,6 +167,7 @@ func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 	if api.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
 	}
+	mwHandlers = append(mwHandlers, CorsHandler)
 	mux := router.NewRouter()
 	registerCloudStorageAPI(mux, api)
 	return registerCustomMiddleware(mux, mwHandlers...)
