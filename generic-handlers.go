@@ -126,7 +126,7 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func CorsHandler(h http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "HEAD", "POST"},
+		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT"},
 		AllowedHeaders: []string{"*"},
 	})
 	return c.Handler(h)
