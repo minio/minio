@@ -308,12 +308,27 @@ func (r *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", r.getSignedHeaders(r.extractSignedHeaders()))
 	query.Set("X-Amz-Credential", r.AccessKeyID+"/"+r.getScope(t))
-
 	encodedQuery := query.Encode()
-	newSignature := r.getSignature(r.getSigningKey(t), r.getStringToSign(r.getPresignedCanonicalRequest(encodedQuery), t))
-	encodedQuery += "&X-Amz-Signature=" + newSignature
 
-	if encodedQuery != r.Request.URL.RawQuery {
+	// Verify if date query is same.
+	if r.Request.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
+		return false, nil
+	}
+	// Verify if expires query is same.
+	if r.Request.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
+		return false, nil
+	}
+	// Verify if signed headers query is same.
+	if r.Request.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
+		return false, nil
+	}
+	// Verify if credential query is same.
+	if r.Request.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
+		return false, nil
+	}
+	// Verify finally if signature is same.
+	newSignature := r.getSignature(r.getSigningKey(t), r.getStringToSign(r.getPresignedCanonicalRequest(encodedQuery), t))
+	if r.Request.URL.Query().Get("X-Amz-Signature") != newSignature {
 		return false, nil
 	}
 	return true, nil
