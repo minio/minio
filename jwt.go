@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -65,6 +66,8 @@ func (jwt *JWT) GenerateToken(userName string) (string, *probe.Error) {
 
 // Authenticate - authenticates incoming username and password.
 func (jwt *JWT) Authenticate(userName, password string) bool {
+	userName = strings.TrimSpace(userName)
+	password = strings.TrimSpace(password)
 	if !bytes.Equal([]byte(userName), jwt.accessKeyID) {
 		return false
 	}
