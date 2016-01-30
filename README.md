@@ -1,6 +1,6 @@
 ## Minio [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Minio is a minimal cloud storage server for Micro Services. Written in Golang and licensed under [Apache license v2](./LICENSE). Compatible with Amazon S3 APIs.
+Minio is a distributed object storage server written in Golang. Source is available under free software / open source [Apache license 2.0](./LICENSE). API compatible with Amazon S3 cloud storage service.
 
 ## Description
 
