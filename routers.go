@@ -71,10 +71,13 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	s.RegisterCodec(codec, "application/json; charset=UTF-8")
 	s.RegisterService(web, "Web")
 	mux := router.NewRouter()
-	// Add new RPC services here
-	mux.Handle("/rpc", s)
+	// Root router.
+	root := mux.NewRoute().PathPrefix("/").Subrouter()
+	root.Handle("/rpc", s)
+
 	// Enable this when we add assets.
-	// mux.Handle("/{file:.*}", http.FileServer(assetFS()))
+	// root.PathPrefix("/login").Handler(http.StripPrefix("/login", http.FileServer(assetFS())))
+	// root.Handle("/{file:.*}", http.FileServer(assetFS()))
 	return registerCustomMiddleware(mux, mwHandlers...)
 }
 

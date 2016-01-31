@@ -109,39 +109,6 @@ func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 			return nil, probe.NewError(err)
 		}
 	}
-
-	host, port, err := net.SplitHostPort(conf.WebAddress)
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
-
-	var hosts []string
-	switch {
-	case host != "":
-		hosts = append(hosts, host)
-	default:
-		addrs, err := net.InterfaceAddrs()
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
-		for _, addr := range addrs {
-			if addr.Network() == "ip+net" {
-				host := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(host); ip.To4() != nil {
-					hosts = append(hosts, host)
-				}
-			}
-		}
-	}
-
-	Println("Starting minio web server:")
-	for _, host := range hosts {
-		if conf.TLS {
-			Printf("Listening on https://%s:%s\n", host, port)
-		} else {
-			Printf("Listening on http://%s:%s\n", host, port)
-		}
-	}
 	return webServer, nil
 }
 
@@ -163,21 +130,21 @@ func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 			return nil, probe.NewError(err)
 		}
 	}
+	return apiServer, nil
+}
 
-	host, port, err := net.SplitHostPort(conf.Address)
-	if err != nil {
-		return nil, probe.NewError(err)
-	}
+func printServerMsg(conf cloudServerConfig) {
+	host, port, e := net.SplitHostPort(conf.Address)
+	fatalIf(probe.NewError(e), "Unable to split host port.", nil)
 
 	var hosts []string
 	switch {
 	case host != "":
 		hosts = append(hosts, host)
 	default:
-		addrs, err := net.InterfaceAddrs()
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
+		addrs, e := net.InterfaceAddrs()
+		fatalIf(probe.NewError(e), "Unable to get interface address.", nil)
+
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
 				host := strings.Split(addr.String(), "/")[0]
@@ -187,33 +154,13 @@ func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 			}
 		}
 	}
-
-	Println("Starting minio server:")
 	for _, host := range hosts {
 		if conf.TLS {
-			Printf("Listening on https://%s:%s\n", host, port)
+			Printf("    https://%s:%s\n", host, port)
 		} else {
-			Printf("Listening on http://%s:%s\n", host, port)
+			Printf("    http://%s:%s\n", host, port)
 		}
 	}
-	return apiServer, nil
-}
-
-// startServer starts an s3 compatible cloud storage server
-func startServer(conf cloudServerConfig) *probe.Error {
-	apiServer, err := configureAPIServer(conf)
-	if err != nil {
-		return err.Trace()
-	}
-	webServer, err := configureWebServer(conf)
-	if err != nil {
-		return err.Trace()
-	}
-	rateLimit := conf.RateLimit
-	if err := minhttp.ListenAndServeLimited(rateLimit, apiServer, webServer); err != nil {
-		return err.Trace()
-	}
-	return nil
 }
 
 // parse input string with percent to int64
@@ -309,20 +256,6 @@ func initServer() (*configV2, *probe.Error) {
 		Println()
 		Println(accessKeys{conf})
 	}
-	Println("\nTo configure Minio Client.")
-	if runtime.GOOS == "windows" {
-		Println("\n\tDownload https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
-		Println("\t$ mc.exe config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
-		Println("\t$ mc.exe mb myminio/photobucket")
-		Println("\t$ mc.exe cp --recursive C:\\Photos myminio/photobucket")
-	} else {
-		Println("\n\t$ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
-		Println("\t$ chmod 755 mc")
-		Println("\t$ ./mc config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
-		Println("\t$ ./mc mb myminio/photobucket")
-		Println("\t$ ./mc cp --recursive ~/Photos myminio/photobucket")
-	}
-	Println()
 	return conf, nil
 }
 
@@ -393,7 +326,7 @@ func serverMain(c *cli.Context) {
 		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
 	}
 	tls := (certFile != "" && keyFile != "")
-	apiServerConfig := cloudServerConfig{
+	serverConfig := cloudServerConfig{
 		Address:         c.GlobalString("address"),
 		WebAddress:      c.GlobalString("web-address"),
 		AccessLog:       c.GlobalBool("enable-accesslog"),
@@ -408,6 +341,33 @@ func serverMain(c *cli.Context) {
 		KeyFile:         keyFile,
 		RateLimit:       c.GlobalInt("ratelimit"),
 	}
-	perr = startServer(apiServerConfig)
-	errorIf(perr.Trace(), "Failed to start the minio server.", nil)
+
+	Println("\nMinio Object Storage:")
+	printServerMsg(serverConfig)
+
+	// configure API server.
+	apiServer, err := configureAPIServer(serverConfig)
+	errorIf(err.Trace(), "Failed to configure API server.", nil)
+
+	Println("\nMinio Browser:")
+	printServerMsg(serverConfig)
+
+	// configure Web server.
+	webServer, err := configureWebServer(serverConfig)
+	errorIf(err.Trace(), "Failed to configure Web server.", nil)
+
+	Println("\nTo configure Minio Client:")
+	if runtime.GOOS == "windows" {
+		Println("    Download \"mc\" from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
+		Println("    $ mc.exe config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
+	} else {
+		Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
+		Println("    $ chmod 755 mc")
+		Println("    $ ./mc config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
+	}
+
+	// Start server.
+	rateLimit := serverConfig.RateLimit
+	err = minhttp.ListenAndServeLimited(rateLimit, apiServer, webServer)
+	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }
