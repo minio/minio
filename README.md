@@ -64,14 +64,16 @@ Read more here on [How to configure data volume containers for Minio?](./Docker.
 
 #### Source
 <blockquote>
-NOTE: Source installation is intended for only developers and advanced users. ‘minio update’ continous delivery mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio.
+NOTE: Source installation is intended for only developers and advanced users.  For general use, please download official releases from https://minio.io/download.
 </blockquote>
 
 If you do not have a working Golang environment, please follow [Install Golang](./INSTALLGO.md).
 
-```sh
-$ GO15VENDOREXPERIMENT=1 go get -u github.com/minio/minio
-```
+~~~
+$ go get -d github.com/minio/minio
+$ cd $GOPATH/src/github.com/minio/minio
+$ make
+~~~
 
 ### How to use Minio?
 
@@ -106,19 +108,20 @@ EXAMPLES:
 
 ~~~
 $ minio server ~/Photos
-AccessKey: G5GJRH51R2HSUWYPGIX5  SecretKey: uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
+AccessKey: WLGDGYAQYIGI833EV05A  SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF  Region: us-east-1
 
-To configure Minio Client.
+Minio Object Storage:
+    http://127.0.0.1:9000
+    http://10.0.0.3:9000
 
-	$ wget https://dl.minio.io/client/mc/release/linux-amd64/mc
-	$ chmod 755 mc
-	$ ./mc config host add myminio http://localhost:9000 G5GJRH51R2HSUWYPGIX5 uxhBC1Yscut3/u81l5L8Yp636ZUk32N4m/gFASuZ
-	$ ./mc mb myminio/photobucket
-	$ ./mc cp --recursive ~/Photos myminio/photobucket
+Minio Browser:
+    http://127.0.0.1:9000
+    http://10.0.0.3:9000
 
-Starting minio server:
-Listening on http://127.0.0.1:9000
-Listening on http://172.30.2.17:9000
+To configure Minio Client:
+    $ wget https://dl.minio.io/client/mc/release/darwin-amd64/mc
+    $ chmod 755 mc
+    $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
 ~~~
 
 #### How to use AWS CLI with Minio?

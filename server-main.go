@@ -233,7 +233,7 @@ type accessKeys struct {
 func (a accessKeys) String() string {
 	magenta := color.New(color.FgMagenta, color.Bold).SprintFunc()
 	white := color.New(color.FgWhite, color.Bold).SprintfFunc()
-	return fmt.Sprint(magenta("AccessKey: ") + white(a.Credentials.AccessKeyID) + "  " + magenta("SecretKey: ") + white(a.Credentials.SecretAccessKey))
+	return fmt.Sprint(magenta("AccessKey: ") + white(a.Credentials.AccessKeyID) + "  " + magenta("SecretKey: ") + white(a.Credentials.SecretAccessKey) + "  " + magenta("Region: ") + white(a.Credentials.Region))
 }
 
 // JSON - json formatted output
