@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -95,19 +96,22 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]
 		if object.Err != nil {
 			return object.Err
 		}
+		objectInfo := ObjectInfo{
+			Key:          object.Key,
+			LastModified: object.LastModified,
+			Size:         object.Size,
+		}
 		// TODO - This can get slower for large directories, we can
 		// perhaps extend the ListObjects XML to reply back
 		// ContentType as well.
-		objectInfo, e := web.Client.StatObject(args.BucketName, object.Key)
-		if e != nil {
-			return e
+		if !strings.HasSuffix(object.Key, "/") && object.Size > 0 {
+			objectStatInfo, e := web.Client.StatObject(args.BucketName, object.Key)
+			if e != nil {
+				return e
+			}
+			objectInfo.ContentType = objectStatInfo.ContentType
 		}
-		*reply = append(*reply, ObjectInfo{
-			Key:          objectInfo.Key,
-			LastModified: objectInfo.LastModified,
-			Size:         objectInfo.Size,
-			ContentType:  objectInfo.ContentType,
-		})
+		*reply = append(*reply, objectInfo)
 	}
 	return nil
 }
