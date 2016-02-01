@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/crypto/sha512"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/contentdb"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -432,12 +433,16 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 	if err != nil {
 		return ObjectMetadata{}, probe.NewError(err)
 	}
+	contentType := "application/octet-stream"
+	if objectExt := filepath.Ext(objectPath); objectExt != "" {
+		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
+	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,
 		Object:      object,
 		Created:     st.ModTime(),
 		Size:        st.Size(),
-		ContentType: "application/octet-stream",
+		ContentType: contentType,
 		Md5:         hex.EncodeToString(h.Sum(nil)),
 	}
 	return newObject, nil

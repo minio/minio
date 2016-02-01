@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/contentdb"
 )
 
 // Filesystem - local variables
@@ -79,6 +80,9 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
+	// Initialize content db.
+	contentdb.Init()
+
 	var buckets *Buckets
 	buckets, err = loadBucketsMetadata()
 	if err != nil {

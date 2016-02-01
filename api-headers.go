@@ -78,7 +78,7 @@ func setObjectHeaders(w http.ResponseWriter, metadata fs.ObjectMetadata, content
 	// set object headers
 	lastModified := metadata.Created.Format(http.TimeFormat)
 	// object related headers
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", metadata.ContentType)
 	if metadata.Md5 != "" {
 		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
 	}

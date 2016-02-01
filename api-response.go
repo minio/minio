@@ -108,7 +108,9 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 		}
 		content.Key = object.Object
 		content.LastModified = object.Created.Format(rfcFormat)
-		content.ETag = "\"" + object.Md5 + "\""
+		if object.Md5 != "" {
+			content.ETag = "\"" + object.Md5 + "\""
+		}
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
 		content.Owner = owner
