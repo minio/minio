@@ -204,7 +204,9 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		}
 		return
 	}
-	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	if metadata.Md5 != "" {
+		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	}
 	writeSuccessResponse(w, nil)
 }
 
@@ -347,7 +349,9 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		}
 		return
 	}
-	w.Header().Set("ETag", "\""+calculatedMD5+"\"")
+	if calculatedMD5 != "" {
+		w.Header().Set("ETag", "\""+calculatedMD5+"\"")
+	}
 	writeSuccessResponse(w, nil)
 }
 

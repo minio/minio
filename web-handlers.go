@@ -95,10 +95,18 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]
 		if object.Err != nil {
 			return object.Err
 		}
+		// TODO - This can get slower for large directories, we can
+		// perhaps extend the ListObjects XML to reply back
+		// ContentType as well.
+		objectInfo, e := web.Client.StatObject(args.BucketName, object.Key)
+		if e != nil {
+			return e
+		}
 		*reply = append(*reply, ObjectInfo{
-			Key:          object.Key,
-			LastModified: object.LastModified,
-			Size:         object.Size,
+			Key:          objectInfo.Key,
+			LastModified: objectInfo.LastModified,
+			Size:         objectInfo.Size,
+			ContentType:  objectInfo.ContentType,
 		})
 	}
 	return nil

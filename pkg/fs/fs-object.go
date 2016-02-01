@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio-xl/pkg/atomic"
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/contentdb"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -152,6 +153,9 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	contentType := "application/octet-stream"
 	if runtime.GOOS == "windows" {
 		object = sanitizeWindowsPath(object)
+	}
+	if objectExt := filepath.Ext(object); objectExt != "" {
+		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
 	}
 	metadata := ObjectMetadata{
 		Bucket:      bucket,
@@ -279,12 +283,16 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	if err != nil {
 		return ObjectMetadata{}, probe.NewError(err)
 	}
+	contentType := "application/octet-stream"
+	if objectExt := filepath.Ext(objectPath); objectExt != "" {
+		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
+	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,
 		Object:      object,
 		Created:     st.ModTime(),
 		Size:        st.Size(),
-		ContentType: "application/octet-stream",
+		ContentType: contentType,
 		Md5:         md5Sum,
 	}
 	return newObject, nil

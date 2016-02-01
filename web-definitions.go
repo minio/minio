@@ -51,6 +51,8 @@ type ObjectInfo struct {
 	LastModified time.Time `json:"lastModified"`
 	// Size in bytes of the object.
 	Size int64 `json:"size"`
+	// ContentType is mime type of the object.
+	ContentType string `json:"contentType"`
 }
 
 // PutObjectURLArgs - args to generate url for upload access.
