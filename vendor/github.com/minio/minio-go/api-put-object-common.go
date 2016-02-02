@@ -94,6 +94,58 @@ func optimalPartInfo(objectSize int64) (totalPartsCount int, partSize int64, las
 	return totalPartsCount, partSize, lastPartSize, nil
 }
 
+// Compatibility code for Golang < 1.5.x.
+// copyBuffer is identical to io.CopyBuffer, since such a function is
+// not available/implemented in Golang version < 1.5.x, we use a
+// custom call exactly implementng io.CopyBuffer from Golang > 1.5.x
+// version does.
+//
+// copyBuffer stages through the provided buffer (if one is required)
+// rather than allocating a temporary one. If buf is nil, one is
+// allocated; otherwise if it has zero length, copyBuffer panics.
+//
+// FIXME: Remove this code when distributions move to newer Golang versions.
+func copyBuffer(writer io.Writer, reader io.Reader, buf []byte) (written int64, err error) {
+	// If the reader has a WriteTo method, use it to do the copy.
+	// Avoids an allocation and a copy.
+	if wt, ok := reader.(io.WriterTo); ok {
+		return wt.WriteTo(writer)
+	}
+	// Similarly, if the writer has a ReadFrom method, use it to do
+	// the copy.
+	if rt, ok := writer.(io.ReaderFrom); ok {
+		return rt.ReadFrom(reader)
+	}
+	if buf == nil {
+		buf = make([]byte, 32*1024)
+	}
+	for {
+		nr, er := reader.Read(buf)
+		if nr > 0 {
+			nw, ew := writer.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er == io.EOF {
+			break
+		}
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	return written, err
+}
+
 // hashCopyBuffer is identical to hashCopyN except that it stages
 // through the provided buffer (if one is required) rather than
 // allocating a temporary one. If buf is nil, one is allocated for 5MiB.
@@ -113,9 +165,9 @@ func (c Client) hashCopyBuffer(writer io.Writer, reader io.Reader, buf []byte) (
 		buf = make([]byte, optimalReadBufferSize)
 	}
 
-	// Using io.CopyBuffer to copy in large buffers, default buffer
+	// Using copyBuffer to copy in large buffers, default buffer
 	// for io.Copy of 32KiB is too small.
-	size, err = io.CopyBuffer(hashWriter, reader, buf)
+	size, err = copyBuffer(hashWriter, reader, buf)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -215,7 +267,7 @@ func (c Client) computeHashBuffer(reader io.ReadSeeker, buf []byte) (md5Sum, sha
 			return nil, nil, 0, err
 		}
 	} else {
-		size, err = io.CopyBuffer(hashWriter, reader, buf)
+		size, err = copyBuffer(hashWriter, reader, buf)
 		if err != nil {
 			return nil, nil, 0, err
 		}

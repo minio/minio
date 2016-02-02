@@ -55,6 +55,52 @@ func randString(n int, src rand.Source) string {
 	return string(b[0:30])
 }
 
+// Tests bucket re-create errors.
+func TestMakeBucketError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping functional tests for short runs")
+	}
+
+	// Seed random based on current time.
+	rand.Seed(time.Now().Unix())
+
+	// Instantiate new minio client object.
+	c, err := minio.New(
+		"s3.amazonaws.com",
+		os.Getenv("ACCESS_KEY"),
+		os.Getenv("SECRET_KEY"),
+		false,
+	)
+	if err != nil {
+		t.Fatal("Error:", err)
+	}
+
+	// Enable tracing, write to stderr.
+	// c.TraceOn(os.Stderr)
+
+	// Set user agent.
+	c.SetAppInfo("Minio-go-FunctionalTest", "0.1.0")
+
+	// Generate a new random bucket name.
+	bucketName := randString(60, rand.NewSource(time.Now().UnixNano()))
+
+	// Make a new bucket in 'eu-central-1'.
+	if err = c.MakeBucket(bucketName, "private", "eu-central-1"); err != nil {
+		t.Fatal("Error:", err, bucketName)
+	}
+	if err = c.MakeBucket(bucketName, "private", "eu-central-1"); err == nil {
+		t.Fatal("Error: make bucket should should fail for", bucketName)
+	}
+	// Verify valid error response from server.
+	if minio.ToErrorResponse(err).Code != "BucketAlreadyExists" &&
+		minio.ToErrorResponse(err).Code != "BucketAlreadyOwnedByYou" {
+		t.Fatal("Error: Invalid error returned by server", err)
+	}
+	if err = c.RemoveBucket(bucketName); err != nil {
+		t.Fatal("Error:", err, bucketName)
+	}
+}
+
 // Tests various bucket supported formats.
 func TestMakeBucketRegions(t *testing.T) {
 	if testing.Short() {
@@ -64,7 +110,7 @@ func TestMakeBucketRegions(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -115,7 +161,7 @@ func TestGetObjectClosedTwice(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -200,7 +246,7 @@ func TestRemovePartiallyUploaded(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -236,7 +282,7 @@ func TestRemovePartiallyUploaded(t *testing.T) {
 			}
 			i++
 		}
-		err = writer.CloseWithError(errors.New("Proactively closed to be verified later."))
+		err := writer.CloseWithError(errors.New("Proactively closed to be verified later."))
 		if err != nil {
 			t.Fatal("Error:", err)
 		}
@@ -270,7 +316,7 @@ func TestResumbalePutObject(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -380,7 +426,7 @@ func TestResumableFPutObject(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -460,7 +506,7 @@ func TestResumablePutObject(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -524,7 +570,7 @@ func TestGetObjectReadSeekFunctional(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),
@@ -638,7 +684,7 @@ func TestGetObjectReadAtFunctional(t *testing.T) {
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
-	// Connect and make sure bucket exists.
+	// Instantiate new minio client object.
 	c, err := minio.New(
 		"s3.amazonaws.com",
 		os.Getenv("ACCESS_KEY"),

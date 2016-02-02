@@ -91,19 +91,14 @@ func (c Client) makeBucketRequest(bucketName string, acl BucketACL, location str
 		return nil, ErrInvalidArgument("Unrecognized ACL " + acl.String())
 	}
 
-	// Set get bucket location always as path style.
+	// In case of Amazon S3.  The make bucket issued on already
+	// existing bucket would fail with 'AuthorizationMalformed' error
+	// if virtual style is used. So we default to 'path style' as that
+	// is the preferred method here. The final location of the
+	// 'bucket' is provided through XML LocationConstraint data with
+	// the request.
 	targetURL := *c.endpointURL
-	if bucketName != "" {
-		// If endpoint supports virtual host style use that always.
-		// Currently only S3 and Google Cloud Storage would support this.
-		if isVirtualHostSupported(c.endpointURL, bucketName) {
-			targetURL.Host = bucketName + "." + c.endpointURL.Host
-			targetURL.Path = "/"
-		} else {
-			// If not fall back to using path style.
-			targetURL.Path = "/" + bucketName
-		}
-	}
+	targetURL.Path = "/" + bucketName + "/"
 
 	// get a new HTTP request for the method.
 	req, err := http.NewRequest("PUT", targetURL.String(), nil)

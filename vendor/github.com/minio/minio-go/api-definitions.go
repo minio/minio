@@ -33,10 +33,10 @@ type ObjectInfo struct {
 	// each parts concatenated into one string.
 	ETag string `json:"etag"`
 
-	Key          string `json:"name"`            // Name of the object
+	Key          string    `json:"name"`         // Name of the object
 	LastModified time.Time `json:"lastModified"` // Date and time the object was last modified.
-	Size         int64 `json:"size"`             // Size in bytes of the object.
-	ContentType  string `json:"contentType"`     // A standard MIME type describing the format of the object data.
+	Size         int64     `json:"size"`         // Size in bytes of the object.
+	ContentType  string    `json:"contentType"`  // A standard MIME type describing the format of the object data.
 
 	// Owner name.
 	Owner struct {
