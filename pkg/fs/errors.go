@@ -102,6 +102,16 @@ func (e ObjectNotFound) Error() string {
 	return "Object not found: " + e.Bucket + "#" + e.Object
 }
 
+// ObjectExistsAsPrefix object already exists with a requested prefix.
+type ObjectExistsAsPrefix struct {
+	Bucket string
+	Prefix string
+}
+
+func (e ObjectExistsAsPrefix) Error() string {
+	return "Object exists on : " + e.Bucket + " as prefix " + e.Prefix
+}
+
 // ObjectCorrupted object found to be corrupted
 type ObjectCorrupted struct {
 	Object string
