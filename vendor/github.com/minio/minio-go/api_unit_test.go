@@ -397,6 +397,22 @@ func TestPartSize(t *testing.T) {
 	}
 }
 
+// Tests query values to URL encoding.
+func TestQueryURLEncoding(t *testing.T) {
+	urlValues := make(url.Values)
+	urlValues.Set("prefix", "test@1123")
+	urlValues.Set("delimiter", "/")
+	urlValues.Set("marker", "%%%@$$$")
+
+	queryStr := queryEncode(urlValues)
+	if !strings.Contains(queryStr, "test%401123") {
+		t.Fatalf("Error: @ should be encoded as %s, invalid query string %s", "test%401123", queryStr)
+	}
+	if !strings.Contains(queryStr, "%25%25%25%40%24%24%24") {
+		t.Fatalf("Error: %s should be encoded as %s, invalid query string %s", "%%%@$$$", "%25%25%25%40%24%24%24", queryStr)
+	}
+}
+
 // Tests url encoding.
 func TestURLEncoding(t *testing.T) {
 	type urlStrings struct {

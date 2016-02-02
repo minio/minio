@@ -88,7 +88,7 @@ func (c Client) FPutObject(bucketName, objectName, filePath, contentType string)
 	}
 
 	// Small object upload is initiated for uploads for input data size smaller than 5MiB.
-	if fileSize < minPartSize {
+	if fileSize < minPartSize && fileSize >= 0 {
 		return c.putObjectSingle(bucketName, objectName, fileReader, fileSize, contentType, nil)
 	}
 	// Upload all large objects as multipart.

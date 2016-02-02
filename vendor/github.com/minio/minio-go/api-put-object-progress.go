@@ -82,7 +82,7 @@ func (c Client) PutObjectWithProgress(bucketName, objectName string, reader io.R
 	}
 
 	// putSmall object.
-	if size < minPartSize && size > 0 {
+	if size < minPartSize && size >= 0 {
 		return c.putObjectSingle(bucketName, objectName, reader, size, contentType, progress)
 	}
 	// For all sizes greater than 5MiB do multipart.

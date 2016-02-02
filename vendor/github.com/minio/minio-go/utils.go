@@ -17,6 +17,7 @@
 package minio
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -27,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -183,7 +185,7 @@ func isValidEndpointURL(endpointURL *url.URL) error {
 		return ErrInvalidArgument("Endpoint url cannot be empty.")
 	}
 	if endpointURL.Path != "/" && endpointURL.Path != "" {
-		return ErrInvalidArgument("Endpoing url cannot have fully qualified paths.")
+		return ErrInvalidArgument("Endpoint url cannot have fully qualified paths.")
 	}
 	if strings.Contains(endpointURL.Host, ".amazonaws.com") {
 		if !isAmazonEndpoint(endpointURL) {
@@ -262,6 +264,31 @@ func isValidObjectPrefix(objectPrefix string) error {
 		return ErrInvalidObjectPrefix("Object prefix with non UTF-8 strings are not supported.")
 	}
 	return nil
+}
+
+// queryEncode - encodes query values in their URL encoded form.
+func queryEncode(v url.Values) string {
+	if v == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vs := v[k]
+		prefix := urlEncodePath(k) + "="
+		for _, v := range vs {
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(prefix)
+			buf.WriteString(urlEncodePath(v))
+		}
+	}
+	return buf.String()
 }
 
 // urlEncodePath encode the strings from UTF-8 byte representations to HTML hex escape sequences

@@ -181,7 +181,7 @@ func (c *Client) SetCustomTransport(customHTTPTransport http.RoundTripper) {
 }
 
 // TraceOn - enable HTTP tracing.
-func (c *Client) TraceOn(outputStream io.Writer) error {
+func (c *Client) TraceOn(outputStream io.Writer) {
 	// if outputStream is nil then default to os.Stdout.
 	if outputStream == nil {
 		outputStream = os.Stdout
@@ -191,7 +191,6 @@ func (c *Client) TraceOn(outputStream io.Writer) error {
 
 	// Enable tracing.
 	c.isTraceEnabled = true
-	return nil
 }
 
 // TraceOff - disable HTTP tracing.
@@ -471,15 +470,15 @@ func (c Client) makeTargetURL(bucketName, objectName, bucketLocation string, que
 			}
 		} else {
 			// If not fall back to using path style.
-			urlStr = urlStr + bucketName
+			urlStr = urlStr + bucketName + "/"
 			if objectName != "" {
-				urlStr = urlStr + "/" + urlEncodePath(objectName)
+				urlStr = urlStr + urlEncodePath(objectName)
 			}
 		}
 	}
 	// If there are any query values, add them to the end.
 	if len(queryValues) > 0 {
-		urlStr = urlStr + "?" + queryValues.Encode()
+		urlStr = urlStr + "?" + queryEncode(queryValues)
 	}
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -528,6 +527,6 @@ type CloudStorageClient interface {
 	SetCustomTransport(customTransport http.RoundTripper)
 
 	// HTTP tracing methods.
-	TraceOn(traceOutput io.Writer) error
+	TraceOn(traceOutput io.Writer)
 	TraceOff()
 }

@@ -188,11 +188,11 @@ func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimit
 	urlValues := make(url.Values)
 	// Set object prefix.
 	if objectPrefix != "" {
-		urlValues.Set("prefix", urlEncodePath(objectPrefix))
+		urlValues.Set("prefix", objectPrefix)
 	}
 	// Set object marker.
 	if objectMarker != "" {
-		urlValues.Set("marker", urlEncodePath(objectMarker))
+		urlValues.Set("marker", objectMarker)
 	}
 	// Set delimiter.
 	if delimiter != "" {
@@ -366,7 +366,7 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 	urlValues.Set("uploads", "")
 	// Set object key marker.
 	if keyMarker != "" {
-		urlValues.Set("key-marker", urlEncodePath(keyMarker))
+		urlValues.Set("key-marker", keyMarker)
 	}
 	// Set upload id marker.
 	if uploadIDMarker != "" {
@@ -374,7 +374,7 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 	}
 	// Set prefix marker.
 	if prefix != "" {
-		urlValues.Set("prefix", urlEncodePath(prefix))
+		urlValues.Set("prefix", prefix)
 	}
 	// Set delimiter.
 	if delimiter != "" {
