@@ -26,7 +26,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
@@ -44,7 +43,6 @@ var serverCmd = cli.Command{
 USAGE:
   minio {{.Name}} [OPTION VALUE] PATH
 
-  OPTION = expiry        VALUE = NN[h|m|s] [DEFAULT=Unlimited]
   OPTION = min-free-disk VALUE = NN% [DEFAULT: 10%]
 
 EXAMPLES:
@@ -60,9 +58,6 @@ EXAMPLES:
   4. Start minio server with minimum free disk threshold to 5%
       $ minio {{.Name}} min-free-disk 5% /home/shared/Pictures
 
-  5. Start minio server with minimum free disk threshold to 15% with auto expiration set to 1h
-      $ minio {{.Name}} min-free-disk 15% expiry 1h /home/shared/Documents
-
 `,
 }
 
@@ -77,9 +72,8 @@ type cloudServerConfig struct {
 	SecretAccessKey string // Secret access key.
 
 	/// FS options
-	Path        string        // Path to export for cloud storage
-	MinFreeDisk int64         // Minimum free disk space for filesystem
-	Expiry      time.Duration // Set auto expiry for filesystem
+	Path        string // Path to export for cloud storage
+	MinFreeDisk int64  // Minimum free disk space for filesystem
 
 	/// TLS service
 	TLS      bool   // TLS on when certs are specified
@@ -297,11 +291,8 @@ func serverMain(c *cli.Context) {
 	// Default
 	minFreeDisk = 10
 
-	var expiration time.Duration
-	expirationSet := false
-
 	args := c.Args()
-	for len(args) >= 2 {
+	for len(args) >= 1 {
 		switch args.First() {
 		case "min-free-disk":
 			if minFreeDiskSet {
@@ -313,16 +304,6 @@ func serverMain(c *cli.Context) {
 			fatalIf(err.Trace(args.First()), "Invalid minium free disk size "+args.First()+" passed.", nil)
 			args = args.Tail()
 			minFreeDiskSet = true
-		case "expiry":
-			if expirationSet {
-				fatalIf(probe.NewError(errInvalidArgument), "Expiration should be set only once.", nil)
-			}
-			args = args.Tail()
-			var err error
-			expiration, err = time.ParseDuration(args.First())
-			fatalIf(probe.NewError(err), "Invalid expiration time "+args.First()+" passed.", nil)
-			args = args.Tail()
-			expirationSet = true
 		default:
 			cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
 		}
@@ -341,7 +322,6 @@ func serverMain(c *cli.Context) {
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
 		Path:            path,
 		MinFreeDisk:     minFreeDisk,
-		Expiry:          expiration,
 		TLS:             tls,
 		CertFile:        certFile,
 		KeyFile:         keyFile,

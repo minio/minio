@@ -146,9 +146,6 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
 	fs.SetMinFreeDisk(conf.MinFreeDisk)
-	if conf.Expiry > 0 {
-		go fs.AutoExpiryThread(conf.Expiry)
-	}
 	return CloudStorageAPI{
 		Filesystem: fs,
 		AccessLog:  conf.AccessLog,
