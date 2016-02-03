@@ -69,10 +69,8 @@ EXAMPLES:
 // cloudServerConfig - http server config
 type cloudServerConfig struct {
 	/// HTTP server options
-	Address    string // Address:Port listening
-	WebAddress string // WebAddress:Port listening
-	AccessLog  bool   // Enable access log handler
-	Anonymous  bool   // No signature turn off
+	Address   string // Address:Port listening
+	AccessLog bool   // Enable access log handler
 
 	// Credentials.
 	AccessKeyID     string // Access key id.
@@ -87,15 +85,25 @@ type cloudServerConfig struct {
 	TLS      bool   // TLS on when certs are specified
 	CertFile string // Domain certificate
 	KeyFile  string // Domain key
-
-	/// Advanced HTTP server options
-	RateLimit int // Ratelimited server of incoming connections
 }
 
 func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
+	// Split the api address into host and port.
+	host, port, e := net.SplitHostPort(conf.Address)
+	if e != nil {
+		return nil, probe.NewError(e)
+	}
+	webPort, e := strconv.Atoi(port)
+	if e != nil {
+		return nil, probe.NewError(e)
+	}
+	// Always choose the next port, based on the API address port.
+	webPort = webPort + 1
+	webAddress := net.JoinHostPort(host, strconv.Itoa(webPort))
+
 	// Minio server config
 	webServer := &http.Server{
-		Addr:           conf.WebAddress,
+		Addr:           webAddress,
 		Handler:        getWebAPIHandler(getNewWebAPI(conf)),
 		MaxHeaderBytes: 1 << 20,
 	}
@@ -133,8 +141,8 @@ func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	return apiServer, nil
 }
 
-func printServerMsg(conf cloudServerConfig) {
-	host, port, e := net.SplitHostPort(conf.Address)
+func printServerMsg(serverConf *http.Server) {
+	host, port, e := net.SplitHostPort(serverConf.Addr)
 	fatalIf(probe.NewError(e), "Unable to split host port.", nil)
 
 	var hosts []string
@@ -155,7 +163,7 @@ func printServerMsg(conf cloudServerConfig) {
 		}
 	}
 	for _, host := range hosts {
-		if conf.TLS {
+		if serverConf.TLSConfig != nil {
 			Printf("    https://%s:%s\n", host, port)
 		} else {
 			Printf("    http://%s:%s\n", host, port)
@@ -328,9 +336,7 @@ func serverMain(c *cli.Context) {
 	tls := (certFile != "" && keyFile != "")
 	serverConfig := cloudServerConfig{
 		Address:         c.GlobalString("address"),
-		WebAddress:      c.GlobalString("web-address"),
 		AccessLog:       c.GlobalBool("enable-accesslog"),
-		Anonymous:       c.GlobalBool("anonymous"),
 		AccessKeyID:     conf.Credentials.AccessKeyID,
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
 		Path:            path,
@@ -339,22 +345,21 @@ func serverMain(c *cli.Context) {
 		TLS:             tls,
 		CertFile:        certFile,
 		KeyFile:         keyFile,
-		RateLimit:       c.GlobalInt("ratelimit"),
 	}
-
-	Println("\nMinio Object Storage:")
-	printServerMsg(serverConfig)
 
 	// configure API server.
 	apiServer, err := configureAPIServer(serverConfig)
 	errorIf(err.Trace(), "Failed to configure API server.", nil)
 
-	Println("\nMinio Browser:")
-	printServerMsg(serverConfig)
+	Println("\nMinio Object Storage:")
+	printServerMsg(apiServer)
 
 	// configure Web server.
 	webServer, err := configureWebServer(serverConfig)
 	errorIf(err.Trace(), "Failed to configure Web server.", nil)
+
+	Println("\nMinio Browser:")
+	printServerMsg(webServer)
 
 	Println("\nTo configure Minio Client:")
 	if runtime.GOOS == "windows" {
@@ -367,7 +372,6 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	rateLimit := serverConfig.RateLimit
-	err = minhttp.ListenAndServeLimited(rateLimit, apiServer, webServer)
+	err = minhttp.ListenAndServe(apiServer, webServer)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

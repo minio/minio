@@ -34,13 +34,6 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
@@ -74,13 +67,6 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads < 0 {
@@ -120,15 +106,6 @@ func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, re
 func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
 
 	// TODO handle encoding type.
 	prefix, marker, delimiter, maxkeys, _ := getBucketResources(req.URL.Query())
@@ -171,12 +148,6 @@ func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.R
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api CloudStorageAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 	buckets, err := api.Filesystem.ListBuckets()
 	if err == nil {
 		// generate response
@@ -199,13 +170,6 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
@@ -214,26 +178,24 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 	}
 
 	var signature *fs.Signature
-	if !api.Anonymous {
-		// Init signature V4 verification
-		if isRequestSignatureV4(req) {
-			var err *probe.Error
-			signature, err = initSignatureV4(req)
-			if err != nil {
-				switch err.ToGoError() {
-				case errInvalidRegion:
-					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-					return
-				case errAccessKeyIDInvalid:
-					errorIf(err.Trace(), "Invalid access key id.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-					return
-				default:
-					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
+	// Init signature V4 verification
+	if isRequestSignatureV4(req) {
+		var err *probe.Error
+		signature, err = initSignatureV4(req)
+		if err != nil {
+			switch err.ToGoError() {
+			case errInvalidRegion:
+				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+				return
+			case errAccessKeyIDInvalid:
+				errorIf(err.Trace(), "Invalid access key id.", nil)
+				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+				return
+			default:
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
 			}
 		}
 	}
@@ -374,13 +336,6 @@ func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
@@ -412,13 +367,6 @@ func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.
 func (api CloudStorageAPI) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 
 	bucketMetadata, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
@@ -452,15 +400,6 @@ func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Re
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
-
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
@@ -481,13 +420,6 @@ func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Re
 func (api CloudStorageAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 
 	err := api.Filesystem.DeleteBucket(bucket)
 	if err != nil {

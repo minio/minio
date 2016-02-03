@@ -34,30 +34,10 @@ var (
 		Usage: "ADDRESS:PORT for cloud storage access.",
 	}
 
-	webAddressFlag = cli.StringFlag{
-		Name:  "web-address",
-		Value: ":9001",
-		Hide:  true,
-		Usage: "WEBADDRESS:PORT for cloud storage access.",
-	}
-
 	accessLogFlag = cli.BoolFlag{
 		Name:  "enable-accesslog",
 		Hide:  true,
 		Usage: "Enable access logs for all incoming HTTP request.",
-	}
-
-	rateLimitFlag = cli.IntFlag{
-		Name:  "ratelimit",
-		Hide:  true,
-		Value: 0,
-		Usage: "Limit for total concurrent requests: [DEFAULT: 0].",
-	}
-
-	anonymousFlag = cli.BoolFlag{
-		Name:  "anonymous",
-		Hide:  true,
-		Usage: "Make server run in anonymous mode where all client connections are accepted.",
 	}
 
 	certFlag = cli.StringFlag{
@@ -68,11 +48,6 @@ var (
 	keyFlag = cli.StringFlag{
 		Name:  "key",
 		Usage: "Provide your domain private key.",
-	}
-
-	jsonFlag = cli.BoolFlag{
-		Name:  "json",
-		Usage: "Enable json formatted output.",
 	}
 )
 
