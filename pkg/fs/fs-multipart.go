@@ -435,7 +435,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
+		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
 	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,
