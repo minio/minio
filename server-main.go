@@ -292,7 +292,7 @@ func serverMain(c *cli.Context) {
 	minFreeDisk = 10
 
 	args := c.Args()
-	for len(args) >= 1 {
+	for len(args) >= 2 {
 		switch args.First() {
 		case "min-free-disk":
 			if minFreeDiskSet {

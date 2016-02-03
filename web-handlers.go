@@ -157,6 +157,13 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
+
+	// See if object exists.
+	_, e := web.Client.StatObject(args.BucketName, args.ObjectName)
+	if e != nil {
+		return e
+	}
+
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
 		return probe.WrapError(err)
