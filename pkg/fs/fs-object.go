@@ -155,7 +155,7 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 		object = sanitizeWindowsPath(object)
 	}
 	if objectExt := filepath.Ext(object); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
+		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
 	}
 	metadata := ObjectMetadata{
 		Bucket:      bucket,
@@ -285,7 +285,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.TrimPrefix(objectExt, "."))
+		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
 	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,
