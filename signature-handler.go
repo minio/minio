@@ -60,13 +60,6 @@ func isRequestPostPolicySignatureV4(req *http.Request) bool {
 	return false
 }
 
-func isRequestRequiresACLCheck(req *http.Request) bool {
-	if isRequestSignatureV4(req) || isRequestPresignedSignatureV4(req) || isRequestPostPolicySignatureV4(req) {
-		return false
-	}
-	return true
-}
-
 func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if isRequestPostPolicySignatureV4(r) && r.Method == "POST" {
 		s.handler.ServeHTTP(w, r)

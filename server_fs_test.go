@@ -78,7 +78,6 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	cloudServer := cloudServerConfig{
 		Path:        fsroot,
 		MinFreeDisk: 0,
-		Anonymous:   false,
 	}
 	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
 	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)

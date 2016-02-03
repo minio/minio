@@ -39,15 +39,6 @@ func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Req
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
-
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
@@ -87,15 +78,6 @@ func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
-
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
 	if err != nil {
 		switch err.ToGoError().(type) {
@@ -125,15 +107,6 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
-
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
@@ -153,26 +126,24 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 	}
 
 	var signature *fs.Signature
-	if !api.Anonymous {
-		if isRequestSignatureV4(req) {
-			// Init signature V4 verification
-			var err *probe.Error
-			signature, err = initSignatureV4(req)
-			if err != nil {
-				switch err.ToGoError() {
-				case errInvalidRegion:
-					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-					return
-				case errAccessKeyIDInvalid:
-					errorIf(err.Trace(), "Invalid access key id.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-					return
-				default:
-					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
+	if isRequestSignatureV4(req) {
+		// Init signature V4 verification
+		var err *probe.Error
+		signature, err = initSignatureV4(req)
+		if err != nil {
+			switch err.ToGoError() {
+			case errInvalidRegion:
+				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+				return
+			case errAccessKeyIDInvalid:
+				errorIf(err.Trace(), "Invalid access key id.", nil)
+				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+				return
+			default:
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
 			}
 		}
 	}
@@ -219,14 +190,6 @@ func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req 
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if !api.Anonymous {
-		// Unauthorized multipart uploads are not supported
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	uploadID, err := api.Filesystem.NewMultipartUpload(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
@@ -260,13 +223,6 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 
 	// get Content-MD5 sent by client and verify if valid
 	md5 := req.Header.Get("Content-MD5")
@@ -302,26 +258,24 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 	}
 
 	var signature *fs.Signature
-	if !api.Anonymous {
-		if isRequestSignatureV4(req) {
-			// Init signature V4 verification
-			var err *probe.Error
-			signature, err = initSignatureV4(req)
-			if err != nil {
-				switch err.ToGoError() {
-				case errInvalidRegion:
-					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-					return
-				case errAccessKeyIDInvalid:
-					errorIf(err.Trace(), "Invalid access key id.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-					return
-				default:
-					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
+	if isRequestSignatureV4(req) {
+		// Init signature V4 verification
+		var err *probe.Error
+		signature, err = initSignatureV4(req)
+		if err != nil {
+			switch err.ToGoError() {
+			case errInvalidRegion:
+				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+				return
+			case errAccessKeyIDInvalid:
+				errorIf(err.Trace(), "Invalid access key id.", nil)
+				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+				return
+			default:
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
 			}
 		}
 	}
@@ -361,13 +315,6 @@ func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, re
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	err := api.Filesystem.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
 	if err != nil {
@@ -396,13 +343,6 @@ func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *ht
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	if objectResourcesMetadata.PartNumberMarker < 0 {
@@ -450,35 +390,26 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-			return
-		}
-	}
-
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
 	var signature *fs.Signature
-	if !api.Anonymous {
-		if isRequestSignatureV4(req) {
-			// Init signature V4 verification
-			var err *probe.Error
-			signature, err = initSignatureV4(req)
-			if err != nil {
-				switch err.ToGoError() {
-				case errInvalidRegion:
-					errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-					writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-					return
-				case errAccessKeyIDInvalid:
-					errorIf(err.Trace(), "Invalid access key id.", nil)
-					writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-					return
-				default:
-					errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
+	if isRequestSignatureV4(req) {
+		// Init signature V4 verification
+		var err *probe.Error
+		signature, err = initSignatureV4(req)
+		if err != nil {
+			switch err.ToGoError() {
+			case errInvalidRegion:
+				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
+				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
+				return
+			case errAccessKeyIDInvalid:
+				errorIf(err.Trace(), "Invalid access key id.", nil)
+				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
+				return
+			default:
+				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
 			}
 		}
 	}
@@ -527,15 +458,6 @@ func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 	object := vars["object"]
-
-	if !api.Anonymous {
-		if isRequestRequiresACLCheck(req) {
-			if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-				writeErrorResponse(w, req, AccessDenied, req.URL.Path)
-				return
-			}
-		}
-	}
 
 	err := api.Filesystem.DeleteObject(bucket, object)
 	if err != nil {

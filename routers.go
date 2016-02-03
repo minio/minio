@@ -30,8 +30,6 @@ import (
 
 // CloudStorageAPI container for S3 compatible API.
 type CloudStorageAPI struct {
-	// Do not check for incoming signatures, allow all requests.
-	Anonymous bool
 	// Once true log all incoming requests.
 	AccessLog bool
 	// Filesystem instance.
@@ -153,7 +151,6 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	}
 	return CloudStorageAPI{
 		Filesystem: fs,
-		Anonymous:  conf.Anonymous,
 		AccessLog:  conf.AccessLog,
 	}
 }
@@ -163,9 +160,7 @@ func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 		TimeValidityHandler,
 		IgnoreResourcesHandler,
 		IgnoreSignatureV2RequestHandler,
-	}
-	if !api.Anonymous {
-		mwHandlers = append(mwHandlers, SignatureHandler)
+		SignatureHandler,
 	}
 	if api.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
