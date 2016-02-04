@@ -83,9 +83,9 @@ type cloudServerConfig struct {
 
 func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	// Split the api address into host and port.
-	host, port, e := net.SplitHostPort(conf.Address)
-	if e != nil {
-		return nil, probe.NewError(e)
+	host, port, _ := net.SplitHostPort(conf.Address)
+	if port == "" {
+		port = "80"
 	}
 	webPort, e := strconv.Atoi(port)
 	if e != nil {
@@ -116,9 +116,16 @@ func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 
 // configureAPIServer configure a new server instance
 func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
+	// Split the api address into host and port.
+	host, port, _ := net.SplitHostPort(conf.Address)
+	if port == "" {
+		port = "80"
+	}
+	apiAddress := net.JoinHostPort(host, port)
+
 	// Minio server config
 	apiServer := &http.Server{
-		Addr:           conf.Address,
+		Addr:           apiAddress,
 		Handler:        getCloudStorageAPIHandler(getNewCloudStorageAPI(conf)),
 		MaxHeaderBytes: 1 << 20,
 	}
@@ -136,8 +143,7 @@ func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 }
 
 func printServerMsg(serverConf *http.Server) {
-	host, port, e := net.SplitHostPort(serverConf.Addr)
-	fatalIf(probe.NewError(e), "Unable to split host port.", nil)
+	host, port, _ := net.SplitHostPort(serverConf.Addr)
 
 	var hosts []string
 	switch {
@@ -158,9 +164,9 @@ func printServerMsg(serverConf *http.Server) {
 	}
 	for _, host := range hosts {
 		if serverConf.TLSConfig != nil {
-			Printf("    https://%s:%s\n", host, port)
+			Printf("    https://%s\n", net.JoinHostPort(host, port))
 		} else {
-			Printf("    http://%s:%s\n", host, port)
+			Printf("    http://%s\n", net.JoinHostPort(host, port))
 		}
 	}
 }

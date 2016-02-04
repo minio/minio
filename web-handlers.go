@@ -150,19 +150,14 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]
 	return nil
 }
 
-func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
-	if targetHost != "" {
-		_, port, e := net.SplitHostPort(apiAddress)
-		if e != nil {
-			return "", probe.NewError(e)
-		}
-		host, _, e := net.SplitHostPort(targetHost)
-		if e != nil {
-			return "", probe.NewError(e)
-		}
-		targetHost = net.JoinHostPort(host, port)
+// getTargetHost - get target host.
+func getTargetHost(apiAddress, targetHost string) string {
+	if targetHost == "" {
+		return apiAddress
 	}
-	return targetHost, nil
+	_, port, _ := net.SplitHostPort(apiAddress)
+	host, _, _ := net.SplitHostPort(targetHost)
+	return net.JoinHostPort(host, port)
 }
 
 // PutObjectURL - generates url for upload access.
@@ -170,11 +165,7 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
-	if err != nil {
-		return probe.WrapError(err)
-	}
-	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	client, e := minio.NewV4(getTargetHost(web.apiAddress, args.TargetHost), web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
 		return e
 	}
@@ -191,18 +182,12 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-
 	// See if object exists.
 	_, e := web.Client.StatObject(args.BucketName, args.ObjectName)
 	if e != nil {
 		return e
 	}
-
-	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
-	if err != nil {
-		return probe.WrapError(err)
-	}
-	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	client, e := minio.NewV4(getTargetHost(web.apiAddress, args.TargetHost), web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
 		return e
 	}

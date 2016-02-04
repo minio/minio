@@ -115,8 +115,7 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 // getNewWebAPI instantiate a new WebAPI.
 func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	// Split host port.
-	host, port, e := net.SplitHostPort(conf.Address)
-	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
+	host, port, _ := net.SplitHostPort(conf.Address)
 
 	// Default host is 'localhost', if no host present.
 	if host == "" {
