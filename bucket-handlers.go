@@ -34,6 +34,11 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
+
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
@@ -67,6 +72,11 @@ func (api CloudStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, req *
 func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
 
 	resources := getBucketMultipartResources(req.URL.Query())
 	if resources.MaxUploads < 0 {
@@ -106,6 +116,13 @@ func (api CloudStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, re
 func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(req) {
+		if api.Filesystem.IsPrivateBucket(bucket) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
 
 	// TODO handle encoding type.
 	prefix, marker, delimiter, maxkeys, _ := getBucketResources(req.URL.Query())
@@ -148,6 +165,11 @@ func (api CloudStorageAPI) ListObjectsHandler(w http.ResponseWriter, req *http.R
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api CloudStorageAPI) ListBucketsHandler(w http.ResponseWriter, req *http.Request) {
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
+
 	buckets, err := api.Filesystem.ListBuckets()
 	if err == nil {
 		// generate response
@@ -169,6 +191,11 @@ func (api CloudStorageAPI) ListBucketsHandler(w http.ResponseWriter, req *http.R
 func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
 
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
@@ -208,20 +235,23 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 			return
 		}
 		if signature != nil {
-			locationBytes, err := ioutil.ReadAll(req.Body)
+			locationBytes, e := ioutil.ReadAll(req.Body)
+			if e != nil {
+				errorIf(probe.NewError(e), "MakeBucket failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
+			sh := sha256.New()
+			sh.Write(locationBytes)
+			ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
 			if err != nil {
-				sh := sha256.New()
-				sh.Write(locationBytes)
-				ok, perr := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-				if perr != nil {
-					errorIf(perr.Trace(), "MakeBucket failed.", nil)
-					writeErrorResponse(w, req, InternalError, req.URL.Path)
-					return
-				}
-				if !ok {
-					writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
-					return
-				}
+				errorIf(err.Trace(), "MakeBucket failed.", nil)
+				writeErrorResponse(w, req, InternalError, req.URL.Path)
+				return
+			}
+			if !ok {
+				writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
+				return
 			}
 		}
 	}
@@ -261,31 +291,31 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary
 	// files
-	reader, err := req.MultipartReader()
-	if err != nil {
-		errorIf(probe.NewError(err), "Unable to initialize multipart reader.", nil)
+	reader, e := req.MultipartReader()
+	if e != nil {
+		errorIf(probe.NewError(e), "Unable to initialize multipart reader.", nil)
 		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 
-	fileBody, formValues, perr := extractHTTPFormValues(reader)
-	if perr != nil {
-		errorIf(perr.Trace(), "Unable to parse form values.", nil)
+	fileBody, formValues, err := extractHTTPFormValues(reader)
+	if err != nil {
+		errorIf(err.Trace(), "Unable to parse form values.", nil)
 		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	bucket := mux.Vars(req)["bucket"]
 	formValues["Bucket"] = bucket
 	object := formValues["Key"]
-	signature, perr := initPostPresignedPolicyV4(formValues)
-	if perr != nil {
-		errorIf(perr.Trace(), "Unable to initialize post policy presigned.", nil)
+	signature, err := initPostPresignedPolicyV4(formValues)
+	if err != nil {
+		errorIf(err.Trace(), "Unable to initialize post policy presigned.", nil)
 		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
 	var ok bool
-	if ok, perr = signature.DoesPolicySignatureMatch(formValues["X-Amz-Date"]); perr != nil {
-		errorIf(perr.Trace(), "Unable to verify signature.", nil)
+	if ok, err = signature.DoesPolicySignatureMatch(formValues["X-Amz-Date"]); err != nil {
+		errorIf(err.Trace(), "Unable to verify signature.", nil)
 		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		return
 	}
@@ -293,15 +323,15 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 		writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		return
 	}
-	if perr = applyPolicy(formValues); perr != nil {
-		errorIf(perr.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
+	if err = applyPolicy(formValues); err != nil {
+		errorIf(err.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
 		writeErrorResponse(w, req, MalformedPOSTRequest, req.URL.Path)
 		return
 	}
-	metadata, perr := api.Filesystem.CreateObject(bucket, object, "", 0, fileBody, nil)
-	if perr != nil {
-		errorIf(perr.Trace(), "CreateObject failed.", nil)
-		switch perr.ToGoError().(type) {
+	metadata, err := api.Filesystem.CreateObject(bucket, object, "", 0, fileBody, nil)
+	if err != nil {
+		errorIf(err.Trace(), "CreateObject failed.", nil)
+		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
 			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
 		case fs.BucketNotFound:
@@ -336,6 +366,11 @@ func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
+
 	// read from 'x-amz-acl'
 	aclType := getACLType(req)
 	if aclType == unsupportedACLType {
@@ -367,6 +402,11 @@ func (api CloudStorageAPI) PutBucketACLHandler(w http.ResponseWriter, req *http.
 func (api CloudStorageAPI) GetBucketACLHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
 
 	bucketMetadata, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
@@ -400,6 +440,13 @@ func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Re
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
 
+	if isRequestRequiresACLCheck(req) {
+		if api.Filesystem.IsPrivateBucket(bucket) {
+			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			return
+		}
+	}
+
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
@@ -420,6 +467,11 @@ func (api CloudStorageAPI) HeadBucketHandler(w http.ResponseWriter, req *http.Re
 func (api CloudStorageAPI) DeleteBucketHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(req) {
+		writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+		return
+	}
 
 	err := api.Filesystem.DeleteBucket(bucket)
 	if err != nil {

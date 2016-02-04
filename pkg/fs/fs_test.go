@@ -33,12 +33,12 @@ var _ = Suite(&MySuite{})
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
 	create := func() Filesystem {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-")
-		c.Check(err, IsNil)
+		path, e := ioutil.TempDir(os.TempDir(), "minio-")
+		c.Check(e, IsNil)
 		storageList = append(storageList, path)
-		store, perr := New(path)
+		store, err := New(path)
 		store.SetMinFreeDisk(0)
-		c.Check(perr, IsNil)
+		c.Check(err, IsNil)
 		return store
 	}
 	APITestSuite(c, create)

@@ -51,17 +51,17 @@ var _ = Suite(&MyAPIFSCacheSuite{})
 var testAPIFSCacheServer *httptest.Server
 
 func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "api-")
-	c.Assert(err, IsNil)
+	root, e := ioutil.TempDir(os.TempDir(), "api-")
+	c.Assert(e, IsNil)
 	s.root = root
 
-	fsroot, err := ioutil.TempDir(os.TempDir(), "api-")
-	c.Assert(err, IsNil)
+	fsroot, e := ioutil.TempDir(os.TempDir(), "api-")
+	c.Assert(e, IsNil)
 
-	accessKeyID, perr := generateAccessKeyID()
-	c.Assert(perr, IsNil)
-	secretAccessKey, perr := generateSecretAccessKey()
-	c.Assert(perr, IsNil)
+	accessKeyID, err := generateAccessKeyID()
+	c.Assert(err, IsNil)
+	secretAccessKey, err := generateSecretAccessKey()
+	c.Assert(err, IsNil)
 
 	conf := newConfigV2()
 	conf.Credentials.AccessKeyID = string(accessKeyID)
@@ -72,8 +72,7 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	// do this only once here
 	setGlobalConfigPath(root)
 
-	perr = saveConfig(conf)
-	c.Assert(perr, IsNil)
+	c.Assert(saveConfig(conf), IsNil)
 
 	cloudServer := cloudServerConfig{
 		Path:        fsroot,

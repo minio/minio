@@ -170,35 +170,32 @@ func parsePercentToInt(s string, bitSize int) (int64, *probe.Error) {
 	i := strings.Index(s, "%")
 	if i < 0 {
 		// no percentage string found try to parse the whole string anyways
-		p, err := strconv.ParseInt(s, 10, bitSize)
-		if err != nil {
-			return 0, probe.NewError(err)
+		p, e := strconv.ParseInt(s, 10, bitSize)
+		if e != nil {
+			return 0, probe.NewError(e)
 		}
 		return p, nil
 	}
-	p, err := strconv.ParseInt(s[:i], 10, bitSize)
-	if err != nil {
-		return 0, probe.NewError(err)
+	p, e := strconv.ParseInt(s[:i], 10, bitSize)
+	if e != nil {
+		return 0, probe.NewError(e)
 	}
 	return p, nil
 }
 func setLogger(conf *configV2) *probe.Error {
 	if conf.IsMongoLoggingEnabled() {
-		err := log2Mongo(conf.MongoLogger.Addr, conf.MongoLogger.DB, conf.MongoLogger.Collection)
-		if err != nil {
-			return err.Trace()
+		if err := log2Mongo(conf.MongoLogger.Addr, conf.MongoLogger.DB, conf.MongoLogger.Collection); err != nil {
+			return err.Trace(conf.MongoLogger.Addr, conf.MongoLogger.DB, conf.MongoLogger.Collection)
 		}
 	}
 	if conf.IsSysloggingEnabled() {
-		err := log2Syslog(conf.SyslogLogger.Network, conf.SyslogLogger.Addr)
-		if err != nil {
-			return err.Trace()
+		if err := log2Syslog(conf.SyslogLogger.Network, conf.SyslogLogger.Addr); err != nil {
+			return err.Trace(conf.SyslogLogger.Network, conf.SyslogLogger.Addr)
 		}
 	}
 	if conf.IsFileLoggingEnabled() {
-		err := log2File(conf.FileLogger.Filename)
-		if err != nil {
-			return err.Trace()
+		if err := log2File(conf.FileLogger.Filename); err != nil {
+			return err.Trace(conf.FileLogger.Filename)
 		}
 	}
 	return nil
@@ -240,8 +237,8 @@ func (a accessKeys) String() string {
 
 // JSON - json formatted output
 func (a accessKeys) JSON() string {
-	b, err := json.Marshal(a)
-	errorIf(probe.NewError(err), "Unable to marshal json", nil)
+	b, e := json.Marshal(a)
+	errorIf(probe.NewError(e), "Unable to marshal json", nil)
 	return string(b)
 }
 
@@ -277,8 +274,8 @@ func checkServerSyntax(c *cli.Context) {
 func serverMain(c *cli.Context) {
 	checkServerSyntax(c)
 
-	conf, perr := initServer()
-	fatalIf(perr.Trace(), "Failed to read config for minio.", nil)
+	conf, err := initServer()
+	fatalIf(err.Trace(), "Failed to read config for minio.", nil)
 
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
@@ -299,7 +296,6 @@ func serverMain(c *cli.Context) {
 				fatalIf(probe.NewError(errInvalidArgument), "Minimum free disk should be set only once.", nil)
 			}
 			args = args.Tail()
-			var err *probe.Error
 			minFreeDisk, err = parsePercentToInt(args.First(), 64)
 			fatalIf(err.Trace(args.First()), "Invalid minium free disk size "+args.First()+" passed.", nil)
 			args = args.Tail()

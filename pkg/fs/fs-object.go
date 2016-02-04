@@ -26,7 +26,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"runtime"
 
 	"github.com/minio/minio-xl/pkg/atomic"
@@ -34,6 +33,7 @@ import (
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/contentdb"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/ioutils"
 )
 
 /// Object Operations
@@ -169,22 +169,22 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 }
 
 // isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
-func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
+func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
 		if err != nil {
-			return probe.NewError(err)
+			return false
 		}
 		actualMD5SumBytes, err := hex.DecodeString(actualMD5Sum)
 		if err != nil {
-			return probe.NewError(err)
+			return false
 		}
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
-			return probe.NewError(BadDigest{Md5: expectedMD5Sum})
+			return false
 		}
-		return nil
+		return true
 	}
-	return probe.NewError(errors.New("invalid argument"))
+	return false
 }
 
 // CreateObject - PUT object
@@ -254,14 +254,12 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	mw := io.MultiWriter(file, h, sh)
 
 	if size > 0 {
-		_, e = io.CopyN(mw, data, size)
-		if e != nil {
+		if _, e = io.CopyN(mw, data, size); e != nil {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(e)
 		}
 	} else {
-		_, e = io.Copy(mw, data)
-		if e != nil {
+		if _, e = io.Copy(mw, data); e != nil {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(e)
 		}
@@ -270,7 +268,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	md5Sum := hex.EncodeToString(h.Sum(nil))
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
-		if e := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum); e != nil {
+		if !isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum) {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
@@ -312,7 +310,6 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 	if basePath == deletePath {
 		return nil
 	}
-
 	fi, e := os.Stat(deletePath)
 	if e != nil {
 		if os.IsNotExist(e) {
@@ -321,15 +318,14 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 		return probe.NewError(e)
 	}
 	if fi.IsDir() {
-		empty, err := isDirEmpty(deletePath)
-		if err != nil {
-			return err.Trace(deletePath)
+		empty, e := ioutils.IsDirEmpty(deletePath)
+		if e != nil {
+			return probe.NewError(e)
 		}
 		if !empty {
 			return nil
 		}
 	}
-
 	if e := os.Remove(deletePath); e != nil {
 		return probe.NewError(e)
 	}

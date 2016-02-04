@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package ioutils
 
 import (
 	"errors"
@@ -22,20 +22,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"github.com/minio/minio-xl/pkg/probe"
 )
 
-// Check if a directory is empty
-func isDirEmpty(dirname string) (bool, *probe.Error) {
-	f, err := os.Open(dirname)
-	defer f.Close()
-	if err != nil {
-		return false, probe.NewError(err)
-	}
-	names, err := f.Readdirnames(1)
+// IsDirEmpty Check if a directory is empty
+func IsDirEmpty(dirname string) (bool, error) {
+	names, err := ReadDirNamesN(dirname, 1)
 	if err != nil && err != io.EOF {
-		return false, probe.NewError(err)
+		return false, err
 	}
 	if len(names) > 0 {
 		return false, nil
@@ -43,19 +36,9 @@ func isDirEmpty(dirname string) (bool, *probe.Error) {
 	return true, nil
 }
 
-// Walk walks the file tree rooted at root, calling walkFn for each file or
+// FTW walks the file tree rooted at root, calling walkFn for each file or
 // directory in the tree, including root.
-func Walk(root string, walkFn WalkFunc) error {
-	info, err := os.Lstat(root)
-	if err != nil {
-		return walkFn(root, nil, err)
-	}
-	return walk(root, info, walkFn)
-}
-
-// WalkUnsorted walks the file tree rooted at root, calling walkFn for each file or
-// directory in the tree, including root.
-func WalkUnsorted(root string, walkFn WalkFunc) error {
+func FTW(root string, walkFn FTWFunc) error {
 	info, err := os.Lstat(root)
 	if err != nil {
 		return walkFn(root, nil, err)
@@ -91,8 +74,10 @@ func readDirUnsortedNames(dirname string) ([]string, error) {
 		return nil, err
 	}
 	nameInfos, err := f.Readdir(-1)
-	f.Close()
 	if err != nil {
+		return nil, err
+	}
+	if err = f.Close(); err != nil {
 		return nil, err
 	}
 	var names []string
@@ -102,12 +87,12 @@ func readDirUnsortedNames(dirname string) ([]string, error) {
 	return names, nil
 }
 
-// WalkFunc is the type of the function called for each file or directory
+// FTWFunc is the type of the function called for each file or directory
 // visited by Walk. The path argument contains the argument to Walk as a
 // prefix; that is, if Walk is called with "dir", which is a directory
 // containing the file "a", the walk function will be called with argument
 // "dir/a". The info argument is the os.FileInfo for the named path.
-type WalkFunc func(path string, info os.FileInfo, err error) error
+type FTWFunc func(path string, info os.FileInfo, err error) error
 
 // ErrSkipDir is used as a return value from WalkFuncs to indicate that
 // the directory named in the call is to be skipped. It is not returned
@@ -123,48 +108,8 @@ var ErrSkipFile = errors.New("skip this file")
 // file or a symlink left
 var ErrDirNotEmpty = errors.New("directory not empty")
 
-func walkUnsorted(path string, info os.FileInfo, walkFn WalkFunc) error {
-	err := walkFn(path, info, nil)
-	if err != nil {
-		if info.Mode().IsDir() && err == ErrSkipDir {
-			return nil
-		}
-		if info.Mode().IsRegular() && err == ErrSkipFile {
-			return nil
-		}
-		return err
-	}
-
-	if !info.IsDir() {
-		return nil
-	}
-
-	names, err := readDirUnsortedNames(path)
-	if err != nil {
-		return walkFn(path, info, err)
-	}
-	for _, name := range names {
-		filename := filepath.Join(path, name)
-		fileInfo, err := os.Lstat(filename)
-		if err != nil {
-			if err := walkFn(filename, fileInfo, err); err != nil && err != ErrSkipDir && err != ErrSkipFile {
-				return err
-			}
-		} else {
-			err = walk(filename, fileInfo, walkFn)
-			if err != nil {
-				if err == ErrSkipDir || err == ErrSkipFile {
-					return nil
-				}
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// walk recursively descends path, calling w.
-func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
+// walk recursively descends path, calling walkFn.
+func walk(path string, info os.FileInfo, walkFn FTWFunc) error {
 	err := walkFn(path, info, nil)
 	if err != nil {
 		if info.Mode().IsDir() && err == ErrSkipDir {

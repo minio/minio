@@ -273,31 +273,30 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 
 	objectPath := filepath.Join(bucketPath, object)
 	partPath := objectPath + fmt.Sprintf("$%d-$multiparts", partID)
-	partFile, err := atomic.FileCreateWithPrefix(partPath, "$multiparts")
-	if err != nil {
-		return "", probe.NewError(err)
+	partFile, e := atomic.FileCreateWithPrefix(partPath, "$multiparts")
+	if e != nil {
+		return "", probe.NewError(e)
 	}
 	h := md5.New()
 	sh := sha256.New()
 	mw := io.MultiWriter(partFile, h, sh)
-	_, err = io.CopyN(mw, data, size)
-	if err != nil {
+	if _, e = io.CopyN(mw, data, size); e != nil {
 		partFile.CloseAndPurge()
-		return "", probe.NewError(err)
+		return "", probe.NewError(e)
 	}
 	md5sum := hex.EncodeToString(h.Sum(nil))
 	// Verify if the written object is equal to what is expected, only if it is requested as such
 	if strings.TrimSpace(expectedMD5Sum) != "" {
-		if err := isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5sum); err != nil {
+		if !isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5sum) {
 			partFile.CloseAndPurge()
 			return "", probe.NewError(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
 	}
 	if signature != nil {
-		ok, perr := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-		if perr != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
+		if err != nil {
 			partFile.CloseAndPurge()
-			return "", perr.Trace()
+			return "", err.Trace()
 		}
 		if !ok {
 			partFile.CloseAndPurge()
@@ -306,9 +305,9 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 	}
 	partFile.Close()
 
-	fi, err := os.Stat(partPath)
-	if err != nil {
-		return "", probe.NewError(err)
+	fi, e := os.Stat(partPath)
+	if e != nil {
+		return "", probe.NewError(e)
 	}
 	partMetadata := PartMetadata{}
 	partMetadata.ETag = md5sum
@@ -316,17 +315,16 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 	partMetadata.Size = fi.Size()
 	partMetadata.LastModified = fi.ModTime()
 
-	multiPartfile, err := os.OpenFile(objectPath+"$multiparts", os.O_RDWR|os.O_APPEND, 0600)
-	if err != nil {
-		return "", probe.NewError(err)
+	multiPartfile, e := os.OpenFile(objectPath+"$multiparts", os.O_RDWR|os.O_APPEND, 0600)
+	if e != nil {
+		return "", probe.NewError(e)
 	}
 	defer multiPartfile.Close()
 
 	var deserializedMultipartSession MultipartSession
 	decoder := json.NewDecoder(multiPartfile)
-	err = decoder.Decode(&deserializedMultipartSession)
-	if err != nil {
-		return "", probe.NewError(err)
+	if e = decoder.Decode(&deserializedMultipartSession); e != nil {
+		return "", probe.NewError(e)
 	}
 	deserializedMultipartSession.Parts = append(deserializedMultipartSession.Parts, &partMetadata)
 	deserializedMultipartSession.TotalParts++
@@ -334,9 +332,8 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 
 	sort.Sort(partNumber(deserializedMultipartSession.Parts))
 	encoder := json.NewEncoder(multiPartfile)
-	err = encoder.Encode(&deserializedMultipartSession)
-	if err != nil {
-		return "", probe.NewError(err)
+	if e = encoder.Encode(&deserializedMultipartSession); e != nil {
+		return "", probe.NewError(e)
 	}
 	return partMetadata.ETag, nil
 }
@@ -362,34 +359,34 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
-	if _, err := os.Stat(bucketPath); err != nil {
+	if _, e := os.Stat(bucketPath); e != nil {
 		// check bucket exists
-		if os.IsNotExist(err) {
+		if os.IsNotExist(e) {
 			return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
 		return ObjectMetadata{}, probe.NewError(InternalError{})
 	}
 
 	objectPath := filepath.Join(bucketPath, object)
-	file, err := atomic.FileCreateWithPrefix(objectPath, "")
-	if err != nil {
-		return ObjectMetadata{}, probe.NewError(err)
+	file, e := atomic.FileCreateWithPrefix(objectPath, "")
+	if e != nil {
+		return ObjectMetadata{}, probe.NewError(e)
 	}
 	h := md5.New()
 	mw := io.MultiWriter(file, h)
 
-	partBytes, err := ioutil.ReadAll(data)
-	if err != nil {
+	partBytes, e := ioutil.ReadAll(data)
+	if e != nil {
 		file.CloseAndPurge()
-		return ObjectMetadata{}, probe.NewError(err)
+		return ObjectMetadata{}, probe.NewError(e)
 	}
 	if signature != nil {
 		sh := sha256.New()
 		sh.Write(partBytes)
-		ok, perr := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-		if perr != nil {
+		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
+		if err != nil {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(err)
+			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
 			file.CloseAndPurge()
@@ -397,7 +394,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		}
 	}
 	parts := &CompleteMultipartUpload{}
-	if err := xml.Unmarshal(partBytes, parts); err != nil {
+	if e := xml.Unmarshal(partBytes, parts); e != nil {
 		file.CloseAndPurge()
 		return ObjectMetadata{}, probe.NewError(MalformedXML{})
 	}
@@ -413,25 +410,24 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 
 	delete(fs.multiparts.ActiveSession, object)
 	for _, part := range parts.Part {
-		err = os.Remove(objectPath + fmt.Sprintf("$%d-$multiparts", part.PartNumber))
-		if err != nil {
+		if e = os.Remove(objectPath + fmt.Sprintf("$%d-$multiparts", part.PartNumber)); e != nil {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(err)
+			return ObjectMetadata{}, probe.NewError(e)
 		}
 	}
-	if err := os.Remove(objectPath + "$multiparts"); err != nil {
+	if e := os.Remove(objectPath + "$multiparts"); e != nil {
 		file.CloseAndPurge()
-		return ObjectMetadata{}, probe.NewError(err)
+		return ObjectMetadata{}, probe.NewError(e)
 	}
-	if err := saveMultipartsSession(fs.multiparts); err != nil {
+	if e := saveMultipartsSession(fs.multiparts); e != nil {
 		file.CloseAndPurge()
-		return ObjectMetadata{}, err.Trace()
+		return ObjectMetadata{}, e.Trace()
 	}
 	file.Close()
 
-	st, err := os.Stat(objectPath)
-	if err != nil {
-		return ObjectMetadata{}, probe.NewError(err)
+	st, e := os.Stat(objectPath)
+	if e != nil {
+		return ObjectMetadata{}, probe.NewError(e)
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
@@ -489,17 +485,16 @@ func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectReso
 	}
 
 	objectPath := filepath.Join(bucketPath, object)
-	multiPartfile, err := os.OpenFile(objectPath+"$multiparts", os.O_RDONLY, 0600)
-	if err != nil {
-		return ObjectResourcesMetadata{}, probe.NewError(err)
+	multiPartfile, e := os.OpenFile(objectPath+"$multiparts", os.O_RDONLY, 0600)
+	if e != nil {
+		return ObjectResourcesMetadata{}, probe.NewError(e)
 	}
 	defer multiPartfile.Close()
 
 	var deserializedMultipartSession MultipartSession
 	decoder := json.NewDecoder(multiPartfile)
-	err = decoder.Decode(&deserializedMultipartSession)
-	if err != nil {
-		return ObjectResourcesMetadata{}, probe.NewError(err)
+	if e = decoder.Decode(&deserializedMultipartSession); e != nil {
+		return ObjectResourcesMetadata{}, probe.NewError(e)
 	}
 	var parts []*PartMetadata
 	for i := startPartNumber; i <= deserializedMultipartSession.TotalParts; i++ {
