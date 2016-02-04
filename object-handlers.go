@@ -170,6 +170,8 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
 		case fs.InvalidDigest:
 			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
+		case fs.ObjectExistsAsPrefix:
+			writeErrorResponse(w, req, ObjectExistsAsPrefix, req.URL.Path)
 		default:
 			writeErrorResponse(w, req, InternalError, req.URL.Path)
 		}

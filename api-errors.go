@@ -74,6 +74,7 @@ const (
 	SignatureVersionNotSupported
 	BucketNotEmpty
 	RootPathFull
+	ObjectExistsAsPrefix
 )
 
 // APIError code to Error structure map
@@ -237,6 +238,11 @@ var errorCodeResponse = map[int]APIError{
 		Code:           "RootPathFull",
 		Description:    "Root path has reached its minimum free disk threshold. Please delete few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
+	},
+	ObjectExistsAsPrefix: {
+		Code:           "ObjectExistsAsPrefix",
+		Description:    "An object already exists as your prefix, choose a different prefix to proceed.",
+		HTTPStatusCode: http.StatusConflict,
 	},
 }
 
