@@ -25,7 +25,6 @@ import (
 type BucketMetadata struct {
 	Name    string
 	Created time.Time
-	ACL     BucketACL
 }
 
 // ObjectMetadata - object key and its relevant metadata

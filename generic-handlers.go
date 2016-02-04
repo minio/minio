@@ -280,7 +280,7 @@ func ignoreNotImplementedObjectResources(req *http.Request) bool {
 
 // List of not implemented bucket queries
 var notimplementedBucketResourceNames = map[string]bool{
-	"policy":         true,
+	"acl":            true,
 	"cors":           true,
 	"lifecycle":      true,
 	"logging":        true,

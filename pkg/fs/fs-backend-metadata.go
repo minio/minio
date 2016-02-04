@@ -21,12 +21,7 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-var multipartsMetadataPath, bucketsMetadataPath string
-
-// setFSBucketsMetadataPath - set fs buckets metadata path.
-func setFSBucketsMetadataPath(metadataPath string) {
-	bucketsMetadataPath = metadataPath
-}
+var multipartsMetadataPath string
 
 // SetFSMultipartsMetadataPath - set custom multiparts session
 // metadata path.
@@ -46,18 +41,6 @@ func saveMultipartsSession(multiparts Multiparts) *probe.Error {
 	return nil
 }
 
-// saveBucketsMetadata - save metadata of all buckets
-func saveBucketsMetadata(buckets Buckets) *probe.Error {
-	qc, err := quick.New(buckets)
-	if err != nil {
-		return err.Trace()
-	}
-	if err := qc.Save(bucketsMetadataPath); err != nil {
-		return err.Trace()
-	}
-	return nil
-}
-
 // loadMultipartsSession load multipart session file
 func loadMultipartsSession() (*Multiparts, *probe.Error) {
 	multiparts := &Multiparts{}
@@ -71,19 +54,4 @@ func loadMultipartsSession() (*Multiparts, *probe.Error) {
 		return nil, err.Trace()
 	}
 	return qc.Data().(*Multiparts), nil
-}
-
-// loadBucketsMetadata load buckets metadata file
-func loadBucketsMetadata() (*Buckets, *probe.Error) {
-	buckets := &Buckets{}
-	buckets.Version = "1"
-	buckets.Metadata = make(map[string]*BucketMetadata)
-	qc, err := quick.New(buckets)
-	if err != nil {
-		return nil, err.Trace()
-	}
-	if err := qc.Load(bucketsMetadataPath); err != nil {
-		return nil, err.Trace()
-	}
-	return qc.Data().(*Buckets), nil
 }

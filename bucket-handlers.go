@@ -26,13 +26,55 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"strings"
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/s3/access"
 	"github.com/minio/minio/pkg/s3/signature4"
 )
+
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (isAllowed bool, s3Error int) {
+	// Read saved bucket policy.
+	policy, err := readBucketPolicy(bucket)
+	if err != nil {
+		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
+		switch err.ToGoError().(type) {
+		case fs.BucketNotFound:
+			return false, NoSuchBucket
+		case fs.BucketNameInvalid:
+			return false, InvalidBucketName
+		default:
+			// For any other error just return AccessDenied.
+			return false, AccessDenied
+		}
+	}
+	// Parse the saved policy.
+	accessPolicy, e := accesspolicy.Validate(policy)
+	if e != nil {
+		errorIf(probe.NewError(e), "Parse policy failed.", nil)
+		return false, AccessDenied
+	}
+
+	// Construct resource in 'arn:aws:s3:::examplebucket' format.
+	resource := accesspolicy.AWSResourcePrefix + strings.TrimPrefix(reqURL.Path, "/")
+
+	// Get conditions for policy verification.
+	conditions := make(map[string]string)
+	for queryParam := range reqURL.Query() {
+		conditions[queryParam] = reqURL.Query().Get("queryParam")
+	}
+
+	// Validate action, resource and conditions with current policy statements.
+	if !bucketPolicyEvalStatements(action, resource, conditions, accessPolicy.Statements) {
+		return false, AccessDenied
+	}
+	return true, None
+}
 
 // GetBucketLocationHandler - GET Bucket location.
 // -------------------------
@@ -41,14 +83,23 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
 		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		match, s3Error := isSignV4ReqAuthenticated(api.Signature, r)
+		if !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
@@ -88,14 +139,23 @@ func (api storageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
 		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:ListBucketMultipartUploads", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned, authTypeSigned:
+		match, s3Error := isSignV4ReqAuthenticated(api.Signature, r)
+		if !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	resources := getBucketMultipartResources(r.URL.Query())
@@ -137,16 +197,23 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:ListBucket", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeSigned, authTypePresigned:
+		match, s3Error := isSignV4ReqAuthenticated(api.Signature, r)
+		if !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	// TODO handle encoding type.
@@ -190,14 +257,17 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	if isRequestRequiresACLCheck(r) {
+	// List buckets does not support bucket policies.
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
 		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeSigned, authTypePresigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	buckets, err := api.Filesystem.ListBuckets()
@@ -219,11 +289,6 @@ func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request)
 func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	if isRequestRequiresACLCheck(r) {
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-		return
-	}
 
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
@@ -253,8 +318,19 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Check if request is presigned.
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned:
+		// Check if request is presigned.
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
@@ -265,7 +341,7 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-	} else if isRequestSignatureV4(r) {
+	case authTypeSigned:
 		// Check if request is signed.
 		sha := sha256.New()
 		mdSh := md5.New()
@@ -356,31 +432,20 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-		return
-	}
-
-	// read from 'x-amz-acl'
-	aclType := getACLType(r)
-	if aclType == unsupportedACLType {
-		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
-		return
-	}
-
-	// if body of request is non-nil then check for validity of Content-Length
-	if r.Body != nil {
-		/// if Content-Length is unknown/missing, deny the request
-		if r.ContentLength == -1 && !contains(r.TransferEncoding, "chunked") {
-			writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
-			return
-		}
-	}
-
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
-
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:CreateBucket", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned:
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
@@ -391,7 +456,7 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-	} else if isRequestSignatureV4(r) {
+	case authTypeSigned:
 		// Verify signature for the incoming body if any.
 		locationBytes, e := ioutil.ReadAll(r.Body)
 		if e != nil {
@@ -414,7 +479,7 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make bucket.
-	err := api.Filesystem.MakeBucket(bucket, getACLTypeString(aclType))
+	err := api.Filesystem.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "MakeBucket failed.", nil)
 		switch err.ToGoError().(type) {
@@ -538,87 +603,6 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponse(w, nil)
 }
 
-// PutBucketACLHandler - PUT Bucket ACL
-// ----------
-// This implementation of the PUT operation modifies the bucketACL for authenticated request
-func (api storageAPI) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	if isRequestRequiresACLCheck(r) {
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
-	}
-
-	// read from 'x-amz-acl'
-	aclType := getACLType(r)
-	if aclType == unsupportedACLType {
-		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
-		return
-	}
-	err := api.Filesystem.SetBucketMetadata(bucket, map[string]string{"acl": getACLTypeString(aclType)})
-	if err != nil {
-		errorIf(err.Trace(), "PutBucketACL failed.", nil)
-		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
-		}
-		return
-	}
-	writeSuccessResponse(w, nil)
-}
-
-// GetBucketACLHandler - GET ACL on a Bucket
-// ----------
-// This operation uses acl subresource to the return the ``acl``
-// of a bucket. One must have permission to access the bucket to
-// know its ``acl``. This operation willl return response of 404
-// if bucket not found and 403 for invalid credentials.
-func (api storageAPI) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	if isRequestRequiresACLCheck(r) {
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
-	}
-
-	bucketMetadata, err := api.Filesystem.GetBucketMetadata(bucket)
-	if err != nil {
-		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
-		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
-		}
-		return
-	}
-	// Generate response
-	response := generateAccessControlPolicyResponse(bucketMetadata.ACL)
-	encodedSuccessResponse := encodeResponse(response)
-	// Write headers
-	setCommonHeaders(w)
-	// Write success response.
-	writeSuccessResponse(w, encodedSuccessResponse)
-}
-
 // HeadBucketHandler - HEAD Bucket
 // ----------
 // This operation is useful to determine if a bucket exists.
@@ -629,16 +613,16 @@ func (api storageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Request) 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypePresigned, authTypeSigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
 	}
 
 	_, err := api.Filesystem.GetBucketMetadata(bucket)
@@ -662,14 +646,22 @@ func (api storageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if isRequestRequiresACLCheck(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
 		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:DeleteBucket", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned, authTypeSigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	err := api.Filesystem.DeleteBucket(bucket)
@@ -685,5 +677,10 @@ func (api storageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
+
+	// Delete bucket access policy, if present - ignore any errors.
+	removeBucketPolicy(bucket)
+
+	// Write success response.
 	writeSuccessNoContent(w)
 }

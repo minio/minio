@@ -137,14 +137,14 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 
 	// GetBucketLocation
 	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
-	// GetBucketACL
-	bucket.Methods("GET").HandlerFunc(a.GetBucketACLHandler).Queries("acl", "")
+	// GetBucketPolicy
+	bucket.Methods("GET").HandlerFunc(a.GetBucketPolicyHandler).Queries("policy", "")
 	// ListMultipartUploads
 	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
 	// ListObjects
 	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
-	// PutBucketACL
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketACLHandler).Queries("acl", "")
+	// PutBucketPolicy
+	bucket.Methods("PUT").HandlerFunc(a.PutBucketPolicyHandler).Queries("policy", "")
 	// PutBucket
 	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
 	// HeadBucket
@@ -152,7 +152,9 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// DeleteMultipleObjects
 	bucket.Methods("POST").HandlerFunc(a.DeleteMultipleObjectsHandler)
 	// PostPolicy
-	bucket.Methods("POST").HandlerFunc(a.PostPolicyBucketHandler)
+	bucket.Methods("POST").Headers("Content-Type", "multipart/form-data").HandlerFunc(a.PostPolicyBucketHandler)
+	// DeleteBucketPolicy
+	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketPolicyHandler).Queries("policy", "")
 	// DeleteBucket
 	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
 

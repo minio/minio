@@ -268,43 +268,6 @@ func generateListBucketsResponse(buckets []fs.BucketMetadata) ListBucketsRespons
 	return data
 }
 
-// generates an AccessControlPolicy response for the said ACL.
-func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyResponse {
-	accessCtrlPolicyResponse := AccessControlPolicyResponse{}
-	accessCtrlPolicyResponse.Owner = Owner{
-		ID:          "minio",
-		DisplayName: "minio",
-	}
-	defaultGrant := Grant{}
-	defaultGrant.Grantee.ID = "minio"
-	defaultGrant.Grantee.DisplayName = "minio"
-	defaultGrant.Permission = "FULL_CONTROL"
-	accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, defaultGrant)
-	switch {
-	case acl.IsPublicRead():
-		publicReadGrant := Grant{}
-		publicReadGrant.Grantee.ID = "minio"
-		publicReadGrant.Grantee.DisplayName = "minio"
-		publicReadGrant.Grantee.URI = "http://acs.amazonaws.com/groups/global/AllUsers"
-		publicReadGrant.Permission = "READ"
-		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadGrant)
-	case acl.IsPublicReadWrite():
-		publicReadGrant := Grant{}
-		publicReadGrant.Grantee.ID = "minio"
-		publicReadGrant.Grantee.DisplayName = "minio"
-		publicReadGrant.Grantee.URI = "http://acs.amazonaws.com/groups/global/AllUsers"
-		publicReadGrant.Permission = "READ"
-		publicReadWriteGrant := Grant{}
-		publicReadWriteGrant.Grantee.ID = "minio"
-		publicReadWriteGrant.Grantee.DisplayName = "minio"
-		publicReadWriteGrant.Grantee.URI = "http://acs.amazonaws.com/groups/global/AllUsers"
-		publicReadWriteGrant.Permission = "WRITE"
-		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadGrant)
-		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadWriteGrant)
-	}
-	return accessCtrlPolicyResponse
-}
-
 // generates an ListObjects response for the said bucket with other enumerated options.
 func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKeys int, resp fs.ListObjectsResult) ListObjectsResponse {
 	var contents []Object

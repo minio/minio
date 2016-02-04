@@ -61,41 +61,77 @@ func isRequestPresignedSignatureV4(r *http.Request) bool {
 // Verify if request has AWS Post policy Signature Version '4'.
 func isRequestPostPolicySignatureV4(r *http.Request) bool {
 	if _, ok := r.Header["Content-Type"]; ok {
-		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") && r.Method == "POST" {
 			return true
 		}
 	}
 	return false
 }
 
-// Verify if request requires ACL check.
-func isRequestRequiresACLCheck(r *http.Request) bool {
-	if isRequestSignatureV4(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
+// Verify if incoming request is anonymous.
+func isRequestAnonymous(r *http.Request) bool {
+	if isRequestJWT(r) || isRequestSignatureV4(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
 		return false
 	}
 	return true
 }
 
+// Authorization type.
+type authType int
+
+// List of all supported auth types.
+const (
+	authTypeUnknown authType = iota
+	authTypeAnonymous
+	authTypePresigned
+	authTypePostPolicy
+	authTypeSigned
+	authTypeJWT
+)
+
+// Get request authentication type.
+func getRequestAuthType(r *http.Request) authType {
+	if _, ok := r.Header["Authorization"]; !ok {
+		return authTypeAnonymous
+	}
+	if isRequestSignatureV4(r) {
+		return authTypeSigned
+	} else if isRequestPresignedSignatureV4(r) {
+		return authTypePresigned
+	} else if isRequestJWT(r) {
+		return authTypeJWT
+	} else if isRequestPostPolicySignatureV4(r) {
+		return authTypePostPolicy
+	}
+	return authTypeUnknown
+}
+
 // Verify if request has valid AWS Signature Version '4'.
-func isSignV4ReqAuthenticated(sign *signature4.Sign, r *http.Request) bool {
+func isSignV4ReqAuthenticated(sign *signature4.Sign, r *http.Request) (match bool, s3Error int) {
 	auth := sign.SetHTTPRequestToVerify(r)
 	if isRequestSignatureV4(r) {
 		dummyPayload := sha256.Sum256([]byte(""))
 		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(dummyPayload[:]))
 		if err != nil {
 			errorIf(err.Trace(), "Signature verification failed.", nil)
-			return false
+			return false, InternalError
 		}
-		return ok
+		if !ok {
+			return false, SignatureDoesNotMatch
+		}
+		return ok, None
 	} else if isRequestPresignedSignatureV4(r) {
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(), "Presigned signature verification failed.", nil)
-			return false
+			return false, InternalError
 		}
-		return ok
+		if !ok {
+			return false, SignatureDoesNotMatch
+		}
+		return ok, None
 	}
-	return false
+	return false, AccessDenied
 }
 
 // authHandler - handles all the incoming authorization headers and
@@ -111,41 +147,21 @@ func setAuthHandler(h http.Handler) http.Handler {
 
 // handler for validating incoming authorization headers.
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Verify if request is presigned, validate signature inside each handlers.
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	case authTypeAnonymous, authTypePresigned, authTypeSigned, authTypePostPolicy:
+		// Let top level caller validate for anonymous and known
+		// signed requests.
 		a.handler.ServeHTTP(w, r)
 		return
-	}
-
-	// Verify if request has post policy signature, validate signature
-	// inside POST policy handler.
-	if isRequestPostPolicySignatureV4(r) && r.Method == "POST" {
-		a.handler.ServeHTTP(w, r)
-		return
-	}
-
-	// No authorization found, let the top level caller validate if
-	// public request is allowed.
-	if _, ok := r.Header["Authorization"]; !ok {
-		a.handler.ServeHTTP(w, r)
-		return
-	}
-
-	// Verify if the signature algorithms are known.
-	if !isRequestSignatureV4(r) && !isRequestJWT(r) {
-		writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
-		return
-	}
-
-	// Verify JWT authorization header is present.
-	if isRequestJWT(r) {
-		// Validate Authorization header if its valid.
+	case authTypeJWT:
+		// Validate Authorization header if its valid for JWT request.
 		if !isJWTReqAuthenticated(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		a.handler.ServeHTTP(w, r)
+	default:
+		writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
+		return
 	}
-
-	// For all other signed requests, let top level caller verify.
-	a.handler.ServeHTTP(w, r)
 }
