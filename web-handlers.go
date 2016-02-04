@@ -20,10 +20,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
@@ -43,6 +47,36 @@ func isAuthenticated(req *http.Request) bool {
 		return false
 	}
 	return tokenRequest.Valid
+}
+
+// ServerInfo - get server info.
+func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfo) error {
+	if !isAuthenticated(r) {
+		return errUnAuthorizedRequest
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	memstats := &runtime.MemStats{}
+	runtime.ReadMemStats(memstats)
+	mem := fmt.Sprintf("Used: %s | Allocated: %s | Used-Heap: %s | Allocated-Heap: %s",
+		humanize.Bytes(memstats.Alloc),
+		humanize.Bytes(memstats.TotalAlloc),
+		humanize.Bytes(memstats.HeapAlloc),
+		humanize.Bytes(memstats.HeapSys))
+	platform := fmt.Sprintf("Host: %s | OS: %s | Arch: %s",
+		host,
+		runtime.GOOS,
+		runtime.GOARCH)
+	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
+	serverInfo := ServerInfo{}
+	serverInfo.MinioVersion = minioVersion
+	serverInfo.MinioMemory = mem
+	serverInfo.MinioPlatform = platform
+	serverInfo.MinioRuntime = goruntime
+	*reply = serverInfo
+	return nil
 }
 
 // DiskInfo - get disk statistics.
