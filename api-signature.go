@@ -173,21 +173,20 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 	/// HTML Form values
 	formValues := make(map[string]string)
 	filePart := new(bytes.Buffer)
-	var err error
-	for err == nil {
+	var e error
+	for e == nil {
 		var part *multipart.Part
-		part, err = reader.NextPart()
+		part, e = reader.NextPart()
 		if part != nil {
 			if part.FileName() == "" {
-				buffer, err := ioutil.ReadAll(part)
-				if err != nil {
-					return nil, nil, probe.NewError(err)
+				buffer, e := ioutil.ReadAll(part)
+				if e != nil {
+					return nil, nil, probe.NewError(e)
 				}
 				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
 			} else {
-				_, err := io.Copy(filePart, part)
-				if err != nil {
-					return nil, nil, probe.NewError(err)
+				if _, e := io.Copy(filePart, part); e != nil {
+					return nil, nil, probe.NewError(e)
 				}
 			}
 		}
@@ -200,13 +199,13 @@ func applyPolicy(formValues map[string]string) *probe.Error {
 		return probe.NewError(errUnsupportedAlgorithm)
 	}
 	/// Decoding policy
-	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
-	if err != nil {
-		return probe.NewError(err)
+	policyBytes, e := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if e != nil {
+		return probe.NewError(e)
 	}
-	postPolicyForm, perr := fs.ParsePostPolicyForm(string(policyBytes))
-	if perr != nil {
-		return perr.Trace()
+	postPolicyForm, err := fs.ParsePostPolicyForm(string(policyBytes))
+	if err != nil {
+		return err.Trace()
 	}
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
 		return probe.NewError(errPolicyAlreadyExpired)
@@ -254,9 +253,9 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *pr
 	if !isValidAccessKey(accessKeyID) {
 		return nil, probe.NewError(errAccessKeyIDInvalid)
 	}
-	config, perr := loadConfigV2()
-	if perr != nil {
-		return nil, perr.Trace()
+	config, err := loadConfigV2()
+	if err != nil {
+		return nil, err.Trace()
 	}
 	region := credentialElements[2]
 	if config.Credentials.AccessKeyID == accessKeyID {

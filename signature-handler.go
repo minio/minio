@@ -44,6 +44,13 @@ func isRequestSignatureV4(req *http.Request) bool {
 	return false
 }
 
+func isRequestRequiresACLCheck(req *http.Request) bool {
+	if isRequestSignatureV4(req) || isRequestPresignedSignatureV4(req) || isRequestPostPolicySignatureV4(req) {
+		return false
+	}
+	return true
+}
+
 func isRequestPresignedSignatureV4(req *http.Request) bool {
 	if _, ok := req.URL.Query()["X-Amz-Credential"]; ok {
 		return ok

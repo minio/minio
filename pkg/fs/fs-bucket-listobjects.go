@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/ioutils"
 )
 
 // listObjectsParams - list objects input parameters.
@@ -77,7 +78,7 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				walkPath = prefixPath
 			}
 		}
-		Walk(walkPath, func(path string, info os.FileInfo, err error) error {
+		ioutils.FTW(walkPath, func(path string, info os.FileInfo, err error) error {
 			// We don't need to list the walk path.
 			if path == walkPath {
 				return nil
@@ -108,7 +109,7 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				// If delimiter is set, we stop if current path is a
 				// directory.
 				if delimiter != "" && info.IsDir() {
-					return ErrSkipDir
+					return ioutils.ErrSkipDir
 				}
 			}
 			return nil

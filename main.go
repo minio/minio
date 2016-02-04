@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"runtime"
 	"strconv"
 
@@ -54,12 +53,6 @@ VERSION:
 func init() {
 	// Check if minio was compiled using a supported version of Golang.
 	checkGolangRuntimeVersion()
-
-	// Check for the environment early on and gracefuly report.
-	_, err := user.Current()
-	if err != nil {
-
-	}
 
 	if os.Getenv("DOCKERIMAGE") == "1" {
 		// the further checks are ignored for docker image

@@ -59,10 +59,10 @@ type LogMessage struct {
 }
 
 func (h *accessLogHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	message, perr := getLogMessage(w, req)
-	fatalIf(perr.Trace(), "Unable to extract http message.", nil)
-	_, err := h.accessLogFile.Write(message)
-	fatalIf(probe.NewError(err), "Writing to log file failed.", nil)
+	message, err := getLogMessage(w, req)
+	fatalIf(err.Trace(), "Unable to extract http message.", nil)
+	_, e := h.accessLogFile.Write(message)
+	fatalIf(probe.NewError(e), "Writing to log file failed.", nil)
 
 	h.Handler.ServeHTTP(w, req)
 }
@@ -103,9 +103,9 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Err
 
 	// logMessage.HTTP.Request = req
 	logMessage.Duration = time.Now().UTC().Sub(logMessage.StartTime)
-	js, err := json.Marshal(logMessage)
-	if err != nil {
-		return nil, probe.NewError(err)
+	js, e := json.Marshal(logMessage)
+	if e != nil {
+		return nil, probe.NewError(e)
 	}
 	js = append(js, byte('\n')) // append a new line
 	return js, nil
@@ -113,8 +113,8 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Err
 
 // AccessLogHandler logs requests
 func AccessLogHandler(h http.Handler) http.Handler {
-	file, err := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	fatalIf(probe.NewError(err), "Unable to open access log.", nil)
+	file, e := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	fatalIf(probe.NewError(e), "Unable to open access log.", nil)
 
 	return &accessLogHandler{Handler: h, accessLogFile: file}
 }

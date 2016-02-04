@@ -42,9 +42,8 @@ func isValidAccessKey(accessKeyID string) bool {
 // takes input as size in integer
 func generateAccessKeyID() ([]byte, *probe.Error) {
 	alpha := make([]byte, minioAccessID)
-	_, err := rand.Read(alpha)
-	if err != nil {
-		return nil, probe.NewError(err)
+	if _, e := rand.Read(alpha); e != nil {
+		return nil, probe.NewError(e)
 	}
 	for i := 0; i < minioAccessID; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
@@ -55,9 +54,8 @@ func generateAccessKeyID() ([]byte, *probe.Error) {
 // generateSecretAccessKey - generate random base64 numeric value from a random seed.
 func generateSecretAccessKey() ([]byte, *probe.Error) {
 	rb := make([]byte, minioSecretID)
-	_, err := rand.Read(rb)
-	if err != nil {
-		return nil, probe.NewError(err)
+	if _, e := rand.Read(rb); e != nil {
+		return nil, probe.NewError(e)
 	}
 	return []byte(base64.StdEncoding.EncodeToString(rb))[:minioSecretID], nil
 }
