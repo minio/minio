@@ -30,8 +30,8 @@ type signatureHandler struct {
 	handler http.Handler
 }
 
-// SignatureHandler to validate authorization header for the incoming request.
-func SignatureHandler(h http.Handler) http.Handler {
+// setSignatureHandler to validate authorization header for the incoming request.
+func setSignatureHandler(h http.Handler) http.Handler {
 	return signatureHandler{h}
 }
 

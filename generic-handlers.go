@@ -26,14 +26,14 @@ import (
 	"github.com/rs/cors"
 )
 
-// MiddlewareHandler - useful to chain different middleware http.Handler
-type MiddlewareHandler func(http.Handler) http.Handler
+// HandlerFunc - useful to chain different middleware http.Handler
+type HandlerFunc func(http.Handler) http.Handler
 
-func registerCustomMiddleware(mux *router.Router, mwHandlers ...MiddlewareHandler) http.Handler {
+func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handler {
 	var f http.Handler
 	f = mux
-	for _, mw := range mwHandlers {
-		f = mw(f)
+	for _, hFn := range handlerFns {
+		f = hFn(f)
 	}
 	return f
 }
@@ -110,8 +110,8 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// TimeValidityHandler to validate parsable time over http header
-func TimeValidityHandler(h http.Handler) http.Handler {
+// setTimeValidityHandler to validate parsable time over http header
+func setTimeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
 }
 
@@ -139,8 +139,8 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// CorsHandler handler for CORS (Cross Origin Resource Sharing)
-func CorsHandler(h http.Handler) http.Handler {
+// setCorsHandler handler for CORS (Cross Origin Resource Sharing)
+func setCorsHandler(h http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT"},
@@ -149,9 +149,9 @@ func CorsHandler(h http.Handler) http.Handler {
 	return c.Handler(h)
 }
 
-// IgnoreSignatureV2RequestHandler -
+// setIgnoreSignatureV2RequestHandler -
 // Verify if authorization header has signature version '2', reject it cleanly.
-func IgnoreSignatureV2RequestHandler(h http.Handler) http.Handler {
+func setIgnoreSignatureV2RequestHandler(h http.Handler) http.Handler {
 	return ignoreSignatureV2RequestHandler{h}
 }
 
@@ -166,11 +166,11 @@ func (h ignoreSignatureV2RequestHandler) ServeHTTP(w http.ResponseWriter, r *htt
 	h.handler.ServeHTTP(w, r)
 }
 
-// IgnoreResourcesHandler -
+// setIgnoreResourcesHandler -
 // Ignore resources handler is wrapper handler used for API request resource validation
 // Since we do not support all the S3 queries, it is necessary for us to throw back a
 // valid error message indicating such a feature is not implemented.
-func IgnoreResourcesHandler(h http.Handler) http.Handler {
+func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 

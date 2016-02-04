@@ -54,14 +54,14 @@ type WebAPI struct {
 }
 
 func getWebAPIHandler(web *WebAPI) http.Handler {
-	var mwHandlers = []MiddlewareHandler{
+	var handlerFns = []HandlerFunc{
 		setCacheControlHandler, // Adds Cache-Control header
-		TimeValidityHandler,    // Validate time.
-		AuthHandler,            // Authentication handler for verifying tokens.
-		CorsHandler,            // CORS added only for testing purposes.
+		setTimeValidityHandler, // Validate time.
+		setJWTAuthHandler,      // Authentication handler for verifying JWT's.
+		setCorsHandler,         // CORS added only for testing purposes.
 	}
 	if web.AccessLog {
-		mwHandlers = append(mwHandlers, AccessLogHandler)
+		handlerFns = append(handlerFns, setAccessLogHandler)
 	}
 
 	s := jsonrpc.NewServer()
@@ -77,7 +77,7 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	// Enable this when we add assets.
 	// root.PathPrefix("/login").Handler(http.StripPrefix("/login", http.FileServer(assetFS())))
 	// root.Handle("/{file:.*}", http.FileServer(assetFS()))
-	return registerCustomMiddleware(mux, mwHandlers...)
+	return registerHandlers(mux, handlerFns...)
 }
 
 // registerCloudStorageAPI - register all the handlers to their respective paths
@@ -154,17 +154,17 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 }
 
 func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
-	var mwHandlers = []MiddlewareHandler{
-		TimeValidityHandler,
-		IgnoreResourcesHandler,
-		IgnoreSignatureV2RequestHandler,
-		SignatureHandler,
+	var handlerFns = []HandlerFunc{
+		setTimeValidityHandler,
+		setIgnoreResourcesHandler,
+		setIgnoreSignatureV2RequestHandler,
+		setSignatureHandler,
 	}
 	if api.AccessLog {
-		mwHandlers = append(mwHandlers, AccessLogHandler)
+		handlerFns = append(handlerFns, setAccessLogHandler)
 	}
-	mwHandlers = append(mwHandlers, CorsHandler)
+	handlerFns = append(handlerFns, setCorsHandler)
 	mux := router.NewRouter()
 	registerCloudStorageAPI(mux, api)
-	return registerCustomMiddleware(mux, mwHandlers...)
+	return registerHandlers(mux, handlerFns...)
 }
