@@ -55,9 +55,10 @@ type WebAPI struct {
 
 func getWebAPIHandler(web *WebAPI) http.Handler {
 	var mwHandlers = []MiddlewareHandler{
-		TimeValidityHandler, // Validate time.
-		AuthHandler,         // Authentication handler for verifying tokens.
-		CorsHandler,         // CORS added only for testing purposes.
+		setCacheControlHandler, // Adds Cache-Control header
+		TimeValidityHandler,    // Validate time.
+		AuthHandler,            // Authentication handler for verifying tokens.
+		CorsHandler,            // CORS added only for testing purposes.
 	}
 	if web.AccessLog {
 		mwHandlers = append(mwHandlers, AccessLogHandler)
