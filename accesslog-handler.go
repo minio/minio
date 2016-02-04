@@ -111,8 +111,8 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Err
 	return js, nil
 }
 
-// AccessLogHandler logs requests
-func AccessLogHandler(h http.Handler) http.Handler {
+// setAccessLogHandler logs requests
+func setAccessLogHandler(h http.Handler) http.Handler {
 	file, e := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	fatalIf(probe.NewError(e), "Unable to open access log.", nil)
 

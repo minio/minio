@@ -23,18 +23,18 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
-type authHandler struct {
+type jwtAuthHandler struct {
 	handler http.Handler
 }
 
-// AuthHandler -
+// setJWTAuthHandler -
 // Verify if authorization header is of form JWT, reject it otherwise.
-func AuthHandler(h http.Handler) http.Handler {
-	return authHandler{h}
+func setJWTAuthHandler(h http.Handler) http.Handler {
+	return jwtAuthHandler{h}
 }
 
 // Ignore request if authorization header is not valid.
-func (h authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h jwtAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Let the top level caller handle if the requests should be
 	// allowed, if there are no Authorization headers.
 	if r.Header.Get("Authorization") == "" {
