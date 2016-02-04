@@ -26,6 +26,9 @@ type MakeBucketArgs struct {
 // DiskInfoArgs - disk info args.
 type DiskInfoArgs struct{}
 
+// ServerInfoArgs  - server info args.
+type ServerInfoArgs struct{}
+
 // ListBucketsArgs - list bucket args.
 type ListBucketsArgs struct{}
 
@@ -33,6 +36,20 @@ type ListBucketsArgs struct{}
 type ListObjectsArgs struct {
 	BucketName string `json:"bucketName"`
 	Prefix     string `json:"prefix"`
+}
+
+// PutObjectURLArgs - args to generate url for upload access.
+type PutObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
+}
+
+// GetObjectURLArgs - args to generate url for download access.
+type GetObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
 }
 
 // BucketInfo container for list buckets metadata.
@@ -55,27 +72,21 @@ type ObjectInfo struct {
 	ContentType string `json:"contentType"`
 }
 
-// PutObjectURLArgs - args to generate url for upload access.
-type PutObjectURLArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
-}
-
-// GetObjectURLArgs - args to generate url for download access.
-type GetObjectURLArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
-}
-
-// AuthToken - auth token reply
-type AuthToken struct {
-	Token string `json:"token" form:"token"`
-}
-
 // LoginArgs - login arguments.
 type LoginArgs struct {
 	Username string `json:"username" form:"username"`
 	Password string `json:"password" form:"password"`
+}
+
+// AuthToken - auth token reply.
+type AuthToken struct {
+	Token string `json:"token" form:"token"`
+}
+
+// ServerInfo - server info reply.
+type ServerInfo struct {
+	MinioVersion  string
+	MinioMemory   string
+	MinioPlatform string
+	MinioRuntime  string
 }
