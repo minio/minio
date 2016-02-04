@@ -93,6 +93,23 @@ func parseDate(req *http.Request) (time.Time, error) {
 	return time.Time{}, errors.New("invalid request")
 }
 
+// Adds Cache-Control header
+type cacheControlHandler struct {
+	handler http.Handler
+}
+
+func setCacheControlHandler(h http.Handler) http.Handler {
+	return cacheControlHandler{h}
+}
+
+func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		// expire the cache in one week
+		w.Header().Set("Cache-Control", "public, max-age=604800")
+	}
+	h.handler.ServeHTTP(w, r)
+}
+
 // TimeValidityHandler to validate parsable time over http header
 func TimeValidityHandler(h http.Handler) http.Handler {
 	return timeHandler{h}
