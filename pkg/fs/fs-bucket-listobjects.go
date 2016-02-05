@@ -271,16 +271,17 @@ func (fs *Filesystem) listObjectsService() *probe.Error {
 // ListObjects - lists all objects for a given prefix, returns upto
 // maxKeys number of objects per call.
 func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
 
+	// Input validation.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsResult{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
 	rootPrefix := filepath.Join(fs.path, bucket)
-	// check bucket exists
+	// Check bucket exists.
 	if _, e := os.Stat(rootPrefix); e != nil {
 		if os.IsNotExist(e) {
 			return ListObjectsResult{}, probe.NewError(BucketNotFound{Bucket: bucket})

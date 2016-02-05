@@ -31,7 +31,7 @@ type Filesystem struct {
 	path             string
 	minFreeDisk      int64
 	maxBuckets       int
-	lock             *sync.Mutex
+	rwLock           *sync.RWMutex
 	multiparts       *Multiparts
 	buckets          *Buckets
 	listServiceReqCh chan<- listServiceReq
@@ -59,7 +59,7 @@ type Multiparts struct {
 }
 
 // New instantiate a new donut
-func New(rootPath string) (Filesystem, *probe.Error) {
+func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe.Error) {
 	setFSBucketsConfigPath(filepath.Join(rootPath, "$buckets.json"))
 	setFSMultipartsConfigPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
@@ -80,8 +80,11 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
-	// Initialize content db.
-	contentdb.Init()
+
+	// Initialize contentdb.
+	if e := contentdb.Init(); e != nil {
+		return Filesystem{}, probe.NewError(e)
+	}
 
 	var buckets *Buckets
 	buckets, err = loadBucketsMetadata()
@@ -98,16 +101,18 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 			return Filesystem{}, err.Trace()
 		}
 	}
-	fs := Filesystem{lock: new(sync.Mutex)}
+	fs := Filesystem{
+		rwLock: &sync.RWMutex{},
+	}
 	fs.path = rootPath
 	fs.multiparts = multiparts
 	fs.buckets = buckets
 	/// Defaults
 
 	// maximum buckets to be listed from list buckets.
-	fs.maxBuckets = 1000
+	fs.maxBuckets = maxBuckets
 	// minium free disk required for i/o operations to succeed.
-	fs.minFreeDisk = 10
+	fs.minFreeDisk = minFreeDisk
 
 	// Start list goroutine.
 	if err = fs.listObjectsService(); err != nil {
@@ -115,21 +120,4 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 	}
 	// Return here.
 	return fs, nil
-}
-
-// SetMinFreeDisk - set min free disk
-func (fs *Filesystem) SetMinFreeDisk(minFreeDisk int64) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
-	fs.minFreeDisk = minFreeDisk
-}
-
-// SetMaxBuckets - set total number of buckets supported, default is 100.
-func (fs *Filesystem) SetMaxBuckets(maxBuckets int) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
-	if maxBuckets == 0 {
-		maxBuckets = 100
-	}
-	fs.maxBuckets = maxBuckets
 }
