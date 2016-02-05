@@ -100,7 +100,7 @@ func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
 			for k, v := range condt {
 				if !isString(v) { // Pre-check value type.
 					// All values must be of type string.
-					return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type â€˜%sâ€™ of conditional field value â€˜%sâ€™ found in POST policy form.",
+					return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
 						reflect.TypeOf(condt).String(), condt))
 				}
 				// {"acl": "public-read" } is an alternate way to indicate - [ "eq", "$acl", "public-read" ]
@@ -115,7 +115,7 @@ func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
 			}
 		case []interface{}: // Handle array types.
 			if len(condt) != 3 { // Return error if we have insufficient elements.
-				return parsedPolicy, probe.NewError(fmt.Errorf("Malformed conditional fields â€˜%sâ€™ of type â€˜%sâ€™ found in POST policy form.",
+				return parsedPolicy, probe.NewError(fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form.",
 					condt, reflect.TypeOf(condt).String()))
 			}
 			switch toString(condt[0]) {
@@ -123,7 +123,7 @@ func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
 				for _, v := range condt { // Pre-check all values for type.
 					if !isString(v) {
 						// All values must be of type string.
-						return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type â€˜%sâ€™ of conditional field value â€˜%sâ€™ found in POST policy form.",
+						return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
 							reflect.TypeOf(condt).String(), condt))
 					}
 				}
@@ -145,11 +145,11 @@ func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
 				}
 			default:
 				// Condition should be valid.
-				return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type â€˜%sâ€™ of conditional field value â€˜%sâ€™ found in POST policy form.",
+				return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
 					reflect.TypeOf(condt).String(), condt))
 			}
 		default:
-			return parsedPolicy, probe.NewError(fmt.Errorf("Unknown field â€˜%sâ€™ of type â€˜%sâ€™ found in POST policy form.",
+			return parsedPolicy, probe.NewError(fmt.Errorf("Unknown field %s of type %s found in POST policy form.",
 				condt, reflect.TypeOf(condt).String()))
 		}
 	}
