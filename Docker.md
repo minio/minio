@@ -9,7 +9,7 @@ sudo apt-get install Docker.io
 ### Generating `minio configs` for the first time.
 
 ```bash
-docker run -p 9000:9000 minio/minio:latest
+docker run -p 9000:9001 minio/minio:latest
 ```
 
 ### Persist `minio configs`.
@@ -28,5 +28,5 @@ docker create -v /export --name minio-export minio/my-minio /bin/true
 You can then use the `--volumes-from` flag to mount the `/export` volume in another container.
 
 ```bash
-docker run -p 9000:9000 --volumes-from minio-export --name minio1 minio/my-minio
+docker run -p 9000:9001 --volumes-from minio-export --name minio1 minio/my-minio
 ```

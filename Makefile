@@ -82,7 +82,7 @@ pkg-remove:
 
 install: gomake-all
 
-dockerimage: checkdocker verifiers
+dockerimage: checkdocker verifiers $(UI_ASSETS)
 	@echo "Building docker image:" minio:$(TAG)
 	@GO15VENDOREXPERIMENT=1 go build --ldflags $(DOCKER_LDFLAGS) -o minio.dockerimage
 	@mkdir -p export
