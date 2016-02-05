@@ -27,7 +27,7 @@ import (
 
 // Metadata - carries metadata about object
 type Metadata struct {
-	Md5sum      []byte
+	MD5sum      []byte
 	ContentType string
 }
 

@@ -46,3 +46,13 @@ func isMaxObjectSize(size int64) bool {
 	}
 	return false
 }
+
+func contains(stringList []string, element string) bool {
+	for _, e := range stringList {
+		if e == element {
+			return true
+		}
+	}
+
+	return false
+}

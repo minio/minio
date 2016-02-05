@@ -60,8 +60,8 @@ type Multiparts struct {
 
 // New instantiate a new donut
 func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe.Error) {
-	setFSBucketsConfigPath(filepath.Join(rootPath, "$buckets.json"))
-	setFSMultipartsConfigPath(filepath.Join(rootPath, "$multiparts-session.json"))
+	setFSBucketsMetadataPath(filepath.Join(rootPath, "$buckets.json"))
+	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
 	var err *probe.Error
 	// load multiparts session from disk
@@ -73,7 +73,7 @@ func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe
 				Version:       "1",
 				ActiveSession: make(map[string]*MultipartSession),
 			}
-			if err := saveMultipartsSession(multiparts); err != nil {
+			if err := saveMultipartsSession(*multiparts); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {
@@ -94,7 +94,7 @@ func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe
 				Version:  "1",
 				Metadata: make(map[string]*BucketMetadata),
 			}
-			if err := saveBucketsMetadata(buckets); err != nil {
+			if err := saveBucketsMetadata(*buckets); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {

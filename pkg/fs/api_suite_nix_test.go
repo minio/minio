@@ -92,7 +92,7 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 	c.Assert(e, check.IsNil)
 	objectMetadata, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, bytes.NewReader(completedPartsBytes), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectMetadata.Md5, check.Equals, finalExpectedmd5SumHex)
+	c.Assert(objectMetadata.MD5, check.Equals, finalExpectedmd5SumHex)
 }
 
 func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
@@ -147,7 +147,7 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 		objects[key] = []byte(randomString)
 		objectMetadata, err := fs.CreateObject("bucket", key, expectedmd5Sum, int64(len(randomString)), bytes.NewBufferString(randomString), nil)
 		c.Assert(err, check.IsNil)
-		c.Assert(objectMetadata.Md5, check.Equals, expectedmd5Sumhex)
+		c.Assert(objectMetadata.MD5, check.Equals, expectedmd5Sumhex)
 	}
 
 	for key, value := range objects {
@@ -276,7 +276,7 @@ func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	md5Sum1hex := hex.EncodeToString(hasher1.Sum(nil))
 	objectMetadata, err := fs.CreateObject("bucket", "object", md5Sum1, int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(md5Sum1hex, check.Equals, objectMetadata.Md5)
+	c.Assert(md5Sum1hex, check.Equals, objectMetadata.MD5)
 
 	hasher2 := md5.New()
 	hasher2.Write([]byte("three"))
@@ -326,7 +326,7 @@ func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	md5Sum1hex := hex.EncodeToString(hasher.Sum(nil))
 	objectMetadata, err := fs.CreateObject("bucket", "dir1/dir2/object", md5Sum1, int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectMetadata.Md5, check.Equals, md5Sum1hex)
+	c.Assert(objectMetadata.MD5, check.Equals, md5Sum1hex)
 
 	var bytesBuffer bytes.Buffer
 	length, err := fs.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object", 0, 0)
@@ -458,7 +458,7 @@ func testDefaultContentType(c *check.C, create func() Filesystem) {
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 }
 
-func testContentMd5Set(c *check.C, create func() Filesystem) {
+func testContentMD5Set(c *check.C, create func() Filesystem) {
 	fs := create()
 	err := fs.MakeBucket("bucket", "")
 	c.Assert(err, check.IsNil)

@@ -230,7 +230,7 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 	// if body of request is non-nil then check for validity of Content-Length
 	if req.Body != nil {
 		/// if Content-Length is unknown/missing, deny the request
-		if req.ContentLength == -1 {
+		if req.ContentLength == -1 && !contains(req.TransferEncoding, "chunked") {
 			writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
 			return
 		}
@@ -353,8 +353,8 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 		}
 		return
 	}
-	if metadata.Md5 != "" {
-		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	if metadata.MD5 != "" {
+		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
