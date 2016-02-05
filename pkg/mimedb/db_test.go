@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package contentdb_test
+package mimedb_test
 
 import (
 	"testing"
 
-	"github.com/minio/minio/pkg/contentdb"
+	"github.com/minio/minio/pkg/mimedb"
 
 	. "gopkg.in/check.v1"
 )
@@ -31,16 +31,7 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestLookup(c *C) {
-	// Test initializing.
-	e := contentdb.Init()
-	c.Assert(e, IsNil)
-
 	// Test MustLookup.
-	contentType, e := contentdb.Lookup("exe")
-	c.Assert(e, IsNil)
-	c.Assert(contentType, Not(Equals), "")
-
-	// Test MustLookup.
-	contentType = contentdb.MustLookup("exe")
+	contentType := mimedb.DB["exe"].ContentType
 	c.Assert(contentType, Not(Equals), "")
 }
