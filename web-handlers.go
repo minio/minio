@@ -214,6 +214,20 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	return nil
 }
 
+// RemoveObject - removes an object.
+func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *int) error {
+	if !isAuthenticated(r) {
+		return errUnAuthorizedRequest
+	}
+
+	e := web.Client.RemoveObject(args.BucketName, args.ObjectName)
+	if e != nil {
+		return e
+	}
+	*reply = 0
+	return nil
+}
+
 // Login - user login handler.
 func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *AuthToken) error {
 	jwt := InitJWT()

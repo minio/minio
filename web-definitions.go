@@ -52,6 +52,13 @@ type GetObjectURLArgs struct {
 	ObjectName string `json:"objectName"`
 }
 
+// RemoveObjectArgs - args to remove an object
+type RemoveObjectArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
+}
+
 // BucketInfo container for list buckets metadata.
 type BucketInfo struct {
 	// The name of the bucket.
