@@ -79,9 +79,7 @@ func setObjectHeaders(w http.ResponseWriter, metadata fs.ObjectMetadata, content
 	lastModified := metadata.Created.Format(http.TimeFormat)
 	// object related headers
 	w.Header().Set("Content-Type", metadata.ContentType)
-	if metadata.Md5 != "" {
-		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
-	}
+	w.Header().Set("ETag", "\""+metadata.Md5+"\"")
 	w.Header().Set("Last-Modified", lastModified)
 
 	// set content range
