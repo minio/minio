@@ -31,9 +31,9 @@ import (
 	"github.com/minio/minio-xl/pkg/atomic"
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/probe"
-	"github.com/minio/minio/pkg/contentdb"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/ioutils"
+	"github.com/minio/minio/pkg/mimedb"
 )
 
 /// Object Operations
@@ -155,8 +155,12 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	if runtime.GOOS == "windows" {
 		object = sanitizeWindowsPath(object)
 	}
+
 	if objectExt := filepath.Ext(object); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
+		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+		if ok {
+			contentType = content.ContentType
+		}
 	}
 	metadata := ObjectMetadata{
 		Bucket:      bucket,
@@ -293,7 +297,10 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
+		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+		if ok {
+			contentType = content.ContentType
+		}
 	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,

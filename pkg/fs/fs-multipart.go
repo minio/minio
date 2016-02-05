@@ -38,8 +38,8 @@ import (
 	"github.com/minio/minio-xl/pkg/crypto/sha256"
 	"github.com/minio/minio-xl/pkg/crypto/sha512"
 	"github.com/minio/minio-xl/pkg/probe"
-	"github.com/minio/minio/pkg/contentdb"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mimedb"
 )
 
 // isValidUploadID - is upload id.
@@ -507,7 +507,10 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
-		contentType = contentdb.MustLookup(strings.ToLower(strings.TrimPrefix(objectExt, ".")))
+		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+		if ok {
+			contentType = content.ContentType
+		}
 	}
 	newObject := ObjectMetadata{
 		Bucket:      bucket,
