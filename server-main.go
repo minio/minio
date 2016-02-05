@@ -58,6 +58,9 @@ EXAMPLES:
   4. Start minio server with minimum free disk threshold to 5%
       $ minio {{.Name}} min-free-disk 5% /home/shared/Pictures
 
+  5. Start minio server with minimum free disk threshold to 15% and support upto 2000 buckets.
+      $ minio {{.Name}} min-free-disk 15% /home/shared/Documents max-buckets 2000
+
 `,
 }
 
@@ -74,6 +77,7 @@ type cloudServerConfig struct {
 	/// FS options
 	Path        string // Path to export for cloud storage
 	MinFreeDisk int64  // Minimum free disk space for filesystem
+	MaxBuckets  int    // Maximum number of buckets suppported by filesystem.
 
 	/// TLS service
 	TLS      bool   // TLS on when certs are specified
@@ -284,9 +288,12 @@ func serverMain(c *cli.Context) {
 	}
 
 	var minFreeDisk int64
+	var maxBuckets int
 	minFreeDiskSet := false
+	maxBucketsSet := false
 	// Default
 	minFreeDisk = 10
+	maxBuckets = 1000
 
 	args := c.Args()
 	for len(args) >= 2 {
@@ -300,6 +307,16 @@ func serverMain(c *cli.Context) {
 			fatalIf(err.Trace(args.First()), "Invalid minium free disk size "+args.First()+" passed.", nil)
 			args = args.Tail()
 			minFreeDiskSet = true
+		case "max-buckets":
+			if maxBucketsSet {
+				fatalIf(probe.NewError(errInvalidArgument), "Maximum buckets should be set only once.", nil)
+			}
+			args = args.Tail()
+			var e error
+			maxBuckets, e = strconv.Atoi(args.First())
+			fatalIf(probe.NewError(e), "Invalid max buckets "+args.First()+" passed.", nil)
+			args = args.Tail()
+			maxBucketsSet = true
 		default:
 			cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
 		}
@@ -318,6 +335,7 @@ func serverMain(c *cli.Context) {
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
 		Path:            path,
 		MinFreeDisk:     minFreeDisk,
+		MaxBuckets:      maxBuckets,
 		TLS:             tls,
 		CertFile:        certFile,
 		KeyFile:         keyFile,

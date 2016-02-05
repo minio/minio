@@ -32,8 +32,8 @@ import (
 
 // DeleteBucket - delete bucket
 func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 	// verify bucket path legal
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -66,6 +66,44 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	return nil
 }
 
+// ListBuckets - Get service.
+func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
+
+	files, err := ioutils.ReadDirN(fs.path, fs.maxBuckets)
+	if err != nil && err != io.EOF {
+		return []BucketMetadata{}, probe.NewError(err)
+	}
+	if err == io.EOF {
+		// This message is printed if there are more than 1000 buckets.
+		fmt.Printf("More buckets found, truncating the bucket list to %d entries only.", fs.maxBuckets)
+	}
+	var metadataList []BucketMetadata
+	for _, file := range files {
+		if !file.IsDir() {
+			// if files found ignore them
+			continue
+		}
+		dirName := strings.ToLower(file.Name())
+		if file.IsDir() {
+			// If directories found with odd names, skip them.
+			if !IsValidBucketName(dirName) {
+				continue
+			}
+		}
+		metadata := BucketMetadata{
+			Name:    dirName,
+			Created: file.ModTime(),
+		}
+		metadataList = append(metadataList, metadata)
+	}
+	// Remove duplicated entries.
+	metadataList = removeDuplicateBuckets(metadataList)
+	return metadataList, nil
+}
+
+// removeDuplicateBuckets - remove duplicate buckets.
 func removeDuplicateBuckets(elements []BucketMetadata) (result []BucketMetadata) {
 	// Use map to record duplicates as we find them.
 	duplicates := make(map[string]struct{})
@@ -78,81 +116,49 @@ func removeDuplicateBuckets(elements []BucketMetadata) (result []BucketMetadata)
 	return result
 }
 
-// ListBuckets - Get service
-func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
-
-	files, err := ioutils.ReadDirN(fs.path, fs.maxBuckets)
-	if err != nil && err != io.EOF {
-		return []BucketMetadata{}, probe.NewError(err)
-	}
-	if err == io.EOF {
-		fmt.Printf("Truncating the bucket list to %d entries only.", fs.maxBuckets)
-	}
-	var metadataList []BucketMetadata
-	for _, file := range files {
-		if !file.IsDir() {
-			// if files found ignore them
-			continue
-		}
-		dirName := strings.ToLower(file.Name())
-		if file.IsDir() {
-			// if directories found with odd names, skip them too
-			if !IsValidBucketName(dirName) {
-				continue
-			}
-		}
-		metadata := BucketMetadata{
-			Name:    dirName,
-			Created: file.ModTime(),
-		}
-		metadataList = append(metadataList, metadata)
-	}
-	metadataList = removeDuplicateBuckets(metadataList)
-	return metadataList, nil
-}
-
-// MakeBucket - PUT Bucket
+// MakeBucket - PUT Bucket.
 func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return probe.NewError(err)
 	}
 
-	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
+	// Remove 5% from total space for cumulative disk space used for
+	// journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return probe.NewError(RootPathFull{Path: fs.path})
 	}
 
-	// verify bucket path legal
+	// Verify if bucket path legal.
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
+	// Verify if bucket acl is legal.
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
-	// get bucket path
+
+	// Get bucket path.
 	bucketDir := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketDir); e == nil {
 		return probe.NewError(BucketExists{Bucket: bucket})
 	}
 
-	// make bucket
+	// Make bucket.
 	if e := os.Mkdir(bucketDir, 0700); e != nil {
 		return probe.NewError(err)
 	}
 
 	bucketMetadata := &BucketMetadata{}
 	fi, e := os.Stat(bucketDir)
-	// check if bucket exists
+	// Check if bucket exists.
 	if e != nil {
 		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
@@ -172,12 +178,17 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	return nil
 }
 
+// denormalizeBucket - will convert incoming bucket names to
+// corresponding valid bucketnames on the backend in a platform
+// compatible way for all operating systems.
 func (fs Filesystem) denormalizeBucket(bucket string) string {
-	buckets, err := ioutils.ReadDirNamesN(fs.path, fs.maxBuckets)
-	if err != nil {
+	buckets, e := ioutils.ReadDirNamesN(fs.path, fs.maxBuckets)
+	if e != nil {
 		return bucket
 	}
 	for _, b := range buckets {
+		// Verify if lowercase version of the bucket is equal to the
+		// incoming bucket, then use the proper name.
 		if strings.ToLower(b) == bucket {
 			return b
 		}
@@ -185,21 +196,20 @@ func (fs Filesystem) denormalizeBucket(bucket string) string {
 	return bucket
 }
 
-// GetBucketMetadata - get bucket metadata
+// GetBucketMetadata - get bucket metadata.
 func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
 	if !IsValidBucketName(bucket) {
 		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
-
-	// get bucket path
+	// Get bucket path.
 	bucketDir := filepath.Join(fs.path, bucket)
 	fi, e := os.Stat(bucketDir)
 	if e != nil {
-		// check if bucket exists
+		// Check if bucket exists.
 		if os.IsNotExist(e) {
 			return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
@@ -215,13 +225,15 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 	return *bucketMetadata, nil
 }
 
-// SetBucketMetadata - set bucket metadata
+// SetBucketMetadata - set bucket metadata.
 func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+	// Input validation.
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
+	// Save the acl.
 	acl := metadata["acl"]
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
@@ -233,7 +245,7 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 	bucketDir := filepath.Join(fs.path, bucket)
 	fi, e := os.Stat(bucketDir)
 	if e != nil {
-		// check if bucket exists
+		// Check if bucket exists.
 		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}

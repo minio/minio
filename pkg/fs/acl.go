@@ -18,8 +18,8 @@ package fs
 
 // IsPrivateBucket - is private bucket
 func (fs Filesystem) IsPrivateBucket(bucket string) bool {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	if !ok {
 		return true
@@ -29,8 +29,8 @@ func (fs Filesystem) IsPrivateBucket(bucket string) bool {
 
 // IsPublicBucket - is public bucket
 func (fs Filesystem) IsPublicBucket(bucket string) bool {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	if !ok {
 		return true
@@ -40,8 +40,8 @@ func (fs Filesystem) IsPublicBucket(bucket string) bool {
 
 // IsReadOnlyBucket - is read only bucket
 func (fs Filesystem) IsReadOnlyBucket(bucket string) bool {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	if !ok {
 		return true
