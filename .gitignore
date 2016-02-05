@@ -9,4 +9,5 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-assetfs.go
+ui-assets.go
+ui-assets.asc
