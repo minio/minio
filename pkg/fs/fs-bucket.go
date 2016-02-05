@@ -32,8 +32,6 @@ import (
 
 // DeleteBucket - delete bucket
 func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
-	fs.rwLock.Lock()
-	defer fs.rwLock.Unlock()
 	// verify bucket path legal
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -59,8 +57,10 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 		}
 		return probe.NewError(e)
 	}
+	fs.rwLock.Lock()
 	delete(fs.buckets.Metadata, bucket)
-	if err := saveBucketsMetadata(fs.buckets); err != nil {
+	fs.rwLock.Unlock()
+	if err := saveBucketsMetadata(*fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil
@@ -68,9 +68,6 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 
 // ListBuckets - Get service.
 func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
-	fs.rwLock.RLock()
-	defer fs.rwLock.RUnlock()
-
 	files, err := ioutils.ReadDirN(fs.path, fs.maxBuckets)
 	if err != nil && err != io.EOF {
 		return []BucketMetadata{}, probe.NewError(err)
@@ -118,9 +115,6 @@ func removeDuplicateBuckets(elements []BucketMetadata) (result []BucketMetadata)
 
 // MakeBucket - PUT Bucket.
 func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
-	fs.rwLock.Lock()
-	defer fs.rwLock.Unlock()
-
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return probe.NewError(err)
@@ -171,8 +165,10 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	bucketMetadata.Name = fi.Name()
 	bucketMetadata.Created = fi.ModTime()
 	bucketMetadata.ACL = BucketACL(acl)
+	fs.rwLock.Lock()
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	if err := saveBucketsMetadata(fs.buckets); err != nil {
+	fs.rwLock.Unlock()
+	if err := saveBucketsMetadata(*fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil
@@ -198,8 +194,6 @@ func (fs Filesystem) denormalizeBucket(bucket string) string {
 
 // GetBucketMetadata - get bucket metadata.
 func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
-	fs.rwLock.RLock()
-	defer fs.rwLock.RUnlock()
 	if !IsValidBucketName(bucket) {
 		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
@@ -215,7 +209,9 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 		}
 		return BucketMetadata{}, probe.NewError(e)
 	}
+	fs.rwLock.RLock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	fs.rwLock.RUnlock()
 	if !ok {
 		bucketMetadata = &BucketMetadata{}
 		bucketMetadata.Name = fi.Name()
@@ -258,8 +254,10 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 		bucketMetadata.Created = fi.ModTime()
 	}
 	bucketMetadata.ACL = BucketACL(acl)
+	fs.rwLock.Lock()
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	if err := saveBucketsMetadata(fs.buckets); err != nil {
+	fs.rwLock.Unlock()
+	if err := saveBucketsMetadata(*fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
 	return nil

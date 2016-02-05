@@ -68,7 +68,7 @@ type ObjectMetadata struct {
 	ContentType string
 	Created     time.Time
 	Mode        os.FileMode
-	Md5         string
+	MD5         string
 	Size        int64
 }
 

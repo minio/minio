@@ -78,7 +78,13 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				walkPath = prefixPath
 			}
 		}
-		ioutils.FTW(walkPath, func(path string, info os.FileInfo, err error) error {
+		ioutils.FTW(walkPath, func(path string, info os.FileInfo, e error) error {
+			if e != nil {
+				return e
+			}
+			if strings.HasSuffix(path, "$multiparts") {
+				return nil
+			}
 			// We don't need to list the walk path.
 			if path == walkPath {
 				return nil
@@ -271,9 +277,6 @@ func (fs *Filesystem) listObjectsService() *probe.Error {
 // ListObjects - lists all objects for a given prefix, returns upto
 // maxKeys number of objects per call.
 func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
-	fs.rwLock.RLock()
-	defer fs.rwLock.RUnlock()
-
 	// Input validation.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsResult{}, probe.NewError(BucketNameInvalid{Bucket: bucket})

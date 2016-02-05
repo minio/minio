@@ -157,7 +157,7 @@ func (e InvalidDisksArgument) Error() string {
 
 // BadDigest bad md5sum
 type BadDigest struct {
-	Md5    string
+	MD5    string
 	Bucket string
 	Object string
 }
@@ -222,11 +222,11 @@ type ImplementationError struct {
 	Err    error
 }
 
-// DigestError - Generic Md5 error
+// DigestError - Generic MD5 error
 type DigestError struct {
 	Bucket string
 	Key    string
-	Md5    string
+	MD5    string
 }
 
 /// ACL related errors
@@ -322,7 +322,7 @@ func (e BackendCorrupted) Error() string {
 
 // Return string an error formatted as the given text
 func (e InvalidDigest) Error() string {
-	return "Md5 provided " + e.Md5 + " is invalid"
+	return "MD5 provided " + e.MD5 + " is invalid"
 }
 
 // OperationNotPermitted - operation not permitted

@@ -353,8 +353,8 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 		}
 		return
 	}
-	if metadata.Md5 != "" {
-		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	if metadata.MD5 != "" {
+		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }

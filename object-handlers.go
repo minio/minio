@@ -198,8 +198,8 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		}
 		return
 	}
-	if metadata.Md5 != "" {
-		w.Header().Set("ETag", "\""+metadata.Md5+"\"")
+	if metadata.MD5 != "" {
+		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -501,7 +501,7 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 		}
 		return
 	}
-	response := generateCompleteMultpartUploadResponse(bucket, object, req.URL.String(), metadata.Md5)
+	response := generateCompleteMultpartUploadResponse(bucket, object, req.URL.String(), metadata.MD5)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
 	setCommonHeaders(w)

@@ -102,9 +102,6 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 
 // GetObjectMetadata - get object metadata.
 func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error) {
-	fs.rwLock.RLock()
-	defer fs.rwLock.RUnlock()
-
 	// Input validation.
 	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -193,9 +190,6 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 
 // CreateObject - create an object.
 func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
-	fs.rwLock.Lock()
-	defer fs.rwLock.Unlock()
-
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectMetadata{}, probe.NewError(e)
@@ -233,7 +227,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		expectedMD5SumBytes, e = base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
 		if e != nil {
 			// Pro-actively close the connection.
-			return ObjectMetadata{}, probe.NewError(InvalidDigest{Md5: expectedMD5Sum})
+			return ObjectMetadata{}, probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -276,7 +270,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	if strings.TrimSpace(expectedMD5Sum) != "" {
 		if !isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum) {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(BadDigest{Md5: expectedMD5Sum, Bucket: bucket, Object: object})
+			return ObjectMetadata{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
 	}
 	sha256Sum := hex.EncodeToString(sh.Sum(nil))
@@ -307,7 +301,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		Created:     st.ModTime(),
 		Size:        st.Size(),
 		ContentType: contentType,
-		Md5:         md5Sum,
+		MD5:         md5Sum,
 	}
 	return newObject, nil
 }
@@ -344,9 +338,6 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 
 // DeleteObject - delete and object
 func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
-	fs.rwLock.Lock()
-	defer fs.rwLock.Unlock()
-
 	// check bucket name valid
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
