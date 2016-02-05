@@ -19,8 +19,8 @@
 		},
 		{
 			"path": "github.com/elazarl/go-bindata-assetfs",
-			"revision": "d5cac425555ca5cf00694df246e04f05e6a55150",
-			"revisionTime": "2015-08-13T07:46:22+03:00"
+			"revision": "57eb5e1fc594ad4b0b1dbea7b286d299e0cb43c2",
+			"revisionTime": "2015-12-24T06:54:52+02:00"
 		},
 		{
 			"path": "github.com/fatih/color",

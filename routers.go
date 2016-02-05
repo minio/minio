@@ -75,8 +75,8 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	root.Handle("/rpc", s)
 
 	// Enable this when we add assets.
-	// root.PathPrefix("/login").Handler(http.StripPrefix("/login", http.FileServer(assetFS())))
-	// root.Handle("/{file:.*}", http.FileServer(assetFS()))
+	root.PathPrefix("/login").Handler(http.StripPrefix("/login", http.FileServer(assetFS())))
+	root.Handle("/{file:.*}", http.FileServer(assetFS()))
 	return registerHandlers(mux, handlerFns...)
 }
 

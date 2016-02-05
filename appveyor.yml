@@ -10,6 +10,8 @@ clone_folder: c:\gopath\src\github.com\minio\minio
 environment:
   GOPATH: c:\gopath
   GO15VENDOREXPERIMENT: 1
+  UI_ASSETS: ui-assets.go
+  UI_ASSETS_ARMOR: ui-assets.asc
 
 # scripts that run after cloning repository
 install:
@@ -19,6 +21,10 @@ install:
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
+  - curl -o ui-assets.go -L https://dl.minio.io/assets/server/%UI_ASSETS%
+  - curl -o ui-assets.asc -L https://dl.minio.io/assets/server/%UI_ASSETS_ARMOR%
+  - gpg --batch --no-tty --yes --keyserver pgp.mit.edu --recv-keys F9AAC728
+  - gpg --batch --no-tty --verify %UI_ASSETS_ARMOR% %UI_ASSETS%  
   - go test .
   - go test -race .
   - go test github.com/minio/minio/pkg...
