@@ -30,15 +30,15 @@ import (
 
 /// Bucket Operations
 
-// DeleteBucket - delete bucket
+// DeleteBucket - delete a bucket.
 func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
-	// verify bucket path legal
+	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	bucket = fs.denormalizeBucket(bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
-	// check bucket exists
+	// Check if bucket exists.
 	if _, e := os.Stat(bucketDir); e != nil {
 		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
@@ -57,12 +57,15 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 		}
 		return probe.NewError(e)
 	}
+
+	// Critical region hold write lock.
 	fs.rwLock.Lock()
 	delete(fs.buckets.Metadata, bucket)
-	fs.rwLock.Unlock()
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
+		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
+	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -73,21 +76,20 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 		return []BucketMetadata{}, probe.NewError(err)
 	}
 	if err == io.EOF {
-		// This message is printed if there are more than 1000 buckets.
+		// This message is printed if there are more than 1000 buckets
+		// and we saw io.EOF.
 		fmt.Printf("More buckets found, truncating the bucket list to %d entries only.", fs.maxBuckets)
 	}
 	var metadataList []BucketMetadata
 	for _, file := range files {
 		if !file.IsDir() {
-			// if files found ignore them
+			// If not directory, ignore all file types.
 			continue
 		}
+		// If directories are found with odd names, skip them.
 		dirName := strings.ToLower(file.Name())
-		if file.IsDir() {
-			// If directories found with odd names, skip them.
-			if !IsValidBucketName(dirName) {
-				continue
-			}
+		if file.IsDir() && !IsValidBucketName(dirName) {
+			continue
 		}
 		metadata := BucketMetadata{
 			Name:    dirName,
@@ -127,19 +129,18 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		return probe.NewError(RootPathFull{Path: fs.path})
 	}
 
-	// Verify if bucket path legal.
+	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	// Verify if bucket acl is legal.
+	// Verify if bucket acl is valid.
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
-
 	// Get bucket path.
+	bucket = fs.denormalizeBucket(bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketDir); e == nil {
 		return probe.NewError(BucketExists{Bucket: bucket})
@@ -150,7 +151,6 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		return probe.NewError(err)
 	}
 
-	bucketMetadata := &BucketMetadata{}
 	fi, e := os.Stat(bucketDir)
 	// Check if bucket exists.
 	if e != nil {
@@ -162,15 +162,21 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 	if strings.TrimSpace(acl) == "" {
 		acl = "private"
 	}
+
+	// Get a new bucket name metadata.
+	bucketMetadata := &BucketMetadata{}
 	bucketMetadata.Name = fi.Name()
 	bucketMetadata.Created = fi.ModTime()
 	bucketMetadata.ACL = BucketACL(acl)
+
+	// Critical region hold a write lock.
 	fs.rwLock.Lock()
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	fs.rwLock.Unlock()
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
+		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
+	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -212,6 +218,7 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 	fs.rwLock.RLock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	fs.rwLock.RUnlock()
+	// If metadata value is not found, get it from disk.
 	if !ok {
 		bucketMetadata = &BucketMetadata{}
 		bucketMetadata.Name = fi.Name()
@@ -245,6 +252,8 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 		}
 		return probe.NewError(e)
 	}
+
+	// Critical region handle read lock.
 	fs.rwLock.RLock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
 	fs.rwLock.RUnlock()
@@ -254,11 +263,14 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 		bucketMetadata.Created = fi.ModTime()
 	}
 	bucketMetadata.ACL = BucketACL(acl)
+
+	// Critical region handle write lock.
 	fs.rwLock.Lock()
 	fs.buckets.Metadata[bucket] = bucketMetadata
-	fs.rwLock.Unlock()
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
+		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
+	fs.rwLock.Unlock()
 	return nil
 }
