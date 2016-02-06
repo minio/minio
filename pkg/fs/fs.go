@@ -46,6 +46,7 @@ type Buckets struct {
 // MultipartSession holds active session information
 type MultipartSession struct {
 	TotalParts int
+	ObjectName string
 	UploadID   string
 	Initiated  time.Time
 	Parts      []PartMetadata

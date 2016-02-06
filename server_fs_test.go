@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"io"
 	"io/ioutil"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
 	"net/http"
@@ -1075,8 +1077,13 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
+	hasher := md5.New()
+	hasher.Write([]byte("hello world"))
+	md5Sum := hasher.Sum(nil)
+
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1086,6 +1093,7 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1093,7 +1101,7 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	// complete multipart upload
+	// Complete multipart upload
 	completeUploads := &fs.CompleteMultipartUpload{
 		Part: []fs.CompletePart{
 			{
