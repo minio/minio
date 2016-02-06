@@ -82,7 +82,8 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 			if e != nil {
 				return e
 			}
-			if strings.HasSuffix(path, "$multiparts") {
+			// Skip special temporary files, kept for multipart transaction.
+			if strings.Contains(path, "$multiparts") || strings.Contains(path, "$tmpobject") {
 				return nil
 			}
 			// We don't need to list the walk path.

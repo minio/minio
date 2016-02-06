@@ -237,7 +237,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 
 	// Write object.
-	file, e := atomic.FileCreateWithPrefix(objectPath, "")
+	file, e := atomic.FileCreateWithPrefix(objectPath, "$tmpobject")
 	if e != nil {
 		switch e := e.(type) {
 		case *os.PathError:
