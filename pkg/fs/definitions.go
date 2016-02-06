@@ -91,7 +91,7 @@ type ObjectResourcesMetadata struct {
 	MaxParts             int
 	IsTruncated          bool
 
-	Part         []*PartMetadata
+	Part         []PartMetadata
 	EncodingType string
 }
 
