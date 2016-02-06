@@ -40,6 +40,7 @@ import (
 
 // GetObject - GET object
 func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error) {
+	// Critical region requiring read lock.
 	fs.rwLock.RLock()
 	defer fs.rwLock.RUnlock()
 
@@ -111,7 +112,7 @@ func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *
 		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: bucket})
 	}
 
-	// normalize buckets.
+	// Normalize buckets.
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
@@ -175,7 +176,10 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 
 // isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
 func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
+	// Verify the md5sum.
 	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
+		// Decode md5sum to bytes from their hexadecimal
+		// representations.
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
 		if err != nil {
 			return false
@@ -184,6 +188,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 		if err != nil {
 			return false
 		}
+		// Verify md5sum bytes are equal after successful decoding.
 		if !bytes.Equal(expectedMD5SumBytes, actualMD5SumBytes) {
 			return false
 		}
@@ -219,6 +224,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		}
 		return ObjectMetadata{}, probe.NewError(e)
 	}
+
 	// Verify object path legal.
 	if !IsValidObjectName(object) {
 		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
@@ -252,23 +258,24 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		}
 	}
 
-	h := md5.New()
-	sh := sha256.New()
-	mw := io.MultiWriter(file, h, sh)
+	// Instantiate checksum hashers and create a multiwriter.
+	md5Hasher := md5.New()
+	sha256Hasher := sha256.New()
+	objectWriter := io.MultiWriter(file, md5Hasher, sha256Hasher)
 
 	if size > 0 {
-		if _, e = io.CopyN(mw, data, size); e != nil {
+		if _, e = io.CopyN(objectWriter, data, size); e != nil {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(e)
 		}
 	} else {
-		if _, e = io.Copy(mw, data); e != nil {
+		if _, e = io.Copy(objectWriter, data); e != nil {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(e)
 		}
 	}
 
-	md5Sum := hex.EncodeToString(h.Sum(nil))
+	md5Sum := hex.EncodeToString(md5Hasher.Sum(nil))
 	// Verify if the written object is equal to what is expected, only
 	// if it is requested as such.
 	if strings.TrimSpace(expectedMD5Sum) != "" {
@@ -277,7 +284,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 			return ObjectMetadata{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
 	}
-	sha256Sum := hex.EncodeToString(sh.Sum(nil))
+	sha256Sum := hex.EncodeToString(sha256Hasher.Sum(nil))
 	if signature != nil {
 		ok, err := signature.DoesSignatureMatch(sha256Sum)
 		if err != nil {
@@ -291,6 +298,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 	file.Close()
 
+	// Set stat again to get the latest metadata.
 	st, e := os.Stat(objectPath)
 	if e != nil {
 		return ObjectMetadata{}, probe.NewError(e)
@@ -318,6 +326,7 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 	if basePath == deletePath {
 		return nil
 	}
+	// Verify if the path exists.
 	pathSt, e := os.Stat(deletePath)
 	if e != nil {
 		if os.IsNotExist(e) {
@@ -326,6 +335,7 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 		return probe.NewError(e)
 	}
 	if pathSt.IsDir() {
+		// Verify if directory is empty.
 		empty, e := ioutils.IsDirEmpty(deletePath)
 		if e != nil {
 			return probe.NewError(e)
@@ -334,25 +344,27 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 			return nil
 		}
 	}
+	// Attempt to remove path.
 	if e := os.Remove(deletePath); e != nil {
 		return probe.NewError(e)
 	}
+	// Recursively go down the next path and delete again.
 	if err := deleteObjectPath(basePath, filepath.Dir(deletePath), bucket, object); err != nil {
 		return err.Trace(basePath, deletePath, bucket, object)
 	}
 	return nil
 }
 
-// DeleteObject - delete and object
+// DeleteObject - delete object.
 func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
-	// check bucket name valid
+	// Check bucket name valid
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
-	// check bucket exists
+	// Check bucket exists
 	if _, e := os.Stat(bucketPath); e != nil {
 		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
@@ -360,19 +372,22 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(e)
 	}
 
-	// verify object path legal
+	// Verify object path legal
 	if !IsValidObjectName(object) {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// Do not use filepath.Join() since filepath.Join strips off any object names with '/', use them as is
-	// in a static manner so that we can send a proper 'ObjectNotFound' reply back upon os.Stat()
+	// Do not use filepath.Join() since filepath.Join strips off any
+	// object names with '/', use them as is in a static manner so
+	// that we can send a proper 'ObjectNotFound' reply back upon
+	// os.Stat().
 	var objectPath string
 	if runtime.GOOS == "windows" {
 		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	} else {
 		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
+	// Delete object path if its empty.
 	err := deleteObjectPath(bucketPath, objectPath, bucket, object)
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
