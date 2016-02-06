@@ -48,7 +48,7 @@ type MultipartSession struct {
 	TotalParts int
 	UploadID   string
 	Initiated  time.Time
-	Parts      []*PartMetadata
+	Parts      []PartMetadata
 }
 
 // Multiparts collection of many parts
