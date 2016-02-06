@@ -223,8 +223,6 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 
 // SetBucketMetadata - set bucket metadata.
 func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
-	fs.rwLock.Lock()
-	defer fs.rwLock.Unlock()
 	// Input validation.
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -247,7 +245,9 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 		}
 		return probe.NewError(e)
 	}
+	fs.rwLock.RLock()
 	bucketMetadata, ok := fs.buckets.Metadata[bucket]
+	fs.rwLock.RUnlock()
 	if !ok {
 		bucketMetadata = &BucketMetadata{}
 		bucketMetadata.Name = fi.Name()
