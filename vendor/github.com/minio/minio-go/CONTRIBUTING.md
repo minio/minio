@@ -14,7 +14,7 @@
     - Have test cases for the new code. If you have questions about how to do it, please ask in your pull request.
     - Run `go fmt`
     - Squash your commits into a single commit. `git rebase -i`. It's okay to force update your pull request.
-    - Make sure `go test -race ./...` and `go build` completes.
+    - Make sure `go test -short -race ./...` and `go build` completes.
 
 * Read [Effective Go](https://github.com/golang/go/wiki/CodeReviewComments) article from Golang project
     - `minio-go` project is strictly conformant with Golang style

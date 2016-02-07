@@ -308,6 +308,14 @@ func (r *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", r.getSignedHeaders(r.extractSignedHeaders()))
 	query.Set("X-Amz-Credential", r.AccessKeyID+"/"+r.getScope(t))
+
+	// Save other headers available in the request parameters.
+	for k, v := range r.Request.URL.Query() {
+		if strings.HasPrefix(strings.ToLower(k), "x-amz") {
+			continue
+		}
+		query[k] = v
+	}
 	encodedQuery := query.Encode()
 
 	// Verify if date query is same.

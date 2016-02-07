@@ -18,13 +18,26 @@ package minio
 
 import (
 	"errors"
+	"net/url"
 	"time"
 )
 
+// supportedGetReqParams - supported request parameters for GET
+// presigned request.
+var supportedGetReqParams = map[string]struct{}{
+	"response-expires":             struct{}{},
+	"response-content-type":        struct{}{},
+	"response-cache-control":       struct{}{},
+	"response-content-disposition": struct{}{},
+}
+
 // presignURL - Returns a presigned URL for an input 'method'.
 // Expires maximum is 7days - ie. 604800 and minimum is 1.
-func (c Client) presignURL(method string, bucketName string, objectName string, expires time.Duration) (url string, err error) {
+func (c Client) presignURL(method string, bucketName string, objectName string, expires time.Duration, reqParams url.Values) (urlStr string, err error) {
 	// Input validation.
+	if method == "" {
+		return "", ErrInvalidArgument("method cannot be empty.")
+	}
 	if err := isValidBucketName(bucketName); err != nil {
 		return "", err
 	}
@@ -35,35 +48,50 @@ func (c Client) presignURL(method string, bucketName string, objectName string, 
 		return "", err
 	}
 
-	if method == "" {
-		return "", ErrInvalidArgument("method cannot be empty.")
-	}
-
+	// Convert expires into seconds.
 	expireSeconds := int64(expires / time.Second)
-	// Instantiate a new request.
-	// Since expires is set newRequest will presign the request.
-	req, err := c.newRequest(method, requestMetadata{
+	reqMetadata := requestMetadata{
 		presignURL: true,
 		bucketName: bucketName,
 		objectName: objectName,
 		expires:    expireSeconds,
-	})
+	}
+
+	// For "GET" we are handling additional request parameters to
+	// override its response headers.
+	if method == "GET" {
+		// Verify if input map has unsupported params, if yes exit.
+		for k := range reqParams {
+			if _, ok := supportedGetReqParams[k]; !ok {
+				return "", ErrInvalidArgument(k + " unsupported request parameter for presigned GET.")
+			}
+		}
+		// Save the request parameters to be used in presigning for
+		// GET request.
+		reqMetadata.queryValues = reqParams
+	}
+
+	// Instantiate a new request.
+	// Since expires is set newRequest will presign the request.
+	req, err := c.newRequest(method, reqMetadata)
 	if err != nil {
 		return "", err
 	}
 	return req.URL.String(), nil
 }
 
-// PresignedGetObject - Returns a presigned URL to access an object without credentials.
-// Expires maximum is 7days - ie. 604800 and minimum is 1.
-func (c Client) PresignedGetObject(bucketName string, objectName string, expires time.Duration) (url string, err error) {
-	return c.presignURL("GET", bucketName, objectName, expires)
+// PresignedGetObject - Returns a presigned URL to access an object
+// without credentials. Expires maximum is 7days - ie. 604800 and
+// minimum is 1. Additionally you can override a set of response
+// headers using the query parameters.
+func (c Client) PresignedGetObject(bucketName string, objectName string, expires time.Duration, reqParams url.Values) (url string, err error) {
+	return c.presignURL("GET", bucketName, objectName, expires, reqParams)
 }
 
 // PresignedPutObject - Returns a presigned URL to upload an object without credentials.
 // Expires maximum is 7days - ie. 604800 and minimum is 1.
 func (c Client) PresignedPutObject(bucketName string, objectName string, expires time.Duration) (url string, err error) {
-	return c.presignURL("PUT", bucketName, objectName, expires)
+	return c.presignURL("PUT", bucketName, objectName, expires, nil)
 }
 
 // PresignedPostPolicy - Returns POST form data to upload an object at a location.

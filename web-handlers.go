@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -206,7 +208,10 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	if e != nil {
 		return e
 	}
-	signedURLStr, e := client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
+	reqParams := make(url.Values)
+	// Set content disposition for browser to download the file.
+	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(args.ObjectName)))
+	signedURLStr, e := client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second, reqParams)
 	if e != nil {
 		return e
 	}

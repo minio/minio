@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -954,11 +955,12 @@ func TestFunctionalV2(t *testing.T) {
 		t.Fatal("Error: ", err)
 	}
 
-	presignedGetURL, err := c.PresignedGetObject(bucketName, objectName, 3600*time.Second)
+	// Generate presigned GET object url.
+	presignedGetURL, err := c.PresignedGetObject(bucketName, objectName, 3600*time.Second, nil)
 	if err != nil {
 		t.Fatal("Error: ", err)
 	}
-
+	// Verify if presigned url works.
 	resp, err := http.Get(presignedGetURL)
 	if err != nil {
 		t.Fatal("Error: ", err)
@@ -972,6 +974,34 @@ func TestFunctionalV2(t *testing.T) {
 	}
 	if !bytes.Equal(newPresignedBytes, buf) {
 		t.Fatal("Error: bytes mismatch.")
+	}
+
+	// Set request parameters.
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", "attachment; filename=\"test.txt\"")
+	// Generate presigned GET object url.
+	presignedGetURL, err = c.PresignedGetObject(bucketName, objectName, 3600*time.Second, reqParams)
+	if err != nil {
+		t.Fatal("Error: ", err)
+	}
+	// Verify if presigned url works.
+	resp, err = http.Get(presignedGetURL)
+	if err != nil {
+		t.Fatal("Error: ", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatal("Error: ", resp.Status)
+	}
+	newPresignedBytes, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal("Error: ", err)
+	}
+	if !bytes.Equal(newPresignedBytes, buf) {
+		t.Fatal("Error: bytes mismatch for presigned GET url.")
+	}
+	// Verify content disposition.
+	if resp.Header.Get("Content-Disposition") != "attachment; filename=\"test.txt\"" {
+		t.Fatalf("Error: wrong Content-Disposition received %s", resp.Header.Get("Content-Disposition"))
 	}
 
 	presignedPutURL, err := c.PresignedPutObject(bucketName, objectName+"-presigned", 3600*time.Second)

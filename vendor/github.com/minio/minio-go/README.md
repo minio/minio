@@ -83,7 +83,7 @@ func main() {
 * [FGetObject(bucketName, objectName, filePath) error](examples/s3/fgetobject.go)
 
 ### Presigned Operations.
-* [PresignedGetObject(bucketName, objectName, time.Duration) (string, error)](examples/s3/presignedgetobject.go)
+* [PresignedGetObject(bucketName, objectName, time.Duration, url.Values) (string, error)](examples/s3/presignedgetobject.go)
 * [PresignedPutObject(bucketName, objectName, time.Duration) (string, error)](examples/s3/presignedputobject.go)
 * [PresignedPostPolicy(NewPostPolicy()) (map[string]string, error)](examples/s3/presignedpostpolicy.go)
 
