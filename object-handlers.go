@@ -18,6 +18,7 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/gorilla/mux"
@@ -28,6 +29,24 @@ import (
 const (
 	maxPartsList = 1000
 )
+
+// supportedGetReqParams - supported request parameters for GET
+// presigned request.
+var supportedGetReqParams = map[string]string{
+	"response-expires":             "Expires",
+	"response-content-type":        "Content-Type",
+	"response-cache-control":       "Cache-Control",
+	"response-content-disposition": "Content-Disposition",
+}
+
+// setResponseHeaders - set any requested parameters as response headers.
+func setResponseHeaders(w http.ResponseWriter, reqParams url.Values) {
+	for k, v := range reqParams {
+		if header, ok := supportedGetReqParams[k]; ok {
+			w.Header()[header] = v
+		}
+	}
+}
 
 // GetObjectHandler - GET Object
 // ----------
@@ -69,7 +88,14 @@ func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Req
 		writeErrorResponse(w, req, InvalidRange, req.URL.Path)
 		return
 	}
+
+	// Set standard object headers.
 	setObjectHeaders(w, metadata, hrange)
+
+	// Set any additional requested response headers.
+	setResponseHeaders(w, req.URL.Query())
+
+	// Get the object.
 	if _, err = api.Filesystem.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		return

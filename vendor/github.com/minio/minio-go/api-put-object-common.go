@@ -55,7 +55,7 @@ func shouldUploadPart(objPart objectPart, objectParts map[int]objectPart) bool {
 		return true
 	}
 	// if md5sum mismatches should upload the part.
-	if objPart.ETag == uploadedPart.ETag {
+	if objPart.ETag != uploadedPart.ETag {
 		return true
 	}
 	return false

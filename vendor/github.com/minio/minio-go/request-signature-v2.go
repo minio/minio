@@ -73,6 +73,11 @@ func preSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 
 	// Get encoded URL path.
 	path := encodeURL2Path(req.URL)
+	if len(req.URL.Query()) > 0 {
+		// Keep the usual queries unescaped for string to sign.
+		query, _ := url.QueryUnescape(queryEncode(req.URL.Query()))
+		path = path + "?" + query
+	}
 
 	// Find epoch expires when the request will expire.
 	epochExpires := d.Unix() + expires
@@ -93,12 +98,16 @@ func preSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 		query.Set("AWSAccessKeyId", accessKeyID)
 	}
 
-	// Fill in Expires and Signature for presigned query.
+	// Fill in Expires for presigned query.
 	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
-	query.Set("Signature", signature)
 
 	// Encode query and save.
-	req.URL.RawQuery = query.Encode()
+	req.URL.RawQuery = queryEncode(query)
+
+	// Save signature finally.
+	req.URL.RawQuery += "&Signature=" + urlEncodePath(signature)
+
+	// Return.
 	return &req
 }
 
@@ -283,7 +292,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
 				// Request parameters
 				if len(vv[0]) > 0 {
 					buf.WriteByte('=')
-					buf.WriteString(url.QueryEscape(vv[0]))
+					buf.WriteString(strings.Replace(url.QueryEscape(vv[0]), "+", "%20", -1))
 				}
 			}
 		}
