@@ -143,7 +143,7 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI.
 func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
-	fs, err := fs.New(conf.Path, conf.MinFreeDisk, conf.MaxBuckets)
+	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
 	return CloudStorageAPI{

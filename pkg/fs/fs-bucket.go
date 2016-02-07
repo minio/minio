@@ -17,15 +17,13 @@
 package fs
 
 import (
-	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/ioutils"
 )
 
 /// Bucket Operations
@@ -71,14 +69,9 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 
 // ListBuckets - Get service.
 func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
-	files, err := ioutils.ReadDirN(fs.path, fs.maxBuckets)
-	if err != nil && err != io.EOF {
-		return []BucketMetadata{}, probe.NewError(err)
-	}
-	if err == io.EOF {
-		// This message is printed if there are more than 1000 buckets
-		// and we saw io.EOF.
-		fmt.Printf("More buckets found, truncating the bucket list to %d entries only.", fs.maxBuckets)
+	files, e := ioutil.ReadDir(fs.path)
+	if e != nil {
+		return []BucketMetadata{}, probe.NewError(e)
 	}
 	var metadataList []BucketMetadata
 	for _, file := range files {
@@ -184,15 +177,15 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 // corresponding valid bucketnames on the backend in a platform
 // compatible way for all operating systems.
 func (fs Filesystem) denormalizeBucket(bucket string) string {
-	buckets, e := ioutils.ReadDirNamesN(fs.path, fs.maxBuckets)
+	buckets, e := ioutil.ReadDir(fs.path)
 	if e != nil {
 		return bucket
 	}
 	for _, b := range buckets {
 		// Verify if lowercase version of the bucket is equal to the
 		// incoming bucket, then use the proper name.
-		if strings.ToLower(b) == bucket {
-			return b
+		if strings.ToLower(b.Name()) == bucket {
+			return b.Name()
 		}
 	}
 	return bucket

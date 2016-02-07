@@ -34,8 +34,14 @@ import (
 )
 
 var serverCmd = cli.Command{
-	Name:   "server",
-	Usage:  "Start Minio cloud storage server.",
+	Name:  "server",
+	Usage: "Start Minio cloud storage server.",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "min-free-disk, M",
+			Value: "5%",
+		},
+	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Usage}}
@@ -43,8 +49,9 @@ var serverCmd = cli.Command{
 USAGE:
   minio {{.Name}} [OPTION VALUE] PATH
 
-  OPTION = min-free-disk VALUE = NN% [DEFAULT: 10%]
-
+OPTIONS:
+  {{range .Flags}}{{.}}
+  {{end}}
 EXAMPLES:
   1. Start minio server on Linux.
       $ minio {{.Name}} /home/shared
@@ -56,10 +63,7 @@ EXAMPLES:
       $ minio --address 192.168.1.101:9000 {{.Name}} /home/shared
 
   4. Start minio server with minimum free disk threshold to 5%
-      $ minio {{.Name}} min-free-disk 5% /home/shared/Pictures
-
-  5. Start minio server with minimum free disk threshold to 15% and support upto 2000 buckets.
-      $ minio {{.Name}} min-free-disk 15% /home/shared/Documents max-buckets 2000
+      $ minio {{.Name}} --min-free-disk 5% /home/shared/Pictures
 
 `,
 }
@@ -266,7 +270,7 @@ func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
-	if len(c.Args()) > 5 {
+	if len(c.Args()) > 1 {
 		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘mc server help’", nil)
 	}
 	path := strings.TrimSpace(c.Args().Last())
@@ -287,40 +291,8 @@ func serverMain(c *cli.Context) {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
 
-	var minFreeDisk int64
-	var maxBuckets int
-	minFreeDiskSet := false
-	maxBucketsSet := false
-	// Default
-	minFreeDisk = 10
-	maxBuckets = 1000
-
-	args := c.Args()
-	for len(args) >= 2 {
-		switch args.First() {
-		case "min-free-disk":
-			if minFreeDiskSet {
-				fatalIf(probe.NewError(errInvalidArgument), "Minimum free disk should be set only once.", nil)
-			}
-			args = args.Tail()
-			minFreeDisk, err = parsePercentToInt(args.First(), 64)
-			fatalIf(err.Trace(args.First()), "Invalid minium free disk size "+args.First()+" passed.", nil)
-			args = args.Tail()
-			minFreeDiskSet = true
-		case "max-buckets":
-			if maxBucketsSet {
-				fatalIf(probe.NewError(errInvalidArgument), "Maximum buckets should be set only once.", nil)
-			}
-			args = args.Tail()
-			var e error
-			maxBuckets, e = strconv.Atoi(args.First())
-			fatalIf(probe.NewError(e), "Invalid max buckets "+args.First()+" passed.", nil)
-			args = args.Tail()
-			maxBucketsSet = true
-		default:
-			cli.ShowCommandHelpAndExit(c, "server", 1) // last argument is exit code
-		}
-	}
+	minFreeDisk, err := parsePercentToInt(c.String("min-free-disk"), 64)
+	fatalIf(err.Trace(c.String("min-free-disk")), "Invalid minium free disk size "+c.String("min-free-disk")+" passed.", nil)
 
 	path := strings.TrimSpace(c.Args().Last())
 	// Last argument is always path
@@ -335,7 +307,6 @@ func serverMain(c *cli.Context) {
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
 		Path:            path,
 		MinFreeDisk:     minFreeDisk,
-		MaxBuckets:      maxBuckets,
 		TLS:             tls,
 		CertFile:        certFile,
 		KeyFile:         keyFile,
