@@ -99,3 +99,5 @@ clean:
 	@rm -fv minio
 	@rm -fv minio.test
 	@rm -fv pkg/fs/fs.test
+	@rm -fv ui-assets.go
+	@rm -fv ui-assets.asc
