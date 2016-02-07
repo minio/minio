@@ -29,7 +29,6 @@ import (
 type Filesystem struct {
 	path             string
 	minFreeDisk      int64
-	maxBuckets       int
 	rwLock           *sync.RWMutex
 	multiparts       *Multiparts
 	buckets          *Buckets
@@ -59,7 +58,7 @@ type Multiparts struct {
 }
 
 // New instantiate a new donut
-func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe.Error) {
+func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 	setFSBucketsMetadataPath(filepath.Join(rootPath, "$buckets.json"))
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
@@ -104,8 +103,6 @@ func New(rootPath string, minFreeDisk int64, maxBuckets int) (Filesystem, *probe
 	fs.buckets = buckets
 	/// Defaults
 
-	// maximum buckets to be listed from list buckets.
-	fs.maxBuckets = maxBuckets
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = minFreeDisk
 

@@ -36,7 +36,7 @@ func (s *MySuite) TestAPISuite(c *C) {
 		path, e := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(e, IsNil)
 		storageList = append(storageList, path)
-		store, err := New(path, 0, 1000)
+		store, err := New(path, 0)
 		c.Check(err, IsNil)
 		return store
 	}
