@@ -16,7 +16,11 @@
 
 package main
 
-import "time"
+import (
+	"time"
+
+	"github.com/minio/minio/pkg/disk"
+)
 
 // MakeBucketArgs - make bucket args.
 type MakeBucketArgs struct {
@@ -32,10 +36,28 @@ type ServerInfoArgs struct{}
 // ListBucketsArgs - list bucket args.
 type ListBucketsArgs struct{}
 
+// DiskInfoRep - disk info reply.
+type DiskInfoRep struct {
+	DiskInfo  disk.Info `json:"diskInfo"`
+	UIVersion string    `json:"uiVersion"`
+}
+
+// ListBucketsRep - list buckets response
+type ListBucketsRep struct {
+	Buckets   []BucketInfo `json:"buckets"`
+	UIVersion string       `json:"uiVersion"`
+}
+
 // ListObjectsArgs - list object args.
 type ListObjectsArgs struct {
 	BucketName string `json:"bucketName"`
 	Prefix     string `json:"prefix"`
+}
+
+// ListObjectsRep - list objects response.
+type ListObjectsRep struct {
+	Objects   []ObjectInfo `json:"objects"`
+	UIVersion string       `json:"uiVersion"`
 }
 
 // PutObjectURLArgs - args to generate url for upload access.
@@ -45,6 +67,12 @@ type PutObjectURLArgs struct {
 	ObjectName string `json:"objectName"`
 }
 
+// PutObjectURLRep - reply for presigned upload url request.
+type PutObjectURLRep struct {
+	URL       string `json:"url"`
+	UIVersion string `json:"uiVersion"`
+}
+
 // GetObjectURLArgs - args to generate url for download access.
 type GetObjectURLArgs struct {
 	TargetHost string `json:"targetHost"`
@@ -52,11 +80,23 @@ type GetObjectURLArgs struct {
 	ObjectName string `json:"objectName"`
 }
 
+// GetObjectURLRep - reply for presigned download url request.
+type GetObjectURLRep struct {
+	URL       string `json:"url"`
+	UIVersion string `json:"uiVersion"`
+}
+
 // RemoveObjectArgs - args to remove an object
 type RemoveObjectArgs struct {
 	TargetHost string `json:"targetHost"`
 	BucketName string `json:"bucketName"`
 	ObjectName string `json:"objectName"`
+}
+
+// GenericRep - reply structure for calls for which reply is success/failure
+// for ex. RemoveObject MakeBucket
+type GenericRep struct {
+	UIVersion string `json:"uiVersion"`
 }
 
 // BucketInfo container for list buckets metadata.
@@ -85,15 +125,17 @@ type LoginArgs struct {
 	Password string `json:"password" form:"password"`
 }
 
-// AuthToken - auth token reply.
-type AuthToken struct {
-	Token string `json:"token" form:"token"`
+// LoginRep - login reply.
+type LoginRep struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
 }
 
-// ServerInfo - server info reply.
-type ServerInfo struct {
+// ServerInfoRep - server info reply.
+type ServerInfoRep struct {
 	MinioVersion  string
 	MinioMemory   string
 	MinioPlatform string
 	MinioRuntime  string
+	UIVersion     string `json:"uiVersion"`
 }
