@@ -41,6 +41,9 @@ var serverCmd = cli.Command{
 			Name:  "min-free-disk, M",
 			Value: "5%",
 		},
+        cli.BoolFlag{
+            Name: "disable-browser",
+        },
 	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
