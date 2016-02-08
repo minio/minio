@@ -115,14 +115,16 @@ Minio Object Storage:
     http://10.0.0.3:9000
 
 Minio Browser:
-    http://127.0.0.1:9000
-    http://10.0.0.3:9000
+    http://127.0.0.1:9001
+    http://10.0.0.3:9001
 
 To configure Minio Client:
     $ wget https://dl.minio.io/client/mc/release/darwin-amd64/mc
     $ chmod 755 mc
     $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
 ~~~
+
+You can disable the object browser by passing the `--disable-browser` flag. Otherwise the browser will listen on the port that follows the one from the API address or the one that you've explicitly specified with `--browser-port=1234`.
 
 #### How to use AWS CLI with Minio?
 
