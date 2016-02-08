@@ -115,8 +115,8 @@ Minio Object Storage:
     http://10.0.0.3:9000
 
 Minio Browser:
-    http://127.0.0.1:9000
-    http://10.0.0.3:9000
+    http://127.0.0.1:9001
+    http://10.0.0.3:9001
 
 To configure Minio Client:
     $ wget https://dl.minio.io/client/mc/release/darwin-amd64/mc
