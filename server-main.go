@@ -41,9 +41,11 @@ var serverCmd = cli.Command{
 			Name:  "min-free-disk, M",
 			Value: "5%",
 		},
-        cli.BoolFlag{
-            Name: "disable-browser",
-        },
+		cli.IntFlag{
+			Name:  "browser-port",
+			Value: -1,
+			Usage: "Listening port of the object browser.",
+		},
 	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
@@ -74,8 +76,9 @@ EXAMPLES:
 // cloudServerConfig - http server config
 type cloudServerConfig struct {
 	/// HTTP server options
-	Address   string // Address:Port listening
-	AccessLog bool   // Enable access log handler
+	Address     string // Address:Port listening
+	AccessLog   bool   // Enable access log handler
+	BrowserPort int    // Listening port of the object browser
 
 	// Credentials.
 	AccessKeyID     string // Access key id.
@@ -102,8 +105,11 @@ func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	if e != nil {
 		return nil, probe.NewError(e)
 	}
-	// Always choose the next port, based on the API address port.
-	webPort = webPort + 1
+	if conf.BrowserPort < 0 {
+		webPort = webPort + 1
+	} else {
+		webPort = conf.BrowserPort
+	}
 	webAddress := net.JoinHostPort(host, strconv.Itoa(webPort))
 
 	// Minio server config
@@ -309,6 +315,7 @@ func serverMain(c *cli.Context) {
 		Address:         c.GlobalString("address"),
 		AccessLog:       c.GlobalBool("enable-accesslog"),
 		AccessKeyID:     conf.Credentials.AccessKeyID,
+		BrowserPort:     c.Int("browser-port"),
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
 		Path:            path,
 		MinFreeDisk:     minFreeDisk,
