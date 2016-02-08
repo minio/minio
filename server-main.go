@@ -297,6 +297,8 @@ func serverMain(c *cli.Context) {
 	minFreeDisk, err := parsePercentToInt(c.String("min-free-disk"), 64)
 	fatalIf(err.Trace(c.String("min-free-disk")), "Invalid minium free disk size "+c.String("min-free-disk")+" passed.", nil)
 
+	disableBrowser := c.Bool("disable-browser")
+
 	path := strings.TrimSpace(c.Args().Last())
 	// Last argument is always path
 	if _, err := os.Stat(path); err != nil {
@@ -322,13 +324,15 @@ func serverMain(c *cli.Context) {
 	Println("\nMinio Object Storage:")
 	printServerMsg(apiServer)
 
-	// configure Web server.
-	webServer, err := configureWebServer(serverConfig)
-	errorIf(err.Trace(), "Failed to configure Web server.", nil)
+	var webServer *http.Server
+	if !disableBrowser {
+		// configure Web server.
+		webServer, err = configureWebServer(serverConfig)
+		errorIf(err.Trace(), "Failed to configure Web server.", nil)
 
-	Println("\nMinio Browser:")
-	printServerMsg(webServer)
-
+		Println("\nMinio Browser:")
+		printServerMsg(webServer)
+	}
 	Println("\nTo configure Minio Client:")
 	if runtime.GOOS == "windows" {
 		Println("    Download \"mc\" from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
@@ -340,6 +344,11 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	err = minhttp.ListenAndServe(apiServer, webServer)
-	errorIf(err.Trace(), "Failed to start the minio server.", nil)
+	var listenErr *probe.Error
+	if !disableBrowser {
+		listenErr = minhttp.ListenAndServe(apiServer, webServer)
+	} else {
+		listenErr = minhttp.ListenAndServe(apiServer)
+	}
+	errorIf(listenErr.Trace(), "Failed to start the minio server.", nil)
 }
