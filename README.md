@@ -124,6 +124,8 @@ To configure Minio Client:
     $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
 ~~~
 
+You can disable the object browser by passing the `--disable-browser` flag. Otherwise the browser will listen on the port that follows the one from the API address or the one that you've explicitly specified with `--browser-port=1234`.
+
 #### How to use AWS CLI with Minio?
 
 <blockquote>
