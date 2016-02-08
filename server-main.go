@@ -46,6 +46,9 @@ var serverCmd = cli.Command{
 			Value: -1,
 			Usage: "Listening port of the object browser.",
 		},
+		cli.BoolFlag{
+			Name: "disable-browser",
+		},
 	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
