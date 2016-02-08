@@ -39,14 +39,16 @@ func Current() (*user.User, error) {
 		}
 		return &user.User{Uid: "0", Gid: "0", Username: "root", Name: "root", HomeDir: wd}, nil
 	}
-	if runtime.GOARCH == "386" && runtime.GOOS == "linux" {
-		return &user.User{
-			Uid:      strconv.Itoa(os.Getuid()),
-			Gid:      strconv.Itoa(os.Getgid()),
-			Username: os.Getenv("USER"),
-			Name:     os.Getenv("USER"),
-			HomeDir:  os.Getenv("HOME"),
-		}, nil
+	if runtime.GOARCH == "386" {
+		if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+			return &user.User{
+				Uid:      strconv.Itoa(os.Getuid()),
+				Gid:      strconv.Itoa(os.Getgid()),
+				Username: os.Getenv("USER"),
+				Name:     os.Getenv("USER"),
+				HomeDir:  os.Getenv("HOME"),
+			}, nil
+		}
 	}
 	user, e := user.Current()
 	if e != nil {
