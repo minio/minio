@@ -52,7 +52,7 @@ func isAuthenticated(req *http.Request) bool {
 }
 
 // ServerInfo - get server info.
-func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfo) error {
+func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -72,17 +72,16 @@ func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 		runtime.GOOS,
 		runtime.GOARCH)
 	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
-	serverInfo := ServerInfo{}
-	serverInfo.MinioVersion = minioVersion
-	serverInfo.MinioMemory = mem
-	serverInfo.MinioPlatform = platform
-	serverInfo.MinioRuntime = goruntime
-	*reply = serverInfo
+	reply.MinioVersion = minioVersion
+	reply.MinioMemory = mem
+	reply.MinioPlatform = platform
+	reply.MinioRuntime = goruntime
+	reply.UIVersion = uiVersion
 	return nil
 }
 
 // DiskInfo - get disk statistics.
-func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *disk.Info) error {
+func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -90,20 +89,22 @@ func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *disk.Inf
 	if e != nil {
 		return e
 	}
-	*reply = info
+	reply.DiskInfo = info
+	reply.UIVersion = uiVersion
 	return nil
 }
 
 // MakeBucket - make a bucket.
-func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *string) error {
+func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
+	reply.UIVersion = uiVersion
 	return web.Client.MakeBucket(args.BucketName, "", "")
 }
 
 // ListBuckets - list buckets api.
-func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *[]BucketInfo) error {
+func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -112,16 +113,17 @@ func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *[]
 		return e
 	}
 	for _, bucket := range buckets {
-		*reply = append(*reply, BucketInfo{
+		reply.Buckets = append(reply.Buckets, BucketInfo{
 			Name:         bucket.Name,
 			CreationDate: bucket.CreationDate,
 		})
 	}
+	reply.UIVersion = uiVersion
 	return nil
 }
 
 // ListObjects - list objects api.
-func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]ObjectInfo) error {
+func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -147,8 +149,9 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *[]
 			}
 			objectInfo.ContentType = objectStatInfo.ContentType
 		}
-		*reply = append(*reply, objectInfo)
+		reply.Objects = append(reply.Objects, objectInfo)
 	}
+	reply.UIVersion = uiVersion
 	return nil
 }
 
@@ -168,7 +171,7 @@ func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
 }
 
 // PutObjectURL - generates url for upload access.
-func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *string) error {
+func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -184,12 +187,13 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	if e != nil {
 		return e
 	}
-	*reply = signedURLStr
+	reply.URL = signedURLStr
+	reply.UIVersion = uiVersion
 	return nil
 }
 
 // GetObjectURL - generates url for download access.
-func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *string) error {
+func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
@@ -215,26 +219,22 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	if e != nil {
 		return e
 	}
-	*reply = signedURLStr
+	reply.URL = signedURLStr
+	reply.UIVersion = uiVersion
 	return nil
 }
 
 // RemoveObject - removes an object.
-func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *int) error {
+func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
 	if !isAuthenticated(r) {
 		return errUnAuthorizedRequest
 	}
-
-	e := web.Client.RemoveObject(args.BucketName, args.ObjectName)
-	if e != nil {
-		return e
-	}
-	*reply = 0
-	return nil
+	reply.UIVersion = uiVersion
+	return web.Client.RemoveObject(args.BucketName, args.ObjectName)
 }
 
 // Login - user login handler.
-func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *AuthToken) error {
+func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	jwt := InitJWT()
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
@@ -242,28 +242,7 @@ func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *AuthToken) err
 			return probe.WrapError(err.Trace())
 		}
 		reply.Token = token
-		return nil
-	}
-	return errUnAuthorizedRequest
-}
-
-// RefreshToken - refresh token handler.
-func (web *WebAPI) RefreshToken(r *http.Request, args *LoginArgs, reply *AuthToken) error {
-	if isAuthenticated(r) {
-		jwt := InitJWT()
-		token, err := jwt.GenerateToken(args.Username)
-		if err != nil {
-			return probe.WrapError(err.Trace())
-		}
-		reply.Token = token
-		return nil
-	}
-	return errUnAuthorizedRequest
-}
-
-// Logout - user logout.
-func (web *WebAPI) Logout(r *http.Request, arg *string, reply *string) error {
-	if isAuthenticated(r) {
+		reply.UIVersion = uiVersion
 		return nil
 	}
 	return errUnAuthorizedRequest
