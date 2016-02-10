@@ -177,7 +177,7 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	}
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
-		return probe.WrapError(err)
+		return err.ToGoError()
 	}
 	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
@@ -206,7 +206,7 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
-		return probe.WrapError(err)
+		return err.ToGoError()
 	}
 	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
@@ -239,11 +239,11 @@ func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) erro
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {
-			return probe.WrapError(err.Trace())
+			return err.ToGoError()
 		}
 		reply.Token = token
 		reply.UIVersion = uiVersion
 		return nil
 	}
-	return errUnAuthorizedRequest
+	return errInvalidCredentials
 }
