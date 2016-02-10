@@ -26,6 +26,7 @@ getdeps: checkdeps checkgopath
 	@go get -u golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get -u github.com/fzipp/gocyclo && echo "Installed gocyclo:"
 	@go get -u github.com/remyoudompheng/go-misc/deadcode && echo "Installed deadcode:"
+	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"
 
 $(UI_ASSETS):
 	@curl -s https://dl.minio.io/assets/server/$(UI_ASSETS_ARMOR) 2>&1 > $(UI_ASSETS_ARMOR) && echo "Downloading signature file $(UI_ASSETS_ARMOR) for verification:"
@@ -33,7 +34,7 @@ $(UI_ASSETS):
 	@curl -s https://dl.minio.io/assets/server/$@ 2>&1 > $@ && echo "Downloading UI assets file $@:"
 	@gpg --batch --no-tty --verify $(UI_ASSETS_ARMOR) $@ 2>&1 > /dev/null && echo "Verifying signature of downloaded assets."
 
-verifiers: getdeps vet fmt lint cyclo
+verifiers: getdeps vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@:"
@@ -61,7 +62,11 @@ build: getdeps verifiers $(UI_ASSETS)
 	@echo "Installing minio:"
 
 deadcode:
-	@GO15VENDOREXPERIMENT=1 deadcode
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
+
+spelling:
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell pkg/**/*
 
 test: build
 	@echo "Running all testing:"
@@ -72,13 +77,13 @@ gomake-all: build
 	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
-	@GO15VENDOREXPERIMENT=1 govendor add $(PKG)
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor add $(PKG)
 
 pkg-update:
-	@GO15VENDOREXPERIMENT=1 govendor update $(PKG)
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor update $(PKG)
 
 pkg-remove:
-	@GO15VENDOREXPERIMENT=1 govendor remove $(PKG)
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor remove $(PKG)
 
 install: gomake-all
 
