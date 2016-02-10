@@ -18,6 +18,9 @@ package main
 
 import "errors"
 
+// errInvalidCredentials
+var errInvalidCredentials = errors.New("Invalid credentials provided")
+
 // errUnAuthorizedRequest - un authorized request.
 var errUnAuthorizedRequest = errors.New("Unauthorized request")
 
