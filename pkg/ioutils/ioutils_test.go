@@ -39,5 +39,5 @@ func (s *MySuite) TestIoutils(c *C) {
 
 	status, err := ioutils.IsDirEmpty(path)
 	c.Assert(err, IsNil)
-	c.Assert(status, Equals, True)
+	c.Assert(status, Equals, true)
 }
