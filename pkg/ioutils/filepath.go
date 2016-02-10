@@ -25,15 +25,17 @@ import (
 )
 
 // IsDirEmpty Check if a directory is empty
-func IsDirEmpty(dirname string) (bool, error) {
-	names, err := ReadDirNamesN(dirname, 1)
-	if err != nil && err != io.EOF {
-		return false, err
+func IsDirEmpty(dirname string) (status bool, err error) {
+	f, err := os.Open(dirname)
+	if err == nil {
+		defer f.Close()
+		if _, err = f.Readdirnames(1); err == io.EOF {
+			status = true
+			err = nil
+		}
 	}
-	if len(names) > 0 {
-		return false, nil
-	}
-	return true, nil
+
+	return
 }
 
 // FTW walks the file tree rooted at root, calling walkFn for each file or
