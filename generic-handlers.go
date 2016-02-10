@@ -176,7 +176,7 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Skip the first element which is usally '/' and split the rest.
+	// Skip the first element which is usually '/' and split the rest.
 	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
 
 	// Save bucketName and objectName extracted from url Path.

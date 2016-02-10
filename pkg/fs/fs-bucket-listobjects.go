@@ -56,11 +56,11 @@ type listWorkerReq struct {
 	respCh chan ListObjectsResult
 }
 
-// listObjects - list objects lists objects upto maxKeys for a given prefix.
+// listObjects - list objects lists objects up to maxKeys for a given prefix.
 func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (chan<- listWorkerReq, *probe.Error) {
 	quitWalker := make(chan bool)
 	reqCh := make(chan listWorkerReq)
-	walkerCh := make(chan ObjectMetadata)
+	walkerCh := make(chan ObjectMetadata, 1000)
 	go func() {
 		defer close(walkerCh)
 		var walkPath string
@@ -144,8 +144,14 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 				for object := range walkerCh {
 					// Verify if the object is lexically smaller than
 					// the marker, we will skip those objects.
-					if marker >= object.Object {
-						continue
+					if marker != "" {
+						if marker >= object.Object {
+							continue
+						} else {
+							// Reset marker so that we avoid comparing
+							// again and again in a loop unecessarily.
+							marker = ""
+						}
 					}
 					if delimiter != "" {
 						// Prefixes are only valid wth delimiters, and
@@ -275,7 +281,7 @@ func (fs *Filesystem) listObjectsService() *probe.Error {
 	return nil
 }
 
-// ListObjects - lists all objects for a given prefix, returns upto
+// ListObjects - lists all objects for a given prefix, returns up to
 // maxKeys number of objects per call.
 func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
 	// Input validation.
