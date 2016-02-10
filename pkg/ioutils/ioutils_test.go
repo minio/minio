@@ -17,10 +17,8 @@
 package ioutils_test
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/minio/minio/pkg/ioutils"
@@ -35,20 +33,11 @@ type MySuite struct{}
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestIoutils(c *C) {
-	path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	path, err := ioutil.TempDir(os.TempDir(), "minio-ioutils_test")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(path)
 
-	var count int
-	for count < 102 {
-		count++
-		err = os.MkdirAll(filepath.Join(path, fmt.Sprintf("minio-%d", count)), 0700)
-		c.Assert(err, IsNil)
-	}
-	dirs, err := ioutils.ReadDirN(path, 100)
+	status, err := ioutils.IsDirEmpty(path)
 	c.Assert(err, IsNil)
-	c.Assert(len(dirs), Equals, 100)
-	dirNames, err := ioutils.ReadDirNamesN(path, 100)
-	c.Assert(err, IsNil)
-	c.Assert(len(dirNames), Equals, 100)
+	c.Assert(status, Equals, true)
 }

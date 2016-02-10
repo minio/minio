@@ -25,15 +25,17 @@ import (
 )
 
 // IsDirEmpty Check if a directory is empty
-func IsDirEmpty(dirname string) (bool, error) {
-	names, err := ReadDirNamesN(dirname, 1)
-	if err != nil && err != io.EOF {
-		return false, err
+func IsDirEmpty(dirname string) (status bool, err error) {
+	f, err := os.Open(dirname)
+	if err == nil {
+		defer f.Close()
+		if _, err = f.Readdirnames(1); err == io.EOF {
+			status = true
+			err = nil
+		}
 	}
-	if len(names) > 0 {
-		return false, nil
-	}
-	return true, nil
+
+	return
 }
 
 // FTW walks the file tree rooted at root, calling walkFn for each file or
@@ -46,45 +48,37 @@ func FTW(root string, walkFn FTWFunc) error {
 	return walk(root, info, walkFn)
 }
 
-// getRealName - gets the proper filename for sorting purposes
-// Readdir() filters out directory names without separators, add
-// them back for proper sorting results.
-func getRealName(info os.FileInfo) string {
-	if info.IsDir() {
-		// Make sure directory has its end separator.
-		return info.Name() + string(os.PathSeparator)
+// byName implements sort.Interface for sorting os.FileInfo list.
+type byName []os.FileInfo
+
+func (f byName) Len() int      { return len(f) }
+func (f byName) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
+func (f byName) Less(i, j int) bool {
+	n1 := f[i].Name()
+	if f[i].IsDir() {
+		n1 = n1 + string(os.PathSeparator)
 	}
-	return info.Name()
+
+	n2 := f[j].Name()
+	if f[i].IsDir() {
+		n2 = n2 + string(os.PathSeparator)
+	}
+
+	return n1 < n2
 }
 
-// readDirNames reads the directory named by dirname and returns
+// readDir reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func readDirNames(dirname string) ([]string, error) {
-	names, err := readDirUnsortedNames(dirname)
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(names)
-	return names, nil
-}
-
-func readDirUnsortedNames(dirname string) ([]string, error) {
+func readDir(dirname string) (fi []os.FileInfo, err error) {
 	f, err := os.Open(dirname)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		defer f.Close()
+		if fi, err = f.Readdir(-1); fi != nil {
+			sort.Sort(byName(fi))
+		}
 	}
-	nameInfos, err := f.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-	if err = f.Close(); err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, nameInfo := range nameInfos {
-		names = append(names, getRealName(nameInfo))
-	}
-	return names, nil
+
+	return
 }
 
 // FTWFunc is the type of the function called for each file or directory
@@ -125,13 +119,12 @@ func walk(path string, info os.FileInfo, walkFn FTWFunc) error {
 		return nil
 	}
 
-	names, err := readDirNames(path)
+	fis, err := readDir(path)
 	if err != nil {
 		return walkFn(path, info, err)
 	}
-	for _, name := range names {
-		filename := filepath.Join(path, name)
-		fileInfo, err := os.Lstat(filename)
+	for _, fileInfo := range fis {
+		filename := filepath.Join(path, fileInfo.Name())
 		if err != nil {
 			if err := walkFn(filename, fileInfo, err); err != nil && err != ErrSkipDir && err != ErrSkipFile {
 				return err
