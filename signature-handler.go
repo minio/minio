@@ -21,9 +21,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio-xl/pkg/crypto/sha256"
-	"github.com/minio/minio-xl/pkg/probe"
-	"github.com/minio/minio/pkg/fs"
+	"github.com/minio/minio/pkg/crypto/sha256"
+	"github.com/minio/minio/pkg/probe"
+	v4 "github.com/minio/minio/pkg/signature"
 )
 
 type signatureHandler struct {
@@ -72,7 +72,7 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handler.ServeHTTP(w, r)
 		return
 	}
-	var signature *fs.Signature
+	var signature *v4.Signature
 	if isRequestSignatureV4(r) {
 		// For PUT and POST requests with payload, send the call upwards for verification.
 		// Or PUT and POST requests without payload, verify here.
@@ -96,7 +96,8 @@ func (s signatureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256.Sum256([]byte(""))))
+			dummySha256Bytes := sha256.Sum256([]byte(""))
+			ok, err := signature.DoesSignatureMatch(hex.EncodeToString(dummySha256Bytes[:]))
 			if err != nil {
 				errorIf(err.Trace(), "Unable to verify signature.", nil)
 				writeErrorResponse(w, r, InternalError, r.URL.Path)

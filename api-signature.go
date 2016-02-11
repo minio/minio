@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-xl/pkg/probe"
-	"github.com/minio/minio/pkg/fs"
+	"github.com/minio/minio/pkg/probe"
+	v4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -125,7 +125,7 @@ func stripAccessKeyID(authHeaderValue string) (string, *probe.Error) {
 }
 
 // initSignatureV4 initializing signature verification.
-func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
+func initSignatureV4(req *http.Request) (*v4.Signature, *probe.Error) {
 	// strip auth from authorization header.
 	authHeaderValue := req.Header.Get("Authorization")
 
@@ -156,7 +156,7 @@ func initSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 		return nil, err.Trace(authHeaderValue)
 	}
 	if config.Credentials.AccessKeyID == accessKeyID {
-		signature := &fs.Signature{
+		signature := &v4.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Region:          region,
@@ -203,7 +203,7 @@ func applyPolicy(formValues map[string]string) *probe.Error {
 	if e != nil {
 		return probe.NewError(e)
 	}
-	postPolicyForm, err := fs.ParsePostPolicyForm(string(policyBytes))
+	postPolicyForm, err := v4.ParsePostPolicyForm(string(policyBytes))
 	if err != nil {
 		return err.Trace()
 	}
@@ -244,7 +244,7 @@ func applyPolicy(formValues map[string]string) *probe.Error {
 }
 
 // initPostPresignedPolicyV4 initializing post policy signature verification
-func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *probe.Error) {
+func initPostPresignedPolicyV4(formValues map[string]string) (*v4.Signature, *probe.Error) {
 	credentialElements := strings.Split(strings.TrimSpace(formValues["X-Amz-Credential"]), "/")
 	if len(credentialElements) != 5 {
 		return nil, probe.NewError(errCredentialTagMalformed)
@@ -259,7 +259,7 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *pr
 	}
 	region := credentialElements[2]
 	if config.Credentials.AccessKeyID == accessKeyID {
-		signature := &fs.Signature{
+		signature := &v4.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Region:          region,
@@ -272,7 +272,7 @@ func initPostPresignedPolicyV4(formValues map[string]string) (*fs.Signature, *pr
 }
 
 // initPresignedSignatureV4 initializing presigned signature verification
-func initPresignedSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
+func initPresignedSignatureV4(req *http.Request) (*v4.Signature, *probe.Error) {
 	credentialElements := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-Credential")), "/")
 	if len(credentialElements) != 5 {
 		return nil, probe.NewError(errCredentialTagMalformed)
@@ -289,7 +289,7 @@ func initPresignedSignatureV4(req *http.Request) (*fs.Signature, *probe.Error) {
 	signedHeaders := strings.Split(strings.TrimSpace(req.URL.Query().Get("X-Amz-SignedHeaders")), ";")
 	signature := strings.TrimSpace(req.URL.Query().Get("X-Amz-Signature"))
 	if config.Credentials.AccessKeyID == accessKeyID {
-		signature := &fs.Signature{
+		signature := &v4.Signature{
 			AccessKeyID:     config.Credentials.AccessKeyID,
 			SecretAccessKey: config.Credentials.SecretAccessKey,
 			Region:          region,

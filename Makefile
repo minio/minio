@@ -48,6 +48,15 @@ fmt:
 	@GO15VENDOREXPERIMENT=1 gofmt -s -l *.go
 	@GO15VENDOREXPERIMENT=1 gofmt -s -l pkg
 
+## Configure Intel library.
+isa-l:
+	@echo "Configuring $@:"
+	@git clone -q https://github.com/minio/isa-l.git
+	@mkdir -p build
+	@cd build; $(PWD)/isa-l/configure --prefix $(PWD)/build/lib --sysconfdir $(PWD)/build/lib --includedir $(PWD)/build/lib --libdir $(PWD)/build/lib >/dev/null
+	@make -C build >/dev/null
+	@make -C build install >/dev/null
+
 lint:
 	@echo "Running $@:"
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint *.go
@@ -58,8 +67,8 @@ cyclo:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 *.go
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
 
-build: getdeps verifiers $(UI_ASSETS)
-	@echo "Installing minio:"
+build: getdeps verifiers $(UI_ASSETS) isa-l
+	@GO15VENDOREXPERIMENT=1 go generate ./...
 
 deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
@@ -69,12 +78,13 @@ spelling:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell pkg/**/*
 
 test: build
-	@echo "Running all testing:"
-	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
-	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@echo "Running all minio testing:"
+	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
+	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
-	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
+	@echo "Installing minio:"
+	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor add $(PKG)
@@ -100,9 +110,9 @@ release:
 
 clean:
 	@echo "Cleaning up all the generated files:"
-	@rm -fv cover.out
-	@rm -fv minio
-	@rm -fv minio.test
-	@rm -fv pkg/fs/fs.test
+	@rm -fv minio minio.test cover.out
+	@find . -name '*.test' | xargs rm -fv
 	@rm -fv ui-assets.go
 	@rm -fv ui-assets.asc
+	@rm -rf isa-l
+	@rm -rf build

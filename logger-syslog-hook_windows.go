@@ -18,7 +18,7 @@
 
 package main
 
-import "github.com/minio/minio-xl/pkg/probe"
+import "github.com/minio/minio/pkg/probe"
 
 func log2Syslog(network, raddr string) *probe.Error {
 	return probe.NewError(errSysLogNotSupported)

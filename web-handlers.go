@@ -31,8 +31,8 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go"
-	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // isAuthenticated validates if any incoming request to be a valid JWT

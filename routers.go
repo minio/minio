@@ -24,8 +24,8 @@ import (
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json"
 	"github.com/minio/minio-go"
-	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/fs"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // CloudStorageAPI container for S3 compatible API.
