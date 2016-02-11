@@ -36,6 +36,9 @@ type ServerInfoArgs struct{}
 // ListBucketsArgs - list bucket args.
 type ListBucketsArgs struct{}
 
+// GenericArgs - empty struct
+type GenericArgs struct{}
+
 // DiskInfoRep - disk info reply.
 type DiskInfoRep struct {
 	DiskInfo  disk.Info `json:"diskInfo"`

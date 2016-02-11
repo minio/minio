@@ -51,6 +51,12 @@ func isAuthenticated(req *http.Request) bool {
 	return tokenRequest.Valid
 }
 
+// GetUIVersion - get UI version
+func (web WebAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
+	reply.UIVersion = uiVersion
+	return nil
+}
+
 // ServerInfo - get server info.
 func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
 	if !isAuthenticated(r) {
