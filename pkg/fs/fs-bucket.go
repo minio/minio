@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/probe"
 )
 
 /// Bucket Operations

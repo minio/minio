@@ -20,7 +20,7 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Configure logger

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio-xl/pkg/crypto/sha256"
+	"github.com/minio/minio/pkg/crypto/sha256"
 )
 
 // sum256Reader calculate sha256 sum for an input read seeker

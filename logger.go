@@ -21,7 +21,7 @@ import (
 	"reflect"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/probe"
 )
 
 type fields map[string]interface{}

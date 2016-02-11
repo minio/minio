@@ -22,9 +22,10 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-xl/pkg/crypto/sha256"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/fs"
+	"github.com/minio/minio/pkg/probe"
+	v4 "github.com/minio/minio/pkg/signature"
 )
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -204,7 +205,7 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	var signature *fs.Signature
+	var signature *v4.Signature
 	// Init signature V4 verification
 	if isRequestSignatureV4(req) {
 		var err *probe.Error
@@ -340,7 +341,7 @@ func (api CloudStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, req *h
 			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
 		case fs.BadDigest:
 			writeErrorResponse(w, req, BadDigest, req.URL.Path)
-		case fs.SignatureDoesNotMatch:
+		case v4.SigDoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)

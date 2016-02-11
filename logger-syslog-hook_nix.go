@@ -23,7 +23,7 @@ import (
 	"log/syslog"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // syslogHook to send logs via syslog.

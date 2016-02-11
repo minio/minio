@@ -33,12 +33,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-xl/pkg/atomic"
-	"github.com/minio/minio-xl/pkg/crypto/sha256"
-	"github.com/minio/minio-xl/pkg/crypto/sha512"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/atomic"
+	"github.com/minio/minio/pkg/crypto/sha256"
+	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/probe"
+	signV4 "github.com/minio/minio/pkg/signature"
 )
 
 // isValidUploadID - is upload id.
@@ -264,7 +265,7 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // CreateObjectPart - create a part in a multipart session
-func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum string, partID int, size int64, data io.Reader, signature *Signature) (string, *probe.Error) {
+func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum string, partID int, size int64, data io.Reader, signature *signV4.Signature) (string, *probe.Error) {
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return "", probe.NewError(err)
@@ -350,7 +351,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 		}
 		if !ok {
 			partFile.CloseAndPurge()
-			return "", probe.NewError(SignatureDoesNotMatch{})
+			return "", probe.NewError(signV4.SigDoesNotMatch{})
 		}
 	}
 	partFile.Close()
@@ -398,7 +399,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
 	// Check bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -447,7 +448,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		}
 		if !ok {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
 		}
 	}
 	completeMultipartUpload := &CompleteMultipartUpload{}

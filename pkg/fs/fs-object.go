@@ -28,12 +28,13 @@ import (
 	"encoding/hex"
 	"runtime"
 
-	"github.com/minio/minio-xl/pkg/atomic"
-	"github.com/minio/minio-xl/pkg/crypto/sha256"
-	"github.com/minio/minio-xl/pkg/probe"
+	"github.com/minio/minio/pkg/atomic"
+	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/ioutils"
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/probe"
+	signV4 "github.com/minio/minio/pkg/signature"
 )
 
 /// Object Operations
@@ -198,7 +199,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 }
 
 // CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *Signature) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectMetadata{}, probe.NewError(e)
@@ -293,7 +294,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		}
 		if !ok {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(SignatureDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
 		}
 	}
 	file.Close()

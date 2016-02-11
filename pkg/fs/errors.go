@@ -39,16 +39,6 @@ func (e ExpiredPresignedRequest) Error() string {
 	return "Presigned request already expired"
 }
 
-// SignatureDoesNotMatch invalid signature
-type SignatureDoesNotMatch struct {
-	SignatureSent       string
-	SignatureCalculated string
-}
-
-func (e SignatureDoesNotMatch) Error() string {
-	return "The request signature we calculated does not match the signature you provided"
-}
-
 // InvalidArgument invalid argument
 type InvalidArgument struct{}
 

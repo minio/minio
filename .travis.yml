@@ -1,9 +1,20 @@
-sudo: false
+sudo: required
+dist: trusty
 language: go
 
 os:
 - linux
 - osx
+
+before_install:
+  - git clone https://github.com/yasm/yasm
+  - cd yasm
+  - git checkout v1.3.0
+  - "./autogen.sh"
+  - "./configure"
+  - make
+  - export PATH=$PATH:`pwd`
+  - cd ..
 
 osx_image: xcode7.2
 
@@ -16,7 +27,6 @@ script:
 - make test GOFLAGS="-race"
 
 go:
-- 1.5.2
 - 1.5.3
 
 notifications:

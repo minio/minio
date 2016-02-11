@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/fatih/color"
-	"github.com/minio/minio-xl/pkg/probe"
-	"github.com/minio/minio-xl/pkg/quick"
+	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/quick"
 	"github.com/minio/minio/pkg/user"
 )
 

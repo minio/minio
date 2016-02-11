@@ -1,30 +1,46 @@
-# version format
-version: "{build}"
-
 # Operating system (build VM template)
-os: Windows Server 2012 R2
+os: Visual Studio 2015
+
+platform: x64
 
 clone_folder: c:\gopath\src\github.com\minio\minio
 
 # environment variables
 environment:
   GOPATH: c:\gopath
+  GO_EXTLINK_ENABLED: 0
   GO15VENDOREXPERIMENT: 1
   UI_ASSETS: ui-assets.go
   UI_ASSETS_ARMOR: ui-assets.asc
 
 # scripts that run after cloning repository
 install:
+  - '"C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64'
+  - curl -fsSL -o c:\go\bin\yasm.exe http://www.tortall.net/projects/yasm/releases/yasm-1.3.0-win64.exe
   - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
+  - curl -fsSL -o mingw-w64.7z http://downloads.sourceforge.net/project/mingw-w64-dgn/mingw-w64/mingw-w64-bin-x86_64-20151206.7z
+  - 7z x -oC:\ mingw-w64.7z > NUL
+  - set PATH=C:\mingw64\bin;%PATH%
+  - x86_64-w64-mingw32-gcc --version  
   - go version
   - go env
+  - git clone https://github.com/minio/isa-l
+  - cd isa-l
+  - make -f Makefile.unx arch=mingw
+  - mv include isa-l
+  - set CGO_CPPFLAGS=-Ic:/gopath/src/github.com/minio/minio/isa-l
+  - set CGO_LDFLAGS=c:/gopath/src/github.com/minio/minio/isa-l/isa-l.a
+  - set CC=x86_64-w64-mingw32-gcc
+  - set CXX=x86_64-w64-mingw32-g++
+  - cd %GOPATH%\src\github.com\minio\minio
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - curl -o ui-assets.go -L https://dl.minio.io/assets/server/ui/%UI_ASSETS%
-  - curl -o ui-assets.asc -L https://dl.minio.io/assets/server/ui/%UI_ASSETS_ARMOR%
+  - curl -fsSL -o ui-assets.go https://dl.minio.io/assets/server/ui/%UI_ASSETS%
+  - curl -fsSL -o ui-assets.asc  https://dl.minio.io/assets/server/ui/%UI_ASSETS_ARMOR%
   - gpg --batch --no-tty --yes --keyserver pgp.mit.edu --recv-keys F9AAC728
   - gpg --batch --no-tty --verify %UI_ASSETS_ARMOR% %UI_ASSETS%
+  - go generate ./...
   - go test .
   - go test -race .
   - go test github.com/minio/minio/pkg...

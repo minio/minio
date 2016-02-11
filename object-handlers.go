@@ -22,8 +22,9 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-xl/pkg/probe"
 	"github.com/minio/minio/pkg/fs"
+	"github.com/minio/minio/pkg/probe"
+	v4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -172,7 +173,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	var signature *fs.Signature
+	var signature *v4.Signature
 	if isRequestSignatureV4(req) {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -209,7 +210,7 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 			writeErrorResponse(w, req, BadDigest, req.URL.Path)
 		case fs.MissingDateHeader:
 			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
-		case fs.SignatureDoesNotMatch:
+		case v4.SigDoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
@@ -320,7 +321,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 		}
 	}
 
-	var signature *fs.Signature
+	var signature *v4.Signature
 	if isRequestSignatureV4(req) {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -353,7 +354,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
 		case fs.BadDigest:
 			writeErrorResponse(w, req, BadDigest, req.URL.Path)
-		case fs.SignatureDoesNotMatch:
+		case v4.SigDoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
@@ -475,7 +476,7 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 	}
 
 	objectResourcesMetadata := getObjectResources(req.URL.Query())
-	var signature *fs.Signature
+	var signature *v4.Signature
 	if isRequestSignatureV4(req) {
 		// Init signature V4 verification
 		var err *probe.Error
@@ -516,7 +517,7 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 			writeErrorResponse(w, req, InvalidPart, req.URL.Path)
 		case fs.InvalidPartOrder:
 			writeErrorResponse(w, req, InvalidPartOrder, req.URL.Path)
-		case fs.SignatureDoesNotMatch:
+		case v4.SigDoesNotMatch:
 			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
