@@ -29,9 +29,9 @@ getdeps: checkdeps checkgopath
 	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"
 
 $(UI_ASSETS):
-	@curl -s https://dl.minio.io/assets/server/$(UI_ASSETS_ARMOR) 2>&1 > $(UI_ASSETS_ARMOR) && echo "Downloading signature file $(UI_ASSETS_ARMOR) for verification:"
+	@curl -s https://dl.minio.io/assets/server/ui/$(UI_ASSETS_ARMOR) 2>&1 > $(UI_ASSETS_ARMOR) && echo "Downloading signature file $(UI_ASSETS_ARMOR) for verification:"
 	@gpg --batch --no-tty --yes --keyserver pgp.mit.edu --recv-keys F9AAC728 2>&1 > /dev/null && echo "Importing public key:"
-	@curl -s https://dl.minio.io/assets/server/$@ 2>&1 > $@ && echo "Downloading UI assets file $@:"
+	@curl -s https://dl.minio.io/assets/server/ui/$@ 2>&1 > $@ && echo "Downloading UI assets file $@:"
 	@gpg --batch --no-tty --verify $(UI_ASSETS_ARMOR) $@ 2>&1 > /dev/null && echo "Verifying signature of downloaded assets."
 
 verifiers: getdeps vet fmt lint cyclo spelling
