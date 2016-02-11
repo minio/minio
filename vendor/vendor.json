@@ -43,9 +43,9 @@
 			"revisionTime": "2015-11-05T07:45:51+08:00"
 		},
 		{
-			"path": "github.com/gorilla/rpc/v2/json",
-			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
-			"revisionTime": "2015-11-05T07:45:51+08:00"
+			"path": "github.com/gorilla/rpc/v2/json2",
+			"revision": "839c4c31c6bb12c15f41802cf89325aa89439ac3",
+			"revisionTime": "2015-07-14T15:53:15-07:00"
 		},
 		{
 			"path": "github.com/mattn/go-isatty",
