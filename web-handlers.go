@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,19 +34,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/probe"
 )
-
-type webError struct {
-	Message string `json:"message"`
-	Details string `json:"details"`
-}
-
-func (we webError) Error() string {
-	retStr, err := json.Marshal(we)
-	if err != nil {
-		return err.Error()
-	}
-	return string(retStr)
-}
 
 // isAuthenticated validates if any incoming request to be a valid JWT
 // authenticated request.
