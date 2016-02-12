@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,11 +63,23 @@ func init() {
 		console.Fatalln("Please run ‘minio’ as a non-root user.")
 	}
 
+	// Initialize config.
+	err := initConfig()
+	fatalIf(err.Trace(), "Unable to initialize minio config.", nil)
 }
 
 func migrate() {
 	// Migrate config file
 	migrateConfig()
+
+	// Migrate other configs here.
+}
+
+func enableLoggers() {
+	// Enable all loggers here.
+	enableConsoleLogger()
+
+	// Add your logger here.
 }
 
 // Tries to get os/arch/platform specific information
@@ -118,24 +130,20 @@ func findClosestCommands(command string) []string {
 }
 
 func registerApp() *cli.App {
-	// register all commands
+	// Register all commands.
+	registerCommand(initCmd)
 	registerCommand(serverCmd)
-	registerCommand(configCmd)
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)
 
-	// register all flags
+	// Register all flags.
 	registerFlag(configFolderFlag)
-	registerFlag(addressFlag)
-	registerFlag(accessLogFlag)
-	registerFlag(certFlag)
-	registerFlag(keyFlag)
 
-	// set up app
+	// Set up app.
 	app := cli.NewApp()
 	app.Name = "Minio"
 	app.Author = "Minio.io"
-	app.Usage = "Cloud Storage Server for Micro Services."
+	app.Usage = "Distributed Object Storage Server for Micro Services."
 	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.`
 	app.Flags = flags
 	app.Commands = commands
@@ -179,6 +187,9 @@ func main() {
 
 		// Migrate any old version of config / state files to newer format.
 		migrate()
+
+		// Enable all loggers by now.
+		enableLoggers()
 
 		return nil
 	}

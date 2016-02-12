@@ -71,7 +71,7 @@ export GOROOT=$(brew --prefix)/Cellar/go/${GOVERSION}/libexec
 export PATH=$PATH:${GOPATH}/bin
 ```
 
-##### Source the new enviornment
+##### Source the new environment
 
 ```sh
 $ source ~/.bash_profile

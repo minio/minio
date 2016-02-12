@@ -97,7 +97,7 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 	tmpBuffer := new(bytes.Buffer)
 
 	// Read defaults to reading at 5MiB buffer.
-	readBuffer := make([]byte, optimalReadBufferSize)
+	readAtBuffer := make([]byte, optimalReadBufferSize)
 
 	// Upload all the missing parts.
 	for partNumber <= lastPartNumber {
@@ -147,7 +147,7 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 		// Calculates MD5 and SHA256 sum for a section reader.
 		var md5Sum, sha256Sum []byte
 		var prtSize int64
-		md5Sum, sha256Sum, prtSize, err = c.hashCopyBuffer(tmpBuffer, sectionReader, readBuffer)
+		md5Sum, sha256Sum, prtSize, err = c.hashCopyBuffer(tmpBuffer, sectionReader, readAtBuffer)
 		if err != nil {
 			return 0, err
 		}

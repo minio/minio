@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package main
 
 import "errors"
 
-// errSysLogNotSupported - this message is only meaningful on windows
-var errSysLogNotSupported = errors.New("Syslog logger not supported on windows")
+// errSyslogNotSupported - this message is only meaningful on windows
+var errSyslogNotSupported = errors.New("Syslog logger not supported on windows")
 
 // errInvalidArgument means that input argument is invalid.
 var errInvalidArgument = errors.New("Invalid arguments specified")

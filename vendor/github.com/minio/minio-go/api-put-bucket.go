@@ -18,8 +18,11 @@ package minio
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -27,27 +30,17 @@ import (
 
 /// Bucket operations
 
-// MakeBucket makes a new bucket.
+// MakeBucket creates a new bucket with bucketName.
 //
-// Optional arguments are acl and location - by default all buckets are created
-// with ``private`` acl and in US Standard region.
-//
-// ACL valid values - http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html
-//
-//  private - owner gets full access [default].
-//  public-read - owner gets full access, all others get read access.
-//  public-read-write - owner gets full access, all others get full access too.
-//  authenticated-read - owner gets full access, authenticated users get read access.
+// Location is an optional argument, by default all buckets are
+// created in US Standard Region.
 //
 // For Amazon S3 for more supported regions - http://docs.aws.amazon.com/general/latest/gr/rande.html
 // For Google Cloud Storage for more supported regions - https://cloud.google.com/storage/docs/bucket-locations
-func (c Client) MakeBucket(bucketName string, acl BucketACL, location string) error {
+func (c Client) MakeBucket(bucketName string, location string) error {
 	// Validate the input arguments.
 	if err := isValidBucketName(bucketName); err != nil {
 		return err
-	}
-	if !acl.isValidBucketACL() {
-		return ErrInvalidArgument("Unrecognized ACL " + acl.String())
 	}
 
 	// If location is empty, treat is a default region 'us-east-1'.
@@ -56,7 +49,7 @@ func (c Client) MakeBucket(bucketName string, acl BucketACL, location string) er
 	}
 
 	// Instantiate the request.
-	req, err := c.makeBucketRequest(bucketName, acl, location)
+	req, err := c.makeBucketRequest(bucketName, location)
 	if err != nil {
 		return err
 	}
@@ -82,13 +75,10 @@ func (c Client) MakeBucket(bucketName string, acl BucketACL, location string) er
 }
 
 // makeBucketRequest constructs request for makeBucket.
-func (c Client) makeBucketRequest(bucketName string, acl BucketACL, location string) (*http.Request, error) {
+func (c Client) makeBucketRequest(bucketName string, location string) (*http.Request, error) {
 	// Validate input arguments.
 	if err := isValidBucketName(bucketName); err != nil {
 		return nil, err
-	}
-	if !acl.isValidBucketACL() {
-		return nil, ErrInvalidArgument("Unrecognized ACL " + acl.String())
 	}
 
 	// In case of Amazon S3.  The make bucket issued on already
@@ -104,12 +94,6 @@ func (c Client) makeBucketRequest(bucketName string, acl BucketACL, location str
 	req, err := http.NewRequest("PUT", targetURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	// by default bucket acl is set to private.
-	req.Header.Set("x-amz-acl", "private")
-	if acl != "" {
-		req.Header.Set("x-amz-acl", string(acl))
 	}
 
 	// set UserAgent for the request.
@@ -131,9 +115,12 @@ func (c Client) makeBucketRequest(bucketName string, acl BucketACL, location str
 		}
 		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
 		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
-		req.ContentLength = int64(createBucketConfigBuffer.Len())
+		req.ContentLength = int64(len(createBucketConfigBytes))
+		// Set content-md5.
+		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(sumMD5(createBucketConfigBytes)))
 		if c.signature.isV4() {
-			req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(createBucketConfigBuffer.Bytes())))
+			// Set sha256.
+			req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(createBucketConfigBytes)))
 		}
 	}
 
@@ -150,57 +137,122 @@ func (c Client) makeBucketRequest(bucketName string, acl BucketACL, location str
 	return req, nil
 }
 
-// SetBucketACL set the permissions on an existing bucket using access control lists (ACL).
+// SetBucketPolicy set the access permissions on an existing bucket.
 //
 // For example
 //
-//  private - owner gets full access [default].
-//  public-read - owner gets full access, all others get read access.
-//  public-read-write - owner gets full access, all others get full access too.
-//  authenticated-read - owner gets full access, authenticated users get read access.
-func (c Client) SetBucketACL(bucketName string, acl BucketACL) error {
+//  none - owner gets full access [default].
+//  readonly - anonymous get access for everyone at a given object prefix.
+//  readwrite - anonymous list/put/delete access to a given object prefix.
+//  writeonly - anonymous put/delete access to a given object prefix.
+func (c Client) SetBucketPolicy(bucketName string, objectPrefix string, bucketPolicy BucketPolicy) error {
 	// Input validation.
 	if err := isValidBucketName(bucketName); err != nil {
 		return err
 	}
-	if !acl.isValidBucketACL() {
-		return ErrInvalidArgument("Unrecognized ACL " + acl.String())
+	if err := isValidObjectPrefix(objectPrefix); err != nil {
+		return err
+	}
+	if !bucketPolicy.isValidBucketPolicy() {
+		return ErrInvalidArgument(fmt.Sprintf("Invalid bucket policy provided. %s", bucketPolicy))
+	}
+	policy, err := c.getBucketPolicy(bucketName, objectPrefix)
+	if err != nil {
+		return err
+	}
+	// For bucket policy set to 'none' we need to remove the policy.
+	if bucketPolicy == BucketPolicyNone && policy.Statements == nil {
+		// No policies to set, return success.
+		return nil
+	}
+	// Remove any previous policies at this path.
+	policy.Statements = removeBucketPolicyStatement(policy.Statements, bucketName, objectPrefix)
+
+	bucketResourceStatement := &Statement{}
+	objectResourceStatement := &Statement{}
+	if bucketPolicy == BucketPolicyReadWrite {
+		// Read write policy.
+		bucketResourceStatement.Effect = "Allow"
+		bucketResourceStatement.Principal.AWS = []string{"*"}
+		bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName)}
+		bucketResourceStatement.Actions = readWriteBucketActions
+		objectResourceStatement.Effect = "Allow"
+		objectResourceStatement.Principal.AWS = []string{"*"}
+		objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName+"/"+objectPrefix+"*")}
+		objectResourceStatement.Actions = readWriteObjectActions
+		// Save the read write policy.
+		policy.Statements = append(policy.Statements, *bucketResourceStatement, *objectResourceStatement)
+	} else if bucketPolicy == BucketPolicyReadOnly {
+		// Read only policy.
+		bucketResourceStatement.Effect = "Allow"
+		bucketResourceStatement.Principal.AWS = []string{"*"}
+		bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName)}
+		bucketResourceStatement.Actions = readOnlyBucketActions
+		objectResourceStatement.Effect = "Allow"
+		objectResourceStatement.Principal.AWS = []string{"*"}
+		objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName+"/"+objectPrefix+"*")}
+		objectResourceStatement.Actions = readOnlyObjectActions
+		// Save the read only policy.
+		policy.Statements = append(policy.Statements, *bucketResourceStatement, *objectResourceStatement)
+	} else if bucketPolicy == BucketPolicyWriteOnly {
+		// Write only policy.
+		bucketResourceStatement.Effect = "Allow"
+		bucketResourceStatement.Principal.AWS = []string{"*"}
+		bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName)}
+		bucketResourceStatement.Actions = writeOnlyBucketActions
+		objectResourceStatement.Effect = "Allow"
+		objectResourceStatement.Principal.AWS = []string{"*"}
+		objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", awsResourcePrefix, bucketName+"/"+objectPrefix+"*")}
+		objectResourceStatement.Actions = writeOnlyObjectActions
+		// Save the write only policy.
+		policy.Statements = append(policy.Statements, *bucketResourceStatement, *objectResourceStatement)
+	}
+	// Save the updated policies.
+	return c.putBucketPolicy(bucketName, policy)
+}
+
+// Saves a new bucket policy.
+func (c Client) putBucketPolicy(bucketName string, policy BucketAccessPolicy) error {
+	// Input validation.
+	if err := isValidBucketName(bucketName); err != nil {
+		return err
 	}
 
-	// Set acl query.
+	// If there are no policy statements, we should remove entire policy.
+	if len(policy.Statements) == 0 {
+		return c.removeBucketPolicy(bucketName)
+	}
+
+	// Get resources properly escaped and lined up before
+	// using them in http request.
 	urlValues := make(url.Values)
-	urlValues.Set("acl", "")
+	urlValues.Set("policy", "")
 
-	// Add misc headers.
-	customHeader := make(http.Header)
-
-	if acl != "" {
-		customHeader.Set("x-amz-acl", acl.String())
-	} else {
-		customHeader.Set("x-amz-acl", "private")
+	policyBytes, err := json.Marshal(&policy)
+	if err != nil {
+		return err
 	}
 
-	// Execute PUT bucket.
-	resp, err := c.executeMethod("PUT", requestMetadata{
-		bucketName:   bucketName,
-		queryValues:  urlValues,
-		customHeader: customHeader,
-	})
+	policyBuffer := bytes.NewReader(policyBytes)
+	reqMetadata := requestMetadata{
+		bucketName:         bucketName,
+		queryValues:        urlValues,
+		contentBody:        policyBuffer,
+		contentLength:      int64(len(policyBytes)),
+		contentMD5Bytes:    sumMD5(policyBytes),
+		contentSHA256Bytes: sum256(policyBytes),
+	}
+
+	// Execute PUT to upload a new bucket policy.
+	resp, err := c.executeMethod("PUT", reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
-
 	if resp != nil {
-		// if error return.
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusNoContent {
 			return httpRespToErrorResponse(resp, bucketName, "")
 		}
 	}
-
-	// return
 	return nil
 }

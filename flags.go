@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,28 +26,6 @@ var (
 		Name:  "config-folder, C",
 		Value: mustGetConfigPath(),
 		Usage: "Path to configuration folder.",
-	}
-
-	addressFlag = cli.StringFlag{
-		Name:  "address",
-		Value: ":9000",
-		Usage: "ADDRESS:PORT for cloud storage access.",
-	}
-
-	accessLogFlag = cli.BoolFlag{
-		Name:  "enable-accesslog",
-		Hide:  true,
-		Usage: "Enable access logs for all incoming HTTP request.",
-	}
-
-	certFlag = cli.StringFlag{
-		Name:  "cert",
-		Usage: "Provide your domain certificate.",
-	}
-
-	keyFlag = cli.StringFlag{
-		Name:  "key",
-		Usage: "Provide your domain private key.",
 	}
 )
 

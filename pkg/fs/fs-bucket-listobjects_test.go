@@ -36,7 +36,7 @@ func TestListObjects(t *testing.T) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	fs, err := New(directory, 0)
+	fs, err := New(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +579,7 @@ func BenchmarkListObjects(b *testing.B) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		b.Fatal(err)
 	}

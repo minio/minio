@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,11 +43,10 @@ const (
 )
 
 type MyAPIFSCacheSuite struct {
-	root            string
-	req             *http.Request
-	body            io.ReadSeeker
-	accessKeyID     string
-	secretAccessKey string
+	root       string
+	req        *http.Request
+	body       io.ReadSeeker
+	credential credential
 }
 
 var _ = Suite(&MyAPIFSCacheSuite{})
@@ -77,31 +76,28 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	fsroot, e := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(e, IsNil)
 
-	accessKeyID, err := generateAccessKeyID()
-	c.Assert(err, IsNil)
-	secretAccessKey, err := generateSecretAccessKey()
-	c.Assert(err, IsNil)
+	// Initialize server config.
+	initConfig()
 
-	conf := newConfigV2()
-	conf.Credentials.AccessKeyID = string(accessKeyID)
-	conf.Credentials.SecretAccessKey = string(secretAccessKey)
-	s.accessKeyID = string(accessKeyID)
-	s.secretAccessKey = string(secretAccessKey)
+	// Get credential.
+	s.credential = serverConfig.GetCredential()
 
-	// do this only once here
+	// Set a default region.
+	serverConfig.SetRegion("us-east-1")
+
+	// Set a new address.
+	serverConfig.SetAddr(":" + strconv.Itoa(getFreePort()))
+
+	// Do this only once here
 	setGlobalConfigPath(root)
 
-	c.Assert(saveConfig(conf), IsNil)
+	// Save config.
+	c.Assert(serverConfig.Save(), IsNil)
 
-	cloudServer := cloudServerConfig{
-		Address:         ":" + strconv.Itoa(getFreePort()),
-		Path:            fsroot,
-		MinFreeDisk:     0,
-		AccessKeyID:     s.accessKeyID,
-		SecretAccessKey: s.secretAccessKey,
-		Region:          "us-east-1",
-	}
-	httpHandler := serverHandler(cloudServer)
+	fs, err := fs.New(fsroot)
+	c.Assert(err, IsNil)
+
+	httpHandler := configureServerHandler(fs)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 
@@ -249,7 +245,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 	stringToSign = stringToSign + scope + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
-	date := sumHMAC([]byte("AWS4"+s.secretAccessKey), []byte(t.Format(yyyymmdd)))
+	date := sumHMAC([]byte("AWS4"+s.credential.SecretAccessKey), []byte(t.Format(yyyymmdd)))
 	region := sumHMAC(date, []byte("us-east-1"))
 	service := sumHMAC(region, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
@@ -258,7 +254,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 
 	// final Authorization header
 	parts := []string{
-		"AWS4-HMAC-SHA256" + " Credential=" + s.accessKeyID + "/" + scope,
+		"AWS4-HMAC-SHA256" + " Credential=" + s.credential.AccessKeyID + "/" + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}
@@ -269,10 +265,10 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 }
 
 func (s *MyAPIFSCacheSuite) TestAuth(c *C) {
-	secretID, err := generateSecretAccessKey()
+	secretID, err := genSecretAccessKey()
 	c.Assert(err, IsNil)
 
-	accessID, err := generateAccessKeyID()
+	accessID, err := genAccessKeyID()
 	c.Assert(err, IsNil)
 
 	c.Assert(len(secretID), Equals, minioSecretID)

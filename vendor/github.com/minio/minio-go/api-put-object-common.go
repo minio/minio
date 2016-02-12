@@ -19,6 +19,7 @@ package minio
 import (
 	"crypto/md5"
 	"crypto/sha256"
+	"fmt"
 	"hash"
 	"io"
 	"math"
@@ -94,62 +95,13 @@ func optimalPartInfo(objectSize int64) (totalPartsCount int, partSize int64, las
 	return totalPartsCount, partSize, lastPartSize, nil
 }
 
-// Compatibility code for Golang < 1.5.x.
-// copyBuffer is identical to io.CopyBuffer, since such a function is
-// not available/implemented in Golang version < 1.5.x, we use a
-// custom call exactly implementng io.CopyBuffer from Golang > 1.5.x
-// version does.
+// hashCopyBuffer is identical to hashCopyN except that it doesn't take
+// any size argument but takes a buffer argument and reader should be
+// of io.ReaderAt interface.
 //
-// copyBuffer stages through the provided buffer (if one is required)
-// rather than allocating a temporary one. If buf is nil, one is
-// allocated; otherwise if it has zero length, copyBuffer panics.
-//
-// FIXME: Remove this code when distributions move to newer Golang versions.
-func copyBuffer(writer io.Writer, reader io.Reader, buf []byte) (written int64, err error) {
-	// If the reader has a WriteTo method, use it to do the copy.
-	// Avoids an allocation and a copy.
-	if wt, ok := reader.(io.WriterTo); ok {
-		return wt.WriteTo(writer)
-	}
-	// Similarly, if the writer has a ReadFrom method, use it to do
-	// the copy.
-	if rt, ok := writer.(io.ReaderFrom); ok {
-		return rt.ReadFrom(reader)
-	}
-	if buf == nil {
-		buf = make([]byte, 32*1024)
-	}
-	for {
-		nr, er := reader.Read(buf)
-		if nr > 0 {
-			nw, ew := writer.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
-		}
-		if er == io.EOF {
-			break
-		}
-		if er != nil {
-			err = er
-			break
-		}
-	}
-	return written, err
-}
-
-// hashCopyBuffer is identical to hashCopyN except that it stages
-// through the provided buffer (if one is required) rather than
-// allocating a temporary one. If buf is nil, one is allocated for 5MiB.
-func (c Client) hashCopyBuffer(writer io.Writer, reader io.Reader, buf []byte) (md5Sum, sha256Sum []byte, size int64, err error) {
+// Stages reads from offsets into the buffer, if buffer is nil it is
+// initialized to optimalBufferSize.
+func (c Client) hashCopyBuffer(writer io.Writer, reader io.ReaderAt, buf []byte) (md5Sum, sha256Sum []byte, size int64, err error) {
 	// MD5 and SHA256 hasher.
 	var hashMD5, hashSHA256 hash.Hash
 	// MD5 and SHA256 hasher.
@@ -160,14 +112,61 @@ func (c Client) hashCopyBuffer(writer io.Writer, reader io.Reader, buf []byte) (
 		hashWriter = io.MultiWriter(writer, hashMD5, hashSHA256)
 	}
 
-	// Allocate buf if not initialized.
+	// Buffer is nil, initialize.
 	if buf == nil {
 		buf = make([]byte, optimalReadBufferSize)
 	}
 
+	// Offset to start reading from.
+	var readAtOffset int64
+
+	// Following block reads data at an offset from the input
+	// reader and copies data to into local temporary file.
+	for {
+		readAtSize, rerr := reader.ReadAt(buf, readAtOffset)
+		if rerr != nil {
+			if rerr != io.EOF {
+				return nil, nil, 0, rerr
+			}
+		}
+		writeSize, werr := hashWriter.Write(buf[:readAtSize])
+		if werr != nil {
+			return nil, nil, 0, werr
+		}
+		if readAtSize != writeSize {
+			return nil, nil, 0, fmt.Errorf("Read size was not completely written to writer. wanted %d, got %d - %s", readAtSize, writeSize, reportIssue)
+		}
+		readAtOffset += int64(writeSize)
+		size += int64(writeSize)
+		if rerr == io.EOF {
+			break
+		}
+	}
+
+	// Finalize md5 sum and sha256 sum.
+	md5Sum = hashMD5.Sum(nil)
+	if c.signature.isV4() {
+		sha256Sum = hashSHA256.Sum(nil)
+	}
+	return md5Sum, sha256Sum, size, err
+}
+
+// hashCopy is identical to hashCopyN except that it doesn't take
+// any size argument.
+func (c Client) hashCopy(writer io.Writer, reader io.Reader) (md5Sum, sha256Sum []byte, size int64, err error) {
+	// MD5 and SHA256 hasher.
+	var hashMD5, hashSHA256 hash.Hash
+	// MD5 and SHA256 hasher.
+	hashMD5 = md5.New()
+	hashWriter := io.MultiWriter(writer, hashMD5)
+	if c.signature.isV4() {
+		hashSHA256 = sha256.New()
+		hashWriter = io.MultiWriter(writer, hashMD5, hashSHA256)
+	}
+
 	// Using copyBuffer to copy in large buffers, default buffer
 	// for io.Copy of 32KiB is too small.
-	size, err = copyBuffer(hashWriter, reader, buf)
+	size, err = io.Copy(hashWriter, reader)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -244,12 +243,8 @@ func (c Client) getUploadID(bucketName, objectName, contentType string) (uploadI
 	return uploadID, isNew, nil
 }
 
-// computeHashBuffer - Calculates MD5 and SHA256 for an input read
-// Seeker is identical to computeHash except that it stages
-// through the provided buffer (if one is required) rather than
-// allocating a temporary one. If buf is nil, it uses a temporary
-// buffer.
-func (c Client) computeHashBuffer(reader io.ReadSeeker, buf []byte) (md5Sum, sha256Sum []byte, size int64, err error) {
+// computeHash - Calculates MD5 and SHA256 for an input read Seeker.
+func (c Client) computeHash(reader io.ReadSeeker) (md5Sum, sha256Sum []byte, size int64, err error) {
 	// MD5 and SHA256 hasher.
 	var hashMD5, hashSHA256 hash.Hash
 	// MD5 and SHA256 hasher.
@@ -261,16 +256,9 @@ func (c Client) computeHashBuffer(reader io.ReadSeeker, buf []byte) (md5Sum, sha
 	}
 
 	// If no buffer is provided, no need to allocate just use io.Copy.
-	if buf == nil {
-		size, err = io.Copy(hashWriter, reader)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-	} else {
-		size, err = copyBuffer(hashWriter, reader, buf)
-		if err != nil {
-			return nil, nil, 0, err
-		}
+	size, err = io.Copy(hashWriter, reader)
+	if err != nil {
+		return nil, nil, 0, err
 	}
 
 	// Seek back reader to the beginning location.
@@ -284,9 +272,4 @@ func (c Client) computeHashBuffer(reader io.ReadSeeker, buf []byte) (md5Sum, sha
 		sha256Sum = hashSHA256.Sum(nil)
 	}
 	return md5Sum, sha256Sum, size, nil
-}
-
-// computeHash - Calculates MD5 and SHA256 for an input read Seeker.
-func (c Client) computeHash(reader io.ReadSeeker) (md5Sum, sha256Sum []byte, size int64, err error) {
-	return c.computeHashBuffer(reader, nil)
 }

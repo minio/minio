@@ -36,7 +36,7 @@ func TestGetBucketInfo(t *testing.T) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestListBuckets(t *testing.T) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestDeleteBucket(t *testing.T) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func BenchmarkListBuckets(b *testing.B) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func BenchmarkDeleteBucket(b *testing.B) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func BenchmarkGetBucketInfo(b *testing.B) {
 	defer os.RemoveAll(directory)
 
 	// Create the filesystem.
-	filesystem, err := New(directory, 0)
+	filesystem, err := New(directory)
 	if err != nil {
 		b.Fatal(err)
 	}

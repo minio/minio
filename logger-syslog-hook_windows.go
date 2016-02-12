@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,13 @@ package main
 
 import "github.com/minio/minio/pkg/probe"
 
-func log2Syslog(network, raddr string) *probe.Error {
-	return probe.NewError(errSysLogNotSupported)
+type syslogLogger struct {
+	Enable bool   `json:"enable"`
+	Addr   string `json:"address"`
+	Level  string `json:"level"`
+}
+
+// enableSyslogLogger - unsupported on windows.
+func enableSyslogLogger(raddr string) {
+	fatalIf(probe.NewError(errSyslogNotSupported), "Unable to enable syslog.", nil)
 }

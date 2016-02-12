@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 )
 
@@ -67,11 +68,6 @@ func (r *bucketLocationCache) Delete(bucketName string) {
 
 // getBucketLocation - Get location for the bucketName from location map cache.
 func (c Client) getBucketLocation(bucketName string) (string, error) {
-	// For anonymous requests, default to "us-east-1" and let other calls
-	// move forward.
-	if c.anonymous {
-		return "us-east-1", nil
-	}
 	if location, ok := c.bucketLocCache.Get(bucketName); ok {
 		return location, nil
 	}
@@ -92,15 +88,10 @@ func (c Client) getBucketLocation(bucketName string) (string, error) {
 		if resp.StatusCode != http.StatusOK {
 			err = httpRespToErrorResponse(resp, bucketName, "")
 			errResp := ToErrorResponse(err)
-			// AccessDenied without a signature mismatch code,
-			// usually means that the bucket policy has certain
-			// restrictions where some API operations are not
-			// allowed. Handle this case so that top level callers can
-			// interpret this easily and fall back if needed to a
-			// lower functionality call. Read each individual API
-			// specific code for such fallbacks.
-			if errResp.Code == "AccessDenied" && errResp.Message == "Access Denied" {
-				// In this case return as "us-east-1" and let the call fail.
+			// For access denied error, it could be an anonymous
+			// request. Move forward and let the top level callers
+			// succeed if possible based on their policy.
+			if errResp.Code == "AccessDenied" && strings.Contains(errResp.Message, "Access Denied") {
 				return "us-east-1", nil
 			}
 			return "", err

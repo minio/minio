@@ -1,7 +1,7 @@
 // +build !windows
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,12 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
+type syslogLogger struct {
+	Enable bool   `json:"enable"`
+	Addr   string `json:"address"`
+	Level  string `json:"level"`
+}
+
 // syslogHook to send logs via syslog.
 type syslogHook struct {
 	writer        *syslog.Writer
@@ -33,28 +39,27 @@ type syslogHook struct {
 	syslogRaddr   string
 }
 
-func log2Syslog(network, raddr string) *probe.Error {
-	syslogHook, e := newSyslog(network, raddr, syslog.LOG_ERR, "MINIO")
-	if e != nil {
-		return probe.NewError(e)
-	}
+// enableSyslogLogger - enable logger at raddr.
+func enableSyslogLogger(raddr string) {
+	syslogHook, e := newSyslog("udp", raddr, syslog.LOG_ERR, "MINIO")
+	fatalIf(probe.NewError(e), "Unable to instantiate syslog.", nil)
+
 	log.Hooks.Add(syslogHook)               // Add syslog hook.
 	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
 	log.Level = logrus.InfoLevel            // Minimum log level.
-	return nil
 }
 
 // newSyslog - Creates a hook to be added to an instance of logger.
 func newSyslog(network, raddr string, priority syslog.Priority, tag string) (*syslogHook, error) {
-	w, err := syslog.Dial(network, raddr, priority, tag)
-	return &syslogHook{w, network, raddr}, err
+	w, e := syslog.Dial(network, raddr, priority, tag)
+	return &syslogHook{w, network, raddr}, e
 }
 
 // Fire - fire the log event
 func (hook *syslogHook) Fire(entry *logrus.Entry) error {
-	line, err := entry.String()
-	if err != nil {
-		return fmt.Errorf("Unable to read entry, %v", err)
+	line, e := entry.String()
+	if e != nil {
+		return fmt.Errorf("Unable to read entry, %v", e)
 	}
 	switch entry.Level {
 	case logrus.PanicLevel:

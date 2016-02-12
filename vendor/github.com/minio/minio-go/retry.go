@@ -17,8 +17,10 @@
 package minio
 
 import (
-	"math/rand"
 	"net"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -33,19 +35,36 @@ const NoJitter = 0.0
 
 // newRetryTimer creates a timer with exponentially increasing delays
 // until the maximum retry attempts are reached.
-func newRetryTimer(maxRetry int, unit time.Duration, cap time.Duration, jitter float64) <-chan int {
+func (c Client) newRetryTimer(maxRetry int, unit time.Duration, cap time.Duration, jitter float64) <-chan int {
 	attemptCh := make(chan int)
 
-	// Seed random function with current unix nano time.
-	rand.Seed(time.Now().UTC().UnixNano())
+	// computes the exponential backoff duration according to
+	// https://www.awsarchitectureblog.com/2015/03/backoff.html
+	exponentialBackoffWait := func(attempt int) time.Duration {
+		// normalize jitter to the range [0, 1.0]
+		if jitter < NoJitter {
+			jitter = NoJitter
+		}
+		if jitter > MaxJitter {
+			jitter = MaxJitter
+		}
+
+		//sleep = random_between(0, min(cap, base * 2 ** attempt))
+		sleep := unit * time.Duration(1<<uint(attempt))
+		if sleep > cap {
+			sleep = cap
+		}
+		if jitter != NoJitter {
+			sleep -= time.Duration(c.random.Float64() * float64(sleep) * jitter)
+		}
+		return sleep
+	}
 
 	go func() {
 		defer close(attemptCh)
 		for i := 0; i < maxRetry; i++ {
 			attemptCh <- i + 1 // Attempts start from 1.
-			// Grow the interval at an exponential rate,
-			// starting at unit and capping at cap
-			time.Sleep(exponentialBackoffWait(unit, i, cap, jitter))
+			time.Sleep(exponentialBackoffWait(i))
 		}
 	}()
 	return attemptCh
@@ -56,40 +75,47 @@ func isNetErrorRetryable(err error) bool {
 	switch err.(type) {
 	case *net.DNSError, *net.OpError, net.UnknownNetworkError:
 		return true
+	case *url.Error:
+		// For a URL error, where it replies back "connection closed"
+		// retry again.
+		if strings.Contains(err.Error(), "Connection closed by foreign host") {
+			return true
+		}
 	}
 	return false
 }
 
-// computes the exponential backoff duration according to
-// https://www.awsarchitectureblog.com/2015/03/backoff.html
-func exponentialBackoffWait(base time.Duration, attempt int, cap time.Duration, jitter float64) time.Duration {
-	// normalize jitter to the range [0, 1.0]
-	if jitter < NoJitter {
-		jitter = NoJitter
-	}
-	if jitter > MaxJitter {
-		jitter = MaxJitter
-	}
-	//sleep = random_between(0, min(cap, base * 2 ** attempt))
-	sleep := base * time.Duration(1<<uint(attempt))
-	if sleep > cap {
-		sleep = cap
-	}
-	if jitter != NoJitter {
-		sleep -= time.Duration(rand.Float64() * float64(sleep) * jitter)
-	}
-	return sleep
+// List of AWS S3 error codes which are retryable.
+var retryableS3Codes = map[string]struct{}{
+	"RequestError":          {},
+	"RequestTimeout":        {},
+	"Throttling":            {},
+	"ThrottlingException":   {},
+	"RequestLimitExceeded":  {},
+	"RequestThrottled":      {},
+	"InternalError":         {},
+	"ExpiredToken":          {},
+	"ExpiredTokenException": {},
+	// Add more AWS S3 codes here.
 }
 
 // isS3CodeRetryable - is s3 error code retryable.
-func isS3CodeRetryable(s3Code string) bool {
-	switch s3Code {
-	case "RequestError", "RequestTimeout", "Throttling", "ThrottlingException":
-		fallthrough
-	case "RequestLimitExceeded", "RequestThrottled", "InternalError":
-		fallthrough
-	case "ExpiredToken", "ExpiredTokenException":
-		return true
-	}
-	return false
+func isS3CodeRetryable(s3Code string) (ok bool) {
+	_, ok = retryableS3Codes[s3Code]
+	return ok
+}
+
+// List of HTTP status codes which are retryable.
+var retryableHTTPStatusCodes = map[int]struct{}{
+	429: {}, // http.StatusTooManyRequests is not part of the Go 1.5 library, yet
+	http.StatusInternalServerError: {},
+	http.StatusBadGateway:          {},
+	http.StatusServiceUnavailable:  {},
+	// Add more HTTP status codes here.
+}
+
+// isHTTPStatusRetryable - is HTTP error code retryable.
+func isHTTPStatusRetryable(httpStatusCode int) (ok bool) {
+	_, ok = retryableHTTPStatusCodes[httpStatusCode]
+	return ok
 }

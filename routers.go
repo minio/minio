@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,28 +35,22 @@ import (
 
 // storageAPI container for S3 compatible API.
 type storageAPI struct {
-	// Once true log all incoming requests.
-	AccessLog bool
 	// Filesystem instance.
 	Filesystem fs.Filesystem
 	// Signature instance.
 	Signature *signature4.Sign
-	// Region instance.
-	Region string
 }
 
 // webAPI container for Web API.
 type webAPI struct {
 	// FSPath filesystem path.
 	FSPath string
-	// Once true log all incoming request.
-	AccessLog bool
 	// Minio client instance.
 	Client *minio.Client
 
 	// private params.
 	apiAddress string // api destination address.
-	// accessKeys kept to be used internally.
+	// credential kept to be used internally.
 	accessKeyID     string
 	secretAccessKey string
 }
@@ -164,11 +158,28 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
-// initWeb instantiate a new Web.
-func initWeb(conf cloudServerConfig) *webAPI {
+// configureServer handler returns final handler for the http server.
+func configureServerHandler(filesystem fs.Filesystem) http.Handler {
+	// Access credentials.
+	cred := serverConfig.GetCredential()
+
+	// Server region.
+	region := serverConfig.GetRegion()
+
+	// Server addr.
+	addr := serverConfig.GetAddr()
+
+	sign, err := signature4.New(cred.AccessKeyID, cred.SecretAccessKey, region)
+	fatalIf(err.Trace(cred.AccessKeyID, cred.SecretAccessKey, region), "Initializing signature version '4' failed.", nil)
+
+	// Initialize API.
+	api := storageAPI{
+		Filesystem: filesystem,
+		Signature:  sign,
+	}
+
 	// Split host port.
-	host, port, e := net.SplitHostPort(conf.Address)
-	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
+	host, port, _ := net.SplitHostPort(addr)
 
 	// Default host is 'localhost', if no host present.
 	if host == "" {
@@ -176,44 +187,18 @@ func initWeb(conf cloudServerConfig) *webAPI {
 	}
 
 	// Initialize minio client for AWS Signature Version '4'
-	inSecure := !conf.TLS // Insecure true when TLS is false.
-	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
+	disableSSL := !isSSL() // Insecure true when SSL is false.
+	client, e := minio.NewV4(net.JoinHostPort(host, port), cred.AccessKeyID, cred.SecretAccessKey, disableSSL)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
-	w := &webAPI{
-		FSPath:          conf.Path,
-		AccessLog:       conf.AccessLog,
-		Client:          client,
-		apiAddress:      conf.Address,
-		accessKeyID:     conf.AccessKeyID,
-		secretAccessKey: conf.SecretAccessKey,
-	}
-	return w
-}
-
-// initAPI instantiate a new StorageAPI.
-func initAPI(conf cloudServerConfig) storageAPI {
-	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
-	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
-
-	sign, err := signature4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
-	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
-
-	return storageAPI{
-		AccessLog:  conf.AccessLog,
-		Filesystem: fs,
-		Signature:  sign,
-		Region:     conf.Region,
-	}
-}
-
-// server handler returns final handler before initializing server.
-func serverHandler(conf cloudServerConfig) http.Handler {
-	// Initialize API.
-	api := initAPI(conf)
-
 	// Initialize Web.
-	web := initWeb(conf)
+	web := &webAPI{
+		FSPath:          filesystem.GetRootPath(),
+		Client:          client,
+		apiAddress:      addr,
+		accessKeyID:     cred.AccessKeyID,
+		secretAccessKey: cred.SecretAccessKey,
+	}
 
 	var handlerFns = []HandlerFunc{
 		// Redirect some pre-defined browser request paths to a static

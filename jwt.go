@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"strings"
 	"time"
 
@@ -28,8 +27,7 @@ import (
 
 // JWT - jwt auth backend
 type JWT struct {
-	accessKeyID     []byte
-	secretAccessKey []byte
+	credential
 }
 
 // Default - each token expires in 10hrs.
@@ -40,13 +38,11 @@ const (
 // initJWT - initialize.
 func initJWT() *JWT {
 	jwt := &JWT{}
-	// Load credentials.
-	config, err := loadConfigV2()
-	fatalIf(err.Trace("JWT"), "Unable to load configuration file.", nil)
 
 	// Save access, secret keys.
-	jwt.accessKeyID = []byte(config.Credentials.AccessKeyID)
-	jwt.secretAccessKey = []byte(config.Credentials.SecretAccessKey)
+	jwt.credential = serverConfig.GetCredential()
+
+	// Return.
 	return jwt
 }
 
@@ -57,7 +53,7 @@ func (jwt *JWT) GenerateToken(userName string) (string, *probe.Error) {
 	token.Claims["exp"] = time.Now().Add(time.Hour * tokenExpires).Unix()
 	token.Claims["iat"] = time.Now().Unix()
 	token.Claims["sub"] = userName
-	tokenString, e := token.SignedString(jwt.secretAccessKey)
+	tokenString, e := token.SignedString([]byte(jwt.SecretAccessKey))
 	if e != nil {
 		return "", probe.NewError(e)
 	}
@@ -68,9 +64,9 @@ func (jwt *JWT) GenerateToken(userName string) (string, *probe.Error) {
 func (jwt *JWT) Authenticate(userName, password string) bool {
 	userName = strings.TrimSpace(userName)
 	password = strings.TrimSpace(password)
-	if !bytes.Equal([]byte(userName), jwt.accessKeyID) {
+	if userName != jwt.AccessKeyID {
 		return false
 	}
-	hashedPassword, _ := bcrypt.GenerateFromPassword(jwt.secretAccessKey, bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
 	return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
 }
