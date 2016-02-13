@@ -30,6 +30,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/dustin/go-humanize"
+	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/probe"
@@ -60,7 +61,7 @@ func (web WebAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *Generi
 // ServerInfo - get server info.
 func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -89,11 +90,11 @@ func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 // DiskInfo - get disk statistics.
 func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	info, e := disk.GetInfo(web.FSPath)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	reply.DiskInfo = info
 	reply.UIVersion = uiVersion
@@ -103,20 +104,24 @@ func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfo
 // MakeBucket - make a bucket.
 func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion
-	return web.Client.MakeBucket(args.BucketName, "", "")
+	e := web.Client.MakeBucket(args.BucketName, "", "")
+	if e != nil {
+		return &json2.Error{Message: e.Error()}
+	}
+	return nil
 }
 
 // ListBuckets - list buckets api.
 func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	buckets, e := web.Client.ListBuckets()
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	for _, bucket := range buckets {
 		reply.Buckets = append(reply.Buckets, BucketInfo{
@@ -131,14 +136,14 @@ func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 // ListObjects - list objects api.
 func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
 	for object := range web.Client.ListObjects(args.BucketName, args.Prefix, false, doneCh) {
 		if object.Err != nil {
-			return object.Err
+			return &json2.Error{Message: object.Err.Error()}
 		}
 		objectInfo := ObjectInfo{
 			Key:          object.Key,
@@ -151,7 +156,7 @@ func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		if !strings.HasSuffix(object.Key, "/") && object.Size > 0 {
 			objectStatInfo, e := web.Client.StatObject(args.BucketName, object.Key)
 			if e != nil {
-				return e
+				return &json2.Error{Message: e.Error()}
 			}
 			objectInfo.ContentType = objectStatInfo.ContentType
 		}
@@ -179,19 +184,19 @@ func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
 // PutObjectURL - generates url for upload access.
 func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
-		return err.ToGoError()
+		return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
 	}
 	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	signedURLStr, e := client.PresignedPutObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	reply.URL = signedURLStr
 	reply.UIVersion = uiVersion
@@ -201,29 +206,29 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 // GetObjectURL - generates url for download access.
 func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 
 	// See if object exists.
 	_, e := web.Client.StatObject(args.BucketName, args.ObjectName)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
 	if err != nil {
-		return err.ToGoError()
+		return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
 	}
 	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	reqParams := make(url.Values)
 	// Set content disposition for browser to download the file.
 	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(args.ObjectName)))
 	signedURLStr, e := client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second, reqParams)
 	if e != nil {
-		return e
+		return &json2.Error{Message: e.Error()}
 	}
 	reply.URL = signedURLStr
 	reply.UIVersion = uiVersion
@@ -233,10 +238,14 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 // RemoveObject - removes an object.
 func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
 	if !isAuthenticated(r) {
-		return errUnAuthorizedRequest
+		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion
-	return web.Client.RemoveObject(args.BucketName, args.ObjectName)
+	e := web.Client.RemoveObject(args.BucketName, args.ObjectName)
+	if e != nil {
+		return &json2.Error{Message: e.Error()}
+	}
+	return nil
 }
 
 // Login - user login handler.
@@ -245,11 +254,11 @@ func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) erro
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {
-			return err.ToGoError()
+			return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
 		}
 		reply.Token = token
 		reply.UIVersion = uiVersion
 		return nil
 	}
-	return errInvalidCredentials
+	return &json2.Error{Message: "Invalid credentials"}
 }
