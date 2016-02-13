@@ -6,6 +6,47 @@ TAG := latest
 UI_ASSETS := ui-assets.go
 UI_ASSETS_ARMOR := ui-assets.asc
 
+HOST ?= $(shell uname)
+CPU ?= $(shell uname -m)
+
+# if no host is identifed (no uname tool)
+# we assume a Linux-64bit build
+ifeq ($(HOST),)
+  HOST = Linux
+endif
+
+# identify CPU
+ifeq ($(CPU), x86_64)
+  HOST := $(HOST)64
+else
+ifeq ($(CPU), i686)
+  HOST := $(HOST)32
+endif
+endif
+
+
+#############################################
+# now we find out the target OS for
+# which we are going to compile in case
+# the caller didn't yet define OS himself
+ifndef (OS)
+  ifeq ($(HOST), Linux64)
+    arch = gcc
+  else
+  ifeq ($(HOST), Linux32)
+    arch = 32
+  else
+  ifeq ($(HOST), Darwin64)
+    arch = clang
+  else
+  ifeq ($(HOST), Darwin32)
+    arch = clang
+  endif
+  endif
+  endif
+  endif
+endif
+
 all: install
 
 checkdeps:
@@ -50,12 +91,10 @@ fmt:
 
 ## Configure Intel library.
 isa-l:
+
 	@echo "Configuring $@:"
 	@git clone -q https://github.com/minio/isa-l.git
-	@mkdir -p build
-	@cd build; $(PWD)/isa-l/configure --prefix $(PWD)/build/lib --sysconfdir $(PWD)/build/lib --includedir $(PWD)/build/lib --libdir $(PWD)/build/lib >/dev/null
-	@make -C build >/dev/null
-	@make -C build install >/dev/null
+	@cd isa-l; make -f Makefile.unx arch=$(arch) >/dev/null; mv include isa-l;
 
 lint:
 	@echo "Running $@:"
@@ -79,12 +118,12 @@ spelling:
 
 test: build
 	@echo "Running all minio testing:"
-	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
-	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
+	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
 	@echo "Installing minio:"
-	@CGO_CPPFLAGS="-I$(PWD)/build/lib" CGO_LDFLAGS="$(PWD)/build/lib/libisal.a" GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
+	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor add $(PKG)
