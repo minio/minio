@@ -22,7 +22,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json"
+	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
@@ -65,7 +65,7 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	}
 
 	s := jsonrpc.NewServer()
-	codec := json.NewCodec()
+	codec := json2.NewCodec()
 	s.RegisterCodec(codec, "application/json")
 	s.RegisterCodec(codec, "application/json; charset=UTF-8")
 	s.RegisterService(web, "Web")
