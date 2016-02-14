@@ -71,7 +71,7 @@ type Service1Request struct {
 	B int
 }
 
-type Service1BadRequest struct {
+type Service1NoParamsRequest struct {
 	V  string `json:"jsonrpc"`
 	M  string `json:"method"`
 	ID uint64 `json:"id"`
@@ -84,8 +84,15 @@ type Service1Response struct {
 type Service1 struct {
 }
 
+const Service1DefaultResponse = 9999
+
 func (t *Service1) Multiply(r *http.Request, req *Service1Request, res *Service1Response) error {
-	res.Result = req.A * req.B
+	if req.A == 0 && req.B == 0 {
+		// Sentinel value for test with no params.
+		res.Result = Service1DefaultResponse
+	} else {
+		res.Result = req.A * req.B
+	}
 	return nil
 }
 
@@ -139,8 +146,13 @@ func TestService(t *testing.T) {
 		t.Errorf("Expected to get %q, but got %q", ErrResponseError, err)
 	}
 
-	if err := executeRaw(t, s, &Service1BadRequest{"2.0", "Service1.Multiply", 1}, &res); err == nil {
-		t.Errorf("Expected error but error in nil")
+	// No parameters.
+	res = Service1Response{}
+	if err := executeRaw(t, s, &Service1NoParamsRequest{"2.0", "Service1.Multiply", 1}, &res); err != nil {
+		t.Error(err)
+	}
+	if res.Result != Service1DefaultResponse {
+		t.Errorf("Wrong response: got %v, want %v", res.Result, Service1DefaultResponse)
 	}
 }
 
