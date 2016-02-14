@@ -125,21 +125,20 @@ func (c *CodecRequest) Method() (string, error) {
 
 // ReadRe<quest fills the request object for the RPC method.
 func (c *CodecRequest) ReadRequest(args interface{}) error {
-	if c.err == nil {
-		if c.request.Params != nil {
-			// JSON params structured object. Unmarshal to the args object.
-			err := json.Unmarshal(*c.request.Params, args)
-			if err != nil {
+	if c.err == nil && c.request.Params != nil {
+		// Note: if c.request.Params is nil it's not an error, it's an optional member.
+		// JSON params structured object. Unmarshal to the args object.
+		if err := json.Unmarshal(*c.request.Params, args); err != nil {
+			// Structed unmarshalling failed, attempt JSON params as
+			// array value. Unmarshal into array containing the
+			// request struct.
+			params := [1]interface{}{args}
+			if err = json.Unmarshal(*c.request.Params, &params); err != nil {
 				c.err = &Error{
 					Code:    E_INVALID_REQ,
 					Message: err.Error(),
 					Data:    c.request.Params,
 				}
-			}
-		} else {
-			c.err = &Error{
-				Code:    E_INVALID_REQ,
-				Message: "rpc: method request ill-formed: missing params field",
 			}
 		}
 	}
