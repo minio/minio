@@ -27,14 +27,14 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/minio/minio/pkg/cpu"
+	"github.com/klauspost/cpuid"
 )
 
 func block(dig *digest, p []byte) {
 	switch true {
-	case cpu.HasAVX2():
+	case cpuid.CPU.AVX2():
 		blockAVX2(dig, p)
-	case cpu.HasSSE41():
+	case cpuid.CPU.SSE3():
 		blockSSE3(dig, p)
 	default:
 		blockGeneric(dig, p)

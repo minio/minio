@@ -26,12 +26,12 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/minio/minio/pkg/cpu"
+	"github.com/klauspost/cpuid"
 )
 
 func block(dig *digest, p []byte) {
 	switch true {
-	case cpu.HasSSE41() == true:
+	case cpuid.CPU.SSE3():
 		blockSSE3(dig, p)
 	default:
 		blockGeneric(dig, p)

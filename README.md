@@ -2,9 +2,15 @@
 
 Minio is a distributed object storage server written in Golang. Source is available under free software / open source [Apache license 2.0](./LICENSE). API compatible with Amazon S3 cloud storage service.
 
+
 ## Description
 
 Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.
+
+Minio currently implements two backends
+
+  - Filesystem (FS) - is available and ready for general purpose use.
+  - ErasureCoded (XL) - is work in progress and not ready for general purpose use.
 
 ## Minio Client
 
