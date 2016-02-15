@@ -53,6 +53,11 @@
 			"revisionTime": "2016-01-19T13:13:26-08:00"
 		},
 		{
+			"path": "github.com/klauspost/cpuid",
+			"revision": "349c675778172472f5e8f3a3e0fe187e302e5a10",
+			"revisionTime": "2016-01-06T11:44:51+01:00"
+		},
+		{
 			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"

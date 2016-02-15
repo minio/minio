@@ -40,7 +40,7 @@ build_script:
   - curl -fsSL -o ui-assets.asc  https://dl.minio.io/assets/server/ui/%UI_ASSETS_ARMOR%
   - gpg --batch --no-tty --yes --keyserver pgp.mit.edu --recv-keys F9AAC728
   - gpg --batch --no-tty --verify %UI_ASSETS_ARMOR% %UI_ASSETS%
-  - go generate ./...
+  - go generate github.com/minio/minio/pkg/crypto/sha1
   - go test .
   - go test -race .
   - go test github.com/minio/minio/pkg...

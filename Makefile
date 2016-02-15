@@ -107,7 +107,7 @@ cyclo:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
 
 build: getdeps verifiers $(UI_ASSETS) isa-l
-	@GO15VENDOREXPERIMENT=1 go generate ./...
+	@GO15VENDOREXPERIMENT=1 go generate github.com/minio/minio/pkg/crypto/sha1
 
 deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode

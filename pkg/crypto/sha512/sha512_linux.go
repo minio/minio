@@ -16,7 +16,7 @@ package sha512
 import (
 	"hash"
 
-	"github.com/minio/minio/pkg/cpu"
+	"github.com/klauspost/cpuid"
 )
 
 // Size - The size of a SHA512 checksum in bytes.
@@ -47,11 +47,11 @@ type digest struct {
 
 func block(dig *digest, p []byte) {
 	switch true {
-	case cpu.HasAVX2() == true:
+	case cpuid.CPU.AVX2():
 		blockAVX2(dig, p)
-	case cpu.HasAVX() == true:
+	case cpuid.CPU.AVX():
 		blockAVX(dig, p)
-	case cpu.HasSSE41() == true:
+	case cpuid.CPU.SSSE3():
 		blockSSE(dig, p)
 	default:
 		blockGeneric(dig, p)
