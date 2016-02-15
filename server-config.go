@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 
 	"github.com/fatih/color"
+	"github.com/minio/go-homedir"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
-	"github.com/minio/minio/pkg/user"
 )
 
 // configV1
@@ -133,7 +133,7 @@ func getConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
-	homeDir, e := user.HomeDir()
+	homeDir, e := homedir.Dir()
 	if e != nil {
 		return "", probe.NewError(e)
 	}

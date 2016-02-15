@@ -51,16 +51,14 @@ VERSION:
   {{$value}}
 {{end}}`
 
+// init - check the environment before main starts
 func init() {
 	// Check if minio was compiled using a supported version of Golang.
-	checkGolangRuntimeVersion()
+	checkGoVersion()
 
-	if os.Getenv("DOCKERIMAGE") == "1" {
-		// the further checks are ignored for docker image
-		return
-	}
-
-	if os.Geteuid() == 0 {
+	// It is an unsafe practice to run network services as
+	// root. Containers are an exception.
+	if !isContainerized() && os.Geteuid() == 0 {
 		Fatalln("Please run ‘minio’ as a non-root user.")
 	}
 
@@ -169,9 +167,6 @@ func main() {
 	probe.Init() // Set project's root source path.
 	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 	probe.SetAppInfo("Commit-ID", minioShortCommitID)
-	if os.Getenv("DOCKERIMAGE") == "1" {
-		probe.SetAppInfo("Docker-Image", "true")
-	}
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {

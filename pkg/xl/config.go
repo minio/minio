@@ -17,9 +17,9 @@
 package xl
 
 import (
-	"os/user"
 	"path/filepath"
 
+	"github.com/minio/go-homedir"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -29,11 +29,11 @@ func getXLConfigPath() (string, *probe.Error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
-	u, err := user.Current()
+	homeDir, err := homedir.Dir()
 	if err != nil {
 		return "", probe.NewError(err)
 	}
-	xlConfigPath := filepath.Join(u.HomeDir, ".minio", "xl.json")
+	xlConfigPath := filepath.Join(homeDir, ".minio", "xl.json")
 	return xlConfigPath, nil
 }
 

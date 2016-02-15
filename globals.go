@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,9 @@
  * limitations under the License.
  */
 
-package user_test
+package main
 
-import (
-	"testing"
-
-	"github.com/minio/minio/pkg/user"
-
-	. "gopkg.in/check.v1"
+// Global constants for Minio.
+const (
+	minGoVersion = ">= 1.5.1" // Minio requires at least Go v1.5.1
 )
-
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestUser(c *C) {
-	_, err := user.Current()
-	c.Assert(err, IsNil)
-}
-
-func (s *MySuite) TestHomeDir(c *C) {
-	_, err := user.HomeDir()
-	c.Assert(err, IsNil)
-}
