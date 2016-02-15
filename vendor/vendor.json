@@ -48,6 +48,11 @@
 			"revisionTime": "2015-11-05T07:45:51+08:00"
 		},
 		{
+			"path": "github.com/hashicorp/go-version",
+			"revision": "7e3c02b30806fa5779d3bdfc152ce4c6f40e7b38",
+			"revisionTime": "2016-01-19T13:13:26-08:00"
+		},
+		{
 			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"
@@ -58,9 +63,19 @@
 			"revisionTime": "2015-11-18T20:00:48-08:00"
 		},
 		{
+			"path": "github.com/minio/go-homedir",
+			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
+			"revisionTime": "2015-10-24T22:24:27-07:00"
+		},
+		{
 			"path": "github.com/minio/minio-go",
 			"revision": "280f16a52008d3ebba1bd64398b9b082e6738386",
 			"revisionTime": "2016-02-07T03:45:25-08:00"
+		},
+		{
+			"path": "github.com/mitchellh/go-homedir",
+			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
+			"revisionTime": "2015-10-24T22:24:27-07:00"
 		},
 		{
 			"path": "github.com/rs/cors",
