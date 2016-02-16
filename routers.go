@@ -26,6 +26,7 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
+	signV4 "github.com/minio/minio/pkg/signature"
 )
 
 // CloudStorageAPI container for S3 compatible API.
@@ -34,6 +35,10 @@ type CloudStorageAPI struct {
 	AccessLog bool
 	// Filesystem instance.
 	Filesystem fs.Filesystem
+	// Signature instance.
+	Signature *signV4.Signature
+	// Region instance.
+	Region string
 }
 
 // WebAPI container for Web API.
@@ -57,7 +62,6 @@ func getWebAPIHandler(web *WebAPI) http.Handler {
 	var handlerFns = []HandlerFunc{
 		setCacheControlHandler, // Adds Cache-Control header
 		setTimeValidityHandler, // Validate time.
-		setJWTAuthHandler,      // Authentication handler for verifying JWT's.
 		setCorsHandler,         // CORS added only for testing purposes.
 	}
 	if web.AccessLog {
@@ -146,9 +150,14 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
+	sign, err := signV4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
+	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
+
 	return CloudStorageAPI{
-		Filesystem: fs,
 		AccessLog:  conf.AccessLog,
+		Filesystem: fs,
+		Signature:  sign,
+		Region:     conf.Region,
 	}
 }
 
@@ -157,7 +166,7 @@ func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
 		setTimeValidityHandler,
 		setIgnoreResourcesHandler,
 		setIgnoreSignatureV2RequestHandler,
-		setSignatureHandler,
+		setAuthHandler,
 	}
 	if api.AccessLog {
 		handlerFns = append(handlerFns, setAccessLogHandler)

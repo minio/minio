@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // File container provided for atomic file writes
@@ -82,7 +81,6 @@ func FileCreateWithPrefix(filePath string, prefix string) (*File, error) {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return nil, err
 	}
-	prefix = strings.TrimSpace(prefix)
 	f, err := ioutil.TempFile(filepath.Dir(filePath), prefix+filepath.Base(filePath))
 	if err != nil {
 		return nil, err

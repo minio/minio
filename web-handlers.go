@@ -36,9 +36,9 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// isAuthenticated validates if any incoming request to be a valid JWT
+// isJWTReqAuthencatied validates if any incoming request to be a valid JWT
 // authenticated request.
-func isAuthenticated(req *http.Request) bool {
+func isJWTReqAuthencatied(req *http.Request) bool {
 	jwt := InitJWT()
 	tokenRequest, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
@@ -60,7 +60,7 @@ func (web WebAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *Generi
 
 // ServerInfo - get server info.
 func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	host, err := os.Hostname()
@@ -89,7 +89,7 @@ func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 
 // DiskInfo - get disk statistics.
 func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	info, e := disk.GetInfo(web.FSPath)
@@ -103,7 +103,7 @@ func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfo
 
 // MakeBucket - make a bucket.
 func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion
@@ -116,7 +116,7 @@ func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 
 // ListBuckets - list buckets api.
 func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	buckets, e := web.Client.ListBuckets()
@@ -135,7 +135,7 @@ func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 
 // ListObjects - list objects api.
 func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	doneCh := make(chan struct{})
@@ -183,7 +183,7 @@ func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
 
 // PutObjectURL - generates url for upload access.
 func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
@@ -205,7 +205,7 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 
 // GetObjectURL - generates url for download access.
 func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 
@@ -237,7 +237,7 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 
 // RemoveObject - removes an object.
 func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
-	if !isAuthenticated(r) {
+	if !isJWTReqAuthencatied(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion

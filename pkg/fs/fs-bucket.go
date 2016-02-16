@@ -152,7 +152,7 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 		}
 		return probe.NewError(e)
 	}
-	if strings.TrimSpace(acl) == "" {
+	if acl == "" {
 		acl = "private"
 	}
 
@@ -232,7 +232,7 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
 	}
-	if strings.TrimSpace(acl) == "" {
+	if acl == "" {
 		acl = "private"
 	}
 	bucket = fs.denormalizeBucket(bucket)

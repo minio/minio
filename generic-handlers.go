@@ -26,6 +26,10 @@ import (
 	"github.com/rs/cors"
 )
 
+const (
+	iso8601Format = "20060102T150405Z"
+)
+
 // HandlerFunc - useful to chain different middleware http.Handler
 type HandlerFunc func(http.Handler) http.Handler
 
@@ -157,13 +161,12 @@ func setIgnoreSignatureV2RequestHandler(h http.Handler) http.Handler {
 
 // Ignore signature version '2' ServerHTTP() wrapper.
 func (h ignoreSignatureV2RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if _, ok := r.Header["Authorization"]; ok {
-		if !strings.HasPrefix(r.Header.Get("Authorization"), authHeaderPrefix) {
-			writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
-			return
-		}
+	if isRequestSignatureV4(r) || isRequestJWT(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
+		h.handler.ServeHTTP(w, r)
+		return
 	}
-	h.handler.ServeHTTP(w, r)
+	writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
+	return
 }
 
 // setIgnoreResourcesHandler -

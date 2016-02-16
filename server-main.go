@@ -77,6 +77,7 @@ type cloudServerConfig struct {
 	// Credentials.
 	AccessKeyID     string // Access key id.
 	SecretAccessKey string // Secret access key.
+	Region          string // Region string.
 
 	/// FS options
 	Path        string // Path to export for cloud storage
@@ -299,12 +300,17 @@ func serverMain(c *cli.Context) {
 	if _, err := os.Stat(path); err != nil {
 		fatalIf(probe.NewError(err), "Unable to validate the path", nil)
 	}
+	region := conf.Credentials.Region
+	if region == "" {
+		region = "us-east-1"
+	}
 	tls := (certFile != "" && keyFile != "")
 	serverConfig := cloudServerConfig{
 		Address:         c.GlobalString("address"),
 		AccessLog:       c.GlobalBool("enable-accesslog"),
 		AccessKeyID:     conf.Credentials.AccessKeyID,
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
+		Region:          region,
 		Path:            path,
 		MinFreeDisk:     minFreeDisk,
 		TLS:             tls,

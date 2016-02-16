@@ -18,25 +18,11 @@ package fs
 
 import "fmt"
 
-// MissingDateHeader date header missing
-type MissingDateHeader struct{}
+// SignDoesNotMatch - signature does not match.
+type SignDoesNotMatch struct{}
 
-func (e MissingDateHeader) Error() string {
-	return "Missing date header"
-}
-
-// MissingExpiresQuery expires query string missing
-type MissingExpiresQuery struct{}
-
-func (e MissingExpiresQuery) Error() string {
-	return "Missing expires query string"
-}
-
-// ExpiredPresignedRequest request already expired
-type ExpiredPresignedRequest struct{}
-
-func (e ExpiredPresignedRequest) Error() string {
-	return "Presigned request already expired"
+func (e SignDoesNotMatch) Error() string {
+	return "Signature does not match."
 }
 
 // InvalidArgument invalid argument
@@ -156,30 +142,8 @@ func (e BadDigest) Error() string {
 	return "Bad digest"
 }
 
-// ParityOverflow parity over flow
-type ParityOverflow struct{}
-
-func (e ParityOverflow) Error() string {
-	return "Parity overflow"
-}
-
-// ChecksumMismatch checksum mismatch
-type ChecksumMismatch struct{}
-
-func (e ChecksumMismatch) Error() string {
-	return "Checksum mismatch"
-}
-
-// MissingPOSTPolicy missing post policy
-type MissingPOSTPolicy struct{}
-
-func (e MissingPOSTPolicy) Error() string {
-	return "Missing POST policy in multipart form"
-}
-
 // InternalError - generic internal error
-type InternalError struct {
-}
+type InternalError struct{}
 
 // BackendError - generic disk backend error
 type BackendError struct {
@@ -237,13 +201,6 @@ type BucketNameInvalid GenericBucketError
 
 /// Object related errors
 
-// EntityTooLarge - object size exceeds maximum limit
-type EntityTooLarge struct {
-	GenericObjectError
-	Size    string
-	MaxSize string
-}
-
 // ObjectNameInvalid - object name provided is invalid
 type ObjectNameInvalid GenericObjectError
 
@@ -290,11 +247,6 @@ func (e BucketNameInvalid) Error() string {
 // Return string an error formatted as the given text
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
-}
-
-// Return string an error formatted as the given text
-func (e EntityTooLarge) Error() string {
-	return e.Bucket + "#" + e.Object + "with " + e.Size + "reached maximum allowed size limit " + e.MaxSize
 }
 
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header

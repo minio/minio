@@ -226,7 +226,7 @@ func (xl API) createObjectPart(bucket, key, uploadID string, partID int, content
 				return "", err.Trace()
 			}
 			if !ok {
-				return "", probe.NewError(signV4.SigDoesNotMatch{})
+				return "", probe.NewError(SignDoesNotMatch{})
 			}
 		}
 	}
@@ -342,7 +342,7 @@ func (xl API) completeMultipartUploadV2(bucket, key, uploadID string, data io.Re
 			return nil, err.Trace()
 		}
 		if !ok {
-			return nil, probe.NewError(signV4.SigDoesNotMatch{})
+			return nil, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}

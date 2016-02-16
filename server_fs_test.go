@@ -77,8 +77,11 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	c.Assert(saveConfig(conf), IsNil)
 
 	cloudServer := cloudServerConfig{
-		Path:        fsroot,
-		MinFreeDisk: 0,
+		Path:            fsroot,
+		MinFreeDisk:     0,
+		AccessKeyID:     s.accessKeyID,
+		SecretAccessKey: s.secretAccessKey,
+		Region:          "us-east-1",
 	}
 	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
 	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)
@@ -225,7 +228,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 		"aws4_request",
 	}, "/")
 
-	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
+	stringToSign := "AWS4-HMAC-SHA256" + "\n" + t.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
@@ -238,7 +241,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 
 	// final Authorization header
 	parts := []string{
-		authHeaderPrefix + " Credential=" + s.accessKeyID + "/" + scope,
+		"AWS4-HMAC-SHA256" + " Credential=" + s.accessKeyID + "/" + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}

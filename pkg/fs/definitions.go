@@ -19,7 +19,6 @@ package fs
 import (
 	"os"
 	"regexp"
-	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -167,7 +166,7 @@ var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 // IsValidBucketName - verify bucket name in accordance with
 //  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
 func IsValidBucketName(bucket string) bool {
-	if strings.TrimSpace(bucket) == "" {
+	if bucket == "" {
 		return false
 	}
 	if len(bucket) < 3 || len(bucket) > 63 {
@@ -182,7 +181,7 @@ func IsValidBucketName(bucket string) bool {
 // IsValidObjectName - verify object name in accordance with
 //   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func IsValidObjectName(object string) bool {
-	if strings.TrimSpace(object) == "" {
+	if object == "" {
 		return true
 	}
 	if len(object) > 1024 || len(object) == 0 {

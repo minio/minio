@@ -23,8 +23,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/fs"
-	"github.com/minio/minio/pkg/probe"
-	v4 "github.com/minio/minio/pkg/signature"
 )
 
 const (
@@ -53,17 +51,22 @@ func setResponseHeaders(w http.ResponseWriter, reqParams url.Values) {
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
-	vars := mux.Vars(req)
+	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
+	}
+
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
 	}
 
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
@@ -71,30 +74,30 @@ func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Req
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
 	var hrange *httpRange
-	hrange, err = getRequestedRange(req.Header.Get("Range"), metadata.Size)
+	hrange, err = getRequestedRange(r.Header.Get("Range"), metadata.Size)
 	if err != nil {
-		writeErrorResponse(w, req, InvalidRange, req.URL.Path)
+		writeErrorResponse(w, r, InvalidRange, r.URL.Path)
 		return
 	}
 
 	// Set standard object headers.
 	setObjectHeaders(w, metadata, hrange)
 
-	// Set any additional requested response headers.
-	setResponseHeaders(w, req.URL.Query())
+	// Set any additional ruested response headers.
+	setResponseHeaders(w, r.URL.Query())
 
 	// Get the object.
 	if _, err = api.Filesystem.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
@@ -106,32 +109,37 @@ func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, req *http.Req
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
-	vars := mux.Vars(req)
+	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
+	}
+
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
 	}
 
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
 	if err != nil {
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -142,86 +150,63 @@ func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, req *http.Re
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
-	vars := mux.Vars(req)
+	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
 	}
 
 	// get Content-MD5 sent by client and verify if valid
-	md5 := req.Header.Get("Content-MD5")
+	md5 := r.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
+		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		return
 	}
 	/// if Content-Length is unknown/missing, deny the request
-	size := req.ContentLength
-	if size == -1 {
-		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
+	size := r.ContentLength
+	if size == -1 && !contains(r.TransferEncoding, "chunked") {
+		writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
 		return
 	}
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
+		writeErrorResponse(w, r, EntityTooLarge, r.URL.Path)
 		return
 	}
 
-	var signature *v4.Signature
-	if isRequestSignatureV4(req) {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			switch err.ToGoError() {
-			case errInvalidRegion:
-				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-				return
-			case errAccessKeyIDInvalid:
-				errorIf(err.Trace(), "Invalid access key id.", nil)
-				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-				return
-			default:
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
-			}
-		}
-	}
+	// Set http request for signature.
+	api.Signature.SetHTTPRequestToVerify(r)
 
-	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, req.Body, signature)
+	// Create object.
+	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, api.Signature)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
+			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BadDigest:
-			writeErrorResponse(w, req, BadDigest, req.URL.Path)
-		case fs.MissingDateHeader:
-			writeErrorResponse(w, req, RequestTimeTooSkewed, req.URL.Path)
-		case v4.SigDoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
+			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+		case fs.SignDoesNotMatch:
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
-		case fs.EntityTooLarge:
-			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
+			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
 		case fs.InvalidDigest:
-			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
+			writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		case fs.ObjectExistsAsPrefix:
-			writeErrorResponse(w, req, ObjectExistsAsPrefix, req.URL.Path)
+			writeErrorResponse(w, r, ObjectExistsAsPrefix, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -234,17 +219,22 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, req *http.Req
 /// Multipart CloudStorageAPI
 
 // NewMultipartUploadHandler - New multipart upload
-func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
+func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
-	vars := mux.Vars(req)
+	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
+	}
+
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
 	}
 
 	uploadID, err := api.Filesystem.NewMultipartUpload(bucket, object)
@@ -252,17 +242,17 @@ func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req 
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
+			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -276,94 +266,72 @@ func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, req 
 }
 
 // PutObjectPartHandler - Upload part
-func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
+func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
 	}
 
 	// get Content-MD5 sent by client and verify if valid
-	md5 := req.Header.Get("Content-MD5")
+	md5 := r.Header.Get("Content-MD5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
+		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		return
 	}
 
 	/// if Content-Length is unknown/missing, throw away
-	size := req.ContentLength
+	size := r.ContentLength
 	if size == -1 {
-		writeErrorResponse(w, req, MissingContentLength, req.URL.Path)
+		writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
 		return
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
+		writeErrorResponse(w, r, EntityTooLarge, r.URL.Path)
 		return
 	}
 
-	uploadID := req.URL.Query().Get("uploadId")
-	partIDString := req.URL.Query().Get("partNumber")
+	uploadID := r.URL.Query().Get("uploadId")
+	partIDString := r.URL.Query().Get("partNumber")
 
 	var partID int
 	{
 		var err error
 		partID, err = strconv.Atoi(partIDString)
 		if err != nil {
-			writeErrorResponse(w, req, InvalidPart, req.URL.Path)
+			writeErrorResponse(w, r, InvalidPart, r.URL.Path)
 			return
 		}
 	}
 
-	var signature *v4.Signature
-	if isRequestSignatureV4(req) {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			switch err.ToGoError() {
-			case errInvalidRegion:
-				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-				return
-			case errAccessKeyIDInvalid:
-				errorIf(err.Trace(), "Invalid access key id.", nil)
-				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-				return
-			default:
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
-			}
-		}
-	}
+	// Set http request.
+	api.Signature.SetHTTPRequestToVerify(r)
 
-	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, req.Body, signature)
+	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, api.Signature)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, req, RootPathFull, req.URL.Path)
+			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
 		case fs.BadDigest:
-			writeErrorResponse(w, req, BadDigest, req.URL.Path)
-		case v4.SigDoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
+			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+		case fs.SignDoesNotMatch:
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
-		case fs.EntityTooLarge:
-			writeErrorResponse(w, req, EntityTooLarge, req.URL.Path)
+			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
 		case fs.InvalidDigest:
-			writeErrorResponse(w, req, InvalidDigest, req.URL.Path)
+			writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -374,35 +342,40 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, req *http
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
+func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
+	}
+
+	objectResourcesMetadata := getObjectResources(r.URL.Query())
 	err := api.Filesystem.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -410,25 +383,30 @@ func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, re
 }
 
 // ListObjectPartsHandler - List object parts
-func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
+func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
+	}
+
+	objectResourcesMetadata := getObjectResources(r.URL.Query())
 	if objectResourcesMetadata.PartNumberMarker < 0 {
-		writeErrorResponse(w, req, InvalidPartNumberMarker, req.URL.Path)
+		writeErrorResponse(w, r, InvalidPartNumberMarker, r.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts < 0 {
-		writeErrorResponse(w, req, InvalidMaxParts, req.URL.Path)
+		writeErrorResponse(w, r, InvalidMaxParts, r.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts == 0 {
@@ -440,17 +418,17 @@ func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *ht
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
@@ -463,72 +441,55 @@ func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, req *ht
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
+func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(req.URL.Query())
-	var signature *v4.Signature
-	if isRequestSignatureV4(req) {
-		// Init signature V4 verification
-		var err *probe.Error
-		signature, err = initSignatureV4(req)
-		if err != nil {
-			switch err.ToGoError() {
-			case errInvalidRegion:
-				errorIf(err.Trace(), "Unknown region in authorization header.", nil)
-				writeErrorResponse(w, req, AuthorizationHeaderMalformed, req.URL.Path)
-				return
-			case errAccessKeyIDInvalid:
-				errorIf(err.Trace(), "Invalid access key id.", nil)
-				writeErrorResponse(w, req, InvalidAccessKeyID, req.URL.Path)
-				return
-			default:
-				errorIf(err.Trace(), "Initializing signature v4 failed.", nil)
-				writeErrorResponse(w, req, InternalError, req.URL.Path)
-				return
-			}
-		}
-	}
+	// Set http request for signature.
+	api.Signature.SetHTTPRequestToVerify(r)
 
-	metadata, err := api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, req.Body, signature)
+	// Extract object resources.
+	objectResourcesMetadata := getObjectResources(r.URL.Query())
+
+	// Complete multipart upload.
+	metadata, err := api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, api.Signature)
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, req, NoSuchUpload, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
 		case fs.InvalidPart:
-			writeErrorResponse(w, req, InvalidPart, req.URL.Path)
+			writeErrorResponse(w, r, InvalidPart, r.URL.Path)
 		case fs.InvalidPartOrder:
-			writeErrorResponse(w, req, InvalidPartOrder, req.URL.Path)
-		case v4.SigDoesNotMatch:
-			writeErrorResponse(w, req, SignatureDoesNotMatch, req.URL.Path)
+			writeErrorResponse(w, r, InvalidPartOrder, r.URL.Path)
+		case fs.SignDoesNotMatch:
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, req, IncompleteBody, req.URL.Path)
+			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
 		case fs.MalformedXML:
-			writeErrorResponse(w, req, MalformedXML, req.URL.Path)
+			writeErrorResponse(w, r, MalformedXML, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 		return
 	}
-	response := generateCompleteMultpartUploadResponse(bucket, object, req.URL.String(), metadata.MD5)
+	response := generateCompleteMultpartUploadResponse(bucket, object, r.URL.String(), metadata.MD5)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
 	setCommonHeaders(w)
@@ -539,16 +500,21 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 /// Delete CloudStorageAPI
 
 // DeleteObjectHandler - Delete object
-func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
+func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(req) {
+	if isRequestRequiresACLCheck(r) {
 		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, req, AccessDenied, req.URL.Path)
+			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 			return
 		}
+	}
+
+	if !isSignV4ReqAuthenticated(api.Signature, r) {
+		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+		return
 	}
 
 	err := api.Filesystem.DeleteObject(bucket, object)
@@ -556,15 +522,15 @@ func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, req *http.
 		errorIf(err.Trace(), "DeleteObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, req, InvalidBucketName, req.URL.Path)
+			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, req, NoSuchBucket, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, req, NoSuchKey, req.URL.Path)
+			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, req, InternalError, req.URL.Path)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
 		}
 	}
 	writeSuccessNoContent(w)

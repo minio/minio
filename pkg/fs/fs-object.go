@@ -178,7 +178,7 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 // isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
 func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 	// Verify the md5sum.
-	if strings.TrimSpace(expectedMD5Sum) != "" && strings.TrimSpace(actualMD5Sum) != "" {
+	if expectedMD5Sum != "" && actualMD5Sum != "" {
 		// Decode md5sum to bytes from their hexadecimal
 		// representations.
 		expectedMD5SumBytes, err := hex.DecodeString(expectedMD5Sum)
@@ -199,7 +199,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 }
 
 // CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, sig *signV4.Signature) (ObjectMetadata, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectMetadata{}, probe.NewError(e)
@@ -233,9 +233,9 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 
 	// Get object path.
 	objectPath := filepath.Join(bucketPath, object)
-	if strings.TrimSpace(expectedMD5Sum) != "" {
+	if expectedMD5Sum != "" {
 		var expectedMD5SumBytes []byte
-		expectedMD5SumBytes, e = base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+		expectedMD5SumBytes, e = base64.StdEncoding.DecodeString(expectedMD5Sum)
 		if e != nil {
 			// Pro-actively close the connection.
 			return ObjectMetadata{}, probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
@@ -244,7 +244,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	}
 
 	// Write object.
-	file, e := atomic.FileCreateWithPrefix(objectPath, "$tmpobject")
+	file, e := atomic.FileCreateWithPrefix(objectPath, expectedMD5Sum+"$tmpobject")
 	if e != nil {
 		switch e := e.(type) {
 		case *os.PathError:
@@ -279,22 +279,22 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	md5Sum := hex.EncodeToString(md5Hasher.Sum(nil))
 	// Verify if the written object is equal to what is expected, only
 	// if it is requested as such.
-	if strings.TrimSpace(expectedMD5Sum) != "" {
-		if !isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5Sum) {
+	if expectedMD5Sum != "" {
+		if !isMD5SumEqual(expectedMD5Sum, md5Sum) {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
 	}
 	sha256Sum := hex.EncodeToString(sha256Hasher.Sum(nil))
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch(sha256Sum)
+	if sig != nil {
+		ok, err := sig.DoesSignatureMatch(sha256Sum)
 		if err != nil {
 			file.CloseAndPurge()
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
+			return ObjectMetadata{}, signV4.ErrSignDoesNotMath("Signature does not match")
 		}
 	}
 	file.Close()
