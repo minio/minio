@@ -116,7 +116,7 @@ func parsePreSignV4(query url.Values) (preSignValues, *probe.Error) {
 
 	var err *probe.Error
 	// Save credentail values.
-	preSignV4Values.Creds, err = parseCredential(query.Get("X-Amz-Credential"))
+	preSignV4Values.Creds, err = parseCredential("Credential=" + query.Get("X-Amz-Credential"))
 	if err != nil {
 		return preSignValues{}, err.Trace(query.Get("X-Amz-Credential"))
 	}
@@ -135,13 +135,13 @@ func parsePreSignV4(query url.Values) (preSignValues, *probe.Error) {
 	}
 
 	// Save signed headers.
-	preSignV4Values.SignedHeaders, err = parseSignedHeaders(query.Get("X-Amz-SignedHeaders"))
+	preSignV4Values.SignedHeaders, err = parseSignedHeaders("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
 	if err != nil {
 		return preSignValues{}, err.Trace(query.Get("X-Amz-SignedHeaders"))
 	}
 
 	// Save signature.
-	preSignV4Values.Signature, err = parseSignature(query.Get("X-Amz-Signature"))
+	preSignV4Values.Signature, err = parseSignature("Signature=" + query.Get("X-Amz-Signature"))
 	if err != nil {
 		return preSignValues{}, err.Trace(query.Get("X-Amz-Signature"))
 	}

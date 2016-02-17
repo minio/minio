@@ -39,10 +39,31 @@ func setAuthHandler(h http.Handler) http.Handler {
 	return authHandler{h}
 }
 
+// handler for validating incoming authorization headers.
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Verify if request has post policy signature.
+	// Verify if request is presigned, validate signature inside each handlers.
+	if isRequestPresignedSignatureV4(r) {
+		a.handler.ServeHTTP(w, r)
+		return
+	}
+
+	// Verify if request has post policy signature, validate signature
+	// inside POST policy handler.
 	if isRequestPostPolicySignatureV4(r) && r.Method == "POST" {
 		a.handler.ServeHTTP(w, r)
+		return
+	}
+
+	// No authorization found, let the top level caller validate if
+	// public request is allowed.
+	if _, ok := r.Header["Authorization"]; !ok {
+		a.handler.ServeHTTP(w, r)
+		return
+	}
+
+	// Verify if the signature algorithms are known.
+	if !isRequestSignatureV4(r) && !isRequestJWT(r) {
+		writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
 		return
 	}
 
@@ -62,7 +83,6 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// For signed, presigned, jwt and anonymous requests let the top level
-	// caller handle and verify.
+	// For all other signed requests, let top level caller verify.
 	a.handler.ServeHTTP(w, r)
 }

@@ -182,10 +182,25 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Set http request for signature.
-	api.Signature.SetHTTPRequestToVerify(r)
+	auth := api.Signature.SetHTTPRequestToVerify(r)
+
+	// For presigned requests verify them right here.
+	if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		auth = nil
+	}
 
 	// Create object.
-	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, api.Signature)
+	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, auth)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -311,10 +326,26 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Set http request.
-	api.Signature.SetHTTPRequestToVerify(r)
+	// Set http request for signature.
+	auth := api.Signature.SetHTTPRequestToVerify(r)
+	// For presigned requests verify right here.
+	if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		// Signature verified, set this to nil payload verification
+		// not necessary.
+		auth = nil
+	}
 
-	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, api.Signature)
+	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, auth)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
@@ -454,7 +485,21 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 	}
 
 	// Set http request for signature.
-	api.Signature.SetHTTPRequestToVerify(r)
+	auth := api.Signature.SetHTTPRequestToVerify(r)
+	// For presigned requests verify right here.
+	if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		auth = nil
+	}
 
 	// Extract object resources.
 	objectResourcesMetadata := getObjectResources(r.URL.Query())

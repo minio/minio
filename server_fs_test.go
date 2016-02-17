@@ -21,8 +21,10 @@ import (
 	"crypto/md5"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +54,21 @@ var _ = Suite(&MyAPIFSCacheSuite{})
 
 var testAPIFSCacheServer *httptest.Server
 
+// Ask the kernel for a free open port.
+func getFreePort() int {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
 func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	root, e := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(e, IsNil)
@@ -77,6 +94,7 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	c.Assert(saveConfig(conf), IsNil)
 
 	cloudServer := cloudServerConfig{
+		Address:         ":" + strconv.Itoa(getFreePort()),
 		Path:            fsroot,
 		MinFreeDisk:     0,
 		AccessKeyID:     s.accessKeyID,
@@ -84,7 +102,8 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 		Region:          "us-east-1",
 	}
 	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
-	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)
+	webAPI := getNewWebAPI(cloudServer)
+	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI, webAPI)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 

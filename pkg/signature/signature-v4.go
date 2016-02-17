@@ -210,7 +210,7 @@ func (s Signature) getSignature(signingKey []byte, stringToSign string) string {
 // returns true if matches, false otherwise. if error is not nil then it is always false
 func (s *Signature) DoesPolicySignatureMatch(formValues map[string]string) (bool, *probe.Error) {
 	// Parse credential tag.
-	creds, err := parseCredential(formValues["X-Amz-Credential"])
+	creds, err := parseCredential("Credential=" + formValues["X-Amz-Credential"])
 	if err != nil {
 		return false, err.Trace(formValues["X-Amz-Credential"])
 	}
@@ -273,13 +273,13 @@ func (s *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	query := make(url.Values)
 	query.Set("X-Amz-Algorithm", signV4Algorithm)
 
-	if time.Now().UTC().Sub(preSignV4Values.Date) > time.Duration(preSignV4Values.Expires)*time.Second {
+	if time.Now().UTC().Sub(preSignV4Values.Date) > time.Duration(preSignV4Values.Expires)/time.Second {
 		return false, ErrExpiredPresignRequest("Presigned request already expired, please initiate a new request.")
 	}
 
 	// Save the date and expires.
 	t := preSignV4Values.Date
-	expireSeconds := int(preSignV4Values.Expires)
+	expireSeconds := int(time.Duration(preSignV4Values.Expires) / time.Second)
 
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))

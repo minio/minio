@@ -241,10 +241,20 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Set http request for signature.
-	api.Signature.SetHTTPRequestToVerify(r)
-
-	// Verify signature for the incoming body if any.
-	if api.Signature != nil {
+	auth := api.Signature.SetHTTPRequestToVerify(r)
+	if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+	} else if isRequestSignatureV4(r) {
+		// Verify signature for the incoming body if any.
 		locationBytes, e := ioutil.ReadAll(r.Body)
 		if e != nil {
 			errorIf(probe.NewError(e), "MakeBucket failed.", nil)
@@ -253,7 +263,7 @@ func (api CloudStorageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Reque
 		}
 		sh := sha256.New()
 		sh.Write(locationBytes)
-		ok, err := api.Signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
+		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
 		if err != nil {
 			errorIf(err.Trace(), "MakeBucket failed.", nil)
 			writeErrorResponse(w, r, InternalError, r.URL.Path)

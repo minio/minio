@@ -19,6 +19,7 @@ package main
 import (
 	"net"
 	"net/http"
+	"path/filepath"
 
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
@@ -58,38 +59,30 @@ type WebAPI struct {
 	secretAccessKey string
 }
 
-func getWebAPIHandler(web *WebAPI) http.Handler {
-	var handlerFns = []HandlerFunc{
-		setCacheControlHandler, // Adds Cache-Control header
-		setTimeValidityHandler, // Validate time.
-		setCorsHandler,         // CORS added only for testing purposes.
-	}
-	if web.AccessLog {
-		handlerFns = append(handlerFns, setAccessLogHandler)
-	}
-
-	s := jsonrpc.NewServer()
-	codec := json2.NewCodec()
-	s.RegisterCodec(codec, "application/json")
-	s.RegisterCodec(codec, "application/json; charset=UTF-8")
-	s.RegisterService(web, "Web")
-	mux := router.NewRouter()
-	// Root router.
-	root := mux.NewRoute().PathPrefix("/").Subrouter()
-	root.Handle("/rpc", s)
-
-	// Enable this when we add assets.
-	root.PathPrefix("/login").Handler(http.StripPrefix("/login", http.FileServer(assetFS())))
-	root.Handle("/{file:.*}", http.FileServer(assetFS()))
-	return registerHandlers(mux, handlerFns...)
-}
-
 // registerCloudStorageAPI - register all the handlers to their respective paths
-func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
-	// root Router
-	root := mux.NewRoute().PathPrefix("/").Subrouter()
+func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI, w *WebAPI) {
+	// Minio rpc router
+	minio := mux.NewRoute().PathPrefix(privateBucket).Subrouter()
+
+	// Initialize json rpc handlers.
+	rpc := jsonrpc.NewServer()
+	codec := json2.NewCodec()
+	rpc.RegisterCodec(codec, "application/json")
+	rpc.RegisterCodec(codec, "application/json; charset=UTF-8")
+	rpc.RegisterService(w, "Web")
+
+	// RPC handler at URI - /minio/rpc
+	minio.Path("/rpc").Handler(rpc)
+
+	// Web handler assets at URI  - /minio/login
+	minio.Path("/login").Handler(http.StripPrefix(filepath.Join(privateBucket, "login"), http.FileServer(assetFS())))
+	minio.Path("/{file:.*}").Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
+
+	// API Router
+	api := mux.NewRoute().PathPrefix("/").Subrouter()
+
 	// Bucket router
-	bucket := root.PathPrefix("/{bucket}").Subrouter()
+	bucket := api.PathPrefix("/{bucket}").Subrouter()
 
 	// Object operations
 	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
@@ -114,7 +107,7 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI) {
 	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
 
 	// Root operation
-	root.Methods("GET").HandlerFunc(a.ListBucketsHandler)
+	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
 // getNewWebAPI instantiate a new WebAPI.
@@ -133,7 +126,7 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
-	web := &WebAPI{
+	w := &WebAPI{
 		FSPath:          conf.Path,
 		AccessLog:       conf.AccessLog,
 		Client:          client,
@@ -142,7 +135,7 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 		accessKeyID:     conf.AccessKeyID,
 		secretAccessKey: conf.SecretAccessKey,
 	}
-	return web
+	return w
 }
 
 // getNewCloudStorageAPI instantiate a new CloudStorageAPI.
@@ -161,18 +154,29 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	}
 }
 
-func getCloudStorageAPIHandler(api CloudStorageAPI) http.Handler {
+func getCloudStorageAPIHandler(api CloudStorageAPI, web *WebAPI) http.Handler {
 	var handlerFns = []HandlerFunc{
+		// Redirect some pre-defined browser request paths to a static
+		// location prefix.
+		setBrowserRedirectHandler,
+		// Validates if incoming request is for restricted buckets.
+		setPrivateBucketHandler,
+		// Adds cache control for all browser requests.
+		setBrowserCacheControlHandler,
+		// Validates all incoming requests to have a valid date header.
 		setTimeValidityHandler,
+		// CORS setting for all browser API requests.
+		setCorsHandler,
+		// Validates all incoming URL resources, for invalid/unsupported
+		// resources client receives a HTTP error.
 		setIgnoreResourcesHandler,
-		setIgnoreSignatureV2RequestHandler,
+		// Auth handler verifies incoming authorization headers and
+		// routes them accordingly. Client receives a HTTP error for
+		// invalid/unsupported signatures.
 		setAuthHandler,
-	}
-	if api.AccessLog {
-		handlerFns = append(handlerFns, setAccessLogHandler)
 	}
 	handlerFns = append(handlerFns, setCorsHandler)
 	mux := router.NewRouter()
-	registerCloudStorageAPI(mux, api)
+	registerCloudStorageAPI(mux, api, web)
 	return registerHandlers(mux, handlerFns...)
 }

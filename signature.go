@@ -60,8 +60,7 @@ func isSignV4ReqAuthenticated(sign *signV4.Signature, r *http.Request) bool {
 			return false
 		}
 		return ok
-	}
-	if isRequestPresignedSignatureV4(r) {
+	} else if isRequestPresignedSignatureV4(r) {
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(), "Presigned signature verification failed.", nil)

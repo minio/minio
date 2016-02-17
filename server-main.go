@@ -90,45 +90,12 @@ type cloudServerConfig struct {
 	KeyFile  string // Domain key
 }
 
-func configureWebServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
-	// Split the api address into host and port.
-	host, port, e := net.SplitHostPort(conf.Address)
-	if e != nil {
-		return nil, probe.NewError(e)
-	}
-	webPort, e := strconv.Atoi(port)
-	if e != nil {
-		return nil, probe.NewError(e)
-	}
-	// Always choose the next port, based on the API address port.
-	webPort = webPort + 1
-	webAddress := net.JoinHostPort(host, strconv.Itoa(webPort))
-
-	// Minio server config
-	webServer := &http.Server{
-		Addr:           webAddress,
-		Handler:        getWebAPIHandler(getNewWebAPI(conf)),
-		MaxHeaderBytes: 1 << 20,
-	}
-
-	if conf.TLS {
-		var err error
-		webServer.TLSConfig = &tls.Config{}
-		webServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		webServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(conf.CertFile, conf.KeyFile)
-		if err != nil {
-			return nil, probe.NewError(err)
-		}
-	}
-	return webServer, nil
-}
-
 // configureAPIServer configure a new server instance
 func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           conf.Address,
-		Handler:        getCloudStorageAPIHandler(getNewCloudStorageAPI(conf)),
+		Handler:        getCloudStorageAPIHandler(getNewCloudStorageAPI(conf), getNewWebAPI(conf)),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -325,13 +292,6 @@ func serverMain(c *cli.Context) {
 	Println("\nMinio Object Storage:")
 	printServerMsg(apiServer)
 
-	// configure Web server.
-	webServer, err := configureWebServer(serverConfig)
-	errorIf(err.Trace(), "Failed to configure Web server.", nil)
-
-	Println("\nMinio Browser:")
-	printServerMsg(webServer)
-
 	Println("\nTo configure Minio Client:")
 	if runtime.GOOS == "windows" {
 		Println("    Download \"mc\" from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
@@ -343,6 +303,6 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	err = minhttp.ListenAndServe(apiServer, webServer)
+	err = minhttp.ListenAndServe(apiServer)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

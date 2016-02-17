@@ -28,6 +28,7 @@ import (
 
 const (
 	iso8601Format = "20060102T150405Z"
+	privateBucket = "/minio"
 )
 
 // HandlerFunc - useful to chain different middleware http.Handler
@@ -42,59 +43,81 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 	return f
 }
 
-type timeHandler struct {
-	handler http.Handler
+// Attempts to parse date string into known date layouts. Date layouts
+// currently supported are ``time.RFC1123``, ``time.RFC1123Z`` and
+// special ``iso8601Format``.
+func parseKnownLayouts(date string) (time.Time, error) {
+	parsedTime, e := time.Parse(time.RFC1123, date)
+	if e == nil {
+		return parsedTime, nil
+	}
+	parsedTime, e = time.Parse(time.RFC1123Z, date)
+	if e == nil {
+		return parsedTime, nil
+	}
+	parsedTime, e = time.Parse(iso8601Format, date)
+	if e == nil {
+		return parsedTime, nil
+	}
+	return time.Time{}, e
 }
 
-type resourceHandler struct {
-	handler http.Handler
-}
-
-type ignoreSignatureV2RequestHandler struct {
-	handler http.Handler
-}
-
-func parseDate(req *http.Request) (time.Time, error) {
+// Parse date string from incoming header, current supports and verifies
+// follow HTTP headers.
+//
+//  - X-Amz-Date
+//  - X-Minio-Date
+//  - Date
+//
+// In following time layouts ``time.RFC1123``, ``time.RFC1123Z`` and ``iso8601Format``.
+func parseDateHeader(req *http.Request) (time.Time, error) {
 	amzDate := req.Header.Get(http.CanonicalHeaderKey("x-amz-date"))
-	switch {
-	case amzDate != "":
-		if _, err := time.Parse(time.RFC1123, amzDate); err == nil {
-			return time.Parse(time.RFC1123, amzDate)
-		}
-		if _, err := time.Parse(time.RFC1123Z, amzDate); err == nil {
-			return time.Parse(time.RFC1123Z, amzDate)
-		}
-		if _, err := time.Parse(iso8601Format, amzDate); err == nil {
-			return time.Parse(iso8601Format, amzDate)
-		}
+	if amzDate != "" {
+		return parseKnownLayouts(amzDate)
 	}
 	minioDate := req.Header.Get(http.CanonicalHeaderKey("x-minio-date"))
-	switch {
-	case minioDate != "":
-		if _, err := time.Parse(time.RFC1123, minioDate); err == nil {
-			return time.Parse(time.RFC1123, minioDate)
-		}
-		if _, err := time.Parse(time.RFC1123Z, minioDate); err == nil {
-			return time.Parse(time.RFC1123Z, minioDate)
-		}
-		if _, err := time.Parse(iso8601Format, minioDate); err == nil {
-			return time.Parse(iso8601Format, minioDate)
+	if minioDate != "" {
+		return parseKnownLayouts(minioDate)
+	}
+	genericDate := req.Header.Get("Date")
+	if genericDate != "" {
+		return parseKnownLayouts(genericDate)
+	}
+	return time.Time{}, errors.New("Date header missing, invalid request.")
+}
+
+// Adds redirect rules for incoming requests.
+type redirectHandler struct {
+	handler        http.Handler
+	locationPrefix string
+}
+
+func setBrowserRedirectHandler(h http.Handler) http.Handler {
+	return redirectHandler{handler: h, locationPrefix: privateBucket}
+}
+
+func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Re-direction handled specifically for browsers.
+	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+		switch r.URL.Path {
+		case "/":
+			// This could be the default route for browser, redirect
+			// to 'locationPrefix/'.
+			fallthrough
+		case "/rpc":
+			// This is '/rpc' API route for browser, redirect to
+			// 'locationPrefix/rpc'.
+			fallthrough
+		case "/login":
+			// This is '/login' route for browser, redirect to
+			// 'locationPrefix/login'.
+			location := h.locationPrefix + r.URL.Path
+			// Redirect to new location.
+			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
+			return
 		}
 	}
-	date := req.Header.Get("Date")
-	switch {
-	case date != "":
-		if _, err := time.Parse(time.RFC1123, date); err == nil {
-			return time.Parse(time.RFC1123, date)
-		}
-		if _, err := time.Parse(time.RFC1123Z, date); err == nil {
-			return time.Parse(time.RFC1123Z, date)
-		}
-		if _, err := time.Parse(iso8601Format, amzDate); err == nil {
-			return time.Parse(iso8601Format, amzDate)
-		}
-	}
-	return time.Time{}, errors.New("invalid request")
+	h.handler.ServeHTTP(w, r)
 }
 
 // Adds Cache-Control header
@@ -102,16 +125,39 @@ type cacheControlHandler struct {
 	handler http.Handler
 }
 
-func setCacheControlHandler(h http.Handler) http.Handler {
+func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 	return cacheControlHandler{h}
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		// expire the cache in one week
-		w.Header().Set("Cache-Control", "public, max-age=604800")
+	if r.Method == "GET" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+		// Expire cache in one hour for all browser requests.
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+// Adds verification for incoming paths.
+type minioPrivateBucketHandler struct {
+	handler       http.Handler
+	privateBucket string
+}
+
+func setPrivateBucketHandler(h http.Handler) http.Handler {
+	return minioPrivateBucketHandler{handler: h, privateBucket: privateBucket}
+}
+
+func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// For all non browser requests, reject access to 'privateBucket'.
+	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && strings.HasPrefix(r.URL.Path, privateBucket) {
+		writeErrorResponse(w, r, AllAccessDisabled, r.URL.Path)
+		return
+	}
+	h.handler.ServeHTTP(w, r)
+}
+
+type timeHandler struct {
+	handler http.Handler
 }
 
 // setTimeValidityHandler to validate parsable time over http header
@@ -122,25 +168,28 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
 	if r.Header.Get("Authorization") != "" {
-		if r.Header.Get(http.CanonicalHeaderKey("x-amz-date")) == "" && r.Header.Get(http.CanonicalHeaderKey("x-minio-date")) == "" && r.Header.Get("Date") == "" {
-			// there is no way to knowing if this is a valid request, could be a attack reject such clients
-			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
-			return
-		}
-		date, err := parseDate(r)
-		if err != nil {
-			// there is no way to knowing if this is a valid request, could be a attack reject such clients
+		date, e := parseDateHeader(r)
+		if e != nil {
+			// All our internal APIs are sensitive towards Date
+			// header, for all requests where Date header is not
+			// present we will reject such clients.
 			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 		duration := time.Since(date)
 		minutes := time.Duration(5) * time.Minute
+		// Verify if the request date header is more than 5minutes
+		// late, reject such clients.
 		if duration.Minutes() > minutes.Minutes() {
 			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+type resourceHandler struct {
+	handler http.Handler
 }
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
@@ -153,26 +202,10 @@ func setCorsHandler(h http.Handler) http.Handler {
 	return c.Handler(h)
 }
 
-// setIgnoreSignatureV2RequestHandler -
-// Verify if authorization header has signature version '2', reject it cleanly.
-func setIgnoreSignatureV2RequestHandler(h http.Handler) http.Handler {
-	return ignoreSignatureV2RequestHandler{h}
-}
-
-// Ignore signature version '2' ServerHTTP() wrapper.
-func (h ignoreSignatureV2RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if isRequestSignatureV4(r) || isRequestJWT(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
-		h.handler.ServeHTTP(w, r)
-		return
-	}
-	writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
-	return
-}
-
 // setIgnoreResourcesHandler -
 // Ignore resources handler is wrapper handler used for API request resource validation
 // Since we do not support all the S3 queries, it is necessary for us to throw back a
-// valid error message indicating such a feature is not implemented.
+// valid error message indicating that requested feature is not implemented.
 func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
