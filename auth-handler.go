@@ -16,12 +16,7 @@
 
 package main
 
-import (
-	"fmt"
-	"net/http"
-
-	jwtgo "github.com/dgrijalva/jwt-go"
-)
+import "net/http"
 
 const (
 	signV4Algorithm = "AWS4-HMAC-SHA256"
@@ -69,15 +64,8 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Verify JWT authorization header is present.
 	if isRequestJWT(r) {
-		// Validate Authorization header to be valid.
-		jwt := InitJWT()
-		token, e := jwtgo.ParseFromRequest(r, func(token *jwtgo.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-			}
-			return jwt.secretAccessKey, nil
-		})
-		if e != nil || !token.Valid {
+		// Validate Authorization header if its valid.
+		if !isJWTReqAuthenticated(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

@@ -37,8 +37,8 @@ const (
 	tokenExpires time.Duration = 10
 )
 
-// InitJWT - initialize.
-func InitJWT() *JWT {
+// initJWT - initialize.
+func initJWT() *JWT {
 	jwt := &JWT{}
 	// Load credentials.
 	config, err := loadConfigV2()

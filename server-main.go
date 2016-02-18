@@ -90,12 +90,12 @@ type cloudServerConfig struct {
 	KeyFile  string // Domain key
 }
 
-// configureAPIServer configure a new server instance
-func configureAPIServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
+// configureServer configure a new server instance
+func configureServer(conf cloudServerConfig) (*http.Server, *probe.Error) {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           conf.Address,
-		Handler:        getCloudStorageAPIHandler(getNewCloudStorageAPI(conf), getNewWebAPI(conf)),
+		Handler:        serverHandler(conf),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -285,11 +285,14 @@ func serverMain(c *cli.Context) {
 		KeyFile:         keyFile,
 	}
 
-	// configure API server.
-	apiServer, err := configureAPIServer(serverConfig)
+	// configure server.
+	apiServer, err := configureServer(serverConfig)
 	errorIf(err.Trace(), "Failed to configure API server.", nil)
 
 	Println("\nMinio Object Storage:")
+	printServerMsg(apiServer)
+
+	Println("\nMinio Browser:")
 	printServerMsg(apiServer)
 
 	Println("\nTo configure Minio Client:")

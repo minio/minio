@@ -273,7 +273,7 @@ func (s *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	query := make(url.Values)
 	query.Set("X-Amz-Algorithm", signV4Algorithm)
 
-	if time.Now().UTC().Sub(preSignV4Values.Date) > time.Duration(preSignV4Values.Expires)/time.Second {
+	if time.Now().UTC().Sub(preSignV4Values.Date) > time.Duration(preSignV4Values.Expires) {
 		return false, ErrExpiredPresignRequest("Presigned request already expired, please initiate a new request.")
 	}
 
@@ -281,6 +281,7 @@ func (s *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	t := preSignV4Values.Date
 	expireSeconds := int(time.Duration(preSignV4Values.Expires) / time.Second)
 
+	// Construct the query.
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", s.getSignedHeaders(s.extractedSignedHeaders))
@@ -293,6 +294,8 @@ func (s *Signature) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 		}
 		query[k] = v
 	}
+
+	// Get the encoded query.
 	encodedQuery := query.Encode()
 
 	// Verify if date query is same.

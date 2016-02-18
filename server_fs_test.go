@@ -101,9 +101,7 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 		SecretAccessKey: s.secretAccessKey,
 		Region:          "us-east-1",
 	}
-	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
-	webAPI := getNewWebAPI(cloudServer)
-	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI, webAPI)
+	httpHandler := serverHandler(cloudServer)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 

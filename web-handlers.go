@@ -36,11 +36,11 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// isJWTReqAuthencatied validates if any incoming request to be a valid JWT
-// authenticated request.
-func isJWTReqAuthencatied(req *http.Request) bool {
-	jwt := InitJWT()
-	tokenRequest, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
+// isJWTReqAuthenticated validates if any incoming request to be a
+// valid JWT authenticated request.
+func isJWTReqAuthenticated(req *http.Request) bool {
+	jwt := initJWT()
+	token, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
@@ -49,18 +49,18 @@ func isJWTReqAuthencatied(req *http.Request) bool {
 	if e != nil {
 		return false
 	}
-	return tokenRequest.Valid
+	return token.Valid
 }
 
 // GetUIVersion - get UI version
-func (web WebAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
+func (web webAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
 	reply.UIVersion = uiVersion
 	return nil
 }
 
 // ServerInfo - get server info.
-func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	host, err := os.Hostname()
@@ -88,8 +88,8 @@ func (web *WebAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 }
 
 // DiskInfo - get disk statistics.
-func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	info, e := disk.GetInfo(web.FSPath)
@@ -102,8 +102,8 @@ func (web *WebAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfo
 }
 
 // MakeBucket - make a bucket.
-func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion
@@ -115,8 +115,8 @@ func (web *WebAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 }
 
 // ListBuckets - list buckets api.
-func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	buckets, e := web.Client.ListBuckets()
@@ -134,8 +134,8 @@ func (web *WebAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 }
 
 // ListObjects - list objects api.
-func (web *WebAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	doneCh := make(chan struct{})
@@ -182,8 +182,8 @@ func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
 }
 
 // PutObjectURL - generates url for upload access.
-func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
@@ -204,8 +204,8 @@ func (web *WebAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 }
 
 // GetObjectURL - generates url for download access.
-func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 
@@ -236,8 +236,8 @@ func (web *WebAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 }
 
 // RemoveObject - removes an object.
-func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
-	if !isJWTReqAuthencatied(r) {
+func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
+	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = uiVersion
@@ -249,8 +249,8 @@ func (web *WebAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *
 }
 
 // Login - user login handler.
-func (web *WebAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt := InitJWT()
+func (web *webAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
+	jwt := initJWT()
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {

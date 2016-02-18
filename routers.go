@@ -30,8 +30,8 @@ import (
 	signV4 "github.com/minio/minio/pkg/signature"
 )
 
-// CloudStorageAPI container for S3 compatible API.
-type CloudStorageAPI struct {
+// storageAPI container for S3 compatible API.
+type storageAPI struct {
 	// Once true log all incoming requests.
 	AccessLog bool
 	// Filesystem instance.
@@ -42,8 +42,8 @@ type CloudStorageAPI struct {
 	Region string
 }
 
-// WebAPI container for Web API.
-type WebAPI struct {
+// webAPI container for Web API.
+type webAPI struct {
 	// FSPath filesystem path.
 	FSPath string
 	// Once true log all incoming request.
@@ -59,8 +59,8 @@ type WebAPI struct {
 	secretAccessKey string
 }
 
-// registerCloudStorageAPI - register all the handlers to their respective paths
-func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI, w *WebAPI) {
+// registerAPIHandlers - register all the handlers to their respective paths
+func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// Minio rpc router
 	minio := mux.NewRoute().PathPrefix(privateBucket).Subrouter()
 
@@ -110,8 +110,8 @@ func registerCloudStorageAPI(mux *router.Router, a CloudStorageAPI, w *WebAPI) {
 	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 
-// getNewWebAPI instantiate a new WebAPI.
-func getNewWebAPI(conf cloudServerConfig) *WebAPI {
+// initWeb instantiate a new Web.
+func initWeb(conf cloudServerConfig) *webAPI {
 	// Split host port.
 	host, port, e := net.SplitHostPort(conf.Address)
 	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
@@ -126,7 +126,7 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
-	w := &WebAPI{
+	w := &webAPI{
 		FSPath:          conf.Path,
 		AccessLog:       conf.AccessLog,
 		Client:          client,
@@ -138,15 +138,15 @@ func getNewWebAPI(conf cloudServerConfig) *WebAPI {
 	return w
 }
 
-// getNewCloudStorageAPI instantiate a new CloudStorageAPI.
-func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
+// initAPI instantiate a new StorageAPI.
+func initAPI(conf cloudServerConfig) storageAPI {
 	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
 	sign, err := signV4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
 	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
 
-	return CloudStorageAPI{
+	return storageAPI{
 		AccessLog:  conf.AccessLog,
 		Filesystem: fs,
 		Signature:  sign,
@@ -154,7 +154,14 @@ func getNewCloudStorageAPI(conf cloudServerConfig) CloudStorageAPI {
 	}
 }
 
-func getCloudStorageAPIHandler(api CloudStorageAPI, web *WebAPI) http.Handler {
+// server handler returns final handler before initializing server.
+func serverHandler(conf cloudServerConfig) http.Handler {
+	// Initialize API.
+	api := initAPI(conf)
+
+	// Initialize Web.
+	web := initWeb(conf)
+
 	var handlerFns = []HandlerFunc{
 		// Redirect some pre-defined browser request paths to a static
 		// location prefix.
@@ -175,8 +182,13 @@ func getCloudStorageAPIHandler(api CloudStorageAPI, web *WebAPI) http.Handler {
 		// invalid/unsupported signatures.
 		setAuthHandler,
 	}
-	handlerFns = append(handlerFns, setCorsHandler)
+
+	// Initialize router.
 	mux := router.NewRouter()
-	registerCloudStorageAPI(mux, api, web)
+
+	// Register all API handlers.
+	registerAPIHandlers(mux, api, web)
+
+	// Register rest of the handlers.
 	return registerHandlers(mux, handlerFns...)
 }
