@@ -29,12 +29,12 @@ import (
 // isContainerized returns true if we are inside a containerized environment.
 func isContainerized() bool {
 	// Docker containers contain ".dockerinit" at its root path.
-	if _, e := os.Stat("/.dockerinit"); os.IsNotExist(e) {
+	if _, e := os.Stat("/.dockerinit"); e == nil {
 		return true
 	}
 
 	// Check if cgroup policies for init process contains docker string.
-	if cgroupData, e := ioutil.ReadFile("/proc/1/cgroup"); e != nil {
+	if cgroupData, e := ioutil.ReadFile("/proc/1/cgroup"); e == nil {
 		if strings.Contains(string(cgroupData), "/docker-") {
 			return true
 		}
