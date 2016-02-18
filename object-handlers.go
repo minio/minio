@@ -51,7 +51,7 @@ func setResponseHeaders(w http.ResponseWriter, reqParams url.Values) {
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -109,7 +109,7 @@ func (api CloudStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Reque
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -150,7 +150,7 @@ func (api CloudStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Requ
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -231,10 +231,10 @@ func (api CloudStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponse(w, nil)
 }
 
-/// Multipart CloudStorageAPI
+/// Multipart storageAPI
 
 // NewMultipartUploadHandler - New multipart upload
-func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -281,7 +281,7 @@ func (api CloudStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *h
 }
 
 // PutObjectPartHandler - Upload part
-func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -373,7 +373,7 @@ func (api CloudStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.R
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -414,7 +414,7 @@ func (api CloudStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r 
 }
 
 // ListObjectPartsHandler - List object parts
-func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -472,7 +472,7 @@ func (api CloudStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -542,10 +542,10 @@ func (api CloudStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter,
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
-/// Delete CloudStorageAPI
+/// Delete storageAPI
 
 // DeleteObjectHandler - Delete object
-func (api CloudStorageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
