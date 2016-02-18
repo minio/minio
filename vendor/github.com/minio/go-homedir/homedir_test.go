@@ -30,6 +30,8 @@ func BenchmarkDir(b *testing.B) {
 }
 
 func TestDir(t *testing.T) {
+	// NOTE: This test is not portable. If user.Current() worked
+	// everywhere, we wouldn't need our package in the first place.
 	u, err := user.Current()
 	if err != nil {
 		t.Fatalf("err: %s", err)

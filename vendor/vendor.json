@@ -69,8 +69,8 @@
 		},
 		{
 			"path": "github.com/minio/go-homedir",
-			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
-			"revisionTime": "2015-10-24T22:24:27-07:00"
+			"revision": "0b1069c753c94b3633cc06a1995252dbcc27c7a6",
+			"revisionTime": "2016-02-15T17:25:11+05:30"
 		},
 		{
 			"path": "github.com/minio/minio-go",
