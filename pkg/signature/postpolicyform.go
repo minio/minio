@@ -17,9 +17,11 @@
 package signature
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/pkg/probe"
@@ -67,8 +69,8 @@ type PostPolicyForm struct {
 	}
 }
 
-// ParsePostPolicyForm - Parse JSON policy string into typed POostPolicyForm structure.
-func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
+// parsePostPolicyFormV4 - Parse JSON policy string into typed POostPolicyForm structure.
+func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
@@ -154,4 +156,54 @@ func ParsePostPolicyForm(policy string) (PostPolicyForm, *probe.Error) {
 		}
 	}
 	return parsedPolicy, nil
+}
+
+// ApplyPolicyCond - apply policy conditions and validate input values.
+func ApplyPolicyCond(formValues map[string]string) *probe.Error {
+	if formValues["X-Amz-Algorithm"] != signV4Algorithm {
+		return ErrUnsuppSignAlgo("Unsupported signature algorithm in policy form data.", formValues["X-Amz-Algorithm"]).Trace(formValues["X-Amz-Algorithm"])
+	}
+	/// Decoding policy
+	policyBytes, e := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if e != nil {
+		return probe.NewError(e)
+	}
+	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
+	if err != nil {
+		return err.Trace()
+	}
+	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
+		return ErrPolicyAlreadyExpired("Policy has already expired, please generate a new one.")
+	}
+	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
+		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
+			return ErrMissingFields("Policy bucket is missing.", formValues["Bucket"])
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
+		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
+			return ErrMissingFields("Policy date is missing.", formValues["X-Amz-Date"])
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
+		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
+			return ErrMissingFields("Policy content-type is missing or invalid.", formValues["Content-Type"])
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
+		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
+			return ErrMissingFields("Policy content-Type is missing or invalid.", formValues["Content-Type"])
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
+		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
+			return ErrMissingFields("Policy key is missing.", formValues["Key"])
+		}
+	}
+	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
+		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
+			return ErrMissingFields("Policy key is missing.", formValues["Key"])
+		}
+	}
+	return nil
 }

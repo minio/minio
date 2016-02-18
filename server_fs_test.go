@@ -21,8 +21,10 @@ import (
 	"crypto/md5"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +54,21 @@ var _ = Suite(&MyAPIFSCacheSuite{})
 
 var testAPIFSCacheServer *httptest.Server
 
+// Ask the kernel for a free open port.
+func getFreePort() int {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
 func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	root, e := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(e, IsNil)
@@ -77,11 +94,16 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	c.Assert(saveConfig(conf), IsNil)
 
 	cloudServer := cloudServerConfig{
-		Path:        fsroot,
-		MinFreeDisk: 0,
+		Address:         ":" + strconv.Itoa(getFreePort()),
+		Path:            fsroot,
+		MinFreeDisk:     0,
+		AccessKeyID:     s.accessKeyID,
+		SecretAccessKey: s.secretAccessKey,
+		Region:          "us-east-1",
 	}
 	cloudStorageAPI := getNewCloudStorageAPI(cloudServer)
-	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI)
+	webAPI := getNewWebAPI(cloudServer)
+	httpHandler := getCloudStorageAPIHandler(cloudStorageAPI, webAPI)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 
@@ -225,7 +247,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 		"aws4_request",
 	}, "/")
 
-	stringToSign := authHeaderPrefix + "\n" + t.Format(iso8601Format) + "\n"
+	stringToSign := "AWS4-HMAC-SHA256" + "\n" + t.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
@@ -238,7 +260,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 
 	// final Authorization header
 	parts := []string{
-		authHeaderPrefix + " Credential=" + s.accessKeyID + "/" + scope,
+		"AWS4-HMAC-SHA256" + " Credential=" + s.accessKeyID + "/" + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}

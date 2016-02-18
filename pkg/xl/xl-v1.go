@@ -376,7 +376,7 @@ func (xl API) completeMultipartUpload(bucket, object, uploadID string, data io.R
 			return ObjectMetadata{}, err.Trace()
 		}
 		if !ok {
-			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	parts := &CompleteMultipartUpload{}

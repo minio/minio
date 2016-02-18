@@ -174,7 +174,15 @@ func saveParts(partPathPrefix string, mw io.Writer, parts []CompletePart) *probe
 		md5Sum = strings.TrimSuffix(md5Sum, "\"")
 		partFile, e := os.OpenFile(partPathPrefix+md5Sum+fmt.Sprintf("$%d-$multiparts", part.PartNumber), os.O_RDONLY, 0600)
 		if e != nil {
-			return probe.NewError(e)
+			if !os.IsNotExist(e) {
+				return probe.NewError(e)
+			}
+			// Some clients do not set Content-MD5, so we would have
+			// created part files without 'ETag' in them.
+			partFile, e = os.OpenFile(partPathPrefix+fmt.Sprintf("$%d-$multiparts", part.PartNumber), os.O_RDONLY, 0600)
+			if e != nil {
+				return probe.NewError(e)
+			}
 		}
 		partReaders = append(partReaders, partFile)
 		partClosers = append(partClosers, partFile)
@@ -322,9 +330,9 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	if strings.TrimSpace(expectedMD5Sum) != "" {
+	if expectedMD5Sum != "" {
 		var expectedMD5SumBytes []byte
-		expectedMD5SumBytes, err = base64.StdEncoding.DecodeString(strings.TrimSpace(expectedMD5Sum))
+		expectedMD5SumBytes, err = base64.StdEncoding.DecodeString(expectedMD5Sum)
 		if err != nil {
 			// Pro-actively close the connection
 			return "", probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
@@ -361,8 +369,8 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 	md5sum := hex.EncodeToString(md5Hasher.Sum(nil))
 	// Verify if the written object is equal to what is expected, only
 	// if it is requested as such.
-	if strings.TrimSpace(expectedMD5Sum) != "" {
-		if !isMD5SumEqual(strings.TrimSpace(expectedMD5Sum), md5sum) {
+	if expectedMD5Sum != "" {
+		if !isMD5SumEqual(expectedMD5Sum, md5sum) {
 			partFile.CloseAndPurge()
 			return "", probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
@@ -375,7 +383,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 		}
 		if !ok {
 			partFile.CloseAndPurge()
-			return "", probe.NewError(signV4.SigDoesNotMatch{})
+			return "", probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	partFile.Close()
@@ -472,7 +480,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		}
 		if !ok {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	completeMultipartUpload := &CompleteMultipartUpload{}

@@ -392,7 +392,7 @@ func (xl API) createObject(bucket, key, contentType, expectedMD5Sum string, size
 		if !ok {
 			// Delete perhaps the object is already saved, due to the nature of append()
 			xl.objects.Delete(objectKey)
-			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 
@@ -435,7 +435,7 @@ func (xl API) MakeBucket(bucketName, acl string, location io.Reader, signature *
 			return err.Trace()
 		}
 		if !ok {
-			return probe.NewError(signV4.SigDoesNotMatch{})
+			return probe.NewError(SignDoesNotMatch{})
 		}
 	}
 

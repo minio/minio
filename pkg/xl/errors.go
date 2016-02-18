@@ -18,6 +18,13 @@ package xl
 
 import "fmt"
 
+// SignDoesNotMatch - signature does not match.
+type SignDoesNotMatch struct{}
+
+func (e SignDoesNotMatch) Error() string {
+	return "Signature does not match."
+}
+
 // InvalidArgument invalid argument
 type InvalidArgument struct{}
 

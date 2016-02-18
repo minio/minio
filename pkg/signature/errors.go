@@ -16,33 +16,41 @@
 
 package signature
 
-// MissingDateHeader date header missing
-type MissingDateHeader struct{}
+import (
+	"fmt"
 
-func (e MissingDateHeader) Error() string {
-	return "Missing date header"
+	"github.com/minio/minio/pkg/probe"
+)
+
+type errFunc func(msg string, a ...string) *probe.Error
+
+func errFactory() errFunc {
+	return func(msg string, a ...string) *probe.Error {
+		return probe.NewError(fmt.Errorf("%s, Args: %s", msg, a)).Untrace()
+	}
 }
 
-// MissingExpiresQuery expires query string missing
-type MissingExpiresQuery struct{}
-
-func (e MissingExpiresQuery) Error() string {
-	return "Missing expires query string"
-}
-
-// ExpiredPresignedRequest request already expired
-type ExpiredPresignedRequest struct{}
-
-func (e ExpiredPresignedRequest) Error() string {
-	return "Presigned request already expired"
-}
-
-// SigDoesNotMatch invalid signature
-type SigDoesNotMatch struct {
-	SignatureSent       string
-	SignatureCalculated string
-}
-
-func (e SigDoesNotMatch) Error() string {
-	return "The request signature we calculated does not match the signature you provided"
-}
+// Various errors.
+var (
+	ErrPolicyAlreadyExpired  = errFactory()
+	ErrInvalidRegion         = errFactory()
+	ErrInvalidDateFormat     = errFactory()
+	ErrInvalidService        = errFactory()
+	ErrInvalidRequestVersion = errFactory()
+	ErrMissingFields         = errFactory()
+	ErrMissingCredTag        = errFactory()
+	ErrCredMalformed         = errFactory()
+	ErrMissingSignTag        = errFactory()
+	ErrMissingSignHeadersTag = errFactory()
+	ErrMissingDateHeader     = errFactory()
+	ErrMalformedDate         = errFactory()
+	ErrMalformedExpires      = errFactory()
+	ErrAuthHeaderEmpty       = errFactory()
+	ErrUnsuppSignAlgo        = errFactory()
+	ErrMissingExpiresQuery   = errFactory()
+	ErrExpiredPresignRequest = errFactory()
+	ErrSignDoesNotMath       = errFactory()
+	ErrInvalidAccessKeyID    = errFactory()
+	ErrInvalidSecretKey      = errFactory()
+	ErrRegionISEmpty         = errFactory()
+)

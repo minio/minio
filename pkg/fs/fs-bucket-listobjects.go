@@ -68,9 +68,11 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 		// Bucket path prefix should always end with a separator.
 		bucketPathPrefix := bucketPath + string(os.PathSeparator)
 		prefixPath := bucketPathPrefix + prefix
-		st, err := os.Stat(prefixPath)
-		if err != nil && os.IsNotExist(err) {
-			walkPath = bucketPath
+		st, e := os.Stat(prefixPath)
+		if e != nil {
+			if os.IsNotExist(e) {
+				walkPath = bucketPath
+			}
 		} else {
 			if st.IsDir() && !strings.HasSuffix(prefix, delimiter) {
 				walkPath = bucketPath

@@ -306,7 +306,7 @@ func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64,
 			//
 			// Signature mismatch occurred all temp files to be removed and all data purged.
 			CleanupWritersOnError(writers)
-			return ObjectMetadata{}, probe.NewError(signV4.SigDoesNotMatch{})
+			return ObjectMetadata{}, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	objMetadata.MD5Sum = hex.EncodeToString(dataMD5sum)

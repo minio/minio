@@ -75,6 +75,7 @@ const (
 	BucketNotEmpty
 	RootPathFull
 	ObjectExistsAsPrefix
+	AllAccessDisabled
 )
 
 // APIError code to Error structure map
@@ -243,6 +244,11 @@ var errorCodeResponse = map[int]APIError{
 		Code:           "ObjectExistsAsPrefix",
 		Description:    "An object already exists as your prefix, choose a different prefix to proceed.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	AllAccessDisabled: {
+		Code:           "AllAccessDisabled",
+		Description:    "All access to this bucket has been disabled.",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 }
 
