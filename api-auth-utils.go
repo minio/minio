@@ -38,7 +38,7 @@ func isValidAccessKey(accessKeyID string) bool {
 	return regex.MatchString(accessKeyID)
 }
 
-// isValidAccessKey - validate access key
+// isValidSecretKey - validate secret key
 func isValidSecretKey(secretKeyID string) bool {
 	if secretKeyID == "" {
 		return true
