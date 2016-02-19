@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,7 +32,6 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // isJWTReqAuthenticated validates if any incoming request to be a
@@ -52,11 +50,32 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 	return token.Valid
 }
 
+// GenericRep - reply structure for calls for which reply is success/failure
+// for ex. RemoveObject MakeBucket
+type GenericRep struct {
+	UIVersion string `json:"uiVersion"`
+}
+
+// GenericArgs - empty struct
+type GenericArgs struct{}
+
 // GetUIVersion - get UI version
 func (web webAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
 	reply.UIVersion = uiVersion
 	return nil
 }
+
+// ServerInfoRep - server info reply.
+type ServerInfoRep struct {
+	MinioVersion  string
+	MinioMemory   string
+	MinioPlatform string
+	MinioRuntime  string
+	UIVersion     string `json:"uiVersion"`
+}
+
+// ServerInfoArgs  - server info args.
+type ServerInfoArgs struct{}
 
 // ServerInfo - get server info.
 func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
@@ -87,6 +106,15 @@ func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 	return nil
 }
 
+// DiskInfoArgs - disk info args.
+type DiskInfoArgs struct{}
+
+// DiskInfoRep - disk info reply.
+type DiskInfoRep struct {
+	DiskInfo  disk.Info `json:"diskInfo"`
+	UIVersion string    `json:"uiVersion"`
+}
+
 // DiskInfo - get disk statistics.
 func (web *webAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
@@ -101,6 +129,11 @@ func (web *webAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfo
 	return nil
 }
 
+// MakeBucketArgs - make bucket args.
+type MakeBucketArgs struct {
+	BucketName string `json:"bucketName"`
+}
+
 // MakeBucket - make a bucket.
 func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
 	if !isJWTReqAuthenticated(r) {
@@ -112,6 +145,23 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 		return &json2.Error{Message: e.Error()}
 	}
 	return nil
+}
+
+// ListBucketsArgs - list bucket args.
+type ListBucketsArgs struct{}
+
+// ListBucketsRep - list buckets response
+type ListBucketsRep struct {
+	Buckets   []BucketInfo `json:"buckets"`
+	UIVersion string       `json:"uiVersion"`
+}
+
+// BucketInfo container for list buckets metadata.
+type BucketInfo struct {
+	// The name of the bucket.
+	Name string `json:"name"`
+	// Date the bucket was created.
+	CreationDate time.Time `json:"creationDate"`
 }
 
 // ListBuckets - list buckets api.
@@ -131,6 +181,30 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 	}
 	reply.UIVersion = uiVersion
 	return nil
+}
+
+// ListObjectsArgs - list object args.
+type ListObjectsArgs struct {
+	BucketName string `json:"bucketName"`
+	Prefix     string `json:"prefix"`
+}
+
+// ListObjectsRep - list objects response.
+type ListObjectsRep struct {
+	Objects   []ObjectInfo `json:"objects"`
+	UIVersion string       `json:"uiVersion"`
+}
+
+// ObjectInfo container for list objects metadata.
+type ObjectInfo struct {
+	// Name of the object
+	Key string `json:"name"`
+	// Date and time the object was last modified.
+	LastModified time.Time `json:"lastModified"`
+	// Size in bytes of the object.
+	Size int64 `json:"size"`
+	// ContentType is mime type of the object.
+	ContentType string `json:"contentType"`
 }
 
 // ListObjects - list objects api.
@@ -166,19 +240,17 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 	return nil
 }
 
-func getTargetHost(apiAddress, targetHost string) (string, *probe.Error) {
-	if targetHost != "" {
-		_, port, e := net.SplitHostPort(apiAddress)
-		if e != nil {
-			return "", probe.NewError(e)
-		}
-		host, _, e := net.SplitHostPort(targetHost)
-		if e != nil {
-			return "", probe.NewError(e)
-		}
-		targetHost = net.JoinHostPort(host, port)
-	}
-	return targetHost, nil
+// PutObjectURLArgs - args to generate url for upload access.
+type PutObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
+}
+
+// PutObjectURLRep - reply for presigned upload url request.
+type PutObjectURLRep struct {
+	URL       string `json:"url"`
+	UIVersion string `json:"uiVersion"`
 }
 
 // PutObjectURL - generates url for upload access.
@@ -186,11 +258,7 @@ func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
-	if err != nil {
-		return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
-	}
-	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
@@ -201,6 +269,19 @@ func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	reply.URL = signedURLStr
 	reply.UIVersion = uiVersion
 	return nil
+}
+
+// GetObjectURLArgs - args to generate url for download access.
+type GetObjectURLArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
+}
+
+// GetObjectURLRep - reply for presigned download url request.
+type GetObjectURLRep struct {
+	URL       string `json:"url"`
+	UIVersion string `json:"uiVersion"`
 }
 
 // GetObjectURL - generates url for download access.
@@ -215,14 +296,11 @@ func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 		return &json2.Error{Message: e.Error()}
 	}
 
-	targetHost, err := getTargetHost(web.apiAddress, args.TargetHost)
-	if err != nil {
-		return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
-	}
-	client, e := minio.NewV4(targetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
+
 	reqParams := make(url.Values)
 	// Set content disposition for browser to download the file.
 	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(args.ObjectName)))
@@ -233,6 +311,13 @@ func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 	reply.URL = signedURLStr
 	reply.UIVersion = uiVersion
 	return nil
+}
+
+// RemoveObjectArgs - args to remove an object
+type RemoveObjectArgs struct {
+	TargetHost string `json:"targetHost"`
+	BucketName string `json:"bucketName"`
+	ObjectName string `json:"objectName"`
 }
 
 // RemoveObject - removes an object.
@@ -246,6 +331,18 @@ func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *
 		return &json2.Error{Message: e.Error()}
 	}
 	return nil
+}
+
+// LoginArgs - login arguments.
+type LoginArgs struct {
+	Username string `json:"username" form:"username"`
+	Password string `json:"password" form:"password"`
+}
+
+// LoginRep - login reply.
+type LoginRep struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
 }
 
 // Login - user login handler.

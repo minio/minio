@@ -35,12 +35,15 @@ docker run -p 9000 --volumes-from minio-export --name minio1 minio/my-minio
 
 Please download [Caddy Server](https://caddyserver.com/download)
 
-Create a caddy configuration file as below, change the ip addresses for your environment.
+Create a caddy configuration file as below, change the ip addresses according to your local
+minio and DNS configuration.
+
 ```bash
-cat Caddyfile
-10.0.0.3:2015 {
-    proxy / localhost:9000 {
+your.public.com {
+    proxy / 10.0.1.3:9000 {
         proxy_header Host {host}
+        proxy_header X-Real-IP {remote}
+        proxy_header X-Forwarded-Proto {scheme}
     }
     tls off
 }
@@ -49,5 +52,5 @@ cat Caddyfile
 ```bash
 $ ./caddy
 Activating privacy features... done.
-10.0.0.3:2015
+your.public.com
 ```
