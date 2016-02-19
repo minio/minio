@@ -263,6 +263,13 @@ func serverMain(c *cli.Context) {
 	secretKey := c.GlobalString("secretAccessKey")
 
 	if (accessKey != "" && secretKey != "") {
+		if (! isValidAccessKey(accessKey)) {
+			fatalIf(probe.NewError(errInvalidArgument), "Access key does not have required length", nil)
+		}
+		if (! isValidSecretKey(secretKey)) {
+			fatalIf(probe.NewError(errInvalidArgument), "Secret key does not have required length", nil)
+		}
+		
 		conf.Credentials.AccessKeyID = accessKey
 		conf.Credentials.SecretAccessKey = secretKey
 		saveConfig(conf)

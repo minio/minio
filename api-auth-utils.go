@@ -38,6 +38,15 @@ func isValidAccessKey(accessKeyID string) bool {
 	return regex.MatchString(accessKeyID)
 }
 
+// isValidAccessKey - validate access key
+func isValidSecretKey(secretKeyID string) bool {
+	if secretKeyID == "" {
+		return true
+	}
+	regex := regexp.MustCompile("^[a-zA-Z0-9\\-\\.\\_\\~]{40}$")
+	return regex.MatchString(secretKeyID)
+}
+
 // generateAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
 func generateAccessKeyID() ([]byte, *probe.Error) {
