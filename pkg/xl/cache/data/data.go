@@ -135,7 +135,7 @@ func (r *Cache) Append(key interface{}, value []byte) bool {
 	}
 	ele, hit := r.reverseItems[key]
 	if !hit {
-		ele := r.items.PushFront(&element{key, value})
+		ele = r.items.PushFront(&element{key, value})
 		r.currentSize += valueLen
 		r.reverseItems[key] = ele
 		return true

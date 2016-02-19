@@ -27,7 +27,7 @@ script:
 - make test GOFLAGS="-race"
 
 go:
-- 1.5.3
+- 1.6
 
 notifications:
   slack:

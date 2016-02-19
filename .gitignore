@@ -13,3 +13,4 @@ build
 isa-l
 vendor/**/*.js
 vendor/**/*.json
+release

@@ -85,8 +85,8 @@ func FileCreateWithPrefix(filePath string, prefix string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(f.Name(), 0600); err != nil {
-		if err := os.Remove(f.Name()); err != nil {
+	if err = os.Chmod(f.Name(), 0600); err != nil {
+		if err = os.Remove(f.Name()); err != nil {
 			return nil, err
 		}
 		return nil, err

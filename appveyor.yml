@@ -10,16 +10,21 @@ environment:
   GOPATH: c:\gopath
   GO_EXTLINK_ENABLED: 0
   GO15VENDOREXPERIMENT: 1
+# Remove this after fixing erasure code.
+  GODEBUG: cgocheck=0
 
 # scripts that run after cloning repository
 install:
   - '"C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64'
   - curl -fsSL -o c:\go\bin\yasm.exe http://www.tortall.net/projects/yasm/releases/yasm-1.3.0-win64.exe
   - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
+  - rd C:\Go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.6.windows-amd64.zip
+  - 7z x go1.6.windows-amd64.zip -oC:\ >nul
   - curl -fsSL -o mingw-w64.7z http://downloads.sourceforge.net/project/mingw-w64-dgn/mingw-w64/mingw-w64-bin-x86_64-20151206.7z
   - 7z x -oC:\ mingw-w64.7z > NUL
   - set PATH=C:\mingw64\bin;%PATH%
-  - x86_64-w64-mingw32-gcc --version  
+  - x86_64-w64-mingw32-gcc --version
   - go version
   - go env
   - git clone https://github.com/minio/isa-l
