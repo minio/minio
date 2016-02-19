@@ -129,6 +129,8 @@ func registerApp() *cli.App {
 	registerFlag(accessLogFlag)
 	registerFlag(certFlag)
 	registerFlag(keyFlag)
+	registerFlag(accessKeyID)
+	registerFlag(secretAccessKey)
 
 	// set up app
 	app := cli.NewApp()

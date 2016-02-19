@@ -49,6 +49,16 @@ var (
 		Name:  "key",
 		Usage: "Provide your domain private key.",
 	}
+
+	accessKeyID = cli.StringFlag{
+		Name:  "accessKeyID",
+		Usage: "AccessKey identifier.",
+	}
+
+	secretAccessKey = cli.StringFlag{
+		Name:  "secretAccessKey",
+		Usage: "Secret key identifier.",
+	}
 )
 
 // registerFlag registers a cli flag
