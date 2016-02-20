@@ -52,7 +52,6 @@ type webAPI struct {
 	Client minio.CloudStorageClient
 
 	// private params.
-	inSecure   bool   // Enabled if TLS is false.
 	apiAddress string // api destination address.
 	// accessKeys kept to be used internally.
 	accessKeyID     string
@@ -130,7 +129,6 @@ func initWeb(conf cloudServerConfig) *webAPI {
 		FSPath:          conf.Path,
 		AccessLog:       conf.AccessLog,
 		Client:          client,
-		inSecure:        inSecure,
 		apiAddress:      conf.Address,
 		accessKeyID:     conf.AccessKeyID,
 		secretAccessKey: conf.SecretAccessKey,

@@ -242,9 +242,10 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 
 // PutObjectURLArgs - args to generate url for upload access.
 type PutObjectURLArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
+	TargetHost  string `json:"targetHost"`
+	TargetProto string `json:"targetProto"`
+	BucketName  string `json:"bucketName"`
+	ObjectName  string `json:"objectName"`
 }
 
 // PutObjectURLRep - reply for presigned upload url request.
@@ -258,7 +259,11 @@ func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+
+	// disableSSL is true if no 'https:' proto is found.
+	disableSSL := (args.TargetProto != "https:")
+
+	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, disableSSL)
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
@@ -273,9 +278,10 @@ func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 
 // GetObjectURLArgs - args to generate url for download access.
 type GetObjectURLArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
+	TargetHost  string `json:"targetHost"`
+	TargetProto string `json:"targetProto"`
+	BucketName  string `json:"bucketName"`
+	ObjectName  string `json:"objectName"`
 }
 
 // GetObjectURLRep - reply for presigned download url request.
@@ -296,7 +302,10 @@ func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 		return &json2.Error{Message: e.Error()}
 	}
 
-	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, web.inSecure)
+	// disableSSL is true if no 'https:' proto is found.
+	disableSSL := (args.TargetProto != "https:")
+
+	client, e := minio.New(args.TargetHost, web.accessKeyID, web.secretAccessKey, disableSSL)
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
