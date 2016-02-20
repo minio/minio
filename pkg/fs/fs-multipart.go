@@ -53,6 +53,13 @@ func (fs Filesystem) isValidUploadID(object, uploadID string) (ok bool) {
 	return
 }
 
+// byObjectMetadataKey is a sortable interface for UploadMetadata slice
+type byUploadMetadataKey []*UploadMetadata
+
+func (b byUploadMetadataKey) Len() int           { return len(b) }
+func (b byUploadMetadataKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byUploadMetadataKey) Less(i, j int) bool { return b[i].Object < b[j].Object }
+
 // ListMultipartUploads - list incomplete multipart sessions for a given BucketMultipartResourcesMetadata
 func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error) {
 	// Input validation.
