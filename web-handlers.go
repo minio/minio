@@ -174,10 +174,13 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 		return &json2.Error{Message: e.Error()}
 	}
 	for _, bucket := range buckets {
-		reply.Buckets = append(reply.Buckets, BucketInfo{
-			Name:         bucket.Name,
-			CreationDate: bucket.CreationDate,
-		})
+		// List all buckets which are not private.
+		if bucket.Name != privateBucket {
+			reply.Buckets = append(reply.Buckets, BucketInfo{
+				Name:         bucket.Name,
+				CreationDate: bucket.CreationDate,
+			})
+		}
 	}
 	reply.UIVersion = uiVersion
 	return nil
