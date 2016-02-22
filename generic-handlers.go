@@ -20,7 +20,6 @@ import (
 	"errors"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,7 +29,7 @@ import (
 
 const (
 	iso8601Format = "20060102T150405Z"
-	privateBucket = "minio"
+	privateBucket = "/minio"
 )
 
 // HandlerFunc - useful to chain different middleware http.Handler
@@ -101,14 +100,12 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Re-direction handled specifically for browsers.
 	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
-		// Following re-direction code handles redirects only for
-		// these specific incoming URLs.
-		// '/' is redirected to '/locationPrefix'
-		// '/rpc' is redirected to '/locationPrefix/rpc'
-		// '/login' is redirected to '/locationPrefix/login'
+		// '/' is redirected to 'locationPrefix/'
+		// '/rpc' is redirected to 'locationPrefix/rpc'
+		// '/login' is redirected to 'locationPrefix/login'
 		switch r.URL.Path {
 		case "/", "/rpc", "/login":
-			location := path.Join(h.locationPrefix, r.URL.Path)
+			location := h.locationPrefix + r.URL.Path
 			// Redirect to new location.
 			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
 			return
@@ -146,7 +143,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'privateBucket'.
-	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && filepath.Base(r.URL.Path) == privateBucket {
+	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == privateBucket {
 		writeErrorResponse(w, r, AllAccessDisabled, r.URL.Path)
 		return
 	}

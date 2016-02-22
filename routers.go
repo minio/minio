@@ -19,7 +19,7 @@ package main
 import (
 	"net"
 	"net/http"
-	"path/filepath"
+	"path"
 
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
@@ -74,7 +74,7 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	minio.Path("/rpc").Handler(rpc)
 
 	// Web handler assets at URI  - /minio/login
-	minio.Path("/login").Handler(http.StripPrefix(filepath.Join(privateBucket, "login"), http.FileServer(assetFS())))
+	minio.Path("/login").Handler(http.StripPrefix(path.Join(privateBucket, "login"), http.FileServer(assetFS())))
 	minio.Path("/{file:.*}").Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
 
 	// API Router

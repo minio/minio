@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -175,7 +176,7 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
-		if bucket.Name != privateBucket {
+		if bucket.Name != path.Base(privateBucket) {
 			reply.Buckets = append(reply.Buckets, BucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.CreationDate,
