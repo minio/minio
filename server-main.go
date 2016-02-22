@@ -52,6 +52,10 @@ USAGE:
 OPTIONS:
   {{range .Flags}}{{.}}
   {{end}}
+
+ENVIRONMENT VARIABLES:
+  MINIO_ACCESS_KEY, MINIO_SECRET_KEY: Access and secret key to use.
+
 EXAMPLES:
   1. Start minio server on Linux.
       $ minio {{.Name}} /home/shared
@@ -257,6 +261,23 @@ func serverMain(c *cli.Context) {
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
+	}
+
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	if accessKey != "" && secretKey != "" {
+		if !isValidAccessKey(accessKey) {
+			fatalIf(probe.NewError(errInvalidArgument), "Access key does not have required length", nil)
+		}
+		if !isValidSecretKey(secretKey) {
+			fatalIf(probe.NewError(errInvalidArgument), "Secret key does not have required length", nil)
+		}
+
+		conf.Credentials.AccessKeyID = accessKey
+		conf.Credentials.SecretAccessKey = secretKey
+
+		err = saveConfig(conf)
+		fatalIf(err.Trace(), "Unable to save credentials to config.", nil)
 	}
 
 	minFreeDisk, err := parsePercentToInt(c.String("min-free-disk"), 64)
