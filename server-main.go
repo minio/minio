@@ -53,7 +53,7 @@ OPTIONS:
   {{range .Flags}}{{.}}
   {{end}}
 
-ENVIRONMENT VARIABLES
+ENVIRONMENT VARIABLES:
   MINIO_ACCESS_KEY, MINIO_SECRET_KEY: Access and secret key to use.
 
 EXAMPLES:
@@ -263,21 +263,22 @@ func serverMain(c *cli.Context) {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
 
-
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if (accessKey != "" && secretKey != "") {
-		if (! isValidAccessKey(accessKey)) {
-	 			fatalIf(probe.NewError(errInvalidArgument), "Access key does not have required length", nil)
-	 	}
-	 	if (! isValidSecretKey(secretKey)) {
-	 			fatalIf(probe.NewError(errInvalidArgument), "Secret key does not have required length", nil)
-	 	}
+	if accessKey != "" && secretKey != "" {
+		if !isValidAccessKey(accessKey) {
+			fatalIf(probe.NewError(errInvalidArgument), "Access key does not have required length", nil)
+		}
+		if !isValidSecretKey(secretKey) {
+			fatalIf(probe.NewError(errInvalidArgument), "Secret key does not have required length", nil)
+		}
 
-	 		conf.Credentials.AccessKeyID = accessKey
-	 		conf.Credentials.SecretAccessKey = secretKey
-	 		saveConfig(conf)
-	 }
+		conf.Credentials.AccessKeyID = accessKey
+		conf.Credentials.SecretAccessKey = secretKey
+
+		err = saveConfig(conf)
+		fatalIf(err.Trace(), "Unable to save credentials to config.", nil)
+	}
 
 	minFreeDisk, err := parsePercentToInt(c.String("min-free-disk"), 64)
 	fatalIf(err.Trace(c.String("min-free-disk")), "Invalid minium free disk size "+c.String("min-free-disk")+" passed.", nil)
