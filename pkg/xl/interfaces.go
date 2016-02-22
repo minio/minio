@@ -20,7 +20,7 @@ import (
 	"io"
 
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 // Collection of XL specification interfaces
@@ -37,7 +37,7 @@ type CloudStorage interface {
 	GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error)
 	SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error
 	ListBuckets() ([]BucketMetadata, *probe.Error)
-	MakeBucket(bucket string, ACL string, location io.Reader, signature *signV4.Signature) *probe.Error
+	MakeBucket(bucket string, ACL string, location io.Reader, signature *signature4.Sign) *probe.Error
 
 	// Bucket operations
 	ListObjects(string, BucketResourcesMetadata) ([]ObjectMetadata, BucketResourcesMetadata, *probe.Error)
@@ -46,7 +46,7 @@ type CloudStorage interface {
 	GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error)
 	GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error)
 	// bucket, object, expectedMD5Sum, size, reader, metadata, signature
-	CreateObject(string, string, string, int64, io.Reader, map[string]string, *signV4.Signature) (ObjectMetadata, *probe.Error)
+	CreateObject(string, string, string, int64, io.Reader, map[string]string, *signature4.Sign) (ObjectMetadata, *probe.Error)
 
 	Multipart
 }
@@ -55,8 +55,8 @@ type CloudStorage interface {
 type Multipart interface {
 	NewMultipartUpload(bucket, key, contentType string) (string, *probe.Error)
 	AbortMultipartUpload(bucket, key, uploadID string) *probe.Error
-	CreateObjectPart(string, string, string, int, string, string, int64, io.Reader, *signV4.Signature) (string, *probe.Error)
-	CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error)
+	CreateObjectPart(string, string, string, int, string, string, int64, io.Reader, *signature4.Sign) (string, *probe.Error)
+	CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signature4.Sign) (ObjectMetadata, *probe.Error)
 	ListMultipartUploads(string, BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error)
 	ListObjectParts(string, string, ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error)
 }

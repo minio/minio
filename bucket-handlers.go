@@ -24,11 +24,11 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -368,7 +368,7 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 		return
 	}
-	if err = signV4.ApplyPolicyCond(formValues); err != nil {
+	if err = signature4.ApplyPolicyCond(formValues); err != nil {
 		errorIf(err.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
 		writeErrorResponse(w, r, MalformedPOSTRequest, r.URL.Path)
 		return

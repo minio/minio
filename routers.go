@@ -27,7 +27,7 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 // storageAPI container for S3 compatible API.
@@ -37,7 +37,7 @@ type storageAPI struct {
 	// Filesystem instance.
 	Filesystem fs.Filesystem
 	// Signature instance.
-	Signature *signV4.Signature
+	Signature *signature4.Sign
 	// Region instance.
 	Region string
 }
@@ -141,7 +141,7 @@ func initAPI(conf cloudServerConfig) storageAPI {
 	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
-	sign, err := signV4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
+	sign, err := signature4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
 	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
 
 	return storageAPI{

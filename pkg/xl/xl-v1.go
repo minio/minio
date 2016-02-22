@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/minio/pkg/xl/block"
 )
 
@@ -128,7 +128,7 @@ func (xl API) listObjects(bucket, prefix, marker, delimiter string, maxkeys int)
 }
 
 // putObject - put object
-func (xl API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (xl API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader, size int64, metadata map[string]string, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}
@@ -160,7 +160,7 @@ func (xl API) putObject(bucket, object, expectedMD5Sum string, reader io.Reader,
 }
 
 // putObject - put object
-func (xl API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *signV4.Signature) (PartMetadata, *probe.Error) {
+func (xl API) putObjectPart(bucket, object, expectedMD5Sum, uploadID string, partID int, reader io.Reader, size int64, metadata map[string]string, signature *signature4.Sign) (PartMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return PartMetadata{}, probe.NewError(InvalidArgument{})
 	}
@@ -337,7 +337,7 @@ func (xl API) listObjectParts(bucket, object string, resources ObjectResourcesMe
 }
 
 // completeMultipartUpload complete an incomplete multipart upload
-func (xl API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (xl API) completeMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	if bucket == "" || strings.TrimSpace(bucket) == "" {
 		return ObjectMetadata{}, probe.NewError(InvalidArgument{})
 	}

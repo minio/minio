@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/minio/pkg/xl/cache/data"
 	"github.com/minio/minio/pkg/xl/cache/metadata"
 )
@@ -267,7 +267,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) *probe.Error {
 }
 
 // CreateObject - create an object
-func (xl API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (xl API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data io.Reader, metadata map[string]string, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	xl.lock.Lock()
 	defer xl.lock.Unlock()
 
@@ -280,7 +280,7 @@ func (xl API) CreateObject(bucket, key, expectedMD5Sum string, size int64, data 
 }
 
 // createObject - PUT object to cache buffer
-func (xl API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (xl API) createObject(bucket, key, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	if len(xl.config.NodeDiskMap) == 0 {
 		if size > int64(xl.config.MaxSize) {
 			generic := GenericObjectError{Bucket: bucket, Object: key}
@@ -414,7 +414,7 @@ func (xl API) createObject(bucket, key, contentType, expectedMD5Sum string, size
 }
 
 // MakeBucket - create bucket in cache
-func (xl API) MakeBucket(bucketName, acl string, location io.Reader, signature *signV4.Signature) *probe.Error {
+func (xl API) MakeBucket(bucketName, acl string, location io.Reader, signature *signature4.Sign) *probe.Error {
 	xl.lock.Lock()
 	defer xl.lock.Unlock()
 

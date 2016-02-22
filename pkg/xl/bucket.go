@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/minio/pkg/xl/block"
 )
 
@@ -236,7 +236,7 @@ func (b bucket) ReadObject(objectName string) (reader io.ReadCloser, size int64,
 }
 
 // WriteObject - write a new object into bucket
-func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (b bucket) WriteObject(objectName string, objectData io.Reader, size int64, expectedMD5Sum string, metadata map[string]string, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if objectName == "" || objectData == nil {

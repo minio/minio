@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signature
+package signature4
 
 import (
 	"fmt"
@@ -24,13 +24,14 @@ import (
 
 type errFunc func(msg string, a ...string) *probe.Error
 
+// generic error factory which wraps around probe.NewError()
 func errFactory() errFunc {
 	return func(msg string, a ...string) *probe.Error {
 		return probe.NewError(fmt.Errorf("%s, Args: %s", msg, a)).Untrace()
 	}
 }
 
-// Various errors.
+// Various signature v4 errors.
 var (
 	ErrPolicyAlreadyExpired  = errFactory()
 	ErrInvalidRegion         = errFactory()
