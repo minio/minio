@@ -259,6 +259,23 @@ func serverMain(c *cli.Context) {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
 
+	accessKey := c.GlobalString("accessKeyID")
+	secretKey := c.GlobalString("secretAccessKey")
+
+	if (accessKey != "" && secretKey != "") {
+		if (! isValidAccessKey(accessKey)) {
+			fatalIf(probe.NewError(errInvalidArgument), "Access key does not have required length", nil)
+		}
+		if (! isValidSecretKey(secretKey)) {
+			fatalIf(probe.NewError(errInvalidArgument), "Secret key does not have required length", nil)
+		}
+		
+		conf.Credentials.AccessKeyID = accessKey
+		conf.Credentials.SecretAccessKey = secretKey
+		saveConfig(conf)
+	}
+
+
 	minFreeDisk, err := parsePercentToInt(c.String("min-free-disk"), 64)
 	fatalIf(err.Trace(c.String("min-free-disk")), "Invalid minium free disk size "+c.String("min-free-disk")+" passed.", nil)
 
