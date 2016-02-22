@@ -96,16 +96,23 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 }
 
 // removeDuplicateBuckets - remove duplicate buckets.
-func removeDuplicateBuckets(elements []BucketMetadata) (result []BucketMetadata) {
-	// Use map to record duplicates as we find them.
-	duplicates := make(map[string]struct{})
-	for _, element := range elements {
-		if _, ok := duplicates[element.Name]; !ok {
-			duplicates[element.Name] = struct{}{}
-			result = append(result, element)
+func removeDuplicateBuckets(buckets []BucketMetadata) []BucketMetadata {
+	length := len(buckets) - 1
+	for i := 0; i < length; i++ {
+		for j := i + 1; j <= length; j++ {
+			if buckets[i].Name == buckets[j].Name {
+				if buckets[i].Created.Sub(buckets[j].Created) > 0 {
+					buckets[i] = buckets[length]
+				} else {
+					buckets[j] = buckets[length]
+				}
+				buckets = buckets[0:length]
+				length--
+				j--
+			}
 		}
 	}
-	return result
+	return buckets
 }
 
 // MakeBucket - PUT Bucket.

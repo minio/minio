@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,39 +18,8 @@ package fs
 
 import (
 	"os"
-	"regexp"
 	"time"
-	"unicode/utf8"
 )
-
-// BucketACL - bucket level access control
-type BucketACL string
-
-// different types of ACL's currently supported for buckets
-const (
-	BucketPrivate         = BucketACL("private")
-	BucketPublicRead      = BucketACL("public-read")
-	BucketPublicReadWrite = BucketACL("public-read-write")
-)
-
-func (b BucketACL) String() string {
-	return string(b)
-}
-
-// IsPrivate - is acl Private
-func (b BucketACL) IsPrivate() bool {
-	return b == BucketACL("private")
-}
-
-// IsPublicRead - is acl PublicRead
-func (b BucketACL) IsPublicRead() bool {
-	return b == BucketACL("public-read")
-}
-
-// IsPublicReadWrite - is acl PublicReadWrite
-func (b BucketACL) IsPublicReadWrite() bool {
-	return b == BucketACL("public-read-write")
-}
 
 // BucketMetadata - name and create date
 type BucketMetadata struct {
@@ -141,54 +110,4 @@ func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 // CompleteMultipartUpload container for completing multipart upload
 type CompleteMultipartUpload struct {
 	Part []CompletePart
-}
-
-// IsValidBucketACL - is provided acl string supported
-func IsValidBucketACL(acl string) bool {
-	switch acl {
-	case "private":
-		fallthrough
-	case "public-read":
-		fallthrough
-	case "public-read-write":
-		return true
-	case "":
-		// by default its "private"
-		return true
-	default:
-		return false
-	}
-}
-
-// validBucket regexp.
-var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
-
-// IsValidBucketName - verify bucket name in accordance with
-//  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
-func IsValidBucketName(bucket string) bool {
-	if bucket == "" {
-		return false
-	}
-	if len(bucket) < 3 || len(bucket) > 63 {
-		return false
-	}
-	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
-		return false
-	}
-	return validBucket.MatchString(bucket)
-}
-
-// IsValidObjectName - verify object name in accordance with
-//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
-func IsValidObjectName(object string) bool {
-	if object == "" {
-		return true
-	}
-	if len(object) > 1024 || len(object) == 0 {
-		return false
-	}
-	if !utf8.ValidString(object) {
-		return false
-	}
-	return true
 }

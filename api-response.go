@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,197 @@
 package main
 
 import (
+	"encoding/xml"
 	"net/http"
 
 	"github.com/minio/minio/pkg/fs"
 )
 
-// Reply date format
 const (
-	rfcFormat = "2006-01-02T15:04:05.000Z"
+	// Reply date format
+	timeFormatAMZ = "2006-01-02T15:04:05.000Z"
+	// Limit number of objects in a given response.
+	maxObjectList = 1000
 )
+
+// LocationResponse - format for location response.
+type LocationResponse struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint" json:"-"`
+	Location string   `xml:",chardata"`
+}
+
+// AccessControlPolicyResponse - format for get bucket acl response.
+type AccessControlPolicyResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
+
+	AccessControlList struct {
+		Grants []Grant `xml:"Grant"`
+	}
+	Owner Owner
+}
+
+// Grant container for grantee and permission.
+type Grant struct {
+	Grantee struct {
+		ID           string
+		DisplayName  string
+		EmailAddress string
+		Type         string
+		URI          string
+	}
+	Permission string
+}
+
+// ListObjectsResponse - format for list objects response.
+type ListObjectsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
+
+	CommonPrefixes []CommonPrefix
+	Contents       []Object
+
+	Delimiter string
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string
+
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
+	Marker      string
+	MaxKeys     int
+	Name        string
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects. Server lists objects in alphabetical
+	// order Note: This element is returned only if you have delimiter request parameter
+	// specified. If response does not include the NextMaker and it is truncated,
+	// you can use the value of the last Key in the response as the marker in the
+	// subsequent request to get the next set of object keys.
+	NextMarker string
+	Prefix     string
+}
+
+// Part container for part metadata.
+type Part struct {
+	PartNumber   int
+	ETag         string
+	LastModified string
+	Size         int64
+}
+
+// ListPartsResponse - format for list parts response.
+type ListPartsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
+
+	Bucket   string
+	Key      string
+	UploadID string `xml:"UploadId"`
+
+	Initiator Initiator
+	Owner     Owner
+
+	// The class of storage used to store the object.
+	StorageClass string
+
+	PartNumberMarker     int
+	NextPartNumberMarker int
+	MaxParts             int
+	IsTruncated          bool
+
+	// List of parts.
+	Parts []Part `xml:"Part"`
+}
+
+// ListMultipartUploadsResponse - format for list multipart uploads response.
+type ListMultipartUploadsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
+
+	Bucket             string
+	KeyMarker          string
+	UploadIDMarker     string `xml:"UploadIdMarker"`
+	NextKeyMarker      string
+	NextUploadIDMarker string `xml:"NextUploadIdMarker"`
+	EncodingType       string
+	MaxUploads         int
+	IsTruncated        bool
+	Uploads            []Upload `xml:"Upload"`
+	Prefix             string
+	Delimiter          string
+	CommonPrefixes     []CommonPrefix
+}
+
+// ListBucketsResponse - format for list buckets response
+type ListBucketsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
+	// Container for one or more buckets.
+	Buckets struct {
+		Buckets []Bucket `xml:"Bucket"`
+	} // Buckets are nested
+	Owner Owner
+}
+
+// Upload container for in progress multipart upload
+type Upload struct {
+	Key          string
+	UploadID     string `xml:"UploadId"`
+	Initiator    Initiator
+	Owner        Owner
+	StorageClass string
+	Initiated    string
+}
+
+// CommonPrefix container for prefix response in ListObjectsResponse
+type CommonPrefix struct {
+	Prefix string
+}
+
+// Bucket container for bucket metadata
+type Bucket struct {
+	Name         string
+	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
+}
+
+// Object container for object metadata
+type Object struct {
+	ETag         string
+	Key          string
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+	Size         int64
+
+	Owner Owner
+
+	// The class of storage used to store the object.
+	StorageClass string
+}
+
+// Initiator inherit from Owner struct, fields are same
+type Initiator Owner
+
+// Owner - bucket owner/principal
+type Owner struct {
+	ID          string
+	DisplayName string
+}
+
+// InitiateMultipartUploadResponse container for InitiateMultiPartUpload response, provides uploadID to start MultiPart upload
+type InitiateMultipartUploadResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ InitiateMultipartUploadResult" json:"-"`
+
+	Bucket   string
+	Key      string
+	UploadID string `xml:"UploadId"`
+}
+
+// CompleteMultipartUploadResponse container for completed multipart upload response
+type CompleteMultipartUploadResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUploadResult" json:"-"`
+
+	Location string
+	Bucket   string
+	Key      string
+	ETag     string
+}
 
 // takes an array of Bucketmetadata information for serialization
 // input:
@@ -34,7 +216,7 @@ const (
 // output:
 // populated struct that can be serialized to match xml and json api spec output
 func generateListBucketsResponse(buckets []fs.BucketMetadata) ListBucketsResponse {
-	var listbuckets []*Bucket
+	var listbuckets []Bucket
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
 
@@ -42,14 +224,14 @@ func generateListBucketsResponse(buckets []fs.BucketMetadata) ListBucketsRespons
 	owner.DisplayName = "minio"
 
 	for _, bucket := range buckets {
-		var listbucket = &Bucket{}
+		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.Format(rfcFormat)
+		listbucket.CreationDate = bucket.Created.Format(timeFormatAMZ)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
 	data.Owner = owner
-	data.Buckets.Bucket = listbuckets
+	data.Buckets.Buckets = listbuckets
 
 	return data
 }
@@ -65,7 +247,7 @@ func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyRe
 	defaultGrant.Grantee.ID = "minio"
 	defaultGrant.Grantee.DisplayName = "minio"
 	defaultGrant.Permission = "FULL_CONTROL"
-	accessCtrlPolicyResponse.AccessControlList.Grant = append(accessCtrlPolicyResponse.AccessControlList.Grant, defaultGrant)
+	accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, defaultGrant)
 	switch {
 	case acl.IsPublicRead():
 		publicReadGrant := Grant{}
@@ -73,7 +255,7 @@ func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyRe
 		publicReadGrant.Grantee.DisplayName = "minio"
 		publicReadGrant.Grantee.URI = "http://acs.amazonaws.com/groups/global/AllUsers"
 		publicReadGrant.Permission = "READ"
-		accessCtrlPolicyResponse.AccessControlList.Grant = append(accessCtrlPolicyResponse.AccessControlList.Grant, publicReadGrant)
+		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadGrant)
 	case acl.IsPublicReadWrite():
 		publicReadGrant := Grant{}
 		publicReadGrant.Grantee.ID = "minio"
@@ -85,16 +267,16 @@ func generateAccessControlPolicyResponse(acl fs.BucketACL) AccessControlPolicyRe
 		publicReadWriteGrant.Grantee.DisplayName = "minio"
 		publicReadWriteGrant.Grantee.URI = "http://acs.amazonaws.com/groups/global/AllUsers"
 		publicReadWriteGrant.Permission = "WRITE"
-		accessCtrlPolicyResponse.AccessControlList.Grant = append(accessCtrlPolicyResponse.AccessControlList.Grant, publicReadGrant)
-		accessCtrlPolicyResponse.AccessControlList.Grant = append(accessCtrlPolicyResponse.AccessControlList.Grant, publicReadWriteGrant)
+		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadGrant)
+		accessCtrlPolicyResponse.AccessControlList.Grants = append(accessCtrlPolicyResponse.AccessControlList.Grants, publicReadWriteGrant)
 	}
 	return accessCtrlPolicyResponse
 }
 
 // generates an ListObjects response for the said bucket with other enumerated options.
 func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKeys int, resp fs.ListObjectsResult) ListObjectsResponse {
-	var contents []*Object
-	var prefixes []*CommonPrefix
+	var contents []Object
+	var prefixes []CommonPrefix
 	var owner = Owner{}
 	var data = ListObjectsResponse{}
 
@@ -102,12 +284,12 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 	owner.DisplayName = "minio"
 
 	for _, object := range resp.Objects {
-		var content = &Object{}
+		var content = Object{}
 		if object.Object == "" {
 			continue
 		}
 		content.Key = object.Object
-		content.LastModified = object.Created.Format(rfcFormat)
+		content.LastModified = object.Created.Format(timeFormatAMZ)
 		if object.MD5 != "" {
 			content.ETag = "\"" + object.MD5 + "\""
 		}
@@ -128,7 +310,7 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 	data.NextMarker = resp.NextMarker
 	data.IsTruncated = resp.IsTruncated
 	for _, prefix := range resp.Prefixes {
-		var prefixItem = &CommonPrefix{}
+		var prefixItem = CommonPrefix{}
 		prefixItem.Prefix = prefix
 		prefixes = append(prefixes, prefixItem)
 	}
@@ -173,14 +355,14 @@ func generateListPartsResponse(objectMetadata fs.ObjectResourcesMetadata) ListPa
 	listPartsResponse.IsTruncated = objectMetadata.IsTruncated
 	listPartsResponse.NextPartNumberMarker = objectMetadata.NextPartNumberMarker
 
-	listPartsResponse.Part = make([]*Part, len(objectMetadata.Part))
+	listPartsResponse.Parts = make([]Part, len(objectMetadata.Part))
 	for _, part := range objectMetadata.Part {
-		newPart := &Part{}
+		newPart := Part{}
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.Format(rfcFormat)
-		listPartsResponse.Part = append(listPartsResponse.Part, newPart)
+		newPart.LastModified = part.LastModified.Format(timeFormatAMZ)
+		listPartsResponse.Parts = append(listPartsResponse.Parts, newPart)
 	}
 	return listPartsResponse
 }
@@ -199,13 +381,13 @@ func generateListMultipartUploadsResponse(bucket string, metadata fs.BucketMulti
 	listMultipartUploadsResponse.NextUploadIDMarker = metadata.NextUploadIDMarker
 	listMultipartUploadsResponse.UploadIDMarker = metadata.UploadIDMarker
 
-	listMultipartUploadsResponse.Upload = make([]*Upload, len(metadata.Upload))
+	listMultipartUploadsResponse.Uploads = make([]Upload, len(metadata.Upload))
 	for _, upload := range metadata.Upload {
-		newUpload := &Upload{}
+		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object
-		newUpload.Initiated = upload.Initiated.Format(rfcFormat)
-		listMultipartUploadsResponse.Upload = append(listMultipartUploadsResponse.Upload, newUpload)
+		newUpload.Initiated = upload.Initiated.Format(timeFormatAMZ)
+		listMultipartUploadsResponse.Uploads = append(listMultipartUploadsResponse.Uploads, newUpload)
 	}
 	return listMultipartUploadsResponse
 }

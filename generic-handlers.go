@@ -245,8 +245,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
-	q := req.URL.Query()
-	for name := range q {
+	for name := range req.URL.Query() {
 		if notimplementedBucketResourceNames[name] {
 			return true
 		}
@@ -256,11 +255,32 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
-	q := req.URL.Query()
-	for name := range q {
+	for name := range req.URL.Query() {
 		if notimplementedObjectResourceNames[name] {
 			return true
 		}
 	}
 	return false
+}
+
+// List of not implemented bucket queries
+var notimplementedBucketResourceNames = map[string]bool{
+	"policy":         true,
+	"cors":           true,
+	"lifecycle":      true,
+	"logging":        true,
+	"notification":   true,
+	"replication":    true,
+	"tagging":        true,
+	"versions":       true,
+	"requestPayment": true,
+	"versioning":     true,
+	"website":        true,
+}
+
+// List of not implemented object queries
+var notimplementedObjectResourceNames = map[string]bool{
+	"torrent": true,
+	"acl":     true,
+	"policy":  true,
 }

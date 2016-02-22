@@ -155,7 +155,7 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	}
 	contentType := "application/octet-stream"
 	if runtime.GOOS == "windows" {
-		object = sanitizeWindowsPath(object)
+		object = filepath.ToSlash(object)
 	}
 
 	if objectExt := filepath.Ext(object); objectExt != "" {
