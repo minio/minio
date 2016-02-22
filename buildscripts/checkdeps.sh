@@ -21,6 +21,7 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
+    YASM_VERSION="1.2.0"
     CURL_VERSION="7.12.0"
     GPG_VERSION="1.3"
     GO_VERSION="1.5.1"
@@ -191,6 +192,11 @@ check_deps() {
     check_version "$(env curl --version 2>/dev/null | sed -e 's/^.* \([0-9.\].*\).*$/\1/' -e 's/^\([0-9.\]*\).*/\1/g' | head -1)" "${CURL_VERSION}"
     if [ $? -ge 2 ]; then
         MISSING="${MISSING} curl"
+    fi
+
+    check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${YASM_VERSION}"
+    if [ $? -ge 2 ]; then
+        MISSING="${MISSING} yasm(${YASM_VERSION})"
     fi
 }
 
