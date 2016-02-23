@@ -1,4 +1,20 @@
-package signature
+/*
+ * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package signature4
 
 import (
 	"net/url"
@@ -8,7 +24,9 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-type credScope struct {
+// credential data type represents structured form of Credential
+// string from authorization header.
+type credential struct {
 	accessKeyID string
 	scope       struct {
 		date    time.Time
@@ -18,45 +36,46 @@ type credScope struct {
 	}
 }
 
-func parseCredential(credElement string) (credScope, *probe.Error) {
+// parse credential string into its structured form.
+func parseCredential(credElement string) (credential, *probe.Error) {
 	creds := strings.Split(strings.TrimSpace(credElement), "=")
 	if len(creds) != 2 {
-		return credScope{}, ErrMissingFields("Credential tag has missing fields.", credElement).Trace(credElement)
+		return credential{}, ErrMissingFields("Credential tag has missing fields.", credElement).Trace(credElement)
 	}
 	if creds[0] != "Credential" {
-		return credScope{}, ErrMissingCredTag("Missing credentials tag.", credElement).Trace(credElement)
+		return credential{}, ErrMissingCredTag("Missing credentials tag.", credElement).Trace(credElement)
 	}
 	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
 	if len(credElements) != 5 {
-		return credScope{}, ErrCredMalformed("Credential values malformed.", credElement).Trace(credElement)
+		return credential{}, ErrCredMalformed("Credential values malformed.", credElement).Trace(credElement)
 	}
 	if !isValidAccessKey.MatchString(credElements[0]) {
-		return credScope{}, ErrInvalidAccessKeyID("Invalid access key id.", credElement).Trace(credElement)
+		return credential{}, ErrInvalidAccessKeyID("Invalid access key id.", credElement).Trace(credElement)
 	}
-	cred := credScope{
+	cred := credential{
 		accessKeyID: credElements[0],
 	}
 	var e error
 	cred.scope.date, e = time.Parse(yyyymmdd, credElements[1])
 	if e != nil {
-		return credScope{}, ErrInvalidDateFormat("Invalid date format.", credElement).Trace(credElement)
+		return credential{}, ErrInvalidDateFormat("Invalid date format.", credElement).Trace(credElement)
 	}
 	if credElements[2] == "" {
-		return credScope{}, ErrRegionISEmpty("Region is empty.", credElement).Trace(credElement)
+		return credential{}, ErrRegionISEmpty("Region is empty.", credElement).Trace(credElement)
 	}
 	cred.scope.region = credElements[2]
 	if credElements[3] != "s3" {
-		return credScope{}, ErrInvalidService("Invalid service detected.", credElement).Trace(credElement)
+		return credential{}, ErrInvalidService("Invalid service detected.", credElement).Trace(credElement)
 	}
 	cred.scope.service = credElements[3]
 	if credElements[4] != "aws4_request" {
-		return credScope{}, ErrInvalidRequestVersion("Invalid request version detected.", credElement).Trace(credElement)
+		return credential{}, ErrInvalidRequestVersion("Invalid request version detected.", credElement).Trace(credElement)
 	}
 	cred.scope.request = credElements[4]
 	return cred, nil
 }
 
-// parse signature.
+// Parse signature string.
 func parseSignature(signElement string) (string, *probe.Error) {
 	signFields := strings.Split(strings.TrimSpace(signElement), "=")
 	if len(signFields) != 2 {
@@ -69,7 +88,7 @@ func parseSignature(signElement string) (string, *probe.Error) {
 	return signature, nil
 }
 
-// parse signed headers.
+// Parse signed headers string.
 func parseSignedHeaders(signedHdrElement string) ([]string, *probe.Error) {
 	signedHdrFields := strings.Split(strings.TrimSpace(signedHdrElement), "=")
 	if len(signedHdrFields) != 2 {
@@ -82,14 +101,14 @@ func parseSignedHeaders(signedHdrElement string) ([]string, *probe.Error) {
 	return signedHeaders, nil
 }
 
-// structured version of AWS Signature V4 header.
+// signValues data type represents structured form of AWS Signature V4 header.
 type signValues struct {
-	Creds         credScope
+	Credential    credential
 	SignedHeaders []string
 	Signature     string
 }
 
-// structued version of AWS Signature V4 query string.
+// preSignValues data type represents structued form of AWS Signature V4 query string.
 type preSignValues struct {
 	signValues
 	Date    time.Time
@@ -115,8 +134,8 @@ func parsePreSignV4(query url.Values) (preSignValues, *probe.Error) {
 	preSignV4Values := preSignValues{}
 
 	var err *probe.Error
-	// Save credentail values.
-	preSignV4Values.Creds, err = parseCredential("Credential=" + query.Get("X-Amz-Credential"))
+	// Save credential.
+	preSignV4Values.Credential, err = parseCredential("Credential=" + query.Get("X-Amz-Credential"))
 	if err != nil {
 		return preSignValues{}, err.Trace(query.Get("X-Amz-Credential"))
 	}
@@ -181,7 +200,7 @@ func parseSignV4(v4Auth string) (signValues, *probe.Error) {
 
 	var err *probe.Error
 	// Save credentail values.
-	signV4Values.Creds, err = parseCredential(authFields[0])
+	signV4Values.Credential, err = parseCredential(authFields[0])
 	if err != nil {
 		return signValues{}, err.Trace(v4Auth)
 	}

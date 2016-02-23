@@ -35,7 +35,7 @@ import (
 
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/probe"
-	signV4 "github.com/minio/minio/pkg/signature"
+	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/minio/pkg/xl/cache/data"
 )
 
@@ -109,7 +109,7 @@ func (xl API) AbortMultipartUpload(bucket, key, uploadID string) *probe.Error {
 }
 
 // CreateObjectPart - create a part in a multipart session
-func (xl API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signV4.Signature) (string, *probe.Error) {
+func (xl API) CreateObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signature4.Sign) (string, *probe.Error) {
 	xl.lock.Lock()
 	etag, err := xl.createObjectPart(bucket, key, uploadID, partID, "", expectedMD5Sum, size, data, signature)
 	xl.lock.Unlock()
@@ -120,7 +120,7 @@ func (xl API) CreateObjectPart(bucket, key, uploadID string, partID int, content
 }
 
 // createObject - internal wrapper function called by CreateObjectPart
-func (xl API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signV4.Signature) (string, *probe.Error) {
+func (xl API) createObjectPart(bucket, key, uploadID string, partID int, contentType, expectedMD5Sum string, size int64, data io.Reader, signature *signature4.Sign) (string, *probe.Error) {
 	if !IsValidBucket(bucket) {
 		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
@@ -289,7 +289,7 @@ func (xl API) mergeMultipart(parts *CompleteMultipartUpload, uploadID string, fu
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (xl API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signV4.Signature) (ObjectMetadata, *probe.Error) {
+func (xl API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Reader, signature *signature4.Sign) (ObjectMetadata, *probe.Error) {
 	xl.lock.Lock()
 	defer xl.lock.Unlock()
 	size := int64(xl.multiPartObjects[uploadID].Stats().Bytes)
@@ -307,7 +307,7 @@ func (xl API) CompleteMultipartUpload(bucket, key, uploadID string, data io.Read
 	return objectMetadata, nil
 }
 
-func (xl API) completeMultipartUploadV2(bucket, key, uploadID string, data io.Reader, signature *signV4.Signature) (io.Reader, *probe.Error) {
+func (xl API) completeMultipartUploadV2(bucket, key, uploadID string, data io.Reader, signature *signature4.Sign) (io.Reader, *probe.Error) {
 	if !IsValidBucket(bucket) {
 		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}

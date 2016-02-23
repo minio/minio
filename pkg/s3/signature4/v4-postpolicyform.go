@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signature
+package signature4
 
 import (
 	"encoding/base64"

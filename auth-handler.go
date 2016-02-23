@@ -16,12 +16,87 @@
 
 package main
 
-import "net/http"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"strings"
+
+	"github.com/minio/minio/pkg/s3/signature4"
+)
 
 const (
 	signV4Algorithm = "AWS4-HMAC-SHA256"
 	jwtAlgorithm    = "Bearer"
 )
+
+// Verify if request has JWT.
+func isRequestJWT(r *http.Request) bool {
+	if _, ok := r.Header["Authorization"]; ok {
+		if strings.HasPrefix(r.Header.Get("Authorization"), jwtAlgorithm) {
+			return true
+		}
+	}
+	return false
+}
+
+// Verify if request has AWS Signature Version '4'.
+func isRequestSignatureV4(r *http.Request) bool {
+	if _, ok := r.Header["Authorization"]; ok {
+		if strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm) {
+			return true
+		}
+	}
+	return false
+}
+
+// Verify if request has AWS Presignature Version '4'.
+func isRequestPresignedSignatureV4(r *http.Request) bool {
+	if _, ok := r.URL.Query()["X-Amz-Credential"]; ok {
+		return true
+	}
+	return false
+}
+
+// Verify if request has AWS Post policy Signature Version '4'.
+func isRequestPostPolicySignatureV4(r *http.Request) bool {
+	if _, ok := r.Header["Content-Type"]; ok {
+		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+			return true
+		}
+	}
+	return false
+}
+
+// Verify if request requires ACL check.
+func isRequestRequiresACLCheck(r *http.Request) bool {
+	if isRequestSignatureV4(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
+		return false
+	}
+	return true
+}
+
+// Verify if request has valid AWS Signature Version '4'.
+func isSignV4ReqAuthenticated(sign *signature4.Sign, r *http.Request) bool {
+	auth := sign.SetHTTPRequestToVerify(r)
+	if isRequestSignatureV4(r) {
+		dummyPayload := sha256.Sum256([]byte(""))
+		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(dummyPayload[:]))
+		if err != nil {
+			errorIf(err.Trace(), "Signature verification failed.", nil)
+			return false
+		}
+		return ok
+	} else if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(), "Presigned signature verification failed.", nil)
+			return false
+		}
+		return ok
+	}
+	return false
+}
 
 // authHandler - handles all the incoming authorization headers and
 // validates them if possible.
