@@ -104,7 +104,7 @@ func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// '/rpc' is redirected to 'locationPrefix/rpc'
 		// '/login' is redirected to 'locationPrefix/login'
 		switch r.URL.Path {
-		case "/", "/rpc", "/login":
+		case "/", "/rpc", "/login", "/favicon.ico":
 			location := h.locationPrefix + r.URL.Path
 			// Redirect to new location.
 			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
