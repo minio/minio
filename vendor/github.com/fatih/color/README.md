@@ -143,7 +143,7 @@ c.Println("This prints again cyan...")
 ## Credits
 
  * [Fatih Arslan](https://github.com/fatih)
- * Windows support via @shiena: [ansicolor](https://github.com/shiena/ansicolor)
+ * Windows support via @mattn: [colorable](https://github.com/mattn/go-colorable)
 
 ## License
 

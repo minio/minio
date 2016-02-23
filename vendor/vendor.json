@@ -24,8 +24,8 @@
 		},
 		{
 			"path": "github.com/fatih/color",
-			"revision": "76d423163af754ff6423d2d9be0057fbf03c57c2",
-			"revisionTime": "2015-08-24T00:44:34+03:00"
+			"revision": "7a5857db0b2752a436d8461d88c42dea0ee191c0",
+			"revisionTime": "2016-02-12T11:24:09+02:00"
 		},
 		{
 			"path": "github.com/gorilla/context",
@@ -58,6 +58,11 @@
 			"revisionTime": "2016-01-06T11:44:51+01:00"
 		},
 		{
+			"path": "github.com/mattn/go-colorable",
+			"revision": "9cbef7c35391cca05f15f8181dc0b18bc9736dbb",
+			"revisionTime": "2016-02-20T16:59:35+09:00"
+		},
+		{
 			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"
@@ -88,14 +93,14 @@
 			"revisionTime": "2015-10-24T22:24:27-07:00"
 		},
 		{
+			"path": "github.com/olekukonko/ts",
+			"revision": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8",
+			"revisionTime": "2014-04-12T15:01:45-07:00"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
 			"revisionTime": "2015-08-29T22:34:20-07:00"
-		},
-		{
-			"path": "github.com/shiena/ansicolor",
-			"revision": "a5e2b567a4dd6cc74545b8a4f27c9d63b9e7735b",
-			"revisionTime": "2015-07-19T16:15:31+09:00"
 		},
 		{
 			"path": "golang.org/x/crypto/bcrypt",
