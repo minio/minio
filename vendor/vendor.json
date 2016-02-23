@@ -1,6 +1,6 @@
 {
 	"comment": "",
-	"ignore": "",
+	"ignore": "appengine test",
 	"package": [
 		{
 			"path": "github.com/Sirupsen/logrus",
@@ -76,6 +76,11 @@
 			"path": "github.com/minio/minio-go",
 			"revision": "280f16a52008d3ebba1bd64398b9b082e6738386",
 			"revisionTime": "2016-02-07T03:45:25-08:00"
+		},
+		{
+			"path": "github.com/minio/miniobrowser",
+			"revision": "b2835d0f671b5d539269bd2d9191b7c9c6ed87b3",
+			"revisionTime": "2016-02-23T13:18:37-08:00"
 		},
 		{
 			"path": "github.com/mitchellh/go-homedir",

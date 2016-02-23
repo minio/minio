@@ -33,6 +33,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/miniobrowser"
 )
 
 // isJWTReqAuthenticated validates if any incoming request to be a
@@ -62,7 +63,7 @@ type GenericArgs struct{}
 
 // GetUIVersion - get UI version
 func (web webAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -103,7 +104,7 @@ func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -126,7 +127,7 @@ func (web *webAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfo
 		return &json2.Error{Message: e.Error()}
 	}
 	reply.DiskInfo = info
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -140,7 +141,7 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	e := web.Client.MakeBucket(args.BucketName, "", "")
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
@@ -183,7 +184,7 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 			})
 		}
 	}
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -240,7 +241,7 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		}
 		reply.Objects = append(reply.Objects, objectInfo)
 	}
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -276,7 +277,7 @@ func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *
 		return &json2.Error{Message: e.Error()}
 	}
 	reply.URL = signedURLStr
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -322,7 +323,7 @@ func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *
 		return &json2.Error{Message: e.Error()}
 	}
 	reply.URL = signedURLStr
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -338,7 +339,7 @@ func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	reply.UIVersion = uiVersion
+	reply.UIVersion = miniobrowser.UIVersion
 	e := web.Client.RemoveObject(args.BucketName, args.ObjectName)
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
@@ -367,7 +368,7 @@ func (web *webAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) erro
 			return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
 		}
 		reply.Token = token
-		reply.UIVersion = uiVersion
+		reply.UIVersion = miniobrowser.UIVersion
 		return nil
 	}
 	return &json2.Error{Message: "Invalid credentials"}

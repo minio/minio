@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/elazarl/go-bindata-assetfs"
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
@@ -27,6 +28,7 @@ import (
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/s3/signature4"
+	"github.com/minio/miniobrowser"
 )
 
 // storageAPI container for S3 compatible API.
@@ -65,6 +67,17 @@ type indexHandler struct {
 func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.URL.Path = privateBucket + "/"
 	h.handler.ServeHTTP(w, r)
+}
+
+const assetPrefix = "production"
+
+func assetFS() *assetfs.AssetFS {
+	return &assetfs.AssetFS{
+		Asset:     miniobrowser.Asset,
+		AssetDir:  miniobrowser.AssetDir,
+		AssetInfo: miniobrowser.AssetInfo,
+		Prefix:    assetPrefix,
+	}
 }
 
 // registerAPIHandlers - register all the handlers to their respective paths

@@ -10,8 +10,6 @@ environment:
   GOPATH: c:\gopath
   GO_EXTLINK_ENABLED: 0
   GO15VENDOREXPERIMENT: 1
-  UI_ASSETS: ui-assets.go
-  UI_ASSETS_ARMOR: ui-assets.asc
 
 # scripts that run after cloning repository
 install:
@@ -36,10 +34,6 @@ install:
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - curl -fsSL -o ui-assets.go https://dl.minio.io/assets/server/ui/%UI_ASSETS%
-  - curl -fsSL -o ui-assets.asc  https://dl.minio.io/assets/server/ui/%UI_ASSETS_ARMOR%
-  - gpg --batch --no-tty --yes --keyserver pgp.mit.edu --recv-keys F9AAC728
-  - gpg --batch --no-tty --verify %UI_ASSETS_ARMOR% %UI_ASSETS%
   - go generate github.com/minio/minio/pkg/crypto/sha1
   - go test .
   - go test -race .
