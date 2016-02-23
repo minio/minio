@@ -17,8 +17,12 @@
 package main
 
 var (
-	minioVersion       = "UNOFFICIAL.GOGET"
-	minioReleaseTag    = "UNOFFICIAL.GOGET"
-	minioCommitID      = "UNOFFICIAL.GOGET"
-	minioShortCommitID = minioCommitID[:]
+	// minioVersion - version time.RFC3339.
+	minioVersion = "DEVELOPMENT.GOGET"
+	// minioReleaseTag - release tag in TAG.%Y-%m-%dT%H-%M-%SZ.
+	minioReleaseTag = "DEVELOPMENT.GOGET"
+	// minioCommitID - latest commit id.
+	minioCommitID = "DEVELOPMENT.GOGET"
+	// minioShortCommitID - first 12 characters from mcCommitID
+	minioShortCommitID = minioCommitID[:12]
 )

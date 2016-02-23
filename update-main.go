@@ -121,8 +121,9 @@ func parseReleaseData(data string) (time.Time, *probe.Error) {
 	if releaseDateSplits[0] != "minio" {
 		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing minio tag"))
 	}
-	if releaseDateSplits[1] != "OFFICIAL" {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing OFFICIAL tag"))
+	// "OFFICIAL" tag is still kept for backward compatibility, we should remove this for the next release.
+	if releaseDateSplits[1] != "RELEASE" && releaseDateSplits[1] != "OFFICIAL" {
+		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing RELEASE tag"))
 	}
 	dateSplits := strings.SplitN(releaseDateSplits[2], "T", 2)
 	if len(dateSplits) < 2 {
@@ -145,7 +146,7 @@ func getReleaseUpdate(updateURL string) {
 	data, e := http.Get(newUpdateURL)
 	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
 
-	if minioVersion == "UNOFFICIAL.GOGET" {
+	if minioVersion == "DEVELOPMENT.GOGET" {
 		fatalIf(probe.NewError(errors.New("")),
 			"Update mechanism is not supported for ‘go get’ based binary builds.  Please download official releases from https://minio.io/#minio", nil)
 	}
