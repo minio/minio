@@ -72,7 +72,7 @@ func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 				Version:       "1",
 				ActiveSession: make(map[string]*MultipartSession),
 			}
-			if err := saveMultipartsSession(*multiparts); err != nil {
+			if err = saveMultipartsSession(*multiparts); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {
@@ -88,7 +88,7 @@ func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 				Version:  "1",
 				Metadata: make(map[string]*BucketMetadata),
 			}
-			if err := saveBucketsMetadata(*buckets); err != nil {
+			if err = saveBucketsMetadata(*buckets); err != nil {
 				return Filesystem{}, err.Trace()
 			}
 		} else {

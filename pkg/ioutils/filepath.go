@@ -126,7 +126,7 @@ func walk(path string, info os.FileInfo, walkFn FTWFunc) error {
 	for _, fileInfo := range fis {
 		filename := filepath.Join(path, fileInfo.Name())
 		if err != nil {
-			if err := walkFn(filename, fileInfo, err); err != nil && err != ErrSkipDir && err != ErrSkipFile {
+			if err = walkFn(filename, fileInfo, err); err != nil && err != ErrSkipDir && err != ErrSkipFile {
 				return err
 			}
 		} else {

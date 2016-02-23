@@ -18,5 +18,5 @@ package main
 
 // Global constants for Minio.
 const (
-	minGoVersion = ">= 1.5.1" // Minio requires at least Go v1.5.1
+	minGoVersion = ">= 1.6" // Minio requires at least Go v1.6
 )

@@ -1,5 +1,7 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 DOCKER_BIN := $(shell which docker)
+PWD := $(shell pwd)
+GOPATH := $(shell go env GOPATH)
 DOCKER_LDFLAGS := '$(LDFLAGS) -extldflags "-static"'
 BUILD_LDFLAGS := '$(LDFLAGS)'
 TAG := latest
@@ -47,20 +49,16 @@ endif
 
 all: install
 
-checkdeps:
+checks:
 	@echo "Checking deps:"
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
-
-checkgopath:
-	@echo "Checking if project is at ${GOPATH}"
-	@for miniopath in $(echo ${GOPATH} | sed 's/:/\n/g'); do if [ ! -d ${miniopath}/src/github.com/minio/minio ]; then echo "Project not found in ${miniopath}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" && exit 1; fi done
-	@echo "Setting BUILD_LDFLAGS: ${BUILD_LDFLAGS}"
+	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
 checkdocker:
 	@echo "Checking if docker is installed.. "
 	@if [ -z ${DOCKER_BIN} ]; then echo "Docker not installed, cannot build docker image. Please install 'sudo apt-get install docker.io'" && exit 1; else echo "Docker installed at ${DOCKER_BIN}."; fi;
 
-getdeps: checkdeps checkgopath
+getdeps: checks
 	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
 	@go get -u golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get -u github.com/fzipp/gocyclo && echo "Installed gocyclo:"
@@ -110,8 +108,8 @@ spelling:
 
 test: build
 	@echo "Running all minio testing:"
-	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
-	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@GODEBUG=cgocheck=0 CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
+	@GODEBUG=cgocheck=0 CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
 	@echo "Installing minio:"

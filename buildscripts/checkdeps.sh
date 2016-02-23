@@ -22,8 +22,7 @@ _init() {
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
     YASM_VERSION="1.2.0"
-    CURL_VERSION="7.12.0"
-    GO_VERSION="1.5.1"
+    GO_VERSION="1.6"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
 
