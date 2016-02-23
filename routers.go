@@ -19,7 +19,6 @@ package main
 import (
 	"net"
 	"net/http"
-	"path"
 
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
@@ -58,6 +57,16 @@ type webAPI struct {
 	secretAccessKey string
 }
 
+// indexHandler - Handler to serve index.html
+type indexHandler struct {
+	handler http.Handler
+}
+
+func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = privateBucket + "/"
+	h.handler.ServeHTTP(w, r)
+}
+
 // registerAPIHandlers - register all the handlers to their respective paths
 func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// Minio rpc router
@@ -72,10 +81,10 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 
 	// RPC handler at URI - /minio/rpc
 	minio.Path("/rpc").Handler(rpc)
-
-	// Web handler assets at URI  - /minio/login
-	minio.Path("/login").Handler(http.StripPrefix(path.Join(privateBucket, "login"), http.FileServer(assetFS())))
-	minio.Path("/{file:.*}").Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
+	// Serve javascript files and favicon.ico from assets
+	minio.Path("/{assets:[^/]+.js|favicon.ico}").Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
+	// Serve index.html for rest of the requests
+	minio.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(privateBucket, http.FileServer(assetFS()))})
 
 	// API Router
 	api := mux.NewRoute().PathPrefix("/").Subrouter()
