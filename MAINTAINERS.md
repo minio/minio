@@ -34,4 +34,4 @@ $
 
 `minio` doesn't follow semantic versioning style, `minio` instead uses the release date and time as the release versions.
 
-`make release` will install new released binary into your `GOPATH`
+`make release` will generate new binary into `release` directory.

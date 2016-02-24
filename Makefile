@@ -124,6 +124,9 @@ pkg-update:
 pkg-remove:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor remove $(PKG)
 
+pkg-list:
+	@GO15VENDOREXPERIMENT=1 $(GOPATH)/bin/govendor list
+
 install: gomake-all
 
 dockerimage: checkdocker verifiers $(UI_ASSETS)
@@ -134,8 +137,11 @@ dockerimage: checkdocker verifiers $(UI_ASSETS)
 	@rmdir export
 	@rm minio.dockerimage
 
-release:
-	@./release.sh
+release: verifiers
+	@MC_RELEASE=RELEASE GO15VENDOREXPERIMENT=1 ./buildscripts/build.sh
+
+experimental: verifiers
+	@MC_RELEASE=EXPERIMENTAL GO15VENDOREXPERIMENT=1 ./buildscripts/build.sh
 
 clean:
 	@echo "Cleaning up all the generated files:"
@@ -143,3 +149,4 @@ clean:
 	@find . -name '*.test' | xargs rm -fv
 	@rm -rf isa-l
 	@rm -rf build
+	@rm -rf release

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/shiena/ansicolor"
 )
 
 // NoColor defines if the output is colorized or not. It's dynamically set to
@@ -53,6 +53,18 @@ const (
 	FgWhite
 )
 
+// Foreground Hi-Intensity text colors
+const (
+	FgHiBlack Attribute = iota + 90
+	FgHiRed
+	FgHiGreen
+	FgHiYellow
+	FgHiBlue
+	FgHiMagenta
+	FgHiCyan
+	FgHiWhite
+)
+
 // Background text colors
 const (
 	BgBlack Attribute = iota + 40
@@ -63,6 +75,18 @@ const (
 	BgMagenta
 	BgCyan
 	BgWhite
+)
+
+// Background Hi-Intensity text colors
+const (
+	BgHiBlack Attribute = iota + 100
+	BgHiRed
+	BgHiGreen
+	BgHiYellow
+	BgHiBlue
+	BgHiMagenta
+	BgHiCyan
+	BgHiWhite
 )
 
 // New returns a newly created color object.
@@ -123,7 +147,7 @@ func (c *Color) prepend(value Attribute) {
 
 // Output defines the standard output of the print functions. By default
 // os.Stdout is used.
-var Output = ansicolor.NewAnsiColorWriter(os.Stdout)
+var Output = colorable.NewColorableStdout()
 
 // Print formats using the default formats for its operands and writes to
 // standard output. Spaces are added between operands when neither is a
