@@ -58,15 +58,6 @@ type GenericRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
-// GenericArgs - empty struct
-type GenericArgs struct{}
-
-// GetUIVersion - get UI version
-func (web webAPI) GetUIVersion(r *http.Request, args *GenericArgs, reply *GenericRep) error {
-	reply.UIVersion = miniobrowser.UIVersion
-	return nil
-}
-
 // ServerInfoRep - server info reply.
 type ServerInfoRep struct {
 	MinioVersion  string

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"net/http"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -125,8 +126,20 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
-		// Expire cache in one hour for all browser requests.
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		// For all browser requests set appropriate Cache-Control policies
+		match, e := regexp.MatchString(privateBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
+		if e != nil {
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			return
+		}
+		if match {
+			// For assets set cache expiry of one year. For each release, the name
+			// of the asset name will change and hence it can not be served from cache.
+			w.Header().Set("Cache-Control", "max-age=31536000")
+		} else if strings.HasPrefix(r.URL.Path, privateBucket+"/") {
+			// For non asset requests we serve index.html which will never be cached.
+			w.Header().Set("Cache-Control", "no-store")
+		}
 	}
 	h.handler.ServeHTTP(w, r)
 }
