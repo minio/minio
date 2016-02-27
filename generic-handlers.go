@@ -251,11 +251,6 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
 		return
 	}
-	// X-Amz-Copy-Source should be ignored as NotImplemented.
-	if _, ok := r.Header[http.CanonicalHeaderKey("x-amz-copy-source")]; ok {
-		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
-		return
-	}
 	h.handler.ServeHTTP(w, r)
 }
 

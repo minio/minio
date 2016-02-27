@@ -165,12 +165,12 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 		}
 	}
 	metadata := ObjectMetadata{
-		Bucket:      bucket,
-		Object:      object,
-		Created:     stat.ModTime(),
-		Size:        stat.Size(),
-		ContentType: contentType,
-		Mode:        stat.Mode(),
+		Bucket:       bucket,
+		Object:       object,
+		LastModified: stat.ModTime(),
+		Size:         stat.Size(),
+		ContentType:  contentType,
+		Mode:         stat.Mode(),
 	}
 	return metadata, nil
 }
@@ -312,12 +312,12 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		}
 	}
 	newObject := ObjectMetadata{
-		Bucket:      bucket,
-		Object:      object,
-		Created:     st.ModTime(),
-		Size:        st.Size(),
-		ContentType: contentType,
-		MD5:         md5Sum,
+		Bucket:       bucket,
+		Object:       object,
+		LastModified: st.ModTime(),
+		Size:         st.Size(),
+		ContentType:  contentType,
+		MD5:          md5Sum,
 	}
 	return newObject, nil
 }

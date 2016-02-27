@@ -546,12 +546,12 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		}
 	}
 	newObject := ObjectMetadata{
-		Bucket:      bucket,
-		Object:      object,
-		Created:     st.ModTime(),
-		Size:        st.Size(),
-		ContentType: contentType,
-		MD5:         hex.EncodeToString(md5Hasher.Sum(nil)),
+		Bucket:       bucket,
+		Object:       object,
+		LastModified: st.ModTime(),
+		Size:         st.Size(),
+		ContentType:  contentType,
+		MD5:          hex.EncodeToString(md5Hasher.Sum(nil)),
 	}
 	return newObject, nil
 }

@@ -57,6 +57,9 @@ const (
 	InvalidMaxUploads
 	InvalidMaxParts
 	InvalidPartNumberMarker
+	InvalidRequestBody
+	InvalidCopySource
+	InvalidCopyDest
 	MalformedXML
 	MissingContentLength
 	MissingRequestBodyError
@@ -80,6 +83,21 @@ const (
 
 // APIError code to Error structure map
 var errorCodeResponse = map[int]APIError{
+	InvalidCopyDest: {
+		Code:           "InvalidRequest",
+		Description:    "This copy request is illegal because it is trying to copy an object to itself.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidCopySource: {
+		Code:           "InvalidArgument",
+		Description:    "Copy Source must mention the source bucket and key: sourcebucket/sourcekey.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidRequestBody: {
+		Code:           "InvalidArgument",
+		Description:    "Body shouldn't be set for this request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	InvalidMaxUploads: {
 		Code:           "InvalidArgument",
 		Description:    "Argument maxUploads must be an integer between 0 and 2147483647.",
