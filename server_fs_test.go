@@ -508,6 +508,15 @@ func (s *MyAPIFSCacheSuite) TestNotImplemented(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
+
+	request, err = s.newRequest("POST", testAPIFSCacheServer.URL+"/bucket/object", 0, nil)
+	request.Header.Set("X-Amz-Copy-Source", "/bucket/object-old")
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
 }
 
 func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
