@@ -39,13 +39,13 @@
 		},
 		{
 			"path": "github.com/gorilla/rpc/v2",
-			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
-			"revisionTime": "2015-11-05T07:45:51+08:00"
+			"revision": "5bc359e9ad5cb47312fe2ef8d0651dafab381f27",
+			"revisionTime": "2016-02-26T18:40:55-08:00"
 		},
 		{
 			"path": "github.com/gorilla/rpc/v2/json2",
-			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
-			"revisionTime": "2015-11-05T07:45:51+08:00"
+			"revision": "5bc359e9ad5cb47312fe2ef8d0651dafab381f27",
+			"revisionTime": "2016-02-26T18:40:55-08:00"
 		},
 		{
 			"path": "github.com/hashicorp/go-version",
