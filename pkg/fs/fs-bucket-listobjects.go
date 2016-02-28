@@ -103,10 +103,10 @@ func (fs Filesystem) listObjects(bucket, prefix, marker, delimiter string, maxKe
 			objectName := strings.TrimPrefix(path, bucketPathPrefix)
 			if strings.HasPrefix(objectName, prefix) {
 				object := ObjectMetadata{
-					Object:  objectName,
-					Created: info.ModTime(),
-					Mode:    info.Mode(),
-					Size:    info.Size(),
+					Object:       objectName,
+					LastModified: info.ModTime(),
+					Mode:         info.Mode(),
+					Size:         info.Size(),
 				}
 				select {
 				// Send object on walker channel.

@@ -508,15 +508,6 @@ func (s *MyAPIFSCacheSuite) TestNotImplemented(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
-
-	request, err = s.newRequest("POST", testAPIFSCacheServer.URL+"/bucket/object", 0, nil)
-	request.Header.Set("X-Amz-Copy-Source", "/bucket/object-old")
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
 }
 
 func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
@@ -548,6 +539,44 @@ func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
+
+func (s *MyAPIFSCacheSuite) TestCopyObject(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-copy", 0, nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-copy/object", int64(buffer1.Len()), buffer1)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-copy/object1", 0, nil)
+	request.Header.Set("X-Amz-Copy-Source", "/put-object-copy/object")
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/put-object-copy/object1", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	object, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	c.Assert(string(object), Equals, "hello world")
 }
 
 func (s *MyAPIFSCacheSuite) TestPutObject(c *C) {
@@ -759,7 +788,6 @@ func (s *MyAPIFSCacheSuite) TestPartialContent(c *C) {
 	// prepare request
 	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/partial-content/bar", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("Accept", "application/json")
 	request.Header.Add("Range", "bytes=6-7")
 
 	client = http.Client{}

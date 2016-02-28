@@ -105,29 +105,53 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// Bucket router
 	bucket := api.PathPrefix("/{bucket}").Subrouter()
 
-	// Object operations
+	/// Object operations
+
+	// HeadObject
 	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
+	// PutObjectPart
 	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	// ListObjectPxarts
 	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
+	// CompleteMultipartUpload
 	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	// NewMultipartUpload
 	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.NewMultipartUploadHandler).Queries("uploads", "")
+	// AbortMultipartUpload
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	// GetObject
 	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.GetObjectHandler)
+	// CopyObject
+	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/).*?").HandlerFunc(a.CopyObjectHandler)
+	// PutObject
 	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectHandler)
+	// DeleteObject
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
 
-	// Bucket operations
+	/// Bucket operations
+
+	// GetBucketLocation
 	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
+	// GetBucketACL
 	bucket.Methods("GET").HandlerFunc(a.GetBucketACLHandler).Queries("acl", "")
+	// ListMultipartUploads
 	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
+	// ListObjects
 	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
+	// PutBucketACL
 	bucket.Methods("PUT").HandlerFunc(a.PutBucketACLHandler).Queries("acl", "")
+	// PutBucket
 	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
+	// HeadBucket
 	bucket.Methods("HEAD").HandlerFunc(a.HeadBucketHandler)
+	// PostPolicy
 	bucket.Methods("POST").HandlerFunc(a.PostPolicyBucketHandler)
+	// DeleteBucket
 	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
 
-	// Root operation
+	/// Root operation
+
+	// ListBuckets
 	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
 }
 

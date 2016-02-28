@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/xml"
 	"net/http"
+	"time"
 
 	"github.com/minio/minio/pkg/fs"
 )
@@ -181,6 +182,14 @@ type Object struct {
 	StorageClass string
 }
 
+// CopyObjectResponse container returns ETag and LastModified of the
+// successfully copied object
+type CopyObjectResponse struct {
+	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyObjectResult" json:"-"`
+	ETag         string
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+}
+
 // Initiator inherit from Owner struct, fields are same
 type Initiator Owner
 
@@ -289,7 +298,7 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 			continue
 		}
 		content.Key = object.Object
-		content.LastModified = object.Created.Format(timeFormatAMZ)
+		content.LastModified = object.LastModified.Format(timeFormatAMZ)
 		if object.MD5 != "" {
 			content.ETag = "\"" + object.MD5 + "\""
 		}
@@ -316,6 +325,14 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 	}
 	data.CommonPrefixes = prefixes
 	return data
+}
+
+// generateCopyObjectResponse
+func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
+	return CopyObjectResponse{
+		ETag:         "\"" + etag + "\"",
+		LastModified: lastModified.Format(timeFormatAMZ),
+	}
 }
 
 // generateInitiateMultipartUploadResponse

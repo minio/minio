@@ -33,11 +33,11 @@ type ObjectMetadata struct {
 	Bucket string
 	Object string
 
-	ContentType string
-	Created     time.Time
-	Mode        os.FileMode
-	MD5         string
-	Size        int64
+	ContentType  string
+	LastModified time.Time
+	Mode         os.FileMode
+	MD5          string
+	Size         int64
 }
 
 // PartMetadata - various types of individual part resources
