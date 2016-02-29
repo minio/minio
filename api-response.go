@@ -298,7 +298,7 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 			continue
 		}
 		content.Key = object.Object
-		content.LastModified = object.LastModified.Format(timeFormatAMZ)
+		content.LastModified = object.LastModified.UTC().Format(timeFormatAMZ)
 		if object.MD5 != "" {
 			content.ETag = "\"" + object.MD5 + "\""
 		}
@@ -331,7 +331,7 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.Format(timeFormatAMZ),
+		LastModified: lastModified.UTC().Format(timeFormatAMZ),
 	}
 }
 
@@ -378,7 +378,7 @@ func generateListPartsResponse(objectMetadata fs.ObjectResourcesMetadata) ListPa
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.Format(timeFormatAMZ)
+		newPart.LastModified = part.LastModified.UTC().Format(timeFormatAMZ)
 		listPartsResponse.Parts = append(listPartsResponse.Parts, newPart)
 	}
 	return listPartsResponse

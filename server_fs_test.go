@@ -648,6 +648,24 @@ func (s *MyAPIFSCacheSuite) TestHeadOnObject(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	lastModified := response.Header.Get("Last-Modified")
+	t, err := time.Parse(http.TimeFormat, lastModified)
+	c.Assert(err, IsNil)
+
+	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/headonobject/object1", 0, nil)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Modified-Since", t.Add(1*time.Minute).UTC().Format(http.TimeFormat))
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
+
+	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/headonobject/object1", 0, nil)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Unmodified-Since", t.Add(-1*time.Minute).UTC().Format(http.TimeFormat))
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
 }
 
 func (s *MyAPIFSCacheSuite) TestHeadOnBucket(c *C) {
