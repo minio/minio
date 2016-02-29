@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/fs"
@@ -41,8 +42,8 @@ var supportedGetReqParams = map[string]string{
 	"response-content-disposition": "Content-Disposition",
 }
 
-// setResponseHeaders - set any requested parameters as response headers.
-func setResponseHeaders(w http.ResponseWriter, reqParams url.Values) {
+// setGetRespHeaders - set any requested parameters as response headers.
+func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
 		if header, ok := supportedGetReqParams[k]; ok {
 			w.Header()[header] = v
@@ -89,6 +90,7 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	var hrange *httpRange
 	hrange, err = getRequestedRange(r.Header.Get("Range"), metadata.Size)
 	if err != nil {
@@ -99,14 +101,119 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Set standard object headers.
 	setObjectHeaders(w, metadata, hrange)
 
-	// Set any additional ruested response headers.
-	setResponseHeaders(w, r.URL.Query())
+	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
+	if checkLastModified(w, r, metadata.LastModified) {
+		return
+	}
+	// Verify 'If-Match' and 'If-None-Match'.
+	if checkETag(w, r) {
+		return
+	}
+
+	// Set any additional requested response headers.
+	setGetRespHeaders(w, r.URL.Query())
 
 	// Get the object.
 	if _, err = api.Filesystem.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		return
 	}
+}
+
+var unixEpochTime = time.Unix(0, 0)
+
+// checkLastModified implements If-Modified-Since and
+// If-Unmodified-Since checks.
+//
+// modtime is the modification time of the resource to be served, or
+// IsZero(). return value is whether this request is now complete.
+func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
+	if modtime.IsZero() || modtime.Equal(unixEpochTime) {
+		// If the object doesn't have a modtime (IsZero), or the modtime
+		// is obviously garbage (Unix time == 0), then ignore modtimes
+		// and don't process the If-Modified-Since header.
+		return false
+	}
+
+	// The Date-Modified header truncates sub-second precision, so
+	// use mtime < t+1s instead of mtime <= t to check for unmodified.
+	if _, ok := r.Header["If-Modified-Since"]; ok {
+		// Return the object only if it has been modified since the
+		// specified time, otherwise return a 304 (not modified).
+		t, err := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since"))
+		if err == nil && modtime.Before(t.Add(1*time.Second)) {
+			h := w.Header()
+			// Remove following headers if already set.
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	} else if _, ok := r.Header["If-Unmodified-Since"]; ok {
+		// Return the object only if it has not been modified since
+		// the specified time, otherwise return a 412 (precondition failed).
+		t, err := time.Parse(http.TimeFormat, r.Header.Get("If-Unmodified-Since"))
+		if err == nil && modtime.After(t.Add(1*time.Second)) {
+			h := w.Header()
+			// Remove following headers if already set.
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return true
+		}
+	}
+	w.Header().Set("Last-Modified", modtime.UTC().Format(http.TimeFormat))
+	return false
+}
+
+// checkETag implements If-None-Match and If-Match checks.
+//
+// The ETag or modtime must have been previously set in the
+// ResponseWriter's headers.  The modtime is only compared at second
+// granularity and may be the zero value to mean unknown.
+//
+// The return value is whether this request is now considered done.
+func checkETag(w http.ResponseWriter, r *http.Request) bool {
+	etag := w.Header().Get("ETag")
+	// Must know ETag.
+	if etag == "" {
+		return false
+	}
+	if inm := r.Header.Get("If-None-Match"); inm != "" {
+		// Return the object only if its entity tag (ETag) is
+		// different from the one specified; otherwise, return a 304
+		// (not modified).
+		if r.Method != "GET" && r.Method != "HEAD" {
+			return false
+		}
+		if inm == etag || inm == "*" {
+			h := w.Header()
+			// Remove following headers if already set.
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	} else if im := r.Header.Get("If-Match"); im != "" {
+		// Return the object only if its entity tag (ETag) is the same
+		// as the one specified; otherwise, return a 412 (precondition failed).
+		if r.Method != "GET" && r.Method != "HEAD" {
+			return false
+		}
+		if im != etag {
+			h := w.Header()
+			// Remove following headers if already set.
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return true
+		}
+	}
+	return false
 }
 
 // HeadObjectHandler - HEAD Object
@@ -146,7 +253,21 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
+
+	// Set standard object headers.
 	setObjectHeaders(w, metadata, nil)
+
+	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
+	if checkLastModified(w, r, metadata.LastModified) {
+		return
+	}
+
+	// Verify 'If-Match' and 'If-None-Match'.
+	if checkETag(w, r) {
+		return
+	}
+
+	// Successfull response.
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -154,6 +275,12 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
+//
+// TODO: Does not support following request headers just yet.
+//  - x-amz-copy-source-if-match
+//  - x-amz-copy-source-if-none-match
+//  - x-amz-copy-source-if-unmodified-since
+//  - x-amz-copy-source-if-modified-since
 func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
