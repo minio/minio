@@ -173,22 +173,20 @@ func testPaging(c *check.C, create func() Filesystem) {
 		key := "obj" + strconv.Itoa(i)
 		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
-		// TODO
-		//result, err = fs.ListObjects("bucket", "", "", "", 5)
-		//c.Assert(err, check.IsNil)
-		//c.Assert(len(result.Objects), check.Equals, i+1)
-		//c.Assert(result.IsTruncated, check.Equals, false)
+		result, err = fs.ListObjects("bucket", "", "", "", 5)
+		c.Assert(err, check.IsNil)
+		c.Assert(len(result.Objects), check.Equals, i+1)
+		c.Assert(result.IsTruncated, check.Equals, false)
 	}
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
-		// TODO
-		//result, err = fs.ListObjects("bucket", "", "", "", 5)
-		//c.Assert(err, check.IsNil)
-		//c.Assert(len(result.Objects), check.Equals, 5)
-		//c.Assert(result.IsTruncated, check.Equals, true)
+		result, err = fs.ListObjects("bucket", "", "", "", 5)
+		c.Assert(err, check.IsNil)
+		c.Assert(len(result.Objects), check.Equals, 5)
+		c.Assert(result.IsTruncated, check.Equals, true)
 	}
 	// check paging with prefix at end returns less objects
 	{
