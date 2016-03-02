@@ -74,13 +74,13 @@ func New(accessKeyID, secretAccessKey, region string) (*Sign, *probe.Error) {
 }
 
 // SetHTTPRequestToVerify - sets the http request which needs to be verified.
-func (s *Sign) SetHTTPRequestToVerify(r *http.Request) *Sign {
+func (s *Sign) SetHTTPRequestToVerify(r *http.Request) Sign {
 	// Do not set http request if its 'nil'.
 	if r == nil {
-		return s
+		return *s
 	}
 	s.httpRequest = r
-	return s
+	return *s
 }
 
 // getCanonicalHeaders generate a list of request headers with their values
