@@ -29,12 +29,6 @@ import (
 
 /// helpers
 
-// isValidSecretKey - validate secret key.
-var isValidSecretKey = regexp.MustCompile("^.{40}$")
-
-// isValidAccessKey - validate access key.
-var isValidAccessKey = regexp.MustCompile("^[A-Z0-9\\-\\.\\_\\~]{20}$")
-
 // isValidRegion - verify if incoming region value is valid with configured Region.
 func isValidRegion(reqRegion string, confRegion string) bool {
 	if confRegion == "" || confRegion == "US" {

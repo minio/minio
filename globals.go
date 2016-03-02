@@ -20,3 +20,8 @@ package main
 const (
 	minGoVersion = ">= 1.6" // Minio requires at least Go v1.6
 )
+
+const (
+	defaultAccessKeyID     = "admin"
+	defaultSecretAccessKey = "password"
+)

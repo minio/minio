@@ -31,7 +31,7 @@ const (
 
 // isValidAccessKey - validate access key
 func isValidAccessKey(accessKeyID string) bool {
-	if accessKeyID == "" {
+	if accessKeyID == defaultAccessKeyID {
 		return true
 	}
 	regex := regexp.MustCompile("^[A-Z0-9\\-\\.\\_\\~]{20}$")
@@ -39,9 +39,12 @@ func isValidAccessKey(accessKeyID string) bool {
 }
 
 // isValidSecretKey - validate secret key
-func isValidSecretKey(secretKeyID string) bool {
+func isValidSecretKey(secretAccessKey string) bool {
+	if secretAccessKey == defaultSecretAccessKey {
+		return true
+	}
 	regex := regexp.MustCompile("^[a-zA-Z0-9\\-\\.\\_\\~]{40}$")
-	return regex.MatchString(secretKeyID)
+	return regex.MatchString(secretAccessKey)
 }
 
 // generateAccessKeyID - generate random alpha numeric value using only uppercase characters
