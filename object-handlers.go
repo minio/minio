@@ -441,9 +441,12 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
 
+	var metadata fs.ObjectMetadata
+	var err *probe.Error
 	// For presigned requests verify them right here.
 	if isRequestPresignedSignatureV4(r) {
-		ok, err := auth.DoesPresignedSignatureMatch()
+		var ok bool
+		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
@@ -453,11 +456,12 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		auth = nil
+		// Create presigned object.
+		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+	} else {
+		// Create object.
+		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, &auth)
 	}
-
-	// Create object.
-	metadata, err := api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, auth)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -573,21 +577,21 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 	uploadID := r.URL.Query().Get("uploadId")
 	partIDString := r.URL.Query().Get("partNumber")
 
-	var partID int
-	{
-		var err error
-		partID, err = strconv.Atoi(partIDString)
-		if err != nil {
-			writeErrorResponse(w, r, InvalidPart, r.URL.Path)
-			return
-		}
+	partID, e := strconv.Atoi(partIDString)
+	if e != nil {
+		writeErrorResponse(w, r, InvalidPart, r.URL.Path)
+		return
 	}
 
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
+
+	var partMD5 string
+	var err *probe.Error
 	// For presigned requests verify right here.
 	if isRequestPresignedSignatureV4(r) {
-		ok, err := auth.DoesPresignedSignatureMatch()
+		var ok bool
+		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
@@ -597,12 +601,10 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		// Signature verified, set this to nil payload verification
-		// not necessary.
-		auth = nil
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
+	} else {
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, &auth)
 	}
-
-	calculatedMD5, err := api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, auth)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
@@ -623,8 +625,8 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
-	if calculatedMD5 != "" {
-		w.Header().Set("ETag", "\""+calculatedMD5+"\"")
+	if partMD5 != "" {
+		w.Header().Set("ETag", "\""+partMD5+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -741,11 +743,18 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		}
 	}
 
+	// Extract object resources.
+	objectResourcesMetadata := getObjectResources(r.URL.Query())
+
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
+
+	var metadata fs.ObjectMetadata
+	var err *probe.Error
 	// For presigned requests verify right here.
 	if isRequestPresignedSignatureV4(r) {
-		ok, err := auth.DoesPresignedSignatureMatch()
+		var ok bool
+		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
@@ -755,14 +764,12 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		auth = nil
+		// Complete multipart upload presigned.
+		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
+	} else {
+		// Complete multipart upload.
+		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, &auth)
 	}
-
-	// Extract object resources.
-	objectResourcesMetadata := getObjectResources(r.URL.Query())
-
-	// Complete multipart upload.
-	metadata, err := api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, api.Signature)
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {

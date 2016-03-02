@@ -242,6 +242,7 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
+
 	if isRequestPresignedSignatureV4(r) {
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
@@ -355,10 +356,10 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 	var ok bool
 
 	// Set http request for signature.
-	api.Signature.SetHTTPRequestToVerify(r)
+	auth := api.Signature.SetHTTPRequestToVerify(r)
 
 	// Verify policy signature.
-	ok, err = api.Signature.DoesPolicySignatureMatch(formValues)
+	ok, err = auth.DoesPolicySignatureMatch(formValues)
 	if err != nil {
 		errorIf(err.Trace(), "Unable to verify signature.", nil)
 		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
