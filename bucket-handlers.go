@@ -291,7 +291,7 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Make sure to add Location information here only for bucket
-	w.Header().Set("Location", "/"+bucket)
+	w.Header().Set("Location", getLocation(r))
 	writeSuccessResponse(w, nil)
 }
 
