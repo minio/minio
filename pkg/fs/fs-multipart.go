@@ -491,7 +491,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		}
 	}
 	completeMultipartUpload := &CompleteMultipartUpload{}
-	if e := xml.Unmarshal(partBytes, completeMultipartUpload); e != nil {
+	if e = xml.Unmarshal(partBytes, completeMultipartUpload); e != nil {
 		file.CloseAndPurge()
 		return ObjectMetadata{}, probe.NewError(MalformedXML{})
 	}
