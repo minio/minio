@@ -5,11 +5,12 @@ Minio is an object storage server compatible with Amazon S3 and licensed under [
 
 ## Description
 
-Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.
+Minio is an open source object storage server released under Apache License V2. It is compatible with Amazon S3 cloud storage service. Minio follows a minimalist design philosophy.
+Minio is light enough to be bundled with the application stack. It sits on the side of NodeJS, Redis, MySQL and the likes. Unlike databases, Minio stores objects such as photos, videos, log files, backups, container / VM images and so on. Minio is best suited for storing blobs of information ranging from KBs to TBs each. In a simplistic sense, it is like a FTP server with a simple get / put API over HTTP.
 
 Minio currently implements two backends
 
-  - Filesystem (FS) - is available and ready for general purpose use.
+  - Filesystem (FS) - is available and ready for general purpose use. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.
   - ErasureCoded (XL) - is work in progress and not ready for general purpose use.
 
 ## Minio Client
