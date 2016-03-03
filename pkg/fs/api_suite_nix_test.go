@@ -66,7 +66,6 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 
 	completedParts := CompleteMultipartUpload{}
 	completedParts.Part = make([]CompletePart, 0)
-	finalHasher := md5.New()
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -75,7 +74,6 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 		}
 
 		hasher := md5.New()
-		finalHasher.Write([]byte(randomString))
 		hasher.Write([]byte(randomString))
 		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
@@ -87,12 +85,11 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
 		completedParts.Part = append(completedParts.Part, CompletePart{PartNumber: i, ETag: calculatedmd5sum})
 	}
-	finalExpectedmd5SumHex := hex.EncodeToString(finalHasher.Sum(nil))
 	completedPartsBytes, e := xml.Marshal(completedParts)
 	c.Assert(e, check.IsNil)
 	objectMetadata, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, bytes.NewReader(completedPartsBytes), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectMetadata.MD5, check.Equals, finalExpectedmd5SumHex)
+	c.Assert(objectMetadata.MD5, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
 
 func testMultipartObjectAbort(c *check.C, create func() Filesystem) {

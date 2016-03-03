@@ -218,6 +218,11 @@ type CompleteMultipartUploadResponse struct {
 	ETag     string
 }
 
+// getLocation get URL location.
+func getLocation(r *http.Request) string {
+	return r.URL.Path
+}
+
 // takes an array of Bucketmetadata information for serialization
 // input:
 // array of bucket metadata

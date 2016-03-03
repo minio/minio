@@ -798,7 +798,10 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		}
 		return
 	}
-	response := generateCompleteMultpartUploadResponse(bucket, object, r.URL.String(), metadata.MD5)
+	// get object location.
+	location := getLocation(r)
+	// Generate complete multipart response.
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, metadata.MD5)
 	encodedSuccessResponse := encodeSuccessResponse(response)
 	// write headers
 	setCommonHeaders(w)
