@@ -28,29 +28,12 @@ import (
 	"strings"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/miniobrowser"
 )
-
-// isJWTReqAuthenticated validates if any incoming request to be a
-// valid JWT authenticated request.
-func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt := initJWT()
-	token, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return jwt.secretAccessKey, nil
-	})
-	if e != nil {
-		return false
-	}
-	return token.Valid
-}
 
 // GenericRep - reply structure for calls for which reply is success/failure
 // for ex. RemoveObject MakeBucket
@@ -167,8 +150,8 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 		return &json2.Error{Message: e.Error()}
 	}
 	for _, bucket := range buckets {
-		// List all buckets which are not private.
-		if bucket.Name != path.Base(privateBucket) {
+		// List all buckets which are not restricted.
+		if bucket.Name != path.Base(restrictedBucket) {
 			reply.Buckets = append(reply.Buckets, BucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.CreationDate,

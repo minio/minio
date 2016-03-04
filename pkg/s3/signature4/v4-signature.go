@@ -56,12 +56,6 @@ const (
 
 // New - initialize a new authorization checkes.
 func New(accessKeyID, secretAccessKey, region string) (*Sign, *probe.Error) {
-	if !isValidAccessKey.MatchString(accessKeyID) {
-		return nil, ErrInvalidAccessKeyID("Invalid access key id.", accessKeyID).Trace(accessKeyID)
-	}
-	if !isValidSecretKey.MatchString(secretAccessKey) {
-		return nil, ErrInvalidAccessKeyID("Invalid secret key.", secretAccessKey).Trace(secretAccessKey)
-	}
 	if region == "" {
 		return nil, ErrRegionISEmpty("Region is empty.").Trace()
 	}

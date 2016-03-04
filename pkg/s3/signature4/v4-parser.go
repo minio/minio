@@ -49,7 +49,9 @@ func parseCredential(credElement string) (credential, *probe.Error) {
 	if len(credElements) != 5 {
 		return credential{}, ErrCredMalformed("Credential values malformed.", credElement).Trace(credElement)
 	}
-	if !isValidAccessKey.MatchString(credElements[0]) {
+	// Access key id cannot be empty.
+	accessKeyID := credElements[0]
+	if accessKeyID == "" {
 		return credential{}, ErrInvalidAccessKeyID("Invalid access key id.", credElement).Trace(credElement)
 	}
 	cred := credential{

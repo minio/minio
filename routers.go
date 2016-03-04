@@ -17,205 +17,40 @@
 package main
 
 import (
-	"fmt"
-	"net"
 	"net/http"
 
-	"github.com/elazarl/go-bindata-assetfs"
 	router "github.com/gorilla/mux"
-	jsonrpc "github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio-go"
-	"github.com/minio/minio/pkg/fs"
-	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/signature4"
-	"github.com/minio/miniobrowser"
 )
 
-// storageAPI container for S3 compatible API.
-type storageAPI struct {
-	// Once true log all incoming requests.
-	AccessLog bool
-	// Filesystem instance.
-	Filesystem fs.Filesystem
-	// Signature instance.
-	Signature *signature4.Sign
-	// Region instance.
-	Region string
-}
+// registerAllRouters - register all the routers on their respective paths.
+func registerAllRouters(mux *router.Router, web *webAPI, node *nodeAPI, api storageAPI) {
+	// Register node rpc router.
+	registerNodeRPCRouter(mux, node)
 
-// webAPI container for Web API.
-type webAPI struct {
-	// FSPath filesystem path.
-	FSPath string
-	// Once true log all incoming request.
-	AccessLog bool
-	// Minio client instance.
-	Client minio.CloudStorageClient
+	// Register web browser router.
+	registerWebRouter(mux, web)
 
-	// private params.
-	apiAddress string // api destination address.
-	// accessKeys kept to be used internally.
-	accessKeyID     string
-	secretAccessKey string
-}
-
-// indexHandler - Handler to serve index.html
-type indexHandler struct {
-	handler http.Handler
-}
-
-func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = privateBucket + "/"
-	h.handler.ServeHTTP(w, r)
-}
-
-const assetPrefix = "production"
-
-func assetFS() *assetfs.AssetFS {
-	return &assetfs.AssetFS{
-		Asset:     miniobrowser.Asset,
-		AssetDir:  miniobrowser.AssetDir,
-		AssetInfo: miniobrowser.AssetInfo,
-		Prefix:    assetPrefix,
-	}
-}
-
-// specialAssets are files which are unique files not embedded inside index_bundle.js.
-const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
-
-// registerAPIHandlers - register all the handlers to their respective paths
-func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
-	// Minio rpc router
-	minio := mux.NewRoute().PathPrefix(privateBucket).Subrouter()
-
-	// Initialize json rpc handlers.
-	rpc := jsonrpc.NewServer()
-	codec := json2.NewCodec()
-	rpc.RegisterCodec(codec, "application/json")
-	rpc.RegisterCodec(codec, "application/json; charset=UTF-8")
-	rpc.RegisterService(w, "Web")
-
-	// RPC handler at URI - /minio/rpc
-	minio.Path("/rpc").Handler(rpc)
-	// Serve all assets.
-	minio.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
-	// Serve index.html for rest of the requests
-	minio.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(privateBucket, http.FileServer(assetFS()))})
-
-	// API Router
-	api := mux.NewRoute().PathPrefix("/").Subrouter()
-
-	// Bucket router
-	bucket := api.PathPrefix("/{bucket}").Subrouter()
-
-	/// Object operations
-
-	// HeadObject
-	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
-	// PutObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-	// ListObjectPxarts
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
-	// CompleteMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-	// NewMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.NewMultipartUploadHandler).Queries("uploads", "")
-	// AbortMultipartUpload
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-	// GetObject
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.GetObjectHandler)
-	// CopyObject
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/).*?").HandlerFunc(a.CopyObjectHandler)
-	// PutObject
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectHandler)
-	// DeleteObject
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
-
-	/// Bucket operations
-
-	// GetBucketLocation
-	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
-	// GetBucketACL
-	bucket.Methods("GET").HandlerFunc(a.GetBucketACLHandler).Queries("acl", "")
-	// ListMultipartUploads
-	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
-	// ListObjects
-	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
-	// PutBucketACL
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketACLHandler).Queries("acl", "")
-	// PutBucket
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
-	// HeadBucket
-	bucket.Methods("HEAD").HandlerFunc(a.HeadBucketHandler)
-	// PostPolicy
-	bucket.Methods("POST").HandlerFunc(a.PostPolicyBucketHandler)
-	// DeleteBucket
-	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
-
-	/// Root operation
-
-	// ListBuckets
-	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
-}
-
-// initWeb instantiate a new Web.
-func initWeb(conf cloudServerConfig) *webAPI {
-	// Split host port.
-	host, port, e := net.SplitHostPort(conf.Address)
-	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
-
-	// Default host is 'localhost', if no host present.
-	if host == "" {
-		host = "localhost"
-	}
-
-	// Initialize minio client for AWS Signature Version '4'
-	inSecure := !conf.TLS // Insecure true when TLS is false.
-	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
-	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
-
-	w := &webAPI{
-		FSPath:          conf.Path,
-		AccessLog:       conf.AccessLog,
-		Client:          client,
-		apiAddress:      conf.Address,
-		accessKeyID:     conf.AccessKeyID,
-		secretAccessKey: conf.SecretAccessKey,
-	}
-	return w
-}
-
-// initAPI instantiate a new StorageAPI.
-func initAPI(conf cloudServerConfig) storageAPI {
-	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
-	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
-
-	sign, err := signature4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
-	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
-
-	return storageAPI{
-		AccessLog:  conf.AccessLog,
-		Filesystem: fs,
-		Signature:  sign,
-		Region:     conf.Region,
-	}
+	// Register api router.
+	registerAPIRouter(mux, api)
 }
 
 // server handler returns final handler before initializing server.
 func serverHandler(conf cloudServerConfig) http.Handler {
-	// Initialize API.
-	api := initAPI(conf)
-
 	// Initialize Web.
 	web := initWeb(conf)
 
-	var handlerFns = []HandlerFunc{
+	// Initialize Node.
+	node := initNode(conf)
+
+	// Initialize API.
+	api := initAPI(conf)
+
+	var handlerFns = []handlerFunc{
 		// Redirect some pre-defined browser request paths to a static
 		// location prefix.
 		setBrowserRedirectHandler,
 		// Validates if incoming request is for restricted buckets.
-		setPrivateBucketHandler,
+		setRestrictedBucketHandler,
 		// Adds cache control for all browser requests.
 		setBrowserCacheControlHandler,
 		// Validates all incoming requests to have a valid date header.
@@ -234,8 +69,8 @@ func serverHandler(conf cloudServerConfig) http.Handler {
 	// Initialize router.
 	mux := router.NewRouter()
 
-	// Register all API handlers.
-	registerAPIHandlers(mux, api, web)
+	// Register all routers - web, node, api.
+	registerAllRouters(mux, web, node, api)
 
 	// Register rest of the handlers.
 	return registerHandlers(mux, handlerFns...)

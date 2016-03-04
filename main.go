@@ -119,6 +119,7 @@ func findClosestCommands(command string) []string {
 func registerApp() *cli.App {
 	// register all commands
 	registerCommand(serverCmd)
+	registerCommand(joinCmd)
 	registerCommand(configCmd)
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)

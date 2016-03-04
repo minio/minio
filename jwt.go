@@ -18,6 +18,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -36,6 +38,24 @@ type JWT struct {
 const (
 	tokenExpires time.Duration = 10
 )
+
+/// helpers
+
+// isJWTReqAuthenticated validates if any incoming request to be a
+// valid JWT authenticated request.
+func isJWTReqAuthenticated(req *http.Request) bool {
+	jwt := initJWT()
+	token, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwt.secretAccessKey, nil
+	})
+	if e != nil {
+		return false
+	}
+	return token.Valid
+}
 
 // initJWT - initialize.
 func initJWT() *JWT {
