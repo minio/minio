@@ -40,9 +40,9 @@ func mainJoin(ctx *cli.Context) {
 	req, err := newRPCRequest(rpcOperation{
 		Method: "Node.Join",
 		Request: JoinArgs{
-			Username:    ctx.Args().Get(1),
-			Password:    ctx.Args().Get(2),
-			NodeAddress: "",
+			TargetAddress: ctx.Args().Get(0),
+			Username:      ctx.Args().Get(1),
+			Password:      ctx.Args().Get(2),
 		}}, serverURLParse.String())
 	fatalIf(err.Trace(), "Failed in initializing new rpc request.", nil)
 
@@ -54,9 +54,9 @@ func mainJoin(ctx *cli.Context) {
 		fatalIf(probe.NewError(errors.New(res.Status)), "Request failed.", nil)
 	}
 
-	token := &JoinRep{}
-	e = json2.DecodeClientResponse(res.Body, token)
+	joinRep := &JoinRep{}
+	e = json2.DecodeClientResponse(res.Body, joinRep)
 	fatalIf(probe.NewError(e), "Failed decoding json response body.", nil)
 
-	fmt.Println(token)
+	fmt.Println(joinRep)
 }
