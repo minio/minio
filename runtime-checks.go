@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-version"
+	"github.com/minio/mc/pkg/console"
 )
 
 // isContainerized returns true if we are inside a containerized environment.
@@ -49,17 +50,17 @@ func checkGoVersion() {
 	// Current version.
 	curVersion, e := version.NewVersion(runtime.Version()[2:])
 	if e != nil {
-		Fatalln("Unable to determine current go version.", e)
+		console.Fatalln("Unable to determine current go version.", e)
 	}
 
 	// Prepare version constraint.
 	constraints, e := version.NewConstraint(minGoVersion)
 	if e != nil {
-		Fatalln("Unable to check go version.")
+		console.Fatalln("Unable to check go version.")
 	}
 
 	// Check for minimum version.
 	if !constraints.Check(curVersion) {
-		Fatalln(fmt.Sprintf("Please recompile Minio with Golang version %s.", minGoVersion))
+		console.Fatalln(fmt.Sprintf("Please recompile Minio with Golang version %s.", minGoVersion))
 	}
 }

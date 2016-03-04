@@ -17,9 +17,8 @@
 package main
 
 import (
-	"os"
-
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var versionCmd = cli.Command{
@@ -34,11 +33,8 @@ USAGE:
 `,
 }
 
-func mainVersion(ctxx *cli.Context) {
-	Println("Version: " + minioVersion)
-	Println("Release-Tag: " + minioReleaseTag)
-	Println("Commit-ID: " + minioCommitID)
-	if os.Getenv("DOCKERIMAGE") == "1" {
-		Println("Docker-Image: " + "true")
-	}
+func mainVersion(ctx *cli.Context) {
+	console.Println("Version: " + minioVersion)
+	console.Println("Release-Tag: " + minioReleaseTag)
+	console.Println("Commit-ID: " + minioCommitID)
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -59,7 +60,7 @@ func init() {
 	// It is an unsafe practice to run network services as
 	// root. Containers are an exception.
 	if !isContainerized() && os.Geteuid() == 0 {
-		Fatalln("Please run ‘minio’ as a non-root user.")
+		console.Fatalln("Please run ‘minio’ as a non-root user.")
 	}
 
 }
@@ -140,7 +141,7 @@ func registerApp() *cli.App {
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
-		msg := fmt.Sprintf("‘%s’ is not a minio sub-command. See ‘minio help’.", command)
+		msg := fmt.Sprintf("‘%s’ is not a minio sub-command. See ‘minio --help’.", command)
 		closestCommands := findClosestCommands(command)
 		if len(closestCommands) > 0 {
 			msg += fmt.Sprintf("\n\nDid you mean one of these?\n")
@@ -148,7 +149,7 @@ func registerApp() *cli.App {
 				msg += fmt.Sprintf("        ‘%s’\n", cmd)
 			}
 		}
-		Fatalln(msg)
+		console.Fatalln(msg)
 	}
 	return app
 }
@@ -156,10 +157,10 @@ func registerApp() *cli.App {
 func checkMainSyntax(c *cli.Context) {
 	configPath, err := getConfigPath()
 	if err != nil {
-		Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
+		console.Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
 	if configPath == "" {
-		Fatalf("Config folder cannot be empty, please specify --config-folder <foldername>.")
+		console.Fatalln("Config folder cannot be empty, please specify --config-folder <foldername>.")
 	}
 }
 

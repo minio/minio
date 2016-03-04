@@ -83,6 +83,11 @@
 			"revisionTime": "2016-02-15T17:25:11+05:30"
 		},
 		{
+			"path": "github.com/minio/mc/pkg/console",
+			"revision": "db6b4f13442b26995f04b3b2b31b006cae7786e6",
+			"revisionTime": "2016-02-29T08:42:30-08:00"
+		},
+		{
 			"path": "github.com/minio/minio-go",
 			"revision": "280f16a52008d3ebba1bd64398b9b082e6738386",
 			"revisionTime": "2016-02-07T03:45:25-08:00"
