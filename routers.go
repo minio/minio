@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 
@@ -80,6 +81,9 @@ func assetFS() *assetfs.AssetFS {
 	}
 }
 
+// specialAssets are files which are unique files not embedded inside index_bundle.js.
+const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
+
 // registerAPIHandlers - register all the handlers to their respective paths
 func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// Minio rpc router
@@ -94,8 +98,8 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 
 	// RPC handler at URI - /minio/rpc
 	minio.Path("/rpc").Handler(rpc)
-	// Serve javascript files and favicon.ico from assets
-	minio.Path("/{assets:[^/]+.js|favicon.ico}").Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
+	// Serve all assets.
+	minio.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
 	// Serve index.html for rest of the requests
 	minio.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(privateBucket, http.FileServer(assetFS()))})
 
