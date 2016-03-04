@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/elazarl/go-bindata-assetfs"
+	"github.com/gorilla/handlers"
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
@@ -99,7 +100,7 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	// RPC handler at URI - /minio/rpc
 	minio.Path("/rpc").Handler(rpc)
 	// Serve all assets.
-	minio.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(http.StripPrefix(privateBucket, http.FileServer(assetFS())))
+	minio.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(handlers.CompressHandler(http.StripPrefix(privateBucket, http.FileServer(assetFS()))))
 	// Serve index.html for rest of the requests
 	minio.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(privateBucket, http.FileServer(assetFS()))})
 
