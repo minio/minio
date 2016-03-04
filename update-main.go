@@ -27,6 +27,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -183,7 +184,7 @@ func getReleaseUpdate(updateURL string) {
 	if latest.After(current) {
 		updateMsg.Update = true
 	}
-	Println(updateMsg)
+	console.Println(updateMsg)
 }
 
 // main entry point for update command.

@@ -16,7 +16,10 @@
 
 package main
 
-import "github.com/minio/cli"
+import (
+	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
+)
 
 // Print config version.
 var configVersionCmd = cli.Command{
@@ -43,5 +46,5 @@ func mainConfigVersion(ctx *cli.Context) {
 	// convert interface{} back to its original struct
 	newConf := config
 	type Version string
-	Println(newConf.Version)
+	console.Println(newConf.Version)
 }

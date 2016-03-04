@@ -20,6 +20,7 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -106,17 +107,17 @@ func mainConfigLogger(ctx *cli.Context) {
 		}
 	}
 	if ctx.Args().Get(0) == "list" {
-		Println(conf)
+		console.Println(conf)
 	}
 }
 
 func enableLog2Mongo(conf *config, args cli.Args) {
 	if conf.IsFileLoggingEnabled() {
-		Infoln("File logging already enabled. Removing automatically by enabling mongo.")
+		console.Infoln("File logging already enabled. Removing automatically by enabling mongo.")
 		conf.FileLogger.Filename = ""
 	}
 	if conf.IsSysloggingEnabled() {
-		Infoln("Syslog logging already enabled. Removing automatically by enabling mongo.")
+		console.Infoln("Syslog logging already enabled. Removing automatically by enabling mongo.")
 		conf.SyslogLogger.Addr = ""
 		conf.SyslogLogger.Network = ""
 	}
@@ -130,11 +131,11 @@ func enableLog2Mongo(conf *config, args cli.Args) {
 
 func enableLog2Syslog(conf *config, args cli.Args) {
 	if conf.IsFileLoggingEnabled() {
-		Infoln("File logging already enabled. Removing automatically by enabling syslog.")
+		console.Infoln("File logging already enabled. Removing automatically by enabling syslog.")
 		conf.FileLogger.Filename = ""
 	}
 	if conf.IsMongoLoggingEnabled() {
-		Infoln("Mongo logging already enabled. Removing automatically by enabling syslog.")
+		console.Infoln("Mongo logging already enabled. Removing automatically by enabling syslog.")
 		conf.MongoLogger.Addr = ""
 		conf.MongoLogger.DB = ""
 		conf.MongoLogger.Collection = ""
@@ -147,12 +148,12 @@ func enableLog2Syslog(conf *config, args cli.Args) {
 
 func enableLog2File(conf *config, args cli.Args) {
 	if conf.IsSysloggingEnabled() {
-		Infoln("Syslog logging already enabled. Removing automatically by enabling file logging.")
+		console.Infoln("Syslog logging already enabled. Removing automatically by enabling file logging.")
 		conf.SyslogLogger.Addr = ""
 		conf.SyslogLogger.Network = ""
 	}
 	if conf.IsMongoLoggingEnabled() {
-		Infoln("Mongo logging already enabled. Removing automatically by enabling file logging.")
+		console.Infoln("Mongo logging already enabled. Removing automatically by enabling file logging.")
 		conf.MongoLogger.Addr = ""
 		conf.MongoLogger.DB = ""
 		conf.MongoLogger.Collection = ""

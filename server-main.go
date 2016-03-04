@@ -29,6 +29,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/minhttp"
 	"github.com/minio/minio/pkg/probe"
 )
@@ -138,9 +139,9 @@ func printServerMsg(serverConf *http.Server) {
 	}
 	for _, host := range hosts {
 		if serverConf.TLSConfig != nil {
-			Printf("    https://%s:%s\n", host, port)
+			console.Printf("    https://%s:%s\n", host, port)
 		} else {
-			Printf("    http://%s:%s\n", host, port)
+			console.Printf("    http://%s:%s\n", host, port)
 		}
 	}
 }
@@ -232,8 +233,8 @@ func initServer() (*configV2, *probe.Error) {
 		return nil, err.Trace()
 	}
 	if conf != nil {
-		Println()
-		Println(accessKeys{conf})
+		console.Println()
+		console.Println(accessKeys{conf})
 	}
 	return conf, nil
 }
@@ -310,20 +311,20 @@ func serverMain(c *cli.Context) {
 	apiServer, err := configureServer(serverConfig)
 	errorIf(err.Trace(), "Failed to configure API server.", nil)
 
-	Println("\nMinio Object Storage:")
+	console.Println("\nMinio Object Storage:")
 	printServerMsg(apiServer)
 
-	Println("\nMinio Browser:")
+	console.Println("\nMinio Browser:")
 	printServerMsg(apiServer)
 
-	Println("\nTo configure Minio Client:")
+	console.Println("\nTo configure Minio Client:")
 	if runtime.GOOS == "windows" {
-		Println("    Download \"mc\" from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
-		Println("    $ mc.exe config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
+		console.Println("    Download \"mc\" from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
+		console.Println("    $ mc.exe config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 	} else {
-		Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
-		Println("    $ chmod 755 mc")
-		Println("    $ ./mc config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
+		console.Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
+		console.Println("    $ chmod 755 mc")
+		console.Println("    $ ./mc config host add myminio http://localhost:9000 " + conf.Credentials.AccessKeyID + " " + conf.Credentials.SecretAccessKey)
 	}
 
 	// Start server.

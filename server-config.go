@@ -25,6 +25,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/minio/go-homedir"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -265,7 +266,7 @@ func migrateV1ToV2() {
 	err = saveConfig(cv2)
 	fatalIf(err.Trace(), "Unable to save config version ‘2’.", nil)
 
-	Println("Migration from version ‘1’ to ‘2’ completed successfully.")
+	console.Println("Migration from version ‘1’ to ‘2’ completed successfully.")
 
 	/// Purge old fsUsers.json file
 	configPath, err := getConfigPath()
