@@ -1158,7 +1158,7 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
-	request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(md5Sum))
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1168,7 +1168,7 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
-	request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(md5Sum))
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
