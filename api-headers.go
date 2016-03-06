@@ -50,10 +50,9 @@ func setCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set("Accept-Ranges", "bytes")
 }
 
-// Write error response headers
-func encodeErrorResponse(response interface{}) []byte {
+// Encodes the response headers into XML format.
+func encodeResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
-	// write common headers
 	bytesBuffer.WriteString(xml.Header)
 	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
@@ -63,40 +62,26 @@ func encodeErrorResponse(response interface{}) []byte {
 // Write object header
 func setObjectHeaders(w http.ResponseWriter, metadata fs.ObjectMetadata, contentRange *httpRange) {
 	// set common headers
-	if contentRange != nil {
-		if contentRange.length > 0 {
-			w.Header().Set("Content-Length", strconv.FormatInt(contentRange.length, 10))
-			setCommonHeaders(w)
-		} else {
-			w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
-			setCommonHeaders(w)
-		}
-	} else {
-		w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
-		setCommonHeaders(w)
-	}
-	// set object headers
+	setCommonHeaders(w)
+
+	// set object-related metadata headers
 	lastModified := metadata.LastModified.UTC().Format(http.TimeFormat)
-	// object related headers
+	w.Header().Set("Last-Modified", lastModified)
+
 	w.Header().Set("Content-Type", metadata.ContentType)
 	if metadata.MD5 != "" {
 		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
 	}
-	w.Header().Set("Last-Modified", lastModified)
 
-	// set content range
+	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
+
+	// for providing ranged content
 	if contentRange != nil {
 		if contentRange.start > 0 || contentRange.length > 0 {
+			// override content-length
+			w.Header().Set("Content-Length", strconv.FormatInt(contentRange.length, 10))
 			w.Header().Set("Content-Range", contentRange.String())
 			w.WriteHeader(http.StatusPartialContent)
 		}
 	}
-}
-
-func encodeSuccessResponse(response interface{}) []byte {
-	var bytesBuffer bytes.Buffer
-	bytesBuffer.WriteString(xml.Header)
-	e := xml.NewEncoder(&bytesBuffer)
-	e.Encode(response)
-	return bytesBuffer.Bytes()
 }

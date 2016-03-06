@@ -392,7 +392,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	response := generateCopyObjectResponse(metadata.MD5, metadata.LastModified)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
 	// write success response.
@@ -534,7 +534,7 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 	}
 
 	response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
 	// write success response.
@@ -723,7 +723,7 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	response := generateListPartsResponse(objectResourcesMetadata)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// write headers.
 	setCommonHeaders(w)
 	// write success response.
@@ -802,7 +802,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	location := getLocation(r)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, metadata.MD5)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
 	// write success response.

@@ -436,7 +436,7 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int,
 	error := getErrorCode(errorType)
 	// generate error response
 	errorResponse := getErrorResponse(error, resource)
-	encodedErrorResponse := encodeErrorResponse(errorResponse)
+	encodedErrorResponse := encodeResponse(errorResponse)
 	// set common headers
 	setCommonHeaders(w)
 	// write Header
