@@ -63,9 +63,9 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Generate response.
-	encodedSuccessResponse := encodeSuccessResponse(LocationResponse{})
+	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	if api.Region != "us-east-1" {
-		encodedSuccessResponse = encodeSuccessResponse(LocationResponse{
+		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: api.Region,
 		})
 	}
@@ -117,7 +117,7 @@ func (api storageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http
 	}
 	// generate response
 	response := generateListMultipartUploadsResponse(bucket, resources)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// write headers.
 	setCommonHeaders(w)
 	// write success response.
@@ -160,7 +160,7 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 	if err == nil {
 		// generate response
 		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listResp)
-		encodedSuccessResponse := encodeSuccessResponse(response)
+		encodedSuccessResponse := encodeResponse(response)
 		// Write headers
 		setCommonHeaders(w)
 		// Write success response.
@@ -201,7 +201,7 @@ func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request)
 	if err == nil {
 		// generate response
 		response := generateListBucketsResponse(buckets)
-		encodedSuccessResponse := encodeSuccessResponse(response)
+		encodedSuccessResponse := encodeResponse(response)
 		// write headers
 		setCommonHeaders(w)
 		// write response
@@ -475,7 +475,7 @@ func (api storageAPI) GetBucketACLHandler(w http.ResponseWriter, r *http.Request
 	}
 	// Generate response
 	response := generateAccessControlPolicyResponse(bucketMetadata.ACL)
-	encodedSuccessResponse := encodeSuccessResponse(response)
+	encodedSuccessResponse := encodeResponse(response)
 	// Write headers
 	setCommonHeaders(w)
 	// Write success response.
