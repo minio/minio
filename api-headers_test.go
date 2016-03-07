@@ -22,7 +22,7 @@ import (
 
 func TestGenerateRequestID(t *testing.T) {
 	// Ensure that it returns an alphanumeric result of length 16.
-	var id []byte = generateRequestID()
+	var id = generateRequestID()
 
 	if len(id) != 16 {
 		t.Fail()
