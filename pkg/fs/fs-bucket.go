@@ -58,12 +58,12 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 
 	// Critical region hold write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	delete(fs.buckets.Metadata, bucket)
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -171,12 +171,12 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 
 	// Critical region hold a write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	fs.buckets.Metadata[bucket] = bucketMetadata
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -266,11 +266,11 @@ func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string
 
 	// Critical region handle write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	fs.buckets.Metadata[bucket] = bucketMetadata
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
