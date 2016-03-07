@@ -36,14 +36,11 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	}
 	bucket = fs.denormalizeBucket(bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
-	// Check if bucket exists.
-	if _, e := os.Stat(bucketDir); e != nil {
+	if e := os.Remove(bucketDir); e != nil {
+		// Error if there was no bucket in the first place.
 		if os.IsNotExist(e) {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return probe.NewError(e)
-	}
-	if e := os.Remove(bucketDir); e != nil {
 		// On windows the string is slightly different, handle it here.
 		if strings.Contains(e.Error(), "directory is not empty") {
 			return probe.NewError(BucketNotEmpty{Bucket: bucket})
@@ -58,12 +55,12 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 
 	// Critical region hold write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	delete(fs.buckets.Metadata, bucket)
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -171,12 +168,12 @@ func (fs Filesystem) MakeBucket(bucket, acl string) *probe.Error {
 
 	// Critical region hold a write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	fs.buckets.Metadata[bucket] = bucketMetadata
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
 
@@ -230,47 +227,29 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 
 // SetBucketMetadata - set bucket metadata.
 func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
-	// Input validation.
-	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+	bucketMetadata, err := fs.GetBucketMetadata(bucket)
+	if err != nil {
+		return err
 	}
+
 	// Save the acl.
 	acl := metadata["acl"]
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
-	}
-	if acl == "" {
+	} else if acl == "" {
 		acl = "private"
-	}
-	bucket = fs.denormalizeBucket(bucket)
-	bucketDir := filepath.Join(fs.path, bucket)
-	fi, e := os.Stat(bucketDir)
-	if e != nil {
-		// Check if bucket exists.
-		if os.IsNotExist(e) {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return probe.NewError(e)
-	}
-
-	// Critical region handle read lock.
-	fs.rwLock.RLock()
-	bucketMetadata, ok := fs.buckets.Metadata[bucket]
-	fs.rwLock.RUnlock()
-	if !ok {
-		bucketMetadata = &BucketMetadata{}
-		bucketMetadata.Name = fi.Name()
-		bucketMetadata.Created = fi.ModTime()
 	}
 	bucketMetadata.ACL = BucketACL(acl)
 
+	bucket = fs.denormalizeBucket(bucket)
+
 	// Critical region handle write lock.
 	fs.rwLock.Lock()
-	fs.buckets.Metadata[bucket] = bucketMetadata
+	defer fs.rwLock.Unlock()
+
+	fs.buckets.Metadata[bucket] = &bucketMetadata
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(bucket)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }

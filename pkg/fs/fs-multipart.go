@@ -276,6 +276,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 
 	// Critical region requiring write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
 	// Initialize multipart session.
 	mpartSession := &MultipartSession{}
 	mpartSession.TotalParts = 0
@@ -288,10 +289,8 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 
 	fs.multiparts.ActiveSession[uploadID] = mpartSession
 	if err := saveMultipartsSession(*fs.multiparts); err != nil {
-		fs.rwLock.Unlock()
 		return "", err.Trace(objectPath)
 	}
-	fs.rwLock.Unlock()
 	return uploadID, nil
 }
 
@@ -445,12 +444,12 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 
 	// Critical region requiring write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	fs.multiparts.ActiveSession[uploadID] = deserializedMultipartSession
 	if err := saveMultipartsSession(*fs.multiparts); err != nil {
-		fs.rwLock.Unlock()
 		return "", err.Trace(partPathPrefix)
 	}
-	fs.rwLock.Unlock()
 
 	// Return etag.
 	return partMetadata.ETag, nil
@@ -693,11 +692,11 @@ func (fs Filesystem) AbortMultipartUpload(bucket, object, uploadID string) *prob
 
 	// Critical region requiring write lock.
 	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	delete(fs.multiparts.ActiveSession, uploadID)
 	if err := saveMultipartsSession(*fs.multiparts); err != nil {
-		fs.rwLock.Unlock()
 		return err.Trace(partPathPrefix)
 	}
-	fs.rwLock.Unlock()
 	return nil
 }
