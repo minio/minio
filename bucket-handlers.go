@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/xml"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -210,6 +213,140 @@ func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request)
 	}
 	errorIf(err.Trace(), "ListBuckets failed.", nil)
 	writeErrorResponse(w, r, InternalError, r.URL.Path)
+}
+
+// DeleteMultipleObjectsHandler - deletes multiple objects.
+func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	if isRequestRequiresACLCheck(r) {
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	}
+
+	// Content-Length is required and should be non-zero
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+	if r.ContentLength <= 0 {
+		writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
+		return
+	}
+
+	// Content-Md5 is requied should be set
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+	if _, ok := r.Header["Content-Md5"]; !ok {
+		writeErrorResponse(w, r, MissingContentMD5, r.URL.Path)
+		return
+	}
+
+	// Set http request for signature.
+	auth := api.Signature.SetHTTPRequestToVerify(r)
+
+	// Allocate incoming content length bytes.
+	deleteXMLBytes := make([]byte, r.ContentLength)
+
+	// Read incoming body XML bytes.
+	_, e := io.ReadFull(r.Body, deleteXMLBytes)
+	if e != nil {
+		errorIf(probe.NewError(e), "DeleteMultipleObjects failed.", nil)
+		writeErrorResponse(w, r, InternalError, r.URL.Path)
+		return
+	}
+
+	// Check if request is presigned.
+	if isRequestPresignedSignatureV4(r) {
+		ok, err := auth.DoesPresignedSignatureMatch()
+		if err != nil {
+			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+	} else if isRequestSignatureV4(r) {
+		// Check if request is signed.
+		sha := sha256.New()
+		mdSh := md5.New()
+		sha.Write(deleteXMLBytes)
+		mdSh.Write(deleteXMLBytes)
+		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(sha.Sum(nil)))
+		if err != nil {
+			errorIf(err.Trace(), "DeleteMultipleObjects failed.", nil)
+			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			return
+		}
+		if !ok {
+			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		// Verify content md5.
+		if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(mdSh.Sum(nil)) {
+			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+			return
+		}
+	}
+
+	// Unmarshal list of keys to be deleted.
+	deleteObjects := &DeleteObjectsRequest{}
+	if e := xml.Unmarshal(deleteXMLBytes, deleteObjects); e != nil {
+		writeErrorResponse(w, r, MalformedXML, r.URL.Path)
+		return
+	}
+
+	var deleteErrors []DeleteError
+	var deletedObjects []ObjectIdentifier
+	// Loop through all the objects and delete them sequentially.
+	for _, object := range deleteObjects.Objects {
+		err := api.Filesystem.DeleteObject(bucket, object.ObjectName)
+		if err == nil {
+			deletedObjects = append(deletedObjects, ObjectIdentifier{
+				ObjectName: object.ObjectName,
+			})
+		} else {
+			errorIf(err.Trace(object.ObjectName), "DeleteObject failed.", nil)
+			switch err.ToGoError().(type) {
+			case fs.BucketNameInvalid:
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    errorCodeResponse[InvalidBucketName].Code,
+					Message: errorCodeResponse[InvalidBucketName].Description,
+					Key:     object.ObjectName,
+				})
+			case fs.BucketNotFound:
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    errorCodeResponse[NoSuchBucket].Code,
+					Message: errorCodeResponse[NoSuchBucket].Description,
+					Key:     object.ObjectName,
+				})
+			case fs.ObjectNotFound:
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    errorCodeResponse[NoSuchKey].Code,
+					Message: errorCodeResponse[NoSuchKey].Description,
+					Key:     object.ObjectName,
+				})
+			case fs.ObjectNameInvalid:
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    errorCodeResponse[NoSuchKey].Code,
+					Message: errorCodeResponse[NoSuchKey].Description,
+					Key:     object.ObjectName,
+				})
+			default:
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    errorCodeResponse[InternalError].Code,
+					Message: errorCodeResponse[InternalError].Description,
+					Key:     object.ObjectName,
+				})
+			}
+		}
+	}
+	// Generate response
+	response := generateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
+	encodedSuccessResponse := encodeResponse(response)
+	// Write headers
+	setCommonHeaders(w)
+	// Write success response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // PutBucketHandler - PUT Bucket

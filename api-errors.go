@@ -62,6 +62,7 @@ const (
 	InvalidCopyDest
 	MalformedXML
 	MissingContentLength
+	MissingContentMD5
 	MissingRequestBodyError
 	NoSuchBucket
 	NoSuchKey
@@ -125,7 +126,7 @@ var errorCodeResponse = map[int]APIError{
 	},
 	BadDigest: {
 		Code:           "BadDigest",
-		Description:    "The Content-MD5 you specified did not match what we received.",
+		Description:    "The Content-Md5 you specified did not match what we received.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	BucketAlreadyExists: {
@@ -165,7 +166,7 @@ var errorCodeResponse = map[int]APIError{
 	},
 	InvalidDigest: {
 		Code:           "InvalidDigest",
-		Description:    "The Content-MD5 you specified is not valid.",
+		Description:    "The Content-Md5 you specified is not valid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	InvalidRange: {
@@ -182,6 +183,11 @@ var errorCodeResponse = map[int]APIError{
 		Code:           "MissingContentLength",
 		Description:    "You must provide the Content-Length HTTP header.",
 		HTTPStatusCode: http.StatusLengthRequired,
+	},
+	MissingContentMD5: {
+		Code:           "MissingContentMD5",
+		Description:    "Missing required header for this request: Content-Md5.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	MissingRequestBodyError: {
 		Code:           "MissingRequestBodyError",

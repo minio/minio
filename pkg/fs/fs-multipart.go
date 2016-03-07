@@ -202,7 +202,7 @@ func saveParts(partPathPrefix string, mw io.Writer, parts []CompletePart) *probe
 			if !os.IsNotExist(e) {
 				return probe.NewError(e)
 			}
-			// Some clients do not set Content-MD5, so we would have
+			// Some clients do not set Content-Md5, so we would have
 			// created part files without 'ETag' in them.
 			partFile, e = os.OpenFile(partPathPrefix+fmt.Sprintf("$%d-$multiparts", part.PartNumber), os.O_RDONLY, 0600)
 			if e != nil {

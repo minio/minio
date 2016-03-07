@@ -218,6 +218,24 @@ type CompleteMultipartUploadResponse struct {
 	ETag     string
 }
 
+// DeleteError structure.
+type DeleteError struct {
+	Code    string
+	Message string
+	Key     string
+}
+
+// DeleteObjectsResponse container for multiple object deletes.
+type DeleteObjectsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult" json:"-"`
+
+	// Collection of all deleted objects
+	DeletedObjects []ObjectIdentifier `xml:"Deleted,omitempty"`
+
+	// Collection of errors deleting certain objects.
+	Errors []DeleteError `xml:"Error,omitempty"`
+}
+
 // getLocation get URL location.
 func getLocation(r *http.Request) string {
 	return r.URL.Path
@@ -412,6 +430,16 @@ func generateListMultipartUploadsResponse(bucket string, metadata fs.BucketMulti
 		listMultipartUploadsResponse.Uploads = append(listMultipartUploadsResponse.Uploads, newUpload)
 	}
 	return listMultipartUploadsResponse
+}
+
+// generate multi objects delete response.
+func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, errs []DeleteError) DeleteObjectsResponse {
+	deleteResp := DeleteObjectsResponse{}
+	if !quiet {
+		deleteResp.DeletedObjects = deletedObjects
+	}
+	deleteResp.Errors = errs
+	return deleteResp
 }
 
 // writeSuccessResponse write success headers and response if any.

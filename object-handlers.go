@@ -420,8 +420,8 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// get Content-MD5 sent by client and verify if valid
-	md5 := r.Header.Get("Content-MD5")
+	// get Content-Md5 sent by client and verify if valid
+	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
 		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		return
@@ -554,8 +554,8 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// get Content-MD5 sent by client and verify if valid
-	md5 := r.Header.Get("Content-MD5")
+	// get Content-Md5 sent by client and verify if valid
+	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
 		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
 		return
@@ -811,7 +811,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 
 /// Delete storageAPI
 
-// DeleteObjectHandler - Delete object
+// DeleteObjectHandler - delete an object
 func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

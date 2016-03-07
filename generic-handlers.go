@@ -289,7 +289,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 	"requestPayment": true,
 	"versioning":     true,
 	"website":        true,
-	"delete":         true,
 }
 
 // List of not implemented object queries
