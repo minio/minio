@@ -45,49 +45,6 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 	return f
 }
 
-// Attempts to parse date string into known date layouts. Date layouts
-// currently supported are ``time.RFC1123``, ``time.RFC1123Z`` and
-// special ``iso8601Format``.
-func parseKnownLayouts(date string) (time.Time, error) {
-	parsedTime, e := time.Parse(time.RFC1123, date)
-	if e == nil {
-		return parsedTime, nil
-	}
-	parsedTime, e = time.Parse(time.RFC1123Z, date)
-	if e == nil {
-		return parsedTime, nil
-	}
-	parsedTime, e = time.Parse(iso8601Format, date)
-	if e == nil {
-		return parsedTime, nil
-	}
-	return time.Time{}, e
-}
-
-// Parse date string from incoming header, current supports and verifies
-// follow HTTP headers.
-//
-//  - X-Amz-Date
-//  - X-Minio-Date
-//  - Date
-//
-// In following time layouts ``time.RFC1123``, ``time.RFC1123Z`` and ``iso8601Format``.
-func parseDateHeader(req *http.Request) (time.Time, error) {
-	amzDate := req.Header.Get(http.CanonicalHeaderKey("x-amz-date"))
-	if amzDate != "" {
-		return parseKnownLayouts(amzDate)
-	}
-	minioDate := req.Header.Get(http.CanonicalHeaderKey("x-minio-date"))
-	if minioDate != "" {
-		return parseKnownLayouts(minioDate)
-	}
-	genericDate := req.Header.Get("Date")
-	if genericDate != "" {
-		return parseKnownLayouts(genericDate)
-	}
-	return time.Time{}, errors.New("Date header missing, invalid request.")
-}
-
 // Adds redirect rules for incoming requests.
 type redirectHandler struct {
 	handler        http.Handler
@@ -163,6 +120,53 @@ func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	h.handler.ServeHTTP(w, r)
 }
 
+// Supported incoming date formats.
+var timeFormats = []string{
+	time.RFC1123,
+	time.RFC1123Z,
+	iso8601Format,
+}
+
+// Attempts to parse date string into known date layouts. Date layouts
+// currently supported are
+//  - ``time.RFC1123``
+//  - ``time.RFC1123Z``
+//  - ``iso8601Format``
+func parseDate(date string) (parsedTime time.Time, e error) {
+	for _, layout := range timeFormats {
+		parsedTime, e = time.Parse(layout, date)
+		if e == nil {
+			return parsedTime, nil
+		}
+	}
+	return time.Time{}, e
+}
+
+// Parse date string from incoming header, current supports and verifies
+// follow HTTP headers.
+//
+//  - X-Amz-Date
+//  - X-Minio-Date
+//  - Date
+//
+// In following time layouts ``time.RFC1123``, ``time.RFC1123Z`` and
+// ``iso8601Format``.
+var dateHeaders = []string{
+	"x-amz-date",
+	"x-minio-date",
+	"date",
+}
+
+func parseDateHeader(req *http.Request) (time.Time, error) {
+	for _, dateHeader := range dateHeaders {
+		date := req.Header.Get(http.CanonicalHeaderKey(dateHeader))
+		if date != "" {
+			return parseDate(date)
+		}
+	}
+	return time.Time{}, errors.New("Date header missing, invalid request.")
+}
+
 type timeHandler struct {
 	handler http.Handler
 }
@@ -183,11 +187,9 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
-		duration := time.Since(date)
-		minutes := time.Duration(5) * time.Minute
 		// Verify if the request date header is more than 5minutes
 		// late, reject such clients.
-		if duration.Minutes() > minutes.Minutes() {
+		if time.Now().UTC().Sub(date)/time.Minute > time.Duration(5)*time.Minute {
 			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
 			return
 		}
