@@ -230,45 +230,27 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 
 // SetBucketMetadata - set bucket metadata.
 func (fs Filesystem) SetBucketMetadata(bucket string, metadata map[string]string) *probe.Error {
-	// Input validation.
-	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+	bucketMetadata, err := fs.GetBucketMetadata(bucket)
+	if err != nil {
+		return err
 	}
+
 	// Save the acl.
 	acl := metadata["acl"]
 	if !IsValidBucketACL(acl) {
 		return probe.NewError(InvalidACL{ACL: acl})
-	}
-	if acl == "" {
+	} else if acl == "" {
 		acl = "private"
 	}
-	bucket = fs.denormalizeBucket(bucket)
-	bucketDir := filepath.Join(fs.path, bucket)
-	fi, e := os.Stat(bucketDir)
-	if e != nil {
-		// Check if bucket exists.
-		if os.IsNotExist(e) {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return probe.NewError(e)
-	}
-
-	// Critical region handle read lock.
-	fs.rwLock.RLock()
-	bucketMetadata, ok := fs.buckets.Metadata[bucket]
-	fs.rwLock.RUnlock()
-	if !ok {
-		bucketMetadata = &BucketMetadata{}
-		bucketMetadata.Name = fi.Name()
-		bucketMetadata.Created = fi.ModTime()
-	}
 	bucketMetadata.ACL = BucketACL(acl)
+
+	bucket = fs.denormalizeBucket(bucket)
 
 	// Critical region handle write lock.
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
 
-	fs.buckets.Metadata[bucket] = bucketMetadata
+	fs.buckets.Metadata[bucket] = &bucketMetadata
 	if err := saveBucketsMetadata(*fs.buckets); err != nil {
 		return err.Trace(bucket)
 	}
