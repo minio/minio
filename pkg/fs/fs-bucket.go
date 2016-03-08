@@ -78,7 +78,7 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 		}
 		// If directories are found with odd names, skip them.
 		dirName := strings.ToLower(file.Name())
-		if file.IsDir() && !IsValidBucketName(dirName) {
+		if !IsValidBucketName(dirName) {
 			continue
 		}
 		metadata := BucketMetadata{

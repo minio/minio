@@ -19,9 +19,50 @@ package fs
 import (
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestListBuckets(t *testing.T) {
+	// Make a temporary directory to use as the filesystem.
+	directory, fserr := ioutil.TempDir("", "minio-benchmark")
+	if fserr != nil {
+		t.Fatal(fserr)
+	}
+	defer os.RemoveAll(directory)
+
+	// Create the filesystem.
+	filesystem, err := New(directory, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a few buckets.
+	for i := 0; i < 10; i++ {
+		err = filesystem.MakeBucket("testbucket."+strconv.Itoa(i), "public-read")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// List, and ensure that they are all there.
+	metadatas, err := filesystem.ListBuckets()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(metadatas) != 10 {
+		t.Errorf("incorrect length of metadatas (%i)\n", len(metadatas))
+	}
+
+	// Iterate over the buckets, ensuring that the name is correct.
+	for i := 0; i < len(metadatas); i++ {
+		if !strings.Contains(metadatas[i].Name, "testbucket") {
+			t.Fail()
+		}
+	}
+}
 
 func TestDeleteBucket(t *testing.T) {
 	// Make a temporary directory to use as the filesystem.
@@ -41,6 +82,39 @@ func TestDeleteBucket(t *testing.T) {
 	err = filesystem.DeleteBucket("bucket")
 	if !strings.Contains(err.Cause.Error(), "Bucket not found:") {
 		t.Fail()
+	}
+}
+
+func BenchmarkListBuckets(b *testing.B) {
+	// Make a temporary directory to use as the filesystem.
+	directory, fserr := ioutil.TempDir("", "minio-benchmark")
+	if fserr != nil {
+		b.Fatal(fserr)
+	}
+	defer os.RemoveAll(directory)
+
+	// Create the filesystem.
+	filesystem, err := New(directory, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Create a few buckets.
+	for i := 0; i < 20; i++ {
+		err = filesystem.MakeBucket("bucket."+strconv.Itoa(i), "public-read")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.ResetTimer()
+
+	// List the buckets over and over and over.
+	for i := 0; i < b.N; i++ {
+		_, err = filesystem.ListBuckets()
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
