@@ -25,6 +25,11 @@ docker stop <running_minio_container_id>
 docker create -v /export --name minio-export minio/my-minio /bin/true
 ```
 
+You can also map ```.minio``` directory containing authentication information.
+```bash
+docker create -v /export --name minio-export -v /.minio --name minio-config minio/my-minio /bin/true
+```
+
 You can then use the `--volumes-from` flag to mount the `/export` volume in another container.
 
 ```bash
