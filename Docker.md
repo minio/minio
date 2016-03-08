@@ -25,37 +25,14 @@ docker stop <running_minio_container_id>
 docker create -v /export --name minio-export minio/my-minio /bin/true
 ```
 
-You can also map ```.minio``` directory containing authentication information.
+You can also map ``.minio`` directory containing authentication information.
+
 ```bash
 docker create -v /export --name minio-export -v /.minio --name minio-config minio/my-minio /bin/true
 ```
 
-You can then use the `--volumes-from` flag to mount the `/export` volume in another container.
+You can then use the `--volumes-from` flag to mount the `/export` and ``/.minio`` volume in another container.
 
 ```bash
-docker run -p 9000 --volumes-from minio-export --name minio1 minio/my-minio
-```
-
-### Setup a sample proxy in front using Caddy.
-
-Please download [Caddy Server](https://caddyserver.com/download)
-
-Create a caddy configuration file as below, change the ip addresses according to your local
-minio and DNS configuration.
-
-```bash
-your.public.com {
-    proxy / 10.0.1.3:9000 {
-        proxy_header Host {host}
-        proxy_header X-Real-IP {remote}
-        proxy_header X-Forwarded-Proto {scheme}
-    }
-    tls off
-}
-```
-
-```bash
-$ ./caddy
-Activating privacy features... done.
-your.public.com
+docker run -p 9000 --volumes-from minio-export --volumes-from minio-config --name minio-server1 minio/my-minio
 ```
