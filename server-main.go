@@ -255,8 +255,54 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
+// extract port number from address.
+// address should be of the form host:port
+func getPort(address string) int {
+	_, portStr, e := net.SplitHostPort(address)
+	fatalIf(probe.NewError(e), "Unable to split host port.", nil)
+	portInt, e := strconv.Atoi(portStr)
+	fatalIf(probe.NewError(e), "Invalid port number.", nil)
+	return portInt
+}
+
+// Make sure that none of the other processes are listening on the
+// specified port on any of the interfaces.
+//
+// On linux if a process is listening on 127.0.0.1:9000 then Listen()
+// on ":9000" fails with the error "port already in use".
+// However on Mac OSX Listen() on ":9000" falls back to the IPv6 address.
+// This causes confusion on Mac OSX that minio server is not reachable
+// on 127.0.0.1 even though minio server is running. So before we start
+// the minio server we make sure that the port is free on all the IPs.
+func checkPortAvailability(port int) {
+	ifcs, e := net.Interfaces()
+	if e != nil {
+		fatalIf(probe.NewError(e), "Unable to list interfaces.", nil)
+	}
+	for _, ifc := range ifcs {
+		addrs, e := ifc.Addrs()
+		if e != nil {
+			fatalIf(probe.NewError(e), fmt.Sprintf("Unable to list addresses on interface %s.", ifc.Name), nil)
+		}
+		for _, addr := range addrs {
+			ip := addr.(*net.IPNet).IP
+			tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
+			l, e := net.ListenTCP("tcp", &tcpAddr)
+			if e != nil {
+				fatalIf(probe.NewError(e), fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+			}
+			e = l.Close()
+			if e != nil {
+				fatalIf(probe.NewError(e), fmt.Sprintf("Unable to close listener on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+			}
+		}
+	}
+}
+
 func serverMain(c *cli.Context) {
 	checkServerSyntax(c)
+	address := c.GlobalString("address")
+	checkPortAvailability(getPort(address))
 
 	conf, err := initServer()
 	fatalIf(err.Trace(), "Failed to read config for minio.", nil)
@@ -298,7 +344,7 @@ func serverMain(c *cli.Context) {
 	}
 	tls := (certFile != "" && keyFile != "")
 	serverConfig := cloudServerConfig{
-		Address:         c.GlobalString("address"),
+		Address:         address,
 		AccessLog:       c.GlobalBool("enable-accesslog"),
 		AccessKeyID:     conf.Credentials.AccessKeyID,
 		SecretAccessKey: conf.Credentials.SecretAccessKey,
