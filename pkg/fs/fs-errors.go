@@ -163,6 +163,13 @@ type GenericBucketError struct {
 	Bucket string
 }
 
+// BucketPolicyNotFound - no bucket policy found.
+type BucketPolicyNotFound GenericBucketError
+
+func (e BucketPolicyNotFound) Error() string {
+	return "No bucket policy found for bucket: " + e.Bucket
+}
+
 // GenericObjectError - generic object error
 type GenericObjectError struct {
 	Bucket string
@@ -181,17 +188,6 @@ type DigestError struct {
 	Bucket string
 	Key    string
 	MD5    string
-}
-
-/// ACL related errors
-
-// InvalidACL - acl invalid
-type InvalidACL struct {
-	ACL string
-}
-
-func (e InvalidACL) Error() string {
-	return "Requested ACL is " + e.ACL + " invalid"
 }
 
 /// Bucket related errors

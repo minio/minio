@@ -524,7 +524,6 @@ func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
 func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -533,7 +532,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket-slash/", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -582,7 +580,6 @@ func (s *MyAPIFSCacheSuite) TestCopyObject(c *C) {
 func (s *MyAPIFSCacheSuite) TestPutObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -627,7 +624,6 @@ func (s *MyAPIFSCacheSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C)
 func (s *MyAPIFSCacheSuite) TestHeadOnObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/headonobject", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -671,7 +667,6 @@ func (s *MyAPIFSCacheSuite) TestHeadOnObject(c *C) {
 func (s *MyAPIFSCacheSuite) TestHeadOnBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/headonbucket", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -837,7 +832,6 @@ func (s *MyAPIFSCacheSuite) TestListObjectsHandlerErrors(c *C) {
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objecthandlererrors", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -855,7 +849,6 @@ func (s *MyAPIFSCacheSuite) TestListObjectsHandlerErrors(c *C) {
 func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket-.", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -864,7 +857,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -873,7 +865,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -881,7 +872,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket?acl", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "unknown")
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)

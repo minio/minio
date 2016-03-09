@@ -42,7 +42,8 @@ type APIErrorResponse struct {
 
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
-	AccessDenied = iota
+	None = iota
+	AccessDenied
 	BadDigest
 	BucketAlreadyExists
 	EntityTooSmall
@@ -60,11 +61,13 @@ const (
 	InvalidRequestBody
 	InvalidCopySource
 	InvalidCopyDest
+	InvalidPolicyDocument
 	MalformedXML
 	MissingContentLength
 	MissingContentMD5
 	MissingRequestBodyError
 	NoSuchBucket
+	NoSuchBucketPolicy
 	NoSuchKey
 	NoSuchUpload
 	NotImplemented
@@ -80,6 +83,7 @@ const (
 	RootPathFull
 	ObjectExistsAsPrefix
 	AllAccessDisabled
+	MalformedPolicy
 )
 
 // APIError code to Error structure map
@@ -117,6 +121,11 @@ var errorCodeResponse = map[int]APIError{
 	InvalidPartNumberMarker: {
 		Code:           "InvalidArgument",
 		Description:    "Argument partNumberMarker must be an integer.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	InvalidPolicyDocument: {
+		Code:           "InvalidPolicyDocument",
+		Description:    "The content of the form does not meet the conditions specified in the policy document.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	AccessDenied: {
@@ -199,6 +208,11 @@ var errorCodeResponse = map[int]APIError{
 		Description:    "The specified bucket does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	NoSuchBucketPolicy: {
+		Code:           "NoSuchBucketPolicy",
+		Description:    "The specified bucket does not have a bucket policy.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	NoSuchKey: {
 		Code:           "NoSuchKey",
 		Description:    "The specified key does not exist.",
@@ -273,6 +287,11 @@ var errorCodeResponse = map[int]APIError{
 		Code:           "AllAccessDisabled",
 		Description:    "All access to this bucket has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	MalformedPolicy: {
+		Code:           "MalformedPolicy",
+		Description:    "Policy has invalid resource",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 }
 

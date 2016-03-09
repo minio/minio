@@ -65,7 +65,7 @@ func BenchmarkDeleteBucket(b *testing.B) {
 		b.StopTimer()
 
 		// Create and delete the bucket over and over.
-		err = filesystem.MakeBucket("bucket", "public-read-write")
+		err = filesystem.MakeBucket("bucket")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -94,7 +94,7 @@ func BenchmarkGetBucketMetadata(b *testing.B) {
 	}
 
 	// Put up a bucket with some metadata.
-	err = filesystem.MakeBucket("bucket", "public-read-write")
+	err = filesystem.MakeBucket("bucket")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -104,40 +104,6 @@ func BenchmarkGetBucketMetadata(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// Retrieve the metadata!
 		_, err := filesystem.GetBucketMetadata("bucket")
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkSetBucketMetadata(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
-	directory, fserr := ioutil.TempDir("", "minio-benchmark")
-	if fserr != nil {
-		b.Fatal(fserr)
-	}
-	defer os.RemoveAll(directory)
-
-	// Create the filesystem.
-	filesystem, err := New(directory, 0)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// Put up a bucket with some metadata.
-	err = filesystem.MakeBucket("bucket", "public-read-write")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	metadata := make(map[string]string)
-	metadata["acl"] = "public-read-write"
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		// Set all the metadata!
-		err = filesystem.SetBucketMetadata("bucket", metadata)
 		if err != nil {
 			b.Fatal(err)
 		}

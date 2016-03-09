@@ -61,16 +61,22 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypePresigned, authTypeSigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
@@ -225,15 +231,8 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-			return
-		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+	if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
 
@@ -286,14 +285,22 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
 		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
 		return
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned, authTypeSigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	// TODO: Reject requests where body/payload is present, for now we
@@ -413,13 +420,6 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-			return
-		}
-	}
-
 	// get Content-Md5 sent by client and verify if valid
 	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
@@ -440,11 +440,23 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
-
 	var metadata fs.ObjectMetadata
 	var err *probe.Error
-	// For presigned requests verify them right here.
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		// Create anonymous object.
+		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+	case authTypePresigned:
+		// For presigned requests verify them right here.
 		var ok bool
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
@@ -458,7 +470,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Create presigned object.
 		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
-	} else {
+	case authTypeSigned:
 		// Create object.
 		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, &auth)
 	}
@@ -501,16 +513,18 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	default:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	uploadID, err := api.Filesystem.NewMultipartUpload(bucket, object)
@@ -547,13 +561,6 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-			return
-		}
-	}
-
 	// get Content-Md5 sent by client and verify if valid
 	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
@@ -585,11 +592,20 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
-
 	var partMD5 string
 	var err *probe.Error
-	// For presigned requests verify right here.
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		// No need to verify signature, anonymous request access is
+		// already allowed.
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
+	case authTypePresigned:
+		// For presigned requests verify right here.
 		var ok bool
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
@@ -602,7 +618,7 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
-	} else {
+	default:
 		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, &auth)
 	}
 	if err != nil {
@@ -637,16 +653,18 @@ func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:AbortMultipartUpload", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	default:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	objectResourcesMetadata := getObjectResources(r.URL.Query())
@@ -678,16 +696,18 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:ListMultipartUploadParts", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
+	default:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	objectResourcesMetadata := getObjectResources(r.URL.Query())
@@ -724,9 +744,9 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 	}
 	response := generateListPartsResponse(objectResourcesMetadata)
 	encodedSuccessResponse := encodeResponse(response)
-	// write headers.
+	// Write headers.
 	setCommonHeaders(w)
-	// write success response.
+	// Write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
@@ -736,13 +756,6 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
-			return
-		}
-	}
-
 	// Extract object resources.
 	objectResourcesMetadata := getObjectResources(r.URL.Query())
 
@@ -751,8 +764,21 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 
 	var metadata fs.ObjectMetadata
 	var err *probe.Error
-	// For presigned requests verify right here.
-	if isRequestPresignedSignatureV4(r) {
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		// Complete multipart upload anonymous.
+		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
+	case authTypePresigned:
+		// For presigned requests verify right here.
 		var ok bool
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
@@ -766,7 +792,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		}
 		// Complete multipart upload presigned.
 		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
-	} else {
+	case authTypeSigned:
 		// Complete multipart upload.
 		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, &auth)
 	}
@@ -817,18 +843,23 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if isRequestRequiresACLCheck(r) {
-		if api.Filesystem.IsPrivateBucket(bucket) || api.Filesystem.IsReadOnlyBucket(bucket) {
-			writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if isAllowed, s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); !isAllowed {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	}
-
-	if !isSignV4ReqAuthenticated(api.Signature, r) {
-		writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
-		return
-	}
-
 	err := api.Filesystem.DeleteObject(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "DeleteObject failed.", nil)

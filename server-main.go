@@ -187,6 +187,9 @@ func getConfig() (*configV2, *probe.Error) {
 	if err := createConfigPath(); err != nil {
 		return nil, err.Trace()
 	}
+	if err := createBucketsConfigPath(); err != nil {
+		return nil, err.Trace()
+	}
 	config, err := loadConfigV2()
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {

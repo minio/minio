@@ -38,7 +38,6 @@ func APITestSuite(c *check.C, create func() Filesystem) {
 	testPaging(c, create)
 	testObjectOverwriteWorks(c, create)
 	testNonExistantBucketOperations(c, create)
-	testBucketMetadata(c, create)
 	testBucketRecreateFails(c, create)
 	testPutObjectInSubdir(c, create)
 	testListBuckets(c, create)
@@ -53,13 +52,13 @@ func APITestSuite(c *check.C, create func() Filesystem) {
 
 func testMakeBucket(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 }
 
 func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	uploadID, err := fs.NewMultipartUpload("bucket", "key")
 	c.Assert(err, check.IsNil)
@@ -94,7 +93,7 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 
 func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	uploadID, err := fs.NewMultipartUpload("bucket", "key")
 	c.Assert(err, check.IsNil)
@@ -126,7 +125,7 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 	objects := make(map[string][]byte)
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	for i := 0; i < 10; i++ {
 		randomPerm := rand.Perm(10)
@@ -161,7 +160,7 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 
 func testPaging(c *check.C, create func() Filesystem) {
 	fs := create()
-	fs.MakeBucket("bucket", "")
+	fs.MakeBucket("bucket")
 	result, err := fs.ListObjects("bucket", "", "", "", 0)
 	c.Assert(err, check.IsNil)
 	c.Assert(len(result.Objects), check.Equals, 0)
@@ -262,7 +261,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 
 func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	hasher1 := md5.New()
@@ -292,27 +291,17 @@ func testNonExistantBucketOperations(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketMetadata(c *check.C, create func() Filesystem) {
-	fs := create()
-	err := fs.MakeBucket("string", "")
-	c.Assert(err, check.IsNil)
-
-	metadata, err := fs.GetBucketMetadata("string")
-	c.Assert(err, check.IsNil)
-	c.Assert(metadata.ACL, check.Equals, BucketACL("private"))
-}
-
 func testBucketRecreateFails(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("string", "")
+	err := fs.MakeBucket("string")
 	c.Assert(err, check.IsNil)
-	err = fs.MakeBucket("string", "")
+	err = fs.MakeBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
 }
 
 func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	hasher := md5.New()
@@ -339,7 +328,7 @@ func testListBuckets(c *check.C, create func() Filesystem) {
 	c.Assert(len(buckets), check.Equals, 0)
 
 	// add one and test exists
-	err = fs.MakeBucket("bucket1", "")
+	err = fs.MakeBucket("bucket1")
 	c.Assert(err, check.IsNil)
 
 	buckets, err = fs.ListBuckets()
@@ -347,7 +336,7 @@ func testListBuckets(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 
 	// add two and test exists
-	err = fs.MakeBucket("bucket2", "")
+	err = fs.MakeBucket("bucket2")
 	c.Assert(err, check.IsNil)
 
 	buckets, err = fs.ListBuckets()
@@ -355,7 +344,7 @@ func testListBuckets(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 
 	// add three and test exists + prefix
-	err = fs.MakeBucket("bucket22", "")
+	err = fs.MakeBucket("bucket22")
 
 	buckets, err = fs.ListBuckets()
 	c.Assert(len(buckets), check.Equals, 3)
@@ -368,9 +357,9 @@ func testListBucketsOrder(c *check.C, create func() Filesystem) {
 	for i := 0; i < 10; i++ {
 		fs := create()
 		// add one and test exists
-		err := fs.MakeBucket("bucket1", "")
+		err := fs.MakeBucket("bucket1")
 		c.Assert(err, check.IsNil)
-		err = fs.MakeBucket("bucket2", "")
+		err = fs.MakeBucket("bucket2")
 		c.Assert(err, check.IsNil)
 		buckets, err := fs.ListBuckets()
 		c.Assert(err, check.IsNil)
@@ -390,7 +379,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesyst
 
 func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -408,7 +397,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
 
 func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	_, err = fs.CreateObject("bucket", "dir1/dir2/object", "", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
@@ -443,7 +432,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem)
 
 func testDefaultContentType(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// test empty
@@ -455,7 +444,7 @@ func testDefaultContentType(c *check.C, create func() Filesystem) {
 
 func testContentMD5Set(c *check.C, create func() Filesystem) {
 	fs := create()
-	err := fs.MakeBucket("bucket", "")
+	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// test md5 invalid

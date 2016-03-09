@@ -154,8 +154,8 @@ func createConfigPath() *probe.Error {
 	if err != nil {
 		return err.Trace()
 	}
-	if err := os.MkdirAll(configPath, 0700); err != nil {
-		return probe.NewError(err)
+	if e := os.MkdirAll(configPath, 0700); e != nil {
+		return probe.NewError(e)
 	}
 	return nil
 }

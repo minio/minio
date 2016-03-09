@@ -31,15 +31,8 @@ type Filesystem struct {
 	minFreeDisk      int64
 	rwLock           *sync.RWMutex
 	multiparts       *Multiparts
-	buckets          *Buckets
 	listServiceReqCh chan<- listServiceReq
 	timeoutReqCh     chan<- uint32
-}
-
-// Buckets holds acl information
-type Buckets struct {
-	Version  string `json:"version"`
-	Metadata map[string]*BucketMetadata
 }
 
 // MultipartSession holds active session information
@@ -59,7 +52,6 @@ type Multiparts struct {
 
 // New instantiate a new donut
 func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
-	setFSBucketsMetadataPath(filepath.Join(rootPath, "$buckets.json"))
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
 	var err *probe.Error
@@ -80,27 +72,12 @@ func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 		}
 	}
 
-	var buckets *Buckets
-	buckets, err = loadBucketsMetadata()
-	if err != nil {
-		if os.IsNotExist(err.ToGoError()) {
-			buckets = &Buckets{
-				Version:  "1",
-				Metadata: make(map[string]*BucketMetadata),
-			}
-			if err = saveBucketsMetadata(*buckets); err != nil {
-				return Filesystem{}, err.Trace()
-			}
-		} else {
-			return Filesystem{}, err.Trace()
-		}
-	}
 	fs := Filesystem{
 		rwLock: &sync.RWMutex{},
 	}
 	fs.path = rootPath
 	fs.multiparts = multiparts
-	fs.buckets = buckets
+
 	/// Defaults
 
 	// minium free disk required for i/o operations to succeed.
