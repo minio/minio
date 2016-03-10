@@ -25,14 +25,59 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
+// ListObjectParams - list object params used for list object map
+type ListObjectParams struct {
+	bucket    string
+	delimiter string
+	marker    string
+	prefix    string
+}
+
 // Filesystem - local variables
 type Filesystem struct {
-	path             string
-	minFreeDisk      int64
-	rwLock           *sync.RWMutex
-	multiparts       *Multiparts
-	listServiceReqCh chan<- listServiceReq
-	timeoutReqCh     chan<- uint32
+	path               string
+	minFreeDisk        int64
+	rwLock             *sync.RWMutex
+	multiparts         *Multiparts
+	listObjectMap      map[ListObjectParams][]ObjectInfoChannel
+	listObjectMapMutex *sync.Mutex
+}
+
+func (fs *Filesystem) pushListObjectCh(params ListObjectParams, ch ObjectInfoChannel) {
+	fs.listObjectMapMutex.Lock()
+	defer fs.listObjectMapMutex.Unlock()
+
+	channels := []ObjectInfoChannel{ch}
+	if _, ok := fs.listObjectMap[params]; ok {
+		channels = append(fs.listObjectMap[params], ch)
+	}
+
+	fs.listObjectMap[params] = channels
+}
+
+func (fs *Filesystem) popListObjectCh(params ListObjectParams) *ObjectInfoChannel {
+	fs.listObjectMapMutex.Lock()
+	defer fs.listObjectMapMutex.Unlock()
+
+	if channels, ok := fs.listObjectMap[params]; ok {
+		for i, channel := range channels {
+			if !channel.IsTimedOut() {
+				chs := channels[i+1:]
+				if len(chs) > 0 {
+					fs.listObjectMap[params] = chs
+				} else {
+					delete(fs.listObjectMap, params)
+				}
+
+				return &channel
+			}
+		}
+
+		// As all channels are timed out, delete the map entry
+		delete(fs.listObjectMap, params)
+	}
+
+	return nil
 }
 
 // MultipartSession holds active session information
@@ -83,10 +128,9 @@ func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = minFreeDisk
 
-	// Start list goroutine.
-	if err = fs.listObjectsService(); err != nil {
-		return Filesystem{}, err.Trace(rootPath)
-	}
+	fs.listObjectMap = make(map[ListObjectParams][]ObjectInfoChannel)
+	fs.listObjectMapMutex = &sync.Mutex{}
+
 	// Return here.
 	return fs, nil
 }
