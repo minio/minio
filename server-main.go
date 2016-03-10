@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -285,9 +286,18 @@ func checkPortAvailability(port int) {
 			fatalIf(probe.NewError(e), fmt.Sprintf("Unable to list addresses on interface %s.", ifc.Name), nil)
 		}
 		for _, addr := range addrs {
-			ip := addr.(*net.IPNet).IP
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				errorIf(probe.NewError(errors.New("")), "Interface type assertion to (*net.IPNet) failed.", nil)
+				continue
+			}
+			ip := ipnet.IP
+			network := "tcp4"
+			if ip.To4() == nil {
+				network = "tcp6"
+			}
 			tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
-			l, e := net.ListenTCP("tcp", &tcpAddr)
+			l, e := net.ListenTCP(network, &tcpAddr)
 			if e != nil {
 				fatalIf(probe.NewError(e), fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
 			}
