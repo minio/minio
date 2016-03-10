@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,15 +30,10 @@ func (c Client) RemoveBucket(bucketName string) error {
 	if err := isValidBucketName(bucketName); err != nil {
 		return err
 	}
-	// Instantiate a new request.
-	req, err := c.newRequest("DELETE", requestMetadata{
+	// Execute DELETE on bucket.
+	resp, err := c.executeMethod("DELETE", requestMetadata{
 		bucketName: bucketName,
 	})
-	if err != nil {
-		return err
-	}
-	// Initiate the request.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
@@ -64,16 +59,11 @@ func (c Client) RemoveObject(bucketName, objectName string) error {
 	if err := isValidObjectName(objectName); err != nil {
 		return err
 	}
-	// Instantiate the request.
-	req, err := c.newRequest("DELETE", requestMetadata{
+	// Execute DELETE on objectName.
+	resp, err := c.executeMethod("DELETE", requestMetadata{
 		bucketName: bucketName,
 		objectName: objectName,
 	})
-	if err != nil {
-		return err
-	}
-	// Initiate the request.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
@@ -124,18 +114,12 @@ func (c Client) abortMultipartUpload(bucketName, objectName, uploadID string) er
 	urlValues := make(url.Values)
 	urlValues.Set("uploadId", uploadID)
 
-	// Instantiate a new DELETE request.
-	req, err := c.newRequest("DELETE", requestMetadata{
+	// Execute DELETE on multipart upload.
+	resp, err := c.executeMethod("DELETE", requestMetadata{
 		bucketName:  bucketName,
 		objectName:  objectName,
 		queryValues: urlValues,
 	})
-	if err != nil {
-		return err
-	}
-
-	// Initiate the request.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
@@ -149,13 +133,13 @@ func (c Client) abortMultipartUpload(bucketName, objectName, uploadID string) er
 				// This is needed specifically for abort and it cannot
 				// be converged into default case.
 				errorResponse = ErrorResponse{
-					Code:            "NoSuchUpload",
-					Message:         "The specified multipart upload does not exist.",
-					BucketName:      bucketName,
-					Key:             objectName,
-					RequestID:       resp.Header.Get("x-amz-request-id"),
-					HostID:          resp.Header.Get("x-amz-id-2"),
-					AmzBucketRegion: resp.Header.Get("x-amz-bucket-region"),
+					Code:       "NoSuchUpload",
+					Message:    "The specified multipart upload does not exist.",
+					BucketName: bucketName,
+					Key:        objectName,
+					RequestID:  resp.Header.Get("x-amz-request-id"),
+					HostID:     resp.Header.Get("x-amz-id-2"),
+					Region:     resp.Header.Get("x-amz-bucket-region"),
 				}
 			default:
 				return httpRespToErrorResponse(resp, bucketName, objectName)

@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,22 @@ type hookReader struct {
 	hook   io.Reader
 }
 
+// Seek implements io.Seeker. Seeks source first, and if necessary
+// seeks hook if Seek method is appropriately found.
+func (hr *hookReader) Seek(offset int64, whence int) (n int64, err error) {
+	// Verify for source has embedded Seeker, use it.
+	sourceSeeker, ok := hr.source.(io.Seeker)
+	if ok {
+		return sourceSeeker.Seek(offset, whence)
+	}
+	// Verify if hook has embedded Seeker, use it.
+	hookSeeker, ok := hr.hook.(io.Seeker)
+	if ok {
+		return hookSeeker.Seek(offset, whence)
+	}
+	return n, nil
+}
+
 // Read implements io.Reader. Always reads from the source, the return
 // value 'n' number of bytes are reported through the hook. Returns
 // error for all non io.EOF conditions.
@@ -44,7 +60,7 @@ func (hr *hookReader) Read(b []byte) (n int, err error) {
 	return n, err
 }
 
-// newHook returns a io.Reader which implements hookReader that
+// newHook returns a io.ReadSeeker which implements hookReader that
 // reports the data read from the source to the hook.
 func newHook(source, hook io.Reader) io.Reader {
 	if hook == nil {

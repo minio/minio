@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,13 +34,8 @@ import (
 //   }
 //
 func (c Client) ListBuckets() ([]BucketInfo, error) {
-	// Instantiate a new request.
-	req, err := c.newRequest("GET", requestMetadata{})
-	if err != nil {
-		return nil, err
-	}
-	// Initiate the request.
-	resp, err := c.do(req)
+	// Execute GET on service.
+	resp, err := c.executeMethod("GET", requestMetadata{})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -206,16 +201,11 @@ func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimit
 	// Set max keys.
 	urlValues.Set("max-keys", fmt.Sprintf("%d", maxkeys))
 
-	// Initialize a new request.
-	req, err := c.newRequest("GET", requestMetadata{
+	// Execute GET on bucket to list objects.
+	resp, err := c.executeMethod("GET", requestMetadata{
 		bucketName:  bucketName,
 		queryValues: urlValues,
 	})
-	if err != nil {
-		return listBucketResult{}, err
-	}
-	// Execute list buckets.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return listBucketResult{}, err
@@ -388,16 +378,11 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 	// Set max-uploads.
 	urlValues.Set("max-uploads", fmt.Sprintf("%d", maxUploads))
 
-	// Instantiate a new request.
-	req, err := c.newRequest("GET", requestMetadata{
+	// Execute GET on bucketName to list multipart uploads.
+	resp, err := c.executeMethod("GET", requestMetadata{
 		bucketName:  bucketName,
 		queryValues: urlValues,
 	})
-	if err != nil {
-		return listMultipartUploadsResult{}, err
-	}
-	// Execute list multipart uploads request.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return listMultipartUploadsResult{}, err
@@ -510,16 +495,12 @@ func (c Client) listObjectPartsQuery(bucketName, objectName, uploadID string, pa
 	// Set max parts.
 	urlValues.Set("max-parts", fmt.Sprintf("%d", maxParts))
 
-	req, err := c.newRequest("GET", requestMetadata{
+	// Execute GET on objectName to get list of parts.
+	resp, err := c.executeMethod("GET", requestMetadata{
 		bucketName:  bucketName,
 		objectName:  objectName,
 		queryValues: urlValues,
 	})
-	if err != nil {
-		return listObjectPartsResult{}, err
-	}
-	// Exectue list object parts.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return listObjectPartsResult{}, err

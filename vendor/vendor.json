@@ -89,8 +89,8 @@
 		},
 		{
 			"path": "github.com/minio/minio-go",
-			"revision": "280f16a52008d3ebba1bd64398b9b082e6738386",
-			"revisionTime": "2016-02-07T03:45:25-08:00"
+			"revision": "a4c6c439feb53e1aad083f0a3f0083a047092c17",
+			"revisionTime": "2016-03-10T10:12:11-08:00"
 		},
 		{
 			"path": "github.com/minio/miniobrowser",
