@@ -52,7 +52,7 @@ type webAPI struct {
 	// Once true log all incoming request.
 	AccessLog bool
 	// Minio client instance.
-	Client minio.CloudStorageClient
+	Client *minio.Client
 
 	// private params.
 	apiAddress string // api destination address.

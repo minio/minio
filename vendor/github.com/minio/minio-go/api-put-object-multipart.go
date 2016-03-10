@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 		var reader io.Reader
 		// Update progress reader appropriately to the latest offset
 		// as we read from the source.
-		reader = newHook(tmpBuffer, progress)
+		reader = newHook(bytes.NewReader(tmpBuffer.Bytes()), progress)
 
 		// Verify if part should be uploaded.
 		if shouldUploadPart(objectPart{
@@ -134,8 +134,7 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 		}, partsInfo) {
 			// Proceed to upload the part.
 			var objPart objectPart
-			objPart, err = c.uploadPart(bucketName, objectName, uploadID, ioutil.NopCloser(reader), partNumber,
-				md5Sum, sha256Sum, prtSize)
+			objPart, err = c.uploadPart(bucketName, objectName, uploadID, reader, partNumber, md5Sum, sha256Sum, prtSize)
 			if err != nil {
 				// Reset the temporary buffer upon any error.
 				tmpBuffer.Reset()
@@ -230,14 +229,8 @@ func (c Client) initiateMultipartUpload(bucketName, objectName, contentType stri
 		customHeader: customHeader,
 	}
 
-	// Instantiate the request.
-	req, err := c.newRequest("POST", reqMetadata)
-	if err != nil {
-		return initiateMultipartUploadResult{}, err
-	}
-
-	// Execute the request.
-	resp, err := c.do(req)
+	// Execute POST on an objectName to initiate multipart upload.
+	resp, err := c.executeMethod("POST", reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
 		return initiateMultipartUploadResult{}, err
@@ -257,7 +250,7 @@ func (c Client) initiateMultipartUpload(bucketName, objectName, contentType stri
 }
 
 // uploadPart - Uploads a part in a multipart upload.
-func (c Client) uploadPart(bucketName, objectName, uploadID string, reader io.ReadCloser, partNumber int, md5Sum, sha256Sum []byte, size int64) (objectPart, error) {
+func (c Client) uploadPart(bucketName, objectName, uploadID string, reader io.Reader, partNumber int, md5Sum, sha256Sum []byte, size int64) (objectPart, error) {
 	// Input validation.
 	if err := isValidBucketName(bucketName); err != nil {
 		return objectPart{}, err
@@ -295,13 +288,8 @@ func (c Client) uploadPart(bucketName, objectName, uploadID string, reader io.Re
 		contentSHA256Bytes: sha256Sum,
 	}
 
-	// Instantiate a request.
-	req, err := c.newRequest("PUT", reqMetadata)
-	if err != nil {
-		return objectPart{}, err
-	}
-	// Execute the request.
-	resp, err := c.do(req)
+	// Execute PUT on each part.
+	resp, err := c.executeMethod("PUT", reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
 		return objectPart{}, err
@@ -342,24 +330,18 @@ func (c Client) completeMultipartUpload(bucketName, objectName, uploadID string,
 	}
 
 	// Instantiate all the complete multipart buffer.
-	completeMultipartUploadBuffer := bytes.NewBuffer(completeMultipartUploadBytes)
+	completeMultipartUploadBuffer := bytes.NewReader(completeMultipartUploadBytes)
 	reqMetadata := requestMetadata{
 		bucketName:         bucketName,
 		objectName:         objectName,
 		queryValues:        urlValues,
-		contentBody:        ioutil.NopCloser(completeMultipartUploadBuffer),
-		contentLength:      int64(completeMultipartUploadBuffer.Len()),
-		contentSHA256Bytes: sum256(completeMultipartUploadBuffer.Bytes()),
+		contentBody:        completeMultipartUploadBuffer,
+		contentLength:      int64(len(completeMultipartUploadBytes)),
+		contentSHA256Bytes: sum256(completeMultipartUploadBytes),
 	}
 
-	// Instantiate the request.
-	req, err := c.newRequest("POST", reqMetadata)
-	if err != nil {
-		return completeMultipartUploadResult{}, err
-	}
-
-	// Execute the request.
-	resp, err := c.do(req)
+	// Execute POST to complete multipart upload for an objectName.
+	resp, err := c.executeMethod("POST", reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
 		return completeMultipartUploadResult{}, err

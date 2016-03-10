@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,17 +47,11 @@ func (c Client) GetBucketACL(bucketName string) (BucketACL, error) {
 	urlValues := make(url.Values)
 	urlValues.Set("acl", "")
 
-	// Instantiate a new request.
-	req, err := c.newRequest("GET", requestMetadata{
+	// Execute GET acl on bucketName.
+	resp, err := c.executeMethod("GET", requestMetadata{
 		bucketName:  bucketName,
 		queryValues: urlValues,
 	})
-	if err != nil {
-		return "", err
-	}
-
-	// Initiate the request.
-	resp, err := c.do(req)
 	defer closeResponse(resp)
 	if err != nil {
 		return "", err
@@ -83,12 +76,12 @@ func (c Client) GetBucketACL(bucketName string) (BucketACL, error) {
 	if !isGoogleEndpoint(c.endpointURL) {
 		if policy.AccessControlList.Grant == nil {
 			errorResponse := ErrorResponse{
-				Code:            "InternalError",
-				Message:         "Access control Grant list is empty. " + reportIssue,
-				BucketName:      bucketName,
-				RequestID:       resp.Header.Get("x-amz-request-id"),
-				HostID:          resp.Header.Get("x-amz-id-2"),
-				AmzBucketRegion: resp.Header.Get("x-amz-bucket-region"),
+				Code:       "InternalError",
+				Message:    "Access control Grant list is empty. " + reportIssue,
+				BucketName: bucketName,
+				RequestID:  resp.Header.Get("x-amz-request-id"),
+				HostID:     resp.Header.Get("x-amz-id-2"),
+				Region:     resp.Header.Get("x-amz-bucket-region"),
 			}
 			return "", errorResponse
 		}
@@ -177,7 +170,11 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 				// Get shortest length.
 				// NOTE: Last remaining bytes are usually smaller than
 				// req.Buffer size. Use that as the final length.
-				length := math.Min(float64(len(req.Buffer)), float64(objectInfo.Size-req.Offset))
+				// Don't use Math.min() here to avoid converting int64 to float64
+				length := int64(len(req.Buffer))
+				if objectInfo.Size-req.Offset < length {
+					length = objectInfo.Size - req.Offset
+				}
 				httpReader, _, err := c.getObject(bucketName, objectName, req.Offset, int64(length))
 				if err != nil {
 					resCh <- readResponse{
@@ -484,17 +481,12 @@ func (c Client) getObject(bucketName, objectName string, offset, length int64) (
 		customHeader.Set("Range", fmt.Sprintf("bytes=%d", length))
 	}
 
-	// Instantiate a new request.
-	req, err := c.newRequest("GET", requestMetadata{
+	// Execute GET on objectName.
+	resp, err := c.executeMethod("GET", requestMetadata{
 		bucketName:   bucketName,
 		objectName:   objectName,
 		customHeader: customHeader,
 	})
-	if err != nil {
-		return nil, ObjectInfo{}, err
-	}
-	// Execute the request.
-	resp, err := c.do(req)
 	if err != nil {
 		return nil, ObjectInfo{}, err
 	}
@@ -513,11 +505,11 @@ func (c Client) getObject(bucketName, objectName string, offset, length int64) (
 	if err != nil {
 		msg := "Last-Modified time format not recognized. " + reportIssue
 		return nil, ObjectInfo{}, ErrorResponse{
-			Code:            "InternalError",
-			Message:         msg,
-			RequestID:       resp.Header.Get("x-amz-request-id"),
-			HostID:          resp.Header.Get("x-amz-id-2"),
-			AmzBucketRegion: resp.Header.Get("x-amz-bucket-region"),
+			Code:      "InternalError",
+			Message:   msg,
+			RequestID: resp.Header.Get("x-amz-request-id"),
+			HostID:    resp.Header.Get("x-amz-id-2"),
+			Region:    resp.Header.Get("x-amz-bucket-region"),
 		}
 	}
 	// Get content-type.

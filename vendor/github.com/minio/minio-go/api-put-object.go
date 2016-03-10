@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,11 +146,11 @@ func (c Client) putObjectNoChecksum(bucketName, objectName string, reader io.Rea
 
 	// Update progress reader appropriately to the latest offset as we
 	// read from the source.
-	reader = newHook(reader, progress)
+	readSeeker := newHook(reader, progress)
 
 	// This function does not calculate sha256 and md5sum for payload.
 	// Execute put object.
-	st, err := c.putObjectDo(bucketName, objectName, ioutil.NopCloser(reader), nil, nil, size, contentType)
+	st, err := c.putObjectDo(bucketName, objectName, readSeeker, nil, nil, size, contentType)
 	if err != nil {
 		return 0, err
 	}
@@ -178,12 +178,12 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 		size = maxSinglePutObjectSize
 	}
 	var md5Sum, sha256Sum []byte
-	var readCloser io.ReadCloser
 	if size <= minPartSize {
 		// Initialize a new temporary buffer.
 		tmpBuffer := new(bytes.Buffer)
 		md5Sum, sha256Sum, size, err = c.hashCopyN(tmpBuffer, reader, size)
-		readCloser = ioutil.NopCloser(tmpBuffer)
+		reader = bytes.NewReader(tmpBuffer.Bytes())
+		tmpBuffer.Reset()
 	} else {
 		// Initialize a new temporary file.
 		var tmpFile *tempFile
@@ -191,12 +191,13 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 		if err != nil {
 			return 0, err
 		}
+		defer tmpFile.Close()
 		md5Sum, sha256Sum, size, err = c.hashCopyN(tmpFile, reader, size)
 		// Seek back to beginning of the temporary file.
 		if _, err = tmpFile.Seek(0, 0); err != nil {
 			return 0, err
 		}
-		readCloser = tmpFile
+		reader = tmpFile
 	}
 	// Return error if its not io.EOF.
 	if err != nil {
@@ -204,26 +205,26 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 			return 0, err
 		}
 	}
-	// Progress the reader to the size.
-	if progress != nil {
-		if _, err = io.CopyN(ioutil.Discard, progress, size); err != nil {
-			return size, err
-		}
-	}
 	// Execute put object.
-	st, err := c.putObjectDo(bucketName, objectName, readCloser, md5Sum, sha256Sum, size, contentType)
+	st, err := c.putObjectDo(bucketName, objectName, reader, md5Sum, sha256Sum, size, contentType)
 	if err != nil {
 		return 0, err
 	}
 	if st.Size != size {
 		return 0, ErrUnexpectedEOF(st.Size, size, bucketName, objectName)
 	}
+	// Progress the reader to the size if putObjectDo is successful.
+	if progress != nil {
+		if _, err = io.CopyN(ioutil.Discard, progress, size); err != nil {
+			return size, err
+		}
+	}
 	return size, nil
 }
 
 // putObjectDo - executes the put object http operation.
 // NOTE: You must have WRITE permissions on a bucket to add an object to it.
-func (c Client) putObjectDo(bucketName, objectName string, reader io.ReadCloser, md5Sum []byte, sha256Sum []byte, size int64, contentType string) (ObjectInfo, error) {
+func (c Client) putObjectDo(bucketName, objectName string, reader io.Reader, md5Sum []byte, sha256Sum []byte, size int64, contentType string) (ObjectInfo, error) {
 	// Input validation.
 	if err := isValidBucketName(bucketName); err != nil {
 		return ObjectInfo{}, err
@@ -258,13 +259,9 @@ func (c Client) putObjectDo(bucketName, objectName string, reader io.ReadCloser,
 		contentMD5Bytes:    md5Sum,
 		contentSHA256Bytes: sha256Sum,
 	}
-	// Initiate new request.
-	req, err := c.newRequest("PUT", reqMetadata)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	// Execute the request.
-	resp, err := c.do(req)
+
+	// Execute PUT an objectName.
+	resp, err := c.executeMethod("PUT", reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
 		return ObjectInfo{}, err
