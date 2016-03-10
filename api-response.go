@@ -423,10 +423,10 @@ func writeSuccessNoContent(w http.ResponseWriter) {
 }
 
 // writeErrorRespone write error headers
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorType int, resource string) {
-	error := getErrorCode(errorType)
+func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
+	error := getAPIError(errorCode)
 	// generate error response
-	errorResponse := getErrorResponse(error, resource)
+	errorResponse := getAPIErrorResponse(error, resource)
 	encodedErrorResponse := encodeResponse(errorResponse)
 	// set common headers
 	setCommonHeaders(w)

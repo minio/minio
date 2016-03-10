@@ -86,7 +86,7 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// For all browser requests set appropriate Cache-Control policies
 		match, e := regexp.MatchString(privateBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
 		if e != nil {
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
 		if match {
@@ -114,7 +114,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'privateBucket'.
 	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == privateBucket {
-		writeErrorResponse(w, r, AllAccessDisabled, r.URL.Path)
+		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
 		return
 	}
 	h.handler.ServeHTTP(w, r)
@@ -184,13 +184,13 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 		// Verify if the request date header is more than 5minutes
 		// late, reject such clients.
 		if time.Now().UTC().Sub(date)/time.Minute > time.Duration(5)*time.Minute {
-			writeErrorResponse(w, r, RequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
 			return
 		}
 	}
@@ -237,20 +237,20 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
 			return
 		}
 	}
 	// If bucketName and objectName are present check for its resource queries.
 	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
 			return
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
 	if r.Method == "PUT" && r.URL.Path == "/" {
-		writeErrorResponse(w, r, NotImplemented, r.URL.Path)
+		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
 		return
 	}
 	h.handler.ServeHTTP(w, r)

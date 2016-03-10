@@ -64,16 +64,16 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -84,15 +84,15 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -100,7 +100,7 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var hrange *httpRange
 	hrange, err = getRequestedRange(r.Header.Get("Range"), metadata.Size)
 	if err != nil {
-		writeErrorResponse(w, r, InvalidRange, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -240,15 +240,15 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -288,16 +288,16 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -323,13 +323,13 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	// If source object is empty, reply back error.
 	if sourceObject == "" {
-		writeErrorResponse(w, r, InvalidCopySource, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidCopySource, r.URL.Path)
 		return
 	}
 
 	// Source and destination objects cannot be same, reply back error.
 	if sourceObject == object && sourceBucket == bucket {
-		writeErrorResponse(w, r, InvalidCopyDest, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidCopyDest, r.URL.Path)
 		return
 	}
 
@@ -338,22 +338,22 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, objectSource)
+			writeErrorResponse(w, r, ErrInvalidBucketName, objectSource)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, objectSource)
+			writeErrorResponse(w, r, ErrNoSuchBucket, objectSource)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, objectSource)
+			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, objectSource)
+			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
 		default:
-			writeErrorResponse(w, r, InternalError, objectSource)
+			writeErrorResponse(w, r, ErrInternalError, objectSource)
 		}
 		return
 	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(metadata.Size) {
-		writeErrorResponse(w, r, EntityTooLarge, objectSource)
+		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
 		return
 	}
 
@@ -380,21 +380,21 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
+			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BadDigest:
-			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
+			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		case fs.InvalidDigest:
-			writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		case fs.ObjectExistsAsPrefix:
-			writeErrorResponse(w, r, ObjectExistsAsPrefix, r.URL.Path)
+			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -413,7 +413,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// If the matching failed, it means that the X-Amz-Copy-Source was
 	// wrong, fail right here.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		writeErrorResponse(w, r, InvalidCopySource, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidCopySource, r.URL.Path)
 		return
 	}
 	vars := mux.Vars(r)
@@ -423,18 +423,18 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// get Content-Md5 sent by client and verify if valid
 	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
 	/// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	if size == -1 && !contains(r.TransferEncoding, "chunked") {
-		writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
+		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
 		return
 	}
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, r, EntityTooLarge, r.URL.Path)
+		writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
 		return
 	}
 
@@ -445,11 +445,11 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -461,11 +461,11 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		if !ok {
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		// Create presigned object.
@@ -478,23 +478,23 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
+			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BadDigest:
-			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
 		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
+			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		case fs.InvalidDigest:
-			writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		case fs.ObjectExistsAsPrefix:
-			writeErrorResponse(w, r, ObjectExistsAsPrefix, r.URL.Path)
+			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -516,12 +516,12 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 	switch getRequestAuthType(r) {
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	default:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -532,17 +532,17 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
+			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -564,20 +564,20 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 	// get Content-Md5 sent by client and verify if valid
 	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
-		writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
 
 	/// if Content-Length is unknown/missing, throw away
 	size := r.ContentLength
 	if size == -1 {
-		writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
+		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
 		return
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, r, EntityTooLarge, r.URL.Path)
+		writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
 		return
 	}
 
@@ -586,7 +586,7 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 
 	partID, e := strconv.Atoi(partIDString)
 	if e != nil {
-		writeErrorResponse(w, r, InvalidPart, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
 		return
 	}
 
@@ -597,7 +597,7 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 	switch getRequestAuthType(r) {
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -610,11 +610,11 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		if !ok {
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
@@ -625,19 +625,19 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.RootPathFull:
-			writeErrorResponse(w, r, RootPathFull, r.URL.Path)
+			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case fs.BadDigest:
-			writeErrorResponse(w, r, BadDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
 		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
+			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		case fs.InvalidDigest:
-			writeErrorResponse(w, r, InvalidDigest, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -656,12 +656,12 @@ func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http
 	switch getRequestAuthType(r) {
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:AbortMultipartUpload", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:AbortMultipartUpload", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	default:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -673,17 +673,17 @@ func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -699,12 +699,12 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 	switch getRequestAuthType(r) {
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:ListMultipartUploadParts", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:ListMultipartUploadParts", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	default:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -712,11 +712,11 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 
 	objectResourcesMetadata := getObjectResources(r.URL.Query())
 	if objectResourcesMetadata.PartNumberMarker < 0 {
-		writeErrorResponse(w, r, InvalidPartNumberMarker, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidPartNumberMarker, r.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts < 0 {
-		writeErrorResponse(w, r, InvalidMaxParts, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
 	if objectResourcesMetadata.MaxParts == 0 {
@@ -728,17 +728,17 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -767,11 +767,11 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -783,11 +783,11 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		ok, err = auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		if !ok {
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		// Complete multipart upload presigned.
@@ -800,27 +800,27 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.InvalidUploadID:
-			writeErrorResponse(w, r, NoSuchUpload, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case fs.InvalidPart:
-			writeErrorResponse(w, r, InvalidPart, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
 		case fs.InvalidPartOrder:
-			writeErrorResponse(w, r, InvalidPartOrder, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
-			writeErrorResponse(w, r, IncompleteBody, r.URL.Path)
+			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		case fs.MalformedXML:
-			writeErrorResponse(w, r, MalformedXML, r.URL.Path)
+			writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -846,16 +846,16 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, AccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if isAllowed, s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); !isAllowed {
+		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -865,15 +865,15 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 		errorIf(err.Trace(), "DeleteObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketNotFound:
-			writeErrorResponse(w, r, NoSuchBucket, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case fs.ObjectNotFound:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case fs.ObjectNameInvalid:
-			writeErrorResponse(w, r, NoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 	}
 	writeSuccessNoContent(w)

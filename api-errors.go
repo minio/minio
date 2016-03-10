@@ -40,269 +40,275 @@ type APIErrorResponse struct {
 	HostID     string `xml:"HostId"`
 }
 
+// APIErrorCode type of error status.
+type APIErrorCode int
+
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
-	None = iota
-	AccessDenied
-	BadDigest
-	BucketAlreadyExists
-	EntityTooSmall
-	EntityTooLarge
-	IncompleteBody
-	InternalError
-	InvalidAccessKeyID
-	InvalidBucketName
-	InvalidDigest
-	InvalidRange
-	InvalidMaxKeys
-	InvalidMaxUploads
-	InvalidMaxParts
-	InvalidPartNumberMarker
-	InvalidRequestBody
-	InvalidCopySource
-	InvalidCopyDest
-	InvalidPolicyDocument
-	MalformedXML
-	MissingContentLength
-	MissingContentMD5
-	MissingRequestBodyError
-	NoSuchBucket
-	NoSuchBucketPolicy
-	NoSuchKey
-	NoSuchUpload
-	NotImplemented
-	RequestTimeTooSkewed
-	SignatureDoesNotMatch
-	MethodNotAllowed
-	InvalidPart
-	InvalidPartOrder
-	AuthorizationHeaderMalformed
-	MalformedPOSTRequest
-	SignatureVersionNotSupported
-	BucketNotEmpty
-	RootPathFull
-	ObjectExistsAsPrefix
-	AllAccessDisabled
-	MalformedPolicy
+	ErrNone APIErrorCode = iota
+	ErrAccessDenied
+	ErrBadDigest
+	ErrBucketAlreadyExists
+	ErrEntityTooSmall
+	ErrEntityTooLarge
+	ErrIncompleteBody
+	ErrInternalError
+	ErrInvalidAccessKeyID
+	ErrInvalidBucketName
+	ErrInvalidDigest
+	ErrInvalidRange
+	ErrInvalidMaxKeys
+	ErrInvalidMaxUploads
+	ErrInvalidMaxParts
+	ErrInvalidPartNumberMarker
+	ErrInvalidRequestBody
+	ErrInvalidCopySource
+	ErrInvalidCopyDest
+	ErrInvalidPolicyDocument
+	ErrMalformedXML
+	ErrMissingContentLength
+	ErrMissingContentMD5
+	ErrMissingRequestBodyError
+	ErrNoSuchBucket
+	ErrNoSuchBucketPolicy
+	ErrNoSuchKey
+	ErrNoSuchUpload
+	ErrNotImplemented
+	ErrRequestTimeTooSkewed
+	ErrSignatureDoesNotMatch
+	ErrMethodNotAllowed
+	ErrInvalidPart
+	ErrInvalidPartOrder
+	ErrAuthorizationHeaderMalformed
+	ErrMalformedPOSTRequest
+	ErrSignatureVersionNotSupported
+	ErrBucketNotEmpty
+	ErrRootPathFull
+	ErrObjectExistsAsPrefix
+	ErrAllAccessDisabled
+	ErrMalformedPolicy
+	// Add new error codes here.
 )
 
-// APIError code to Error structure map
-var errorCodeResponse = map[int]APIError{
-	InvalidCopyDest: {
+// error code to APIError structure, these fields carry respective
+// descriptions for all the error responses.
+var errorCodeResponse = map[APIErrorCode]APIError{
+	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
 		Description:    "This copy request is illegal because it is trying to copy an object to itself.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidCopySource: {
+	ErrInvalidCopySource: {
 		Code:           "InvalidArgument",
 		Description:    "Copy Source must mention the source bucket and key: sourcebucket/sourcekey.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidRequestBody: {
+	ErrInvalidRequestBody: {
 		Code:           "InvalidArgument",
 		Description:    "Body shouldn't be set for this request.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidMaxUploads: {
+	ErrInvalidMaxUploads: {
 		Code:           "InvalidArgument",
 		Description:    "Argument maxUploads must be an integer between 0 and 2147483647.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidMaxKeys: {
+	ErrInvalidMaxKeys: {
 		Code:           "InvalidArgument",
 		Description:    "Argument maxKeys must be an integer between 0 and 2147483647.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidMaxParts: {
+	ErrInvalidMaxParts: {
 		Code:           "InvalidArgument",
 		Description:    "Argument maxParts must be an integer between 1 and 10000.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidPartNumberMarker: {
+	ErrInvalidPartNumberMarker: {
 		Code:           "InvalidArgument",
 		Description:    "Argument partNumberMarker must be an integer.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidPolicyDocument: {
+	ErrInvalidPolicyDocument: {
 		Code:           "InvalidPolicyDocument",
 		Description:    "The content of the form does not meet the conditions specified in the policy document.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	AccessDenied: {
+	ErrAccessDenied: {
 		Code:           "AccessDenied",
 		Description:    "Access Denied.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	BadDigest: {
+	ErrBadDigest: {
 		Code:           "BadDigest",
 		Description:    "The Content-Md5 you specified did not match what we received.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	BucketAlreadyExists: {
+	ErrBucketAlreadyExists: {
 		Code:           "BucketAlreadyExists",
 		Description:    "The requested bucket name is not available.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	EntityTooSmall: {
+	ErrEntityTooSmall: {
 		Code:           "EntityTooSmall",
 		Description:    "Your proposed upload is smaller than the minimum allowed object size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	EntityTooLarge: {
+	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	IncompleteBody: {
+	ErrIncompleteBody: {
 		Code:           "IncompleteBody",
 		Description:    "You did not provide the number of bytes specified by the Content-Length HTTP header.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InternalError: {
+	ErrInternalError: {
 		Code:           "InternalError",
 		Description:    "We encountered an internal error, please try again.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
-	InvalidAccessKeyID: {
+	ErrInvalidAccessKeyID: {
 		Code:           "InvalidAccessKeyID",
 		Description:    "The access key ID you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	InvalidBucketName: {
+	ErrInvalidBucketName: {
 		Code:           "InvalidBucketName",
 		Description:    "The specified bucket is not valid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidDigest: {
+	ErrInvalidDigest: {
 		Code:           "InvalidDigest",
 		Description:    "The Content-Md5 you specified is not valid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidRange: {
+	ErrInvalidRange: {
 		Code:           "InvalidRange",
 		Description:    "The requested range cannot be satisfied.",
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	},
-	MalformedXML: {
+	ErrMalformedXML: {
 		Code:           "MalformedXML",
 		Description:    "The XML you provided was not well-formed or did not validate against our published schema.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	MissingContentLength: {
+	ErrMissingContentLength: {
 		Code:           "MissingContentLength",
 		Description:    "You must provide the Content-Length HTTP header.",
 		HTTPStatusCode: http.StatusLengthRequired,
 	},
-	MissingContentMD5: {
+	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
 		Description:    "Missing required header for this request: Content-Md5.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	MissingRequestBodyError: {
+	ErrMissingRequestBodyError: {
 		Code:           "MissingRequestBodyError",
 		Description:    "Request body is empty.",
 		HTTPStatusCode: http.StatusLengthRequired,
 	},
-	NoSuchBucket: {
+	ErrNoSuchBucket: {
 		Code:           "NoSuchBucket",
 		Description:    "The specified bucket does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	NoSuchBucketPolicy: {
+	ErrNoSuchBucketPolicy: {
 		Code:           "NoSuchBucketPolicy",
 		Description:    "The specified bucket does not have a bucket policy.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	NoSuchKey: {
+	ErrNoSuchKey: {
 		Code:           "NoSuchKey",
 		Description:    "The specified key does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	NoSuchUpload: {
+	ErrNoSuchUpload: {
 		Code:           "NoSuchUpload",
 		Description:    "The specified multipart upload does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	NotImplemented: {
+	ErrNotImplemented: {
 		Code:           "NotImplemented",
 		Description:    "A header you provided implies functionality that is not implemented.",
 		HTTPStatusCode: http.StatusNotImplemented,
 	},
-	RequestTimeTooSkewed: {
+	ErrRequestTimeTooSkewed: {
 		Code:           "RequestTimeTooSkewed",
 		Description:    "The difference between the request time and the server's time is too large.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	SignatureDoesNotMatch: {
+	ErrSignatureDoesNotMatch: {
 		Code:           "SignatureDoesNotMatch",
 		Description:    "The request signature we calculated does not match the signature you provided.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	MethodNotAllowed: {
+	ErrMethodNotAllowed: {
 		Code:           "MethodNotAllowed",
 		Description:    "The specified method is not allowed against this resource.",
 		HTTPStatusCode: http.StatusMethodNotAllowed,
 	},
-	InvalidPart: {
+	ErrInvalidPart: {
 		Code:           "InvalidPart",
 		Description:    "One or more of the specified parts could not be found.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	InvalidPartOrder: {
+	ErrInvalidPartOrder: {
 		Code:           "InvalidPartOrder",
 		Description:    "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	AuthorizationHeaderMalformed: {
+	ErrAuthorizationHeaderMalformed: {
 		Code:           "AuthorizationHeaderMalformed",
 		Description:    "The authorization header is malformed; the region is wrong; expecting 'us-east-1'.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	MalformedPOSTRequest: {
+	ErrMalformedPOSTRequest: {
 		Code:           "MalformedPOSTRequest",
 		Description:    "The body of your POST request is not well-formed multipart/form-data.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	SignatureVersionNotSupported: {
+	ErrSignatureVersionNotSupported: {
 		Code:           "InvalidRequest",
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	BucketNotEmpty: {
+	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	RootPathFull: {
+	ErrRootPathFull: {
 		Code:           "RootPathFull",
 		Description:    "Root path has reached its minimum free disk threshold. Please delete few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
-	ObjectExistsAsPrefix: {
+	ErrObjectExistsAsPrefix: {
 		Code:           "ObjectExistsAsPrefix",
 		Description:    "An object already exists as your prefix, choose a different prefix to proceed.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	AllAccessDisabled: {
+	ErrAllAccessDisabled: {
 		Code:           "AllAccessDisabled",
 		Description:    "All access to this bucket has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	MalformedPolicy: {
+	ErrMalformedPolicy: {
 		Code:           "MalformedPolicy",
 		Description:    "Policy has invalid resource",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	// Add your error structure here.
 }
 
-// errorCodeError provides errorCode to Error. It returns empty if the code provided is unknown
-func getErrorCode(code int) APIError {
+// getAPIError provides API Error for input API error code.
+func getAPIError(code APIErrorCode) APIError {
 	return errorCodeResponse[code]
 }
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getErrorResponse(err APIError, resource string) APIErrorResponse {
+func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
 	var data = APIErrorResponse{}
 	data.Code = err.Code
 	data.Message = err.Description
