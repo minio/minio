@@ -39,9 +39,20 @@ go_build() {
 main() {
     # Build releases.
     echo "Executing $release_str builds for OS: ${SUPPORTED_OSARCH}"
+    echo  "Choose an OS Arch from the below"
     for osarch in ${SUPPORTED_OSARCH}; do
-        go_build ${osarch}
+        echo ${osarch}
     done
+
+    read -p "If you want to build for all, Just press Enter: " chosen_osarch
+    if [ "$chosen_osarch" = "" ]; then
+        for each_osarch in ${SUPPORTED_OSARCH}; do
+            go_build ${each_osarch}
+        done
+    else
+        go_build ${chosen_osarch}
+    fi
+
 }
 
 # Run main.
