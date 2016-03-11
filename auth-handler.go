@@ -106,31 +106,31 @@ func getRequestAuthType(r *http.Request) authType {
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isSignV4ReqAuthenticated(sign *signature4.Sign, r *http.Request) (match bool, s3Error int) {
+func isReqAuthenticated(sign *signature4.Sign, r *http.Request) (s3Error APIErrorCode) {
 	auth := sign.SetHTTPRequestToVerify(r)
 	if isRequestSignatureV4(r) {
 		dummyPayload := sha256.Sum256([]byte(""))
 		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(dummyPayload[:]))
 		if err != nil {
 			errorIf(err.Trace(), "Signature verification failed.", nil)
-			return false, InternalError
+			return ErrInternalError
 		}
 		if !ok {
-			return false, SignatureDoesNotMatch
+			return ErrSignatureDoesNotMatch
 		}
-		return ok, None
+		return ErrNone
 	} else if isRequestPresignedSignatureV4(r) {
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(), "Presigned signature verification failed.", nil)
-			return false, InternalError
+			return ErrInternalError
 		}
 		if !ok {
-			return false, SignatureDoesNotMatch
+			return ErrSignatureDoesNotMatch
 		}
-		return ok, None
+		return ErrNone
 	}
-	return false, AccessDenied
+	return ErrAccessDenied
 }
 
 // authHandler - handles all the incoming authorization headers and
@@ -160,7 +160,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		a.handler.ServeHTTP(w, r)
 	default:
-		writeErrorResponse(w, r, SignatureVersionNotSupported, r.URL.Path)
+		writeErrorResponse(w, r, ErrSignatureVersionNotSupported, r.URL.Path)
 		return
 	}
 }

@@ -40,7 +40,7 @@ func TestListBuckets(t *testing.T) {
 
 	// Create a few buckets.
 	for i := 0; i < 10; i++ {
-		err = filesystem.MakeBucket("testbucket."+strconv.Itoa(i), "public-read")
+		err = filesystem.MakeBucket("testbucket." + strconv.Itoa(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	if len(metadatas) != 10 {
-		t.Errorf("incorrect length of metadatas (%i)\n", len(metadatas))
+		t.Errorf("incorrect length of metadatas (%d)\n", len(metadatas))
 	}
 
 	// Iterate over the buckets, ensuring that the name is correct.
@@ -101,7 +101,7 @@ func BenchmarkListBuckets(b *testing.B) {
 
 	// Create a few buckets.
 	for i := 0; i < 20; i++ {
-		err = filesystem.MakeBucket("bucket."+strconv.Itoa(i), "public-read")
+		err = filesystem.MakeBucket("bucket." + strconv.Itoa(i))
 		if err != nil {
 			b.Fatal(err)
 		}

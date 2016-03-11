@@ -139,12 +139,12 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	// incoming request is not chunked.
 	if !contains(r.TransferEncoding, "chunked") {
 		if r.ContentLength == -1 || r.ContentLength == 0 {
-			writeErrorResponse(w, r, MissingContentLength, r.URL.Path)
+			writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
 			return
 		}
 		// If Content-Length is greater than maximum allowed policy size.
 		if r.ContentLength > maxAccessPolicySize {
-			writeErrorResponse(w, r, EntityTooLarge, r.URL.Path)
+			writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
 			return
 		}
 	}
@@ -155,14 +155,14 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	accessPolicyBytes, e := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if e != nil {
 		errorIf(probe.NewError(e).Trace(bucket), "Reading policy failed.", nil)
-		writeErrorResponse(w, r, InternalError, r.URL.Path)
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
 	// Parse access access.
 	accessPolicy, e := accesspolicy.Validate(accessPolicyBytes)
 	if e != nil {
-		writeErrorResponse(w, r, InvalidPolicyDocument, r.URL.Path)
+		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		for _, resource := range statement.Resources {
 			resourcePrefix := strings.SplitAfter(resource, accesspolicy.AWSResourcePrefix)[1]
 			if !strings.HasPrefix(resourcePrefix, bucket) {
-				writeErrorResponse(w, r, MalformedPolicy, r.URL.Path)
+				writeErrorResponse(w, r, ErrMalformedPolicy, r.URL.Path)
 				return
 			}
 		}
@@ -183,11 +183,11 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		if !ok {
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 	} else if isRequestSignatureV4(r) {
@@ -196,11 +196,11 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		ok, err := api.Signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
 		if err != nil {
 			errorIf(err.Trace(string(accessPolicyBytes)), "SaveBucketPolicy failed.", nil)
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 		if !ok {
-			writeErrorResponse(w, r, SignatureDoesNotMatch, r.URL.Path)
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
 	}
@@ -211,9 +211,9 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		errorIf(err.Trace(bucket), "SaveBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -229,7 +229,7 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	bucket := vars["bucket"]
 
 	// Validate incoming signature.
-	if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -240,11 +240,11 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 		errorIf(err.Trace(bucket), "DeleteBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketPolicyNotFound:
-			writeErrorResponse(w, r, NoSuchBucketPolicy, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
@@ -260,7 +260,7 @@ func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	bucket := vars["bucket"]
 
 	// Validate incoming signature.
-	if match, s3Error := isSignV4ReqAuthenticated(api.Signature, r); !match {
+	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -271,11 +271,11 @@ func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
-			writeErrorResponse(w, r, InvalidBucketName, r.URL.Path)
+			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BucketPolicyNotFound:
-			writeErrorResponse(w, r, NoSuchBucketPolicy, r.URL.Path)
+			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
-			writeErrorResponse(w, r, InternalError, r.URL.Path)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
