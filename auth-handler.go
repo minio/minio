@@ -91,9 +91,6 @@ const (
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if _, ok := r.Header["Authorization"]; !ok {
-		return authTypeAnonymous
-	}
 	if isRequestSignatureV4(r) {
 		return authTypeSigned
 	} else if isRequestPresignedSignatureV4(r) {
@@ -102,6 +99,8 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeJWT
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
+	} else if _, ok := r.Header["Authorization"]; !ok {
+		return authTypeAnonymous
 	}
 	return authTypeUnknown
 }
