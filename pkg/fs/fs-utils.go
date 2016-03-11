@@ -24,12 +24,11 @@ import (
 // validBucket regexp.
 var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 
-// IsValidBucketName - verify bucket name in accordance with
-//  - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
+// IsValidBucketName verifies a bucket name in accordance with Amazon's
+// requirements. It must be 3-63 characters long, can contain dashes
+// and periods, but must begin and end with a lowercase letter or a number.
+// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 func IsValidBucketName(bucket string) bool {
-	if bucket == "" {
-		return false
-	}
 	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
 	}
@@ -39,12 +38,11 @@ func IsValidBucketName(bucket string) bool {
 	return validBucket.MatchString(bucket)
 }
 
-// IsValidObjectName - verify object name in accordance with
-//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+// IsValidObjectName verifies an object name in accordance with Amazon's
+// requirements. It cannot exceed 1024 characters and must be a valid UTF8
+// string.
+// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func IsValidObjectName(object string) bool {
-	if object == "" {
-		return true
-	}
 	if len(object) > 1024 || len(object) == 0 {
 		return false
 	}
