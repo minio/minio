@@ -30,8 +30,8 @@ const (
 	listObjectsLimit = 1000
 )
 
-// IsDirEmpty - returns whether given directory is empty or not
-func IsDirEmpty(dirname string) (status bool, err error) {
+// isDirEmpty - returns whether given directory is empty or not
+func isDirEmpty(dirname string) (status bool, err error) {
 	f, err := os.Open(dirname)
 	if err == nil {
 		defer f.Close()
@@ -44,8 +44,8 @@ func IsDirEmpty(dirname string) (status bool, err error) {
 	return
 }
 
-// IsDirExist - returns whether given directory is exist or not
-func IsDirExist(dirname string) (status bool, err error) {
+// isDirExist - returns whether given directory is exist or not
+func isDirExist(dirname string) (status bool, err error) {
 	fi, err := os.Lstat(dirname)
 	if err == nil {
 		status = fi.IsDir()
