@@ -79,7 +79,7 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
+	objectInfo, err := api.Filesystem.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -98,17 +98,18 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var hrange *httpRange
-	hrange, err = getRequestedRange(r.Header.Get("Range"), metadata.Size)
+	hrange, err = getRequestedRange(r.Header.Get("Range"), objectInfo.Size)
 	if err != nil {
 		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
 		return
 	}
 
 	// Set standard object headers.
-	setObjectHeaders(w, metadata, hrange)
+	setObjectHeaders(w, objectInfo, hrange)
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	if checkLastModified(w, r, metadata.LastModified) {
+	lastModified := objectInfo.ModifiedTime
+	if checkLastModified(w, r, lastModified) {
 		return
 	}
 	// Verify 'If-Match' and 'If-None-Match'.
@@ -236,8 +237,9 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	metadata, err := api.Filesystem.GetObjectMetadata(bucket, object)
+	objectInfo, err := api.Filesystem.GetObjectInfo(bucket, object)
 	if err != nil {
+		errorIf(err.Trace(bucket, object), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -254,10 +256,11 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Set standard object headers.
-	setObjectHeaders(w, metadata, nil)
+	setObjectHeaders(w, objectInfo, nil)
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	if checkLastModified(w, r, metadata.LastModified) {
+	lastModified := objectInfo.ModifiedTime
+	if checkLastModified(w, r, lastModified) {
 		return
 	}
 
@@ -333,9 +336,9 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	metadata, err := api.Filesystem.GetObjectMetadata(sourceBucket, sourceObject)
+	objectInfo, err := api.Filesystem.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
-		errorIf(err.Trace(), "GetObjectMetadata failed.", nil)
+		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, objectSource)
@@ -352,7 +355,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
-	if isMaxObjectSize(metadata.Size) {
+	if isMaxObjectSize(objectInfo.Size) {
 		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
 		return
 	}
@@ -370,12 +373,12 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	// Verify md5sum.
-	expectedMD5Sum := metadata.MD5
+	expectedMD5Sum := objectInfo.MD5Sum
 	// Size of object.
-	size := metadata.Size
+	size := objectInfo.Size
 
 	// Create the object.
-	metadata, err = api.Filesystem.CreateObject(bucket, object, expectedMD5Sum, size, reader, nil)
+	objectInfo, err = api.Filesystem.CreateObject(bucket, object, expectedMD5Sum, size, reader, nil)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -398,7 +401,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	response := generateCopyObjectResponse(metadata.MD5, metadata.LastModified)
+	response := generateCopyObjectResponse(objectInfo.MD5Sum, objectInfo.ModifiedTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
@@ -440,7 +443,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
-	var metadata fs.ObjectMetadata
+	var objectInfo fs.ObjectInfo
 	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
@@ -454,7 +457,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create anonymous object.
-		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify them right here.
 		var ok bool
@@ -469,10 +472,10 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create presigned object.
-		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
 	case authTypeSigned:
 		// Create object.
-		metadata, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, &auth)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, &auth)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
@@ -498,8 +501,8 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if metadata.MD5 != "" {
-		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
+	if objectInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -762,7 +765,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	// Set http request for signature.
 	auth := api.Signature.SetHTTPRequestToVerify(r)
 
-	var metadata fs.ObjectMetadata
+	var objectInfo fs.ObjectInfo
 	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
@@ -776,7 +779,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			return
 		}
 		// Complete multipart upload anonymous.
-		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
+		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify right here.
 		var ok bool
@@ -791,10 +794,10 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			return
 		}
 		// Complete multipart upload presigned.
-		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
+		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
 	case authTypeSigned:
 		// Complete multipart upload.
-		metadata, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, &auth)
+		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, &auth)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
@@ -827,7 +830,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	// get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, metadata.MD5)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objectInfo.MD5Sum)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)

@@ -153,7 +153,7 @@ func BenchmarkDeleteBucket(b *testing.B) {
 	}
 }
 
-func BenchmarkGetBucketMetadata(b *testing.B) {
+func BenchmarkGetBucketInfo(b *testing.B) {
 	// Make a temporary directory to use as the filesystem.
 	directory, fserr := ioutil.TempDir("", "minio-benchmark")
 	if fserr != nil {
@@ -177,7 +177,7 @@ func BenchmarkGetBucketMetadata(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Retrieve the metadata!
-		_, err := filesystem.GetBucketMetadata("bucket")
+		_, err := filesystem.GetBucketInfo("bucket")
 		if err != nil {
 			b.Fatal(err)
 		}

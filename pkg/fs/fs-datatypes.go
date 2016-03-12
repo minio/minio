@@ -16,28 +16,7 @@
 
 package fs
 
-import (
-	"os"
-	"time"
-)
-
-// BucketMetadata - name and create date
-type BucketMetadata struct {
-	Name    string
-	Created time.Time
-}
-
-// ObjectMetadata - object key and its relevant metadata
-type ObjectMetadata struct {
-	Bucket string
-	Object string
-
-	ContentType  string
-	LastModified time.Time
-	Mode         os.FileMode
-	MD5          string
-	Size         int64
-}
+import "time"
 
 // PartMetadata - various types of individual part resources
 type PartMetadata struct {
@@ -89,7 +68,7 @@ type BucketMultipartResourcesMetadata struct {
 type ListObjectsResult struct {
 	IsTruncated bool
 	NextMarker  string
-	Objects     []ObjectMetadata
+	Objects     []ObjectInfo
 	Prefixes    []string
 }
 

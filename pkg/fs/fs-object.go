@@ -102,15 +102,15 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 	return count, nil
 }
 
-// GetObjectMetadata - get object metadata.
-func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *probe.Error) {
+// GetObjectInfo - get object info.
+func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Error) {
 	// Input validation.
 	if !IsValidBucketName(bucket) {
-		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	if !IsValidObjectName(object) {
-		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: bucket})
+		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: bucket})
 	}
 
 	// Normalize buckets.
@@ -118,23 +118,20 @@ func (fs Filesystem) GetObjectMetadata(bucket, object string) (ObjectMetadata, *
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		if os.IsNotExist(e) {
-			return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return ObjectMetadata{}, probe.NewError(e)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	metadata, err := getMetadata(fs.path, bucket, object)
+	info, err := getObjectInfo(fs.path, bucket, object)
 	if err != nil {
-		return ObjectMetadata{}, err.Trace(bucket, object)
+		return ObjectInfo{}, err.Trace(bucket, object)
 	}
-	if metadata.Mode.IsDir() {
-		return ObjectMetadata{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-	}
-	return metadata, nil
+	return info, nil
 }
 
-// getMetadata - get object metadata.
-func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error) {
+// getObjectInfo - get object stat info.
+func getObjectInfo(rootPath, bucket, object string) (ObjectInfo, *probe.Error) {
 	// Do not use filepath.Join() since filepath.Join strips off any
 	// object names with '/', use them as is in a static manner so
 	// that we can send a proper 'ObjectNotFound' reply back upon
@@ -149,9 +146,9 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 	stat, err := os.Stat(objectPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ObjectMetadata{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
-		return ObjectMetadata{}, probe.NewError(err)
+		return ObjectInfo{}, probe.NewError(err)
 	}
 	contentType := "application/octet-stream"
 	if runtime.GOOS == "windows" {
@@ -164,13 +161,13 @@ func getMetadata(rootPath, bucket, object string) (ObjectMetadata, *probe.Error)
 			contentType = content.ContentType
 		}
 	}
-	metadata := ObjectMetadata{
+	metadata := ObjectInfo{
 		Bucket:       bucket,
-		Object:       object,
-		LastModified: stat.ModTime(),
+		Name:         object,
+		ModifiedTime: stat.ModTime(),
 		Size:         stat.Size(),
 		ContentType:  contentType,
-		Mode:         stat.Mode(),
+		IsDir:        stat.Mode().IsDir(),
 	}
 	return metadata, nil
 }
@@ -199,36 +196,36 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 }
 
 // CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, sig *signature4.Sign) (ObjectMetadata, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, sig *signature4.Sign) (ObjectInfo, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
-		return ObjectMetadata{}, probe.NewError(e)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	// Remove 5% from total space for cumulative disk space used for
 	// journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
-		return ObjectMetadata{}, probe.NewError(RootPathFull{Path: fs.path})
+		return ObjectInfo{}, probe.NewError(RootPathFull{Path: fs.path})
 	}
 
 	// Check bucket name valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e = os.Stat(bucketPath); e != nil {
 		if os.IsNotExist(e) {
-			return ObjectMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return ObjectMetadata{}, probe.NewError(e)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	// Verify object path legal.
 	if !IsValidObjectName(object) {
-		return ObjectMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// Get object path.
@@ -238,7 +235,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		expectedMD5SumBytes, e = base64.StdEncoding.DecodeString(expectedMD5Sum)
 		if e != nil {
 			// Pro-actively close the connection.
-			return ObjectMetadata{}, probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
+			return ObjectInfo{}, probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
 		}
 		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
 	}
@@ -250,12 +247,12 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		case *os.PathError:
 			if e.Op == "mkdir" {
 				if strings.Contains(e.Error(), "not a directory") {
-					return ObjectMetadata{}, probe.NewError(ObjectExistsAsPrefix{Bucket: bucket, Prefix: object})
+					return ObjectInfo{}, probe.NewError(ObjectExistsAsPrefix{Bucket: bucket, Prefix: object})
 				}
 			}
-			return ObjectMetadata{}, probe.NewError(e)
+			return ObjectInfo{}, probe.NewError(e)
 		default:
-			return ObjectMetadata{}, probe.NewError(e)
+			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
 
@@ -267,12 +264,12 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	if size > 0 {
 		if _, e = io.CopyN(objectWriter, data, size); e != nil {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(e)
+			return ObjectInfo{}, probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(objectWriter, data); e != nil {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(e)
+			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
 
@@ -282,7 +279,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	if expectedMD5Sum != "" {
 		if !isMD5SumEqual(expectedMD5Sum, md5Sum) {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
+			return ObjectInfo{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
 		}
 	}
 	sha256Sum := hex.EncodeToString(sha256Hasher.Sum(nil))
@@ -290,11 +287,11 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		ok, err := sig.DoesSignatureMatch(sha256Sum)
 		if err != nil {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, err.Trace()
+			return ObjectInfo{}, err.Trace()
 		}
 		if !ok {
 			file.CloseAndPurge()
-			return ObjectMetadata{}, probe.NewError(SignDoesNotMatch{})
+			return ObjectInfo{}, probe.NewError(SignDoesNotMatch{})
 		}
 	}
 	file.Close()
@@ -302,7 +299,7 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 	// Set stat again to get the latest metadata.
 	st, e := os.Stat(objectPath)
 	if e != nil {
-		return ObjectMetadata{}, probe.NewError(e)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
@@ -311,13 +308,13 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 			contentType = content.ContentType
 		}
 	}
-	newObject := ObjectMetadata{
+	newObject := ObjectInfo{
 		Bucket:       bucket,
-		Object:       object,
-		LastModified: st.ModTime(),
+		Name:         object,
+		ModifiedTime: st.ModTime(),
 		Size:         st.Size(),
 		ContentType:  contentType,
-		MD5:          md5Sum,
+		MD5Sum:       md5Sum,
 	}
 	return newObject, nil
 }

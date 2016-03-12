@@ -247,7 +247,7 @@ func getLocation(r *http.Request) string {
 //
 // output:
 // populated struct that can be serialized to match xml and json api spec output
-func generateListBucketsResponse(buckets []fs.BucketMetadata) ListBucketsResponse {
+func generateListBucketsResponse(buckets []fs.BucketInfo) ListBucketsResponse {
 	var listbuckets []Bucket
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
@@ -280,13 +280,13 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 
 	for _, object := range resp.Objects {
 		var content = Object{}
-		if object.Object == "" {
+		if object.Name == "" {
 			continue
 		}
-		content.Key = object.Object
-		content.LastModified = object.LastModified.UTC().Format(timeFormatAMZ)
-		if object.MD5 != "" {
-			content.ETag = "\"" + object.MD5 + "\""
+		content.Key = object.Name
+		content.LastModified = object.ModifiedTime.UTC().Format(timeFormatAMZ)
+		if object.MD5Sum != "" {
+			content.ETag = "\"" + object.MD5Sum + "\""
 		}
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"

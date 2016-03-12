@@ -85,9 +85,9 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 	}
 	completedPartsBytes, e := xml.Marshal(completedParts)
 	c.Assert(e, check.IsNil)
-	objectMetadata, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, bytes.NewReader(completedPartsBytes), nil)
+	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, bytes.NewReader(completedPartsBytes), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectMetadata.MD5, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
+	c.Assert(objectInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
 
 func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
@@ -140,9 +140,9 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		objectMetadata, err := fs.CreateObject("bucket", key, expectedmd5Sum, int64(len(randomString)), bytes.NewBufferString(randomString), nil)
+		objectInfo, err := fs.CreateObject("bucket", key, expectedmd5Sum, int64(len(randomString)), bytes.NewBufferString(randomString), nil)
 		c.Assert(err, check.IsNil)
-		c.Assert(objectMetadata.MD5, check.Equals, expectedmd5Sumhex)
+		c.Assert(objectInfo.MD5Sum, check.Equals, expectedmd5Sumhex)
 	}
 
 	for key, value := range objects {
@@ -151,7 +151,7 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 		c.Assert(err, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
-		metadata, err := fs.GetObjectMetadata("bucket", key)
+		metadata, err := fs.GetObjectInfo("bucket", key)
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
 	}
@@ -199,11 +199,11 @@ func testPaging(c *check.C, create func() Filesystem) {
 	{
 		result, err = fs.ListObjects("bucket", "", "", "", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
-		c.Assert(result.Objects[2].Object, check.Equals, "obj0")
-		c.Assert(result.Objects[3].Object, check.Equals, "obj1")
-		c.Assert(result.Objects[4].Object, check.Equals, "obj10")
+		c.Assert(result.Objects[0].Name, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Name, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[2].Name, check.Equals, "obj0")
+		c.Assert(result.Objects[3].Name, check.Equals, "obj1")
+		c.Assert(result.Objects[4].Name, check.Equals, "obj10")
 	}
 
 	// check delimited results with delimiter and prefix
@@ -222,11 +222,11 @@ func testPaging(c *check.C, create func() Filesystem) {
 	{
 		result, err = fs.ListObjects("bucket", "", "", "/", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
-		c.Assert(result.Objects[2].Object, check.Equals, "obj0")
-		c.Assert(result.Objects[3].Object, check.Equals, "obj1")
-		c.Assert(result.Objects[4].Object, check.Equals, "obj10")
+		c.Assert(result.Objects[0].Name, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Name, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[2].Name, check.Equals, "obj0")
+		c.Assert(result.Objects[3].Name, check.Equals, "obj1")
+		c.Assert(result.Objects[4].Name, check.Equals, "obj10")
 		c.Assert(result.Prefixes[0], check.Equals, "this/")
 	}
 
@@ -234,26 +234,26 @@ func testPaging(c *check.C, create func() Filesystem) {
 	{
 		result, err = fs.ListObjects("bucket", "", "newPrefix", "", 3)
 		c.Assert(err, check.IsNil)
-		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix2")
-		c.Assert(result.Objects[1].Object, check.Equals, "obj0")
-		c.Assert(result.Objects[2].Object, check.Equals, "obj1")
+		c.Assert(result.Objects[0].Name, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[1].Name, check.Equals, "obj0")
+		c.Assert(result.Objects[2].Name, check.Equals, "obj1")
 	}
 	// check ordering of results with prefix
 	{
 		result, err = fs.ListObjects("bucket", "obj", "", "", 1000)
 		c.Assert(err, check.IsNil)
-		c.Assert(result.Objects[0].Object, check.Equals, "obj0")
-		c.Assert(result.Objects[1].Object, check.Equals, "obj1")
-		c.Assert(result.Objects[2].Object, check.Equals, "obj10")
-		c.Assert(result.Objects[3].Object, check.Equals, "obj2")
-		c.Assert(result.Objects[4].Object, check.Equals, "obj3")
+		c.Assert(result.Objects[0].Name, check.Equals, "obj0")
+		c.Assert(result.Objects[1].Name, check.Equals, "obj1")
+		c.Assert(result.Objects[2].Name, check.Equals, "obj10")
+		c.Assert(result.Objects[3].Name, check.Equals, "obj2")
+		c.Assert(result.Objects[4].Name, check.Equals, "obj3")
 	}
 	// check ordering of results with prefix and no paging
 	{
 		result, err = fs.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
-		c.Assert(result.Objects[0].Object, check.Equals, "newPrefix")
-		c.Assert(result.Objects[1].Object, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[0].Name, check.Equals, "newPrefix")
+		c.Assert(result.Objects[1].Name, check.Equals, "newPrefix2")
 	}
 }
 
@@ -265,9 +265,9 @@ func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	hasher1.Write([]byte("one"))
 	md5Sum1 := base64.StdEncoding.EncodeToString(hasher1.Sum(nil))
 	md5Sum1hex := hex.EncodeToString(hasher1.Sum(nil))
-	objectMetadata, err := fs.CreateObject("bucket", "object", md5Sum1, int64(len("one")), bytes.NewBufferString("one"), nil)
+	objectInfo, err := fs.CreateObject("bucket", "object", md5Sum1, int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(md5Sum1hex, check.Equals, objectMetadata.MD5)
+	c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
 
 	hasher2 := md5.New()
 	hasher2.Write([]byte("three"))
@@ -305,9 +305,9 @@ func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	hasher.Write([]byte("hello world"))
 	md5Sum1 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	md5Sum1hex := hex.EncodeToString(hasher.Sum(nil))
-	objectMetadata, err := fs.CreateObject("bucket", "dir1/dir2/object", md5Sum1, int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
+	objectInfo, err := fs.CreateObject("bucket", "dir1/dir2/object", md5Sum1, int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectMetadata.MD5, check.Equals, md5Sum1hex)
+	c.Assert(objectInfo.MD5Sum, check.Equals, md5Sum1hex)
 
 	var bytesBuffer bytes.Buffer
 	length, err := fs.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object", 0, 0)
@@ -438,7 +438,7 @@ func testDefaultContentType(c *check.C, create func() Filesystem) {
 
 	// test empty
 	_, err = fs.CreateObject("bucket", "one", "", int64(len("one")), bytes.NewBufferString("one"), nil)
-	metadata, err := fs.GetObjectMetadata("bucket", "one")
+	metadata, err := fs.GetObjectInfo("bucket", "one")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
 }

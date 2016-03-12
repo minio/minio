@@ -101,9 +101,9 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	_, err := api.Filesystem.GetBucketMetadata(bucket)
+	_, err := api.Filesystem.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
+		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
@@ -564,7 +564,7 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
-	metadata, err := api.Filesystem.CreateObject(bucket, object, "", -1, fileBody, nil)
+	objectInfo, err := api.Filesystem.CreateObject(bucket, object, "", -1, fileBody, nil)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -585,8 +585,8 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	if metadata.MD5 != "" {
-		w.Header().Set("ETag", "\""+metadata.MD5+"\"")
+	if objectInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -613,9 +613,9 @@ func (api storageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	_, err := api.Filesystem.GetBucketMetadata(bucket)
+	_, err := api.Filesystem.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err.Trace(), "GetBucketMetadata failed.", nil)
+		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
