@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/pkg/atomic"
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/ioutils"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/s3/signature4"
@@ -334,7 +333,7 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 	}
 	if pathSt.IsDir() {
 		// Verify if directory is empty.
-		empty, e := ioutils.IsDirEmpty(deletePath)
+		empty, e := isDirEmpty(deletePath)
 		if e != nil {
 			return probe.NewError(e)
 		}
