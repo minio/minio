@@ -38,7 +38,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	bucket = fs.denormalizeBucket(bucket)
 
-	if status, err := IsDirExist(filepath.Join(fs.path, bucket)); !status {
+	if status, err := isDirExist(filepath.Join(fs.path, bucket)); !status {
 		if err == nil {
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
 		} else if os.IsNotExist(err) {
