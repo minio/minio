@@ -444,6 +444,7 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 			w.WriteHeader(http.StatusNotModified)
 			return true
 		}
+	}
 	else if _, ok := r.Header["x-amz-copy-source-if-unmodified-since"]; ok {
 		//Return the object only if it has not been modified since the
 		//specified time, otherwise return a 412 error (precondition failed).
