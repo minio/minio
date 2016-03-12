@@ -177,11 +177,9 @@ func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time
 
 // checkETag implements If-None-Match and If-Match checks.
 //
-// The ETag or modtime must have been previously set in the
-// ResponseWriter's headers.  The modtime is only compared at second
-// granularity and may be the zero value to mean unknown.
-//
-// The return value is whether this request is now considered done.
+// The ETag must have been previously set in the ResponseWriter's
+// headers. The return value is whether this request is now considered
+// done.
 func checkETag(w http.ResponseWriter, r *http.Request) bool {
 	etag := w.Header().Get("ETag")
 	// Must know ETag.
@@ -277,12 +275,6 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
-//
-// TODO: Does not support following request headers just yet.
-//  - x-amz-copy-source-if-match
-//  - x-amz-copy-source-if-none-match
-//  - x-amz-copy-source-if-unmodified-since
-//  - x-amz-copy-source-if-modified-since
 func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -405,8 +397,114 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
+
+	// Verify x-amz-copy-source-if-modified-since and
+	// x-amz-copy-source-if-unmodified-since
+	lastModified := objectInfo.ModifiedTime
+	if checkCopySourceLastModified(w, r, lastModified) {
+		return
+	}
+
+	// Verify x-amz-copy-source-if-match and
+	// x-amz-copy-source-if-none-match
+	if checkCopySourceETag(w, r) {
+		return
+	}
+
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
+}
+
+// checkCopySource implements x-amz-copy-source-if-modified-since and
+// x-amz-copy-source-if-unmodified-since checks.
+//
+// modtime is the modification time of the resource to be served, or
+// IsZero(). return value is whether this request is now complete.
+func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
+	if modtime.IsZero() || modtime.Equal(unixEpochTime) {
+		// If the object doesn't have a modtime (IsZero), or the modtime
+		// is obviously garbage (Unix time == 0), then ignore modtimes
+		// and don't process the If-Modified-Since header.
+		return false
+	}
+	// The Date-Modified header truncates sub-second precision, so
+	// use mtime < t+1s instead of mtime <= t to check for unmodified.
+	if _, ok := r.Header["x-amz-copy-source-if-modified-since"]; ok {
+		// Return the object only if it has been modified since the
+		// specified time, otherwise return a 304 error (not modified).
+		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-modified-since"))
+		if err == nil && modtime.Before(t.Add(1*time.Second)) {
+			h := w.Header()
+			// Remove Content headers if set
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	} else if _, ok := r.Header["x-amz-copy-source-if-unmodified-since"]; ok {
+		// Return the object only if it has not been modified since the
+		// specified time, otherwise return a 412 error (precondition failed).
+		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-unmodified-since"))
+		if err == nil && modtime.After(t.Add(1*time.Second)) {
+			h := w.Header()
+			// Remove Content headers if set
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return true
+		}
+	}
+	w.Header().Set("Last-Modified", modtime.UTC().Format(http.TimeFormat))
+	return false
+}
+
+// checkCopySourceETag implements x-amz-copy-source-if-match and
+// x-amz-copy-source-if-none-match checks.
+//
+// The ETag must have been previously set in the ResponseWriter's
+// headers. The return value is whether this request is now considered
+// complete.
+func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
+	etag := w.Header().Get("ETag")
+	// Tag must be provided...
+	if etag == "" {
+		return false
+	}
+	if inm := r.Header.Get("x-amz-copy-source-if-none-match"); inm != "" {
+		// Return the object only if its entity tag (ETag) is different
+		// from the one specified; otherwise, return a 304 (not modified).
+		if r.Method != "PUT" {
+			return false
+		}
+		if inm == etag || inm == "*" {
+			h := w.Header()
+			// Remove Content headers if set
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); inm != "" {
+		// Return the object only if its entity tag (ETag) is the same
+		// as the one specified; otherwise, return a 412 (precondition failed).
+		if r.Method != "PUT" {
+			return false
+		}
+		if inm != etag {
+			h := w.Header()
+			// Remove Content headers if set
+			delete(h, "Content-Type")
+			delete(h, "Content-Length")
+			delete(h, "Content-Range")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return true
+		}
+	}
+	return false
+
 }
 
 // PutObjectHandler - PUT Object
@@ -423,7 +521,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	// get Content-Md5 sent by client and verify if valid
+	// Get Content-Md5 sent by client and verify if valid
 	md5 := r.Header.Get("Content-Md5")
 	if !isValidMD5(md5) {
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
