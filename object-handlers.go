@@ -403,13 +403,13 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	// Verify x-amz-copy-source-if-modified-since and
 	// x-amz-copy-source-if-unmodified-since
 	lastModified := objectInfo.ModifiedTime
-	if checkCopySourceLastModified(w, r, lastModified){
+	if checkCopySourceLastModified(w, r, lastModified) {
 		return
 	}
 
 	// Verify x-amz-copy-source-if-match and
 	// x-amz-copy-source-if-none-match
-	if checkCopySourceETag(w, r){
+	if checkCopySourceETag(w, r) {
 		return
 	}
 
@@ -422,7 +422,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 //
 // modtime is the modification time of the resource to be served, or
 // IsZero(). return value is whether this request is now complete.
-func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool{
+func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
 	if modtime.IsZero() || modtime.Equal(unixEpochTime) {
 		// If the object doesn't have a modtime (IsZero), or the modtime
 		// is obviously garbage (Unix time == 0), then ignore modtimes
@@ -435,7 +435,7 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 		//Return the object only if it has been modified since the
 		//specified time, otherwise return a 304 error (not modified).
 		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-modified-since"))
-		if err == nil && modtime.Before(t.Add(1 * time.Second)) {
+		if err == nil && modtime.Before(t.Add(1*time.Second)) {
 			h := w.Header()
 			//Remove Content headers if set
 			delete(h, "Content-Type")
@@ -448,7 +448,7 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 		//Return the object only if it has not been modified since the
 		//specified time, otherwise return a 412 error (precondition failed).
 		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-unmodified-since"))
-		if err == nil && modtime.After(t.Add(1 * time.Second)) {
+		if err == nil && modtime.After(t.Add(1*time.Second)) {
 			h := w.Header()
 			//Remove Content headers if set
 			delete(h, "Content-Type")
@@ -471,12 +471,12 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 //
 // The return value is whether this request is now considered done.
 func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
-	etag := r.Header().Get("ETag")
+	etag := w.Header().Get("ETag")
 	//tag must be provided...
 	if etag == "" {
 		return false
 	}
-	if inm := r.Header.Get("x-amz-copy-source-if-none-match"); inm != ""{
+	if inm := r.Header.Get("x-amz-copy-source-if-none-match"); inm != "" {
 		// Return the object only if its entity tag (ETag) is different
 		// from the one specified; otherwise, return a 304 (not modified).
 		if r.Method != "PUT" {
@@ -491,7 +491,7 @@ func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
 			w.WriteHeader(http.StatusNotModified)
 			return true
 		}
-	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); inm != ""{
+	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); inm != "" {
 		// Return the object only if its entity tag (ETag) is the same
 		// as the one specified; otherwise, return a 412 (precondition failed).
 		if r.Method != "PUT" {
