@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/probe"
@@ -55,13 +56,19 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	return nil
 }
 
+// BucketInfo - name and create date
+type BucketInfo struct {
+	Name    string
+	Created time.Time
+}
+
 // ListBuckets - Get service.
-func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
+func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
 	files, e := ioutil.ReadDir(fs.path)
 	if e != nil {
-		return []BucketMetadata{}, probe.NewError(e)
+		return []BucketInfo{}, probe.NewError(e)
 	}
-	var metadataList []BucketMetadata
+	var metadataList []BucketInfo
 	for _, file := range files {
 		if !file.IsDir() {
 			// If not directory, ignore all file types.
@@ -72,7 +79,7 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 		if !IsValidBucketName(dirName) {
 			continue
 		}
-		metadata := BucketMetadata{
+		metadata := BucketInfo{
 			Name:    dirName,
 			Created: file.ModTime(),
 		}
@@ -84,7 +91,7 @@ func (fs Filesystem) ListBuckets() ([]BucketMetadata, *probe.Error) {
 }
 
 // removeDuplicateBuckets - remove duplicate buckets.
-func removeDuplicateBuckets(buckets []BucketMetadata) []BucketMetadata {
+func removeDuplicateBuckets(buckets []BucketInfo) []BucketInfo {
 	length := len(buckets) - 1
 	for i := 0; i < length; i++ {
 		for j := i + 1; j <= length; j++ {
@@ -153,10 +160,10 @@ func (fs Filesystem) denormalizeBucket(bucket string) string {
 	return bucket
 }
 
-// GetBucketMetadata - get bucket metadata.
-func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Error) {
+// GetBucketInfo - get bucket metadata.
+func (fs Filesystem) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	if !IsValidBucketName(bucket) {
-		return BucketMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	bucket = fs.denormalizeBucket(bucket)
 	// Get bucket path.
@@ -165,11 +172,11 @@ func (fs Filesystem) GetBucketMetadata(bucket string) (BucketMetadata, *probe.Er
 	if e != nil {
 		// Check if bucket exists.
 		if os.IsNotExist(e) {
-			return BucketMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return BucketInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return BucketMetadata{}, probe.NewError(e)
+		return BucketInfo{}, probe.NewError(e)
 	}
-	bucketMetadata := BucketMetadata{}
+	bucketMetadata := BucketInfo{}
 	bucketMetadata.Name = fi.Name()
 	bucketMetadata.Created = fi.ModTime()
 	return bucketMetadata, nil

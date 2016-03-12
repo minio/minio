@@ -106,17 +106,15 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 			continue
 		}
 
+		// Add the bucket.
+		objInfo.Bucket = bucket
+
 		if strings.HasPrefix(objInfo.Name, prefix) {
 			if objInfo.Name > marker {
 				if objInfo.IsDir {
 					result.Prefixes = append(result.Prefixes, objInfo.Name)
 				} else {
-					result.Objects = append(result.Objects, ObjectMetadata{
-						Bucket:       bucket,
-						Object:       objInfo.Name,
-						LastModified: objInfo.ModifiedTime,
-						Size:         objInfo.Size,
-					})
+					result.Objects = append(result.Objects, objInfo)
 				}
 				nextMarker = objInfo.Name
 				i++

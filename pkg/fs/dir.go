@@ -75,9 +75,11 @@ func (f byName) Less(i, j int) bool {
 
 // ObjectInfo - object info
 type ObjectInfo struct {
+	Bucket       string
 	Name         string
 	ModifiedTime time.Time
-	Checksum     string
+	ContentType  string
+	MD5Sum       string
 	Size         int64
 	IsDir        bool
 	Err          error
@@ -99,26 +101,54 @@ func readDir(scanDir, namePrefix string) (objInfos []ObjectInfo) {
 		return
 	}
 
+	// Close the directory
 	f.Close()
+
+	// Sort files by Name.
 	sort.Sort(byName(fis))
 
-	// make []ObjectInfo from []FileInfo
+	// Populate []ObjectInfo from []FileInfo
 	for _, fi := range fis {
 		name := fi.Name()
+		size := fi.Size()
+		modTime := fi.ModTime()
+		isDir := fi.Mode().IsDir()
+
+		// Add prefix if name prefix exists.
 		if namePrefix != "" {
 			name = namePrefix + "/" + name
 		}
 
-		if fi.IsDir() {
+		// For directories explicitly end with '/'.
+		if isDir {
 			name += "/"
+			size = 0 // Size is set to '0' for directories explicitly.
 		}
 
+		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+			// Handle symlink by doing an additional stat and follow the link.
+			st, e := os.Stat(filepath.Join(scanDir, name))
+			if e != nil {
+				objInfos = append(objInfos, ObjectInfo{Err: err})
+				return
+			}
+			size = st.Size()
+			modTime = st.ModTime()
+			isDir = st.Mode().IsDir()
+			// For directories explicitly end with '/'.
+			if isDir {
+				name += "/"
+				size = 0 // Size is set to '0' for directories explicitly.
+			}
+		}
+
+		// Populate []ObjectInfo.
 		objInfos = append(objInfos, ObjectInfo{
 			Name:         name,
-			ModifiedTime: fi.ModTime(),
-			Checksum:     "",
-			Size:         fi.Size(),
-			IsDir:        fi.IsDir(),
+			ModifiedTime: modTime,
+			MD5Sum:       "", // TODO
+			Size:         size,
+			IsDir:        isDir,
 		})
 	}
 
