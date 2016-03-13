@@ -18,8 +18,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -134,6 +132,18 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	}
+
 	// If Content-Length is unknown or zero, deny the
 	// request. PutBucketPolicy always needs a Content-Length if
 	// incoming request is not chunked.
@@ -173,34 +183,6 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Set http request for signature verification.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
-	if isRequestPresignedSignatureV4(r) {
-		ok, err := auth.DoesPresignedSignatureMatch()
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-	} else if isRequestSignatureV4(r) {
-		sh := sha256.New()
-		sh.Write(bucketPolicyBuf)
-		ok, err := api.Signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-		if err != nil {
-			errorIf(err.Trace(string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-	}
-
 	// Save bucket policy.
 	err := writeBucketPolicy(bucket, bucketPolicyBuf)
 	if err != nil {
@@ -224,10 +206,16 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Validate incoming signature.
-	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	// Delete bucket access policy.
@@ -255,10 +243,16 @@ func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Validate incoming signature.
-	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	// Read bucket access policy.

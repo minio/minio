@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signature4
+package main
 
 import (
 	"encoding/base64"
@@ -158,8 +158,8 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 	return parsedPolicy, nil
 }
 
-// ApplyPolicyCond - apply policy conditions and validate input values.
-func ApplyPolicyCond(formValues map[string]string) *probe.Error {
+// checkPostPolicy - apply policy conditions and validate input values.
+func checkPostPolicy(formValues map[string]string) *probe.Error {
 	if formValues["X-Amz-Algorithm"] != signV4Algorithm {
 		return ErrUnsuppSignAlgo("Unsupported signature algorithm in policy form data.", formValues["X-Amz-Algorithm"]).Trace(formValues["X-Amz-Algorithm"])
 	}

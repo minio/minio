@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -34,12 +33,10 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/atomic"
-	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/crypto/sha512"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 // isValidUploadID - is upload id.
@@ -322,7 +319,7 @@ func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // CreateObjectPart - create a part in a multipart session
-func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum string, partID int, size int64, data io.Reader, signature *signature4.Sign) (string, *probe.Error) {
+func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Bytes []byte) (string, *probe.Error) {
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return "", probe.NewError(err)
@@ -355,71 +352,58 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	if expectedMD5Sum != "" {
-		var expectedMD5SumBytes []byte
-		expectedMD5SumBytes, err = base64.StdEncoding.DecodeString(expectedMD5Sum)
-		if err != nil {
-			// Pro-actively close the connection
-			return "", probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
-		}
-		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
-	}
-
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
-	if _, err = os.Stat(bucketPath); err != nil {
+	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
-		if os.IsNotExist(err) {
+		if os.IsNotExist(e) {
 			return "", probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return "", probe.NewError(err)
+		return "", probe.NewError(e)
+	}
+
+	// md5Hex representation.
+	var md5Hex string
+	if len(md5Bytes) != 0 {
+		md5Hex = hex.EncodeToString(md5Bytes)
 	}
 
 	objectPath := filepath.Join(bucketPath, object)
 	partPathPrefix := objectPath + uploadID
-	partPath := partPathPrefix + expectedMD5Sum + fmt.Sprintf("$%d-$multiparts", partID)
+	partPath := partPathPrefix + md5Hex + fmt.Sprintf("$%d-$multiparts", partID)
 	partFile, e := atomic.FileCreateWithPrefix(partPath, "$multiparts")
 	if e != nil {
 		return "", probe.NewError(e)
 	}
+	defer partFile.Close()
 
-	md5Hasher := md5.New()
-	sha256Hasher := sha256.New()
-	partWriter := io.MultiWriter(partFile, md5Hasher, sha256Hasher)
-	if _, e = io.CopyN(partWriter, data, size); e != nil {
+	// Initialize md5 writer.
+	md5Writer := md5.New()
+
+	// Create a multiwriter.
+	multiWriter := io.MultiWriter(md5Writer, partFile)
+
+	if _, e = io.CopyN(multiWriter, data, size); e != nil {
 		partFile.CloseAndPurge()
 		return "", probe.NewError(e)
 	}
 
-	md5sum := hex.EncodeToString(md5Hasher.Sum(nil))
-	// Verify if the written object is equal to what is expected, only
-	// if it is requested as such.
-	if expectedMD5Sum != "" {
-		if !isMD5SumEqual(expectedMD5Sum, md5sum) {
-			partFile.CloseAndPurge()
-			return "", probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
+	// Finalize new md5.
+	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	if len(md5Bytes) != 0 {
+		if newMD5Hex != md5Hex {
+			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
-	if signature != nil {
-		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sha256Hasher.Sum(nil)))
-		if err != nil {
-			partFile.CloseAndPurge()
-			return "", err.Trace()
-		}
-		if !ok {
-			partFile.CloseAndPurge()
-			return "", probe.NewError(SignDoesNotMatch{})
-		}
-	}
-	partFile.Close()
 
-	fi, e := os.Stat(partPath)
+	// Stat the file to get the latest information.
+	fi, e := os.Stat(partFile.Name())
 	if e != nil {
 		return "", probe.NewError(e)
 	}
 	partMetadata := PartMetadata{}
-	partMetadata.ETag = md5sum
 	partMetadata.PartNumber = partID
+	partMetadata.ETag = newMD5Hex
 	partMetadata.Size = fi.Size()
 	partMetadata.LastModified = fi.ModTime()
 
@@ -450,13 +434,11 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID, expectedMD5Sum s
 	if err := saveMultipartsSession(*fs.multiparts); err != nil {
 		return "", err.Trace(partPathPrefix)
 	}
-
-	// Return etag.
-	return partMetadata.ETag, nil
+	return newMD5Hex, nil
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, data io.Reader, signature *signature4.Sign) (ObjectInfo, *probe.Error) {
+func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploadID string, completeMultipartBytes []byte) (ObjectInfo, *probe.Error) {
 	// Check bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -488,26 +470,8 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, da
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	partBytes, e := ioutil.ReadAll(data)
-	if e != nil {
-		objectWriter.CloseAndPurge()
-		return ObjectInfo{}, probe.NewError(e)
-	}
-	if signature != nil {
-		sh := sha256.New()
-		sh.Write(partBytes)
-		ok, err := signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-		if err != nil {
-			objectWriter.CloseAndPurge()
-			return ObjectInfo{}, err.Trace()
-		}
-		if !ok {
-			objectWriter.CloseAndPurge()
-			return ObjectInfo{}, probe.NewError(SignDoesNotMatch{})
-		}
-	}
 	completeMultipartUpload := &CompleteMultipartUpload{}
-	if e = xml.Unmarshal(partBytes, completeMultipartUpload); e != nil {
+	if e = xml.Unmarshal(completeMultipartBytes, completeMultipartUpload); e != nil {
 		objectWriter.CloseAndPurge()
 		return ObjectInfo{}, probe.NewError(MalformedXML{})
 	}

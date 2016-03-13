@@ -29,7 +29,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/miniobrowser"
 )
 
@@ -37,8 +36,6 @@ import (
 type storageAPI struct {
 	// Filesystem instance.
 	Filesystem fs.Filesystem
-	// Signature instance.
-	Signature *signature4.Sign
 }
 
 // webAPI container for Web API.
@@ -163,19 +160,12 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
-	// Server region.
-	region := serverConfig.GetRegion()
-
 	// Server addr.
 	addr := serverConfig.GetAddr()
-
-	sign, err := signature4.New(cred.AccessKeyID, cred.SecretAccessKey, region)
-	fatalIf(err.Trace(cred.AccessKeyID, cred.SecretAccessKey, region), "Initializing signature version '4' failed.", nil)
 
 	// Initialize API.
 	api := storageAPI{
 		Filesystem: filesystem,
-		Signature:  sign,
 	}
 
 	// Split host port.

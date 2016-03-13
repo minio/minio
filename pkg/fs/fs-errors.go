@@ -18,13 +18,6 @@ package fs
 
 import "fmt"
 
-// SignDoesNotMatch - signature does not match.
-type SignDoesNotMatch struct{}
-
-func (e SignDoesNotMatch) Error() string {
-	return "Signature does not match."
-}
-
 // InvalidArgument invalid argument
 type InvalidArgument struct{}
 
@@ -131,15 +124,14 @@ func (e InvalidDisksArgument) Error() string {
 	return "Invalid number of disks per node"
 }
 
-// BadDigest bad md5sum
+// BadDigest - Content-MD5 you specified did not match what we received.
 type BadDigest struct {
-	MD5    string
-	Bucket string
-	Object string
+	ExpectedMD5   string
+	CalculatedMD5 string
 }
 
 func (e BadDigest) Error() string {
-	return "Bad digest"
+	return "Bad digest expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
 }
 
 // InternalError - generic internal error
@@ -183,13 +175,6 @@ type ImplementationError struct {
 	Err    error
 }
 
-// DigestError - Generic MD5 error
-type DigestError struct {
-	Bucket string
-	Key    string
-	MD5    string
-}
-
 /// Bucket related errors
 
 // BucketNameInvalid - bucketname provided is invalid
@@ -199,9 +184,6 @@ type BucketNameInvalid GenericBucketError
 
 // ObjectNameInvalid - object name provided is invalid
 type ObjectNameInvalid GenericObjectError
-
-// InvalidDigest - md5 in request header invalid
-type InvalidDigest DigestError
 
 // Return string an error formatted as the given text
 func (e ImplementationError) Error() string {
@@ -256,11 +238,6 @@ func (e IncompleteBody) Error() string {
 // Return string an error formatted as the given text
 func (e BackendCorrupted) Error() string {
 	return "Backend corrupted: " + e.Path
-}
-
-// Return string an error formatted as the given text
-func (e InvalidDigest) Error() string {
-	return "MD5 provided " + e.MD5 + " is invalid"
 }
 
 // OperationNotPermitted - operation not permitted

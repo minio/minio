@@ -1,3 +1,5 @@
+// +build ignore
+
 /*
  * Minio Cloud Storage, (C) 2015 Minio, Inc.
  *

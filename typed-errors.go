@@ -23,3 +23,6 @@ var errSyslogNotSupported = errors.New("Syslog logger not supported on windows")
 
 // errInvalidArgument means that input argument is invalid.
 var errInvalidArgument = errors.New("Invalid arguments specified")
+
+// errSignatureMismatch means signature did not match.
+var errSignatureMismatch = errors.New("Signature does not match")

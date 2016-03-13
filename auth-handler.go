@@ -17,17 +17,16 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio/pkg/s3/signature4"
-)
-
-const (
-	signV4Algorithm = "AWS4-HMAC-SHA256"
-	jwtAlgorithm    = "Bearer"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Verify if request has JWT.
@@ -97,12 +96,41 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
+// sum256 calculate sha256 sum for an input byte array
+func sum256(data []byte) []byte {
+	hash := sha256.New()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+// sumMD5 calculate md5 sum for an input byte array
+func sumMD5(data []byte) []byte {
+	hash := md5.New()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(sign *signature4.Sign, r *http.Request) (s3Error APIErrorCode) {
-	auth := sign.SetHTTPRequestToVerify(r)
+func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
+	if r == nil {
+		errorIf(probe.NewError(errInvalidArgument), "HTTP request cannot be empty.", nil)
+		return ErrInternalError
+	}
+	payload, e := ioutil.ReadAll(r.Body)
+	if e != nil {
+		errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
+		return ErrInternalError
+	}
+	// Verify Content-Md5, if payload is set.
+	if r.Header.Get("Content-Md5") != "" {
+		if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
+			return ErrBadDigest
+		}
+	}
+	// Populate back the payload.
+	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	if isRequestSignatureV4(r) {
-		dummyPayload := sha256.Sum256([]byte(""))
-		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(dummyPayload[:]))
+		ok, err := doesSignatureMatch(hex.EncodeToString(sum256(payload)), r)
 		if err != nil {
 			errorIf(err.Trace(), "Signature verification failed.", nil)
 			return ErrInternalError
@@ -112,7 +140,7 @@ func isReqAuthenticated(sign *signature4.Sign, r *http.Request) (s3Error APIErro
 		}
 		return ErrNone
 	} else if isRequestPresignedSignatureV4(r) {
-		ok, err := auth.DoesPresignedSignatureMatch()
+		ok, err := doesPresignedSignatureMatch(r)
 		if err != nil {
 			errorIf(err.Trace(), "Presigned signature verification failed.", nil)
 			return ErrInternalError

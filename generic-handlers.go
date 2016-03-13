@@ -28,11 +28,6 @@ import (
 	"github.com/rs/cors"
 )
 
-const (
-	iso8601Format = "20060102T150405Z"
-	privateBucket = "/minio"
-)
-
 // HandlerFunc - useful to chain different middleware http.Handler
 type HandlerFunc func(http.Handler) http.Handler
 
@@ -50,6 +45,11 @@ type redirectHandler struct {
 	handler        http.Handler
 	locationPrefix string
 }
+
+// Private bucket.
+const (
+	privateBucket = "/minio"
+)
 
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return redirectHandler{handler: h, locationPrefix: privateBucket}

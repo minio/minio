@@ -17,7 +17,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -73,7 +76,7 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -230,9 +233,16 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	bucket = vars["bucket"]
 	object = vars["object"]
 
-	if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	}
 
 	objectInfo, err := api.Filesystem.GetObjectInfo(bucket, object)
@@ -292,7 +302,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -366,6 +376,17 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var md5Bytes []byte
+	if objectInfo.MD5Sum != "" {
+		var e error
+		md5Bytes, e = hex.DecodeString(objectInfo.MD5Sum)
+		if e != nil {
+			errorIf(probe.NewError(e), "Decoding md5 failed.", nil)
+			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
+			return
+		}
+	}
+
 	// Initialize a pipe for data pipe line.
 	reader, writer := io.Pipe()
 
@@ -378,13 +399,11 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	// Verify md5sum.
-	expectedMD5Sum := objectInfo.MD5Sum
 	// Size of object.
 	size := objectInfo.Size
 
 	// Create the object.
-	objectInfo, err = api.Filesystem.CreateObject(bucket, object, expectedMD5Sum, size, reader, nil)
+	objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, reader, md5Bytes)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -398,8 +417,6 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.InvalidDigest:
-			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		case fs.ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
@@ -522,8 +539,9 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 
 	// Get Content-Md5 sent by client and verify if valid
-	md5 := r.Header.Get("Content-Md5")
-	if !isValidMD5(md5) {
+	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
+	if err != nil {
+		errorIf(err.Trace(r.Header.Get("Content-Md5")), "Decoding md5 failed.", nil)
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -539,10 +557,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
 	var objectInfo fs.ObjectInfo
-	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -555,11 +570,11 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create anonymous object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify them right here.
 		var ok bool
-		ok, err = auth.DoesPresignedSignatureMatch()
+		ok, err = doesPresignedSignatureMatch(r)
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
@@ -570,14 +585,46 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create presigned object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, nil)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, r.Body, nil)
 	case authTypeSigned:
+		// Initialize a pipe for data pipe line.
+		reader, writer := io.Pipe()
+
+		// Start writing in a routine.
+		go func() {
+			shaWriter := sha256.New()
+			multiWriter := io.MultiWriter(shaWriter, writer)
+			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
+				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
+				writer.CloseWithError(e)
+				return
+			}
+			shaPayload := shaWriter.Sum(nil)
+			ok, serr := doesSignatureMatch(hex.EncodeToString(shaPayload), r)
+			if serr != nil {
+				errorIf(serr.Trace(), "Signature verification failed.", nil)
+				writer.CloseWithError(probe.WrapError(serr))
+				return
+			}
+			if !ok {
+				writer.CloseWithError(errSignatureMismatch)
+				return
+			}
+			writer.Close()
+		}()
+
 		// Create object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, md5, size, r.Body, &auth)
+		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, reader, md5Bytes)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
-		switch err.ToGoError().(type) {
+		e := err.ToGoError()
+		// Verify if the underlying error is signature mismatch.
+		if e == errSignatureMismatch {
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		switch e.(type) {
 		case fs.RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.BucketNotFound:
@@ -586,12 +633,8 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case fs.BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.InvalidDigest:
-			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		case fs.ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
@@ -615,14 +658,18 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 	object = vars["object"]
 
 	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
 		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	default:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -663,8 +710,9 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 	object := vars["object"]
 
 	// get Content-Md5 sent by client and verify if valid
-	md5 := r.Header.Get("Content-Md5")
-	if !isValidMD5(md5) {
+	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
+	if err != nil {
+		errorIf(err.Trace(r.Header.Get("Content-Md5")), "Decoding md5 failed.", nil)
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -691,11 +739,12 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
 	var partMD5 string
-	var err *probe.Error
 	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
 		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
@@ -704,11 +753,11 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		}
 		// No need to verify signature, anonymous request access is
 		// already allowed.
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify right here.
 		var ok bool
-		ok, err = auth.DoesPresignedSignatureMatch()
+		ok, err = doesPresignedSignatureMatch(r)
 		if err != nil {
 			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
@@ -718,25 +767,52 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, nil)
-	default:
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, md5, partID, size, r.Body, &auth)
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
+	case authTypeSigned:
+		// Initialize a pipe for data pipe line.
+		reader, writer := io.Pipe()
+
+		// Start writing in a routine.
+		go func() {
+			shaWriter := sha256.New()
+			multiWriter := io.MultiWriter(shaWriter, writer)
+			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
+				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
+				writer.CloseWithError(e)
+				return
+			}
+			shaPayload := shaWriter.Sum(nil)
+			ok, serr := doesSignatureMatch(hex.EncodeToString(shaPayload), r)
+			if serr != nil {
+				errorIf(serr.Trace(), "Signature verification failed.", nil)
+				writer.CloseWithError(probe.WrapError(serr))
+				return
+			}
+			if !ok {
+				writer.CloseWithError(errSignatureMismatch)
+				return
+			}
+			writer.Close()
+		}()
+		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, reader, md5Bytes)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
-		switch err.ToGoError().(type) {
+		e := err.ToGoError()
+		// Verify if the underlying error is signature mismatch.
+		if e == errSignatureMismatch {
+			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+			return
+		}
+		switch e.(type) {
 		case fs.RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
 		case fs.InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case fs.BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.InvalidDigest:
-			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
@@ -755,14 +831,18 @@ func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http
 	object := vars["object"]
 
 	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
 		if s3Error := enforceBucketPolicy("s3:AbortMultipartUpload", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	default:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -798,14 +878,18 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 	object := vars["object"]
 
 	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
 		if s3Error := enforceBucketPolicy("s3:ListMultipartUploadParts", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-	default:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -860,9 +944,6 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	// Extract object resources.
 	objectResourcesMetadata := getObjectResources(r.URL.Query())
 
-	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
-
 	var objectInfo fs.ObjectInfo
 	var err *probe.Error
 	switch getRequestAuthType(r) {
@@ -876,26 +957,27 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		// Complete multipart upload anonymous.
-		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
-	case authTypePresigned:
-		// For presigned requests verify right here.
-		var ok bool
-		ok, err = auth.DoesPresignedSignatureMatch()
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		completePartBytes, e := ioutil.ReadAll(r.Body)
+		if e != nil {
+			errorIf(probe.NewError(e), "CompleteMultipartUpload failed.", nil)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		// Complete multipart upload anonymous.
+		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, completePartBytes)
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		completePartBytes, e := ioutil.ReadAll(r.Body)
+		if e != nil {
+			errorIf(probe.NewError(e), "CompleteMultipartUpload failed.", nil)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
 		// Complete multipart upload presigned.
-		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, nil)
-	case authTypeSigned:
-		// Complete multipart upload.
-		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, r.Body, &auth)
+		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, completePartBytes)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
@@ -914,8 +996,6 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
 		case fs.InvalidPartOrder:
 			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
-		case fs.SignDoesNotMatch:
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		case fs.MalformedXML:
@@ -925,12 +1005,12 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 		}
 		return
 	}
-	// get object location.
+	// Get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, objectInfo.MD5Sum)
 	encodedSuccessResponse := encodeResponse(response)
-	// write headers
+	// Write headers.
 	setCommonHeaders(w)
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
@@ -956,7 +1036,7 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -976,6 +1056,7 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
+		return
 	}
 	writeSuccessNoContent(w)
 }

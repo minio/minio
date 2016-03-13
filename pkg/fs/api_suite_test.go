@@ -19,7 +19,6 @@ package fs
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
 	"math/rand"
@@ -61,7 +60,7 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 
 	completedParts := CompleteMultipartUpload{}
-	completedParts.Part = make([]CompletePart, 0)
+	//completedParts.Part = make([]CompletePart, 10)
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -71,19 +70,17 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 
 		hasher := md5.New()
 		hasher.Write([]byte(randomString))
-		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
-		var calculatedmd5sum string
-		calculatedmd5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, expectedmd5Sum, i, int64(len(randomString)),
-			bytes.NewBufferString(randomString), nil)
+		var calculatedMD5sum string
+		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
 		c.Assert(err, check.IsNil)
-		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
-		completedParts.Part = append(completedParts.Part, CompletePart{PartNumber: i, ETag: calculatedmd5sum})
+		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
+		completedParts.Part = append(completedParts.Part, CompletePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
 	completedPartsBytes, e := xml.Marshal(completedParts)
 	c.Assert(e, check.IsNil)
-	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, bytes.NewReader(completedPartsBytes), nil)
+	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedPartsBytes)
 	c.Assert(err, check.IsNil)
 	c.Assert(objectInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
@@ -105,15 +102,13 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 
 		hasher := md5.New()
 		hasher.Write([]byte(randomString))
-		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
-		var calculatedmd5sum string
-		calculatedmd5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, expectedmd5Sum, i, int64(len(randomString)),
-			bytes.NewBufferString(randomString), nil)
+		var calculatedMD5sum string
+		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
 		c.Assert(err, check.IsNil)
-		c.Assert(calculatedmd5sum, check.Equals, expectedmd5Sumhex)
-		parts[i] = calculatedmd5sum
+		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
+		parts[i] = expectedMD5Sumhex
 	}
 	err = fs.AbortMultipartUpload("bucket", "key", uploadID)
 	c.Assert(err, check.IsNil)
@@ -133,14 +128,14 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 
 		hasher := md5.New()
 		hasher.Write([]byte(randomString))
-		expectedmd5Sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-		expectedmd5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		objectInfo, err := fs.CreateObject("bucket", key, expectedmd5Sum, int64(len(randomString)), bytes.NewBufferString(randomString), nil)
+		var objectInfo ObjectInfo
+		objectInfo, err = fs.CreateObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
 		c.Assert(err, check.IsNil)
-		c.Assert(objectInfo.MD5Sum, check.Equals, expectedmd5Sumhex)
+		c.Assert(objectInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {
@@ -165,7 +160,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.CreateObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -175,7 +170,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = fs.CreateObject("bucket", key, "", int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.CreateObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "obj", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -184,9 +179,9 @@ func testPaging(c *check.C, create func() Filesystem) {
 	}
 	// check paging with prefix at end returns less objects
 	{
-		_, err = fs.CreateObject("bucket", "newPrefix", "", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
+		_, err = fs.CreateObject("bucket", "newPrefix", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
 		c.Assert(err, check.IsNil)
-		_, err = fs.CreateObject("bucket", "newPrefix2", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
+		_, err = fs.CreateObject("bucket", "newPrefix2", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -206,9 +201,9 @@ func testPaging(c *check.C, create func() Filesystem) {
 
 	// check delimited results with delimiter and prefix
 	{
-		_, err = fs.CreateObject("bucket", "this/is/delimited", "", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
+		_, err = fs.CreateObject("bucket", "this/is/delimited", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
 		c.Assert(err, check.IsNil)
-		_, err = fs.CreateObject("bucket", "this/is/also/a/delimited/file", "", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
+		_, err = fs.CreateObject("bucket", "this/is/also/a/delimited/file", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "this/is/", "", "/", 10)
 		c.Assert(err, check.IsNil)
@@ -260,18 +255,11 @@ func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	hasher1 := md5.New()
-	hasher1.Write([]byte("one"))
-	md5Sum1 := base64.StdEncoding.EncodeToString(hasher1.Sum(nil))
-	md5Sum1hex := hex.EncodeToString(hasher1.Sum(nil))
-	objectInfo, err := fs.CreateObject("bucket", "object", md5Sum1, int64(len("one")), bytes.NewBufferString("one"), nil)
+	_, err = fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
+	// c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
 
-	hasher2 := md5.New()
-	hasher2.Write([]byte("three"))
-	md5Sum2 := base64.StdEncoding.EncodeToString(hasher2.Sum(nil))
-	_, err = fs.CreateObject("bucket", "object", md5Sum2, int64(len("three")), bytes.NewBufferString("three"), nil)
+	_, err = fs.CreateObject("bucket", "object", int64(len("three")), bytes.NewBufferString("three"), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer
@@ -283,7 +271,7 @@ func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 
 func testNonExistantBucketOperations(c *check.C, create func() Filesystem) {
 	fs := create()
-	_, err := fs.CreateObject("bucket", "object", "", int64(len("one")), bytes.NewBufferString("one"), nil)
+	_, err := fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 }
 
@@ -300,13 +288,8 @@ func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	hasher := md5.New()
-	hasher.Write([]byte("hello world"))
-	md5Sum1 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-	md5Sum1hex := hex.EncodeToString(hasher.Sum(nil))
-	objectInfo, err := fs.CreateObject("bucket", "dir1/dir2/object", md5Sum1, int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
+	_, err = fs.CreateObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectInfo.MD5Sum, check.Equals, md5Sum1hex)
 
 	var bytesBuffer bytes.Buffer
 	length, err := fs.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object", 0, 0)
@@ -396,7 +379,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem)
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = fs.CreateObject("bucket", "dir1/dir2/object", "", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
+	_, err = fs.CreateObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
 
 	var byteBuffer bytes.Buffer
@@ -431,26 +414,9 @@ func testDefaultContentType(c *check.C, create func() Filesystem) {
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	// test empty
-	_, err = fs.CreateObject("bucket", "one", "", int64(len("one")), bytes.NewBufferString("one"), nil)
+	// Test empty
+	_, err = fs.CreateObject("bucket", "one", int64(len("one")), bytes.NewBufferString("one"), nil)
 	metadata, err := fs.GetObjectInfo("bucket", "one")
 	c.Assert(err, check.IsNil)
 	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
-}
-
-func testContentMD5Set(c *check.C, create func() Filesystem) {
-	fs := create()
-	err := fs.MakeBucket("bucket")
-	c.Assert(err, check.IsNil)
-
-	// test md5 invalid
-	badmd5Sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA"
-	calculatedmd5sum, err := fs.CreateObject("bucket", "one", badmd5Sum, int64(len("one")), bytes.NewBufferString("one"), nil)
-	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(calculatedmd5sum, check.Not(check.Equals), badmd5Sum)
-
-	goodmd5sum := "NWJiZjVhNTIzMjhlNzQzOWFlNmU3MTlkZmU3MTIyMDA="
-	calculatedmd5sum, err = fs.CreateObject("bucket", "two", goodmd5sum, int64(len("one")), bytes.NewBufferString("one"), nil)
-	c.Assert(err, check.IsNil)
-	c.Assert(calculatedmd5sum, check.Equals, goodmd5sum)
 }

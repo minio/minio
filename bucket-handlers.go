@@ -18,9 +18,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -30,10 +27,8 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
@@ -94,7 +89,7 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -151,7 +146,7 @@ func (api storageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -208,7 +203,7 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -262,7 +257,7 @@ func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request)
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -288,6 +283,24 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	}
+
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
@@ -302,9 +315,6 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
-
 	// Allocate incoming content length bytes.
 	deleteXMLBytes := make([]byte, r.ContentLength)
 
@@ -314,52 +324,6 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 		errorIf(probe.NewError(e), "DeleteMultipleObjects failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
-	}
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	case authTypePresigned:
-		// Check if request is presigned.
-		ok, err := auth.DoesPresignedSignatureMatch()
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-	case authTypeSigned:
-		// Check if request is signed.
-		sha := sha256.New()
-		mdSh := md5.New()
-		sha.Write(deleteXMLBytes)
-		mdSh.Write(deleteXMLBytes)
-		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(sha.Sum(nil)))
-		if err != nil {
-			errorIf(err.Trace(), "DeleteMultipleObjects failed.", nil)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		// Verify content md5.
-		if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(mdSh.Sum(nil)) {
-			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-			return
-		}
 	}
 
 	// Unmarshal list of keys to be deleted.
@@ -431,41 +395,14 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 
 	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
-	case authTypePresigned:
-		ok, err := auth.DoesPresignedSignatureMatch()
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-	case authTypeSigned:
-		// Verify signature for the incoming body if any.
-		locationBytes, e := ioutil.ReadAll(r.Body)
-		if e != nil {
-			errorIf(probe.NewError(e), "MakeBucket failed.", nil)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		sh := sha256.New()
-		sh.Write(locationBytes)
-		ok, err := auth.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
-		if err != nil {
-			errorIf(err.Trace(), "MakeBucket failed.", nil)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+	case authTypePresigned, authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
 	}
@@ -539,11 +476,8 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 	object := formValues["Key"]
 	var ok bool
 
-	// Set http request for signature.
-	auth := api.Signature.SetHTTPRequestToVerify(r)
-
 	// Verify policy signature.
-	ok, err = auth.DoesPolicySignatureMatch(formValues)
+	ok, err = doesPolicySignatureMatch(formValues)
 	if err != nil {
 		errorIf(err.Trace(), "Unable to verify signature.", nil)
 		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
@@ -553,12 +487,12 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 		return
 	}
-	if err = signature4.ApplyPolicyCond(formValues); err != nil {
-		errorIf(err.Trace(), "Invalid request, policy doesn't match with the endpoint.", nil)
+	if err = checkPostPolicy(formValues); err != nil {
+		errorIf(err.Trace(), "Invalid request, policy doesn't match.", nil)
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
-	objectInfo, err := api.Filesystem.CreateObject(bucket, object, "", -1, fileBody, nil)
+	objectInfo, err := api.Filesystem.CreateObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -572,8 +506,6 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
 		case fs.IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.InvalidDigest:
-			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
@@ -601,7 +533,7 @@ func (api storageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -634,7 +566,7 @@ func (api storageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
