@@ -345,6 +345,20 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
+	// Verify before writing.
+
+	// Verify x-amz-copy-source-if-modified-since and
+	// x-amz-copy-source-if-unmodified-since.
+	lastModified := objectInfo.ModifiedTime
+	if checkCopySourceLastModified(w, r, lastModified) {
+		return
+	}
+
+	// Verify x-amz-copy-source-if-match and
+	// x-amz-copy-source-if-none-match.
+	if checkCopySourceETag(w, r) {
+		return
+	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(objectInfo.Size) {
@@ -397,20 +411,6 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
-
-	// Verify x-amz-copy-source-if-modified-since and
-	// x-amz-copy-source-if-unmodified-since
-	lastModified := objectInfo.ModifiedTime
-	if checkCopySourceLastModified(w, r, lastModified) {
-		return
-	}
-
-	// Verify x-amz-copy-source-if-match and
-	// x-amz-copy-source-if-none-match
-	if checkCopySourceETag(w, r) {
-		return
-	}
-
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
