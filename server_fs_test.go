@@ -279,6 +279,76 @@ func (s *MyAPIFSCacheSuite) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
+func (s *MyAPIFSCacheSuite) TestBucketPolicy(c *C) {
+	// Sample bucket policy.
+	bucketPolicyBuf := `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:GetBucketLocation",
+                "s3:ListBucket"
+            ],
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "*"
+                ]
+            },
+            "Resource": [
+                "arn:aws:s3:::policybucket"
+            ]
+        },
+        {
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "*"
+                ]
+            },
+            "Resource": [
+                "arn:aws:s3:::policybucket/this*"
+            ]
+        }
+    ]
+}`
+
+	// Put a new bucket policy.
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/policybucket?policy", int64(len(bucketPolicyBuf)), bytes.NewReader([]byte(bucketPolicyBuf)))
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+
+	// Fetch the uploaded policy.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/policybucket?policy", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	bucketPolicyReadBuf, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	// Verify if downloaded policy matches with previousy uploaded.
+	c.Assert(bytes.Equal([]byte(bucketPolicyBuf), bucketPolicyReadBuf), Equals, true)
+
+	// Delete policy.
+	request, err = s.newRequest("DELETE", testAPIFSCacheServer.URL+"/policybucket?policy", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+}
+
 func (s *MyAPIFSCacheSuite) TestDeleteBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucket", 0, nil)
 	c.Assert(err, IsNil)

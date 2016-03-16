@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/access"
 	"github.com/minio/minio/pkg/s3/signature4"
 )
 
@@ -54,14 +53,14 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 		}
 	}
 	// Parse the saved policy.
-	accessPolicy, e := accesspolicy.Validate(policy)
+	bucketPolicy, e := parseBucketPolicy(policy)
 	if e != nil {
 		errorIf(probe.NewError(e), "Parse policy failed.", nil)
 		return ErrAccessDenied
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket' format.
-	resource := accesspolicy.AWSResourcePrefix + strings.TrimPrefix(reqURL.Path, "/")
+	resource := AWSResourcePrefix + strings.TrimPrefix(reqURL.Path, "/")
 
 	// Get conditions for policy verification.
 	conditions := make(map[string]string)
@@ -70,7 +69,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditions, accessPolicy.Statements) {
+	if !bucketPolicyEvalStatements(action, resource, conditions, bucketPolicy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
@@ -436,12 +435,6 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
-	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy("s3:CreateBucket", bucket, r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
 	case authTypePresigned:
 		ok, err := auth.DoesPresignedSignatureMatch()
 		if err != nil {
@@ -639,12 +632,6 @@ func (api storageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
-	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy("s3:DeleteBucket", bucket, r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(api.Signature, r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)

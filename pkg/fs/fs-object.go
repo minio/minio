@@ -54,50 +54,53 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 
 	// normalize buckets.
 	bucket = fs.denormalizeBucket(bucket)
-	bucketPath := filepath.Join(fs.path, bucket)
-	if _, e := os.Stat(bucketPath); e != nil {
+	objectPath := filepath.Join(fs.path, bucket, object)
+
+	file, e := os.Open(objectPath)
+	if e != nil {
+		// If the object doesn't exist, the bucket might not exist either. Stat for
+		// the bucket and give a better error message if that is true.
 		if os.IsNotExist(e) {
-			return 0, probe.NewError(BucketNotFound{Bucket: bucket})
+			_, e = os.Stat(filepath.Join(fs.path, bucket))
+			if os.IsNotExist(e) {
+				return 0, probe.NewError(BucketNotFound{Bucket: bucket})
+			}
+
+			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
 		return 0, probe.NewError(e)
 	}
-
-	objectPath := filepath.Join(bucketPath, object)
-	filestat, err := os.Stat(objectPath)
-	switch err := err.(type) {
-	case nil:
-		if filestat.IsDir() {
-			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		}
-	default:
-		if os.IsNotExist(err) {
-			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		}
-		return 0, probe.NewError(err)
-	}
-	file, err := os.Open(objectPath)
-	if err != nil {
-		return 0, probe.NewError(err)
-	}
 	defer file.Close()
 
-	_, err = file.Seek(start, os.SEEK_SET)
-	if err != nil {
-		return 0, probe.NewError(err)
+	_, e = file.Seek(start, os.SEEK_SET)
+	if e != nil {
+		// When the "handle is invalid", the file might be a directory on Windows.
+		if runtime.GOOS == "windows" && strings.Contains(e.Error(), "handle is invalid") {
+			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		}
+
+		return 0, probe.NewError(e)
 	}
 
 	var count int64
+	// Copy over the whole file if the length is non-positive.
 	if length > 0 {
-		count, err = io.CopyN(w, file, length)
-		if err != nil {
-			return count, probe.NewError(err)
-		}
+		count, e = io.CopyN(w, file, length)
 	} else {
-		count, err = io.Copy(w, file)
-		if err != nil {
-			return count, probe.NewError(err)
-		}
+		count, e = io.Copy(w, file)
 	}
+
+	if e != nil {
+		// This call will fail if the object is a directory. Stat the file to see if
+		// this is true, if so, return an ObjectNotFound error.
+		stat, e := os.Stat(objectPath)
+		if e == nil && stat.IsDir() {
+			return count, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		}
+
+		return count, probe.NewError(e)
+	}
+
 	return count, nil
 }
 
