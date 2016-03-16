@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
@@ -276,6 +277,27 @@ func getPort(address string) int {
 // on 127.0.0.1 even though minio server is running. So before we start
 // the minio server we make sure that the port is free on all the IPs.
 func checkPortAvailability(port int) {
+	isAddrInUse := func(e error) bool {
+		// Check if the syscall error is EADDRINUSE.
+		// EADDRINUSE is the system call error if another process is
+		// already listening at the specified port.
+		neterr, ok := e.(*net.OpError)
+		if !ok {
+			return false
+		}
+		osErr, ok := neterr.Err.(*os.SyscallError)
+		if !ok {
+			return false
+		}
+		sysErr, ok := osErr.Err.(syscall.Errno)
+		if !ok {
+			return false
+		}
+		if sysErr != syscall.EADDRINUSE {
+			return false
+		}
+		return true
+	}
 	ifcs, e := net.Interfaces()
 	if e != nil {
 		fatalIf(probe.NewError(e), "Unable to list interfaces.", nil)
@@ -299,7 +321,13 @@ func checkPortAvailability(port int) {
 			tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
 			l, e := net.ListenTCP(network, &tcpAddr)
 			if e != nil {
-				fatalIf(probe.NewError(e), fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+				if isAddrInUse(e) {
+					// Fail if port is already in use.
+					fatalIf(probe.NewError(e), fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+				} else {
+					// Ignore other errors.
+					continue
+				}
 			}
 			e = l.Close()
 			if e != nil {
