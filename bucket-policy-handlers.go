@@ -29,7 +29,6 @@ import (
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/access"
 )
 
 // maximum supported access policy size.
@@ -37,12 +36,13 @@ const maxAccessPolicySize = 20 * 1024 * 1024 // 20KiB.
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.
-func bucketPolicyEvalStatements(action string, resource string, conditions map[string]string, statements []accesspolicy.Statement) bool {
+func bucketPolicyEvalStatements(action string, resource string, conditions map[string]string, statements []policyStatement) bool {
 	for _, statement := range statements {
 		if bucketPolicyMatchStatement(action, resource, conditions, statement) {
 			if statement.Effect == "Allow" {
 				return true
 			}
+			// Do not uncomment kept here for readability.
 			// else statement.Effect == "Deny"
 			return false
 		}
@@ -52,7 +52,7 @@ func bucketPolicyEvalStatements(action string, resource string, conditions map[s
 }
 
 // Verify if action, resource and conditions match input policy statement.
-func bucketPolicyMatchStatement(action string, resource string, conditions map[string]string, statement accesspolicy.Statement) bool {
+func bucketPolicyMatchStatement(action string, resource string, conditions map[string]string, statement policyStatement) bool {
 	// Verify if action matches.
 	if bucketPolicyActionMatch(action, statement) {
 		// Verify if resource matches.
@@ -67,7 +67,7 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 }
 
 // Verify if given action matches with policy statement.
-func bucketPolicyActionMatch(action string, statement accesspolicy.Statement) bool {
+func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	for _, policyAction := range statement.Actions {
 		// Policy action can be a regex, validate the action with matching string.
 		matched, e := regexp.MatchString(policyAction, action)
@@ -80,7 +80,7 @@ func bucketPolicyActionMatch(action string, statement accesspolicy.Statement) bo
 }
 
 // Verify if given resource matches with policy statement.
-func bucketPolicyResourceMatch(resource string, statement accesspolicy.Statement) bool {
+func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
 	for _, presource := range statement.Resources {
 		matched, e := regexp.MatchString(presource, strings.TrimPrefix(resource, "/"))
 		fatalIf(probe.NewError(e), "Invalid pattern, please verify the pattern string.", nil)
@@ -93,7 +93,7 @@ func bucketPolicyResourceMatch(resource string, statement accesspolicy.Statement
 }
 
 // Verify if given condition matches with policy statement.
-func bucketPolicyConditionMatch(conditions map[string]string, statement accesspolicy.Statement) bool {
+func bucketPolicyConditionMatch(conditions map[string]string, statement policyStatement) bool {
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
@@ -152,29 +152,25 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	// Read access policy up to maxAccessPolicySize.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 	// bucket policies are limited to 20KB in size, using a limit reader.
-	accessPolicyBytes, e := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
+	bucketPolicyBuf, e := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if e != nil {
 		errorIf(probe.NewError(e).Trace(bucket), "Reading policy failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
-	// Parse access access.
-	accessPolicy, e := accesspolicy.Validate(accessPolicyBytes)
+	// Parse bucket policy.
+	bucketPolicy, e := parseBucketPolicy(bucketPolicyBuf)
 	if e != nil {
+		errorIf(probe.NewError(e), "Unable to parse bucket policy.", nil)
 		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
 		return
 	}
 
-	// If the policy resource has different bucket name, reject it.
-	for _, statement := range accessPolicy.Statements {
-		for _, resource := range statement.Resources {
-			resourcePrefix := strings.SplitAfter(resource, accesspolicy.AWSResourcePrefix)[1]
-			if !strings.HasPrefix(resourcePrefix, bucket) {
-				writeErrorResponse(w, r, ErrMalformedPolicy, r.URL.Path)
-				return
-			}
-		}
+	// Parse check bucket policy.
+	if s3Error := checkBucketPolicy(bucket, bucketPolicy); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
 	}
 
 	// Set http request for signature verification.
@@ -192,10 +188,10 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 		}
 	} else if isRequestSignatureV4(r) {
 		sh := sha256.New()
-		sh.Write(accessPolicyBytes)
+		sh.Write(bucketPolicyBuf)
 		ok, err := api.Signature.DoesSignatureMatch(hex.EncodeToString(sh.Sum(nil)))
 		if err != nil {
-			errorIf(err.Trace(string(accessPolicyBytes)), "SaveBucketPolicy failed.", nil)
+			errorIf(err.Trace(string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
@@ -206,9 +202,9 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Save bucket policy.
-	err := writeBucketPolicy(bucket, accessPolicyBytes)
+	err := writeBucketPolicy(bucket, bucketPolicyBuf)
 	if err != nil {
-		errorIf(err.Trace(bucket), "SaveBucketPolicy failed.", nil)
+		errorIf(err.Trace(bucket, string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
 		case fs.BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)

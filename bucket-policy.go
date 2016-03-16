@@ -138,6 +138,11 @@ func writeBucketPolicy(bucket string, accessPolicyBytes []byte) *probe.Error {
 		}
 	}
 
+	// Create top level directory.
+	if e := os.MkdirAll(filepath.Dir(bucketPolicyFile), 0700); e != nil {
+		return probe.NewError(e)
+	}
+
 	// Write bucket policy.
 	if e := ioutil.WriteFile(bucketPolicyFile, accessPolicyBytes, 0600); e != nil {
 		return probe.NewError(e)
