@@ -365,20 +365,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
 		return
 	}
-	// Verify headers before writing.
 
-	// Verify x-amz-copy-source-if-modified-since and
-	// x-amz-copy-source-if-unmodified-since.
-	lastModified := objectInfo.ModifiedTime
-	if checkCopySourceLastModified(w, r, lastModified) {
-		return
-	}
-
-	// Verify x-amz-copy-source-if-match and
-	// x-amz-copy-source-if-none-match.
-	if checkCopySourceETag(w, r) {
-		return
-	}
 	// Initialize a pipe for data pipe line.
 	reader, writer := io.Pipe()
 
