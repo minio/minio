@@ -1,38 +1,11 @@
-## Running Minio in Docker.
+### Run Minio docker image
+```docker run -p 9000:9000 minio/minio```
 
-### Installing Docker.
+This will start minio server in the docker container, the data however is not persistent.
 
-```bash
-sudo apt-get install Docker.io
-```
-
-### Generating `minio configs` for the first time.
+### Map data volumes from host
+Map export and configuration directories from host for persistence.
 
 ```bash
-docker run -p 9000 minio/minio:latest
-```
-
-### Persist `minio configs`.
-
-```bash
-docker commit <running_minio_container_id> minio/my-minio
-docker stop <running_minio_container_id>
-```
-
-### Create a data volume container.
-
-```bash
-docker create -v /export --name minio-export minio/my-minio /bin/true
-```
-
-You can also map ``.minio`` directory containing authentication information.
-
-```bash
-docker create -v /export --name minio-export -v /root/.minio --name minio-config minio/my-minio /bin/true
-```
-
-You can then use the `--volumes-from` flag to mount the `/export` and ``/root/.minio`` volume in another container.
-
-```bash
-docker run -p 9000 --volumes-from minio-export --volumes-from minio-config --name minio-server1 minio/my-minio
+docker run -p 9000:9000 -v $HOME/export:/export -v $HOME/.minio:/root/.minio minio/minio
 ```
