@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -30,6 +31,7 @@ import (
 // maxKeys number of objects per call.
 func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
 	result := ListObjectsResult{}
+	var queryPrefix string
 
 	// Input validation.
 	if !IsValidBucketName(bucket) {
@@ -40,8 +42,10 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	if status, err := isDirExist(filepath.Join(fs.path, bucket)); !status {
 		if err == nil {
+			// File exists, but its not a directory.
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
 		} else if os.IsNotExist(err) {
+			// File does not exist.
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
 		} else {
 			return result, probe.NewError(err)
@@ -60,8 +64,9 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		}
 
 		if !strings.HasPrefix(marker, prefix) {
-			return result, probe.NewError(fmt.Errorf("marker '%s' and prefix '%s' do not match", marker, prefix))
+			return result, probe.NewError(fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", marker, prefix))
 		}
+
 	}
 
 	// Return empty response for a valid request when maxKeys is 0.
@@ -85,17 +90,37 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	rootDir := filepath.Join(bucketDir, prefixDir)
 
+	// Maximum 1000 objects returned in a single to listObjects.
+	// Further calls will set right marker value to continue reading the rest of the objectList.
+	// popListObjectCh returns nil if the call to ListObject is done for the first time.
+	// On further calls to ListObjects to retrive more objects within the timeout period,
+	// popListObjectCh returns the channel from which rest of the objects can be retrieved.
 	objectInfoCh := fs.popListObjectCh(ListObjectParams{bucket, delimiter, marker, prefix})
 	if objectInfoCh == nil {
-		ch := treeWalk(rootDir, bucketDir, recursive)
+		if prefix != "" {
+			// queryPrefix variable is set to value of the prefix to be searched.
+			// If prefix contains directory hierarchy queryPrefix is set to empty string,
+			// this ensure that all objects inside the prefixDir is listed.
+			// Otherwise the base name is extracted from path.Base and it'll be will be set to Querystring.
+			// if prefix = /Asia/India/, queryPrefix will be set to empty string(""), so that all objects in prefixDir are listed.
+			// if prefix = /Asia/India/summerpics , Querystring will be set to "summerpics",
+			// so those all objects with the prefix "summerpics" inside the /Asia/India/ prefix folder gets listed.
+			if prefix[len(prefix)-1:] == "/" {
+				queryPrefix = ""
+			} else {
+				queryPrefix = path.Base(prefix)
+			}
+		}
+		ch := treeWalk(rootDir, bucketDir, recursive, queryPrefix)
 		objectInfoCh = &ch
 	}
 
 	nextMarker := ""
 	for i := 0; i < maxKeys; {
+
 		objInfo, ok := objectInfoCh.Read()
 		if !ok {
-			// closed channel
+			// Closed channel.
 			return result, nil
 		}
 
@@ -113,18 +138,18 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 		// Add the bucket.
 		objInfo.Bucket = bucket
-
-		if strings.HasPrefix(objInfo.Name, prefix) {
-			if objInfo.Name > marker {
-				if objInfo.IsDir {
-					result.Prefixes = append(result.Prefixes, objInfo.Name)
-				} else {
-					result.Objects = append(result.Objects, objInfo)
-				}
-				nextMarker = objInfo.Name
-				i++
+		// In case its not the first call to ListObjects (before timeout),
+		// The result is already inside the buffered channel.
+		if objInfo.Name > marker {
+			if objInfo.IsDir {
+				result.Prefixes = append(result.Prefixes, objInfo.Name)
+			} else {
+				result.Objects = append(result.Objects, objInfo)
 			}
+			nextMarker = objInfo.Name
+			i++
 		}
+
 	}
 
 	if !objectInfoCh.IsClosed() {

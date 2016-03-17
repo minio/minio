@@ -24,7 +24,6 @@ import (
 	"encoding/xml"
 	"math/rand"
 	"strconv"
-	"time"
 
 	"gopkg.in/check.v1"
 )
@@ -216,7 +215,6 @@ func testPaging(c *check.C, create func() Filesystem) {
 		c.Assert(len(result.Objects), check.Equals, 1)
 		c.Assert(result.Prefixes[0], check.Equals, "this/is/also/")
 	}
-	time.Sleep(time.Second)
 
 	// check delimited results with delimiter without prefix
 	{

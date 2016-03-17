@@ -69,7 +69,7 @@ func TestGetBucketInfo(t *testing.T) {
 		{"meta-test-bucket.3", BucketInfo{Name: "meta-test-bucket.3"}, nil, true},
 	}
 	for i, testCase := range testCases {
-		//the err returned is of type *probe.Error
+		// The err returned is of type *probe.Error.
 		bucketInfo, err := filesystem.GetBucketInfo(testCase.bucketName)
 
 		if err != nil && testCase.shouldPass {

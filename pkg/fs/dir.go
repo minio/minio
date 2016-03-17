@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	// listObjectsLimit - maximum list objects limit
+	// ListObjectsLimit - maximum list objects limit.
 	listObjectsLimit = 1000
 )
 
-// isDirEmpty - returns whether given directory is empty or not
+// IsDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) (status bool, err error) {
 	f, err := os.Open(dirname)
 	if err == nil {
@@ -44,7 +44,7 @@ func isDirEmpty(dirname string) (status bool, err error) {
 	return
 }
 
-// isDirExist - returns whether given directory is exist or not
+// IsDirExist - returns whether given directory is exist or not.
 func isDirExist(dirname string) (status bool, err error) {
 	fi, err := os.Lstat(dirname)
 	if err == nil {
@@ -54,11 +54,17 @@ func isDirExist(dirname string) (status bool, err error) {
 	return
 }
 
-// byName implements sort.Interface for sorting os.FileInfo list
+// ByName implements sort.Interface for sorting os.FileInfo list.
 type byName []os.FileInfo
 
-func (f byName) Len() int      { return len(f) }
-func (f byName) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
+func (f byName) Len() int {
+	return len(f)
+}
+
+func (f byName) Swap(i, j int) {
+	f[i], f[j] = f[j], f[i]
+}
+
 func (f byName) Less(i, j int) bool {
 	n1 := f[i].Name()
 	if f[i].IsDir() {
@@ -73,7 +79,7 @@ func (f byName) Less(i, j int) bool {
 	return n1 < n2
 }
 
-// ObjectInfo - object info
+// ObjectInfo - object info.
 type ObjectInfo struct {
 	Bucket       string
 	Name         string
@@ -85,31 +91,61 @@ type ObjectInfo struct {
 	Err          error
 }
 
-// readDir - read 'scanDir' directory.  It returns list of ObjectInfo where
-//           each object name is appended with 'namePrefix'
-func readDir(scanDir, namePrefix string) (objInfos []ObjectInfo) {
+// Using sort.Search() internally to jump to the file entry containing the prefix.
+func searchFileInfos(fileInfos []os.FileInfo, x string) int {
+	processFunc := func(i int) bool {
+		return fileInfos[i].Name() >= x
+	}
+	return sort.Search(len(fileInfos), processFunc)
+}
+
+// ReadDir - read 'scanDir' directory.  It returns list of ObjectInfo.
+// Each object name is appended with 'namePrefix'.
+func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []ObjectInfo) {
 	f, err := os.Open(scanDir)
 	if err != nil {
 		objInfos = append(objInfos, ObjectInfo{Err: err})
 		return
 	}
-
 	fis, err := f.Readdir(-1)
 	if err != nil {
 		f.Close()
 		objInfos = append(objInfos, ObjectInfo{Err: err})
 		return
 	}
-
-	// Close the directory
+	// Close the directory.
 	f.Close()
-
 	// Sort files by Name.
 	sort.Sort(byName(fis))
 
-	// Populate []ObjectInfo from []FileInfo
+	var prefixIndex int
+	// Searching for entries with objectName containing  prefix.
+	// Binary search is used  for efficient search.
+	if queryPrefix != "" && isFirst {
+		prefixIndex = searchFileInfos(fis, queryPrefix)
+		if prefixIndex == len(fis) {
+			return
+		}
+
+		if !strings.HasPrefix(fis[prefixIndex].Name(), queryPrefix) {
+			return
+		}
+		fis = fis[prefixIndex:]
+
+	}
+
+	// Populate []ObjectInfo from []FileInfo.
 	for _, fi := range fis {
 		name := fi.Name()
+		if queryPrefix != "" && isFirst {
+			// If control is here then there is a queryPrefix, and there are objects which satisfies the prefix.
+			// Since the result is sorted, the object names which satisfies query prefix would be stored one after the other.
+			// Push the objectInfo only if its contains the prefix.
+			// This ensures that the channel containing object Info would only has objects with the given queryPrefix.
+			if !strings.HasPrefix(name, queryPrefix) {
+				return
+			}
+		}
 		size := fi.Size()
 		modTime := fi.ModTime()
 		isDir := fi.Mode().IsDir()
@@ -122,7 +158,8 @@ func readDir(scanDir, namePrefix string) (objInfos []ObjectInfo) {
 		// For directories explicitly end with '/'.
 		if isDir {
 			name += "/"
-			size = 0 // Size is set to '0' for directories explicitly.
+			// Size is set to '0' for directories explicitly.
+			size = 0
 		}
 
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
@@ -150,12 +187,13 @@ func readDir(scanDir, namePrefix string) (objInfos []ObjectInfo) {
 			Size:         size,
 			IsDir:        isDir,
 		})
+
 	}
 
 	return
 }
 
-// ObjectInfoChannel - object info channel
+// ObjectInfoChannel - object info channel.
 type ObjectInfoChannel struct {
 	ch        <-chan ObjectInfo
 	objInfo   *ObjectInfo
@@ -170,7 +208,7 @@ func (oic *ObjectInfoChannel) Read() (ObjectInfo, bool) {
 	}
 
 	if oic.objInfo == nil {
-		// first read
+		// First read.
 		if oi, ok := <-oic.ch; ok {
 			oic.objInfo = &oi
 		} else {
@@ -183,7 +221,7 @@ func (oic *ObjectInfoChannel) Read() (ObjectInfo, bool) {
 	status := true
 	oic.objInfo = nil
 
-	// read once more to know whether it was last read
+	// Read once more to know whether it was last read.
 	if oi, ok := <-oic.ch; ok {
 		oic.objInfo = &oi
 	} else {
@@ -193,7 +231,7 @@ func (oic *ObjectInfoChannel) Read() (ObjectInfo, bool) {
 	return retObjInfo, status
 }
 
-// IsClosed - return whether channel is closed or not
+// IsClosed - return whether channel is closed or not.
 func (oic ObjectInfoChannel) IsClosed() bool {
 	if oic.objInfo != nil {
 		return false
@@ -202,7 +240,7 @@ func (oic ObjectInfoChannel) IsClosed() bool {
 	return oic.closed
 }
 
-// IsTimedOut - return whether channel is closed due to timeout
+// IsTimedOut - return whether channel is closed due to timeout.
 func (oic ObjectInfoChannel) IsTimedOut() bool {
 	if oic.timedOut {
 		return true
@@ -220,19 +258,19 @@ func (oic ObjectInfoChannel) IsTimedOut() bool {
 	}
 }
 
-// treeWalk - walk into 'scanDir' recursively when 'recursive' is true.
-//            It uses 'bucketDir' to get name prefix for object name.
-func treeWalk(scanDir, bucketDir string, recursive bool) ObjectInfoChannel {
+// TreeWalk - walk into 'scanDir' recursively when 'recursive' is true.
+// It uses 'bucketDir' to get name prefix for object name.
+func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) ObjectInfoChannel {
 	objectInfoCh := make(chan ObjectInfo, listObjectsLimit)
 	timeoutCh := make(chan struct{}, 1)
 
-	// goroutine - retrieves directory entries, makes ObjectInfo and sends into the channel
+	// goroutine - retrieves directory entries, makes ObjectInfo and sends into the channel.
 	go func() {
 		defer close(objectInfoCh)
 		defer close(timeoutCh)
 
-		// send function - returns true if ObjectInfo is sent
-		//                 within (time.Second * 15) else false on time-out
+		// Send function - returns true if ObjectInfo is sent.
+		// Within (time.Second * 15) else false on time-out.
 		send := func(oi ObjectInfo) bool {
 			timer := time.After(time.Second * 15)
 			select {
@@ -246,11 +284,14 @@ func treeWalk(scanDir, bucketDir string, recursive bool) ObjectInfoChannel {
 
 		namePrefix := strings.Replace(filepath.ToSlash(scanDir), filepath.ToSlash(bucketDir), "", 1)
 		if strings.HasPrefix(namePrefix, "/") {
-			/* remove beginning "/" */
+			// Remove forward slash ("/") from beginning.
 			namePrefix = namePrefix[1:]
 		}
-
-		for objInfos := readDir(scanDir, namePrefix); len(objInfos) > 0; {
+		// The last argument (isFisrt), is set to `true` only during the first run of the function.
+		// This makes sure that the sub-directories inside the prefixDir are recursed
+		// without being asserted for prefix in the object name.
+		isFirst := true
+		for objInfos := readDir(scanDir, namePrefix, queryPrefix, isFirst); len(objInfos) > 0; {
 			var objInfo ObjectInfo
 			objInfo, objInfos = objInfos[0], objInfos[1:]
 			if !send(objInfo) {
@@ -259,14 +300,15 @@ func treeWalk(scanDir, bucketDir string, recursive bool) ObjectInfoChannel {
 
 			if objInfo.IsDir && recursive {
 				scanDir := filepath.Join(bucketDir, filepath.FromSlash(objInfo.Name))
-
 				namePrefix = strings.Replace(filepath.ToSlash(scanDir), filepath.ToSlash(bucketDir), "", 1)
+
 				if strings.HasPrefix(namePrefix, "/") {
 					/* remove beginning "/" */
 					namePrefix = namePrefix[1:]
 				}
-
-				objInfos = append(readDir(scanDir, namePrefix), objInfos...)
+				// The last argument is set to false in the further calls to readdir.
+				isFirst = false
+				objInfos = append(readDir(scanDir, namePrefix, queryPrefix, isFirst), objInfos...)
 			}
 		}
 	}()
