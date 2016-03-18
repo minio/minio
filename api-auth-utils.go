@@ -40,7 +40,7 @@ func isValidAccessKey(accessKeyID string) bool {
 
 // isValidSecretKey - validate secret key
 func isValidSecretKey(secretKeyID string) bool {
-	regex := regexp.MustCompile("^[a-zA-Z0-9\\-\\.\\_\\~]{40}$")
+	regex := regexp.MustCompile("^.{40}$")
 	return regex.MatchString(secretKeyID)
 }
 
