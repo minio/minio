@@ -64,7 +64,12 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		}
 	}
 
-	if maxKeys <= 0 || maxKeys > listObjectsLimit {
+	// Return empty response for a valid request when maxKeys is 0.
+	if maxKeys == 0 {
+		return result, nil
+	}
+
+	if maxKeys < 0 || maxKeys > listObjectsLimit {
 		maxKeys = listObjectsLimit
 	}
 
