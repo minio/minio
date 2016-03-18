@@ -237,10 +237,6 @@ func initServer() (*configV2, *probe.Error) {
 	if err := setLogger(conf); err != nil {
 		return nil, err.Trace()
 	}
-	if conf != nil {
-		console.Println()
-		console.Println(accessKeys{conf})
-	}
 	return conf, nil
 }
 
@@ -342,14 +338,14 @@ func serverMain(c *cli.Context) {
 	address := c.GlobalString("address")
 	checkPortAvailability(getPort(address))
 
-	conf, err := initServer()
-	fatalIf(err.Trace(), "Failed to read config for minio.", nil)
-
 	certFile := c.GlobalString("cert")
 	keyFile := c.GlobalString("key")
 	if (certFile != "" && keyFile == "") || (certFile == "" && keyFile != "") {
 		fatalIf(probe.NewError(errInvalidArgument), "Both certificate and key are required to enable https.", nil)
 	}
+
+	conf, err := initServer()
+	fatalIf(err.Trace(), "Failed to read config for minio.", nil)
 
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
@@ -397,6 +393,10 @@ func serverMain(c *cli.Context) {
 	// configure server.
 	apiServer, err := configureServer(serverConfig)
 	errorIf(err.Trace(), "Failed to configure API server.", nil)
+
+	console.Println()
+	// Print access keys and region.
+	console.Println(accessKeys{conf})
 
 	console.Println("\nMinio Object Storage:")
 	printServerMsg(apiServer)
