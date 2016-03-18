@@ -138,10 +138,10 @@ dockerimage: checkdocker verifiers $(UI_ASSETS)
 	@rm minio.dockerimage
 
 release: verifiers
-	@MINIO_RELEASE=RELEASE GO15VENDOREXPERIMENT=1 ./buildscripts/build.sh
+	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
 
 experimental: verifiers
-	@MINIO_RELEASE=EXPERIMENTAL GO15VENDOREXPERIMENT=1 ./buildscripts/build.sh
+	@MINIO_RELEASE=EXPERIMENTAL ./buildscripts/build.sh
 
 clean:
 	@echo "Cleaning up all the generated files:"

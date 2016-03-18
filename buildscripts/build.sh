@@ -24,6 +24,12 @@ _init() {
 
     # List of supported architectures
     SUPPORTED_OSARCH='linux/386 linux/amd64 linux/arm windows/386 windows/amd64 darwin/amd64'
+
+    ## System binaries
+    CP="/bin/cp"
+    SHASUM="/usr/bin/shasum"
+    GZIP="/usr/bin/gzip"
+    ZIP="/usr/bin/zip"
 }
 
 go_build() {
@@ -33,7 +39,37 @@ go_build() {
     package=$(go list -f '{{.ImportPath}}')
     echo -n "-->"
     printf "%15s:%s\n" "${osarch}" "${package}"
-    GO15VENDOREXPERIMENT=1 GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_str/$os-$arch/$(basename $package).$release_tag
+
+    # Release binary name
+    release_bin="$release_str/$os-$arch/$(basename $package).$release_tag"
+    # Release binary downloadable name
+    release_real_bin="$release_str/$os-$arch/$(basename $package)"
+    # Release shasum name
+    release_shasum="$release_str/$os-$arch/$(basename $package).shasum"
+    # Release zip file.
+    release_real_zip="$release_str/$os-$arch/$(basename $package).zip"
+    release_real_gz="$release_str/$os-$arch/$(basename $package).gz"
+
+    # Go build to build the binary.
+    GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin
+
+    # Create copy
+    $CP -p $release_bin $release_real_bin
+
+    # Calculate shasum
+    $SHASUM $release_bin > $release_shasum
+
+    # Create a compressed file.
+    if [ $os == "windows" ]; then
+        $ZIP -r $release_real_zip $release_real_bin
+    elif [ $os == "darwin" ]; then
+        $ZIP -r $release_real_zip $release_real_bin
+    elif [ $os == "linux" ]; then
+        $GZIP -c $release_real_bin > $release_real_gz
+    else
+        echo "$os operating system is not supported."
+        exit 1
+    fi
 }
 
 main() {
