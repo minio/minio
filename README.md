@@ -185,6 +185,7 @@ host_base = localhost:9000
 host_bucket = localhost:9000
 access_key = YOUR_ACCESS_KEY_HERE
 secret_key = YOUR_SECRET_KEY_HERE
+signature_v2 = False
 ```
 
 To list your buckets.
