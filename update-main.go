@@ -172,11 +172,12 @@ func getReleaseUpdate(updateURL string) {
 	}
 
 	var downloadURL string
-	if runtime.GOOS == "windows" {
-		downloadURL = newUpdateURLPrefix + "/minio.exe"
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		downloadURL = newUpdateURLPrefix + "/minio.zip"
 	} else {
-		downloadURL = newUpdateURLPrefix + "/minio"
+		downloadURL = newUpdateURLPrefix + "/minio.gz"
 	}
+
 	updateMsg := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
