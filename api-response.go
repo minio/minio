@@ -359,13 +359,13 @@ func generateListPartsResponse(objectMetadata fs.ObjectResourcesMetadata) ListPa
 	listPartsResponse.NextPartNumberMarker = objectMetadata.NextPartNumberMarker
 
 	listPartsResponse.Parts = make([]Part, len(objectMetadata.Part))
-	for _, part := range objectMetadata.Part {
+	for index, part := range objectMetadata.Part {
 		newPart := Part{}
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
 		newPart.LastModified = part.LastModified.UTC().Format(timeFormatAMZ)
-		listPartsResponse.Parts = append(listPartsResponse.Parts, newPart)
+		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse
 }
@@ -385,12 +385,12 @@ func generateListMultipartUploadsResponse(bucket string, metadata fs.BucketMulti
 	listMultipartUploadsResponse.UploadIDMarker = metadata.UploadIDMarker
 
 	listMultipartUploadsResponse.Uploads = make([]Upload, len(metadata.Upload))
-	for _, upload := range metadata.Upload {
+	for index, upload := range metadata.Upload {
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object
-		newUpload.Initiated = upload.Initiated.Format(timeFormatAMZ)
-		listMultipartUploadsResponse.Uploads = append(listMultipartUploadsResponse.Uploads, newUpload)
+		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZ)
+		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse
 }
