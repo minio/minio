@@ -1103,8 +1103,34 @@ func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
+	// listMultipartUploadsResponse - format for list multipart uploads response.
+	type listMultipartUploadsResponse struct {
+		XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
+
+		Bucket             string
+		KeyMarker          string
+		UploadIDMarker     string `xml:"UploadIdMarker"`
+		NextKeyMarker      string
+		NextUploadIDMarker string `xml:"NextUploadIdMarker"`
+		EncodingType       string
+		MaxUploads         int
+		IsTruncated        bool
+		// All the in progress multipart uploads.
+		Uploads []struct {
+			Key          string
+			UploadID     string `xml:"UploadId"`
+			Initiator    Initiator
+			Owner        Owner
+			StorageClass string
+			Initiated    time.Time // Keep this native to be able to parse properly.
+		}
+		Prefix         string
+		Delimiter      string
+		CommonPrefixes []CommonPrefix
+	}
+
 	decoder = xml.NewDecoder(response3.Body)
-	newResponse3 := &ListMultipartUploadsResponse{}
+	newResponse3 := &listMultipartUploadsResponse{}
 	err = decoder.Decode(newResponse3)
 	c.Assert(err, IsNil)
 	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
