@@ -35,12 +35,6 @@ type webAPI struct {
 	FSPath string
 	// Minio client instance.
 	Client *minio.Client
-
-	// private params.
-	apiAddress string // api destination address.
-	// credential kept to be used internally.
-	accessKeyID     string
-	secretAccessKey string
 }
 
 // indexHandler - Handler to serve index.html
