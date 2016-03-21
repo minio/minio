@@ -349,7 +349,7 @@ func (s *Sign) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
 
 	// Verify if the access key id matches.
 	if signV4Values.Credential.accessKeyID != s.accessKeyID {
-		return false, ErrInvalidAccessKeyID("Access key id does not match with our records.", signV4Values.Credential.accessKeyID).Trace(signV4Values.Credential.accessKeyID)
+		return false, ErrInvalidAccessKeyID("Access key id does not match with our records.", signV4Values.Credential.accessKeyID).Trace(signV4Values.Credential.accessKeyID, s.accessKeyID)
 	}
 
 	// Verify if region is valid.
