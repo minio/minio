@@ -1103,6 +1103,15 @@ func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
+	// The reason to duplicate this structure here is to verify if the
+	// unmarshalling works from a client perspective, specifically
+	// while unmarshalling time.Time type for 'Initiated' field.
+	// time.Time does not honor xml marshaler, it means that we need
+	// to encode/format it before giving it to xml marshalling.
+
+	// This below check adds client side verification to see if its
+	// truly parseable.
+
 	// listMultipartUploadsResponse - format for list multipart uploads response.
 	type listMultipartUploadsResponse struct {
 		XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`

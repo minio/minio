@@ -46,7 +46,7 @@ func createBucketsConfigPath() *probe.Error {
 	return nil
 }
 
-// getBucketConfigPath - get bucket path.
+// getBucketConfigPath - get bucket config path.
 func getBucketConfigPath(bucket string) (string, *probe.Error) {
 	bucketsConfigPath, err := getBucketsConfigPath()
 	if err != nil {
@@ -55,7 +55,7 @@ func getBucketConfigPath(bucket string) (string, *probe.Error) {
 	return filepath.Join(bucketsConfigPath, bucket), nil
 }
 
-// createBucketConfigPath - create bucket directory.
+// createBucketConfigPath - create bucket config directory.
 func createBucketConfigPath(bucket string) *probe.Error {
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
@@ -125,6 +125,11 @@ func writeBucketPolicy(bucket string, accessPolicyBytes []byte) *probe.Error {
 		return probe.NewError(fs.BucketNameInvalid{Bucket: bucket})
 	}
 
+	// Create bucket config path.
+	if err := createBucketConfigPath(bucket); err != nil {
+		return err.Trace()
+	}
+
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
 		return err.Trace()
@@ -136,11 +141,6 @@ func writeBucketPolicy(bucket string, accessPolicyBytes []byte) *probe.Error {
 		if !os.IsNotExist(e) {
 			return probe.NewError(e)
 		}
-	}
-
-	// Create top level directory.
-	if e := os.MkdirAll(filepath.Dir(bucketPolicyFile), 0700); e != nil {
-		return probe.NewError(e)
 	}
 
 	// Write bucket policy.

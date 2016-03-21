@@ -68,14 +68,6 @@ func isRequestPostPolicySignatureV4(r *http.Request) bool {
 	return false
 }
 
-// Verify if incoming request is anonymous.
-func isRequestAnonymous(r *http.Request) bool {
-	if isRequestJWT(r) || isRequestSignatureV4(r) || isRequestPresignedSignatureV4(r) || isRequestPostPolicySignatureV4(r) {
-		return false
-	}
-	return true
-}
-
 // Authorization type.
 type authType int
 

@@ -37,28 +37,6 @@ type LocationResponse struct {
 	Location string   `xml:",chardata"`
 }
 
-// AccessControlPolicyResponse - format for get bucket acl response.
-type AccessControlPolicyResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
-
-	AccessControlList struct {
-		Grants []Grant `xml:"Grant"`
-	}
-	Owner Owner
-}
-
-// Grant container for grantee and permission.
-type Grant struct {
-	Grantee struct {
-		ID           string
-		DisplayName  string
-		EmailAddress string
-		Type         string
-		URI          string
-	}
-	Permission string
-}
-
 // ListObjectsResponse - format for list objects response.
 type ListObjectsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
