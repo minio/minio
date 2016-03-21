@@ -148,7 +148,7 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 		downloadURL = newUpdateURLPrefix + "/minio.zip"
 	default:
 		// For all other operating systems.
-		downloadURL = newUpdateURLPrefix + "/minio.gz"
+		downloadURL = newUpdateURLPrefix + "/minio.tgz"
 	}
 
 	// Initialize update message.
