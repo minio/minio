@@ -214,8 +214,8 @@ upload: 'newdemo/newdemofile.txt' -> 's3://testbucket/newdemo/newdemofile.txt'
 
 To sync bucket or object with local filesystem
 ```
-$ s3cmd sync  s3://otherbucket otherlocabucket
-download: 's3://otherbucket/cat.jpg' -> 'otherlocabucket/cat.jpg' 
+$ s3cmd sync  s3://otherbucket otherlocalbucket
+download: 's3://otherbucket/cat.jpg' -> 'otherlocalbucket/cat.jpg' 
 ```
 
 To list buckets.
