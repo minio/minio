@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,6 +34,8 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/s3/signature4"
 	"github.com/minio/miniobrowser"
 )
 
@@ -51,6 +54,10 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 	}
 	return token.Valid
 }
+
+// GenericArgs - empty struct for calls that don't accept arguments
+// for ex. ServerInfo, GenerateAuth
+type GenericArgs struct{}
 
 // GenericRep - reply structure for calls for which reply is success/failure
 // for ex. RemoveObject MakeBucket
@@ -210,7 +217,6 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 	}
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-
 	for object := range web.Client.ListObjects(args.BucketName, args.Prefix, false, doneCh) {
 		if object.Err != nil {
 			return &json2.Error{Message: object.Err.Error()}
@@ -363,4 +369,88 @@ func (web *webAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) erro
 		return nil
 	}
 	return &json2.Error{Message: "Invalid credentials"}
+}
+
+// GenerateAuthReply - reply for GenerateAuth
+type GenerateAuthReply struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+	UIVersion string `json:"uiVersion"`
+}
+
+func (web webAPI) GenerateAuth(r *http.Request, args *GenericArgs, reply *GenerateAuthReply) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	reply.AccessKey = string(mustGenerateAccessKeyID())
+	reply.SecretKey = string(mustGenerateSecretAccessKey())
+	reply.UIVersion = miniobrowser.UIVersion
+	return nil
+}
+
+// SetAuthArgs - argument for SetAuth
+type SetAuthArgs struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+}
+
+// SetAuthReply - reply for SetAuth
+type SetAuthReply struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// SetAuth - Set accessKey and secretKey credentials.
+func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	if !isValidAccessKey(args.AccessKey) {
+		return &json2.Error{Message: "Invalid Access Key"}
+	}
+	if !isValidSecretKey(args.SecretKey) {
+		return &json2.Error{Message: "Invalid Secret Key"}
+	}
+	conf, err := getConfig()
+	if err != nil {
+		return &json2.Error{Message: err.Cause.Error()}
+	}
+	conf.Credentials.AccessKeyID = args.AccessKey
+	conf.Credentials.SecretAccessKey = args.SecretKey
+	if err = saveConfig(conf); err != nil {
+		return &json2.Error{Message: err.Cause.Error()}
+	}
+	sign, err := signature4.New(args.AccessKey, args.SecretKey, web.storageapi.Region)
+	if err != nil {
+		return &json2.Error{Message: err.Cause.Error()}
+	}
+	web.accessKeyID = args.AccessKey
+	web.secretAccessKey = args.SecretKey
+	web.storageapi.Signature = sign
+
+	// Split host port.
+	host, port, e := net.SplitHostPort(web.apiAddress)
+	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
+
+	// Default host is 'localhost', if no host present.
+	if host == "" {
+		host = "localhost"
+	}
+
+	client, e := minio.NewV4(net.JoinHostPort(host, port), web.accessKeyID, web.secretAccessKey, web.insecure)
+	if e != nil {
+		return &json2.Error{Message: e.Error()}
+	}
+	web.Client = client
+	jwt := initJWT()
+	if !jwt.Authenticate(args.AccessKey, args.SecretKey) {
+		return &json2.Error{Message: "Invalid credentials"}
+	}
+	token, err := jwt.GenerateToken(args.AccessKey)
+	if err != nil {
+		return &json2.Error{Message: err.Cause.Error()}
+	}
+	reply.Token = token
+	reply.UIVersion = miniobrowser.UIVersion
+	return nil
 }

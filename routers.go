@@ -56,9 +56,13 @@ type webAPI struct {
 
 	// private params.
 	apiAddress string // api destination address.
+	// http or https
+	insecure bool
 	// accessKeys kept to be used internally.
 	accessKeyID     string
 	secretAccessKey string
+
+	storageapi *storageAPI
 }
 
 // indexHandler - Handler to serve index.html
@@ -86,7 +90,7 @@ func assetFS() *assetfs.AssetFS {
 const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
 
 // registerAPIHandlers - register all the handlers to their respective paths
-func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
+func registerAPIHandlers(mux *router.Router, w *webAPI) {
 	// Minio rpc router
 	minio := mux.NewRoute().PathPrefix(privateBucket).Subrouter()
 
@@ -113,59 +117,103 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	/// Object operations
 
 	// HeadObject
-	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
+	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.HeadObjectHandler(rw, r)
+	})
 	// PutObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.PutObjectPartHandler(rw, r)
+	}).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 	// ListObjectPxarts
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.ListObjectPartsHandler(rw, r)
+	}).Queries("uploadId", "{uploadId:.*}")
 	// CompleteMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.CompleteMultipartUploadHandler(rw, r)
+	}).Queries("uploadId", "{uploadId:.*}")
 	// NewMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.NewMultipartUploadHandler).Queries("uploads", "")
+	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.NewMultipartUploadHandler(rw, r)
+	}).Queries("uploads", "")
 	// AbortMultipartUpload
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.AbortMultipartUploadHandler(rw, r)
+	}).Queries("uploadId", "{uploadId:.*}")
 	// GetObject
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.GetObjectHandler)
+	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.GetObjectHandler(rw, r)
+	})
 	// CopyObject
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/).*?").HandlerFunc(a.CopyObjectHandler)
+	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/).*?").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.CopyObjectHandler(rw, r)
+	})
 	// PutObject
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectHandler)
+	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.PutObjectHandler(rw, r)
+	})
 	// DeleteObject
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
+	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.DeleteObjectHandler(rw, r)
+	})
 
 	/// Bucket operations
 
 	// GetBucketLocation
-	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
+	bucket.Methods("GET").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.GetBucketLocationHandler(rw, r)
+	}).Queries("location", "")
 	// GetBucketPolicy
-	bucket.Methods("GET").HandlerFunc(a.GetBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("GET").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.GetBucketPolicyHandler(rw, r)
+	}).Queries("policy", "")
 	// ListMultipartUploads
-	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
+	bucket.Methods("GET").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.ListMultipartUploadsHandler(rw, r)
+	}).Queries("uploads", "")
 	// ListObjects
-	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
+	bucket.Methods("GET").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.ListObjectsHandler(rw, r)
+	})
 	// PutBucketPolicy
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("PUT").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.PutBucketPolicyHandler(rw, r)
+	}).Queries("policy", "")
 	// PutBucket
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
+	bucket.Methods("PUT").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.PutBucketHandler(rw, r)
+	})
 	// HeadBucket
-	bucket.Methods("HEAD").HandlerFunc(a.HeadBucketHandler)
+	bucket.Methods("HEAD").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.HeadBucketHandler(rw, r)
+	})
 	// DeleteMultipleObjects
-	bucket.Methods("POST").HandlerFunc(a.DeleteMultipleObjectsHandler)
+	bucket.Methods("POST").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.DeleteMultipleObjectsHandler(rw, r)
+	})
 	// PostPolicy
-	bucket.Methods("POST").Headers("Content-Type", "multipart/form-data").HandlerFunc(a.PostPolicyBucketHandler)
+	bucket.Methods("POST").Headers("Content-Type", "multipart/form-data").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.PostPolicyBucketHandler(rw, r)
+	})
 	// DeleteBucketPolicy
-	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("DELETE").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.DeleteBucketPolicyHandler(rw, r)
+	}).Queries("policy", "")
 	// DeleteBucket
-	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
+	bucket.Methods("DELETE").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.DeleteBucketHandler(rw, r)
+	})
 
 	/// Root operation
 
 	// ListBuckets
-	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
+	api.Methods("GET").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.storageapi.ListBucketsHandler(rw, r)
+	})
 }
 
 // initWeb instantiate a new Web.
-func initWeb(conf cloudServerConfig) *webAPI {
+func initWeb(conf cloudServerConfig, storageapi *storageAPI) *webAPI {
 	// Split host port.
 	host, port, e := net.SplitHostPort(conf.Address)
 	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
@@ -176,30 +224,31 @@ func initWeb(conf cloudServerConfig) *webAPI {
 	}
 
 	// Initialize minio client for AWS Signature Version '4'
-	inSecure := !conf.TLS // Insecure true when TLS is false.
-	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, inSecure)
+	insecure := !conf.TLS // Insecure true when TLS is false.
+	client, e := minio.NewV4(net.JoinHostPort(host, port), conf.AccessKeyID, conf.SecretAccessKey, insecure)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
-	w := &webAPI{
+	return &webAPI{
 		FSPath:          conf.Path,
 		AccessLog:       conf.AccessLog,
 		Client:          client,
 		apiAddress:      conf.Address,
+		insecure:        insecure,
 		accessKeyID:     conf.AccessKeyID,
 		secretAccessKey: conf.SecretAccessKey,
+		storageapi:      storageapi,
 	}
-	return w
 }
 
 // initAPI instantiate a new StorageAPI.
-func initAPI(conf cloudServerConfig) storageAPI {
+func initAPI(conf cloudServerConfig) *storageAPI {
 	fs, err := fs.New(conf.Path, conf.MinFreeDisk)
 	fatalIf(err.Trace(), "Initializing filesystem failed.", nil)
 
 	sign, err := signature4.New(conf.AccessKeyID, conf.SecretAccessKey, conf.Region)
 	fatalIf(err.Trace(conf.AccessKeyID, conf.SecretAccessKey, conf.Region), "Initializing signature version '4' failed.", nil)
 
-	return storageAPI{
+	return &storageAPI{
 		AccessLog:  conf.AccessLog,
 		Filesystem: fs,
 		Signature:  sign,
@@ -213,7 +262,7 @@ func serverHandler(conf cloudServerConfig) http.Handler {
 	api := initAPI(conf)
 
 	// Initialize Web.
-	web := initWeb(conf)
+	web := initWeb(conf, api)
 
 	var handlerFns = []HandlerFunc{
 		// Redirect some pre-defined browser request paths to a static
@@ -240,7 +289,7 @@ func serverHandler(conf cloudServerConfig) http.Handler {
 	mux := router.NewRouter()
 
 	// Register all API handlers.
-	registerAPIHandlers(mux, api, web)
+	registerAPIHandlers(mux, web)
 
 	// Register rest of the handlers.
 	return registerHandlers(mux, handlerFns...)
