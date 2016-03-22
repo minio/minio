@@ -188,17 +188,59 @@ secret_key = YOUR_SECRET_KEY_HERE
 signature_v2 = False
 ```
 
-To list your buckets.
+To make a bucket
+```
+$ s3cmd mb s3://mybucket
+Bucket 's3://mybucket/' created
+```
+
+To copy an object to bucket
+```
+$ s3cmd put newfile.txt s3://testbucket
+upload: 'newfile' -> 's3://testbucket/newfile'  
+```
+
+To copy an object to local system
+```
+$ s3cmd get s3://testbucket/newfile
+download: 's3://testbucket/newfile' -> './newfile'
+```
+
+To sync local file/directory to a bucket 
+```
+$ s3cmd sync newdemo s3://testbucket
+upload: 'newdemo/newdemofile.txt' -> 's3://testbucket/newdemo/newdemofile.txt'
+```
+
+To sync bucket or object with local filesystem
+```
+$ s3cmd sync  s3://otherbucket otherlocabucket
+download: 's3://otherbucket/cat.jpg' -> 'otherlocabucket/cat.jpg' 
+```
+
+To list buckets.
 ```
 $ s3cmd ls s3://
 2015-12-09 16:12  s3://testbbucket
 ```
 
-To list contents inside buckets.
+To list contents inside bucket.
 ```
 $ s3cmd ls s3://testbucket/
                        DIR   s3://testbucket/test/
 2015-12-09 16:05    138504   s3://testbucket/newfile
+```
+
+Delete an object from bucket
+```
+$ s3cmd del s3://testbucket/newfile
+delete: 's3://testbucket/newfile'
+```
+
+Delete a bucket
+```
+$ s3cmd rb s3://testbucket
+Bucket 's3://testbucket/' removed
 ```
 
 ## Contribute to Minio Project
