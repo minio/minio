@@ -39,8 +39,9 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
-
-	if status, err := isDirExist(filepath.Join(fs.path, bucket)); !status {
+	bucketDir := filepath.Join(fs.path, bucket)
+	// Verify if bucket exists.
+	if status, err := isDirExist(bucketDir); !status {
 		if err == nil {
 			// File exists, but its not a directory.
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
@@ -51,11 +52,16 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 			return result, probe.NewError(err)
 		}
 	}
+	if !IsValidObjectPrefix(prefix) {
+		return result, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
+	}
 
+	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
 		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported", delimiter))
 	}
 
+	// Marker is set unescape.
 	if marker != "" {
 		if markerUnescaped, err := url.QueryUnescape(marker); err == nil {
 			marker = markerUnescaped
@@ -74,11 +80,24 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		return result, nil
 	}
 
+	// Over flowing maxkeys - reset to listObjectsLimit.
 	if maxKeys < 0 || maxKeys > listObjectsLimit {
 		maxKeys = listObjectsLimit
 	}
 
-	bucketDir := filepath.Join(fs.path, bucket)
+	// Verify if prefix exists.
+	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
+	rootDir := filepath.Join(bucketDir, prefixDir)
+	_, err := isDirExist(rootDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Prefix does not exist, not an error just respond empty
+			// list response.
+			return result, nil
+		}
+		// Rest errors should be treated as failure.
+		return result, probe.NewError(err)
+	}
 
 	recursive := true
 	skipDir := true
@@ -86,9 +105,6 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		skipDir = false
 		recursive = false
 	}
-
-	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
-	rootDir := filepath.Join(bucketDir, prefixDir)
 
 	// Maximum 1000 objects returned in a single to listObjects.
 	// Further calls will set right marker value to continue reading the rest of the objectList.
