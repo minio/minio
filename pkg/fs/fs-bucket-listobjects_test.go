@@ -100,324 +100,324 @@ func TestListObjects(t *testing.T) {
 	resultCases := []ListObjectsResult{
 		// ListObjectsResult-0.
 		// Testing for listing all objects in the bucket, (testCase 20,21,22).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-1.
 		// Used for asserting the truncated case, (testCase 23).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
 			},
 		},
 		// ListObjectsResult-2.
 		// (TestCase 24).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
-				ObjectInfo{Name: "newPrefix0"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "newPrefix0"},
 			},
 		},
 		// ListObjectsResult-3.
 		// (TestCase 25).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 			},
 		},
 		// ListObjectsResult-4.
 		// Again used for truncated case.
 		// (TestCase 26).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
+				{Name: "Asia-maps"},
 			},
 		},
 		// ListObjectsResult-5.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix "new", (testCase 27-29).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
 			},
 		},
 		// ListObjectsResult-6.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix = "obj", (testCase 30).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-7.
 		// Used for Asserting prefixes and truncation.
 		// Used for test case with prefix = "new" and maxKeys = 1, (testCase 31).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
+				{Name: "newPrefix0"},
 			},
 		},
 		// ListObjectsResult-8.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix = "obj" and maxKeys = 2, (testCase 32).
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
+				{Name: "obj0"},
+				{Name: "obj1"},
 			},
 		},
 		// ListObjectsResult-9.
 		// Used for asserting the case with marker, but without prefix.
 		//marker is set to "newPrefix0" in the testCase, (testCase 33).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-10.
 		//marker is set to "newPrefix1" in the testCase, (testCase 34).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-11.
 		//marker is set to "obj0" in the testCase, (testCase 35).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-12.
 		// Marker is set to "obj1" in the testCase, (testCase 36).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj2"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-13.
 		// Marker is set to "man" in the testCase, (testCase37).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-14.
 		// Marker is set to "Abc" in the testCase, (testCase 39).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-15.
 		// Marker is set to "Asia/India/India-summer-photos-1" in the testCase, (testCase 40).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-16.
 		// Marker is set to "Asia/India/Karnataka/Bangalore/Koramangala/pics" in the testCase, (testCase 41).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-17.
 		// Used for asserting the case with marker, without prefix but with truncation.
 		// Marker =  "newPrefix0" & maxKeys = 3 in the testCase, (testCase42).
 		// Output truncated to 3 values.
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
-				ObjectInfo{Name: "obj0"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "obj0"},
 			},
 		},
 		// ListObjectsResult-18.
 		// Marker = "newPrefix1" & maxkeys = 1 in the testCase, (testCase43).
 		// Output truncated to 1 value.
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
 			},
 		},
 		// ListObjectsResult-19.
 		// Marker = "obj0" & maxKeys = 1 in the testCase, (testCase44).
 		// Output truncated to 1 value.
-		ListObjectsResult{
+		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj1"},
+				{Name: "obj1"},
 			},
 		},
 		// ListObjectsResult-20.
 		// Marker = "obj0" & prefix = "obj" in the testCase, (testCase 45).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-21.
 		// Marker = "obj1" & prefix = "obj" in the testCase, (testCase 46).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "obj2"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-22.
 		// Marker = "newPrefix0" & prefix = "new" in the testCase,, (testCase 47).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "newPrefix1"},
+				{Name: "newzen/zen/recurse/again/again/again/pics"},
 			},
 		},
 		// ListObjectsResult-23.
 		// Prefix is set to "Asia/India/" in the testCase, and delimiter is not set (testCase 55).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 			},
 		},
 
 		// ListObjectsResult-24.
 		// Prefix is set to "Asia" in the testCase, and delimiter is not set (testCase 56).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
-				ObjectInfo{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
+				{Name: "Asia-maps"},
+				{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 			},
 		},
 
 		// ListObjectsResult-25.
 		// Prefix is set to "Asia" in the testCase, and delimiter is set (testCase 57).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia-maps"},
+				{Name: "Asia-maps"},
 			},
 		},
 		// ListObjectsResult-26.
 		// prefix = "new" and delimiter is set in the testCase.(testCase 58).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
 			},
 		},
 		// ListObjectsResult-27.
 		// Prefix is set to "Asia/India/" in the testCase, and delimiter is set to forward slash '/' (testCase 59).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "Asia/India/India-summer-photos-1"},
+				{Name: "Asia/India/India-summer-photos-1"},
 			},
 		},
 		// ListObjectsResult-28.
 		// Marker is set to "Asia/India/India-summer-photos-1" and delimiter set in the testCase, (testCase 60).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-29.
 		// Marker is set to "Asia/India/Karnataka/Bangalore/Koramangala/pics" in the testCase and delimeter set, (testCase 61).
-		ListObjectsResult{
+		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				ObjectInfo{Name: "newPrefix0"},
-				ObjectInfo{Name: "newPrefix1"},
-				ObjectInfo{Name: "obj0"},
-				ObjectInfo{Name: "obj1"},
-				ObjectInfo{Name: "obj2"},
+				{Name: "newPrefix0"},
+				{Name: "newPrefix1"},
+				{Name: "obj0"},
+				{Name: "obj1"},
+				{Name: "obj2"},
 			},
 		},
 	}
@@ -459,8 +459,8 @@ func TestListObjects(t *testing.T) {
 		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsResult{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (14-15).
-		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s:", filepath.FromSlash("/empty-bucket/europe/france")), false},
-		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s:", filepath.FromSlash("/empty-bucket/europe/tunisia")), false},
+		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s", filepath.FromSlash("/empty-bucket/europe/france")), false},
+		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s", filepath.FromSlash("/empty-bucket/europe/tunisia")), false},
 		// Testing on empty bucket, that is, bucket without any objects in it (16).
 		{"empty-bucket", "", "", "", 0, ListObjectsResult{}, nil, true},
 		// Setting maxKeys to negative value (17-18).

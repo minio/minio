@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	// ListObjectsLimit - maximum list objects limit.
+	// listObjectsLimit - maximum list objects limit.
 	listObjectsLimit = 1000
 )
 
-// IsDirEmpty - returns whether given directory is empty or not.
+// isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) (status bool, err error) {
 	f, err := os.Open(dirname)
 	if err == nil {
@@ -44,7 +44,7 @@ func isDirEmpty(dirname string) (status bool, err error) {
 	return
 }
 
-// IsDirExist - returns whether given directory is exist or not.
+// isDirExist - returns whether given directory is exist or not.
 func isDirExist(dirname string) (status bool, err error) {
 	fi, err := os.Lstat(dirname)
 	if err == nil {
@@ -54,7 +54,7 @@ func isDirExist(dirname string) (status bool, err error) {
 	return
 }
 
-// ByName implements sort.Interface for sorting os.FileInfo list.
+// byName implements sort.Interface for sorting os.FileInfo list.
 type byName []os.FileInfo
 
 func (f byName) Len() int {
@@ -99,7 +99,7 @@ func searchFileInfos(fileInfos []os.FileInfo, x string) int {
 	return sort.Search(len(fileInfos), processFunc)
 }
 
-// ReadDir - read 'scanDir' directory.  It returns list of ObjectInfo.
+// readDir - read 'scanDir' directory.  It returns list of ObjectInfo.
 // Each object name is appended with 'namePrefix'.
 func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []ObjectInfo) {
 	f, err := os.Open(scanDir)
@@ -158,7 +158,7 @@ func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []
 		// For directories explicitly end with '/'.
 		if isDir {
 			name += "/"
-			// Size is set to '0' for directories explicitly.
+			// size is set to '0' for directories explicitly.
 			size = 0
 		}
 
@@ -175,7 +175,8 @@ func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []
 			// For directories explicitly end with '/'.
 			if isDir {
 				name += "/"
-				size = 0 // Size is set to '0' for directories explicitly.
+				// size is set to '0' for directories explicitly.
+				size = 0
 			}
 		}
 
@@ -258,7 +259,7 @@ func (oic ObjectInfoChannel) IsTimedOut() bool {
 	}
 }
 
-// TreeWalk - walk into 'scanDir' recursively when 'recursive' is true.
+// treeWalk - walk into 'scanDir' recursively when 'recursive' is true.
 // It uses 'bucketDir' to get name prefix for object name.
 func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) ObjectInfoChannel {
 	objectInfoCh := make(chan ObjectInfo, listObjectsLimit)
@@ -269,7 +270,7 @@ func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) Obj
 		defer close(objectInfoCh)
 		defer close(timeoutCh)
 
-		// Send function - returns true if ObjectInfo is sent.
+		// send function - returns true if ObjectInfo is sent.
 		// Within (time.Second * 15) else false on time-out.
 		send := func(oi ObjectInfo) bool {
 			timer := time.After(time.Second * 15)
