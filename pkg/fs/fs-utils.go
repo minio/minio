@@ -51,3 +51,15 @@ func IsValidObjectName(object string) bool {
 	}
 	return true
 }
+
+// IsValidObjectPrefix verifies whether the prefix is a valid object name.
+// Its valid to have a empty prefix.
+func IsValidObjectPrefix(object string) bool {
+	// Prefix can be empty.
+	if object == "" {
+		return true
+	}
+	// Verify if prefix is a valid object name.
+	return IsValidObjectName(object)
+
+}

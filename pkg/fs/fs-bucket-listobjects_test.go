@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -459,8 +458,8 @@ func TestListObjects(t *testing.T) {
 		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsResult{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (14-15).
-		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s", filepath.FromSlash("/empty-bucket/europe/france")), false},
-		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsResult{}, fmt.Errorf("%s", filepath.FromSlash("/empty-bucket/europe/tunisia")), false},
+		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsResult{}, nil, true},
+		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsResult{}, nil, true},
 		// Testing on empty bucket, that is, bucket without any objects in it (16).
 		{"empty-bucket", "", "", "", 0, ListObjectsResult{}, nil, true},
 		// Setting maxKeys to negative value (17-18).
