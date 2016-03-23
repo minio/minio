@@ -193,7 +193,7 @@ var invalidPrefixActions = map[string]struct{}{
 func checkBucketPolicy(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
-	var resources []string
+	var resourceMap = make(map[string]struct{})
 	for _, statement := range bucketPolicy.Statements {
 		for _, action := range statement.Actions {
 			for _, resource := range statement.Resources {
@@ -211,10 +211,15 @@ func checkBucketPolicy(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
 						return ErrMalformedPolicy
 					}
 					// All valid resources collect them separately to verify nesting.
-					resources = append(resources, resourcePrefix)
+					resourceMap[resourcePrefix] = struct{}{}
 				}
 			}
 		}
+	}
+
+	var resources []string
+	for resource := range resourceMap {
+		resources = append(resources, resource)
 	}
 
 	// Sort strings as shorter first.
