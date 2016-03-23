@@ -518,8 +518,7 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 // signature policy in multipart/form-data
 func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	// Here the parameter is the size of the form data that should
-	// be loaded in memory, the remaining being put in temporary
-	// files
+	// be loaded in memory, the remaining being put in temporary files.
 	reader, e := r.MultipartReader()
 	if e != nil {
 		errorIf(probe.NewError(e), "Unable to initialize multipart reader.", nil)

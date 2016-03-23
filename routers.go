@@ -149,10 +149,10 @@ func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
 	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
 	// HeadBucket
 	bucket.Methods("HEAD").HandlerFunc(a.HeadBucketHandler)
+	// PostPolicy
+	bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(a.PostPolicyBucketHandler)
 	// DeleteMultipleObjects
 	bucket.Methods("POST").HandlerFunc(a.DeleteMultipleObjectsHandler)
-	// PostPolicy
-	bucket.Methods("POST").Headers("Content-Type", "multipart/form-data").HandlerFunc(a.PostPolicyBucketHandler)
 	// DeleteBucketPolicy
 	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketPolicyHandler).Queries("policy", "")
 	// DeleteBucket
