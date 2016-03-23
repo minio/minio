@@ -112,7 +112,7 @@ func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Er
 	}
 
 	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: bucket})
+		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// Normalize buckets.
@@ -127,7 +127,13 @@ func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Er
 
 	info, err := getObjectInfo(fs.path, bucket, object)
 	if err != nil {
+		if os.IsNotExist(err.ToGoError()) {
+			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		}
 		return ObjectInfo{}, err.Trace(bucket, object)
+	}
+	if info.IsDir {
+		return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 	}
 	return info, nil
 }
@@ -136,8 +142,7 @@ func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Er
 func getObjectInfo(rootPath, bucket, object string) (ObjectInfo, *probe.Error) {
 	// Do not use filepath.Join() since filepath.Join strips off any
 	// object names with '/', use them as is in a static manner so
-	// that we can send a proper 'ObjectNotFound' reply back upon
-	// os.Stat().
+	// that we can send a proper 'ObjectNotFound' reply back upon os.Stat().
 	var objectPath string
 	// For windows use its special os.PathSeparator == "\\"
 	if runtime.GOOS == "windows" {
@@ -145,12 +150,9 @@ func getObjectInfo(rootPath, bucket, object string) (ObjectInfo, *probe.Error) {
 	} else {
 		objectPath = rootPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
-	stat, err := os.Stat(objectPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		}
-		return ObjectInfo{}, probe.NewError(err)
+	stat, e := os.Stat(objectPath)
+	if e != nil {
+		return ObjectInfo{}, probe.NewError(e)
 	}
 	contentType := "application/octet-stream"
 	if runtime.GOOS == "windows" {
