@@ -101,6 +101,8 @@ func initConfig() *probe.Error {
 	}
 	// Save the loaded config globally.
 	serverConfig = qc.Data().(*serverConfigV3)
+	// Set the version properly after the unmarshalled json is loaded.
+	serverConfig.Version = globalMinioConfigVersion
 	return nil
 }
 
