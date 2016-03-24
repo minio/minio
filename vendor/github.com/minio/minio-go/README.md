@@ -61,12 +61,14 @@ func main() {
 
 ## Documentation
 
+[API documentation](./API.md)
+
+## Examples
+
 ### Bucket Operations.
-* [MakeBucket(bucketName, BucketACL, location) error](examples/s3/makebucket.go)
+* [MakeBucket(bucketName, location) error](examples/s3/makebucket.go)
 * [BucketExists(bucketName) error](examples/s3/bucketexists.go)
 * [RemoveBucket(bucketName) error](examples/s3/removebucket.go)
-* [GetBucketACL(bucketName) (BucketACL, error)](examples/s3/getbucketacl.go)
-* [SetBucketACL(bucketName, BucketACL) error)](examples/s3/setbucketacl.go)
 * [ListBuckets() []BucketInfo](examples/s3/listbuckets.go)
 * [ListObjects(bucketName, objectPrefix, recursive, chan<- struct{}) <-chan ObjectInfo](examples/s3/listobjects.go)
 * [ListIncompleteUploads(bucketName, prefix, recursive, chan<- struct{}) <-chan ObjectMultipartInfo](examples/s3/listincompleteuploads.go)
@@ -86,6 +88,11 @@ func main() {
 * [PresignedGetObject(bucketName, objectName, time.Duration, url.Values) (string, error)](examples/s3/presignedgetobject.go)
 * [PresignedPutObject(bucketName, objectName, time.Duration) (string, error)](examples/s3/presignedputobject.go)
 * [PresignedPostPolicy(NewPostPolicy()) (map[string]string, error)](examples/s3/presignedpostpolicy.go)
+
+### Bucket Policy Operations.
+* [SetBucketPolicy(bucketName, objectPrefix, BucketPolicy) error](examples/s3/setbucketpolicy.go)
+* [GetBucketPolicy(bucketName, objectPrefix) (BucketPolicy, error)](examples/s3/getbucketpolicy.go)
+* [RemoveBucketPolicy(bucketName, objectPrefix) error](examples/s3/removebucketpolicy.go)
 
 ### API Reference
 

@@ -178,7 +178,7 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
-	if r.Header.Get("Authorization") != "" {
+	if _, ok := r.Header["Authorization"]; ok {
 		date, e := parseDateHeader(r)
 		if e != nil {
 			// All our internal APIs are sensitive towards Date

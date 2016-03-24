@@ -116,9 +116,11 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
-	if api.Region != "us-east-1" {
+	// Get current region.
+	region := serverConfig.GetRegion()
+	if region != "us-east-1" {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
-			Location: api.Region,
+			Location: region,
 		})
 	}
 	setCommonHeaders(w) // write headers.

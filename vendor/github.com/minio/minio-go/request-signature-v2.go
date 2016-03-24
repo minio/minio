@@ -124,7 +124,7 @@ func postPresignSignatureV2(policyBase64, secretAccessKey string) string {
 // Signature = Base64( HMAC-SHA1( YourSecretAccessKeyID, UTF-8-Encoding-Of( StringToSign ) ) );
 //
 // StringToSign = HTTP-Verb + "\n" +
-//  	Content-MD5 + "\n" +
+//  	Content-Md5 + "\n" +
 //  	Content-Type + "\n" +
 //  	Date + "\n" +
 //  	CanonicalizedProtocolHeaders +
@@ -172,7 +172,7 @@ func signV2(req http.Request, accessKeyID, secretAccessKey string) *http.Request
 // From the Amazon docs:
 //
 // StringToSign = HTTP-Verb + "\n" +
-// 	 Content-MD5 + "\n" +
+// 	 Content-Md5 + "\n" +
 //	 Content-Type + "\n" +
 //	 Date + "\n" +
 //	 CanonicalizedProtocolHeaders +
@@ -192,7 +192,7 @@ func getStringToSignV2(req http.Request) string {
 func writeDefaultHeaders(buf *bytes.Buffer, req http.Request) {
 	buf.WriteString(req.Method)
 	buf.WriteByte('\n')
-	buf.WriteString(req.Header.Get("Content-MD5"))
+	buf.WriteString(req.Header.Get("Content-Md5"))
 	buf.WriteByte('\n')
 	buf.WriteString(req.Header.Get("Content-Type"))
 	buf.WriteByte('\n')

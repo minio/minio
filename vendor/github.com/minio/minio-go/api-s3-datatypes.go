@@ -171,27 +171,3 @@ type createBucketConfiguration struct {
 	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CreateBucketConfiguration" json:"-"`
 	Location string   `xml:"LocationConstraint"`
 }
-
-// grant container for the grantee and his or her permissions.
-type grant struct {
-	// grantee container for DisplayName and ID of the person being
-	// granted permissions.
-	Grantee struct {
-		ID           string
-		DisplayName  string
-		EmailAddress string
-		Type         string
-		URI          string
-	}
-	Permission string
-}
-
-// accessControlPolicy contains the elements providing ACL permissions
-// for a bucket.
-type accessControlPolicy struct {
-	// accessControlList container for ACL information.
-	AccessControlList struct {
-		Grant []grant
-	}
-	Owner owner
-}

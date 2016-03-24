@@ -19,6 +19,7 @@ package minio
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
@@ -43,6 +44,13 @@ func xmlDecoder(body io.Reader, v interface{}) error {
 // sum256 calculate sha256 sum for an input byte array.
 func sum256(data []byte) []byte {
 	hash := sha256.New()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+// sumMD5 calculate sumMD5 sum for an input byte array.
+func sumMD5(data []byte) []byte {
+	hash := md5.New()
 	hash.Write(data)
 	return hash.Sum(nil)
 }

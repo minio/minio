@@ -50,6 +50,54 @@ func (c Client) RemoveBucket(bucketName string) error {
 	return nil
 }
 
+// RemoveBucketPolicy remove a bucket policy on given path.
+func (c Client) RemoveBucketPolicy(bucketName, objectPrefix string) error {
+	// Input validation.
+	if err := isValidBucketName(bucketName); err != nil {
+		return err
+	}
+	if err := isValidObjectPrefix(objectPrefix); err != nil {
+		return err
+	}
+	policy, err := c.getBucketPolicy(bucketName, objectPrefix)
+	if err != nil {
+		return err
+	}
+	// No bucket policy found, nothing to remove return success.
+	if policy.Statements == nil {
+		return nil
+	}
+
+	// Save new statements after removing requested bucket policy.
+	policy.Statements = removeBucketPolicyStatement(policy.Statements, bucketName, objectPrefix)
+
+	// Commit the update policy.
+	return c.putBucketPolicy(bucketName, policy)
+}
+
+// Removes all policies on a bucket.
+func (c Client) removeBucketPolicy(bucketName string) error {
+	// Input validation.
+	if err := isValidBucketName(bucketName); err != nil {
+		return err
+	}
+	// Get resources properly escaped and lined up before
+	// using them in http request.
+	urlValues := make(url.Values)
+	urlValues.Set("policy", "")
+
+	// Execute DELETE on objectName.
+	resp, err := c.executeMethod("DELETE", requestMetadata{
+		bucketName:  bucketName,
+		queryValues: urlValues,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // RemoveObject remove an object from a bucket.
 func (c Client) RemoveObject(bucketName, objectName string) error {
 	// Input validation.

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,21 @@ type fields map[string]interface{}
 
 var log = logrus.New() // Default console logger.
 
+// logger carries logging configuration for various supported loggers.
+// Currently supported loggers are
+//
+//   - console [default]
+//   - file
+//   - syslog
+//
+type logger struct {
+	Console consoleLogger `json:"console"`
+	File    fileLogger    `json:"file"`
+	Syslog  syslogLogger  `json:"syslog"`
+	// Add new loggers here.
+}
+
+// errorIf synonymous with fatalIf but doesn't exit on error != nil
 func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 	if err == nil {
 		return
@@ -49,6 +64,7 @@ func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 	log.WithFields(fields).Error(msg)
 }
 
+// fatalIf wrapper function which takes error and prints jsonic error messages.
 func fatalIf(err *probe.Error, msg string, fields map[string]interface{}) {
 	if err == nil {
 		return

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,29 +24,28 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
+type fileLogger struct {
+	Enable   bool   `json:"enable"`
+	Filename string `json:"fileName"`
+	Level    string `json:"level"`
+}
+
 type localFile struct {
 	*os.File
 }
 
-func log2File(filename string) *probe.Error {
-	fileHook, e := newFile(filename)
-	if e != nil {
-		return probe.NewError(e)
-	}
-	log.Hooks.Add(fileHook)                 // Add a local file hook.
-	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
-	log.Level = logrus.InfoLevel            // Minimum log level.
-	return nil
+func enableFileLogger(filename string) {
+	file, e := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	fatalIf(probe.NewError(e), "Unable to open log file.", nil)
+
+	// Add a local file hook.
+	log.Hooks.Add(&localFile{file})
+	// Set default JSON formatter.
+	log.Formatter = new(logrus.JSONFormatter)
+	log.Level = logrus.InfoLevel // Minimum log level.
 }
 
-func newFile(filename string) (*localFile, error) {
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return nil, err
-	}
-	return &localFile{file}, nil
-}
-
+// Fire fires the file logger hook and logs to the file.
 func (l *localFile) Fire(entry *logrus.Entry) error {
 	line, err := entry.String()
 	if err != nil {

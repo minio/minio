@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ type Multiparts struct {
 }
 
 // New instantiate a new donut
-func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
+func New(rootPath string) (Filesystem, *probe.Error) {
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
 	var err *probe.Error
@@ -126,11 +126,16 @@ func New(rootPath string, minFreeDisk int64) (Filesystem, *probe.Error) {
 	/// Defaults
 
 	// minium free disk required for i/o operations to succeed.
-	fs.minFreeDisk = minFreeDisk
+	fs.minFreeDisk = 5
 
 	fs.listObjectMap = make(map[ListObjectParams][]ObjectInfoChannel)
 	fs.listObjectMapMutex = &sync.Mutex{}
 
 	// Return here.
 	return fs, nil
+}
+
+// GetRootPath - get root path.
+func (fs Filesystem) GetRootPath() string {
+	return fs.path
 }

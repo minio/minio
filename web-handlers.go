@@ -44,7 +44,7 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwt.secretAccessKey, nil
+		return []byte(jwt.SecretAccessKey), nil
 	})
 	if e != nil {
 		return false
@@ -133,7 +133,7 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.Client.MakeBucket(args.BucketName, "", "")
+	e := web.Client.MakeBucket(args.BucketName, "")
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
