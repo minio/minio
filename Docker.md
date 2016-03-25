@@ -1,6 +1,6 @@
 ### Run Minio docker image
 
-Start docker, however image is not persistent.
+Start docker, however data is not persistent.
 
 ```bash
 docker run -p 9000:9000 minio/minio fs /export/data

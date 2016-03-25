@@ -132,11 +132,9 @@ install: gomake-all
 dockerimage: checkdocker verifiers $(UI_ASSETS)
 	@echo "Building docker image:" minio:$(TAG)
 	@GO15VENDOREXPERIMENT=1 GOOS=linux GOARCH=amd64 go build --ldflags $(DOCKER_LDFLAGS) -o docker/minio.dockerimage
-	@cd docker
-	@mkdir -p export
-	@sudo docker build --rm --tag=minio/minio:$(TAG) .
-	@rmdir export
-	@rm minio.dockerimage
+	@cd docker; mkdir -p export; sudo docker build --rm --tag=minio/minio:$(TAG) .
+	@rmdir docker/export
+	@rm docker/minio.dockerimage
 
 release: verifiers
 	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
