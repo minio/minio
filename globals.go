@@ -16,7 +16,11 @@
 
 package main
 
-import "github.com/fatih/color"
+import (
+	"github.com/fatih/color"
+	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
+)
 
 // Global constants for Minio.
 const (
@@ -33,9 +37,34 @@ const (
 	globalMinioConfigFile    = "config.json"
 )
 
+var (
+	globalQuiet = false // Quiet flag set via command line
+	globalDebug = false // Debug flag set via command line
+	// Add new global flags here.
+)
+
 // global colors.
 var (
 	colorMagenta = color.New(color.FgMagenta, color.Bold).SprintfFunc()
 	colorWhite   = color.New(color.FgWhite, color.Bold).SprintfFunc()
 	colorGreen   = color.New(color.FgGreen, color.Bold).SprintfFunc()
 )
+
+// Set global states. NOTE: It is deliberately kept monolithic to
+// ensure we dont miss out any flags.
+func setGlobals(quiet, debug bool) {
+	globalQuiet = quiet
+	globalDebug = debug
+	// Enable debug messages if requested.
+	if globalDebug == true {
+		console.DebugPrint = true
+	}
+}
+
+// Set global states. NOTE: It is deliberately kept monolithic to
+// ensure we dont miss out any flags.
+func setGlobalsFromContext(ctx *cli.Context) {
+	quiet := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	debug := ctx.Bool("debug") || ctx.GlobalBool("debug")
+	setGlobals(quiet, debug)
+}

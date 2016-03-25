@@ -27,6 +27,17 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/olekukonko/ts"
+)
+
+var (
+	// global flags for minio.
+	minioFlags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "help, h",
+			Usage: "Show help.",
+		},
+	}
 )
 
 // Help template for minio.
@@ -136,16 +147,13 @@ func registerApp() *cli.App {
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)
 
-	// Register all flags.
-	registerFlag(configFolderFlag)
-
 	// Set up app.
 	app := cli.NewApp()
 	app.Name = "Minio"
 	app.Author = "Minio.io"
 	app.Usage = "Distributed Object Storage Server for Micro Services."
 	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.`
-	app.Flags = flags
+	app.Flags = append(minioFlags, globalFlags...)
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
@@ -168,7 +176,7 @@ func checkMainSyntax(c *cli.Context) {
 		console.Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
 	if configPath == "" {
-		console.Fatalln("Config folder cannot be empty, please specify --config-folder <foldername>.")
+		console.Fatalln("Config folder cannot be empty, please specify --config-dir <foldername>.")
 	}
 }
 
@@ -179,8 +187,11 @@ func main() {
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
+		// Set global flags.
+		setGlobalsFromContext(c)
+
 		// Sets new config folder.
-		setGlobalConfigPath(c.GlobalString("config-folder"))
+		setGlobalConfigPath(c.GlobalString("config-dir"))
 
 		// Valid input arguments to main.
 		checkMainSyntax(c)
@@ -191,11 +202,29 @@ func main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
+		// Do not print update messages, if quiet flag is set.
+		if !globalQuiet {
+			// Do not print any errors in release update function.
+			noError := true
+			updateMsg := getReleaseUpdate(minioUpdateStableURL, noError)
+			if updateMsg.Update {
+				console.Println(updateMsg)
+			}
+		}
+
+		// Return here.
 		return nil
 	}
 	app.ExtraInfo = func() map[string]string {
-		return getSystemData()
+		if _, e := ts.GetSize(); e != nil {
+			globalQuiet = true
+		}
+		// Enable if debug is enabled.
+		if globalDebug {
+			return getSystemData()
+		}
+		return make(map[string]string)
 	}
-
+	// Run the app - exit on error.
 	app.RunAndExitOnError()
 }
