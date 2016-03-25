@@ -349,4 +349,5 @@ func serverMain(c *cli.Context) {
 		err = minhttp.ListenAndServe(apiServer)
 		errorIf(err.Trace(), "Failed to start the minio server.", nil)
 	}
+	console.Println(colorGreen("No known backends configured, please use ‘minio init --help’ to initialize a backend."))
 }
