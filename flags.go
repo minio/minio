@@ -15,21 +15,3 @@
  */
 
 package main
-
-import "github.com/minio/cli"
-
-// Collection of minio flags currently supported
-var flags = []cli.Flag{}
-
-var (
-	configFolderFlag = cli.StringFlag{
-		Name:  "config-folder, C",
-		Value: mustGetConfigPath(),
-		Usage: "Path to configuration folder.",
-	}
-)
-
-// registerFlag registers a cli flag
-func registerFlag(flag cli.Flag) {
-	flags = append(flags, flag)
-}

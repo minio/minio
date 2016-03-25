@@ -200,7 +200,7 @@ func initServer(c *cli.Context) {
 	}
 }
 
-// check init arguments.
+// Check init arguments.
 func checkInitSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "init", 1)
@@ -214,8 +214,7 @@ func checkInitSyntax(c *cli.Context) {
 	}
 }
 
-// extract port number from address.
-// address should be of the form host:port
+// Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
 	_, portStr, e := net.SplitHostPort(address)
 	fatalIf(probe.NewError(e), "Unable to split host port.", nil)
@@ -307,6 +306,7 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	// get backend.
 	backend := serverConfig.GetBackend()
 	if backend.Type == "fs" {
 		// Initialize file system.
@@ -348,6 +348,7 @@ func serverMain(c *cli.Context) {
 		// Start server.
 		err = minhttp.ListenAndServe(apiServer)
 		errorIf(err.Trace(), "Failed to start the minio server.", nil)
+		return
 	}
 	console.Println(colorGreen("No known backends configured, please use ‘minio init --help’ to initialize a backend."))
 }

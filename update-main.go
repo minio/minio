@@ -89,13 +89,7 @@ func (u updateMessage) String() string {
 		updateMessage := color.New(color.FgGreen, color.Bold).SprintfFunc()
 		return updateMessage("You are already running the most recent version of ‘minio’.")
 	}
-	var msg string
-	if runtime.GOOS == "windows" {
-		msg = "Download " + u.Download
-	} else {
-		msg = "Download " + u.Download
-	}
-	msg, err := colorizeUpdateMessage(msg)
+	msg, err := colorizeUpdateMessage(u.Download)
 	fatalIf(err.Trace(msg), "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
 	return msg
 }
@@ -141,59 +135,108 @@ func parseReleaseData(data string) (time.Time, *probe.Error) {
 }
 
 // verify updates for releases.
-func getReleaseUpdate(updateURL string) {
+func getReleaseUpdate(updateURL string, noError bool) updateMessage {
+	// Construct a new update url.
 	newUpdateURLPrefix := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH
 	newUpdateURL := newUpdateURLPrefix + "/minio.shasum"
-	data, e := http.Get(newUpdateURL)
-	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
 
-	if minioVersion == "DEVELOPMENT.GOGET" {
-		fatalIf(probe.NewError(errors.New("")),
-			"Update mechanism is not supported for ‘go get’ based binary builds.  Please download official releases from https://minio.io/#minio", nil)
-	}
-
-	current, e := time.Parse(time.RFC3339, minioVersion)
-	fatalIf(probe.NewError(e), "Unable to parse version string as time.", nil)
-
-	if current.IsZero() {
-		fatalIf(probe.NewError(errors.New("")),
-			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
-	}
-
-	body, e := ioutil.ReadAll(data.Body)
-	fatalIf(probe.NewError(e), "Fetching updates failed. Please try again.", nil)
-
-	latest, err := parseReleaseData(string(body))
-	fatalIf(err.Trace(updateURL), "Please report this issue at https://github.com/minio/minio/issues.", nil)
-
-	if latest.IsZero() {
-		fatalIf(probe.NewError(errors.New("")),
-			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
-	}
-
+	// Get the downloadURL.
 	var downloadURL string
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "windows", "darwin":
+		// For windows and darwin.
 		downloadURL = newUpdateURLPrefix + "/minio.zip"
-	} else {
+	default:
+		// For all other operating systems.
 		downloadURL = newUpdateURLPrefix + "/minio.gz"
 	}
 
+	// Initialize update message.
 	updateMsg := updateMessage{
 		Download: downloadURL,
 		Version:  minioVersion,
 	}
+
+	// Instantiate a new client with 1 sec timeout.
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+	}
+
+	// Fetch new update.
+	data, e := client.Get(newUpdateURL)
+	if e != nil && noError {
+		return updateMsg
+	}
+	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
+
+	// Error out if 'update' command is issued for development based builds.
+	if minioVersion == "DEVELOPMENT.GOGET" && !noError {
+		fatalIf(probe.NewError(errors.New("")),
+			"Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio", nil)
+	}
+
+	// Parse current minio version into RFC3339.
+	current, e := time.Parse(time.RFC3339, minioVersion)
+	if e != nil && noError {
+		return updateMsg
+	}
+	fatalIf(probe.NewError(e), "Unable to parse version string as time.", nil)
+
+	// Verify if current minio version is zero.
+	if current.IsZero() && !noError {
+		fatalIf(probe.NewError(errors.New("")),
+			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
+	}
+
+	// Verify if we have a valid http response i.e http.StatusOK.
+	if data != nil {
+		if data.StatusCode != http.StatusOK {
+			// Return quickly if noError is set.
+			if noError {
+				return updateMsg
+			}
+			fatalIf(probe.NewError(errors.New("")), "Update server responsed with "+data.Status, nil)
+		}
+	}
+
+	// Read the response body.
+	updateBody, e := ioutil.ReadAll(data.Body)
+	if e != nil && noError {
+		return updateMsg
+	}
+	fatalIf(probe.NewError(e), "Fetching updates failed. Please try again.", nil)
+
+	// Parse the date if its valid.
+	latest, err := parseReleaseData(string(updateBody))
+	if err != nil && noError {
+		return updateMsg
+	}
+	fatalIf(err.Trace(updateURL), "Please report this issue at https://github.com/minio/minio/issues.", nil)
+
+	// Verify if the date is not zero.
+	if latest.IsZero() && !noError {
+		fatalIf(probe.NewError(errors.New("")),
+			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
+	}
+
+	// Is the update latest?.
 	if latest.After(current) {
 		updateMsg.Update = true
 	}
-	console.Println(updateMsg)
+
+	// Return update message.
+	return updateMsg
 }
 
 // main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
+	// Print all errors as they occur.
+	noError := false
+
 	// Check for update.
 	if ctx.Bool("experimental") {
-		getReleaseUpdate(minioUpdateExperimentalURL)
+		console.Println(getReleaseUpdate(minioUpdateExperimentalURL, noError))
 	} else {
-		getReleaseUpdate(minioUpdateStableURL)
+		console.Println(getReleaseUpdate(minioUpdateStableURL, noError))
 	}
 }

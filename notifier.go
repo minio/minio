@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 	"strings"
 
@@ -29,25 +28,22 @@ import (
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
 func colorizeUpdateMessage(updateString string) (string, *probe.Error) {
-	// initialize coloring
+	// Initialize coloring.
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
 
-	// calculate length without color coding, due to ANSI color characters padded to actual
-	// string the final length is wrong than the original string length
-	line1Str := fmt.Sprintf("  Update available: ")
-	line2Str := fmt.Sprintf("  Run \"%s\" to update. ", updateString)
+	// Calculate length without color coding, due to ANSI color
+	// characters padded to actual string the final length is wrong
+	// than the original string length.
+	line1Str := fmt.Sprintf("  New update: %s ", updateString)
 	line1Length := len(line1Str)
-	line2Length := len(line2Str)
 
-	// populate lines with color coding
-	line1InColor := line1Str
-	line2InColor := fmt.Sprintf("  Run \"%s\" to update. ", cyan(updateString))
+	// Populate lines with color coding.
+	line1InColor := fmt.Sprintf("  New update: %s ", cyan(updateString))
 
-	// calculate the rectangular box size
-	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
+	// Calculate the rectangular box size.
+	maxContentWidth := line1Length
 	line1Rest := maxContentWidth - line1Length
-	line2Rest := maxContentWidth - line2Length
 
 	terminal, err := ts.GetSize()
 	if err != nil {
@@ -56,31 +52,29 @@ func colorizeUpdateMessage(updateString string) (string, *probe.Error) {
 
 	var message string
 	switch {
-	case len(line2Str) > terminal.Col():
-		message = "\n" + line1InColor + "\n" + line2InColor + "\n"
+	case len(line1Str) > terminal.Col():
+		message = "\n" + line1InColor + "\n"
 	default:
-		// on windows terminal turn off unicode characters
+		// On windows terminal turn off unicode characters.
 		var top, bottom, sideBar string
 		if runtime.GOOS == "windows" {
 			top = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			bottom = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			sideBar = yellow("|")
 		} else {
-			// color the rectangular box, use unicode characters here
+			// Color the rectangular box, use unicode characters here.
 			top = yellow("┏" + strings.Repeat("━", maxContentWidth) + "┓")
 			bottom = yellow("┗" + strings.Repeat("━", maxContentWidth) + "┛")
 			sideBar = yellow("┃")
 		}
-		// fill spaces to the rest of the area
+		// Fill spaces to the rest of the area.
 		spacePaddingLine1 := strings.Repeat(" ", line1Rest)
-		spacePaddingLine2 := strings.Repeat(" ", line2Rest)
 
-		// construct the final message
+		// Construct the final message.
 		message = "\n" + top + "\n" +
 			sideBar + line1InColor + spacePaddingLine1 + sideBar + "\n" +
-			sideBar + line2InColor + spacePaddingLine2 + sideBar + "\n" +
 			bottom + "\n"
 	}
-	// return the final message
+	// Return the final message.
 	return message, nil
 }
