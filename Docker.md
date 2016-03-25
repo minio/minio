@@ -1,11 +1,13 @@
 ### Run Minio docker image
-```docker run -p 9000:9000 minio/minio```
 
-This will start minio server in the docker container, the data however is not persistent.
+Start docker, however image is not persistent.
 
-### Map data volumes from host
+```bash
+docker run -p 9000:9000 minio/minio fs /export/data
+```
+
 Map export and configuration directories from host for persistence.
 
 ```bash
-docker run -p 9000:9000 -v $HOME/export:/export -v $HOME/.minio:/root/.minio minio/minio
+docker run -p 9000:9000 --name minio1 -v /mnt/export/minio1:/export -v /mnt/config/minio1:/root/.minio minio/minio fs /export/data
 ```
