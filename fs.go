@@ -76,7 +76,8 @@ func (fs *Filesystem) popListObjectCh(params listObjectParams) *objectInfoChanne
 
 	if channels, ok := fs.listObjectMap[params]; ok {
 		for i, channel := range channels {
-			if !channel.IsTimedOut() {
+			if !channel.timedOut {
+				// channels[:i] have all timed out, hence remove them too.
 				chs := channels[i+1:]
 				if len(chs) > 0 {
 					fs.listObjectMap[params] = chs
