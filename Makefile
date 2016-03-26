@@ -19,8 +19,12 @@ endif
 ifeq ($(CPU), x86_64)
   HOST := $(HOST)64
 else
+ifeq ($(CPU), amd64)
+  HOST := $(HOST)64
+else
 ifeq ($(CPU), i686)
   HOST := $(HOST)32
+endif
 endif
 endif
 
@@ -41,6 +45,10 @@ ifndef (OS)
   else
   ifeq ($(HOST), Darwin32)
     arch = clang
+  else
+  ifeq ($(HOST), FreeBSD64)
+    arch = gcc
+  endif
   endif
   endif
   endif
@@ -84,7 +92,7 @@ isa-l:
 
 	@echo "Configuring $@:"
 	@git clone -q https://github.com/minio/isa-l.git
-	@cd isa-l; make -f Makefile.unx arch=$(arch) >/dev/null; mv include isa-l;
+	@cd isa-l; ${MAKE} -f Makefile.unx arch=$(arch) >/dev/null; mv include isa-l;
 
 lint:
 	@echo "Running $@:"

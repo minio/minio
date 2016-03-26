@@ -19,8 +19,8 @@ _init() {
 
     shopt -s extglob
 
-    PWD=$(pwd)
-    GOPATH=$(go env GOPATH)
+    PWD=$(pwd -P)
+    GOPATH=$(cd "$(go env GOPATH)" ; env pwd -P)
 }
 
 main() {
