@@ -1,4 +1,4 @@
-// +build windows
+// +build windows, solaris
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -19,6 +19,7 @@
 package fs
 
 import (
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -30,21 +31,24 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]Dirent, error) {
 	if err != nil {
 		return nil, err
 	}
-	fis, err := f.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
 	var dirents []Dirent
-	for len(fis) > 0 {
-		var fi os.FileInfo
-		fi, fis = fis[0], fis[1:] // Pop out entries.
-		if strings.HasPrefix(fi.Name(), entryPrefixMatch) {
-			dirents = append(dirents, Dirent{
-				Name:         fi.Name(),
-				Size:         fi.Size(),
-				ModifiedTime: fi.ModTime(),
-				IsDir:        fi.IsDir(),
-			})
+	for {
+		fis, err := f.Readdir(1000)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		for _, fi := range fis {
+			if strings.HasPrefix(fi.Name(), entryPrefixMatch) {
+				dirents = append(dirents, Dirent{
+					Name:         fi.Name(),
+					Size:         fi.Size(),
+					ModifiedTime: fi.ModTime(),
+					IsDir:        fi.IsDir(),
+				})
+			}
 		}
 	}
 	// Sort dirents.
