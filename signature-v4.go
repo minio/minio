@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package signature4 implements helper functions to validate AWS
+// This file implements helper functions to validate AWS
 // Signature Version '4' authorization header.
 //
 // This package provides comprehensive helpers for following signature
@@ -22,7 +22,7 @@
 // - Based on Authorization header.
 // - Based on Query parameters.
 // - Based on Form POST policy.
-package signature4
+package main
 
 import (
 	"bytes"
@@ -38,15 +38,6 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// Sign - local variables
-type Sign struct {
-	accessKeyID            string
-	secretAccessKey        string
-	region                 string
-	httpRequest            *http.Request
-	extractedSignedHeaders http.Header
-}
-
 // AWS Signature Version '4' constants.
 const (
 	signV4Algorithm = "AWS4-HMAC-SHA256"
@@ -54,37 +45,8 @@ const (
 	yyyymmdd        = "20060102"
 )
 
-// New - initialize a new authorization checkes.
-func New(accessKeyID, secretAccessKey, region string) (*Sign, *probe.Error) {
-	if !isValidAccessKey.MatchString(accessKeyID) {
-		return nil, ErrInvalidAccessKeyID("Invalid access key id.", accessKeyID).Trace(accessKeyID)
-	}
-	if !isValidSecretKey.MatchString(secretAccessKey) {
-		return nil, ErrInvalidAccessKeyID("Invalid secret key.", secretAccessKey).Trace(secretAccessKey)
-	}
-	if region == "" {
-		return nil, ErrRegionISEmpty("Region is empty.").Trace()
-	}
-	signature := &Sign{
-		accessKeyID:     accessKeyID,
-		secretAccessKey: secretAccessKey,
-		region:          region,
-	}
-	return signature, nil
-}
-
-// SetHTTPRequestToVerify - sets the http request which needs to be verified.
-func (s *Sign) SetHTTPRequestToVerify(r *http.Request) Sign {
-	// Do not set http request if its 'nil'.
-	if r == nil {
-		return *s
-	}
-	s.httpRequest = r
-	return *s
-}
-
 // getCanonicalHeaders generate a list of request headers with their values
-func (s Sign) getCanonicalHeaders(signedHeaders http.Header) string {
+func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 	var headers []string
 	vals := make(http.Header)
 	for k, vv := range signedHeaders {
@@ -100,7 +62,7 @@ func (s Sign) getCanonicalHeaders(signedHeaders http.Header) string {
 		buf.WriteByte(':')
 		switch {
 		case k == "host":
-			buf.WriteString(s.httpRequest.Host)
+			buf.WriteString(host)
 			fallthrough
 		default:
 			for idx, v := range vals[k] {
@@ -116,7 +78,7 @@ func (s Sign) getCanonicalHeaders(signedHeaders http.Header) string {
 }
 
 // getSignedHeaders generate a string i.e alphabetically sorted, semicolon-separated list of lowercase request header names
-func (s Sign) getSignedHeaders(signedHeaders http.Header) string {
+func getSignedHeaders(signedHeaders http.Header) string {
 	var headers []string
 	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
@@ -136,18 +98,17 @@ func (s Sign) getSignedHeaders(signedHeaders http.Header) string {
 //  <SignedHeaders>\n
 //  <HashedPayload>
 //
-func (s *Sign) getCanonicalRequest() string {
-	payload := s.httpRequest.Header.Get(http.CanonicalHeaderKey("x-amz-content-sha256"))
-	s.httpRequest.URL.RawQuery = strings.Replace(s.httpRequest.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath := getURLEncodedName(s.httpRequest.URL.Path)
+func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method, host string) string {
+	rawQuery := strings.Replace(queryStr, "+", "%20", -1)
+	encodedPath := getURLEncodedName(urlPath)
 	// Convert any space strings back to "+".
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
-		s.httpRequest.Method,
+		method,
 		encodedPath,
-		s.httpRequest.URL.RawQuery,
-		s.getCanonicalHeaders(s.extractedSignedHeaders),
-		s.getSignedHeaders(s.extractedSignedHeaders),
+		rawQuery,
+		getCanonicalHeaders(extractedSignedHeaders, host),
+		getSignedHeaders(extractedSignedHeaders),
 		payload,
 	}, "\n")
 	return canonicalRequest
@@ -163,27 +124,27 @@ func (s *Sign) getCanonicalRequest() string {
 //  <SignedHeaders>\n
 //  <HashedPayload>
 //
-func (s Sign) getPresignedCanonicalRequest(presignedQuery string) string {
+func getPresignCanonicalRequest(extractedSignedHeaders http.Header, presignedQuery, urlPath, method, host string) string {
 	rawQuery := strings.Replace(presignedQuery, "+", "%20", -1)
-	encodedPath := getURLEncodedName(s.httpRequest.URL.Path)
+	encodedPath := getURLEncodedName(urlPath)
 	// Convert any space strings back to "+".
 	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
-		s.httpRequest.Method,
+		method,
 		encodedPath,
 		rawQuery,
-		s.getCanonicalHeaders(s.extractedSignedHeaders),
-		s.getSignedHeaders(s.extractedSignedHeaders),
+		getCanonicalHeaders(extractedSignedHeaders, host),
+		getSignedHeaders(extractedSignedHeaders),
 		"UNSIGNED-PAYLOAD",
 	}, "\n")
 	return canonicalRequest
 }
 
 // getScope generate a string of a specific date, an AWS region, and a service.
-func (s Sign) getScope(t time.Time) string {
+func getScope(t time.Time, region string) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
-		s.region,
+		region,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -191,92 +152,105 @@ func (s Sign) getScope(t time.Time) string {
 }
 
 // getStringToSign a string based on selected query values.
-func (s Sign) getStringToSign(canonicalRequest string, t time.Time) string {
+func getStringToSign(canonicalRequest string, t time.Time, region string) string {
 	stringToSign := signV4Algorithm + "\n" + t.Format(iso8601Format) + "\n"
-	stringToSign = stringToSign + s.getScope(t) + "\n"
+	stringToSign = stringToSign + getScope(t, region) + "\n"
 	canonicalRequestBytes := sha256.Sum256([]byte(canonicalRequest))
 	stringToSign = stringToSign + hex.EncodeToString(canonicalRequestBytes[:])
 	return stringToSign
 }
 
 // getSigningKey hmac seed to calculate final signature.
-func (s Sign) getSigningKey(t time.Time) []byte {
-	secret := s.secretAccessKey
-	date := sumHMAC([]byte("AWS4"+secret), []byte(t.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte(s.region))
-	service := sumHMAC(region, []byte("s3"))
+func getSigningKey(secretKey string, t time.Time, region string) []byte {
+	date := sumHMAC([]byte("AWS4"+secretKey), []byte(t.Format(yyyymmdd)))
+	regionBytes := sumHMAC(date, []byte(region))
+	service := sumHMAC(regionBytes, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 	return signingKey
 }
 
 // getSignature final signature in hexadecimal form.
-func (s Sign) getSignature(signingKey []byte, stringToSign string) string {
+func getSignature(signingKey []byte, stringToSign string) string {
 	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 
-// DoesPolicySignatureMatch - Verify query headers with post policy
+// doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func (s *Sign) DoesPolicySignatureMatch(formValues map[string]string) (bool, *probe.Error) {
+func doesPolicySignatureMatch(formValues map[string]string) (bool, *probe.Error) {
+	// Access credentials.
+	cred := serverConfig.GetCredential()
+
+	// Server region.
+	region := serverConfig.GetRegion()
+
 	// Parse credential tag.
-	credential, err := parseCredential("Credential=" + formValues["X-Amz-Credential"])
+	credHeader, err := parseCredentialHeader("Credential=" + formValues["X-Amz-Credential"])
 	if err != nil {
 		return false, err.Trace(formValues["X-Amz-Credential"])
 	}
 
 	// Verify if the access key id matches.
-	if credential.accessKeyID != s.accessKeyID {
-		return false, ErrInvalidAccessKeyID("Access key id does not match with our records.", credential.accessKeyID).Trace(credential.accessKeyID)
+	if credHeader.accessKey != cred.AccessKeyID {
+		return false, ErrInvalidAccessKey("Access key id does not match with our records.", credHeader.accessKey).Trace(credHeader.accessKey)
 	}
 
 	// Verify if the region is valid.
-	reqRegion := credential.scope.region
-	if !isValidRegion(reqRegion, s.region) {
-		return false, ErrInvalidRegion("Requested region is not recognized.", reqRegion).Trace(reqRegion)
+	if !isValidRegion(credHeader.scope.region, region) {
+		return false, ErrInvalidRegion("Requested region is not recognized.", credHeader.scope.region).Trace(credHeader.scope.region)
 	}
-
-	// Save region.
-	s.region = reqRegion
 
 	// Parse date string.
 	t, e := time.Parse(iso8601Format, formValues["X-Amz-Date"])
 	if e != nil {
 		return false, probe.NewError(e)
 	}
-	signingKey := s.getSigningKey(t)
-	newSignature := s.getSignature(signingKey, formValues["Policy"])
+
+	// Get signing key.
+	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+
+	// Get signature.
+	newSignature := getSignature(signingKey, formValues["Policy"])
+
+	// Verify signature.
 	if newSignature != formValues["X-Amz-Signature"] {
 		return false, nil
 	}
 	return true, nil
 }
 
-// DoesPresignedSignatureMatch - Verify query headers with presigned signature
+// doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func (s *Sign) DoesPresignedSignatureMatch() (bool, *probe.Error) {
+func doesPresignedSignatureMatch(r *http.Request) (bool, *probe.Error) {
+	// Access credentials.
+	cred := serverConfig.GetCredential()
+
+	// Server region.
+	region := serverConfig.GetRegion()
+
+	// Copy request
+	req := *r
+
 	// Parse request query string.
-	preSignValues, err := parsePreSignV4(s.httpRequest.URL.Query())
+	preSignValues, err := parsePreSignV4(req.URL.Query())
 	if err != nil {
-		return false, err.Trace(s.httpRequest.URL.String())
+		return false, err.Trace(req.URL.String())
 	}
 
 	// Verify if the access key id matches.
-	if preSignValues.Credential.accessKeyID != s.accessKeyID {
-		return false, ErrInvalidAccessKeyID("Access key id does not match with our records.", preSignValues.Credential.accessKeyID).Trace(preSignValues.Credential.accessKeyID)
+	if preSignValues.Credential.accessKey != cred.AccessKeyID {
+		return false, ErrInvalidAccessKey("Access key id does not match with our records.", preSignValues.Credential.accessKey).Trace(preSignValues.Credential.accessKey)
 	}
 
 	// Verify if region is valid.
-	reqRegion := preSignValues.Credential.scope.region
-	if !isValidRegion(reqRegion, s.region) {
-		return false, ErrInvalidRegion("Requested region is not recognized.", reqRegion).Trace(reqRegion)
+	sRegion := preSignValues.Credential.scope.region
+	if !isValidRegion(sRegion, region) {
+		return false, ErrInvalidRegion("Requested region is not recognized.", sRegion).Trace(sRegion)
 	}
 
-	// Save region.
-	s.region = reqRegion
-
 	// Extract all the signed headers along with its values.
-	s.extractedSignedHeaders = extractSignedHeaders(preSignValues.SignedHeaders, s.httpRequest.Header)
+	extractedSignedHeaders := extractSignedHeaders(preSignValues.SignedHeaders, req.Header)
 
 	// Construct new query.
 	query := make(url.Values)
@@ -293,11 +267,11 @@ func (s *Sign) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	// Construct the query.
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
-	query.Set("X-Amz-SignedHeaders", s.getSignedHeaders(s.extractedSignedHeaders))
-	query.Set("X-Amz-Credential", s.accessKeyID+"/"+s.getScope(t))
+	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
+	query.Set("X-Amz-Credential", cred.AccessKeyID+"/"+getScope(t, region))
 
 	// Save other headers available in the request parameters.
-	for k, v := range s.httpRequest.URL.Query() {
+	for k, v := range req.URL.Query() {
 		if strings.HasPrefix(strings.ToLower(k), "x-amz") {
 			continue
 		}
@@ -308,35 +282,58 @@ func (s *Sign) DoesPresignedSignatureMatch() (bool, *probe.Error) {
 	encodedQuery := query.Encode()
 
 	// Verify if date query is same.
-	if s.httpRequest.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
+	if req.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
 		return false, nil
 	}
 	// Verify if expires query is same.
-	if s.httpRequest.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
+	if req.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
 		return false, nil
 	}
 	// Verify if signed headers query is same.
-	if s.httpRequest.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
+	if req.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
 		return false, nil
 	}
 	// Verify if credential query is same.
-	if s.httpRequest.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
+	if req.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
 		return false, nil
 	}
-	// Verify finally if signature is same.
-	newSignature := s.getSignature(s.getSigningKey(t), s.getStringToSign(s.getPresignedCanonicalRequest(encodedQuery), t))
-	if s.httpRequest.URL.Query().Get("X-Amz-Signature") != newSignature {
+
+	/// Verify finally if signature is same.
+
+	// Get canonical request.
+	presignedCanonicalReq := getPresignCanonicalRequest(extractedSignedHeaders, encodedQuery, req.URL.Path, req.Method, req.Host)
+
+	// Get string to sign from canonical request.
+	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, region)
+
+	// Get hmac presigned signing key.
+	presignedSigningKey := getSigningKey(cred.SecretAccessKey, t, region)
+
+	// Get new signature.
+	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
+
+	// Verify signature.
+	if req.URL.Query().Get("X-Amz-Signature") != newSignature {
 		return false, nil
 	}
 	return true, nil
 }
 
-// DoesSignatureMatch - Verify authorization header with calculated header in accordance with
+// doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func (s *Sign) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
+func doesSignatureMatch(hashedPayload string, r *http.Request) (bool, *probe.Error) {
+	// Access credentials.
+	cred := serverConfig.GetCredential()
+
+	// Server region.
+	region := serverConfig.GetRegion()
+
+	// Copy request.
+	req := *r
+
 	// Save authorization header.
-	v4Auth := s.httpRequest.Header.Get("Authorization")
+	v4Auth := req.Header.Get("Authorization")
 
 	// Parse signature version '4' header.
 	signV4Values, err := parseSignV4(v4Auth)
@@ -345,29 +342,23 @@ func (s *Sign) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
 	}
 
 	// Extract all the signed headers along with its values.
-	s.extractedSignedHeaders = extractSignedHeaders(signV4Values.SignedHeaders, s.httpRequest.Header)
+	extractedSignedHeaders := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
 
 	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKeyID != s.accessKeyID {
-		return false, ErrInvalidAccessKeyID("Access key id does not match with our records.", signV4Values.Credential.accessKeyID).Trace(signV4Values.Credential.accessKeyID)
+	if signV4Values.Credential.accessKey != cred.AccessKeyID {
+		return false, ErrInvalidAccessKey("Access key id does not match with our records.", signV4Values.Credential.accessKey).Trace(signV4Values.Credential.accessKey)
 	}
 
 	// Verify if region is valid.
-	reqRegion := signV4Values.Credential.scope.region
-	if !isValidRegion(reqRegion, s.region) {
-		return false, ErrInvalidRegion("Requested region is not recognized.", reqRegion).Trace(reqRegion)
+	sRegion := signV4Values.Credential.scope.region
+	if !isValidRegion(sRegion, region) {
+		return false, ErrInvalidRegion("Requested region is not recognized.", sRegion).Trace(sRegion)
 	}
-
-	// Save region.
-	s.region = reqRegion
-
-	// Set input payload.
-	s.httpRequest.Header.Set("X-Amz-Content-Sha256", hashedPayload)
 
 	// Extract date, if not present throw error.
 	var date string
-	if date = s.httpRequest.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
-		if date = s.httpRequest.Header.Get("Date"); date == "" {
+	if date = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
+		if date = r.Header.Get("Date"); date == "" {
 			return false, ErrMissingDateHeader("Date header is missing from the request.").Trace()
 		}
 	}
@@ -377,11 +368,20 @@ func (s *Sign) DoesSignatureMatch(hashedPayload string) (bool, *probe.Error) {
 		return false, probe.NewError(e)
 	}
 
-	// Signature version '4'.
-	canonicalRequest := s.getCanonicalRequest()
-	stringToSign := s.getStringToSign(canonicalRequest, t)
-	signingKey := s.getSigningKey(t)
-	newSignature := s.getSignature(signingKey, stringToSign)
+	// Query string.
+	queryStr := req.URL.Query().Encode()
+
+	// Get canonical request.
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method, req.Host)
+
+	// Get string to sign from canonical request.
+	stringToSign := getStringToSign(canonicalRequest, t, region)
+
+	// Get hmac signing key.
+	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+
+	// Calculate signature.
+	newSignature := getSignature(signingKey, stringToSign)
 
 	// Verify if signature match.
 	if newSignature != signV4Values.Signature {

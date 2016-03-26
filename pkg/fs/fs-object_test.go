@@ -19,7 +19,6 @@ package fs
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -47,7 +46,7 @@ func TestGetObjectInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fs.CreateObject("test-getobjectinfo", "Asia/asiapics.jpg", "", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
+	_, err = fs.CreateObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +137,7 @@ func TestGetObjectInfoCore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fs.CreateObject("test-getobjinfo", "Asia/asiapics.jpg", "", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
+	_, err = fs.CreateObject("test-getobjinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,16 +227,14 @@ func BenchmarkGetObject(b *testing.B) {
 	text := "Jack and Jill went up the hill / To fetch a pail of water."
 	hasher := md5.New()
 	hasher.Write([]byte(text))
-	sum := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	for i := 0; i < 10; i++ {
-		_, err = filesystem.CreateObject("bucket", "object"+strconv.Itoa(i), sum, int64(len(text)), bytes.NewBufferString(text), nil)
+		_, err = filesystem.CreateObject("bucket", "object"+strconv.Itoa(i), int64(len(text)), bytes.NewBufferString(text), hasher.Sum(nil))
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 
 	var w bytes.Buffer
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

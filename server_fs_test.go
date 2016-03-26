@@ -38,10 +38,6 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-const (
-	yyyymmdd = "20060102"
-)
-
 type MyAPIFSCacheSuite struct {
 	root       string
 	req        *http.Request
@@ -154,29 +150,31 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 
 	req.Header.Set("x-amz-date", t.Format(iso8601Format))
 
-	// add Content-Length
+	// Add Content-Length
 	req.ContentLength = contentLength
 
-	// add body
+	// Save for subsequent use
+	var hashedPayload string
 	switch {
 	case body == nil:
-		req.Body = nil
+		hashedPayload = hex.EncodeToString(sum256([]byte{}))
 	default:
+		payloadBytes, e := ioutil.ReadAll(body)
+		if e != nil {
+			return nil, e
+		}
+		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
+		md5base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
+		req.Header.Set("Content-Md5", md5base64)
+	}
+	req.Header.Set("x-amz-content-sha256", hashedPayload)
+
+	// Seek back to beginning.
+	if body != nil {
+		body.Seek(0, 0)
+		// Add body
 		req.Body = ioutil.NopCloser(body)
 	}
-
-	// save for subsequent use
-	hash := func() string {
-		switch {
-		case body == nil:
-			return hex.EncodeToString(sum256([]byte{}))
-		default:
-			sum256Bytes, _ := sum256Reader(body)
-			return hex.EncodeToString(sum256Bytes)
-		}
-	}
-	hashedPayload := hash()
-	req.Header.Set("x-amz-content-sha256", hashedPayload)
 
 	var headers []string
 	vals := make(map[string][]string)

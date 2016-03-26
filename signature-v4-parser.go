@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signature4
+package main
 
 import (
 	"net/url"
@@ -24,11 +24,11 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// credential data type represents structured form of Credential
+// credentialHeader data type represents structured form of Credential
 // string from authorization header.
-type credential struct {
-	accessKeyID string
-	scope       struct {
+type credentialHeader struct {
+	accessKey string
+	scope     struct {
 		date    time.Time
 		region  string
 		service string
@@ -36,40 +36,41 @@ type credential struct {
 	}
 }
 
-// parse credential string into its structured form.
-func parseCredential(credElement string) (credential, *probe.Error) {
+// parse credentialHeader string into its structured form.
+func parseCredentialHeader(credElement string) (credentialHeader, *probe.Error) {
 	creds := strings.Split(strings.TrimSpace(credElement), "=")
 	if len(creds) != 2 {
-		return credential{}, ErrMissingFields("Credential tag has missing fields.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrMissingFields("Credential tag has missing fields.", credElement).Trace(credElement)
 	}
 	if creds[0] != "Credential" {
-		return credential{}, ErrMissingCredTag("Missing credentials tag.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrMissingCredTag("Missing credentials tag.", credElement).Trace(credElement)
 	}
 	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
 	if len(credElements) != 5 {
-		return credential{}, ErrCredMalformed("Credential values malformed.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrCredMalformed("Credential values malformed.", credElement).Trace(credElement)
 	}
 	if !isValidAccessKey.MatchString(credElements[0]) {
-		return credential{}, ErrInvalidAccessKeyID("Invalid access key id.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrInvalidAccessKey("Invalid access key id.", credElement).Trace(credElement)
 	}
-	cred := credential{
-		accessKeyID: credElements[0],
+	// Save access key id.
+	cred := credentialHeader{
+		accessKey: credElements[0],
 	}
 	var e error
 	cred.scope.date, e = time.Parse(yyyymmdd, credElements[1])
 	if e != nil {
-		return credential{}, ErrInvalidDateFormat("Invalid date format.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrInvalidDateFormat("Invalid date format.", credElement).Trace(credElement)
 	}
 	if credElements[2] == "" {
-		return credential{}, ErrRegionISEmpty("Region is empty.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrRegionISEmpty("Region is empty.", credElement).Trace(credElement)
 	}
 	cred.scope.region = credElements[2]
 	if credElements[3] != "s3" {
-		return credential{}, ErrInvalidService("Invalid service detected.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrInvalidService("Invalid service detected.", credElement).Trace(credElement)
 	}
 	cred.scope.service = credElements[3]
 	if credElements[4] != "aws4_request" {
-		return credential{}, ErrInvalidRequestVersion("Invalid request version detected.", credElement).Trace(credElement)
+		return credentialHeader{}, ErrInvalidRequestVersion("Invalid request version detected.", credElement).Trace(credElement)
 	}
 	cred.scope.request = credElements[4]
 	return cred, nil
@@ -103,7 +104,7 @@ func parseSignedHeaders(signedHdrElement string) ([]string, *probe.Error) {
 
 // signValues data type represents structured form of AWS Signature V4 header.
 type signValues struct {
-	Credential    credential
+	Credential    credentialHeader
 	SignedHeaders []string
 	Signature     string
 }
@@ -118,7 +119,7 @@ type preSignValues struct {
 // Parses signature version '4' query string of the following form.
 //
 //   querystring = X-Amz-Algorithm=algorithm
-//   querystring += &X-Amz-Credential= urlencode(access_key_ID + '/' + credential_scope)
+//   querystring += &X-Amz-Credential= urlencode(accessKey + '/' + credential_scope)
 //   querystring += &X-Amz-Date=date
 //   querystring += &X-Amz-Expires=timeout interval
 //   querystring += &X-Amz-SignedHeaders=signed_headers
@@ -135,7 +136,7 @@ func parsePreSignV4(query url.Values) (preSignValues, *probe.Error) {
 
 	var err *probe.Error
 	// Save credential.
-	preSignV4Values.Credential, err = parseCredential("Credential=" + query.Get("X-Amz-Credential"))
+	preSignV4Values.Credential, err = parseCredentialHeader("Credential=" + query.Get("X-Amz-Credential"))
 	if err != nil {
 		return preSignValues{}, err.Trace(query.Get("X-Amz-Credential"))
 	}
@@ -171,8 +172,8 @@ func parsePreSignV4(query url.Values) (preSignValues, *probe.Error) {
 
 // Parses signature version '4' header of the following form.
 //
-//    Authorization: algorithm Credential=access key ID/credential scope, \
-//            SignedHeaders=SignedHeaders, Signature=signature
+//    Authorization: algorithm Credential=accessKeyID/credScope, \
+//            SignedHeaders=signedHeaders, Signature=signature
 //
 func parseSignV4(v4Auth string) (signValues, *probe.Error) {
 	// Replace all spaced strings, some clients can send spaced
@@ -200,7 +201,7 @@ func parseSignV4(v4Auth string) (signValues, *probe.Error) {
 
 	var err *probe.Error
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredential(authFields[0])
+	signV4Values.Credential, err = parseCredentialHeader(authFields[0])
 	if err != nil {
 		return signValues{}, err.Trace(v4Auth)
 	}

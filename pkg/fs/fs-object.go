@@ -18,22 +18,19 @@ package fs
 
 import (
 	"bytes"
+	"crypto/md5"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"crypto/md5"
-	"encoding/base64"
 	"encoding/hex"
 	"runtime"
 
 	"github.com/minio/minio/pkg/atomic"
-	"github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/s3/signature4"
 )
 
 /// Object Operations
@@ -200,7 +197,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 }
 
 // CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size int64, data io.Reader, sig *signature4.Sign) (ObjectInfo, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket string, object string, size int64, data io.Reader, md5Bytes []byte) (ObjectInfo, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
@@ -234,18 +231,15 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 
 	// Get object path.
 	objectPath := filepath.Join(bucketPath, object)
-	if expectedMD5Sum != "" {
-		var expectedMD5SumBytes []byte
-		expectedMD5SumBytes, e = base64.StdEncoding.DecodeString(expectedMD5Sum)
-		if e != nil {
-			// Pro-actively close the connection.
-			return ObjectInfo{}, probe.NewError(InvalidDigest{MD5: expectedMD5Sum})
-		}
-		expectedMD5Sum = hex.EncodeToString(expectedMD5SumBytes)
+
+	// md5Hex representation.
+	var md5Hex string
+	if len(md5Bytes) != 0 {
+		md5Hex = hex.EncodeToString(md5Bytes)
 	}
 
 	// Write object.
-	file, e := atomic.FileCreateWithPrefix(objectPath, expectedMD5Sum+"$tmpobject")
+	file, e := atomic.FileCreateWithPrefix(objectPath, md5Hex+"$tmpobject")
 	if e != nil {
 		switch e := e.(type) {
 		case *os.PathError:
@@ -259,52 +253,40 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
+	defer file.Close()
+
+	// Initialize md5 writer.
+	md5Writer := md5.New()
+
+	// Instantiate a new multi writer.
+	multiWriter := io.MultiWriter(md5Writer, file)
 
 	// Instantiate checksum hashers and create a multiwriter.
-	md5Hasher := md5.New()
-	sha256Hasher := sha256.New()
-	objectWriter := io.MultiWriter(file, md5Hasher, sha256Hasher)
-
 	if size > 0 {
-		if _, e = io.CopyN(objectWriter, data, size); e != nil {
+		if _, e = io.CopyN(multiWriter, data, size); e != nil {
 			file.CloseAndPurge()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	} else {
-		if _, e = io.Copy(objectWriter, data); e != nil {
+		if _, e = io.Copy(multiWriter, data); e != nil {
 			file.CloseAndPurge()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
 
-	md5Sum := hex.EncodeToString(md5Hasher.Sum(nil))
-	// Verify if the written object is equal to what is expected, only
-	// if it is requested as such.
-	if expectedMD5Sum != "" {
-		if !isMD5SumEqual(expectedMD5Sum, md5Sum) {
-			file.CloseAndPurge()
-			return ObjectInfo{}, probe.NewError(BadDigest{MD5: expectedMD5Sum, Bucket: bucket, Object: object})
+	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	if len(md5Bytes) != 0 {
+		if newMD5Hex != md5Hex {
+			return ObjectInfo{}, probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
-	sha256Sum := hex.EncodeToString(sha256Hasher.Sum(nil))
-	if sig != nil {
-		ok, err := sig.DoesSignatureMatch(sha256Sum)
-		if err != nil {
-			file.CloseAndPurge()
-			return ObjectInfo{}, err.Trace()
-		}
-		if !ok {
-			file.CloseAndPurge()
-			return ObjectInfo{}, probe.NewError(SignDoesNotMatch{})
-		}
-	}
-	file.Close()
 
 	// Set stat again to get the latest metadata.
-	st, e := os.Stat(objectPath)
+	st, e := os.Stat(file.Name())
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
+
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(objectPath); objectExt != "" {
 		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
@@ -317,8 +299,8 @@ func (fs Filesystem) CreateObject(bucket, object, expectedMD5Sum string, size in
 		Name:         object,
 		ModifiedTime: st.ModTime(),
 		Size:         st.Size(),
+		MD5Sum:       newMD5Hex,
 		ContentType:  contentType,
-		MD5Sum:       md5Sum,
 	}
 	return newObject, nil
 }

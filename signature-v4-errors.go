@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package signature4
+package main
 
 import (
 	"fmt"
@@ -48,10 +48,7 @@ var (
 	ErrMalformedExpires      = errFactory()
 	ErrAuthHeaderEmpty       = errFactory()
 	ErrUnsuppSignAlgo        = errFactory()
-	ErrMissingExpiresQuery   = errFactory()
 	ErrExpiredPresignRequest = errFactory()
-	ErrSignDoesNotMath       = errFactory()
-	ErrInvalidAccessKeyID    = errFactory()
-	ErrInvalidSecretKey      = errFactory()
 	ErrRegionISEmpty         = errFactory()
+	ErrInvalidAccessKey      = errFactory()
 )

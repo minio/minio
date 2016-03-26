@@ -25,6 +25,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const jwtAlgorithm = "Bearer"
+
 // JWT - jwt auth backend
 type JWT struct {
 	credential

@@ -19,18 +19,17 @@ package main
 import (
 	"encoding/base64"
 	"strings"
+
+	"github.com/minio/minio/pkg/probe"
 )
 
-// isValidMD5 - verify if valid md5
-func isValidMD5(md5 string) bool {
-	if md5 == "" {
-		return true
+// checkValidMD5 - verify if valid md5, returns md5 in bytes.
+func checkValidMD5(md5 string) ([]byte, *probe.Error) {
+	md5Bytes, e := base64.StdEncoding.DecodeString(strings.TrimSpace(md5))
+	if e != nil {
+		return nil, probe.NewError(e)
 	}
-	_, err := base64.StdEncoding.DecodeString(strings.TrimSpace(md5))
-	if err != nil {
-		return false
-	}
-	return true
+	return md5Bytes, nil
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
