@@ -1,4 +1,4 @@
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build linux darwin dragonfly freebsd netbsd openbsd
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -16,14 +16,20 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
 	"unsafe"
+)
+
+const (
+	// large enough buffer size for ReadDirent() syscall
+	readDirentBufSize = 4096 * 25
 )
 
 // actual length of the byte array from the c - world.
@@ -36,32 +42,42 @@ func clen(n []byte) int {
 	return len(n)
 }
 
-func parseDirents(buf []byte) []Dirent {
+// parseDirents - inspired from syscall_<os>.go:parseDirents()
+func parseDirents(buf []byte) []fsDirent {
 	bufidx := 0
-	dirents := []Dirent{}
+	dirents := []fsDirent{}
 	for bufidx < len(buf) {
 		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
 		bufidx += int(dirent.Reclen)
+		if skipDirent(dirent) {
+			continue
+		}
+		if runtime.GOOS != "linux" {
+			if dirent.Reclen == 0 {
+				break
+			}
+		}
 		bytes := (*[10000]byte)(unsafe.Pointer(&dirent.Name[0]))
 		var name = string(bytes[0:clen(bytes[:])])
 		if name == "." || name == ".." { // Useless names
 			continue
 		}
-		dirents = append(dirents, Dirent{
-			Name:  name,
-			IsDir: dirent.Type == syscall.DT_DIR,
+		dirents = append(dirents, fsDirent{
+			name:  name,
+			isDir: dirent.Type == syscall.DT_DIR,
 		})
 	}
 	return dirents
 }
 
-func readDirAll(readDirPath, entryPrefixMatch string) ([]Dirent, error) {
-	buf := make([]byte, 100*1024)
+func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
+	buf := make([]byte, readDirentBufSize)
 	f, err := os.Open(readDirPath)
 	if err != nil {
 		return nil, err
 	}
-	dirents := []Dirent{}
+	defer f.Close()
+	dirents := []fsDirent{}
 	for {
 		nbuf, err := syscall.ReadDirent(int(f.Fd()), buf)
 		if err != nil {
@@ -71,19 +87,15 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]Dirent, error) {
 			break
 		}
 		for _, dirent := range parseDirents(buf[:nbuf]) {
-			if strings.HasPrefix(dirent.Name, entryPrefixMatch) {
+			if dirent.isDir {
+				dirent.name += string(os.PathSeparator)
+				dirent.size = 0
+			}
+			if strings.HasPrefix(dirent.name, entryPrefixMatch) {
 				dirents = append(dirents, dirent)
 			}
 		}
 	}
-	sort.Sort(Dirents(dirents))
+	sort.Sort(fsDirents(dirents))
 	return dirents, nil
-}
-
-// Using sort.Search() internally to jump to the file entry containing the prefix.
-func searchDirents(dirents []Dirent, x string) int {
-	processFunc := func(i int) bool {
-		return dirents[i].Name >= x
-	}
-	return sort.Search(len(dirents), processFunc)
 }

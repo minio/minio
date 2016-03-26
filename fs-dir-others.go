@@ -1,4 +1,4 @@
-// +build windows, solaris
+// +build !linux,!darwin,!openbsd,!freebsd,!netbsd,!dragonfly
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"io"
@@ -25,13 +25,13 @@ import (
 	"strings"
 )
 
-func readDirAll(readDirPath, entryPrefixMatch string) ([]Dirent, error) {
-	buf := make([]byte, 100*1024)
+func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 	f, err := os.Open(readDirPath)
 	if err != nil {
 		return nil, err
 	}
-	var dirents []Dirent
+	defer f.Close()
+	var dirents []fsDirent
 	for {
 		fis, err := f.Readdir(1000)
 		if err != nil {
@@ -41,25 +41,22 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]Dirent, error) {
 			return nil, err
 		}
 		for _, fi := range fis {
+			dirent := fsDirent{
+				name:         fi.Name(),
+				size:         fi.Size(),
+				modifiedTime: fi.ModTime(),
+				isDir:        fi.IsDir(),
+			}
+			if dirent.isDir {
+				dirent.name += string(os.PathSeparator)
+				dirent.size = 0
+			}
 			if strings.HasPrefix(fi.Name(), entryPrefixMatch) {
-				dirents = append(dirents, Dirent{
-					Name:         fi.Name(),
-					Size:         fi.Size(),
-					ModifiedTime: fi.ModTime(),
-					IsDir:        fi.IsDir(),
-				})
+				dirents = append(dirents, dirent)
 			}
 		}
 	}
 	// Sort dirents.
-	sort.Sort(Dirents(dirents))
+	sort.Sort(fsDirents(dirents))
 	return dirents, nil
-}
-
-// Using sort.Search() internally to jump to the file entry containing the prefix.
-func searchDirents(dirents []Dirent, x string) int {
-	processFunc := func(i int) bool {
-		return dirents[i].Name >= x
-	}
-	return sort.Search(len(dirents), processFunc)
 }

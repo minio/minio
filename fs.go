@@ -39,7 +39,7 @@ type Filesystem struct {
 	minFreeDisk        int64
 	rwLock             *sync.RWMutex
 	multiparts         *multiparts
-	listObjectMap      map[listObjectParams][]objectInfoChannel
+	listObjectMap      map[listObjectParams][]*treeWalker
 	listObjectMapMutex *sync.Mutex
 }
 
@@ -58,34 +58,31 @@ type multiparts struct {
 	ActiveSession map[string]*multipartSession `json:"activeSessions"`
 }
 
-func (fs *Filesystem) pushListObjectCh(params listObjectParams, ch objectInfoChannel) {
+func (fs *Filesystem) pushTreeWalker(params listObjectParams, walker *treeWalker) {
 	fs.listObjectMapMutex.Lock()
 	defer fs.listObjectMapMutex.Unlock()
 
-	channels := []objectInfoChannel{ch}
-	if _, ok := fs.listObjectMap[params]; ok {
-		channels = append(fs.listObjectMap[params], ch)
-	}
+	walkers, _ := fs.listObjectMap[params]
+	walkers = append(walkers, walker)
 
-	fs.listObjectMap[params] = channels
+	fs.listObjectMap[params] = walkers
 }
 
-func (fs *Filesystem) popListObjectCh(params listObjectParams) *objectInfoChannel {
+func (fs *Filesystem) popTreeWalker(params listObjectParams) *treeWalker {
 	fs.listObjectMapMutex.Lock()
 	defer fs.listObjectMapMutex.Unlock()
 
-	if channels, ok := fs.listObjectMap[params]; ok {
-		for i, channel := range channels {
-			if !channel.timedOut {
-				// channels[:i] have all timed out, hence remove them too.
-				chs := channels[i+1:]
-				if len(chs) > 0 {
-					fs.listObjectMap[params] = chs
+	if walkers, ok := fs.listObjectMap[params]; ok {
+		for i, walker := range walkers {
+			if !walker.timedOut {
+				newWalkers := walkers[i+1:]
+				if len(newWalkers) > 0 {
+					fs.listObjectMap[params] = newWalkers
 				} else {
 					delete(fs.listObjectMap, params)
 				}
 
-				return &channel
+				return walker
 			}
 		}
 
@@ -129,7 +126,7 @@ func newFS(rootPath string) (ObjectAPI, *probe.Error) {
 	// Minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 5
 
-	fs.listObjectMap = make(map[listObjectParams][]objectInfoChannel)
+	fs.listObjectMap = make(map[listObjectParams][]*treeWalker)
 	fs.listObjectMapMutex = &sync.Mutex{}
 
 	// Return here.

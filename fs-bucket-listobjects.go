@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/pkg/probe"
 )
@@ -32,118 +30,6 @@ const (
 	// listObjectsLimit - maximum list objects limit.
 	listObjectsLimit = 1000
 )
-
-// ObjectInfo - object info.
-type ObjectInfo struct {
-	Bucket       string
-	Name         string
-	ModifiedTime time.Time
-	ContentType  string
-	MD5Sum       string
-	Size         int64
-	IsDir        bool
-	Err          error
-}
-
-// ObjectInfoChannel - object info channel.
-type ObjectInfoChannel struct {
-	ch       <-chan ObjectInfo
-	timedOut bool
-}
-
-func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(ObjectInfo) bool) bool {
-	markerPart := ""
-	markerRest := ""
-
-	if marker != "" {
-		markerSplit := strings.SplitN(marker, string(os.PathSeparator), 2)
-		markerPart = markerSplit[0]
-		if len(markerSplit) == 2 {
-			markerRest = markerSplit[1]
-		}
-	}
-
-	dirents, err := readDirAll(path.Join(bucketDir, prefixDir), entryPrefixMatch)
-	if err != nil {
-		send(ObjectInfo{Err: err})
-		return false
-	}
-
-	dirents = dirents[searchDirents(dirents, markerPart):]
-	for i, dirent := range dirents {
-		if i == 0 && markerPart == dirent.Name && !dirent.IsDir {
-			continue
-		}
-		if dirent.IsDir && recursive {
-			markerArg := ""
-			if dirent.Name == markerPart {
-				markerArg = markerRest
-			}
-			if !treeWalk(bucketDir, path.Join(prefixDir, dirent.Name), "", markerArg, recursive, send) {
-				return false
-			}
-			continue
-		}
-		objectInfo := ObjectInfo{}
-		objectInfo.Name = path.Join(prefixDir, dirent.Name)
-		if dirent.ModifiedTime.IsZero() && dirent.Size == 0 {
-			// ModifiedTime and Size are zero, Stat() and figure out
-			// the actual values that need to be set.
-			fi, err := os.Stat(path.Join(bucketDir, prefixDir, dirent.Name))
-			if err != nil {
-				send(ObjectInfo{Err: err})
-				return false
-			}
-			objectInfo.ModifiedTime = fi.ModTime()
-			objectInfo.Size = fi.Size()
-			objectInfo.IsDir = fi.IsDir()
-			if fi.IsDir() {
-				objectInfo.Size = 0
-				objectInfo.Name += "/"
-			}
-		} else {
-			// If ModifiedTime or Size are set then we set them back
-			// without attempting another Stat operation.
-			objectInfo.ModifiedTime = dirent.ModifiedTime
-			objectInfo.Size = dirent.Size
-			objectInfo.IsDir = dirent.IsDir
-		}
-		if !send(objectInfo) {
-			return false
-		}
-	}
-	return true
-}
-
-func getObjectInfoChannel(fsPath, bucket, prefix, marker string, recursive bool) *ObjectInfoChannel {
-	objectInfoCh := make(chan ObjectInfo, listObjectsLimit)
-	objectInfoChannel := ObjectInfoChannel{ch: objectInfoCh}
-	entryPrefixMatch := prefix
-	prefixDir := ""
-	lastIndex := strings.LastIndex(prefix, string(os.PathSeparator))
-	if lastIndex != -1 {
-		entryPrefixMatch = prefix[lastIndex+1:]
-		prefixDir = prefix[:lastIndex]
-	}
-
-	go func() {
-		defer close(objectInfoCh)
-		send := func(oi ObjectInfo) bool {
-			// Add the bucket.
-			oi.Bucket = bucket
-			timer := time.After(time.Second * 15)
-			select {
-			case objectInfoCh <- oi:
-				return true
-			case <-timer:
-				objectInfoChannel.timedOut = true
-				return false
-			}
-		}
-		treeWalk(path.Join(fsPath, bucket), prefixDir, entryPrefixMatch, marker, recursive, send)
-	}()
-	return &objectInfoChannel
-}
 
 // isDirExist - returns whether given directory is exist or not.
 func isDirExist(dirname string) (status bool, err error) {
@@ -156,8 +42,8 @@ func isDirExist(dirname string) (status bool, err error) {
 
 // ListObjects - lists all objects for a given prefix, returns up to
 // maxKeys number of objects per call.
-func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
-	result := ListObjectsResult{}
+func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error) {
+	result := ListObjectsInfo{}
 
 	// Input validation.
 	if !IsValidBucketName(bucket) {
@@ -184,7 +70,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
-		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported. Only '/' is supported.", delimiter))
+		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported. Only '/' is supported", delimiter))
 	}
 
 	// Marker is set unescape.
@@ -231,25 +117,26 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	// Maximum 1000 objects returned in a single to listObjects.
 	// Further calls will set right marker value to continue reading the rest of the objectList.
-	// popListObjectCh returns nil if the call to ListObject is done for the first time.
+	// popTreeWalker returns nil if the call to ListObject is done for the first time.
 	// On further calls to ListObjects to retrive more objects within the timeout period,
-	// popListObjectCh returns the channel from which rest of the objects can be retrieved.
-	objectInfoCh := fs.popListObjectCh(listObjectParams{bucket, delimiter, marker, prefix})
-	if objectInfoCh == nil {
-		objectInfoCh = getObjectInfoChannel(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
+	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
+	walker := fs.popTreeWalker(listObjectParams{bucket, delimiter, marker, prefix})
+	if walker == nil {
+		walker = startTreeWalker(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
 	}
 
 	nextMarker := ""
 	for i := 0; i < maxKeys; {
-		objInfo, ok := <-objectInfoCh.ch
+		walkResult, ok := <-walker.ch
 		if !ok {
 			// Closed channel.
 			return result, nil
 		}
-		if objInfo.Err != nil {
-			return ListObjectsInfo{}, probe.NewError(objInfo.Err)
+		if walkResult.err != nil {
+			return ListObjectsInfo{}, probe.NewError(walkResult.err)
 		}
-
+		objInfo := walkResult.objectInfo
+		objInfo.Name = filepath.ToSlash(objInfo.Name)
 		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
 			continue
 		}
@@ -259,11 +146,15 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		} else {
 			result.Objects = append(result.Objects, objInfo)
 		}
+
+		if walkResult.end {
+			return result, nil
+		}
 		nextMarker = objInfo.Name
 		i++
 	}
 	result.IsTruncated = true
 	result.NextMarker = nextMarker
-	fs.pushListObjectCh(ListObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
+	fs.pushTreeWalker(listObjectParams{bucket, delimiter, nextMarker, prefix}, walker)
 	return result, nil
 }
