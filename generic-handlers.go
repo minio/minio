@@ -46,13 +46,13 @@ type redirectHandler struct {
 	locationPrefix string
 }
 
-// Private bucket.
+// Reserved bucket.
 const (
-	privateBucket = "/minio"
+	reservedBucket = "/minio"
 )
 
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
-	return redirectHandler{handler: h, locationPrefix: privateBucket}
+	return redirectHandler{handler: h, locationPrefix: reservedBucket}
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
 		// For all browser requests set appropriate Cache-Control policies
-		match, e := regexp.MatchString(privateBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
+		match, e := regexp.MatchString(reservedBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
 		if e != nil {
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
@@ -93,7 +93,7 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// For assets set cache expiry of one year. For each release, the name
 			// of the asset name will change and hence it can not be served from cache.
 			w.Header().Set("Cache-Control", "max-age=31536000")
-		} else if strings.HasPrefix(r.URL.Path, privateBucket+"/") {
+		} else if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
 			// For non asset requests we serve index.html which will never be cached.
 			w.Header().Set("Cache-Control", "no-store")
 		}
@@ -103,17 +103,17 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Adds verification for incoming paths.
 type minioPrivateBucketHandler struct {
-	handler       http.Handler
-	privateBucket string
+	handler        http.Handler
+	reservedBucket string
 }
 
 func setPrivateBucketHandler(h http.Handler) http.Handler {
-	return minioPrivateBucketHandler{handler: h, privateBucket: privateBucket}
+	return minioPrivateBucketHandler{handler: h, reservedBucket: reservedBucket}
 }
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For all non browser requests, reject access to 'privateBucket'.
-	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == privateBucket {
+	// For all non browser requests, reject access to 'reservedBucket'.
+	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == reservedBucket {
 		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
 		return
 	}

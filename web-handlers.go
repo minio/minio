@@ -168,7 +168,7 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
-		if bucket.Name != path.Base(privateBucket) {
+		if bucket.Name != path.Base(reservedBucket) {
 			reply.Buckets = append(reply.Buckets, BucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.CreationDate,
