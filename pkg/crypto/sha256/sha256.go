@@ -1,4 +1,4 @@
-// +build darwin windows 386 arm !cgo
+// +build freebsd darwin windows 386 arm !cgo
 
 /*
  * Minio Cloud Storage, (C) 2014-2016 Minio, Inc.

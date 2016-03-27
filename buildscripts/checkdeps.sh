@@ -141,6 +141,9 @@ is_supported_os() {
         "Linux")
             os="linux"
             ;;
+        "FreeBSD")
+            os="freebsd"
+            ;;
         "Darwin")
             osx_host_version=$(env sw_vers -productVersion)
             check_version "${osx_host_version}" "${OSX_VERSION}"
@@ -155,7 +158,7 @@ is_supported_os() {
 is_supported_arch() {
     local supported
     case ${UNAME##* } in
-        "x86_64")
+        "x86_64" | "amd64")
             supported=1
             ;;
         "arm"*)
