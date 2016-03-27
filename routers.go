@@ -17,143 +17,14 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 
-	"github.com/elazarl/go-bindata-assetfs"
-	"github.com/gorilla/handlers"
 	router "github.com/gorilla/mux"
-	jsonrpc "github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/miniobrowser"
 )
-
-// storageAPI container for S3 compatible API.
-type storageAPI struct {
-	// Filesystem instance.
-	Filesystem fs.Filesystem
-}
-
-// webAPI container for Web API.
-type webAPI struct {
-	// FSPath filesystem path.
-	FSPath string
-	// Minio client instance.
-	Client *minio.Client
-
-	// private params.
-	apiAddress string // api destination address.
-	// credential kept to be used internally.
-	accessKeyID     string
-	secretAccessKey string
-}
-
-// indexHandler - Handler to serve index.html
-type indexHandler struct {
-	handler http.Handler
-}
-
-func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = privateBucket + "/"
-	h.handler.ServeHTTP(w, r)
-}
-
-const assetPrefix = "production"
-
-func assetFS() *assetfs.AssetFS {
-	return &assetfs.AssetFS{
-		Asset:     miniobrowser.Asset,
-		AssetDir:  miniobrowser.AssetDir,
-		AssetInfo: miniobrowser.AssetInfo,
-		Prefix:    assetPrefix,
-	}
-}
-
-// specialAssets are files which are unique files not embedded inside index_bundle.js.
-const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
-
-// registerAPIHandlers - register all the handlers to their respective paths
-func registerAPIHandlers(mux *router.Router, a storageAPI, w *webAPI) {
-	// Minio rpc router
-	minio := mux.NewRoute().PathPrefix(privateBucket).Subrouter()
-
-	// Initialize json rpc handlers.
-	rpc := jsonrpc.NewServer()
-	codec := json2.NewCodec()
-	rpc.RegisterCodec(codec, "application/json")
-	rpc.RegisterCodec(codec, "application/json; charset=UTF-8")
-	rpc.RegisterService(w, "Web")
-
-	// RPC handler at URI - /minio/rpc
-	minio.Path("/rpc").Handler(rpc)
-	// Serve all assets.
-	minio.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(handlers.CompressHandler(http.StripPrefix(privateBucket, http.FileServer(assetFS()))))
-	// Serve index.html for rest of the requests
-	minio.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(privateBucket, http.FileServer(assetFS()))})
-
-	// API Router
-	api := mux.NewRoute().PathPrefix("/").Subrouter()
-
-	// Bucket router
-	bucket := api.PathPrefix("/{bucket}").Subrouter()
-
-	/// Object operations
-
-	// HeadObject
-	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(a.HeadObjectHandler)
-	// PutObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-	// ListObjectPxarts
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
-	// CompleteMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-	// NewMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(a.NewMultipartUploadHandler).Queries("uploads", "")
-	// AbortMultipartUpload
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-	// GetObject
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(a.GetObjectHandler)
-	// CopyObject
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/).*?").HandlerFunc(a.CopyObjectHandler)
-	// PutObject
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(a.PutObjectHandler)
-	// DeleteObject
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(a.DeleteObjectHandler)
-
-	/// Bucket operations
-
-	// GetBucketLocation
-	bucket.Methods("GET").HandlerFunc(a.GetBucketLocationHandler).Queries("location", "")
-	// GetBucketPolicy
-	bucket.Methods("GET").HandlerFunc(a.GetBucketPolicyHandler).Queries("policy", "")
-	// ListMultipartUploads
-	bucket.Methods("GET").HandlerFunc(a.ListMultipartUploadsHandler).Queries("uploads", "")
-	// ListObjects
-	bucket.Methods("GET").HandlerFunc(a.ListObjectsHandler)
-	// PutBucketPolicy
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketPolicyHandler).Queries("policy", "")
-	// PutBucket
-	bucket.Methods("PUT").HandlerFunc(a.PutBucketHandler)
-	// HeadBucket
-	bucket.Methods("HEAD").HandlerFunc(a.HeadBucketHandler)
-	// PostPolicy
-	bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(a.PostPolicyBucketHandler)
-	// DeleteMultipleObjects
-	bucket.Methods("POST").HandlerFunc(a.DeleteMultipleObjectsHandler)
-	// DeleteBucketPolicy
-	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketPolicyHandler).Queries("policy", "")
-	// DeleteBucket
-	bucket.Methods("DELETE").HandlerFunc(a.DeleteBucketHandler)
-
-	/// Root operation
-
-	// ListBuckets
-	api.Methods("GET").HandlerFunc(a.ListBucketsHandler)
-}
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(filesystem fs.Filesystem) http.Handler {
@@ -190,6 +61,16 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 		secretAccessKey: cred.SecretAccessKey,
 	}
 
+	// Initialize router.
+	mux := router.NewRouter()
+
+	// Register all routers.
+	registerWebRouter(mux, web)
+	registerAPIRouter(mux, api)
+	// Add new routers here.
+
+	// List of some generic handlers which are applied for all
+	// incoming requests.
 	var handlerFns = []HandlerFunc{
 		// Redirect some pre-defined browser request paths to a static
 		// location prefix.
@@ -209,13 +90,8 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
 		setAuthHandler,
+		// Add new handlers here.
 	}
-
-	// Initialize router.
-	mux := router.NewRouter()
-
-	// Register all API handlers.
-	registerAPIHandlers(mux, api, web)
 
 	// Register rest of the handlers.
 	return registerHandlers(mux, handlerFns...)
