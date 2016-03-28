@@ -27,19 +27,25 @@ import (
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	var storageHandlers StorageAPI
+	var e error
 	if len(srvCmdConfig.exportPaths) == 1 {
 		// Verify if export path is a local file system path.
-		st, e := os.Stat(srvCmdConfig.exportPaths[0])
+		var st os.FileInfo
+		st, e = os.Stat(srvCmdConfig.exportPaths[0])
 		if e == nil && st.Mode().IsDir() {
 			// Initialize storage API.
 			storageHandlers, e = newFS(srvCmdConfig.exportPaths[0])
 			fatalIf(probe.NewError(e), "Initializing fs failed.", nil)
 		} else {
-			// Initialize storage API.
+			// Initialize network storage API.
 			storageHandlers, e = newNetworkFS(srvCmdConfig.exportPaths[0])
 			fatalIf(probe.NewError(e), "Initializing network fs failed.", nil)
 		}
-	} // else if - XL part.
+	} else {
+		// Initialize XL storage API.
+		storageHandlers, e = newXL(srvCmdConfig.exportPaths...)
+		fatalIf(probe.NewError(e), "Initializing XL failed.", nil)
+	}
 
 	// Initialize object layer.
 	objectAPI := newObjectLayer(storageHandlers)

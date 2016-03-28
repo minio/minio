@@ -1056,8 +1056,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case InvalidPart:
 			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
-		case InvalidPartOrder:
-			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		default:
