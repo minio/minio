@@ -43,6 +43,10 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 			return nil, err
 		}
 		for _, fi := range fis {
+			// Skip special files.
+			if hasSpecialPrefix(fi.Name()) {
+				continue
+			}
 			dirent := fsDirent{
 				name:    fi.Name(),
 				modTime: fi.ModTime(),
@@ -84,6 +88,10 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 			return nil, err
 		}
 		for _, fi := range fis {
+			// Skip special files.
+			if hasSpecialPrefix(fi.Name()) {
+				continue
+			}
 			dirent := fsDirent{
 				name:    fi.Name(),
 				modTime: fi.ModTime(),

@@ -66,6 +66,10 @@ EXAMPLES:
 
   3. Start minio server on Windows.
       $ minio {{.Name}} C:\MyShare
+
+  4. Start minio server 8 disks to enable erasure coded layer with 4 data and 4 parity.
+      $ minio {{.Name}} /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend \
+          /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend
 `,
 }
 
@@ -155,9 +159,6 @@ func initServerConfig(c *cli.Context) {
 func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() && c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
-	}
-	if len(c.Args()) > 2 {
-		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘minio server --help’.", nil)
 	}
 }
 

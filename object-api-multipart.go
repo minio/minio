@@ -21,12 +21,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	glog "log"
 	"path"
 	"strconv"
 	"strings"
 
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/safe"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -73,6 +73,14 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	if !IsValidObjectPrefix(prefix) {
 		return ListMultipartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListMultipartsInfo{}, probe.NewError(e)
+			}
+		}
+	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashPathSeparator {
 		return ListMultipartsInfo{}, probe.NewError(UnsupportedDelimiter{
@@ -109,14 +117,14 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		recursive = false
 	}
 	result.IsTruncated = true
+	result.MaxUploads = maxUploads
 	newMaxUploads := 0
-	prefixPath := path.Join(bucket, prefix)
-	if strings.HasSuffix(prefix, slashPathSeparator) {
-		// Add back the slash separator removed after 'path.Join'.
-		prefixPath = prefixPath + slashPathSeparator
-	}
+	prefixPath := bucket + slashPathSeparator + prefix
 	if recursive {
-		keyMarkerPath := path.Join(keyMarker, uploadIDMarker)
+		keyMarkerPath := ""
+		if keyMarker != "" {
+			keyMarkerPath = path.Join(keyMarker, uploadIDMarker)
+		}
 	outerLoop:
 		for {
 			fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, keyMarkerPath, recursive, maxUploads-newMaxUploads)
@@ -125,26 +133,30 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 			}
 			for _, fi := range fileInfos {
 				keyMarkerPath = fi.Name
-				fileName := path.Base(fi.Name)
-				if strings.Contains(fileName, ".") {
+				uploadID := path.Base(fi.Name)
+				objectName := strings.TrimPrefix(path.Dir(fi.Name), bucket+slashPathSeparator)
+				if strings.Contains(uploadID, ".") {
 					// fileName contains partnumber and md5sum info, skip this.
 					continue
 				}
 				result.Uploads = append(result.Uploads, uploadMetadata{
-					Object:    path.Dir(fi.Name),
-					UploadID:  fileName,
+					Object:    objectName,
+					UploadID:  uploadID,
 					Initiated: fi.ModTime,
 				})
-				result.NextKeyMarker = path.Dir(fi.Name)
-				result.NextUploadIDMarker = fileName
+				result.NextKeyMarker = objectName
+				result.NextUploadIDMarker = uploadID
 				newMaxUploads++
 				if newMaxUploads == maxUploads {
+					if eof {
+						result.IsTruncated = false
+					}
 					break outerLoop
 				}
 			}
 			if eof {
 				result.IsTruncated = false
-				break outerLoop
+				break
 			}
 		}
 		if !result.IsTruncated {
@@ -176,21 +188,22 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	var uploads []uploadMetadata
 	for _, fi := range fileInfos {
 		leaf, entries := o.checkLeafDirectory(fi.Name)
+		objectName := strings.TrimPrefix(fi.Name, bucket+slashPathSeparator)
 		if leaf {
 			for _, entry := range entries {
 				if strings.Contains(entry.Name, ".") {
 					continue
 				}
 				uploads = append(uploads, uploadMetadata{
-					Object:    strings.TrimSuffix(fi.Name, slashPathSeparator),
-					UploadID:  entry.Name,
+					Object:    strings.TrimSuffix(objectName, slashPathSeparator),
+					UploadID:  path.Base(entry.Name),
 					Initiated: entry.ModTime,
 				})
 			}
 			continue
 		}
 		uploads = append(uploads, uploadMetadata{
-			Object: fi.Name,
+			Object: objectName,
 		})
 	}
 	index := 0
@@ -199,27 +212,26 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		if upload.Object > keyMarker {
 			break
 		}
-		if uploads[index].Object == keyMarker && uploadIDMarker != "" {
-			if upload.UploadID > uploadIDMarker {
-				break
-			}
+		if uploads[index].Object == keyMarker && upload.UploadID > uploadIDMarker {
+			break
 		}
 	}
 	for ; index < len(uploads); index++ {
-		newMaxUploads++
-		if newMaxUploads == maxUploads {
+		if (len(result.Uploads) + len(result.CommonPrefixes)) == maxUploads {
 			break
 		}
+		result.NextKeyMarker = uploads[index].Object
 		if strings.HasSuffix(uploads[index].Object, slashPathSeparator) {
 			result.CommonPrefixes = append(result.CommonPrefixes, uploads[index].Object)
 			continue
 		}
+		result.NextUploadIDMarker = uploads[index].UploadID
 		result.Uploads = append(result.Uploads, uploads[index])
 	}
-	result.MaxUploads = newMaxUploads
-	result.IsTruncated = true
-	if index >= len(uploads)-1 {
+	if index == len(uploads) {
 		result.IsTruncated = false
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
 	}
 	return result, nil
 }
@@ -317,12 +329,12 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(e)
 		}
 	}
@@ -330,7 +342,7 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -348,6 +360,14 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	}
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListPartsInfo{}, probe.NewError(e)
+			}
+		}
 	}
 	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
 		return ListPartsInfo{}, probe.NewError(e)
@@ -397,55 +417,86 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	return result, nil
 }
 
-func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, *probe.Error) {
+// Create an s3 compatible MD5sum for complete multipart transaction.
+func makeS3MD5(md5Strs ...string) (string, *probe.Error) {
+	var finalMD5Bytes []byte
+	for _, md5Str := range md5Strs {
+		md5Bytes, e := hex.DecodeString(md5Str)
+		if e != nil {
+			return "", probe.NewError(e)
+		}
+		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
+	}
+	md5Hasher := md5.New()
+	md5Hasher.Write(finalMD5Bytes)
+	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(md5Strs))
+	return s3MD5, nil
+}
+
+func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, *probe.Error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+		return "", probe.NewError(e)
 	} else if !status {
-		return ObjectInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
+		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
+	glog.SetFlags(glog.LstdFlags | glog.Lshortfile)
+
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
-		return ObjectInfo{}, nil
+		glog.Println(e)
+		return "", nil
 	}
+
+	var md5Sums []string
 	for _, part := range parts {
+		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
 		var fileReader io.ReadCloser
 		fileReader, e = o.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			if e == errFileNotFound {
+				return "", probe.NewError(InvalidPart{})
+			}
+			glog.Println(e)
+			return "", probe.NewError(e)
 		}
 		_, e = io.Copy(fileWriter, fileReader)
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			glog.Println(e)
+			return "", probe.NewError(e)
 		}
 		e = fileReader.Close()
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			glog.Println(e)
+			return "", probe.NewError(e)
 		}
+		md5Sums = append(md5Sums, part.ETag)
 	}
+
 	e = fileWriter.Close()
 	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+		glog.Println(e)
+		return "", probe.NewError(e)
 	}
-	fi, e := o.storage.StatFile(bucket, object)
-	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+
+	// Save the s3 md5.
+	s3MD5, err := makeS3MD5(md5Sums...)
+	if err != nil {
+		return "", err.Trace(md5Sums...)
 	}
+
+	// Remove multipart upload.
 	o.removeMultipartUpload(bucket, object, uploadID)
-	return ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		ModTime: fi.ModTime,
-		Size:    fi.Size,
-		IsDir:   false,
-	}, nil
+
+	// Return md5sum.
+	return s3MD5, nil
 }
 
 func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe.Error {
@@ -456,6 +507,10 @@ func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe
 	if !IsValidObjectName(object) {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		return nil
+	}
+
 	marker := ""
 	for {
 		uploadIDFile := path.Join(bucket, object, uploadID)

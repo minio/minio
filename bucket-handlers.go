@@ -558,7 +558,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	objInfo, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
+	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -577,8 +577,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 		return
 	}
-	if objInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	if md5Sum != "" {
+		w.Header().Set("ETag", "\""+md5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }

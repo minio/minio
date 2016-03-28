@@ -457,9 +457,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
 	// Create the object.
-	objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
+	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
-		errorIf(err.Trace(), "PutObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
@@ -474,11 +473,20 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		case ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
+			errorIf(err.Trace(), "PutObject failed.", nil)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
-	response := generateCopyObjectResponse(objInfo.MD5Sum, objInfo.ModTime)
+
+	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+
+	response := generateCopyObjectResponse(md5Sum, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
@@ -613,7 +621,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var objInfo ObjectInfo
+	var md5Sum string
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -626,7 +634,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
+		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned, authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
@@ -665,7 +673,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Make sure we hex encode here.
 		metadata["md5"] = hex.EncodeToString(md5Bytes)
 		// Create object.
-		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
@@ -693,8 +701,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	if objInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	if md5Sum != "" {
+		w.Header().Set("ETag", "\""+md5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -965,6 +973,8 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
+		case InvalidPart:
+			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
@@ -987,7 +997,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get upload id.
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
-	var objInfo ObjectInfo
 	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
@@ -1030,7 +1039,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		completeParts = append(completeParts, part)
 	}
 	// Complete multipart upload.
-	objInfo, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+	var md5Sum string
+	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
@@ -1046,8 +1056,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case InvalidPart:
 			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
-		case InvalidPartOrder:
-			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		default:
@@ -1058,7 +1066,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.MD5Sum)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, md5Sum)
 	encodedSuccessResponse := encodeResponse(response)
 	// Write headers.
 	setCommonHeaders(w)

@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/safe"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
@@ -100,7 +99,7 @@ func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
 		}
 		reader := r.Body
 		if _, err = io.Copy(writeCloser, reader); err != nil {
-			writeCloser.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(writeCloser)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -18,6 +18,7 @@ package main
 
 import (
 	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -53,4 +54,24 @@ func isValidPrefix(prefix string) bool {
 	}
 	// Verify if prefix is a valid path.
 	return isValidPath(prefix)
+}
+
+// List of special prefixes for files, includes old and new ones.
+var specialPrefixes = []string{
+	"$multipart",
+	"$tmpobject",
+	"$tmpfile",
+	// Add new special prefixes if any used.
+}
+
+// hasSpecialPrefix - has special prefix.
+func hasSpecialPrefix(name string) (isSpecial bool) {
+	for _, specialPrefix := range specialPrefixes {
+		if strings.HasPrefix(name, specialPrefix) {
+			isSpecial = true
+			break
+		}
+		isSpecial = false
+	}
+	return isSpecial
 }

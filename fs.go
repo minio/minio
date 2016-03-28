@@ -302,14 +302,6 @@ func (s *fsStorage) lookupTreeWalk(params listParams) *treeWalker {
 	return nil
 }
 
-// List of special prefixes for files, includes old and new ones.
-var specialPrefixes = []string{
-	"$multipart",
-	"$tmpobject",
-	"$tmpfile",
-	// Add new special prefixes if any used.
-}
-
 // List operation.
 func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, count int) ([]FileInfo, bool, error) {
 	// Verify if volume is valid and it exists.
@@ -339,7 +331,8 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 	// Verify if prefix exists.
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	prefixRootDir := filepath.Join(volumeDir, prefixDir)
-	if status, err := isDirExist(prefixRootDir); !status {
+	var status bool
+	if status, err = isDirExist(prefixRootDir); !status {
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
@@ -373,16 +366,6 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 		}
 		fileInfo := walkResult.fileInfo
 		fileInfo.Name = filepath.ToSlash(fileInfo.Name)
-		// TODO: Find a proper place to skip these files.
-		// Skip temporary files.
-		for _, specialPrefix := range specialPrefixes {
-			if strings.Contains(fileInfo.Name, specialPrefix) {
-				if walkResult.end {
-					return fileInfos, true, nil
-				}
-				continue
-			}
-		}
 		fileInfos = append(fileInfos, fileInfo)
 		// We have listed everything return.
 		if walkResult.end {

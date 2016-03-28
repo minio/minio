@@ -48,7 +48,7 @@ func clen(n []byte) int {
 
 // parseDirents - inspired from
 // https://golang.org/src/syscall/syscall_<os>.go
-func parseDirents(buf []byte) []fsDirent {
+func parseDirents(dirPath string, buf []byte) []fsDirent {
 	bufidx := 0
 	dirents := []fsDirent{}
 	for bufidx < len(buf) {
@@ -66,7 +66,7 @@ func parseDirents(buf []byte) []fsDirent {
 		bytes := (*[10000]byte)(unsafe.Pointer(&dirent.Name[0]))
 		var name = string(bytes[0:clen(bytes[:])])
 		// Reserved names skip them.
-		if name == "." || name == ".." {
+		if name == "." || name == ".." || hasSpecialPrefix(name) {
 			continue
 		}
 
@@ -87,13 +87,23 @@ func parseDirents(buf []byte) []fsDirent {
 		case syscall.DT_SOCK:
 			mode = os.ModeSocket
 		case syscall.DT_UNKNOWN:
-			mode = 0xffffffff
+			// On Linux XFS does not implement d_type for on disk
+			// format << v5. Fall back to Stat().
+			if fi, err := os.Stat(filepath.Join(dirPath, name)); err == nil {
+				mode = fi.Mode()
+			} else {
+				// Caller listing would fail, if Stat failed but we
+				// won't crash the server.
+				mode = 0xffffffff
+			}
 		}
 
-		dirents = append(dirents, fsDirent{
+		drnt := fsDirent{
 			name: name,
 			mode: mode,
-		})
+		}
+
+		dirents = append(dirents, drnt)
 	}
 	return dirents
 }
@@ -116,7 +126,7 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 		if nbuf <= 0 {
 			break
 		}
-		for _, dirent := range parseDirents(buf[:nbuf]) {
+		for _, dirent := range parseDirents(readDirPath, buf[:nbuf]) {
 			if dirent.IsDir() {
 				dirent.name += string(os.PathSeparator)
 				dirent.size = 0
@@ -152,7 +162,7 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 		if nbuf <= 0 {
 			break
 		}
-		for _, dirent := range parseDirents(buf[:nbuf]) {
+		for _, dirent := range parseDirents(dirPath, buf[:nbuf]) {
 			if !namesOnly {
 				dirent.name = filepath.Join(dirPath, dirent.name)
 			}
