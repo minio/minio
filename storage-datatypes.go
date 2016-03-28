@@ -34,6 +34,7 @@ type VolInfo struct {
 type FileInfo struct {
 	Volume  string
 	Name    string
+	MD5Sum  string
 	ModTime time.Time
 	Size    int64
 	Mode    os.FileMode

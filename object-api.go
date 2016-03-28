@@ -237,7 +237,9 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", probe.NewError(clErr)
+			}
 			if e == io.ErrUnexpectedEOF {
 				return "", probe.NewError(IncompleteBody{})
 			}
@@ -245,7 +247,9 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", probe.NewError(clErr)
+			}
 			return "", probe.NewError(e)
 		}
 	}
@@ -258,7 +262,9 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			safeCloseAndRemove(fileWriter)
+			if e = safeCloseAndRemove(fileWriter); e != nil {
+				return "", probe.NewError(e)
+			}
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -267,7 +273,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 		return "", probe.NewError(e)
 	}
 
-	// Return md5sum.
+	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
 
@@ -282,6 +288,8 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 	if e := o.storage.DeleteFile(bucket, object); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
+		} else if e == errFileNotFound {
+			return probe.NewError(ObjectNotFound{Bucket: bucket})
 		}
 		if e == errFileNotFound {
 			return probe.NewError(ObjectNotFound{
@@ -345,7 +353,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 			Name:    fileInfo.Name,
 			ModTime: fileInfo.ModTime,
 			Size:    fileInfo.Size,
-			IsDir:   fileInfo.Mode.IsDir(),
+			IsDir:   false,
 		})
 	}
 	return result, nil

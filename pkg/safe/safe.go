@@ -20,10 +20,19 @@
 package safe
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 )
+
+// Vault - vault is an interface for different implementations of safe
+// i/o semantics.
+type Vault interface {
+	io.ReadWriteCloser
+	SyncClose() error
+	CloseAndRemove() error
+}
 
 // File provides for safe file writes.
 type File struct {
@@ -37,6 +46,7 @@ func (f *File) SyncClose() error {
 	if err := f.File.Sync(); err != nil {
 		return err
 	}
+	// Close the fd.
 	if err := f.Close(); err != nil {
 		return err
 	}
@@ -45,11 +55,11 @@ func (f *File) SyncClose() error {
 
 // Close the file, returns an error if any
 func (f *File) Close() error {
-	// close the embedded fd
+	// Close the embedded fd.
 	if err := f.File.Close(); err != nil {
 		return err
 	}
-	// safe rename to final destination
+	// Safe rename to final destination
 	if err := os.Rename(f.Name(), f.file); err != nil {
 		return err
 	}
@@ -63,6 +73,7 @@ func (f *File) CloseAndRemove() error {
 	if err := f.File.Close(); err != nil {
 		return err
 	}
+	// Remove the temp file.
 	if err := os.Remove(f.Name()); err != nil {
 		return err
 	}
