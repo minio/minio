@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package atomic
+package safe
 
 import (
 	"io/ioutil"
@@ -34,7 +34,7 @@ type MySuite struct {
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) SetUpSuite(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "atomic-")
+	root, err := ioutil.TempDir(os.TempDir(), "safe-")
 	c.Assert(err, IsNil)
 	s.root = root
 }
@@ -44,7 +44,7 @@ func (s *MySuite) TearDownSuite(c *C) {
 }
 
 func (s *MySuite) TestAtomic(c *C) {
-	f, err := FileCreate(filepath.Join(s.root, "testfile"))
+	f, err := CreateFile(filepath.Join(s.root, "testfile"))
 	c.Assert(err, IsNil)
 	_, err = os.Stat(filepath.Join(s.root, "testfile"))
 	c.Assert(err, Not(IsNil))
@@ -55,11 +55,11 @@ func (s *MySuite) TestAtomic(c *C) {
 }
 
 func (s *MySuite) TestAtomicPurge(c *C) {
-	f, err := FileCreate(filepath.Join(s.root, "purgefile"))
+	f, err := CreateFile(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, IsNil)
 	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, Not(IsNil))
-	err = f.CloseAndPurge()
+	err = f.PurgeClose()
 	c.Assert(err, IsNil)
 	err = f.Close()
 	c.Assert(err, Not(IsNil))

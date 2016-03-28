@@ -27,10 +27,10 @@ import (
 	"encoding/hex"
 	"runtime"
 
-	"github.com/minio/minio/pkg/atomic"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/safe"
 )
 
 // isDirEmpty - returns whether given directory is empty or not.
@@ -239,7 +239,7 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 	}
 
 	// Write object.
-	file, e := atomic.FileCreateWithPrefix(objectPath, md5Hex+"$tmpobject")
+	file, e := safe.CreateFileWithPrefix(objectPath, md5Hex+"$tmpobject")
 	if e != nil {
 		switch e := e.(type) {
 		case *os.PathError:
@@ -264,12 +264,12 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			file.CloseAndPurge()
+			file.PurgeClose()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			file.CloseAndPurge()
+			file.PurgeClose()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	}

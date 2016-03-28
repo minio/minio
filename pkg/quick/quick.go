@@ -30,8 +30,8 @@ import (
 	"sync"
 
 	"github.com/fatih/structs"
-	"github.com/minio/minio/pkg/atomic"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/safe"
 )
 
 // Config - generic config interface functions
@@ -178,15 +178,15 @@ func (d config) Version() string {
 // If the file does not exist, writeFile creates it;
 // otherwise writeFile truncates it before writing.
 func writeFile(filename string, data []byte) *probe.Error {
-	atomicFile, e := atomic.FileCreate(filename)
+	safeFile, e := safe.CreateFile(filename)
 	if e != nil {
 		return probe.NewError(e)
 	}
-	_, e = atomicFile.Write(data)
+	_, e = safeFile.Write(data)
 	if e != nil {
 		return probe.NewError(e)
 	}
-	e = atomicFile.Close()
+	e = safeFile.Close()
 	if e != nil {
 		return probe.NewError(e)
 	}
