@@ -281,8 +281,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		} else if strings.Contains(err.Error(), "directory is not empty") {
-			// On windows the string is slightly different, handle it
-			// here.
+			// On windows the string is slightly different, handle it here.
 			return errVolumeNotEmpty
 		} else if strings.Contains(err.Error(), "directory not empty") {
 			// Hopefully for all other operating systems, this is
@@ -291,7 +290,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 		}
 		return err
 	}
-	return err
+	return nil
 }
 
 // Save the goroutine reference in the map
@@ -357,7 +356,8 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 	// Verify if prefix exists.
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	prefixRootDir := filepath.Join(volumeDir, prefixDir)
-	if status, err := isDirExist(prefixRootDir); !status {
+	var status bool
+	if status, err = isDirExist(prefixRootDir); !status {
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
