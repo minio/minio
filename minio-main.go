@@ -30,7 +30,6 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/minhttp"
 	"github.com/minio/minio/pkg/probe"
 )
@@ -92,11 +91,11 @@ EXAMPLES:
 }
 
 // configureServer configure a new server instance
-func configureServer(filesystem fs.Filesystem) *http.Server {
+func configureServer(storage Backend) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           serverConfig.GetAddr(),
-		Handler:        configureServerHandler(filesystem),
+		Handler:        configureServerHandler(storage),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -310,7 +309,7 @@ func serverMain(c *cli.Context) {
 	backend := serverConfig.GetBackend()
 	if backend.Type == "fs" {
 		// Initialize file system.
-		filesystem, err := fs.New(backend.Disk)
+		filesystem, err := newFS(backend.Disk)
 		fatalIf(err.Trace(backend.Type, backend.Disk), "Initializing filesystem failed.", nil)
 
 		// Configure server.

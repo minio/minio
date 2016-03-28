@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-
-	"github.com/minio/minio/pkg/fs"
 )
 
 //// helpers
@@ -60,20 +58,20 @@ func encodeResponse(response interface{}) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objectInfo fs.ObjectInfo, contentRange *httpRange) {
+func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *httpRange) {
 	// set common headers
 	setCommonHeaders(w)
 
 	// set object-related metadata headers
-	lastModified := objectInfo.ModifiedTime.UTC().Format(http.TimeFormat)
+	lastModified := objInfo.ModifiedTime.UTC().Format(http.TimeFormat)
 	w.Header().Set("Last-Modified", lastModified)
 
-	w.Header().Set("Content-Type", objectInfo.ContentType)
-	if objectInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
+	w.Header().Set("Content-Type", objInfo.ContentType)
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
 
-	w.Header().Set("Content-Length", strconv.FormatInt(objectInfo.Size, 10))
+	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
 
 	// for providing ranged content
 	if contentRange != nil {

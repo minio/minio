@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
@@ -197,7 +197,7 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 }
 
 // CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket string, object string, size int64, data io.Reader, md5Bytes []byte) (ObjectInfo, *probe.Error) {
+func (fs Filesystem) CreateObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (ObjectInfo, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
@@ -233,10 +233,7 @@ func (fs Filesystem) CreateObject(bucket string, object string, size int64, data
 	objectPath := filepath.Join(bucketPath, object)
 
 	// md5Hex representation.
-	var md5Hex string
-	if len(md5Bytes) != 0 {
-		md5Hex = hex.EncodeToString(md5Bytes)
-	}
+	md5Hex := metadata["md5"]
 
 	// Write object.
 	file, e := atomic.FileCreateWithPrefix(objectPath, md5Hex+"$tmpobject")
@@ -275,7 +272,7 @@ func (fs Filesystem) CreateObject(bucket string, object string, size int64, data
 	}
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if len(md5Bytes) != 0 {
+	if len(md5Hex) != 0 {
 		if newMD5Hex != md5Hex {
 			return ObjectInfo{}, probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}

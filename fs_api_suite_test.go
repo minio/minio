@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015, 2016 Minio, Inc.
+ * Minimalist Object Backend, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/xml"
 	"math/rand"
 	"strconv"
 
@@ -28,7 +27,7 @@ import (
 )
 
 // APITestSuite - collection of API tests
-func APITestSuite(c *check.C, create func() Filesystem) {
+func APITestSuite(c *check.C, create func() Backend) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -46,21 +45,21 @@ func APITestSuite(c *check.C, create func() Filesystem) {
 	testMultipartObjectAbort(c, create)
 }
 
-func testMakeBucket(c *check.C, create func() Filesystem) {
+func testMakeBucket(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
+func testMultipartObjectCreation(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	uploadID, err := fs.NewMultipartUpload("bucket", "key")
 	c.Assert(err, check.IsNil)
 
-	completedParts := CompleteMultipartUpload{}
-	//completedParts.Part = make([]CompletePart, 10)
+	completedParts := completeMultipartUpload{}
+	metadata := make(map[string]string)
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -73,19 +72,21 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		var calculatedMD5sum string
-		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		metadata["md5"] = hex.EncodeToString(hasher.Sum(nil))
+		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
-		completedParts.Part = append(completedParts.Part, CompletePart{PartNumber: i, ETag: calculatedMD5sum})
+		completedParts.Parts = append(completedParts.Parts, completePart{
+			PartNumber: i,
+			ETag:       calculatedMD5sum,
+		})
 	}
-	completedPartsBytes, e := xml.Marshal(completedParts)
-	c.Assert(e, check.IsNil)
-	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedPartsBytes)
+	objInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
+	c.Assert(objInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
 
-func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
+func testMultipartObjectAbort(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -93,6 +94,7 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 
 	parts := make(map[int]string)
+	metadata := make(map[string]string)
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -104,8 +106,9 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 		hasher.Write([]byte(randomString))
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
+		metadata["md5"] = expectedMD5Sumhex
 		var calculatedMD5sum string
-		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
 		parts[i] = expectedMD5Sumhex
@@ -114,7 +117,7 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
+func testMultipleObjectCreation(c *check.C, create func() Backend) {
 	objects := make(map[string][]byte)
 	fs := create()
 	err := fs.MakeBucket("bucket")
@@ -132,10 +135,12 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		var objectInfo ObjectInfo
-		objectInfo, err = fs.CreateObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		var objInfo ObjectInfo
+		metadata := make(map[string]string)
+		metadata["md5"] = hex.EncodeToString(hasher.Sum(nil))
+		objInfo, err = fs.CreateObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
-		c.Assert(objectInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
+		c.Assert(objInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {
@@ -144,13 +149,13 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 		c.Assert(err, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
-		metadata, err := fs.GetObjectInfo("bucket", key)
+		objInfo, err := fs.GetObjectInfo("bucket", key)
 		c.Assert(err, check.IsNil)
-		c.Assert(metadata.Size, check.Equals, int64(len(value)))
+		c.Assert(objInfo.Size, check.Equals, int64(len(value)))
 	}
 }
 
-func testPaging(c *check.C, create func() Filesystem) {
+func testPaging(c *check.C, create func() Backend) {
 	fs := create()
 	fs.MakeBucket("bucket")
 	result, err := fs.ListObjects("bucket", "", "", "", 0)
@@ -250,14 +255,14 @@ func testPaging(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
+func testObjectOverwriteWorks(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	_, err = fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
-	// c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
+	// c.Assert(md5Sum1hex, check.Equals, objInfo.MD5Sum)
 
 	_, err = fs.CreateObject("bucket", "object", int64(len("three")), bytes.NewBufferString("three"), nil)
 	c.Assert(err, check.IsNil)
@@ -269,13 +274,13 @@ func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "three")
 }
 
-func testNonExistantBucketOperations(c *check.C, create func() Filesystem) {
+func testNonExistantBucketOperations(c *check.C, create func() Backend) {
 	fs := create()
 	_, err := fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketRecreateFails(c *check.C, create func() Filesystem) {
+func testBucketRecreateFails(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("string")
 	c.Assert(err, check.IsNil)
@@ -283,7 +288,7 @@ func testBucketRecreateFails(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
+func testPutObjectInSubdir(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -298,7 +303,7 @@ func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
 	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, length)
 }
 
-func testListBuckets(c *check.C, create func() Filesystem) {
+func testListBuckets(c *check.C, create func() Backend) {
 	fs := create()
 
 	// test empty list
@@ -330,7 +335,7 @@ func testListBuckets(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 }
 
-func testListBucketsOrder(c *check.C, create func() Filesystem) {
+func testListBucketsOrder(c *check.C, create func() Backend) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
@@ -348,7 +353,7 @@ func testListBucketsOrder(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesystem) {
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Backend) {
 	fs := create()
 	result, err := fs.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
@@ -356,7 +361,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesyst
 	c.Assert(len(result.Objects), check.Equals, 0)
 }
 
-func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
+func testNonExistantObjectInBucket(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -374,7 +379,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem) {
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -409,7 +414,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem)
 	c.Assert(len(byteBuffer2.Bytes()), check.Equals, 0)
 }
 
-func testDefaultContentType(c *check.C, create func() Filesystem) {
+func testDefaultContentType(c *check.C, create func() Backend) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)

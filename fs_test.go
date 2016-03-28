@@ -14,29 +14,22 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"io/ioutil"
 	"os"
-	"testing"
 
 	. "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestAPISuite(c *C) {
+func (s *MyAPIFSCacheSuite) TestAPISuite(c *C) {
 	var storageList []string
-	create := func() Filesystem {
+	create := func() Backend {
 		path, e := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(e, IsNil)
 		storageList = append(storageList, path)
-		store, err := New(path)
+		store, err := newFS(path)
 		c.Check(err, IsNil)
 		return store
 	}

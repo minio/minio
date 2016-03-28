@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -51,55 +50,57 @@ func (fs Filesystem) isValidUploadID(object, uploadID string) (ok bool) {
 }
 
 // byObjectInfoKey is a sortable interface for UploadMetadata slice
-type byUploadMetadataKey []*UploadMetadata
+type byUploadMetadataKey []uploadMetadata
 
 func (b byUploadMetadataKey) Len() int           { return len(b) }
 func (b byUploadMetadataKey) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byUploadMetadataKey) Less(i, j int) bool { return b[i].Object < b[j].Object }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given BucketMultipartResourcesMetadata
-func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error) {
+func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, *probe.Error) {
 	// Input validation.
 	if !IsValidBucketName(bucket) {
-		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ListMultipartsInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	bucket = fs.denormalizeBucket(bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
 		if os.IsNotExist(e) {
-			return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return ListMultipartsInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return BucketMultipartResourcesMetadata{}, probe.NewError(e)
+		return ListMultipartsInfo{}, probe.NewError(e)
 	}
-	var uploads []*UploadMetadata
+	var uploads []uploadMetadata
+	multipartsInfo := ListMultipartsInfo{}
+
 	fs.rwLock.RLock()
 	defer fs.rwLock.RUnlock()
 	for uploadID, session := range fs.multiparts.ActiveSession {
 		objectName := session.ObjectName
-		if strings.HasPrefix(objectName, resources.Prefix) {
-			if len(uploads) > resources.MaxUploads {
+		if strings.HasPrefix(objectName, objectPrefix) {
+			if len(uploads) > maxUploads {
 				sort.Sort(byUploadMetadataKey(uploads))
-				resources.Upload = uploads
-				resources.NextKeyMarker = session.ObjectName
-				resources.NextUploadIDMarker = uploadID
-				resources.IsTruncated = true
-				return resources, nil
+				multipartsInfo.Uploads = uploads
+				multipartsInfo.NextKeyMarker = session.ObjectName
+				multipartsInfo.NextUploadIDMarker = uploadID
+				multipartsInfo.IsTruncated = true
+				return multipartsInfo, nil
 			}
-			// UploadIDMarker is ignored if KeyMarker is empty.
+			// uploadIDMarker is ignored if KeyMarker is empty.
 			switch {
-			case resources.KeyMarker != "" && resources.UploadIDMarker == "":
-				if objectName > resources.KeyMarker {
-					upload := new(UploadMetadata)
+			case keyMarker != "" && uploadIDMarker == "":
+				if objectName > keyMarker {
+					upload := uploadMetadata{}
 					upload.Object = objectName
 					upload.UploadID = uploadID
 					upload.Initiated = session.Initiated
 					uploads = append(uploads, upload)
 				}
-			case resources.KeyMarker != "" && resources.UploadIDMarker != "":
-				if session.UploadID > resources.UploadIDMarker {
-					if objectName >= resources.KeyMarker {
-						upload := new(UploadMetadata)
+			case keyMarker != "" && uploadIDMarker != "":
+				if session.UploadID > uploadIDMarker {
+					if objectName >= keyMarker {
+						upload := uploadMetadata{}
 						upload.Object = objectName
 						upload.UploadID = uploadID
 						upload.Initiated = session.Initiated
@@ -107,7 +108,7 @@ func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipa
 					}
 				}
 			default:
-				upload := new(UploadMetadata)
+				upload := uploadMetadata{}
 				upload.Object = objectName
 				upload.UploadID = uploadID
 				upload.Initiated = session.Initiated
@@ -116,13 +117,13 @@ func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipa
 		}
 	}
 	sort.Sort(byUploadMetadataKey(uploads))
-	resources.Upload = uploads
-	return resources, nil
+	multipartsInfo.Uploads = uploads
+	return multipartsInfo, nil
 }
 
 // verify if parts sent over the network do really match with what we
 // have for the session.
-func doPartsMatch(parts []CompletePart, savedParts []PartMetadata) bool {
+func doPartsMatch(parts []completePart, savedParts []partInfo) bool {
 	if parts == nil || savedParts == nil {
 		return false
 	}
@@ -176,7 +177,7 @@ func MultiCloser(closers ...io.Closer) io.Closer {
 }
 
 // removeParts - remove all parts.
-func removeParts(partPathPrefix string, parts []PartMetadata) *probe.Error {
+func removeParts(partPathPrefix string, parts []partInfo) *probe.Error {
 	for _, part := range parts {
 		// We are on purpose ignoring the return values here, since
 		// another thread would have purged these entries.
@@ -186,7 +187,7 @@ func removeParts(partPathPrefix string, parts []PartMetadata) *probe.Error {
 }
 
 // saveParts - concantenate and save all parts.
-func saveParts(partPathPrefix string, mw io.Writer, parts []CompletePart) *probe.Error {
+func saveParts(partPathPrefix string, mw io.Writer, parts []completePart) *probe.Error {
 	var partReaders []io.Reader
 	var partClosers []io.Closer
 	for _, part := range parts {
@@ -275,13 +276,13 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
 	// Initialize multipart session.
-	mpartSession := &MultipartSession{}
+	mpartSession := &multipartSession{}
 	mpartSession.TotalParts = 0
 	mpartSession.ObjectName = object
 	mpartSession.UploadID = uploadID
 	mpartSession.Initiated = time.Now().UTC()
 	// Multipart has maximum of 10000 parts.
-	var parts []PartMetadata
+	var parts []partInfo
 	mpartSession.Parts = parts
 
 	fs.multiparts.ActiveSession[uploadID] = mpartSession
@@ -292,7 +293,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 }
 
 // Remove all duplicated parts based on the latest time of their upload.
-func removeDuplicateParts(parts []PartMetadata) []PartMetadata {
+func removeDuplicateParts(parts []partInfo) []partInfo {
 	length := len(parts) - 1
 	for i := 0; i < length; i++ {
 		for j := i + 1; j <= length; j++ {
@@ -312,29 +313,23 @@ func removeDuplicateParts(parts []PartMetadata) []PartMetadata {
 }
 
 // partNumber is a sortable interface for Part slice.
-type partNumber []PartMetadata
+type partNumber []partInfo
 
 func (a partNumber) Len() int           { return len(a) }
 func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // CreateObjectPart - create a part in a multipart session
-func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Bytes []byte) (string, *probe.Error) {
+func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, metadata map[string]string) (string, *probe.Error) {
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return "", probe.NewError(err)
 	}
 
-	// Remove 5% from total space for cumulative disk space used for
-	// journalling, inodes etc.
+	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return "", probe.NewError(RootPathFull{Path: fs.path})
-	}
-
-	// Part id cannot be negative.
-	if partID <= 0 {
-		return "", probe.NewError(errors.New("invalid part id, cannot be zero or less than zero"))
 	}
 
 	// Check bucket name valid.
@@ -345,6 +340,11 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 	// Verify object path legal.
 	if !IsValidObjectName(object) {
 		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+
+	// Part id cannot be negative.
+	if partID <= 0 {
+		return "", probe.NewError(errors.New("invalid part id, cannot be zero or less than zero"))
 	}
 
 	// Verify upload is valid for the incoming object.
@@ -362,12 +362,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 		return "", probe.NewError(e)
 	}
 
-	// md5Hex representation.
-	var md5Hex string
-	if len(md5Bytes) != 0 {
-		md5Hex = hex.EncodeToString(md5Bytes)
-	}
-
+	md5Hex := metadata["md5"]
 	objectPath := filepath.Join(bucketPath, object)
 	partPathPrefix := objectPath + uploadID
 	partPath := partPathPrefix + md5Hex + fmt.Sprintf("$%d-$multiparts", partID)
@@ -390,7 +385,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 
 	// Finalize new md5.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if len(md5Bytes) != 0 {
+	if len(md5Hex) != 0 {
 		if newMD5Hex != md5Hex {
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -401,11 +396,11 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 	if e != nil {
 		return "", probe.NewError(e)
 	}
-	partMetadata := PartMetadata{}
-	partMetadata.PartNumber = partID
-	partMetadata.ETag = newMD5Hex
-	partMetadata.Size = fi.Size()
-	partMetadata.LastModified = fi.ModTime()
+	prtInfo := partInfo{}
+	prtInfo.PartNumber = partID
+	prtInfo.ETag = newMD5Hex
+	prtInfo.Size = fi.Size()
+	prtInfo.LastModified = fi.ModTime()
 
 	// Critical region requiring read lock.
 	fs.rwLock.RLock()
@@ -416,10 +411,11 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 	}
 
 	// Add all incoming parts.
-	deserializedMultipartSession.Parts = append(deserializedMultipartSession.Parts, partMetadata)
+	deserializedMultipartSession.Parts = append(deserializedMultipartSession.Parts, prtInfo)
 
 	// Remove duplicate parts based on the most recent uploaded.
 	deserializedMultipartSession.Parts = removeDuplicateParts(deserializedMultipartSession.Parts)
+
 	// Save total parts uploaded.
 	deserializedMultipartSession.TotalParts = len(deserializedMultipartSession.Parts)
 
@@ -438,7 +434,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploadID string, completeMultipartBytes []byte) (ObjectInfo, *probe.Error) {
+func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, *probe.Error) {
 	// Check bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -470,18 +466,10 @@ func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploa
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	completeMultipartUpload := &CompleteMultipartUpload{}
-	if e = xml.Unmarshal(completeMultipartBytes, completeMultipartUpload); e != nil {
-		objectWriter.CloseAndPurge()
-		return ObjectInfo{}, probe.NewError(MalformedXML{})
-	}
-	if !sort.IsSorted(completedParts(completeMultipartUpload.Part)) {
+	if !sort.IsSorted(completedParts(parts)) {
 		objectWriter.CloseAndPurge()
 		return ObjectInfo{}, probe.NewError(InvalidPartOrder{})
 	}
-
-	// Save parts for verification.
-	parts := completeMultipartUpload.Part
 
 	// Critical region requiring read lock.
 	fs.rwLock.RLock()
@@ -551,35 +539,32 @@ func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploa
 	return newObject, nil
 }
 
-// ListObjectParts - list parts from incomplete multipart session for a given ObjectResourcesMetadata
-func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error) {
+// ListObjectParts - list parts from incomplete multipart session.
+func (fs Filesystem) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, *probe.Error) {
 	// Check bucket name is valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ListPartsInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	// Verify object path legal.
 	if !IsValidObjectName(object) {
-		return ObjectResourcesMetadata{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-
-	// Save upload id.
-	uploadID := resources.UploadID
 
 	// Verify if upload id is valid for incoming object.
 	if !fs.isValidUploadID(object, uploadID) {
-		return ObjectResourcesMetadata{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
+		return ListPartsInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	objectResourcesMetadata := resources
-	objectResourcesMetadata.Bucket = bucket
-	objectResourcesMetadata.Object = object
+	prtsInfo := ListPartsInfo{}
+	prtsInfo.Bucket = bucket
+	prtsInfo.Object = object
 	var startPartNumber int
 	switch {
-	case objectResourcesMetadata.PartNumberMarker == 0:
+	case partNumberMarker == 0:
 		startPartNumber = 1
 	default:
-		startPartNumber = objectResourcesMetadata.PartNumberMarker
+		startPartNumber = partNumberMarker
 	}
 
 	bucket = fs.denormalizeBucket(bucket)
@@ -587,9 +572,9 @@ func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectReso
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
 		if os.IsNotExist(e) {
-			return ObjectResourcesMetadata{}, probe.NewError(BucketNotFound{Bucket: bucket})
+			return ListPartsInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
 		}
-		return ObjectResourcesMetadata{}, probe.NewError(e)
+		return ListPartsInfo{}, probe.NewError(e)
 	}
 
 	// Critical region requiring read lock.
@@ -597,22 +582,22 @@ func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectReso
 	deserializedMultipartSession, ok := fs.multiparts.ActiveSession[uploadID]
 	fs.rwLock.RUnlock()
 	if !ok {
-		return ObjectResourcesMetadata{}, probe.NewError(InvalidUploadID{UploadID: resources.UploadID})
+		return ListPartsInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
-	var parts []PartMetadata
+	var parts []partInfo
 	for i := startPartNumber; i <= deserializedMultipartSession.TotalParts; i++ {
-		if len(parts) > objectResourcesMetadata.MaxParts {
+		if len(parts) > maxParts {
 			sort.Sort(partNumber(parts))
-			objectResourcesMetadata.IsTruncated = true
-			objectResourcesMetadata.Part = parts
-			objectResourcesMetadata.NextPartNumberMarker = i
-			return objectResourcesMetadata, nil
+			prtsInfo.IsTruncated = true
+			prtsInfo.Parts = parts
+			prtsInfo.NextPartNumberMarker = i
+			return prtsInfo, nil
 		}
 		parts = append(parts, deserializedMultipartSession.Parts[i-1])
 	}
 	sort.Sort(partNumber(parts))
-	objectResourcesMetadata.Part = parts
-	return objectResourcesMetadata, nil
+	prtsInfo.Parts = parts
+	return prtsInfo, nil
 }
 
 // AbortMultipartUpload - abort an incomplete multipart session

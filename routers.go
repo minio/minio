@@ -22,12 +22,11 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(filesystem fs.Filesystem) http.Handler {
+func configureServerHandler(storage Backend) http.Handler {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
@@ -36,7 +35,7 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 
 	// Initialize API.
 	api := storageAPI{
-		Filesystem: filesystem,
+		Storage: storage,
 	}
 
 	// Split host port.
@@ -54,7 +53,7 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 
 	// Initialize Web.
 	web := &webAPI{
-		FSPath:          filesystem.GetRootPath(),
+		FSPath:          storage.(*Filesystem).GetRootPath(),
 		Client:          client,
 		apiAddress:      addr,
 		accessKeyID:     cred.AccessKeyID,

@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -38,9 +37,9 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	if err != nil {
 		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			return ErrNoSuchBucket
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			return ErrInvalidBucketName
 		default:
 			// For any other error just return AccessDenied.
@@ -95,13 +94,13 @@ func (api storageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	_, err := api.Filesystem.GetBucketInfo(bucket)
+	_, err := api.Storage.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -152,20 +151,20 @@ func (api storageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	resources := getBucketMultipartResources(r.URL.Query())
-	if resources.MaxUploads < 0 {
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+	if maxUploads < 0 {
 		writeErrorResponse(w, r, ErrInvalidMaxUploads, r.URL.Path)
 		return
 	}
-	if resources.MaxUploads == 0 {
-		resources.MaxUploads = maxObjectList
+	if maxUploads == 0 {
+		maxUploads = maxObjectList
 	}
 
-	resources, err := api.Filesystem.ListMultipartUploads(bucket, resources)
+	listMultipartsInfo, err := api.Storage.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -173,7 +172,7 @@ func (api storageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http
 		return
 	}
 	// generate response
-	response := generateListMultipartUploadsResponse(bucket, resources)
+	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers.
 	setCommonHeaders(w)
@@ -219,10 +218,10 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 		maxkeys = maxObjectList
 	}
 
-	listResp, err := api.Filesystem.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
+	listObjectsInfo, err := api.Storage.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
 	if err == nil {
 		// generate response
-		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listResp)
+		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listObjectsInfo)
 		encodedSuccessResponse := encodeResponse(response)
 		// Write headers
 		setCommonHeaders(w)
@@ -231,13 +230,13 @@ func (api storageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	switch err.ToGoError().(type) {
-	case fs.BucketNameInvalid:
+	case BucketNameInvalid:
 		writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-	case fs.BucketNotFound:
+	case BucketNotFound:
 		writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-	case fs.ObjectNotFound:
+	case ObjectNotFound:
 		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	case fs.ObjectNameInvalid:
+	case ObjectNameInvalid:
 		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 	default:
 		errorIf(err.Trace(), "ListObjects failed.", nil)
@@ -263,10 +262,10 @@ func (api storageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	buckets, err := api.Filesystem.ListBuckets()
+	bucketsInfo, err := api.Storage.ListBuckets()
 	if err == nil {
 		// generate response
-		response := generateListBucketsResponse(buckets)
+		response := generateListBucketsResponse(bucketsInfo)
 		encodedSuccessResponse := encodeResponse(response)
 		// write headers
 		setCommonHeaders(w)
@@ -337,7 +336,7 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 	var deletedObjects []ObjectIdentifier
 	// Loop through all the objects and delete them sequentially.
 	for _, object := range deleteObjects.Objects {
-		err := api.Filesystem.DeleteObject(bucket, object.ObjectName)
+		err := api.Storage.DeleteObject(bucket, object.ObjectName)
 		if err == nil {
 			deletedObjects = append(deletedObjects, ObjectIdentifier{
 				ObjectName: object.ObjectName,
@@ -345,25 +344,25 @@ func (api storageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *htt
 		} else {
 			errorIf(err.Trace(object.ObjectName), "DeleteObject failed.", nil)
 			switch err.ToGoError().(type) {
-			case fs.BucketNameInvalid:
+			case BucketNameInvalid:
 				deleteErrors = append(deleteErrors, DeleteError{
 					Code:    errorCodeResponse[ErrInvalidBucketName].Code,
 					Message: errorCodeResponse[ErrInvalidBucketName].Description,
 					Key:     object.ObjectName,
 				})
-			case fs.BucketNotFound:
+			case BucketNotFound:
 				deleteErrors = append(deleteErrors, DeleteError{
 					Code:    errorCodeResponse[ErrNoSuchBucket].Code,
 					Message: errorCodeResponse[ErrNoSuchBucket].Description,
 					Key:     object.ObjectName,
 				})
-			case fs.ObjectNotFound:
+			case ObjectNotFound:
 				deleteErrors = append(deleteErrors, DeleteError{
 					Code:    errorCodeResponse[ErrNoSuchKey].Code,
 					Message: errorCodeResponse[ErrNoSuchKey].Description,
 					Key:     object.ObjectName,
 				})
-			case fs.ObjectNameInvalid:
+			case ObjectNameInvalid:
 				deleteErrors = append(deleteErrors, DeleteError{
 					Code:    errorCodeResponse[ErrNoSuchKey].Code,
 					Message: errorCodeResponse[ErrNoSuchKey].Description,
@@ -408,13 +407,13 @@ func (api storageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make bucket.
-	err := api.Filesystem.MakeBucket(bucket)
+	err := api.Storage.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "MakeBucket failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketExists:
+		case BucketExists:
 			writeErrorResponse(w, r, ErrBucketAlreadyExists, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -492,27 +491,27 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
-	objectInfo, err := api.Filesystem.CreateObject(bucket, object, -1, fileBody, nil)
+	objInfo, err := api.Storage.CreateObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.RootPathFull:
+		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BadDigest:
+		case BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.IncompleteBody:
+		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
-	if objectInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -539,13 +538,13 @@ func (api storageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	_, err := api.Filesystem.GetBucketInfo(bucket)
+	_, err := api.Storage.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -572,13 +571,13 @@ func (api storageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	err := api.Filesystem.DeleteBucket(bucket)
+	err := api.Storage.DeleteBucket(bucket)
 	if err != nil {
 		errorIf(err.Trace(), "DeleteBucket failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNotEmpty:
+		case BucketNotEmpty:
 			writeErrorResponse(w, r, ErrBucketNotEmpty, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)

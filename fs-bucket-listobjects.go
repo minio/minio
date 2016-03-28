@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"fmt"
@@ -29,8 +29,8 @@ import (
 
 // ListObjects - lists all objects for a given prefix, returns up to
 // maxKeys number of objects per call.
-func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
-	result := ListObjectsResult{}
+func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error) {
+	result := ListObjectsInfo{}
 	var queryPrefix string
 
 	// Input validation.
@@ -111,7 +111,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// popListObjectCh returns nil if the call to ListObject is done for the first time.
 	// On further calls to ListObjects to retrive more objects within the timeout period,
 	// popListObjectCh returns the channel from which rest of the objects can be retrieved.
-	objectInfoCh := fs.popListObjectCh(ListObjectParams{bucket, delimiter, marker, prefix})
+	objectInfoCh := fs.popListObjectCh(listObjectParams{bucket, delimiter, marker, prefix})
 	if objectInfoCh == nil {
 		if prefix != "" {
 			// queryPrefix variable is set to value of the prefix to be searched.
@@ -141,7 +141,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		}
 
 		if objInfo.Err != nil {
-			return ListObjectsResult{}, probe.NewError(objInfo.Err)
+			return ListObjectsInfo{}, probe.NewError(objInfo.Err)
 		}
 
 		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
@@ -171,7 +171,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	if !objectInfoCh.IsClosed() {
 		result.IsTruncated = true
 		result.NextMarker = nextMarker
-		fs.pushListObjectCh(ListObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
+		fs.pushListObjectCh(listObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
 	}
 
 	return result, nil
