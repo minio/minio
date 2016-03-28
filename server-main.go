@@ -156,9 +156,6 @@ func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() && c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
-	if len(c.Args()) > 2 {
-		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘minio server --help’.", nil)
-	}
 }
 
 // Extract port number from address address should be of the form host:port.

@@ -266,6 +266,8 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 	if e := o.storage.DeleteFile(bucket, object); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
+		} else if e == errFileNotFound {
+			return probe.NewError(ObjectNotFound{Bucket: bucket})
 		}
 		return probe.NewError(e)
 	}

@@ -54,7 +54,7 @@ func (s *MySuite) TestSafe(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *MySuite) TestSafePurge(c *C) {
+func (s *MySuite) TestSafeRemove(c *C) {
 	f, err := CreateFile(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, IsNil)
 	_, err = os.Stat(filepath.Join(s.root, "purgefile"))

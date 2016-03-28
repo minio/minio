@@ -73,6 +73,14 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	if !IsValidObjectPrefix(prefix) {
 		return ListMultipartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListMultipartsInfo{}, probe.NewError(e)
+			}
+		}
+	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashPathSeparator {
 		return ListMultipartsInfo{}, probe.NewError(UnsupportedDelimiter{
@@ -349,6 +357,14 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListPartsInfo{}, probe.NewError(e)
+			}
+		}
+	}
 	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
 		return ListPartsInfo{}, probe.NewError(e)
 	} else if !status {
@@ -456,6 +472,10 @@ func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe
 	if !IsValidObjectName(object) {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		return nil
+	}
+
 	marker := ""
 	for {
 		uploadIDFile := path.Join(bucket, object, uploadID)
