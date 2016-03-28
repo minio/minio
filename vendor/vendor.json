@@ -108,6 +108,12 @@
 			"revisionTime": "2015-08-29T22:34:20-07:00"
 		},
 		{
+			"checksumSHA1": "u0hXGADM3JDza8YjgiyNJpAJk8g=",
+			"path": "github.com/skyrings/skyring-common/tools/uuid",
+			"revision": "762fd2bfc12e766d90478d638255981ab1966a3d",
+			"revisionTime": "2016-03-24T19:44:43+05:30"
+		},
+		{
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"
@@ -122,5 +128,6 @@
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
 		}
-	]
+	],
+	"rootPath": "github.com/minio/minio"
 }

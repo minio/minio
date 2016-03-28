@@ -31,12 +31,17 @@ const (
 )
 
 // isDirExist - returns whether given directory is exist or not.
-func isDirExist(dirname string) (status bool, err error) {
+func isDirExist(dirname string) (bool, error) {
 	fi, err := os.Lstat(dirname)
-	if err == nil {
-		status = fi.IsDir()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, err
 	}
-	return
+
+	return fi.IsDir(), nil
 }
 
 func (fs *Filesystem) saveTreeWalk(params listObjectParams, walker *treeWalker) {

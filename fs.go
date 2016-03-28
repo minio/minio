@@ -33,14 +33,25 @@ type listObjectParams struct {
 	prefix    string
 }
 
+// listMultipartObjectParams - list multipart object params used for list multipart object map
+type listMultipartObjectParams struct {
+	bucket         string
+	delimiter      string
+	keyMarker      string
+	prefix         string
+	uploadIDMarker string
+}
+
 // Filesystem - local variables
 type Filesystem struct {
-	path               string
-	minFreeDisk        int64
-	rwLock             *sync.RWMutex
-	multiparts         *multiparts
-	listObjectMap      map[listObjectParams][]*treeWalker
-	listObjectMapMutex *sync.Mutex
+	path                        string
+	minFreeDisk                 int64
+	rwLock                      *sync.RWMutex
+	multiparts                  *multiparts
+	listObjectMap               map[listObjectParams][]*treeWalker
+	listObjectMapMutex          *sync.Mutex
+	listMultipartObjectMap      map[listMultipartObjectParams][]multipartObjectInfoChannel
+	listMultipartObjectMapMutex *sync.Mutex
 }
 
 // MultipartSession holds active session information
@@ -56,6 +67,43 @@ type multipartSession struct {
 type multiparts struct {
 	Version       string                       `json:"version"`
 	ActiveSession map[string]*multipartSession `json:"activeSessions"`
+}
+
+func (fs *Filesystem) pushListMultipartObjectCh(params listMultipartObjectParams, ch multipartObjectInfoChannel) {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	channels := []multipartObjectInfoChannel{ch}
+	if _, ok := fs.listMultipartObjectMap[params]; ok {
+		channels = append(fs.listMultipartObjectMap[params], ch)
+	}
+
+	fs.listMultipartObjectMap[params] = channels
+}
+
+func (fs *Filesystem) popListMultipartObjectCh(params listMultipartObjectParams) *multipartObjectInfoChannel {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	if channels, ok := fs.listMultipartObjectMap[params]; ok {
+		for i, channel := range channels {
+			if !channel.IsTimedOut() {
+				chs := channels[i+1:]
+				if len(chs) > 0 {
+					fs.listMultipartObjectMap[params] = chs
+				} else {
+					delete(fs.listMultipartObjectMap, params)
+				}
+
+				return &channel
+			}
+		}
+
+		// As all channels are timed out, delete the map entry
+		delete(fs.listMultipartObjectMap, params)
+	}
+
+	return nil
 }
 
 // newFS instantiate a new filesystem.
@@ -93,6 +141,9 @@ func newFS(rootPath string) (ObjectAPI, *probe.Error) {
 
 	fs.listObjectMap = make(map[listObjectParams][]*treeWalker)
 	fs.listObjectMapMutex = &sync.Mutex{}
+
+	fs.listMultipartObjectMap = make(map[listMultipartObjectParams][]multipartObjectInfoChannel)
+	fs.listMultipartObjectMapMutex = &sync.Mutex{}
 
 	// Return here.
 	return fs, nil
