@@ -48,17 +48,14 @@ func configureServerHandler(filesystem fs.Filesystem) http.Handler {
 	}
 
 	// Initialize minio client for AWS Signature Version '4'
-	disableSSL := !isSSL() // Insecure true when SSL is false.
-	client, e := minio.NewV4(net.JoinHostPort(host, port), cred.AccessKeyID, cred.SecretAccessKey, disableSSL)
+	insecure := !isSSL() // Insecure true when SSL is false.
+	client, e := minio.NewV4(net.JoinHostPort(host, port), cred.AccessKeyID, cred.SecretAccessKey, insecure)
 	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
 
 	// Initialize Web.
 	web := &webAPI{
-		FSPath:          filesystem.GetRootPath(),
-		Client:          client,
-		apiAddress:      addr,
-		accessKeyID:     cred.AccessKeyID,
-		secretAccessKey: cred.SecretAccessKey,
+		FSPath: filesystem.GetRootPath(),
+		Client: client,
 	}
 
 	// Initialize router.
