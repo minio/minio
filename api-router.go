@@ -16,15 +16,12 @@
 
 package main
 
-import (
-	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
-)
+import router "github.com/gorilla/mux"
 
 // storageAPI container for S3 compatible API.
 type storageAPI struct {
-	// Filesystem instance.
-	Filesystem fs.Filesystem
+	// Storage instance.
+	Storage Backend
 }
 
 // registerAPIRouter - registers S3 compatible APIs.

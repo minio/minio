@@ -9,7 +9,7 @@
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implieapi.Filesystem.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implieapi.Storage.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -28,7 +29,6 @@ import (
 	"time"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -82,17 +82,17 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objectInfo, err := api.Filesystem.GetObjectInfo(bucket, object)
+	objInfo, err := api.Storage.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -101,17 +101,17 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var hrange *httpRange
-	hrange, err = getRequestedRange(r.Header.Get("Range"), objectInfo.Size)
+	hrange, err = getRequestedRange(r.Header.Get("Range"), objInfo.Size)
 	if err != nil {
 		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
 		return
 	}
 
 	// Set standard object headers.
-	setObjectHeaders(w, objectInfo, hrange)
+	setObjectHeaders(w, objInfo, hrange)
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -124,7 +124,7 @@ func (api storageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	setGetRespHeaders(w, r.URL.Query())
 
 	// Get the object.
-	if _, err = api.Filesystem.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
+	if _, err = api.Storage.GetObject(w, bucket, object, hrange.start, hrange.length); err != nil {
 		errorIf(err.Trace(), "GetObject failed.", nil)
 		return
 	}
@@ -245,17 +245,17 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	objectInfo, err := api.Filesystem.GetObjectInfo(bucket, object)
+	objInfo, err := api.Storage.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(bucket, object), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -264,10 +264,10 @@ func (api storageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Set standard object headers.
-	setObjectHeaders(w, objectInfo, nil)
+	setObjectHeaders(w, objInfo, nil)
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -338,17 +338,17 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	objectInfo, err := api.Filesystem.GetObjectInfo(sourceBucket, sourceObject)
+	objInfo, err := api.Storage.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, objectSource)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, objectSource)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, objectSource)
@@ -359,7 +359,7 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Verify x-amz-copy-source-if-modified-since and
 	// x-amz-copy-source-if-unmodified-since.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkCopySourceLastModified(w, r, lastModified) {
 		return
 	}
@@ -371,15 +371,15 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
-	if isMaxObjectSize(objectInfo.Size) {
+	if isMaxObjectSize(objInfo.Size) {
 		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
 		return
 	}
 
 	var md5Bytes []byte
-	if objectInfo.MD5Sum != "" {
+	if objInfo.MD5Sum != "" {
 		var e error
-		md5Bytes, e = hex.DecodeString(objectInfo.MD5Sum)
+		md5Bytes, e = hex.DecodeString(objInfo.MD5Sum)
 		if e != nil {
 			errorIf(probe.NewError(e), "Decoding md5 failed.", nil)
 			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
@@ -393,38 +393,41 @@ func (api storageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) 
 	// Start writing in a routine.
 	go func() {
 		defer writer.Close()
-		if _, getErr := api.Filesystem.GetObject(writer, sourceBucket, sourceObject, 0, 0); getErr != nil {
+		if _, getErr := api.Storage.GetObject(writer, sourceBucket, sourceObject, 0, 0); getErr != nil {
 			writer.CloseWithError(probe.WrapError(getErr))
 			return
 		}
 	}()
 
 	// Size of object.
-	size := objectInfo.Size
+	size := objInfo.Size
+
+	metadata := make(map[string]string)
+	metadata["md5"] = hex.EncodeToString(md5Bytes)
 
 	// Create the object.
-	objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, reader, md5Bytes)
+	objInfo, err = api.Storage.CreateObject(bucket, object, size, reader, metadata)
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.RootPathFull:
+		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BadDigest:
+		case BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.IncompleteBody:
+		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.ObjectExistsAsPrefix:
+		case ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
-	response := generateCopyObjectResponse(objectInfo.MD5Sum, objectInfo.ModifiedTime)
+	response := generateCopyObjectResponse(objInfo.MD5Sum, objInfo.ModifiedTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
@@ -557,7 +560,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var objectInfo fs.ObjectInfo
+	var objInfo ObjectInfo
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -570,7 +573,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create anonymous object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, r.Body, nil)
+		objInfo, err = api.Storage.CreateObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify them right here.
 		var ok bool
@@ -585,7 +588,7 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create presigned object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, r.Body, nil)
+		objInfo, err = api.Storage.CreateObject(bucket, object, size, r.Body, nil)
 	case authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
@@ -613,8 +616,11 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			writer.Close()
 		}()
 
+		metadata := make(map[string]string)
+		metadata["md5"] = hex.EncodeToString(md5Bytes)
+
 		// Create object.
-		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, reader, md5Bytes)
+		objInfo, err = api.Storage.CreateObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CreateObject failed.", nil)
@@ -625,25 +631,25 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch e.(type) {
-		case fs.RootPathFull:
+		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BadDigest:
+		case BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.IncompleteBody:
+		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.ObjectExistsAsPrefix:
+		case ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
-	if objectInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -675,19 +681,19 @@ func (api storageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	uploadID, err := api.Filesystem.NewMultipartUpload(bucket, object)
+	uploadID, err := api.Storage.NewMultipartUpload(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.RootPathFull:
+		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -751,9 +757,8 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		// No need to verify signature, anonymous request access is
-		// already allowed.
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
+		// No need to verify signature, anonymous request access is already allowed.
+		partMD5, err = api.Storage.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify right here.
 		var ok bool
@@ -767,7 +772,7 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
+		partMD5, err = api.Storage.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
 	case authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
@@ -794,7 +799,10 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			}
 			writer.Close()
 		}()
-		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, reader, md5Bytes)
+
+		metadata := make(map[string]string)
+		metadata["md5"] = hex.EncodeToString(md5Bytes)
+		partMD5, err = api.Storage.CreateObjectPart(bucket, object, uploadID, partID, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CreateObjectPart failed.", nil)
@@ -805,13 +813,13 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		switch e.(type) {
-		case fs.RootPathFull:
+		case RootPathFull:
 			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
-		case fs.InvalidUploadID:
+		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		case fs.BadDigest:
+		case BadDigest:
 			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case fs.IncompleteBody:
+		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -848,20 +856,20 @@ func (api storageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(r.URL.Query())
-	err := api.Filesystem.AbortMultipartUpload(bucket, object, objectResourcesMetadata.UploadID)
+	uploadID, _, _, _ := getObjectResources(r.URL.Query())
+	err := api.Storage.AbortMultipartUpload(bucket, object, uploadID)
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.InvalidUploadID:
+		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -895,39 +903,39 @@ func (api storageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(r.URL.Query())
-	if objectResourcesMetadata.PartNumberMarker < 0 {
+	uploadID, partNumberMarker, maxParts, _ := getObjectResources(r.URL.Query())
+	if partNumberMarker < 0 {
 		writeErrorResponse(w, r, ErrInvalidPartNumberMarker, r.URL.Path)
 		return
 	}
-	if objectResourcesMetadata.MaxParts < 0 {
+	if maxParts < 0 {
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	if objectResourcesMetadata.MaxParts == 0 {
-		objectResourcesMetadata.MaxParts = maxPartsList
+	if maxParts == 0 {
+		maxParts = maxPartsList
 	}
 
-	objectResourcesMetadata, err := api.Filesystem.ListObjectParts(bucket, object, objectResourcesMetadata)
+	listPartsInfo, err := api.Storage.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.InvalidUploadID:
+		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
-	response := generateListPartsResponse(objectResourcesMetadata)
+	response := generateListPartsResponse(listPartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 	// Write headers.
 	setCommonHeaders(w)
@@ -942,9 +950,9 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	object := vars["object"]
 
 	// Extract object resources.
-	objectResourcesMetadata := getObjectResources(r.URL.Query())
+	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
-	var objectInfo fs.ObjectInfo
+	var objInfo ObjectInfo
 	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
@@ -963,8 +971,17 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
+		complMultipartUpload := &completeMultipartUpload{}
+		if e = xml.Unmarshal(completePartBytes, complMultipartUpload); e != nil {
+			errorIf(probe.NewError(e), "Unmarshalling body failed.", nil)
+			writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+			return
+		}
+		// All completed parts.
+		parts := complMultipartUpload.Parts
+
 		// Complete multipart upload anonymous.
-		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, completePartBytes)
+		objInfo, err = api.Storage.CompleteMultipartUpload(bucket, object, uploadID, parts)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -976,30 +993,37 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
+		complMultipartUpload := &completeMultipartUpload{}
+		if e = xml.Unmarshal(completePartBytes, complMultipartUpload); e != nil {
+			errorIf(probe.NewError(e), "Unmarshalling body failed.", nil)
+			writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+			return
+		}
+		// All completed parts.
+		parts := complMultipartUpload.Parts
+
 		// Complete multipart upload presigned.
-		objectInfo, err = api.Filesystem.CompleteMultipartUpload(bucket, object, objectResourcesMetadata.UploadID, completePartBytes)
+		objInfo, err = api.Storage.CompleteMultipartUpload(bucket, object, uploadID, parts)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.InvalidUploadID:
+		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		case fs.InvalidPart:
+		case InvalidPart:
 			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
-		case fs.InvalidPartOrder:
+		case InvalidPartOrder:
 			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
-		case fs.IncompleteBody:
+		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case fs.MalformedXML:
-			writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
@@ -1008,7 +1032,7 @@ func (api storageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *h
 	// Get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, objectInfo.MD5Sum)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.MD5Sum)
 	encodedSuccessResponse := encodeResponse(response)
 	// Write headers.
 	setCommonHeaders(w)
@@ -1041,17 +1065,17 @@ func (api storageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	err := api.Filesystem.DeleteObject(bucket, object)
+	err := api.Storage.DeleteObject(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(), "DeleteObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketNotFound:
+		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case fs.ObjectNotFound:
+		case ObjectNotFound:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case fs.ObjectNameInvalid:
+		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)

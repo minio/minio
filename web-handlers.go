@@ -145,12 +145,12 @@ type ListBucketsArgs struct{}
 
 // ListBucketsRep - list buckets response
 type ListBucketsRep struct {
-	Buckets   []BucketInfo `json:"buckets"`
-	UIVersion string       `json:"uiVersion"`
+	Buckets   []WebBucketInfo `json:"buckets"`
+	UIVersion string          `json:"uiVersion"`
 }
 
-// BucketInfo container for list buckets metadata.
-type BucketInfo struct {
+// WebBucketInfo container for list buckets metadata.
+type WebBucketInfo struct {
 	// The name of the bucket.
 	Name string `json:"name"`
 	// Date the bucket was created.
@@ -169,7 +169,7 @@ func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *Li
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
 		if bucket.Name != path.Base(reservedBucket) {
-			reply.Buckets = append(reply.Buckets, BucketInfo{
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.CreationDate,
 			})
@@ -187,12 +187,12 @@ type ListObjectsArgs struct {
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []ObjectInfo `json:"objects"`
-	UIVersion string       `json:"uiVersion"`
+	Objects   []WebObjectInfo `json:"objects"`
+	UIVersion string          `json:"uiVersion"`
 }
 
-// ObjectInfo container for list objects metadata.
-type ObjectInfo struct {
+// WebObjectInfo container for list objects metadata.
+type WebObjectInfo struct {
 	// Name of the object
 	Key string `json:"name"`
 	// Date and time the object was last modified.
@@ -215,7 +215,7 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		if object.Err != nil {
 			return &json2.Error{Message: object.Err.Error()}
 		}
-		objectInfo := ObjectInfo{
+		objectInfo := WebObjectInfo{
 			Key:          object.Key,
 			LastModified: object.LastModified,
 			Size:         object.Size,

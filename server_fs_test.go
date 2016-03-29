@@ -34,7 +34,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/minio/minio/pkg/fs"
 	. "gopkg.in/check.v1"
 )
 
@@ -90,10 +89,10 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	// Save config.
 	c.Assert(serverConfig.Save(), IsNil)
 
-	fs, err := fs.New(fsroot)
+	bkend, err := newFS(fsroot)
 	c.Assert(err, IsNil)
 
-	httpHandler := configureServerHandler(fs)
+	httpHandler := configureServerHandler(bkend)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 
@@ -1266,8 +1265,8 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
 	// Complete multipart upload
-	completeUploads := &fs.CompleteMultipartUpload{
-		Part: []fs.CompletePart{
+	completeUploads := &completeMultipartUpload{
+		Parts: []completePart{
 			{
 				PartNumber: 1,
 				ETag:       response1.Header.Get("ETag"),

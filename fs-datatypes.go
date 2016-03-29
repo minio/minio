@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import "time"
 
-// PartMetadata - various types of individual part resources
-type PartMetadata struct {
+// partInfo - various types of individual part resources.
+type partInfo struct {
 	PartNumber   int
 	LastModified time.Time
 	ETag         string
 	Size         int64
 }
 
-// ObjectResourcesMetadata - various types of object resources
-type ObjectResourcesMetadata struct {
+// ListPartsInfo - various types of object resources.
+type ListPartsInfo struct {
 	Bucket               string
 	Object               string
 	UploadID             string
@@ -37,20 +37,20 @@ type ObjectResourcesMetadata struct {
 	MaxParts             int
 	IsTruncated          bool
 
-	Part         []PartMetadata
+	Parts        []partInfo
 	EncodingType string
 }
 
-// UploadMetadata container capturing metadata on in progress multipart upload in a given bucket
-type UploadMetadata struct {
+// uploadMetadata container capturing metadata on in progress multipart upload in a given bucket
+type uploadMetadata struct {
 	Object       string
 	UploadID     string
 	StorageClass string
 	Initiated    time.Time
 }
 
-// BucketMultipartResourcesMetadata - various types of bucket resources for inprogress multipart uploads
-type BucketMultipartResourcesMetadata struct {
+// ListMultipartsInfo - various types of bucket resources for inprogress multipart uploads.
+type ListMultipartsInfo struct {
 	KeyMarker          string
 	UploadIDMarker     string
 	NextKeyMarker      string
@@ -58,34 +58,34 @@ type BucketMultipartResourcesMetadata struct {
 	EncodingType       string
 	MaxUploads         int
 	IsTruncated        bool
-	Upload             []*UploadMetadata
+	Uploads            []uploadMetadata
 	Prefix             string
 	Delimiter          string
 	CommonPrefixes     []string
 }
 
-// ListObjectsResult - container for list object request results.
-type ListObjectsResult struct {
+// ListObjectsInfo - container for list objects.
+type ListObjectsInfo struct {
 	IsTruncated bool
 	NextMarker  string
 	Objects     []ObjectInfo
 	Prefixes    []string
 }
 
-// CompletePart - completed part container
-type CompletePart struct {
+// completePart - completed part container.
+type completePart struct {
 	PartNumber int
 	ETag       string
 }
 
 // completedParts is a sortable interface for Part slice
-type completedParts []CompletePart
+type completedParts []completePart
 
 func (a completedParts) Len() int           { return len(a) }
 func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-// CompleteMultipartUpload container for completing multipart upload
-type CompleteMultipartUpload struct {
-	Part []CompletePart
+// completeMultipartUpload container for completing multipart upload
+type completeMultipartUpload struct {
+	Parts []completePart `xml:"Part"`
 }

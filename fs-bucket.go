@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"io/ioutil"
@@ -56,7 +56,7 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	return nil
 }
 
-// BucketInfo - name and create date
+// BucketInfo - bucket name and create date
 type BucketInfo struct {
 	Name    string
 	Created time.Time
@@ -68,7 +68,7 @@ func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
 	if e != nil {
 		return []BucketInfo{}, probe.NewError(e)
 	}
-	var metadataList []BucketInfo
+	var buckets []BucketInfo
 	for _, file := range files {
 		if !file.IsDir() {
 			// If not directory, ignore all file types.
@@ -79,15 +79,15 @@ func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
 		if !IsValidBucketName(dirName) {
 			continue
 		}
-		metadata := BucketInfo{
+		bucket := BucketInfo{
 			Name:    dirName,
 			Created: file.ModTime(),
 		}
-		metadataList = append(metadataList, metadata)
+		buckets = append(buckets, bucket)
 	}
 	// Remove duplicated entries.
-	metadataList = removeDuplicateBuckets(metadataList)
-	return metadataList, nil
+	buckets = removeDuplicateBuckets(buckets)
+	return buckets, nil
 }
 
 // removeDuplicateBuckets - remove duplicate buckets.

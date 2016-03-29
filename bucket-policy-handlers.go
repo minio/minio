@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -188,7 +187,7 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		errorIf(err.Trace(bucket, string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -223,9 +222,9 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	if err != nil {
 		errorIf(err.Trace(bucket), "DeleteBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketPolicyNotFound:
+		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -260,9 +259,9 @@ func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketPolicyNotFound:
+		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)

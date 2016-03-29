@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"os"
@@ -25,8 +25,8 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// ListObjectParams - list object params used for list object map
-type ListObjectParams struct {
+// listObjectParams - list object params used for list object map
+type listObjectParams struct {
 	bucket    string
 	delimiter string
 	marker    string
@@ -38,16 +38,31 @@ type Filesystem struct {
 	path               string
 	minFreeDisk        int64
 	rwLock             *sync.RWMutex
-	multiparts         *Multiparts
-	listObjectMap      map[ListObjectParams][]ObjectInfoChannel
+	multiparts         *multiparts
+	listObjectMap      map[listObjectParams][]objectInfoChannel
 	listObjectMapMutex *sync.Mutex
 }
 
-func (fs *Filesystem) pushListObjectCh(params ListObjectParams, ch ObjectInfoChannel) {
+// MultipartSession holds active session information
+type multipartSession struct {
+	TotalParts int
+	ObjectName string
+	UploadID   string
+	Initiated  time.Time
+	Parts      []partInfo
+}
+
+// multiparts collection of many parts
+type multiparts struct {
+	Version       string                       `json:"version"`
+	ActiveSession map[string]*multipartSession `json:"activeSessions"`
+}
+
+func (fs *Filesystem) pushListObjectCh(params listObjectParams, ch objectInfoChannel) {
 	fs.listObjectMapMutex.Lock()
 	defer fs.listObjectMapMutex.Unlock()
 
-	channels := []ObjectInfoChannel{ch}
+	channels := []objectInfoChannel{ch}
 	if _, ok := fs.listObjectMap[params]; ok {
 		channels = append(fs.listObjectMap[params], ch)
 	}
@@ -55,7 +70,7 @@ func (fs *Filesystem) pushListObjectCh(params ListObjectParams, ch ObjectInfoCha
 	fs.listObjectMap[params] = channels
 }
 
-func (fs *Filesystem) popListObjectCh(params ListObjectParams) *ObjectInfoChannel {
+func (fs *Filesystem) popListObjectCh(params listObjectParams) *objectInfoChannel {
 	fs.listObjectMapMutex.Lock()
 	defer fs.listObjectMapMutex.Unlock()
 
@@ -80,55 +95,40 @@ func (fs *Filesystem) popListObjectCh(params ListObjectParams) *ObjectInfoChanne
 	return nil
 }
 
-// MultipartSession holds active session information
-type MultipartSession struct {
-	TotalParts int
-	ObjectName string
-	UploadID   string
-	Initiated  time.Time
-	Parts      []PartMetadata
-}
-
-// Multiparts collection of many parts
-type Multiparts struct {
-	Version       string                       `json:"version"`
-	ActiveSession map[string]*MultipartSession `json:"activeSessions"`
-}
-
-// New instantiate a new donut
-func New(rootPath string) (Filesystem, *probe.Error) {
+// newFS instantiate a new donut
+func newFS(rootPath string) (Backend, *probe.Error) {
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
 	var err *probe.Error
 	// load multiparts session from disk
-	var multiparts *Multiparts
-	multiparts, err = loadMultipartsSession()
+	var mparts *multiparts
+	mparts, err = loadMultipartsSession()
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
-			multiparts = &Multiparts{
+			mparts = &multiparts{
 				Version:       "1",
-				ActiveSession: make(map[string]*MultipartSession),
+				ActiveSession: make(map[string]*multipartSession),
 			}
-			if err = saveMultipartsSession(*multiparts); err != nil {
-				return Filesystem{}, err.Trace()
+			if err = saveMultipartsSession(*mparts); err != nil {
+				return nil, err.Trace()
 			}
 		} else {
-			return Filesystem{}, err.Trace()
+			return nil, err.Trace()
 		}
 	}
 
-	fs := Filesystem{
+	fs := &Filesystem{
 		rwLock: &sync.RWMutex{},
 	}
 	fs.path = rootPath
-	fs.multiparts = multiparts
+	fs.multiparts = mparts
 
 	/// Defaults
 
 	// minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 5
 
-	fs.listObjectMap = make(map[ListObjectParams][]ObjectInfoChannel)
+	fs.listObjectMap = make(map[listObjectParams][]objectInfoChannel)
 	fs.listObjectMapMutex = &sync.Mutex{}
 
 	// Return here.

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"github.com/minio/minio/pkg/probe"
@@ -23,15 +23,14 @@ import (
 
 var multipartsMetadataPath string
 
-// SetFSMultipartsMetadataPath - set custom multiparts session
-// metadata path.
+// SetFSMultipartsMetadataPath - set custom multiparts session metadata path.
 func setFSMultipartsMetadataPath(metadataPath string) {
 	multipartsMetadataPath = metadataPath
 }
 
-// saveMultipartsSession - save multiparts
-func saveMultipartsSession(multiparts Multiparts) *probe.Error {
-	qc, err := quick.New(multiparts)
+// saveMultipartsSession - save multiparts.
+func saveMultipartsSession(mparts multiparts) *probe.Error {
+	qc, err := quick.New(mparts)
 	if err != nil {
 		return err.Trace()
 	}
@@ -41,17 +40,17 @@ func saveMultipartsSession(multiparts Multiparts) *probe.Error {
 	return nil
 }
 
-// loadMultipartsSession load multipart session file
-func loadMultipartsSession() (*Multiparts, *probe.Error) {
-	multiparts := &Multiparts{}
-	multiparts.Version = "1"
-	multiparts.ActiveSession = make(map[string]*MultipartSession)
-	qc, err := quick.New(multiparts)
+// loadMultipartsSession load multipart session file.
+func loadMultipartsSession() (*multiparts, *probe.Error) {
+	mparts := &multiparts{}
+	mparts.Version = "1"
+	mparts.ActiveSession = make(map[string]*multipartSession)
+	qc, err := quick.New(mparts)
 	if err != nil {
 		return nil, err.Trace()
 	}
 	if err := qc.Load(multipartsMetadataPath); err != nil {
 		return nil, err.Trace()
 	}
-	return qc.Data().(*Multiparts), nil
+	return qc.Data().(*multiparts), nil
 }
