@@ -443,3 +443,21 @@ func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthRep
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
+
+type GetAuthReply struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// GetAuth - return accessKey and secretKey credentials.
+func (web *webAPI) GetAuth(r *http.Request, args *GenericArgs, reply *GetAuthReply) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	creds := serverConfig.GetCredential()
+	reply.AccessKey = creds.AccessKeyID
+	reply.SecretKey = creds.SecretAccessKey
+	reply.UIVersion = miniobrowser.UIVersion
+	return nil
+}
