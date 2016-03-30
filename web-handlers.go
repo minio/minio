@@ -405,11 +405,11 @@ func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthRep
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	if args.AccessKey == "" {
-		return &json2.Error{Message: "Empty access key not allowed"}
+	if !isValidAccessKey.MatchString(args.AccessKey) {
+		return &json2.Error{Message: "Invalid Access Key"}
 	}
-	if args.SecretKey == "" {
-		return &json2.Error{Message: "Empty secret key not allowed"}
+	if !isValidSecretKey.MatchString(args.SecretKey) {
+		return &json2.Error{Message: "Invalid Secret Key"}
 	}
 	cred := credential{args.AccessKey, args.SecretKey}
 	serverConfig.SetCredential(cred)
