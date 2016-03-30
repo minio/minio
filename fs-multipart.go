@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -63,7 +62,7 @@ func (fs Filesystem) ListMultipartUploads(bucket string, resources BucketMultipa
 	if !IsValidBucketName(bucket) {
 		return BucketMultipartResourcesMetadata{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
@@ -244,7 +243,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 		return "", probe.NewError(ObjectNameInvalid{Object: object})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e = os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
@@ -318,8 +317,8 @@ func (a partNumber) Len() int           { return len(a) }
 func (a partNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a partNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-// CreateObjectPart - create a part in a multipart session
-func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Bytes []byte) (string, *probe.Error) {
+// PutObjectPart - create a part in a multipart session
+func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, *probe.Error) {
 	di, err := disk.GetInfo(fs.path)
 	if err != nil {
 		return "", probe.NewError(err)
@@ -352,7 +351,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
@@ -360,12 +359,6 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 			return "", probe.NewError(BucketNotFound{Bucket: bucket})
 		}
 		return "", probe.NewError(e)
-	}
-
-	// md5Hex representation.
-	var md5Hex string
-	if len(md5Bytes) != 0 {
-		md5Hex = hex.EncodeToString(md5Bytes)
 	}
 
 	objectPath := filepath.Join(bucketPath, object)
@@ -390,7 +383,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 
 	// Finalize new md5.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if len(md5Bytes) != 0 {
+	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -438,7 +431,7 @@ func (fs Filesystem) CreateObjectPart(bucket, object, uploadID string, partID in
 }
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
-func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploadID string, completeMultipartBytes []byte) (ObjectInfo, *probe.Error) {
+func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []CompletePart) (ObjectInfo, *probe.Error) {
 	// Check bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -454,7 +447,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploa
 		return ObjectInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
@@ -469,19 +462,6 @@ func (fs Filesystem) CompleteMultipartUpload(bucket string, object string, uploa
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
-
-	completeMultipartUpload := &CompleteMultipartUpload{}
-	if e = xml.Unmarshal(completeMultipartBytes, completeMultipartUpload); e != nil {
-		objectWriter.CloseAndPurge()
-		return ObjectInfo{}, probe.NewError(MalformedXML{})
-	}
-	if !sort.IsSorted(completedParts(completeMultipartUpload.Part)) {
-		objectWriter.CloseAndPurge()
-		return ObjectInfo{}, probe.NewError(InvalidPartOrder{})
-	}
-
-	// Save parts for verification.
-	parts := completeMultipartUpload.Part
 
 	// Critical region requiring read lock.
 	fs.rwLock.RLock()
@@ -582,7 +562,7 @@ func (fs Filesystem) ListObjectParts(bucket, object string, resources ObjectReso
 		startPartNumber = objectResourcesMetadata.PartNumberMarker
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.
@@ -631,7 +611,7 @@ func (fs Filesystem) AbortMultipartUpload(bucket, object, uploadID string) *prob
 		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		// Check bucket exists.

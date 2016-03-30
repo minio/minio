@@ -30,7 +30,6 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/minhttp"
 	"github.com/minio/minio/pkg/probe"
 )
@@ -92,11 +91,11 @@ EXAMPLES:
 }
 
 // configureServer configure a new server instance
-func configureServer(filesystem fs.Filesystem) *http.Server {
+func configureServer(objectAPI ObjectAPI) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           serverConfig.GetAddr(),
-		Handler:        configureServerHandler(filesystem),
+		Handler:        configureServerHandler(objectAPI),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -306,49 +305,52 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	var objectAPI ObjectAPI
+	var err *probe.Error
+
 	// get backend.
 	backend := serverConfig.GetBackend()
 	if backend.Type == "fs" {
-		// Initialize file system.
-		filesystem, err := fs.New(backend.Disk)
+		// Initialize filesystem storage layer.
+		objectAPI, err = newFS(backend.Disk)
 		fatalIf(err.Trace(backend.Type, backend.Disk), "Initializing filesystem failed.", nil)
-
-		// Configure server.
-		apiServer := configureServer(filesystem)
-
-		// Credential.
-		cred := serverConfig.GetCredential()
-
-		// Region.
-		region := serverConfig.GetRegion()
-
-		// Print credentials and region.
-		console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
-
-		console.Println("\nMinio Object Storage:")
-		// Print api listen ips.
-		printListenIPs(apiServer)
-
-		console.Println("\nMinio Browser:")
-		// Print browser listen ips.
-		printListenIPs(apiServer)
-
-		console.Println("\nTo configure Minio Client:")
-
-		// Download 'mc' links.
-		if runtime.GOOS == "windows" {
-			console.Println("    Download 'mc' from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
-			console.Println("    $ mc.exe config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
-		} else {
-			console.Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
-			console.Println("    $ chmod 755 mc")
-			console.Println("    $ ./mc config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
-		}
-
-		// Start server.
-		err = minhttp.ListenAndServe(apiServer)
-		errorIf(err.Trace(), "Failed to start the minio server.", nil)
-		return
+	} else { // else if backend.Type == "xl" { here.
+		console.Fatalln("No known backends configured, please use ‘minio init --help’ to initialize a backend.")
 	}
-	console.Println(colorGreen("No known backends configured, please use ‘minio init --help’ to initialize a backend."))
+
+	// Configure server.
+	apiServer := configureServer(objectAPI)
+
+	// Credential.
+	cred := serverConfig.GetCredential()
+
+	// Region.
+	region := serverConfig.GetRegion()
+
+	// Print credentials and region.
+	console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
+
+	console.Println("\nMinio Object Storage:")
+	// Print api listen ips.
+	printListenIPs(apiServer)
+
+	console.Println("\nMinio Browser:")
+	// Print browser listen ips.
+	printListenIPs(apiServer)
+
+	console.Println("\nTo configure Minio Client:")
+
+	// Download 'mc' links.
+	if runtime.GOOS == "windows" {
+		console.Println("    Download 'mc' from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
+		console.Println("    $ mc.exe config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
+	} else {
+		console.Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
+		console.Println("    $ chmod 755 mc")
+		console.Println("    $ ./mc config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
+	}
+
+	// Start server.
+	err = minhttp.ListenAndServe(apiServer)
+	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

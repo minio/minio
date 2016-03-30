@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"fmt"
@@ -38,7 +38,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		return result, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket) // Get the right bucket name.
 	bucketDir := filepath.Join(fs.path, bucket)
 	// Verify if bucket exists.
 	if status, err := isDirExist(bucketDir); !status {

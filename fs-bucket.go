@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"io/ioutil"
@@ -35,7 +35,7 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
 	if e := os.Remove(bucketDir); e != nil {
 		// Error if there was no bucket in the first place.
@@ -129,7 +129,7 @@ func (fs Filesystem) MakeBucket(bucket string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketDir := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketDir); e == nil {
 		return probe.NewError(BucketExists{Bucket: bucket})
@@ -142,19 +142,23 @@ func (fs Filesystem) MakeBucket(bucket string) *probe.Error {
 	return nil
 }
 
-// denormalizeBucket - will convert incoming bucket names to
-// corresponding valid bucketnames on the backend in a platform
+// getActualBucketname - will convert incoming bucket names to
+// corresponding actual bucketnames on the backend in a platform
 // compatible way for all operating systems.
-func (fs Filesystem) denormalizeBucket(bucket string) string {
-	buckets, e := ioutil.ReadDir(fs.path)
+func getActualBucketname(fsPath, bucket string) string {
+	fd, e := os.Open(fsPath)
+	if e != nil {
+		return bucket
+	}
+	buckets, e := fd.Readdirnames(-1)
 	if e != nil {
 		return bucket
 	}
 	for _, b := range buckets {
-		// Verify if lowercase version of the bucket is equal to the
-		// incoming bucket, then use the proper name.
-		if strings.ToLower(b.Name()) == bucket {
-			return b.Name()
+		// Verify if lowercase version of the bucket is equal
+		// to the incoming bucket, then use the proper name.
+		if strings.ToLower(b) == bucket {
+			return b
 		}
 	}
 	return bucket
@@ -165,7 +169,7 @@ func (fs Filesystem) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	// Get bucket path.
 	bucketDir := filepath.Join(fs.path, bucket)
 	fi, e := os.Stat(bucketDir)

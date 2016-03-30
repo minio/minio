@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import "time"
 
@@ -87,5 +87,5 @@ func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 
 // CompleteMultipartUpload container for completing multipart upload
 type CompleteMultipartUpload struct {
-	Part []CompletePart
+	Parts []CompletePart `xml:"Part"`
 }

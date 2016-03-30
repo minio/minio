@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -128,7 +127,7 @@ func bucketPolicyConditionMatch(conditions map[string]string, statement policySt
 // -----------------
 // This implementation of the PUT operation uses the policy
 // subresource to add to or replace a policy on a bucket
-func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectStorageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -188,7 +187,7 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		errorIf(err.Trace(bucket, string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -202,7 +201,7 @@ func (api storageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 // -----------------
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
-func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectStorageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -223,9 +222,9 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	if err != nil {
 		errorIf(err.Trace(bucket), "DeleteBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketPolicyNotFound:
+		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
@@ -239,7 +238,7 @@ func (api storageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.R
 // -----------------
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
-func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectStorageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -260,9 +259,9 @@ func (api storageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
 		switch err.ToGoError().(type) {
-		case fs.BucketNameInvalid:
+		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case fs.BucketPolicyNotFound:
+		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)

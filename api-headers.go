@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-
-	"github.com/minio/minio/pkg/fs"
 )
 
 //// helpers
@@ -60,7 +58,7 @@ func encodeResponse(response interface{}) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objectInfo fs.ObjectInfo, contentRange *httpRange) {
+func setObjectHeaders(w http.ResponseWriter, objectInfo ObjectInfo, contentRange *httpRange) {
 	// set common headers
 	setCommonHeaders(w)
 

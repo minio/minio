@@ -35,22 +35,23 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/minio/minio/pkg/fs"
 	. "gopkg.in/check.v1"
 )
 
+// Concurreny level.
 const (
 	ConcurrencyLevel = 10
 )
 
-type MyAPIFSCacheSuite struct {
+// API suite container.
+type MyAPISuite struct {
 	root       string
 	req        *http.Request
 	body       io.ReadSeeker
 	credential credential
 }
 
-var _ = Suite(&MyAPIFSCacheSuite{})
+var _ = Suite(&MyAPISuite{})
 
 var testAPIFSCacheServer *httptest.Server
 
@@ -69,7 +70,7 @@ func getFreePort() int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
+func (s *MyAPISuite) SetUpSuite(c *C) {
 	root, e := ioutil.TempDir(os.TempDir(), "api-")
 	c.Assert(e, IsNil)
 	s.root = root
@@ -95,14 +96,14 @@ func (s *MyAPIFSCacheSuite) SetUpSuite(c *C) {
 	// Save config.
 	c.Assert(serverConfig.Save(), IsNil)
 
-	fs, err := fs.New(fsroot)
+	fs, err := newFS(fsroot)
 	c.Assert(err, IsNil)
 
 	httpHandler := configureServerHandler(fs)
 	testAPIFSCacheServer = httptest.NewServer(httpHandler)
 }
 
-func (s *MyAPIFSCacheSuite) TearDownSuite(c *C) {
+func (s *MyAPISuite) TearDownSuite(c *C) {
 	os.RemoveAll(s.root)
 	testAPIFSCacheServer.Close()
 }
@@ -142,7 +143,7 @@ var ignoredHeaders = map[string]bool{
 	"User-Agent":     true,
 }
 
-func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
+func (s *MyAPISuite) newRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
 	if method == "" {
 		method = "POST"
 	}
@@ -267,7 +268,7 @@ func (s *MyAPIFSCacheSuite) newRequest(method, urlStr string, contentLength int6
 	return req, nil
 }
 
-func (s *MyAPIFSCacheSuite) TestAuth(c *C) {
+func (s *MyAPISuite) TestAuth(c *C) {
 	secretID, err := genSecretAccessKey()
 	c.Assert(err, IsNil)
 
@@ -278,7 +279,7 @@ func (s *MyAPIFSCacheSuite) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
-func (s *MyAPIFSCacheSuite) TestBucketPolicy(c *C) {
+func (s *MyAPISuite) TestBucketPolicy(c *C) {
 	// Sample bucket policy.
 	bucketPolicyBuf := `{
     "Version": "2012-10-17",
@@ -348,7 +349,7 @@ func (s *MyAPIFSCacheSuite) TestBucketPolicy(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIFSCacheSuite) TestDeleteBucket(c *C) {
+func (s *MyAPISuite) TestDeleteBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucket", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -366,7 +367,7 @@ func (s *MyAPIFSCacheSuite) TestDeleteBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIFSCacheSuite) TestDeleteObject(c *C) {
+func (s *MyAPISuite) TestDeleteObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucketobject", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -391,7 +392,7 @@ func (s *MyAPIFSCacheSuite) TestDeleteObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIFSCacheSuite) TestNonExistantBucket(c *C) {
+func (s *MyAPISuite) TestNonExistantBucket(c *C) {
 	request, err := s.newRequest("HEAD", testAPIFSCacheServer.URL+"/nonexistantbucket", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -401,7 +402,7 @@ func (s *MyAPIFSCacheSuite) TestNonExistantBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
-func (s *MyAPIFSCacheSuite) TestEmptyObject(c *C) {
+func (s *MyAPISuite) TestEmptyObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/emptyobject", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -432,7 +433,7 @@ func (s *MyAPIFSCacheSuite) TestEmptyObject(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 }
 
-func (s *MyAPIFSCacheSuite) TestBucket(c *C) {
+func (s *MyAPISuite) TestBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/bucket", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -450,7 +451,7 @@ func (s *MyAPIFSCacheSuite) TestBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
-func (s *MyAPIFSCacheSuite) TestObject(c *C) {
+func (s *MyAPISuite) TestObject(c *C) {
 	buffer := bytes.NewReader([]byte("hello world"))
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/testobject", 0, nil)
 	c.Assert(err, IsNil)
@@ -482,7 +483,7 @@ func (s *MyAPIFSCacheSuite) TestObject(c *C) {
 
 }
 
-func (s *MyAPIFSCacheSuite) TestMultipleObjects(c *C) {
+func (s *MyAPISuite) TestMultipleObjects(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/multipleobjects", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -569,7 +570,7 @@ func (s *MyAPIFSCacheSuite) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
 }
 
-func (s *MyAPIFSCacheSuite) TestNotImplemented(c *C) {
+func (s *MyAPISuite) TestNotImplemented(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/bucket/object?policy", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -579,7 +580,7 @@ func (s *MyAPIFSCacheSuite) TestNotImplemented(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
 }
 
-func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
+func (s *MyAPISuite) TestHeader(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/bucket/object", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -590,7 +591,7 @@ func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 }
 
-func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
+func (s *MyAPISuite) TestPutBucket(c *C) {
 	// Block 1: Testing for racey access
 	// The assertion is removed from this block since the purpose of this block is to find races
 	// The purpose this block is not to check for correctness of functionality
@@ -602,7 +603,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 			defer wg.Done()
 			request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket", 0, nil)
 			c.Assert(err, IsNil)
-			request.Header.Add("x-amz-acl", "private")
 
 			client := http.Client{}
 			response, err := client.Do(request)
@@ -614,7 +614,6 @@ func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 	//Block 2: testing for correctness of the functionality
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket-slash/", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -624,10 +623,9 @@ func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
 
 }
 
-func (s *MyAPIFSCacheSuite) TestCopyObject(c *C) {
+func (s *MyAPISuite) TestCopyObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-copy", 0, nil)
 	c.Assert(err, IsNil)
-	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -662,7 +660,7 @@ func (s *MyAPIFSCacheSuite) TestCopyObject(c *C) {
 	c.Assert(string(object), Equals, "hello world")
 }
 
-func (s *MyAPIFSCacheSuite) TestPutObject(c *C) {
+func (s *MyAPISuite) TestPutObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -680,7 +678,7 @@ func (s *MyAPIFSCacheSuite) TestPutObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
-func (s *MyAPIFSCacheSuite) TestListBuckets(c *C) {
+func (s *MyAPISuite) TestListBuckets(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -695,7 +693,7 @@ func (s *MyAPIFSCacheSuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *MyAPIFSCacheSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+func (s *MyAPISuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/innonexistantbucket/object", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
@@ -706,7 +704,7 @@ func (s *MyAPIFSCacheSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
-func (s *MyAPIFSCacheSuite) TestHeadOnObject(c *C) {
+func (s *MyAPISuite) TestHeadOnObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/headonobject", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -749,7 +747,7 @@ func (s *MyAPIFSCacheSuite) TestHeadOnObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
 }
 
-func (s *MyAPIFSCacheSuite) TestHeadOnBucket(c *C) {
+func (s *MyAPISuite) TestHeadOnBucket(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/headonbucket", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -766,7 +764,7 @@ func (s *MyAPIFSCacheSuite) TestHeadOnBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
-func (s *MyAPIFSCacheSuite) TestXMLNameNotInBucketListJson(c *C) {
+func (s *MyAPISuite) TestXMLNameNotInBucketListJson(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
@@ -781,7 +779,7 @@ func (s *MyAPIFSCacheSuite) TestXMLNameNotInBucketListJson(c *C) {
 	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
 }
 
-func (s *MyAPIFSCacheSuite) TestXMLNameNotInObjectListJson(c *C) {
+func (s *MyAPISuite) TestXMLNameNotInObjectListJson(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/xmlnamenotinobjectlistjson", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
@@ -805,7 +803,7 @@ func (s *MyAPIFSCacheSuite) TestXMLNameNotInObjectListJson(c *C) {
 	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
 }
 
-func (s *MyAPIFSCacheSuite) TestContentTypePersists(c *C) {
+func (s *MyAPISuite) TestContentTypePersists(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/contenttype-persists", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -865,7 +863,7 @@ func (s *MyAPIFSCacheSuite) TestContentTypePersists(c *C) {
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
 }
 
-func (s *MyAPIFSCacheSuite) TestPartialContent(c *C) {
+func (s *MyAPISuite) TestPartialContent(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/partial-content", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -898,7 +896,7 @@ func (s *MyAPIFSCacheSuite) TestPartialContent(c *C) {
 	c.Assert(string(partialObject), Equals, "Wo")
 }
 
-func (s *MyAPIFSCacheSuite) TestListObjectsHandlerErrors(c *C) {
+func (s *MyAPISuite) TestListObjectsHandlerErrors(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/objecthandlererrors-.", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -931,7 +929,7 @@ func (s *MyAPIFSCacheSuite) TestListObjectsHandlerErrors(c *C) {
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647.", http.StatusBadRequest)
 }
 
-func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
+func (s *MyAPISuite) TestPutBucketErrors(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket-.", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -963,7 +961,7 @@ func (s *MyAPIFSCacheSuite) TestPutBucketErrors(c *C) {
 	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
 }
 
-func (s *MyAPIFSCacheSuite) TestGetObjectErrors(c *C) {
+func (s *MyAPISuite) TestGetObjectErrors(c *C) {
 	request, err := s.newRequest("GET", testAPIFSCacheServer.URL+"/getobjecterrors", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -997,7 +995,7 @@ func (s *MyAPIFSCacheSuite) TestGetObjectErrors(c *C) {
 
 }
 
-func (s *MyAPIFSCacheSuite) TestGetObjectRangeErrors(c *C) {
+func (s *MyAPISuite) TestGetObjectRangeErrors(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/getobjectrangeerrors", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1025,7 +1023,7 @@ func (s *MyAPIFSCacheSuite) TestGetObjectRangeErrors(c *C) {
 	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
 }
 
-func (s *MyAPIFSCacheSuite) TestObjectMultipartAbort(c *C) {
+func (s *MyAPISuite) TestObjectMultipartAbort(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartabort", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1072,7 +1070,8 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response3.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
+/*
+func (s *MyAPISuite) TestBucketMultipartList(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/bucketmultipartlist", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1085,6 +1084,7 @@ func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
@@ -1159,8 +1159,9 @@ func (s *MyAPIFSCacheSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
 }
+*/
 
-func (s *MyAPIFSCacheSuite) TestValidateObjectMultipartUploadID(c *C) {
+func (s *MyAPISuite) TestValidateObjectMultipartUploadID(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartlist-uploadid", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1183,7 +1184,7 @@ func (s *MyAPIFSCacheSuite) TestValidateObjectMultipartUploadID(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 }
 
-func (s *MyAPIFSCacheSuite) TestObjectMultipartList(c *C) {
+func (s *MyAPISuite) TestObjectMultipartList(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartlist", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1237,7 +1238,7 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipartList(c *C) {
 	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000.", http.StatusBadRequest)
 }
 
-func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
+func (s *MyAPISuite) TestObjectMultipart(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts", 0, nil)
 	c.Assert(err, IsNil)
 
@@ -1287,8 +1288,8 @@ func (s *MyAPIFSCacheSuite) TestObjectMultipart(c *C) {
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
 	// Complete multipart upload
-	completeUploads := &fs.CompleteMultipartUpload{
-		Part: []fs.CompletePart{
+	completeUploads := &CompleteMultipartUpload{
+		Parts: []CompletePart{
 			{
 				PartNumber: 1,
 				ETag:       response1.Header.Get("ETag"),

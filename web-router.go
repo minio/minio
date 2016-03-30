@@ -25,13 +25,12 @@ import (
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/miniobrowser"
 )
 
 // webAPI container for Web API.
 type webAPI struct {
-	Filesystem fs.Filesystem
+	ObjectAPI ObjectAPI
 }
 
 // indexHandler - Handler to serve index.html

@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -36,8 +38,8 @@ func TestGetObjectInfo(t *testing.T) {
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	fs, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func TestGetObjectInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fs.CreateObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
+	_, err = fs.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,6 @@ func TestGetObjectInfo(t *testing.T) {
 		{Bucket: "test-getobjectinfo", Name: "Asia/asiapics.jpg", ContentType: "image/jpeg", IsDir: false},
 	}
 	testCases := []struct {
-		rootPath   string
 		bucketName string
 		objectName string
 
@@ -67,24 +68,24 @@ func TestGetObjectInfo(t *testing.T) {
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{fs.path, ".test", "", ObjectInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
-		{fs.path, "Test", "", ObjectInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
-		{fs.path, "---", "", ObjectInfo{}, BucketNameInvalid{Bucket: "---"}, false},
-		{fs.path, "ad", "", ObjectInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
+		{".test", "", ObjectInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", ObjectInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", ObjectInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", ObjectInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases with valid but non-existing bucket names (Test number 5-7).
-		{fs.path, "abcdefgh", "abc", ObjectInfo{}, BucketNotFound{Bucket: "abcdefgh"}, false},
-		{fs.path, "ijklmnop", "efg", ObjectInfo{}, BucketNotFound{Bucket: "ijklmnop"}, false},
+		{"abcdefgh", "abc", ObjectInfo{}, BucketNotFound{Bucket: "abcdefgh"}, false},
+		{"ijklmnop", "efg", ObjectInfo{}, BucketNotFound{Bucket: "ijklmnop"}, false},
 		// Test cases with valid but non-existing bucket names and invalid object name (Test number 8-9).
-		{fs.path, "abcdefgh", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "abcdefgh", Object: ""}, false},
-		{fs.path, "ijklmnop", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "ijklmnop", Object: ""}, false},
+		{"abcdefgh", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "abcdefgh", Object: ""}, false},
+		{"ijklmnop", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "ijklmnop", Object: ""}, false},
 		// Test cases with non-existing object name with existing bucket (Test number 10-12).
-		{fs.path, "test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
-		{fs.path, "test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
-		{fs.path, "test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
+		{"test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
+		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
+		{"test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
 		// Test case with existing bucket but object name set to a directory (Test number 13).
-		{fs.path, "test-getobjectinfo", "Asia", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
+		{"test-getobjectinfo", "Asia", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
 		// Valid case with existing object (Test number 14).
-		{fs.path, "test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
+		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {
 		result, err := fs.GetObjectInfo(testCase.bucketName, testCase.objectName)
@@ -127,8 +128,8 @@ func TestGetObjectInfoCore(t *testing.T) {
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	fs, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +138,7 @@ func TestGetObjectInfoCore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fs.CreateObject("test-getobjinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
+	_, err = fs.PutObject("test-getobjinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +154,6 @@ func TestGetObjectInfoCore(t *testing.T) {
 		{Bucket: "test-getobjinfo", Name: "Africa", Size: 0, ContentType: "image/jpeg", IsDir: false},
 	}
 	testCases := []struct {
-		rootPath   string
 		bucketName string
 		objectName string
 
@@ -165,14 +165,15 @@ func TestGetObjectInfoCore(t *testing.T) {
 		shouldPass bool
 	}{
 		// Testcase with object name set to a existing directory ( Test number 1).
-		{fs.path, "test-getobjinfo", "Asia", resultCases[0], nil, true},
+		{"test-getobjinfo", "Asia", resultCases[0], nil, true},
 		// ObjectName set to a existing object ( Test number 2).
-		{fs.path, "test-getobjinfo", "Asia/asiapics.jpg", resultCases[1], nil, true},
+		{"test-getobjinfo", "Asia/asiapics.jpg", resultCases[1], nil, true},
 		// Object name set to a non-existing object. (Test number 3).
-		{fs.path, "test-getobjinfo", "Africa", resultCases[2], fmt.Errorf("%s", filepath.FromSlash("test-getobjinfo/Africa")), false},
+		{"test-getobjinfo", "Africa", resultCases[2], fmt.Errorf("%s", filepath.FromSlash("test-getobjinfo/Africa")), false},
 	}
+	rootPath := fs.(*Filesystem).GetRootPath()
 	for i, testCase := range testCases {
-		result, err := getObjectInfo(testCase.rootPath, testCase.bucketName, testCase.objectName)
+		result, err := getObjectInfo(rootPath, testCase.bucketName, testCase.objectName)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
 		}
@@ -205,21 +206,21 @@ func TestGetObjectInfoCore(t *testing.T) {
 }
 
 func BenchmarkGetObject(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark-getobject")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	// Make a bucket and put in a few objects.
-	err = filesystem.MakeBucket("bucket")
+	err = fs.MakeBucket("bucket")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -227,23 +228,30 @@ func BenchmarkGetObject(b *testing.B) {
 	text := "Jack and Jill went up the hill / To fetch a pail of water."
 	hasher := md5.New()
 	hasher.Write([]byte(text))
+	metadata := make(map[string]string)
 	for i := 0; i < 10; i++ {
-		_, err = filesystem.CreateObject("bucket", "object"+strconv.Itoa(i), int64(len(text)), bytes.NewBufferString(text), hasher.Sum(nil))
+		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+		_, err = fs.PutObject("bucket", "object"+strconv.Itoa(i), int64(len(text)), bytes.NewBufferString(text), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 
-	var w bytes.Buffer
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		n, err := filesystem.GetObject(&w, "bucket", "object"+strconv.Itoa(i%10), 0, 0)
+		var w bytes.Buffer
+		r, err := fs.GetObject("bucket", "object"+strconv.Itoa(i%10), 0)
 		if err != nil {
 			b.Error(err)
+		}
+		n, e := io.Copy(&w, r)
+		if e != nil {
+			b.Error(e)
 		}
 		if n != int64(len(text)) {
 			b.Errorf("GetObject returned incorrect length %d (should be %d)\n", n, int64(len(text)))
 		}
+		r.Close()
 	}
 }

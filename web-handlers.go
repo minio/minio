@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -31,7 +32,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/miniobrowser"
 )
 
@@ -110,7 +110,7 @@ func (web *webAPI) DiskInfo(r *http.Request, args *GenericArgs, reply *DiskInfoR
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	info, e := disk.GetInfo(web.Filesystem.GetRootPath())
+	info, e := disk.GetInfo(web.ObjectAPI.(*Filesystem).GetRootPath())
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
@@ -130,7 +130,7 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.Filesystem.MakeBucket(args.BucketName)
+	e := web.ObjectAPI.MakeBucket(args.BucketName)
 	if e != nil {
 		return &json2.Error{Message: e.Cause.Error()}
 	}
@@ -139,12 +139,12 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 
 // ListBucketsRep - list buckets response
 type ListBucketsRep struct {
-	Buckets   []BucketInfo `json:"buckets"`
-	UIVersion string       `json:"uiVersion"`
+	Buckets   []BketInfo `json:"buckets"`
+	UIVersion string     `json:"uiVersion"`
 }
 
-// BucketInfo container for list buckets metadata.
-type BucketInfo struct {
+// BketInfo container for list buckets.
+type BketInfo struct {
 	// The name of the bucket.
 	Name string `json:"name"`
 	// Date the bucket was created.
@@ -156,14 +156,14 @@ func (web *webAPI) ListBuckets(r *http.Request, args *GenericArgs, reply *ListBu
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, e := web.Filesystem.ListBuckets()
+	buckets, e := web.ObjectAPI.ListBuckets()
 	if e != nil {
 		return &json2.Error{Message: e.Cause.Error()}
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
 		if bucket.Name != path.Base(reservedBucket) {
-			reply.Buckets = append(reply.Buckets, BucketInfo{
+			reply.Buckets = append(reply.Buckets, BketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.Created,
 			})
@@ -181,12 +181,12 @@ type ListObjectsArgs struct {
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []ObjectInfo `json:"objects"`
-	UIVersion string       `json:"uiVersion"`
+	Objects   []ObjInfo `json:"objects"`
+	UIVersion string    `json:"uiVersion"`
 }
 
-// ObjectInfo container for list objects metadata.
-type ObjectInfo struct {
+// ObjInfo container for list objects.
+type ObjInfo struct {
 	// Name of the object
 	Key string `json:"name"`
 	// Date and time the object was last modified.
@@ -204,20 +204,20 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	for {
-		lo, err := web.Filesystem.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
+		lo, err := web.ObjectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Cause.Error()}
 		}
 		marker = lo.NextMarker
 		for _, obj := range lo.Objects {
-			reply.Objects = append(reply.Objects, ObjectInfo{
+			reply.Objects = append(reply.Objects, ObjInfo{
 				Key:          obj.Name,
 				LastModified: obj.ModifiedTime,
 				Size:         obj.Size,
 			})
 		}
 		for _, prefix := range lo.Prefixes {
-			reply.Objects = append(reply.Objects, ObjectInfo{
+			reply.Objects = append(reply.Objects, ObjInfo{
 				Key: prefix,
 			})
 		}
@@ -242,7 +242,7 @@ func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.Filesystem.DeleteObject(args.BucketName, args.ObjectName)
+	e := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName)
 	if e != nil {
 		return &json2.Error{Message: e.Cause.Error()}
 	}
@@ -364,7 +364,7 @@ func (web *webAPI) Upload(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	if _, err := web.Filesystem.CreateObject(bucket, object, -1, r.Body, nil); err != nil {
+	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, nil); err != nil {
 		writeWebErrorResponse(w, err.ToGoError())
 	}
 }
@@ -389,8 +389,14 @@ func (web *webAPI) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(object)))
 
-	if _, err := web.Filesystem.GetObject(w, bucket, object, 0, 0); err != nil {
+	objReader, err := web.ObjectAPI.GetObject(bucket, object, 0)
+	if err != nil {
 		writeWebErrorResponse(w, err.ToGoError())
+		return
+	}
+	if _, e := io.Copy(w, objReader); e != nil {
+		/// No need to print error, response writer already written to.
+		return
 	}
 }
 
@@ -402,35 +408,35 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 		return
 	}
 	switch err.(type) {
-	case fs.RootPathFull:
+	case RootPathFull:
 		apiErr := getAPIError(ErrRootPathFull)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.BucketNotFound:
+	case BucketNotFound:
 		apiErr := getAPIError(ErrNoSuchBucket)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.BucketNameInvalid:
+	case BucketNameInvalid:
 		apiErr := getAPIError(ErrInvalidBucketName)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.BadDigest:
+	case BadDigest:
 		apiErr := getAPIError(ErrBadDigest)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.IncompleteBody:
+	case IncompleteBody:
 		apiErr := getAPIError(ErrIncompleteBody)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.ObjectExistsAsPrefix:
+	case ObjectExistsAsPrefix:
 		apiErr := getAPIError(ErrObjectExistsAsPrefix)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.ObjectNotFound:
+	case ObjectNotFound:
 		apiErr := getAPIError(ErrNoSuchKey)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
-	case fs.ObjectNameInvalid:
+	case ObjectNameInvalid:
 		apiErr := getAPIError(ErrNoSuchKey)
 		w.WriteHeader(apiErr.HTTPStatusCode)
 		w.Write([]byte(apiErr.Description))
