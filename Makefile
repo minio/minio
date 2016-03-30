@@ -73,7 +73,7 @@ getdeps: checks
 	@go get -u github.com/remyoudompheng/go-misc/deadcode && echo "Installed deadcode:"
 	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"
 
-verifiers: getdeps vet fmt lint cyclo spelling
+verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@:"
@@ -137,7 +137,7 @@ pkg-list:
 
 install: gomake-all
 
-dockerimage: checkdocker verifiers $(UI_ASSETS)
+dockerimage: checkdocker getdeps verifiers $(UI_ASSETS)
 	@echo "Building docker image:" minio:$(TAG)
 	@GO15VENDOREXPERIMENT=1 GOOS=linux GOARCH=amd64 go build --ldflags $(DOCKER_LDFLAGS) -o docker/minio.dockerimage
 	@cd docker; mkdir -p export; sudo docker build --rm --tag=minio/minio:$(TAG) .
