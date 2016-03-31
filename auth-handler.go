@@ -130,25 +130,9 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	if isRequestSignatureV4(r) {
-		ok, err := doesSignatureMatch(hex.EncodeToString(sum256(payload)), r)
-		if err != nil {
-			errorIf(err.Trace(), "Signature verification failed.", nil)
-			return ErrInternalError
-		}
-		if !ok {
-			return ErrSignatureDoesNotMatch
-		}
-		return ErrNone
+		return doesSignatureMatch(hex.EncodeToString(sum256(payload)), r)
 	} else if isRequestPresignedSignatureV4(r) {
-		ok, err := doesPresignedSignatureMatch(r)
-		if err != nil {
-			errorIf(err.Trace(), "Presigned signature verification failed.", nil)
-			return ErrInternalError
-		}
-		if !ok {
-			return ErrSignatureDoesNotMatch
-		}
-		return ErrNone
+		return doesPresignedSignatureMatch(r)
 	}
 	return ErrAccessDenied
 }

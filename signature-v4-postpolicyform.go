@@ -159,51 +159,51 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 }
 
 // checkPostPolicy - apply policy conditions and validate input values.
-func checkPostPolicy(formValues map[string]string) *probe.Error {
+func checkPostPolicy(formValues map[string]string) APIErrorCode {
 	if formValues["X-Amz-Algorithm"] != signV4Algorithm {
-		return ErrUnsuppSignAlgo("Unsupported signature algorithm in policy form data.", formValues["X-Amz-Algorithm"]).Trace(formValues["X-Amz-Algorithm"])
+		return ErrSignatureVersionNotSupported
 	}
 	/// Decoding policy
 	policyBytes, e := base64.StdEncoding.DecodeString(formValues["Policy"])
 	if e != nil {
-		return probe.NewError(e)
+		return ErrMalformedPOSTRequest
 	}
 	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
 	if err != nil {
-		return err.Trace()
+		return ErrMalformedPOSTRequest
 	}
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
-		return ErrPolicyAlreadyExpired("Policy has already expired, please generate a new one.")
+		return ErrPolicyAlreadyExpired
 	}
 	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
 		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
-			return ErrMissingFields("Policy bucket is missing.", formValues["Bucket"])
+			return ErrMissingFields
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
 		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
-			return ErrMissingFields("Policy date is missing.", formValues["X-Amz-Date"])
+			return ErrMissingFields
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
-			return ErrMissingFields("Policy content-type is missing or invalid.", formValues["Content-Type"])
+			return ErrMissingFields
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
 		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
-			return ErrMissingFields("Policy content-Type is missing or invalid.", formValues["Content-Type"])
+			return ErrMissingFields
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
-			return ErrMissingFields("Policy key is missing.", formValues["Key"])
+			return ErrMissingFields
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
 		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
-			return ErrMissingFields("Policy key is missing.", formValues["Key"])
+			return ErrMissingFields
 		}
 	}
-	return nil
+	return ErrNone
 }

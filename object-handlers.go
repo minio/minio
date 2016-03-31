@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -573,15 +574,8 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		objectInfo, err = api.Filesystem.CreateObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify them right here.
-		var ok bool
-		ok, err = doesPresignedSignatureMatch(r)
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		if apiErr := doesPresignedSignatureMatch(r); apiErr != ErrNone {
+			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
 		// Create presigned object.
@@ -600,14 +594,12 @@ func (api storageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
-			ok, serr := doesSignatureMatch(hex.EncodeToString(shaPayload), r)
-			if serr != nil {
-				errorIf(serr.Trace(), "Signature verification failed.", nil)
-				writer.CloseWithError(probe.WrapError(serr))
-				return
-			}
-			if !ok {
-				writer.CloseWithError(errSignatureMismatch)
+			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r); apiErr != ErrNone {
+				if apiErr == ErrSignatureDoesNotMatch {
+					writer.CloseWithError(errSignatureMismatch)
+					return
+				}
+				writer.CloseWithError(fmt.Errorf("%v", getAPIError(apiErr)))
 				return
 			}
 			writer.Close()
@@ -756,15 +748,9 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
 	case authTypePresigned:
 		// For presigned requests verify right here.
-		var ok bool
-		ok, err = doesPresignedSignatureMatch(r)
-		if err != nil {
-			errorIf(err.Trace(r.URL.String()), "Presigned signature verification failed.", nil)
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		if !ok {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		apiErr := doesPresignedSignatureMatch(r)
+		if apiErr != ErrNone {
+			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
 		partMD5, err = api.Filesystem.CreateObjectPart(bucket, object, uploadID, partID, size, r.Body, nil)
@@ -782,14 +768,12 @@ func (api storageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Reques
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
-			ok, serr := doesSignatureMatch(hex.EncodeToString(shaPayload), r)
-			if serr != nil {
-				errorIf(serr.Trace(), "Signature verification failed.", nil)
-				writer.CloseWithError(probe.WrapError(serr))
-				return
-			}
-			if !ok {
-				writer.CloseWithError(errSignatureMismatch)
+			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r); apiErr != ErrNone {
+				if apiErr == ErrSignatureDoesNotMatch {
+					writer.CloseWithError(errSignatureMismatch)
+					return
+				}
+				writer.CloseWithError(fmt.Errorf("%v", getAPIError(apiErr)))
 				return
 			}
 			writer.Close()
