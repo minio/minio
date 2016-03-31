@@ -17,45 +17,21 @@
 package main
 
 import (
-	"net"
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/fs"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(filesystem fs.Filesystem) http.Handler {
-	// Access credentials.
-	cred := serverConfig.GetCredential()
-
-	// Server addr.
-	addr := serverConfig.GetAddr()
-
 	// Initialize API.
 	api := storageAPI{
 		Filesystem: filesystem,
 	}
-
-	// Split host port.
-	host, port, _ := net.SplitHostPort(addr)
-
-	// Default host is 'localhost', if no host present.
-	if host == "" {
-		host = "localhost"
-	}
-
-	// Initialize minio client for AWS Signature Version '4'
-	insecure := !isSSL() // Insecure true when SSL is false.
-	client, e := minio.NewV4(net.JoinHostPort(host, port), cred.AccessKeyID, cred.SecretAccessKey, insecure)
-	fatalIf(probe.NewError(e), "Unable to initialize minio client", nil)
-
 	// Initialize Web.
 	web := &webAPI{
-		FSPath: filesystem.GetRootPath(),
-		Client: client,
+		Filesystem: filesystem,
 	}
 
 	// Initialize router.
