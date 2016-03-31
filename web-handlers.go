@@ -18,22 +18,20 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/dustin/go-humanize"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/miniobrowser"
 )
@@ -73,11 +71,8 @@ type ServerInfoRep struct {
 	UIVersion     string `json:"uiVersion"`
 }
 
-// ServerInfoArgs  - server info args.
-type ServerInfoArgs struct{}
-
 // ServerInfo - get server info.
-func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *ServerInfoRep) error {
+func (web *webAPI) ServerInfo(r *http.Request, args *GenericArgs, reply *ServerInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -105,9 +100,6 @@ func (web *webAPI) ServerInfo(r *http.Request, args *ServerInfoArgs, reply *Serv
 	return nil
 }
 
-// DiskInfoArgs - disk info args.
-type DiskInfoArgs struct{}
-
 // DiskInfoRep - disk info reply.
 type DiskInfoRep struct {
 	DiskInfo  disk.Info `json:"diskInfo"`
@@ -115,11 +107,11 @@ type DiskInfoRep struct {
 }
 
 // DiskInfo - get disk statistics.
-func (web *webAPI) DiskInfo(r *http.Request, args *DiskInfoArgs, reply *DiskInfoRep) error {
+func (web *webAPI) DiskInfo(r *http.Request, args *GenericArgs, reply *DiskInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	info, e := disk.GetInfo(web.FSPath)
+	info, e := disk.GetInfo(web.Filesystem.GetRootPath())
 	if e != nil {
 		return &json2.Error{Message: e.Error()}
 	}
@@ -139,15 +131,12 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.Client.MakeBucket(args.BucketName, "")
+	e := web.Filesystem.MakeBucket(args.BucketName)
 	if e != nil {
-		return &json2.Error{Message: e.Error()}
+		return &json2.Error{Message: e.Cause.Error()}
 	}
 	return nil
 }
-
-// ListBucketsArgs - list bucket args.
-type ListBucketsArgs struct{}
 
 // ListBucketsRep - list buckets response
 type ListBucketsRep struct {
@@ -164,20 +153,20 @@ type BucketInfo struct {
 }
 
 // ListBuckets - list buckets api.
-func (web *webAPI) ListBuckets(r *http.Request, args *ListBucketsArgs, reply *ListBucketsRep) error {
+func (web *webAPI) ListBuckets(r *http.Request, args *GenericArgs, reply *ListBucketsRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, e := web.Client.ListBuckets()
+	buckets, e := web.Filesystem.ListBuckets()
 	if e != nil {
-		return &json2.Error{Message: e.Error()}
+		return &json2.Error{Message: e.Cause.Error()}
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
 		if bucket.Name != path.Base(reservedBucket) {
 			reply.Buckets = append(reply.Buckets, BucketInfo{
 				Name:         bucket.Name,
-				CreationDate: bucket.CreationDate,
+				CreationDate: bucket.Created,
 			})
 		}
 	}
@@ -211,114 +200,32 @@ type ObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
+	marker := ""
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for object := range web.Client.ListObjects(args.BucketName, args.Prefix, false, doneCh) {
-		if object.Err != nil {
-			return &json2.Error{Message: object.Err.Error()}
+	for {
+		lo, err := web.Filesystem.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
+		if err != nil {
+			return &json2.Error{Message: err.Cause.Error()}
 		}
-		objectInfo := ObjectInfo{
-			Key:          object.Key,
-			LastModified: object.LastModified,
-			Size:         object.Size,
+		marker = lo.NextMarker
+		for _, obj := range lo.Objects {
+			reply.Objects = append(reply.Objects, ObjectInfo{
+				Key:          obj.Name,
+				LastModified: obj.ModifiedTime,
+				Size:         obj.Size,
+			})
 		}
-		// TODO - This can get slower for large directories, we can
-		// perhaps extend the ListObjects XML to reply back
-		// ContentType as well.
-		if !strings.HasSuffix(object.Key, "/") && object.Size > 0 {
-			objectStatInfo, e := web.Client.StatObject(args.BucketName, object.Key)
-			if e != nil {
-				return &json2.Error{Message: e.Error()}
-			}
-			objectInfo.ContentType = objectStatInfo.ContentType
+		for _, prefix := range lo.Prefixes {
+			reply.Objects = append(reply.Objects, ObjectInfo{
+				Key: prefix,
+			})
 		}
-		reply.Objects = append(reply.Objects, objectInfo)
+		if !lo.IsTruncated {
+			break
+		}
 	}
-	reply.UIVersion = miniobrowser.UIVersion
-	return nil
-}
-
-// PutObjectURLArgs - args to generate url for upload access.
-type PutObjectURLArgs struct {
-	TargetHost  string `json:"targetHost"`
-	TargetProto string `json:"targetProto"`
-	BucketName  string `json:"bucketName"`
-	ObjectName  string `json:"objectName"`
-}
-
-// PutObjectURLRep - reply for presigned upload url request.
-type PutObjectURLRep struct {
-	URL       string `json:"url"`
-	UIVersion string `json:"uiVersion"`
-}
-
-// PutObjectURL - generates url for upload access.
-func (web *webAPI) PutObjectURL(r *http.Request, args *PutObjectURLArgs, reply *PutObjectURLRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-
-	// disableSSL is true if no 'https:' proto is found.
-	disableSSL := (args.TargetProto != "https:")
-	cred := serverConfig.GetCredential()
-	client, e := minio.New(args.TargetHost, cred.AccessKeyID, cred.SecretAccessKey, disableSSL)
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-	signedURLStr, e := client.PresignedPutObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second)
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-	reply.URL = signedURLStr
-	reply.UIVersion = miniobrowser.UIVersion
-	return nil
-}
-
-// GetObjectURLArgs - args to generate url for download access.
-type GetObjectURLArgs struct {
-	TargetHost  string `json:"targetHost"`
-	TargetProto string `json:"targetProto"`
-	BucketName  string `json:"bucketName"`
-	ObjectName  string `json:"objectName"`
-}
-
-// GetObjectURLRep - reply for presigned download url request.
-type GetObjectURLRep struct {
-	URL       string `json:"url"`
-	UIVersion string `json:"uiVersion"`
-}
-
-// GetObjectURL - generates url for download access.
-func (web *webAPI) GetObjectURL(r *http.Request, args *GetObjectURLArgs, reply *GetObjectURLRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-
-	// See if object exists.
-	_, e := web.Client.StatObject(args.BucketName, args.ObjectName)
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-
-	// disableSSL is true if no 'https:' proto is found.
-	disableSSL := (args.TargetProto != "https:")
-	cred := serverConfig.GetCredential()
-	client, e := minio.New(args.TargetHost, cred.AccessKeyID, cred.SecretAccessKey, disableSSL)
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-
-	reqParams := make(url.Values)
-	// Set content disposition for browser to download the file.
-	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(args.ObjectName)))
-	signedURLStr, e := client.PresignedGetObject(args.BucketName, args.ObjectName, time.Duration(60*60)*time.Second, reqParams)
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-	reply.URL = signedURLStr
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
@@ -336,9 +243,9 @@ func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.Client.RemoveObject(args.BucketName, args.ObjectName)
+	e := web.Filesystem.DeleteObject(args.BucketName, args.ObjectName)
 	if e != nil {
-		return &json2.Error{Message: e.Error()}
+		return &json2.Error{Message: e.Cause.Error()}
 	}
 	return nil
 }
@@ -405,11 +312,11 @@ func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthRep
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	if args.AccessKey == "" {
-		return &json2.Error{Message: "Empty access key not allowed"}
+	if !isValidAccessKey.MatchString(args.AccessKey) {
+		return &json2.Error{Message: "Invalid Access Key"}
 	}
-	if args.SecretKey == "" {
-		return &json2.Error{Message: "Empty secret key not allowed"}
+	if !isValidSecretKey.MatchString(args.SecretKey) {
+		return &json2.Error{Message: "Invalid Secret Key"}
 	}
 	cred := credential{args.AccessKey, args.SecretKey}
 	serverConfig.SetCredential(cred)
@@ -417,20 +324,6 @@ func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthRep
 		return &json2.Error{Message: err.Cause.Error()}
 	}
 
-	// Split host port.
-	host, port, e := net.SplitHostPort(serverConfig.GetAddr())
-	fatalIf(probe.NewError(e), "Unable to parse web addess.", nil)
-
-	// Default host is 'localhost', if no host present.
-	if host == "" {
-		host = "localhost"
-	}
-
-	client, e := minio.NewV4(net.JoinHostPort(host, port), args.AccessKey, args.SecretKey, !isSSL())
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-	web.Client = client
 	jwt := initJWT()
 	if !jwt.Authenticate(args.AccessKey, args.SecretKey) {
 		return &json2.Error{Message: "Invalid credentials"}
@@ -442,4 +335,105 @@ func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthRep
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
+}
+
+// GetAuthReply - Reply current credentials.
+type GetAuthReply struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// GetAuth - return accessKey and secretKey credentials.
+func (web *webAPI) GetAuth(r *http.Request, args *GenericArgs, reply *GetAuthReply) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	creds := serverConfig.GetCredential()
+	reply.AccessKey = creds.AccessKeyID
+	reply.SecretKey = creds.SecretAccessKey
+	reply.UIVersion = miniobrowser.UIVersion
+	return nil
+}
+
+// Upload - file upload handler.
+func (web *webAPI) Upload(w http.ResponseWriter, r *http.Request) {
+	if !isJWTReqAuthenticated(r) {
+		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		return
+	}
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	if _, err := web.Filesystem.CreateObject(bucket, object, -1, r.Body, nil); err != nil {
+		writeWebErrorResponse(w, err)
+	}
+}
+
+// Download - file download handler.
+func (web *webAPI) Download(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	token := r.URL.Query().Get("token")
+
+	jwt := initJWT()
+	jwttoken, e := jwtgo.Parse(token, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(jwt.SecretAccessKey), nil
+	})
+	if e != nil || !jwttoken.Valid {
+		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+		return
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(object)))
+
+	if _, err := web.Filesystem.GetObject(w, bucket, object, 0, 0); err != nil {
+		writeWebErrorResponse(w, err)
+	}
+}
+
+// writeWebErrorResponse - set HTTP status code and write error description to the body.
+func writeWebErrorResponse(w http.ResponseWriter, err *probe.Error) {
+	e := err.ToGoError()
+	switch e.(type) {
+	case fs.RootPathFull:
+		error := getAPIError(ErrRootPathFull)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.BucketNotFound:
+		error := getAPIError(ErrNoSuchBucket)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.BucketNameInvalid:
+		error := getAPIError(ErrInvalidBucketName)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.BadDigest:
+		error := getAPIError(ErrBadDigest)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.IncompleteBody:
+		error := getAPIError(ErrIncompleteBody)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.ObjectExistsAsPrefix:
+		error := getAPIError(ErrObjectExistsAsPrefix)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.ObjectNotFound:
+		error := getAPIError(ErrNoSuchKey)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	case fs.ObjectNameInvalid:
+		error := getAPIError(ErrNoSuchKey)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	default:
+		error := getAPIError(ErrInternalError)
+		w.WriteHeader(error.HTTPStatusCode)
+		w.Write([]byte(error.Description))
+	}
 }
