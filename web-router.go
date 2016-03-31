@@ -25,16 +25,13 @@ import (
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/miniobrowser"
 )
 
 // webAPI container for Web API.
 type webAPI struct {
-	// FSPath filesystem path.
-	FSPath string
-	// Minio client instance.
-	Client *minio.Client
+	Filesystem fs.Filesystem
 }
 
 // indexHandler - Handler to serve index.html
@@ -76,7 +73,9 @@ func registerWebRouter(mux *router.Router, web *webAPI) {
 	webRPC.RegisterService(web, "Web")
 
 	// RPC handler at URI - /minio/rpc
-	webBrowserRouter.Path("/rpc").Handler(webRPC)
+	webBrowserRouter.Methods("POST").Path("/rpc").Handler(webRPC)
+	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
+	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "").HandlerFunc(web.Download)
 
 	// Add compression for assets.
 	compressedAssets := handlers.CompressHandler(http.StripPrefix(reservedBucket, http.FileServer(assetFS())))
