@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"encoding/base64"
@@ -36,6 +37,10 @@ import (
 
 	"github.com/minio/minio/pkg/fs"
 	. "gopkg.in/check.v1"
+)
+
+const (
+	ConcurrencyLevel = 10
 )
 
 type MyAPIFSCacheSuite struct {
@@ -586,21 +591,37 @@ func (s *MyAPIFSCacheSuite) TestHeader(c *C) {
 }
 
 func (s *MyAPIFSCacheSuite) TestPutBucket(c *C) {
-	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket", 0, nil)
+	// Block 1: Testing for racey access
+	// The assertion is removed from this block since the purpose of this block is to find races
+	// The purpose this block is not to check for correctness of functionality
+	// Run the test with -race flag to utilize this
+	var wg sync.WaitGroup
+	for i := 0; i < ConcurrencyLevel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket", 0, nil)
+			c.Assert(err, IsNil)
+			request.Header.Add("x-amz-acl", "private")
+
+			client := http.Client{}
+			response, err := client.Do(request)
+			defer response.Body.Close()
+		}()
+	}
+	wg.Wait()
+
+	//Block 2: testing for correctness of the functionality
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket-slash/", 0, nil)
 	c.Assert(err, IsNil)
+	request.Header.Add("x-amz-acl", "private")
 
 	client := http.Client{}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	response.Body.Close()
 
-	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-bucket-slash/", 0, nil)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
 func (s *MyAPIFSCacheSuite) TestCopyObject(c *C) {
