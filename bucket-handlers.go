@@ -474,22 +474,15 @@ func (api storageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := mux.Vars(r)["bucket"]
 	formValues["Bucket"] = bucket
 	object := formValues["Key"]
-	var ok bool
 
 	// Verify policy signature.
-	ok, err = doesPolicySignatureMatch(formValues)
-	if err != nil {
-		errorIf(err.Trace(), "Unable to verify signature.", nil)
-		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
+	apiErr := doesPolicySignatureMatch(formValues)
+	if apiErr != ErrNone {
+		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	if !ok {
-		writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-		return
-	}
-	if err = checkPostPolicy(formValues); err != nil {
-		errorIf(err.Trace(), "Invalid request, policy doesn't match.", nil)
-		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+	if apiErr = checkPostPolicy(formValues); apiErr != ErrNone {
+		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
 	objectInfo, err := api.Filesystem.CreateObject(bucket, object, -1, fileBody, nil)

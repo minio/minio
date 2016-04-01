@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"path"
 	"regexp"
@@ -120,51 +119,43 @@ func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	h.handler.ServeHTTP(w, r)
 }
 
-// Supported incoming date formats.
-var timeFormats = []string{
+// Supported Amz date formats.
+var amzDateFormats = []string{
 	time.RFC1123,
 	time.RFC1123Z,
 	iso8601Format,
+	// Add new AMZ date formats here.
 }
 
-// Attempts to parse date string into known date layouts. Date layouts
-// currently supported are
-//  - ``time.RFC1123``
-//  - ``time.RFC1123Z``
-//  - ``iso8601Format``
-func parseDate(date string) (parsedTime time.Time, e error) {
-	for _, layout := range timeFormats {
-		parsedTime, e = time.Parse(layout, date)
+// parseAmzDate - parses date string into supported amz date formats.
+func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
+	for _, dateFormat := range amzDateFormats {
+		amzDate, e := time.Parse(dateFormat, amzDateStr)
 		if e == nil {
-			return parsedTime, nil
+			return amzDate, ErrNone
 		}
 	}
-	return time.Time{}, e
+	return time.Time{}, ErrMalformedDate
 }
 
-// Parse date string from incoming header, current supports and verifies
-// follow HTTP headers.
-//
-//  - X-Amz-Date
-//  - X-Minio-Date
-//  - Date
-//
-// In following time layouts ``time.RFC1123``, ``time.RFC1123Z`` and
-// ``iso8601Format``.
-var dateHeaders = []string{
+// Supported Amz date headers.
+var amzDateHeaders = []string{
 	"x-amz-date",
 	"x-minio-date",
 	"date",
 }
 
-func parseDateHeader(req *http.Request) (time.Time, error) {
-	for _, dateHeader := range dateHeaders {
-		date := req.Header.Get(http.CanonicalHeaderKey(dateHeader))
-		if date != "" {
-			return parseDate(date)
+// parseAmzDateHeader - parses supported amz date headers, in
+// supported amz date formats.
+func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
+	for _, amzDateHeader := range amzDateHeaders {
+		amzDateStr := req.Header.Get(http.CanonicalHeaderKey(amzDateHeader))
+		if amzDateStr != "" {
+			return parseAmzDate(amzDateStr)
 		}
 	}
-	return time.Time{}, errors.New("Date header missing, invalid request.")
+	// Date header missing.
+	return time.Time{}, ErrMissingDateHeader
 }
 
 type timeHandler struct {
@@ -179,17 +170,17 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
 	if _, ok := r.Header["Authorization"]; ok {
-		date, e := parseDateHeader(r)
-		if e != nil {
+		amzDate, apiErr := parseAmzDateHeader(r)
+		if apiErr != ErrNone {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
 		// Verify if the request date header is more than 5minutes
 		// late, reject such clients.
-		if time.Now().UTC().Sub(date)/time.Minute > time.Duration(5)*time.Minute {
+		if time.Now().UTC().Sub(amzDate)/time.Minute > time.Duration(5)*time.Minute {
 			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
 			return
 		}

@@ -87,6 +87,23 @@ const (
 	ErrObjectExistsAsPrefix
 	ErrAllAccessDisabled
 	ErrMalformedPolicy
+	ErrMissingFields
+	ErrMissingCredTag
+	ErrCredMalformed
+	ErrInvalidRegion
+	ErrInvalidService
+	ErrInvalidRequestVersion
+	ErrMissingSignTag
+	ErrMissingSignHeadersTag
+	ErrPolicyAlreadyExpired
+	ErrMalformedDate
+	ErrMalformedExpires
+	ErrAuthHeaderEmpty
+	ErrDateHeaderMissing
+	ErrExpiredPresignRequest
+	ErrMissingDateHeader
+	ErrInvalidQuerySignatureAlgo
+	ErrInvalidQueryParams
 	// Add new error codes here.
 )
 
@@ -295,7 +312,87 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrMalformedPolicy: {
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource",
+		Description:    "Policy has invalid resource.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingFields: {
+		Code:           "MissingFields",
+		Description:    "Missing fields in request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingCredTag: {
+		Code:           "InvalidRequest",
+		Description:    "Missing Credential field for this request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCredMalformed: {
+		Code:           "CredentialMalformed",
+		Description:    "Credential field malformed does not follow accessKeyID/credScope.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMalformedDate: {
+		Code:           "MalformedDate",
+		Description:    "Invalid date format header, expected to be in ISO8601, RFC1123 or RFC1123Z time format.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidRegion: {
+		Code:           "InvalidRegion",
+		Description:    "Region does not match.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidService: {
+		Code:           "AccessDenied",
+		Description:    "Service scope should be of value 's3'.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidRequestVersion: {
+		Code:           "AccessDenied",
+		Description:    "Request scope should be of value 'aws4_request'.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSignTag: {
+		Code:           "AccessDenied",
+		Description:    "Signature header missing Signature field.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSignHeadersTag: {
+		Code:           "InvalidArgument",
+		Description:    "Signature header missing SignedHeaders field.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyAlreadyExpired: {
+		Code:           "AccessDenied",
+		Description:    "Invalid according to Policy: Policy expired.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMalformedExpires: {
+		Code:           "MalformedExpires",
+		Description:    "Malformed expires header, expected non-zero number.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAuthHeaderEmpty: {
+		Code:           "InvalidArgument",
+		Description:    "Authorization header is invalid -- one and only one ' ' (space) required.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingDateHeader: {
+		Code:           "AccessDenied",
+		Description:    "AWS authentication requires a valid Date or x-amz-date header",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidQuerySignatureAlgo: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Algorithm only supports \"AWS4-HMAC-SHA256\".",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrExpiredPresignRequest: {
+		Code:           "AccessDenied",
+		Description:    "Request has expired.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidQueryParams: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Query-string authentication version 4 requires the X-Amz-Algorithm, X-Amz-Credential, X-Amz-Signature, X-Amz-Date, X-Amz-SignedHeaders, and X-Amz-Expires parameters.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
