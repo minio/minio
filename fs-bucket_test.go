@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"io/ioutil"
@@ -28,22 +28,22 @@ import (
 // But also includes test cases for which the function should fail.
 // For those cases for which it fails, its also asserted whether the function fails as expected.
 func TestGetBucketInfo(t *testing.T) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-metadata-test")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Creating few buckets.
 	for i := 0; i < 4; i++ {
-		err = filesystem.MakeBucket("meta-test-bucket." + strconv.Itoa(i))
+		err = fs.MakeBucket("meta-test-bucket." + strconv.Itoa(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ func TestGetBucketInfo(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		// The err returned is of type *probe.Error.
-		bucketInfo, err := filesystem.GetBucketInfo(testCase.bucketName)
+		bucketInfo, err := fs.GetBucketInfo(testCase.bucketName)
 
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
@@ -96,29 +96,29 @@ func TestGetBucketInfo(t *testing.T) {
 }
 
 func TestListBuckets(t *testing.T) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a few buckets.
 	for i := 0; i < 10; i++ {
-		err = filesystem.MakeBucket("testbucket." + strconv.Itoa(i))
+		err = fs.MakeBucket("testbucket." + strconv.Itoa(i))
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// List, and ensure that they are all there.
-	metadatas, err := filesystem.ListBuckets()
+	metadatas, err := fs.ListBuckets()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,43 +136,43 @@ func TestListBuckets(t *testing.T) {
 }
 
 func TestDeleteBucket(t *testing.T) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Deleting a bucket that doesn't exist should error.
-	err = filesystem.DeleteBucket("bucket")
+	err = fs.DeleteBucket("bucket")
 	if !strings.Contains(err.Cause.Error(), "Bucket not found:") {
 		t.Fail()
 	}
 }
 
 func BenchmarkListBuckets(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	// Create a few buckets.
 	for i := 0; i < 20; i++ {
-		err = filesystem.MakeBucket("bucket." + strconv.Itoa(i))
+		err = fs.MakeBucket("bucket." + strconv.Itoa(i))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -182,7 +182,7 @@ func BenchmarkListBuckets(b *testing.B) {
 
 	// List the buckets over and over and over.
 	for i := 0; i < b.N; i++ {
-		_, err = filesystem.ListBuckets()
+		_, err = fs.ListBuckets()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -190,15 +190,15 @@ func BenchmarkListBuckets(b *testing.B) {
 }
 
 func BenchmarkDeleteBucket(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -210,14 +210,14 @@ func BenchmarkDeleteBucket(b *testing.B) {
 		b.StopTimer()
 
 		// Create and delete the bucket over and over.
-		err = filesystem.MakeBucket("bucket")
+		err = fs.MakeBucket("bucket")
 		if err != nil {
 			b.Fatal(err)
 		}
 
 		b.StartTimer()
 
-		err = filesystem.DeleteBucket("bucket")
+		err = fs.DeleteBucket("bucket")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -225,21 +225,21 @@ func BenchmarkDeleteBucket(b *testing.B) {
 }
 
 func BenchmarkGetBucketInfo(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-benchmark")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	// Put up a bucket with some metadata.
-	err = filesystem.MakeBucket("bucket")
+	err = fs.MakeBucket("bucket")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func BenchmarkGetBucketInfo(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Retrieve the metadata!
-		_, err := filesystem.GetBucketInfo("bucket")
+		_, err := fs.GetBucketInfo("bucket")
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
@@ -27,15 +27,15 @@ import (
 )
 
 func TestListObjects(t *testing.T) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-list-object-test")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	fs, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,36 +57,36 @@ func TestListObjects(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
-	_, err = fs.CreateObject("test-bucket-list-object", "Asia-maps", int64(len("asia-maps")), bytes.NewBufferString("asia-maps"), nil)
+	_, err = fs.PutObject("test-bucket-list-object", "Asia-maps", int64(len("asia-maps")), bytes.NewBufferString("asia-maps"), nil)
 	if err != nil {
 		t.Fatal(e)
 	}
 
-	_, err = fs.CreateObject("test-bucket-list-object", "Asia/India/India-summer-photos-1", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
+	_, err = fs.PutObject("test-bucket-list-object", "Asia/India/India-summer-photos-1", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
 		t.Fatal(e)
 	}
 
-	_, err = fs.CreateObject("test-bucket-list-object", "Asia/India/Karnataka/Bangalore/Koramangala/pics", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
+	_, err = fs.PutObject("test-bucket-list-object", "Asia/India/Karnataka/Bangalore/Koramangala/pics", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
 		t.Fatal(e)
 	}
 
 	for i := 0; i < 2; i++ {
 		key := "newPrefix" + strconv.Itoa(i)
-		_, err = fs.CreateObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	_, err = fs.CreateObject("test-bucket-list-object", "newzen/zen/recurse/again/again/again/pics", int64(len("recurse")), bytes.NewBufferString("recurse"), nil)
+	_, err = fs.PutObject("test-bucket-list-object", "newzen/zen/recurse/again/again/again/pics", int64(len("recurse")), bytes.NewBufferString("recurse"), nil)
 	if err != nil {
 		t.Fatal(e)
 	}
 
 	for i := 0; i < 3; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = fs.CreateObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -570,28 +570,28 @@ func TestListObjects(t *testing.T) {
 }
 
 func BenchmarkListObjects(b *testing.B) {
-	// Make a temporary directory to use as the filesystem.
+	// Make a temporary directory to use as the fs.
 	directory, e := ioutil.TempDir("", "minio-list-benchmark")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the filesystem.
-	filesystem, err := New(directory)
+	// Create the fs.
+	fs, err := newFS(directory)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	// Create a bucket.
-	err = filesystem.MakeBucket("ls-benchmark-bucket")
+	err = fs.MakeBucket("ls-benchmark-bucket")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = filesystem.CreateObject("ls-benchmark-bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.PutObject("ls-benchmark-bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -601,7 +601,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	// List the buckets over and over and over.
 	for i := 0; i < b.N; i++ {
-		_, err = filesystem.ListObjects("ls-benchmark-bucket", "", "obj9000", "", -1)
+		_, err = fs.ListObjects("ls-benchmark-bucket", "", "obj9000", "", -1)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
@@ -36,21 +36,17 @@ import (
 /// Object Operations
 
 // GetObject - GET object
-func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length int64) (int64, *probe.Error) {
-	// Critical region requiring read lock.
-	fs.rwLock.RLock()
-	defer fs.rwLock.RUnlock()
-
+func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, *probe.Error) {
 	// Input validation.
 	if !IsValidBucketName(bucket) {
-		return 0, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return 0, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return nil, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// normalize buckets.
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	objectPath := filepath.Join(fs.path, bucket, object)
 
 	file, e := os.Open(objectPath)
@@ -60,45 +56,35 @@ func (fs Filesystem) GetObject(w io.Writer, bucket, object string, start, length
 		if os.IsNotExist(e) {
 			_, e = os.Stat(filepath.Join(fs.path, bucket))
 			if os.IsNotExist(e) {
-				return 0, probe.NewError(BucketNotFound{Bucket: bucket})
+				return nil, probe.NewError(BucketNotFound{Bucket: bucket})
 			}
 
-			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
-		return 0, probe.NewError(e)
+		return nil, probe.NewError(e)
 	}
-	defer file.Close()
+	// Initiate a cached stat operation on the file handler.
+	st, e := file.Stat()
+	if e != nil {
+		return nil, probe.NewError(e)
+	}
+	// Object path is a directory prefix, return object not found error.
+	if st.IsDir() {
+		return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+	}
 
-	_, e = file.Seek(start, os.SEEK_SET)
+	// Seet to a starting offset.
+	_, e = file.Seek(startOffset, os.SEEK_SET)
 	if e != nil {
 		// When the "handle is invalid", the file might be a directory on Windows.
 		if runtime.GOOS == "windows" && strings.Contains(e.Error(), "handle is invalid") {
-			return 0, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
-
-		return 0, probe.NewError(e)
+		return nil, probe.NewError(e)
 	}
 
-	var count int64
-	// Copy over the whole file if the length is non-positive.
-	if length > 0 {
-		count, e = io.CopyN(w, file, length)
-	} else {
-		count, e = io.Copy(w, file)
-	}
-
-	if e != nil {
-		// This call will fail if the object is a directory. Stat the file to see if
-		// this is true, if so, return an ObjectNotFound error.
-		stat, e := os.Stat(objectPath)
-		if e == nil && stat.IsDir() {
-			return count, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		}
-
-		return count, probe.NewError(e)
-	}
-
-	return count, nil
+	// Return successfully seeked file handler.
+	return file, nil
 }
 
 // GetObjectInfo - get object info.
@@ -113,7 +99,7 @@ func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Er
 	}
 
 	// Normalize buckets.
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e := os.Stat(bucketPath); e != nil {
 		if os.IsNotExist(e) {
@@ -196,8 +182,8 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 	return false
 }
 
-// CreateObject - create an object.
-func (fs Filesystem) CreateObject(bucket string, object string, size int64, data io.Reader, md5Bytes []byte) (ObjectInfo, *probe.Error) {
+// PutObject - create an object.
+func (fs Filesystem) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (ObjectInfo, *probe.Error) {
 	di, e := disk.GetInfo(fs.path)
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
@@ -215,7 +201,7 @@ func (fs Filesystem) CreateObject(bucket string, object string, size int64, data
 		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	if _, e = os.Stat(bucketPath); e != nil {
 		if os.IsNotExist(e) {
@@ -234,8 +220,8 @@ func (fs Filesystem) CreateObject(bucket string, object string, size int64, data
 
 	// md5Hex representation.
 	var md5Hex string
-	if len(md5Bytes) != 0 {
-		md5Hex = hex.EncodeToString(md5Bytes)
+	if len(metadata) != 0 {
+		md5Hex = metadata["md5Sum"]
 	}
 
 	// Write object.
@@ -275,7 +261,7 @@ func (fs Filesystem) CreateObject(bucket string, object string, size int64, data
 	}
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if len(md5Bytes) != 0 {
+	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			return ObjectInfo{}, probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -346,7 +332,7 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucket = fs.denormalizeBucket(bucket)
+	bucket = getActualBucketname(fs.path, bucket)
 	bucketPath := filepath.Join(fs.path, bucket)
 	// Check bucket exists
 	if _, e := os.Stat(bucketPath); e != nil {

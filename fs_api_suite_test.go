@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/xml"
+	"io"
 	"math/rand"
 	"strconv"
 
@@ -28,7 +28,7 @@ import (
 )
 
 // APITestSuite - collection of API tests
-func APITestSuite(c *check.C, create func() Filesystem) {
+func APITestSuite(c *check.C, create func() ObjectAPI) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -46,13 +46,13 @@ func APITestSuite(c *check.C, create func() Filesystem) {
 	testMultipartObjectAbort(c, create)
 }
 
-func testMakeBucket(c *check.C, create func() Filesystem) {
+func testMakeBucket(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
+func testMultipartObjectCreation(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -73,19 +73,17 @@ func testMultipartObjectCreation(c *check.C, create func() Filesystem) {
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		var calculatedMD5sum string
-		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		calculatedMD5sum, err = fs.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
-		completedParts.Part = append(completedParts.Part, CompletePart{PartNumber: i, ETag: calculatedMD5sum})
+		completedParts.Parts = append(completedParts.Parts, CompletePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
-	completedPartsBytes, e := xml.Marshal(completedParts)
-	c.Assert(e, check.IsNil)
-	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedPartsBytes)
+	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
 	c.Assert(objectInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
 
-func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
+func testMultipartObjectAbort(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -105,7 +103,7 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		var calculatedMD5sum string
-		calculatedMD5sum, err = fs.CreateObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		calculatedMD5sum, err = fs.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
 		parts[i] = expectedMD5Sumhex
@@ -114,7 +112,7 @@ func testMultipartObjectAbort(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
+func testMultipleObjectCreation(c *check.C, create func() ObjectAPI) {
 	objects := make(map[string][]byte)
 	fs := create()
 	err := fs.MakeBucket("bucket")
@@ -133,24 +131,28 @@ func testMultipleObjectCreation(c *check.C, create func() Filesystem) {
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
 		var objectInfo ObjectInfo
-		objectInfo, err = fs.CreateObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), hasher.Sum(nil))
+		metadata := make(map[string]string)
+		metadata["md5Sum"] = expectedMD5Sumhex
+		objectInfo, err = fs.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
 		c.Assert(objectInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		_, err := fs.GetObject(&byteBuffer, "bucket", key, 0, 0)
+		r, err := fs.GetObject("bucket", key, 0)
 		c.Assert(err, check.IsNil)
+		io.Copy(&byteBuffer, r)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
 
 		metadata, err := fs.GetObjectInfo("bucket", key)
 		c.Assert(err, check.IsNil)
 		c.Assert(metadata.Size, check.Equals, int64(len(value)))
+		r.Close()
 	}
 }
 
-func testPaging(c *check.C, create func() Filesystem) {
+func testPaging(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	fs.MakeBucket("bucket")
 	result, err := fs.ListObjects("bucket", "", "", "", 0)
@@ -160,7 +162,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 	// check before paging occurs
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = fs.CreateObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.PutObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -170,7 +172,7 @@ func testPaging(c *check.C, create func() Filesystem) {
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = fs.CreateObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
+		_, err = fs.PutObject("bucket", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "obj", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -179,9 +181,9 @@ func testPaging(c *check.C, create func() Filesystem) {
 	}
 	// check paging with prefix at end returns less objects
 	{
-		_, err = fs.CreateObject("bucket", "newPrefix", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
+		_, err = fs.PutObject("bucket", "newPrefix", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
 		c.Assert(err, check.IsNil)
-		_, err = fs.CreateObject("bucket", "newPrefix2", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
+		_, err = fs.PutObject("bucket", "newPrefix2", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -201,9 +203,9 @@ func testPaging(c *check.C, create func() Filesystem) {
 
 	// check delimited results with delimiter and prefix
 	{
-		_, err = fs.CreateObject("bucket", "this/is/delimited", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
+		_, err = fs.PutObject("bucket", "this/is/delimited", int64(len("prefix1")), bytes.NewBufferString("prefix1"), nil)
 		c.Assert(err, check.IsNil)
-		_, err = fs.CreateObject("bucket", "this/is/also/a/delimited/file", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
+		_, err = fs.PutObject("bucket", "this/is/also/a/delimited/file", int64(len("prefix2")), bytes.NewBufferString("prefix2"), nil)
 		c.Assert(err, check.IsNil)
 		result, err = fs.ListObjects("bucket", "this/is/", "", "/", 10)
 		c.Assert(err, check.IsNil)
@@ -250,32 +252,33 @@ func testPaging(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testObjectOverwriteWorks(c *check.C, create func() Filesystem) {
+func testObjectOverwriteWorks(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
+	_, err = fs.PutObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
 	// c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
 
-	_, err = fs.CreateObject("bucket", "object", int64(len("three")), bytes.NewBufferString("three"), nil)
+	_, err = fs.PutObject("bucket", "object", int64(len("three")), bytes.NewBufferString("three"), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer
-	length, err := fs.GetObject(&bytesBuffer, "bucket", "object", 0, 0)
+	r, err := fs.GetObject("bucket", "object", 0)
 	c.Assert(err, check.IsNil)
-	c.Assert(length, check.Equals, int64(len("three")))
+	io.Copy(&bytesBuffer, r)
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "three")
+	r.Close()
 }
 
-func testNonExistantBucketOperations(c *check.C, create func() Filesystem) {
+func testNonExistantBucketOperations(c *check.C, create func() ObjectAPI) {
 	fs := create()
-	_, err := fs.CreateObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
+	_, err := fs.PutObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketRecreateFails(c *check.C, create func() Filesystem) {
+func testBucketRecreateFails(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("string")
 	c.Assert(err, check.IsNil)
@@ -283,22 +286,23 @@ func testBucketRecreateFails(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testPutObjectInSubdir(c *check.C, create func() Filesystem) {
+func testPutObjectInSubdir(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = fs.CreateObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
+	_, err = fs.PutObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer
-	length, err := fs.GetObject(&bytesBuffer, "bucket", "dir1/dir2/object", 0, 0)
+	r, err := fs.GetObject("bucket", "dir1/dir2/object", 0)
 	c.Assert(err, check.IsNil)
+	io.Copy(&bytesBuffer, r)
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("hello world"))
-	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, length)
+	r.Close()
 }
 
-func testListBuckets(c *check.C, create func() Filesystem) {
+func testListBuckets(c *check.C, create func() ObjectAPI) {
 	fs := create()
 
 	// test empty list
@@ -330,7 +334,7 @@ func testListBuckets(c *check.C, create func() Filesystem) {
 	c.Assert(err, check.IsNil)
 }
 
-func testListBucketsOrder(c *check.C, create func() Filesystem) {
+func testListBucketsOrder(c *check.C, create func() ObjectAPI) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
@@ -348,7 +352,7 @@ func testListBucketsOrder(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesystem) {
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	result, err := fs.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
@@ -356,16 +360,13 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() Filesyst
 	c.Assert(len(result.Objects), check.Equals, 0)
 }
 
-func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
+func testNonExistantObjectInBucket(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	var byteBuffer bytes.Buffer
-	length, err := fs.GetObject(&byteBuffer, "bucket", "dir1", 0, 0)
-	c.Assert(length, check.Equals, int64(0))
+	_, err = fs.GetObject("bucket", "dir1", 0)
 	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(len(byteBuffer.Bytes()), check.Equals, 0)
 	switch err := err.ToGoError().(type) {
 	case ObjectNotFound:
 		c.Assert(err, check.ErrorMatches, "Object not found: bucket#dir1")
@@ -374,17 +375,15 @@ func testNonExistantObjectInBucket(c *check.C, create func() Filesystem) {
 	}
 }
 
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem) {
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = fs.CreateObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
+	_, err = fs.PutObject("bucket", "dir1/dir2/object", int64(len("hello world")), bytes.NewBufferString("hello world"), nil)
 	c.Assert(err, check.IsNil)
 
-	var byteBuffer bytes.Buffer
-	length, err := fs.GetObject(&byteBuffer, "bucket", "dir1", 0, 0)
-	c.Assert(length, check.Equals, int64(0))
+	_, err = fs.GetObject("bucket", "dir1", 0)
 	switch err := err.ToGoError().(type) {
 	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
@@ -393,11 +392,8 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem)
 		// force a failure with a line number
 		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
-	c.Assert(len(byteBuffer.Bytes()), check.Equals, 0)
 
-	var byteBuffer2 bytes.Buffer
-	length, err = fs.GetObject(&byteBuffer, "bucket", "dir1/", 0, 0)
-	c.Assert(length, check.Equals, int64(0))
+	_, err = fs.GetObject("bucket", "dir1/", 0)
 	switch err := err.ToGoError().(type) {
 	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
@@ -406,17 +402,16 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() Filesystem)
 		// force a failure with a line number
 		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
-	c.Assert(len(byteBuffer2.Bytes()), check.Equals, 0)
 }
 
-func testDefaultContentType(c *check.C, create func() Filesystem) {
+func testDefaultContentType(c *check.C, create func() ObjectAPI) {
 	fs := create()
 	err := fs.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// Test empty
-	_, err = fs.CreateObject("bucket", "one", int64(len("one")), bytes.NewBufferString("one"), nil)
-	metadata, err := fs.GetObjectInfo("bucket", "one")
+	_, err = fs.PutObject("bucket", "one", int64(len("one")), bytes.NewBufferString("one"), nil)
+	objInfo, err := fs.GetObjectInfo("bucket", "one")
 	c.Assert(err, check.IsNil)
-	c.Assert(metadata.ContentType, check.Equals, "application/octet-stream")
+	c.Assert(objInfo.ContentType, check.Equals, "application/octet-stream")
 }

@@ -20,18 +20,18 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/fs"
 )
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(filesystem fs.Filesystem) http.Handler {
+func configureServerHandler(objectAPI ObjectAPI) http.Handler {
 	// Initialize API.
-	api := storageAPI{
-		Filesystem: filesystem,
+	api := objectStorageAPI{
+		ObjectAPI: objectAPI,
 	}
+
 	// Initialize Web.
 	web := &webAPI{
-		Filesystem: filesystem,
+		ObjectAPI: objectAPI,
 	}
 
 	// Initialize router.

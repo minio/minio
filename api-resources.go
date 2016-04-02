@@ -19,8 +19,6 @@ package main
 import (
 	"net/url"
 	"strconv"
-
-	"github.com/minio/minio/pkg/fs"
 )
 
 // parse bucket url queries
@@ -34,7 +32,7 @@ func getBucketResources(values url.Values) (prefix, marker, delimiter string, ma
 }
 
 // part bucket url queries for ?uploads
-func getBucketMultipartResources(values url.Values) (v fs.BucketMultipartResourcesMetadata) {
+func getBucketMultipartResources(values url.Values) (v BucketMultipartResourcesMetadata) {
 	v.Prefix = values.Get("prefix")
 	v.KeyMarker = values.Get("key-marker")
 	v.MaxUploads, _ = strconv.Atoi(values.Get("max-uploads"))
@@ -45,10 +43,15 @@ func getBucketMultipartResources(values url.Values) (v fs.BucketMultipartResourc
 }
 
 // parse object url queries
-func getObjectResources(values url.Values) (v fs.ObjectResourcesMetadata) {
+func getObjectResources(values url.Values) (v ObjectResourcesMetadata) {
 	v.UploadID = values.Get("uploadId")
 	v.PartNumberMarker, _ = strconv.Atoi(values.Get("part-number-marker"))
 	v.MaxParts, _ = strconv.Atoi(values.Get("max-parts"))
 	v.EncodingType = values.Get("encoding-type")
 	return
+}
+
+// get upload id.
+func getUploadID(values url.Values) (uploadID string) {
+	return getObjectResources(values).UploadID
 }

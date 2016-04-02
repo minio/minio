@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -70,8 +69,8 @@ func createBucketConfigPath(bucket string) *probe.Error {
 // readBucketPolicy - read bucket policy.
 func readBucketPolicy(bucket string) ([]byte, *probe.Error) {
 	// Verify bucket is valid.
-	if !fs.IsValidBucketName(bucket) {
-		return nil, probe.NewError(fs.BucketNameInvalid{Bucket: bucket})
+	if !IsValidBucketName(bucket) {
+		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucketConfigPath, err := getBucketConfigPath(bucket)
@@ -83,7 +82,7 @@ func readBucketPolicy(bucket string) ([]byte, *probe.Error) {
 	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
 	if _, e := os.Stat(bucketPolicyFile); e != nil {
 		if os.IsNotExist(e) {
-			return nil, probe.NewError(fs.BucketPolicyNotFound{Bucket: bucket})
+			return nil, probe.NewError(BucketPolicyNotFound{Bucket: bucket})
 		}
 		return nil, probe.NewError(e)
 	}
@@ -98,8 +97,8 @@ func readBucketPolicy(bucket string) ([]byte, *probe.Error) {
 // removeBucketPolicy - remove bucket policy.
 func removeBucketPolicy(bucket string) *probe.Error {
 	// Verify bucket is valid.
-	if !fs.IsValidBucketName(bucket) {
-		return probe.NewError(fs.BucketNameInvalid{Bucket: bucket})
+	if !IsValidBucketName(bucket) {
+		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	bucketConfigPath, err := getBucketConfigPath(bucket)
@@ -111,7 +110,7 @@ func removeBucketPolicy(bucket string) *probe.Error {
 	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
 	if _, e := os.Stat(bucketPolicyFile); e != nil {
 		if os.IsNotExist(e) {
-			return probe.NewError(fs.BucketPolicyNotFound{Bucket: bucket})
+			return probe.NewError(BucketPolicyNotFound{Bucket: bucket})
 		}
 		return probe.NewError(e)
 	}
@@ -121,8 +120,8 @@ func removeBucketPolicy(bucket string) *probe.Error {
 // writeBucketPolicy - save bucket policy.
 func writeBucketPolicy(bucket string, accessPolicyBytes []byte) *probe.Error {
 	// Verify if bucket path legal
-	if !fs.IsValidBucketName(bucket) {
-		return probe.NewError(fs.BucketNameInvalid{Bucket: bucket})
+	if !IsValidBucketName(bucket) {
+		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 
 	// Create bucket config path.

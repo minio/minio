@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package fs
+package main
 
 import (
 	"os"
@@ -95,8 +95,8 @@ type Multiparts struct {
 	ActiveSession map[string]*MultipartSession `json:"activeSessions"`
 }
 
-// New instantiate a new donut
-func New(rootPath string) (Filesystem, *probe.Error) {
+// newFS instantiate a new filesystem.
+func newFS(rootPath string) (ObjectAPI, *probe.Error) {
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
 
 	var err *probe.Error
@@ -117,7 +117,7 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 		}
 	}
 
-	fs := Filesystem{
+	fs := &Filesystem{
 		rwLock: &sync.RWMutex{},
 	}
 	fs.path = rootPath
@@ -125,7 +125,7 @@ func New(rootPath string) (Filesystem, *probe.Error) {
 
 	/// Defaults
 
-	// minium free disk required for i/o operations to succeed.
+	// Minium free disk required for i/o operations to succeed.
 	fs.minFreeDisk = 5
 
 	fs.listObjectMap = make(map[ListObjectParams][]ObjectInfoChannel)

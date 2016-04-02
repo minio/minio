@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/minio/pkg/fs"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -60,7 +59,7 @@ func getRequestedRange(hrange string, size int64) (*httpRange, *probe.Error) {
 func (r *httpRange) parse(ra string) *probe.Error {
 	i := strings.Index(ra, "-")
 	if i < 0 {
-		return probe.NewError(fs.InvalidRange{})
+		return probe.NewError(InvalidRange{})
 	}
 	start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
 	if start == "" {
@@ -68,7 +67,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 		// range start relative to the end of the file.
 		i, err := strconv.ParseInt(end, 10, 64)
 		if err != nil {
-			return probe.NewError(fs.InvalidRange{})
+			return probe.NewError(InvalidRange{})
 		}
 		if i > r.size {
 			i = r.size
@@ -78,7 +77,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 	} else {
 		i, err := strconv.ParseInt(start, 10, 64)
 		if err != nil || i > r.size || i < 0 {
-			return probe.NewError(fs.InvalidRange{})
+			return probe.NewError(InvalidRange{})
 		}
 		r.start = i
 		if end == "" {
@@ -87,7 +86,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 		} else {
 			i, err := strconv.ParseInt(end, 10, 64)
 			if err != nil || r.start > i {
-				return probe.NewError(fs.InvalidRange{})
+				return probe.NewError(InvalidRange{})
 			}
 			if i >= r.size {
 				i = r.size - 1
@@ -104,7 +103,7 @@ func (r *httpRange) parseRange(s string) *probe.Error {
 		return probe.NewError(errors.New("header not present"))
 	}
 	if !strings.HasPrefix(s, b) {
-		return probe.NewError(fs.InvalidRange{})
+		return probe.NewError(InvalidRange{})
 	}
 
 	ras := strings.Split(s[len(b):], ",")
@@ -118,7 +117,7 @@ func (r *httpRange) parseRange(s string) *probe.Error {
 
 	ra := strings.TrimSpace(ras[0])
 	if ra == "" {
-		return probe.NewError(fs.InvalidRange{})
+		return probe.NewError(InvalidRange{})
 	}
 	return r.parse(ra)
 }
