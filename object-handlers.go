@@ -601,8 +601,9 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		// Create anonymous object.
 		objectInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned:
+		validateRegion := true // Validate region.
 		// For presigned requests verify them right here.
-		if apiErr := doesPresignedSignatureMatch(r); apiErr != ErrNone {
+		if apiErr := doesPresignedSignatureMatch(r, validateRegion); apiErr != ErrNone {
 			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
@@ -622,7 +623,8 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
-			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r); apiErr != ErrNone {
+			validateRegion := true // Validate region.
+			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion); apiErr != ErrNone {
 				if apiErr == ErrSignatureDoesNotMatch {
 					writer.CloseWithError(errSignatureMismatch)
 					return
@@ -779,8 +781,9 @@ func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.
 		// already allowed.
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hex.EncodeToString(md5Bytes))
 	case authTypePresigned:
+		validateRegion := true // Validate region.
 		// For presigned requests verify right here.
-		apiErr := doesPresignedSignatureMatch(r)
+		apiErr := doesPresignedSignatureMatch(r, validateRegion)
 		if apiErr != ErrNone {
 			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
@@ -800,7 +803,8 @@ func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
-			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r); apiErr != ErrNone {
+			validateRegion := true // Validate region.
+			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion); apiErr != ErrNone {
 				if apiErr == ErrSignatureDoesNotMatch {
 					writer.CloseWithError(errSignatureMismatch)
 					return

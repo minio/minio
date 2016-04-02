@@ -18,6 +18,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -88,7 +90,28 @@ func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *h
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		payload, e := ioutil.ReadAll(r.Body)
+		if e != nil {
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+			return
+		}
+		// Verify Content-Md5, if payload is set.
+		if r.Header.Get("Content-Md5") != "" {
+			if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
+				writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
+				return
+			}
+		}
+		// Populate back the payload.
+		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+		var s3Error APIErrorCode // API error code.
+		validateRegion := false  // Validate region.
+		if isRequestSignatureV4(r) {
+			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
+		} else if isRequestPresignedSignatureV4(r) {
+			s3Error = doesPresignedSignatureMatch(r, validateRegion)
+		}
+		if s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -117,7 +140,7 @@ func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *h
 			Location: region,
 		})
 	}
-	setCommonHeaders(w) // write headers.
+	setCommonHeaders(w) // Write headers.
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
@@ -256,7 +279,28 @@ func (api objectStorageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		payload, e := ioutil.ReadAll(r.Body)
+		if e != nil {
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+			return
+		}
+		// Verify Content-Md5, if payload is set.
+		if r.Header.Get("Content-Md5") != "" {
+			if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
+				writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
+				return
+			}
+		}
+		// Populate back the payload.
+		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+		var s3Error APIErrorCode // API error code.
+		validateRegion := false  // Validate region.
+		if isRequestSignatureV4(r) {
+			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
+		} else if isRequestPresignedSignatureV4(r) {
+			s3Error = doesPresignedSignatureMatch(r, validateRegion)
+		}
+		if s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}

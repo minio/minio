@@ -195,7 +195,8 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 	}
 
 	// Verify if the region is valid.
-	if !isValidRegion(credHeader.scope.region, region) {
+	sRegion := credHeader.scope.region
+	if !isValidRegion(sRegion, region) {
 		return ErrInvalidRegion
 	}
 
@@ -221,7 +222,7 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesPresignedSignatureMatch(r *http.Request) APIErrorCode {
+func doesPresignedSignatureMatch(r *http.Request, validateRegion bool) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
@@ -244,8 +245,14 @@ func doesPresignedSignatureMatch(r *http.Request) APIErrorCode {
 
 	// Verify if region is valid.
 	sRegion := preSignValues.Credential.scope.region
-	if !isValidRegion(sRegion, region) {
-		return ErrInvalidRegion
+	// Should validate region, only if region is set. Some operations
+	// do not need region validated for example GetBucketLocation.
+	if validateRegion {
+		if !isValidRegion(sRegion, region) {
+			return ErrInvalidRegion
+		}
+	} else {
+		region = sRegion
 	}
 
 	// Extract all the signed headers along with its values.
@@ -267,7 +274,7 @@ func doesPresignedSignatureMatch(r *http.Request) APIErrorCode {
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
-	query.Set("X-Amz-Credential", cred.AccessKeyID+"/"+getScope(t, region))
+	query.Set("X-Amz-Credential", cred.AccessKeyID+"/"+getScope(t, sRegion))
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
@@ -321,7 +328,7 @@ func doesPresignedSignatureMatch(r *http.Request) APIErrorCode {
 // doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesSignatureMatch(hashedPayload string, r *http.Request) APIErrorCode {
+func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bool) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
@@ -350,8 +357,14 @@ func doesSignatureMatch(hashedPayload string, r *http.Request) APIErrorCode {
 
 	// Verify if region is valid.
 	sRegion := signV4Values.Credential.scope.region
-	if !isValidRegion(sRegion, region) {
-		return ErrInvalidRegion
+	// Should validate region, only if region is set. Some operations
+	// do not need region validated for example GetBucketLocation.
+	if validateRegion {
+		if !isValidRegion(sRegion, region) {
+			return ErrInvalidRegion
+		}
+	} else {
+		region = sRegion
 	}
 
 	// Extract date, if not present throw error.

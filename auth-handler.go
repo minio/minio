@@ -129,10 +129,11 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	}
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+	validateRegion := true // Validate region.
 	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(hex.EncodeToString(sum256(payload)), r)
+		return doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(r)
+		return doesPresignedSignatureMatch(r, validateRegion)
 	}
 	return ErrAccessDenied
 }
