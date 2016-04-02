@@ -73,10 +73,6 @@ func init() {
 	if !isContainerized() && os.Geteuid() == 0 {
 		console.Fatalln("Please run ‘minio’ as a non-root user.")
 	}
-
-	// Initialize config.
-	err := initConfig()
-	fatalIf(err.Trace(), "Unable to initialize minio config.", nil)
 }
 
 func migrate() {
@@ -142,7 +138,6 @@ func findClosestCommands(command string) []string {
 
 func registerApp() *cli.App {
 	// Register all commands.
-	registerCommand(initCmd)
 	registerCommand(serverCmd)
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)
@@ -198,6 +193,10 @@ func main() {
 
 		// Migrate any old version of config / state files to newer format.
 		migrate()
+
+		// Initialize config.
+		err := initConfig()
+		fatalIf(err.Trace(), "Unable to initialize minio config.", nil)
 
 		// Enable all loggers by now.
 		enableLoggers()

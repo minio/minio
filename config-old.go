@@ -79,3 +79,70 @@ func loadConfigV2() (*configV2, *probe.Error) {
 	}
 	return qc.Data().(*configV2), nil
 }
+
+/////////////////// Config V3 ///////////////////
+
+// backendV3 type.
+type backendV3 struct {
+	Type  string   `json:"type"`
+	Disk  string   `json:"disk,omitempty"`
+	Disks []string `json:"disks,omitempty"`
+}
+
+// loggerV3 type.
+type loggerV3 struct {
+	Console struct {
+		Enable bool   `json:"enable"`
+		Level  string `json:"level"`
+	}
+	File struct {
+		Enable   bool   `json:"enable"`
+		Filename string `json:"fileName"`
+		Level    string `json:"level"`
+	}
+	Syslog struct {
+		Enable bool   `json:"enable"`
+		Addr   string `json:"address"`
+		Level  string `json:"level"`
+	} `json:"syslog"`
+	// Add new loggers here.
+}
+
+// configV3 server configuration version '3'.
+type configV3 struct {
+	Version string `json:"version"`
+
+	// Backend configuration.
+	Backend backendV3 `json:"backend"`
+
+	// http Server configuration.
+	Addr string `json:"address"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger loggerV3 `json:"logger"`
+}
+
+// loadConfigV3 load config version '3'.
+func loadConfigV3() (*configV3, *probe.Error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err.Trace()
+	}
+	if _, err := os.Stat(configFile); err != nil {
+		return nil, probe.NewError(err)
+	}
+	a := &configV3{}
+	a.Version = "3"
+	qc, err := quick.New(a)
+	if err != nil {
+		return nil, err.Trace()
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err.Trace()
+	}
+	return qc.Data().(*configV3), nil
+}

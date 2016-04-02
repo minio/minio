@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/quick"
 )
 
 func migrateConfig() {
@@ -30,6 +31,8 @@ func migrateConfig() {
 	purgeV1()
 	// Migrate version '2' to '3'.
 	migrateV2ToV3()
+	// Migrate version '3' to '4'.
+	migrateV3ToV4()
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
@@ -54,6 +57,8 @@ func purgeV1() {
 	fatalIf(probe.NewError(errors.New("")), "Unexpected version found ‘"+cv1.Version+"’, cannot migrate.", nil)
 }
 
+// Version '2' to '3' config migration adds new fields and re-orders
+// previous fields. Simplifies config for future additions.
 func migrateV2ToV3() {
 	cv2, err := loadConfigV2()
 	if err != nil {
@@ -65,23 +70,25 @@ func migrateV2ToV3() {
 	if cv2.Version != "2" {
 		return
 	}
-	serverConfig.SetAddr(":9000")
-	serverConfig.SetCredential(credential{
+	srvConfig := &configV3{}
+	srvConfig.Version = "3"
+	srvConfig.Addr = ":9000"
+	srvConfig.Credential = credential{
 		AccessKeyID:     cv2.Credentials.AccessKeyID,
 		SecretAccessKey: cv2.Credentials.SecretAccessKey,
-	})
-	serverConfig.SetRegion(cv2.Credentials.Region)
-	serverConfig.SetConsoleLogger(consoleLogger{
+	}
+	srvConfig.Region = cv2.Credentials.Region
+	srvConfig.Logger.Console = consoleLogger{
 		Enable: true,
 		Level:  "fatal",
-	})
+	}
 	flogger := fileLogger{}
 	flogger.Level = "error"
 	if cv2.FileLogger.Filename != "" {
 		flogger.Enable = true
 		flogger.Filename = cv2.FileLogger.Filename
 	}
-	serverConfig.SetFileLogger(flogger)
+	srvConfig.Logger.File = flogger
 
 	slogger := syslogLogger{}
 	slogger.Level = "debug"
@@ -89,10 +96,52 @@ func migrateV2ToV3() {
 		slogger.Enable = true
 		slogger.Addr = cv2.SyslogLogger.Addr
 	}
-	serverConfig.SetSyslogLogger(slogger)
+	srvConfig.Logger.Syslog = slogger
 
-	err = serverConfig.Save()
-	fatalIf(err.Trace(), "Migrating from version ‘"+cv2.Version+"’ to ‘"+serverConfig.GetVersion()+"’ failed.", nil)
+	qc, err := quick.New(srvConfig)
+	fatalIf(err.Trace(), "Unable to initialize config.", nil)
 
-	console.Println("Migration from version ‘" + cv2.Version + "’ to ‘" + serverConfig.GetVersion() + "’ completed successfully.")
+	configFile, err := getConfigFile()
+	fatalIf(err.Trace(), "Unable to get config file.", nil)
+
+	// Migrate the config.
+	err = qc.Save(configFile)
+	fatalIf(err.Trace(), "Migrating from version ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed.", nil)
+
+	console.Println("Migration from version ‘" + cv2.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+}
+
+// Version '3' to '4' migrates config, removes previous fields related
+// to backend types and server address. This change further simplifies
+// the config for future additions.
+func migrateV3ToV4() {
+	cv3, err := loadConfigV3()
+	if err != nil {
+		if os.IsNotExist(err.ToGoError()) {
+			return
+		}
+	}
+	fatalIf(err.Trace(), "Unable to load config version ‘3’.", nil)
+	if cv3.Version != "3" {
+		return
+	}
+
+	// Save only the new fields, ignore the rest.
+	srvConfig := &serverConfigV4{}
+	srvConfig.Version = globalMinioConfigVersion
+	srvConfig.Credential = cv3.Credential
+	srvConfig.Region = cv3.Region
+	srvConfig.Logger.Console = cv3.Logger.Console
+	srvConfig.Logger.File = cv3.Logger.File
+	srvConfig.Logger.Syslog = cv3.Logger.Syslog
+
+	qc, err := quick.New(srvConfig)
+	fatalIf(err.Trace(), "Unable to initialize the quick config.", nil)
+	configFile, err := getConfigFile()
+	fatalIf(err.Trace(), "Unable to get config file.", nil)
+
+	err = qc.Save(configFile)
+	fatalIf(err.Trace(), "Migrating from version ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed.", nil)
+
+	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }

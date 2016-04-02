@@ -83,15 +83,10 @@ $ make
 
 ### How to use Minio?
 
-Initialize minio server at `~/Photos`
-~~~
-$ minio init fs ~/Photos
-~~~
-
-After successfully initializing, start minio server.
+Start minio server.
 
 ~~~
-$ minio server
+$ minio server ~/Photos
 
 AccessKey: WLGDGYAQYIGI833EV05A  SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF  Region: us-east-1
 
