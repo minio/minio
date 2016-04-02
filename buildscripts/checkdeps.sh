@@ -21,7 +21,6 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
-    YASM_VERSION="1.2.0"
     GO_VERSION="1.6"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
@@ -183,11 +182,6 @@ check_deps() {
     check_version "$(env git --version 2>/dev/null | sed -e 's/^.* \([0-9.\].*\).*$/\1/' -e 's/^\([0-9.\]*\).*/\1/g')" "${GIT_VERSION}"
     if [ $? -ge 2 ]; then
         MISSING="${MISSING} git"
-    fi
-
-    check_version "$(env yasm --version 2>/dev/null | sed 's/^.* \([0-9.]*\).*$/\1/' | head -1)" "${YASM_VERSION}"
-    if [ $? -ge 2 ]; then
-        MISSING="${MISSING} yasm(${YASM_VERSION})"
     fi
 }
 

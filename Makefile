@@ -87,13 +87,6 @@ fmt:
 	@GO15VENDOREXPERIMENT=1 gofmt -s -l *.go
 	@GO15VENDOREXPERIMENT=1 gofmt -s -l pkg
 
-## Configure Intel library.
-isa-l:
-
-	@echo "Configuring $@:"
-	@git clone -q https://github.com/minio/isa-l.git
-	@cd isa-l; ${MAKE} -f Makefile.unx arch=$(arch) >/dev/null; mv include isa-l;
-
 lint:
 	@echo "Running $@:"
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint *.go
@@ -104,8 +97,7 @@ cyclo:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 *.go
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
 
-build: getdeps verifiers $(UI_ASSETS) isa-l
-	@GO15VENDOREXPERIMENT=1 go generate github.com/minio/minio/pkg/crypto/sha1
+build: getdeps verifiers $(UI_ASSETS)
 
 deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
@@ -116,12 +108,12 @@ spelling:
 
 test: build
 	@echo "Running all minio testing:"
-	@GODEBUG=cgocheck=0 CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
-	@GODEBUG=cgocheck=0 CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
+	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 gomake-all: build
 	@echo "Installing minio:"
-	@CGO_CPPFLAGS="-I$(PWD)/isa-l" CGO_LDFLAGS="$(PWD)/isa-l/isa-l.a" GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
+	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor add $(PKG)

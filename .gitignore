@@ -10,7 +10,6 @@ site/
 /Minio.iml
 **/access.log
 build
-isa-l
 vendor/**/*.js
 vendor/**/*.json
 release
