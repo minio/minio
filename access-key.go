@@ -44,10 +44,10 @@ const (
 )
 
 // isValidSecretKey - validate secret key.
-var isValidSecretKey = regexp.MustCompile("^.{8,40}$")
+var isValidSecretKey = regexp.MustCompile(`^.{8,40}$`)
 
 // isValidAccessKey - validate access key.
-var isValidAccessKey = regexp.MustCompile("^[a-zA-Z0-9\\-\\.\\_\\~]{5,20}$")
+var isValidAccessKey = regexp.MustCompile(`^[a-zA-Z0-9\\-\\.\\_\\~]{5,20}$`)
 
 // mustGenAccessKeys - must generate access credentials.
 func mustGenAccessKeys() (creds credential) {

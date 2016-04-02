@@ -40,10 +40,7 @@ const (
 
 // isMaxObjectSize - verify if max object size
 func isMaxObjectSize(size int64) bool {
-	if size > maxObjectSize {
-		return true
-	}
-	return false
+	return size > maxObjectSize
 }
 
 func contains(stringList []string, element string) bool {
