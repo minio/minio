@@ -174,16 +174,16 @@ func (api objectStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r
 		}
 	}
 
-	resources := getBucketMultipartResources(r.URL.Query())
-	if resources.MaxUploads < 0 {
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+	if maxUploads < 0 {
 		writeErrorResponse(w, r, ErrInvalidMaxUploads, r.URL.Path)
 		return
 	}
-	if resources.MaxUploads == 0 {
-		resources.MaxUploads = maxObjectList
+	if maxUploads == 0 {
+		maxUploads = maxObjectList
 	}
 
-	resources, err := api.ObjectAPI.ListMultipartUploads(bucket, resources)
+	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
 		switch err.ToGoError().(type) {
@@ -195,7 +195,7 @@ func (api objectStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r
 		return
 	}
 	// generate response
-	response := generateListMultipartUploadsResponse(bucket, resources)
+	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers.
 	setCommonHeaders(w)
@@ -241,10 +241,10 @@ func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Re
 		maxkeys = maxObjectList
 	}
 
-	listResp, err := api.ObjectAPI.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
+	listObjectsInfo, err := api.ObjectAPI.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
 	if err == nil {
 		// generate response
-		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listResp)
+		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listObjectsInfo)
 		encodedSuccessResponse := encodeResponse(response)
 		// Write headers
 		setCommonHeaders(w)
@@ -306,10 +306,10 @@ func (api objectStorageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	buckets, err := api.ObjectAPI.ListBuckets()
+	bucketsInfo, err := api.ObjectAPI.ListBuckets()
 	if err == nil {
 		// generate response
-		response := generateListBucketsResponse(buckets)
+		response := generateListBucketsResponse(bucketsInfo)
 		encodedSuccessResponse := encodeResponse(response)
 		// write headers
 		setCommonHeaders(w)
@@ -528,7 +528,7 @@ func (api objectStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	objectInfo, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
+	objInfo, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -547,8 +547,8 @@ func (api objectStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *ht
 		}
 		return
 	}
-	if objectInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }

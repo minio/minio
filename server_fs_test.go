@@ -881,7 +881,7 @@ func (s *MyAPISuite) TestPartialContent(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// prepare request
+	// Prepare request
 	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/partial-content/bar", 0, nil)
 	c.Assert(err, IsNil)
 	request.Header.Add("Range", "bytes=6-7")
@@ -1288,8 +1288,8 @@ func (s *MyAPISuite) TestObjectMultipart(c *C) {
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
 	// Complete multipart upload
-	completeUploads := &CompleteMultipartUpload{
-		Parts: []CompletePart{
+	completeUploads := &completeMultipartUpload{
+		Parts: []completePart{
 			{
 				PartNumber: 1,
 				ETag:       response1.Header.Get("ETag"),

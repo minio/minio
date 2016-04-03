@@ -79,18 +79,6 @@ func (f byName) Less(i, j int) bool {
 	return n1 < n2
 }
 
-// ObjectInfo - object info.
-type ObjectInfo struct {
-	Bucket       string
-	Name         string
-	ModifiedTime time.Time
-	ContentType  string
-	MD5Sum       string
-	Size         int64
-	IsDir        bool
-	Err          error
-}
-
 // Using sort.Search() internally to jump to the file entry containing the prefix.
 func searchFileInfos(fileInfos []os.FileInfo, x string) int {
 	processFunc := func(i int) bool {
@@ -140,7 +128,7 @@ func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []
 		if queryPrefix != "" && isFirst {
 			// If control is here then there is a queryPrefix, and there are objects which satisfies the prefix.
 			// Since the result is sorted, the object names which satisfies query prefix would be stored one after the other.
-			// Push the objectInfo only if its contains the prefix.
+			// Push the ObjectInfo only if its contains the prefix.
 			// This ensures that the channel containing object Info would only has objects with the given queryPrefix.
 			if !strings.HasPrefix(name, queryPrefix) {
 				return
@@ -194,8 +182,8 @@ func readDir(scanDir, namePrefix, queryPrefix string, isFirst bool) (objInfos []
 	return
 }
 
-// ObjectInfoChannel - object info channel.
-type ObjectInfoChannel struct {
+// objectInfoChannel - object info channel.
+type objectInfoChannel struct {
 	ch        <-chan ObjectInfo
 	objInfo   *ObjectInfo
 	closed    bool
@@ -203,7 +191,7 @@ type ObjectInfoChannel struct {
 	timedOut  bool
 }
 
-func (oic *ObjectInfoChannel) Read() (ObjectInfo, bool) {
+func (oic *objectInfoChannel) Read() (ObjectInfo, bool) {
 	if oic.closed {
 		return ObjectInfo{}, false
 	}
@@ -233,7 +221,7 @@ func (oic *ObjectInfoChannel) Read() (ObjectInfo, bool) {
 }
 
 // IsClosed - return whether channel is closed or not.
-func (oic ObjectInfoChannel) IsClosed() bool {
+func (oic objectInfoChannel) IsClosed() bool {
 	if oic.objInfo != nil {
 		return false
 	}
@@ -242,7 +230,7 @@ func (oic ObjectInfoChannel) IsClosed() bool {
 }
 
 // IsTimedOut - return whether channel is closed due to timeout.
-func (oic ObjectInfoChannel) IsTimedOut() bool {
+func (oic objectInfoChannel) IsTimedOut() bool {
 	if oic.timedOut {
 		return true
 	}
@@ -261,7 +249,7 @@ func (oic ObjectInfoChannel) IsTimedOut() bool {
 
 // treeWalk - walk into 'scanDir' recursively when 'recursive' is true.
 // It uses 'bucketDir' to get name prefix for object name.
-func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) ObjectInfoChannel {
+func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) objectInfoChannel {
 	objectInfoCh := make(chan ObjectInfo, listObjectsLimit)
 	timeoutCh := make(chan struct{}, 1)
 
@@ -314,5 +302,5 @@ func treeWalk(scanDir, bucketDir string, recursive bool, queryPrefix string) Obj
 		}
 	}()
 
-	return ObjectInfoChannel{ch: objectInfoCh, timeoutCh: timeoutCh}
+	return objectInfoChannel{ch: objectInfoCh, timeoutCh: timeoutCh}
 }

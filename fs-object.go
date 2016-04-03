@@ -58,7 +58,6 @@ func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.Rea
 			if os.IsNotExist(e) {
 				return nil, probe.NewError(BucketNotFound{Bucket: bucket})
 			}
-
 			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
 		return nil, probe.NewError(e)
@@ -73,7 +72,7 @@ func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.Rea
 		return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 	}
 
-	// Seet to a starting offset.
+	// Seek to a starting offset.
 	_, e = file.Seek(startOffset, os.SEEK_SET)
 	if e != nil {
 		// When the "handle is invalid", the file might be a directory on Windows.
@@ -82,8 +81,6 @@ func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.Rea
 		}
 		return nil, probe.NewError(e)
 	}
-
-	// Return successfully seeked file handler.
 	return file, nil
 }
 

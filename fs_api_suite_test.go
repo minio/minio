@@ -1,5 +1,5 @@
 /*
- * Minimalist Object Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +59,7 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectAPI) {
 	uploadID, err := fs.NewMultipartUpload("bucket", "key")
 	c.Assert(err, check.IsNil)
 
-	completedParts := CompleteMultipartUpload{}
-	//completedParts.Part = make([]CompletePart, 10)
+	completedParts := completeMultipartUpload{}
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -76,11 +75,11 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectAPI) {
 		calculatedMD5sum, err = fs.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
-		completedParts.Parts = append(completedParts.Parts, CompletePart{PartNumber: i, ETag: calculatedMD5sum})
+		completedParts.Parts = append(completedParts.Parts, completePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
-	objectInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
+	objInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
-	c.Assert(objectInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
+	c.Assert(objInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
 }
 
 func testMultipartObjectAbort(c *check.C, create func() ObjectAPI) {
@@ -91,6 +90,7 @@ func testMultipartObjectAbort(c *check.C, create func() ObjectAPI) {
 	c.Assert(err, check.IsNil)
 
 	parts := make(map[int]string)
+	metadata := make(map[string]string)
 	for i := 1; i <= 10; i++ {
 		randomPerm := rand.Perm(10)
 		randomString := ""
@@ -102,6 +102,7 @@ func testMultipartObjectAbort(c *check.C, create func() ObjectAPI) {
 		hasher.Write([]byte(randomString))
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
+		metadata["md5"] = expectedMD5Sumhex
 		var calculatedMD5sum string
 		calculatedMD5sum, err = fs.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex)
 		c.Assert(err, check.IsNil)
@@ -130,24 +131,25 @@ func testMultipleObjectCreation(c *check.C, create func() ObjectAPI) {
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)
-		var objectInfo ObjectInfo
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = expectedMD5Sumhex
-		objectInfo, err = fs.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
+		objInfo, err := fs.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
-		c.Assert(objectInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
+		c.Assert(objInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
 		r, err := fs.GetObject("bucket", key, 0)
 		c.Assert(err, check.IsNil)
-		io.Copy(&byteBuffer, r)
+		_, e := io.Copy(&byteBuffer, r)
+		c.Assert(e, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
+		c.Assert(r.Close(), check.IsNil)
 
-		metadata, err := fs.GetObjectInfo("bucket", key)
+		objInfo, err := fs.GetObjectInfo("bucket", key)
 		c.Assert(err, check.IsNil)
-		c.Assert(metadata.Size, check.Equals, int64(len(value)))
+		c.Assert(objInfo.Size, check.Equals, int64(len(value)))
 		r.Close()
 	}
 }
@@ -259,7 +261,7 @@ func testObjectOverwriteWorks(c *check.C, create func() ObjectAPI) {
 
 	_, err = fs.PutObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.IsNil)
-	// c.Assert(md5Sum1hex, check.Equals, objectInfo.MD5Sum)
+	// c.Assert(md5Sum1hex, check.Equals, objInfo.MD5Sum)
 
 	_, err = fs.PutObject("bucket", "object", int64(len("three")), bytes.NewBufferString("three"), nil)
 	c.Assert(err, check.IsNil)
@@ -267,9 +269,10 @@ func testObjectOverwriteWorks(c *check.C, create func() ObjectAPI) {
 	var bytesBuffer bytes.Buffer
 	r, err := fs.GetObject("bucket", "object", 0)
 	c.Assert(err, check.IsNil)
-	io.Copy(&bytesBuffer, r)
+	_, e := io.Copy(&bytesBuffer, r)
+	c.Assert(e, check.IsNil)
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "three")
-	r.Close()
+	c.Assert(r.Close(), check.IsNil)
 }
 
 func testNonExistantBucketOperations(c *check.C, create func() ObjectAPI) {
@@ -297,9 +300,11 @@ func testPutObjectInSubdir(c *check.C, create func() ObjectAPI) {
 	var bytesBuffer bytes.Buffer
 	r, err := fs.GetObject("bucket", "dir1/dir2/object", 0)
 	c.Assert(err, check.IsNil)
-	io.Copy(&bytesBuffer, r)
+	n, e := io.Copy(&bytesBuffer, r)
+	c.Assert(e, check.IsNil)
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("hello world"))
-	r.Close()
+	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, int64(n))
+	c.Assert(r.Close(), check.IsNil)
 }
 
 func testListBuckets(c *check.C, create func() ObjectAPI) {
@@ -411,6 +416,7 @@ func testDefaultContentType(c *check.C, create func() ObjectAPI) {
 
 	// Test empty
 	_, err = fs.PutObject("bucket", "one", int64(len("one")), bytes.NewBufferString("one"), nil)
+	c.Assert(err, check.IsNil)
 	objInfo, err := fs.GetObjectInfo("bucket", "one")
 	c.Assert(err, check.IsNil)
 	c.Assert(objInfo.ContentType, check.Equals, "application/octet-stream")

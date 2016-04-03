@@ -15,8 +15,8 @@ type ObjectAPI interface {
 	GetBucketInfo(bucket string) (BucketInfo, *probe.Error)
 
 	// Bucket query API.
-	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error)
-	ListMultipartUploads(bucket string, resources BucketMultipartResourcesMetadata) (BucketMultipartResourcesMetadata, *probe.Error)
+	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error)
+	ListMultipartUploads(bucket, objectPrefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, *probe.Error)
 
 	// Object resource API.
 	GetObject(bucket, object string, startOffset int64) (io.ReadCloser, *probe.Error)
@@ -27,7 +27,7 @@ type ObjectAPI interface {
 	// Object query API.
 	NewMultipartUpload(bucket, object string) (string, *probe.Error)
 	PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, *probe.Error)
-	ListObjectParts(bucket, object string, resources ObjectResourcesMetadata) (ObjectResourcesMetadata, *probe.Error)
-	CompleteMultipartUpload(bucket string, object string, uploadID string, parts []CompletePart) (ObjectInfo, *probe.Error)
+	ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, *probe.Error)
+	CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, *probe.Error)
 	AbortMultipartUpload(bucket, object, uploadID string) *probe.Error
 }

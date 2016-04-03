@@ -95,7 +95,7 @@ func TestListObjects(t *testing.T) {
 	// Formualting the result data set to be expected from ListObjects call inside the tests,
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
 
-	resultCases := []ListObjectsResult{
+	resultCases := []ListObjectsInfo{
 		// ListObjectsResult-0.
 		// Testing for listing all objects in the bucket, (testCase 20,21,22).
 		{
@@ -428,44 +428,44 @@ func TestListObjects(t *testing.T) {
 		delimeter  string
 		maxKeys    int
 		// Expected output of ListObjects.
-		result ListObjectsResult
+		result ListObjectsInfo
 		err    error
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", "", "", 0, ListObjectsResult{}, BucketNameInvalid{Bucket: ".test"}, false},
-		{"Test", "", "", "", 0, ListObjectsResult{}, BucketNameInvalid{Bucket: "Test"}, false},
-		{"---", "", "", "", 0, ListObjectsResult{}, BucketNameInvalid{Bucket: "---"}, false},
-		{"ad", "", "", "", 0, ListObjectsResult{}, BucketNameInvalid{Bucket: "ad"}, false},
+		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Using an existing file for bucket name, but its not a directory (5).
-		{"simple-file.txt", "", "", "", 0, ListObjectsResult{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
+		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
 		// Valid bucket names, but they donot exist (6-8).
-		{"volatile-bucket-1", "", "", "", 0, ListObjectsResult{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", 0, ListObjectsResult{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", 0, ListObjectsResult{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Valid, existing bucket, but sending invalid delimeter values (9-10).
 		// Empty string < "" > and forward slash < / > are the ony two valid arguments for delimeter.
-		{"test-bucket-list-object", "", "", "*", 0, ListObjectsResult{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
-		{"test-bucket-list-object", "", "", "-", 0, ListObjectsResult{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
+		{"test-bucket-list-object", "", "", "*", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
+		{"test-bucket-list-object", "", "", "-", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
 		// Marker goes through url QueryUnescape, sending inputs for which QueryUnescape would fail (11-12).
 		// Here is how QueryUnescape behaves https://golang.org/pkg/net/url/#QueryUnescape.
 		// QueryUnescape is necessasry since marker is provided as URL query parameter.
-		{"test-bucket-list-object", "", "test%", "", 0, ListObjectsResult{}, fmt.Errorf("invalid URL escape"), false},
-		{"test-bucket-list-object", "", "test%A", "", 0, ListObjectsResult{}, fmt.Errorf("invalid URL escape"), false},
+		{"test-bucket-list-object", "", "test%", "", 0, ListObjectsInfo{}, fmt.Errorf("invalid URL escape"), false},
+		{"test-bucket-list-object", "", "test%A", "", 0, ListObjectsInfo{}, fmt.Errorf("invalid URL escape"), false},
 		// Testing for failure cases with both perfix and marker (13).
 		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
-		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsResult{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
+		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (14-15).
-		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsResult{}, nil, true},
-		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsResult{}, nil, true},
+		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
+		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Testing on empty bucket, that is, bucket without any objects in it (16).
-		{"empty-bucket", "", "", "", 0, ListObjectsResult{}, nil, true},
+		{"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to negative value (17-18).
-		{"empty-bucket", "", "", "", -1, ListObjectsResult{}, nil, true},
-		{"empty-bucket", "", "", "", 1, ListObjectsResult{}, nil, true},
+		{"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
+		{"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to a very large value (19).
-		{"empty-bucket", "", "", "", 1111000000000000, ListObjectsResult{}, nil, true},
+		{"empty-bucket", "", "", "", 1111000000000000, ListObjectsInfo{}, nil, true},
 		// Testing for all 7 objects in the bucket (20).
 		{"test-bucket-list-object", "", "", "", 9, resultCases[0], nil, true},
 		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (21).
@@ -493,7 +493,7 @@ func TestListObjects(t *testing.T) {
 		{"test-bucket-list-object", "", "man", "", 10, resultCases[13], nil, true},
 		// Marker being set to a value which is greater than and all object names when sorted (38).
 		// Expected to send an empty response in this case.
-		{"test-bucket-list-object", "", "zen", "", 10, ListObjectsResult{}, nil, true},
+		{"test-bucket-list-object", "", "zen", "", 10, ListObjectsInfo{}, nil, true},
 		// Marker being set to a value which is lesser than and all object names when sorted (39).
 		// Expected to send all the objects in the bucket in this case.
 		{"test-bucket-list-object", "", "Abc", "", 10, resultCases[14], nil, true},
@@ -511,13 +511,13 @@ func TestListObjects(t *testing.T) {
 		{"test-bucket-list-object", "new", "newPrefix0", "", 2, resultCases[22], nil, true},
 		// Testing with maxKeys set to 0 (48-54).
 		// The parameters have to valid.
-		{"test-bucket-list-object", "", "obj1", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "new", "", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "obj", "", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj0", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj1", "", 0, ListObjectsResult{}, nil, true},
-		{"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsResult{}, nil, true},
+		{"test-bucket-list-object", "", "obj1", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "", "obj0", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "new", "", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "obj", "", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "obj", "obj0", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "obj", "obj1", "", 0, ListObjectsInfo{}, nil, true},
+		{"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsInfo{}, nil, true},
 		// Tests on hierarchical key names as prefix.
 		// Without delimteter the code should recurse into the prefix Dir.
 		// Tests with prefix, but without delimiter (55-56).
