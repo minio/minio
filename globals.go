@@ -56,7 +56,7 @@ func setGlobals(quiet, debug bool) {
 	globalQuiet = quiet
 	globalDebug = debug
 	// Enable debug messages if requested.
-	if globalDebug == true {
+	if globalDebug {
 		console.DebugPrint = true
 	}
 }
