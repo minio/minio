@@ -29,7 +29,7 @@ const (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion = "3"
+	globalMinioConfigVersion = "4"
 	globalMinioConfigDir     = ".minio"
 	globalMinioCertsDir      = ".minio/certs"
 	globalMinioCertFile      = "public.crt"

@@ -34,67 +34,46 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-var initCmd = cli.Command{
-	Name:  "init",
-	Usage: "Initialize Minio cloud storage server.",
+var serverCmd = cli.Command{
+	Name:  "server",
+	Usage: "Start Minio cloud storage server.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "address",
 			Value: ":9000",
 		},
 	},
-	Action: initMain,
-	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Usage}}
-
-USAGE:
-  minio {{.Name}} [OPTION VALUE] PATH
-
-OPTIONS:
-  {{range .Flags}}{{.}}
-  {{end}}
-ENVIRONMENT VARIABLES:
-  MINIO_ACCESS_KEY, MINIO_SECRET_KEY: Access and secret key to use.
-
-EXAMPLES:
-  1. Start minio server on Linux.
-      $ minio {{.Name}} fs /home/shared
-
-  2. Start minio server on Windows.
-      $ minio {{.Name}} fs C:\MyShare
-
-  3. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
-      $ minio {{.Name}} --address 192.168.1.101:9000 fs /home/shared
-
-  4. Start minio server with minimum free disk threshold to 5%
-      $ minio {{.Name}} fs /home/shared/Pictures
-
-`,
-}
-
-var serverCmd = cli.Command{
-	Name:   "server",
-	Usage:  "Start Minio cloud storage server.",
-	Flags:  []cli.Flag{},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}}
+  minio {{.Name}} [OPTIONS] PATH
+
+OPTIONS:
+  {{range .Flags}}{{.}}
+  {{end}}
+ENVIRONMENT VARIABLES:
+  MINIO_ACCESS_KEY: Access key string of 5 to 20 characters in length.
+  MINIO_SECRET_KEY: Secret key string of 8 to 40 characters in length.
 
 EXAMPLES:
   1. Start minio server.
-      $ minio {{.Name}}
+      $ minio {{.Name}} /home/shared
 
+  2. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
+      $ minio {{.Name}} --address 192.168.1.101:9000 /home/shared
+
+  3. Start minio server on Windows.
+      $ minio {{.Name}} C:\MyShare
 `,
 }
 
 // configureServer configure a new server instance
-func configureServer(objectAPI ObjectAPI) *http.Server {
+func configureServer(serverAddr string, objectAPI ObjectAPI) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
-		Addr:           serverConfig.GetAddr(),
+		Addr:           serverAddr,
 		Handler:        configureServerHandler(objectAPI),
 		MaxHeaderBytes: 1 << 20,
 	}
@@ -142,33 +121,11 @@ func printListenIPs(httpServerConf *http.Server) {
 	}
 }
 
-// initServer initialize server
-func initServer(c *cli.Context) {
-	host, port, _ := net.SplitHostPort(c.String("address"))
-	// If port empty, default to port '80'
-	if port == "" {
-		port = "80"
-		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
-			port = "443"
-		}
-	}
-
-	// Join host and port.
-	serverConfig.SetAddr(net.JoinHostPort(host, port))
-
-	// Set backend FS type.
-	if c.Args().Get(0) == "fs" {
-		fsPath := strings.TrimSpace(c.Args().Get(1))
-		// Last argument is always a file system path, verify if it exists and is accessible.
-		_, e := os.Stat(fsPath)
-		fatalIf(probe.NewError(e), "Unable to validate the path", nil)
-
-		serverConfig.SetBackend(backend{
-			Type: "fs",
-			Disk: fsPath,
-		})
-	} // else { Add backend XL type here.
+// initServerConfig initialize server config.
+func initServerConfig(c *cli.Context) {
+	// Save new config.
+	err := serverConfig.Save()
+	fatalIf(err.Trace(), "Unable to save config.", nil)
 
 	// Fetch access keys from environment variables if any and update the config.
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -187,29 +144,15 @@ func initServer(c *cli.Context) {
 			SecretAccessKey: secretKey,
 		})
 	}
-
-	// Save new config.
-	err := serverConfig.Save()
-	fatalIf(err.Trace(), "Unable to save config.", nil)
-
-	// Successfully written.
-	backend := serverConfig.GetBackend()
-	if backend.Type == "fs" {
-		console.Println(colorGreen("Successfully initialized Minio at %s", backend.Disk))
-	}
 }
 
-// Check init arguments.
-func checkInitSyntax(c *cli.Context) {
+// Check server arguments.
+func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(c, "init", 1)
+		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 	if len(c.Args()) > 2 {
-		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘minio init --help’.", nil)
-	}
-	path := strings.TrimSpace(c.Args().Last())
-	if path == "" {
-		fatalIf(probe.NewError(errInvalidArgument), "Path argument cannot be empty.", nil)
+		fatalIf(probe.NewError(errInvalidArgument), "Unnecessary arguments passed. Please refer ‘minio server --help’.", nil)
 	}
 }
 
@@ -292,34 +235,45 @@ func checkPortAvailability(port int) {
 	}
 }
 
-func initMain(c *cli.Context) {
-	// check 'init' cli arguments.
-	checkInitSyntax(c)
-
-	// Initialize server.
-	initServer(c)
-}
-
 func serverMain(c *cli.Context) {
-	if c.Args().Present() || c.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(c, "server", 1)
+	// check 'server' cli arguments.
+	checkServerSyntax(c)
+
+	// Initialize server config.
+	initServerConfig(c)
+
+	// Server address.
+	serverAddress := c.String("address")
+
+	host, port, _ := net.SplitHostPort(serverAddress)
+	// If port empty, default to port '80'
+	if port == "" {
+		port = "80"
+		// if SSL is enabled, choose port as "443" instead.
+		if isSSL() {
+			port = "443"
+		}
 	}
+
+	// Check configured ports.
+	checkPortAvailability(getPort(net.JoinHostPort(host, port)))
 
 	var objectAPI ObjectAPI
 	var err *probe.Error
 
-	// get backend.
-	backend := serverConfig.GetBackend()
-	if backend.Type == "fs" {
+	// Set backend FS type.
+	fsPath := strings.TrimSpace(c.Args().Get(0))
+	if fsPath != "" {
+		// Last argument is always a file system path, verify if it exists and is accessible.
+		_, e := os.Stat(fsPath)
+		fatalIf(probe.NewError(e), "Unable to validate the path", nil)
 		// Initialize filesystem storage layer.
-		objectAPI, err = newFS(backend.Disk)
-		fatalIf(err.Trace(backend.Type, backend.Disk), "Initializing filesystem failed.", nil)
-	} else { // else if backend.Type == "xl" { here.
-		console.Fatalln("No known backends configured, please use ‘minio init --help’ to initialize a backend.")
+		objectAPI, err = newFS(fsPath)
+		fatalIf(err.Trace(fsPath), "Initializing filesystem failed.", nil)
 	}
 
 	// Configure server.
-	apiServer := configureServer(objectAPI)
+	apiServer := configureServer(serverAddress, objectAPI)
 
 	// Credential.
 	cred := serverConfig.GetCredential()

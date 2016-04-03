@@ -24,15 +24,9 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-// serverConfigV3 server configuration version '3'.
-type serverConfigV3 struct {
+// serverConfigV4 server configuration version '4'.
+type serverConfigV4 struct {
 	Version string `json:"version"`
-
-	// Backend configuration.
-	Backend backend `json:"backend"`
-
-	// http Server configuration.
-	Addr string `json:"address"`
 
 	// S3 API configuration.
 	Credential credential `json:"credential"`
@@ -45,17 +39,10 @@ type serverConfigV3 struct {
 	rwMutex *sync.RWMutex
 }
 
-// backend type.
-type backend struct {
-	Type  string   `json:"type"`
-	Disk  string   `json:"disk,omitempty"`
-	Disks []string `json:"disks,omitempty"`
-}
-
 // initConfig - initialize server config. config version (called only once).
 func initConfig() *probe.Error {
 	if !isConfigFileExists() {
-		srvCfg := &serverConfigV3{}
+		srvCfg := &serverConfigV4{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
@@ -89,7 +76,7 @@ func initConfig() *probe.Error {
 	if _, e := os.Stat(configFile); err != nil {
 		return probe.NewError(e)
 	}
-	srvCfg := &serverConfigV3{}
+	srvCfg := &serverConfigV4{}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
@@ -100,17 +87,17 @@ func initConfig() *probe.Error {
 		return err.Trace()
 	}
 	// Save the loaded config globally.
-	serverConfig = qc.Data().(*serverConfigV3)
+	serverConfig = qc.Data().(*serverConfigV4)
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
 	return nil
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV3
+var serverConfig *serverConfigV4
 
 // GetVersion get current config version.
-func (s serverConfigV3) GetVersion() string {
+func (s serverConfigV4) GetVersion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Version
@@ -119,98 +106,77 @@ func (s serverConfigV3) GetVersion() string {
 /// Logger related.
 
 // SetFileLogger set new file logger.
-func (s *serverConfigV3) SetFileLogger(flogger fileLogger) {
+func (s *serverConfigV4) SetFileLogger(flogger fileLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.File = flogger
 }
 
 // GetFileLogger get current file logger.
-func (s serverConfigV3) GetFileLogger() fileLogger {
+func (s serverConfigV4) GetFileLogger() fileLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.File
 }
 
 // SetConsoleLogger set new console logger.
-func (s *serverConfigV3) SetConsoleLogger(clogger consoleLogger) {
+func (s *serverConfigV4) SetConsoleLogger(clogger consoleLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.Console = clogger
 }
 
 // GetConsoleLogger get current console logger.
-func (s serverConfigV3) GetConsoleLogger() consoleLogger {
+func (s serverConfigV4) GetConsoleLogger() consoleLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Console
 }
 
 // SetSyslogLogger set new syslog logger.
-func (s *serverConfigV3) SetSyslogLogger(slogger syslogLogger) {
+func (s *serverConfigV4) SetSyslogLogger(slogger syslogLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.Syslog = slogger
 }
 
 // GetSyslogLogger get current syslog logger.
-func (s *serverConfigV3) GetSyslogLogger() syslogLogger {
+func (s *serverConfigV4) GetSyslogLogger() syslogLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Syslog
 }
 
 // SetRegion set new region.
-func (s *serverConfigV3) SetRegion(region string) {
+func (s *serverConfigV4) SetRegion(region string) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Region = region
 }
 
 // GetRegion get current region.
-func (s serverConfigV3) GetRegion() string {
+func (s serverConfigV4) GetRegion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Region
 }
 
-// SetAddr set new address.
-func (s *serverConfigV3) SetAddr(addr string) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-	s.Addr = addr
-}
-
-// GetAddr get current address.
-func (s serverConfigV3) GetAddr() string {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-	return s.Addr
-}
-
 // SetCredentials set new credentials.
-func (s *serverConfigV3) SetCredential(creds credential) {
+func (s *serverConfigV4) SetCredential(creds credential) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Credential = creds
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV3) GetCredential() credential {
+func (s serverConfigV4) GetCredential() credential {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Credential
 }
 
-// SetBackend set new backend.
-func (s *serverConfigV3) SetBackend(bknd backend) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-	s.Backend = bknd
-}
-
 // Save config.
-func (s serverConfigV3) Save() *probe.Error {
+func (s serverConfigV4) Save() *probe.Error {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 
@@ -233,10 +199,4 @@ func (s serverConfigV3) Save() *probe.Error {
 
 	// Return success.
 	return nil
-}
-
-func (s serverConfigV3) GetBackend() backend {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-	return s.Backend
 }

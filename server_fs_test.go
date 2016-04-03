@@ -81,14 +81,14 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	// Initialize server config.
 	initConfig()
 
+	// Set port.
+	addr := ":" + strconv.Itoa(getFreePort())
+
 	// Get credential.
 	s.credential = serverConfig.GetCredential()
 
 	// Set a default region.
 	serverConfig.SetRegion("us-east-1")
-
-	// Set a new address.
-	serverConfig.SetAddr(":" + strconv.Itoa(getFreePort()))
 
 	// Do this only once here
 	setGlobalConfigPath(root)
@@ -99,8 +99,8 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	fs, err := newFS(fsroot)
 	c.Assert(err, IsNil)
 
-	httpHandler := configureServerHandler(fs)
-	testAPIFSCacheServer = httptest.NewServer(httpHandler)
+	apiServer := configureServer(addr, fs)
+	testAPIFSCacheServer = httptest.NewServer(apiServer.Handler)
 }
 
 func (s *MyAPISuite) TearDownSuite(c *C) {
