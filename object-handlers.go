@@ -9,7 +9,7 @@
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implieapi.ObjectAPI.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
@@ -84,9 +84,8 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	objectInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err.Trace(), "GetObject failed.", nil)
 		switch err.ToGoError().(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -97,23 +96,14 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
+			errorIf(err.Trace(), "GetObjectInfo failed.", nil)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
 	}
 
-	var hrange *httpRange
-	hrange, err = getRequestedRange(r.Header.Get("Range"), objectInfo.Size)
-	if err != nil {
-		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
-		return
-	}
-
-	// Set standard object headers.
-	setObjectHeaders(w, objectInfo, hrange)
-
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -122,8 +112,12 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Set any additional requested response headers.
-	setGetRespHeaders(w, r.URL.Query())
+	var hrange *httpRange
+	hrange, err = getRequestedRange(r.Header.Get("Range"), objInfo.Size)
+	if err != nil {
+		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
+		return
+	}
 
 	// Get the object.
 	startOffset := hrange.start
@@ -134,6 +128,13 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer readCloser.Close() // Close after this handler returns.
+
+	// Set standard object headers.
+	setObjectHeaders(w, objInfo, hrange)
+
+	// Set any additional requested response headers.
+	setGetRespHeaders(w, r.URL.Query())
+
 	if hrange.length > 0 {
 		if _, e := io.CopyN(w, readCloser, hrange.length); e != nil {
 			errorIf(probe.NewError(e), "Writing to client failed", nil)
@@ -264,7 +265,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	objectInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err.Trace(bucket, object), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
@@ -282,11 +283,8 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Set standard object headers.
-	setObjectHeaders(w, objectInfo, nil)
-
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -295,6 +293,9 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 	if checkETag(w, r) {
 		return
 	}
+
+	// Set standard object headers.
+	setObjectHeaders(w, objInfo, nil)
 
 	// Successfull response.
 	w.WriteHeader(http.StatusOK)
@@ -357,7 +358,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	objectInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
+	objInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
 		switch err.ToGoError().(type) {
@@ -378,7 +379,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Verify x-amz-copy-source-if-modified-since and
 	// x-amz-copy-source-if-unmodified-since.
-	lastModified := objectInfo.ModifiedTime
+	lastModified := objInfo.ModifiedTime
 	if checkCopySourceLastModified(w, r, lastModified) {
 		return
 	}
@@ -390,15 +391,15 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
-	if isMaxObjectSize(objectInfo.Size) {
+	if isMaxObjectSize(objInfo.Size) {
 		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
 		return
 	}
 
 	var md5Bytes []byte
-	if objectInfo.MD5Sum != "" {
+	if objInfo.MD5Sum != "" {
 		var e error
-		md5Bytes, e = hex.DecodeString(objectInfo.MD5Sum)
+		md5Bytes, e = hex.DecodeString(objInfo.MD5Sum)
 		if e != nil {
 			errorIf(probe.NewError(e), "Decoding md5 failed.", nil)
 			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
@@ -421,16 +422,15 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-
 	// Size of object.
-	size := objectInfo.Size
+	size := objInfo.Size
 
 	// Save metadata.
 	metadata := make(map[string]string)
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
 	// Create the object.
-	objectInfo, err = api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
+	objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
 		switch err.ToGoError().(type) {
@@ -451,7 +451,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	response := generateCopyObjectResponse(objectInfo.MD5Sum, objectInfo.ModifiedTime)
+	response := generateCopyObjectResponse(objInfo.MD5Sum, objInfo.ModifiedTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
@@ -586,7 +586,7 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var objectInfo ObjectInfo
+	var objInfo ObjectInfo
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -599,7 +599,7 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		// Create anonymous object.
-		objectInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
+		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
 	case authTypePresigned:
 		validateRegion := true // Validate region.
 		// For presigned requests verify them right here.
@@ -608,7 +608,7 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		// Create presigned object.
-		objectInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
+		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
 	case authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
@@ -637,10 +637,10 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 
 		// Save metadata.
 		metadata := make(map[string]string)
-		metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
-
+		// Make sure we hex encode here.
+		metadata["md5"] = hex.EncodeToString(md5Bytes)
 		// Create object.
-		objectInfo, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
@@ -668,8 +668,8 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
-	if objectInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objectInfo.MD5Sum+"\"")
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
 }
@@ -868,7 +868,7 @@ func (api objectStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r
 		}
 	}
 
-	uploadID := getUploadID(r.URL.Query()) // Get upload id.
+	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID)
 	if err != nil {
 		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
@@ -915,20 +915,20 @@ func (api objectStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	objectResourcesMetadata := getObjectResources(r.URL.Query())
-	if objectResourcesMetadata.PartNumberMarker < 0 {
+	uploadID, partNumberMarker, maxParts, _ := getObjectResources(r.URL.Query())
+	if partNumberMarker < 0 {
 		writeErrorResponse(w, r, ErrInvalidPartNumberMarker, r.URL.Path)
 		return
 	}
-	if objectResourcesMetadata.MaxParts < 0 {
+	if maxParts < 0 {
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	if objectResourcesMetadata.MaxParts == 0 {
-		objectResourcesMetadata.MaxParts = maxPartsList
+	if maxParts == 0 {
+		maxParts = maxPartsList
 	}
 
-	objectResourcesMetadata, err := api.ObjectAPI.ListObjectParts(bucket, object, objectResourcesMetadata)
+	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err.Trace(), "ListObjectParts failed.", nil)
 		switch err.ToGoError().(type) {
@@ -947,7 +947,7 @@ func (api objectStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *htt
 		}
 		return
 	}
-	response := generateListPartsResponse(objectResourcesMetadata)
+	response := generateListPartsResponse(listPartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 	// Write headers.
 	setCommonHeaders(w)
@@ -962,8 +962,10 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 	object := vars["object"]
 
 	// Get upload id.
-	uploadID := getUploadID(r.URL.Query()) // Get upload id.
+	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
+	var objInfo ObjectInfo
+	var err *probe.Error
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -987,20 +989,20 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
-	completeMultipartUpload := &CompleteMultipartUpload{}
-	if e = xml.Unmarshal(completeMultipartBytes, completeMultipartUpload); e != nil {
+	complMultipartUpload := &completeMultipartUpload{}
+	if e = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); e != nil {
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
-	if !sort.IsSorted(completedParts(completeMultipartUpload.Parts)) {
+	if !sort.IsSorted(completedParts(complMultipartUpload.Parts)) {
 		writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		return
 	}
 	// Complete parts.
-	completeParts := completeMultipartUpload.Parts
+	completeParts := complMultipartUpload.Parts
 
 	// Complete multipart upload.
-	objectInfo, err := api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+	objInfo, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
@@ -1020,8 +1022,6 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 			writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		case IncompleteBody:
 			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case MalformedXML:
-			writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
@@ -1030,7 +1030,7 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 	// Get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, objectInfo.MD5Sum)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.MD5Sum)
 	encodedSuccessResponse := encodeResponse(response)
 	// Write headers.
 	setCommonHeaders(w)

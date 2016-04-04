@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/probe"
@@ -56,19 +55,13 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	return nil
 }
 
-// BucketInfo - name and create date
-type BucketInfo struct {
-	Name    string
-	Created time.Time
-}
-
 // ListBuckets - Get service.
 func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
 	files, e := ioutil.ReadDir(fs.path)
 	if e != nil {
 		return []BucketInfo{}, probe.NewError(e)
 	}
-	var metadataList []BucketInfo
+	var buckets []BucketInfo
 	for _, file := range files {
 		if !file.IsDir() {
 			// If not directory, ignore all file types.
@@ -79,15 +72,15 @@ func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
 		if !IsValidBucketName(dirName) {
 			continue
 		}
-		metadata := BucketInfo{
+		bucket := BucketInfo{
 			Name:    dirName,
 			Created: file.ModTime(),
 		}
-		metadataList = append(metadataList, metadata)
+		buckets = append(buckets, bucket)
 	}
 	// Remove duplicated entries.
-	metadataList = removeDuplicateBuckets(metadataList)
-	return metadataList, nil
+	buckets = removeDuplicateBuckets(buckets)
+	return buckets, nil
 }
 
 // removeDuplicateBuckets - remove duplicate buckets.

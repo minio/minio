@@ -293,7 +293,6 @@ func serverMain(c *cli.Context) {
 	printListenIPs(apiServer)
 
 	console.Println("\nTo configure Minio Client:")
-
 	// Download 'mc' links.
 	if runtime.GOOS == "windows" {
 		console.Println("    Download 'mc' from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")

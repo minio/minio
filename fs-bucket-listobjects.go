@@ -29,8 +29,8 @@ import (
 
 // ListObjects - lists all objects for a given prefix, returns up to
 // maxKeys number of objects per call.
-func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsResult, *probe.Error) {
-	result := ListObjectsResult{}
+func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error) {
+	result := ListObjectsInfo{}
 	var queryPrefix string
 
 	// Input validation.
@@ -41,15 +41,15 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	bucket = getActualBucketname(fs.path, bucket) // Get the right bucket name.
 	bucketDir := filepath.Join(fs.path, bucket)
 	// Verify if bucket exists.
-	if status, err := isDirExist(bucketDir); !status {
-		if err == nil {
+	if status, e := isDirExist(bucketDir); !status {
+		if e == nil {
 			// File exists, but its not a directory.
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if os.IsNotExist(err) {
+		} else if os.IsNotExist(e) {
 			// File does not exist.
 			return result, probe.NewError(BucketNotFound{Bucket: bucket})
 		} else {
-			return result, probe.NewError(err)
+			return result, probe.NewError(e)
 		}
 	}
 	if !IsValidObjectPrefix(prefix) {
@@ -88,15 +88,15 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// Verify if prefix exists.
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	rootDir := filepath.Join(bucketDir, prefixDir)
-	_, err := isDirExist(rootDir)
-	if err != nil {
-		if os.IsNotExist(err) {
+	_, e := isDirExist(rootDir)
+	if e != nil {
+		if os.IsNotExist(e) {
 			// Prefix does not exist, not an error just respond empty
 			// list response.
 			return result, nil
 		}
 		// Rest errors should be treated as failure.
-		return result, probe.NewError(err)
+		return result, probe.NewError(e)
 	}
 
 	recursive := true
@@ -111,7 +111,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// popListObjectCh returns nil if the call to ListObject is done for the first time.
 	// On further calls to ListObjects to retrive more objects within the timeout period,
 	// popListObjectCh returns the channel from which rest of the objects can be retrieved.
-	objectInfoCh := fs.popListObjectCh(ListObjectParams{bucket, delimiter, marker, prefix})
+	objectInfoCh := fs.popListObjectCh(listObjectParams{bucket, delimiter, marker, prefix})
 	if objectInfoCh == nil {
 		if prefix != "" {
 			// queryPrefix variable is set to value of the prefix to be searched.
@@ -141,7 +141,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		}
 
 		if objInfo.Err != nil {
-			return ListObjectsResult{}, probe.NewError(objInfo.Err)
+			return ListObjectsInfo{}, probe.NewError(objInfo.Err)
 		}
 
 		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
@@ -171,7 +171,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	if !objectInfoCh.IsClosed() {
 		result.IsTruncated = true
 		result.NextMarker = nextMarker
-		fs.pushListObjectCh(ListObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
+		fs.pushListObjectCh(listObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
 	}
 
 	return result, nil

@@ -238,19 +238,17 @@ func BenchmarkGetObject(b *testing.B) {
 	}
 
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
-		var w bytes.Buffer
+		var buffer = new(bytes.Buffer)
 		r, err := fs.GetObject("bucket", "object"+strconv.Itoa(i%10), 0)
 		if err != nil {
 			b.Error(err)
 		}
-		n, e := io.Copy(&w, r)
-		if e != nil {
+		if _, e := io.Copy(buffer, r); e != nil {
 			b.Error(e)
 		}
-		if n != int64(len(text)) {
-			b.Errorf("GetObject returned incorrect length %d (should be %d)\n", n, int64(len(text)))
+		if buffer.Len() != len(text) {
+			b.Errorf("GetObject returned incorrect length %d (should be %d)\n", buffer.Len(), len(text))
 		}
 		r.Close()
 	}

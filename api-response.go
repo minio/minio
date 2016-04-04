@@ -245,7 +245,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 }
 
 // generates an ListObjects response for the said bucket with other enumerated options.
-func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKeys int, resp ListObjectsResult) ListObjectsResponse {
+func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	var contents []Object
 	var prefixes []CommonPrefix
 	var owner = Owner{}
@@ -317,25 +317,25 @@ func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) 
 }
 
 // generateListPartsResult
-func generateListPartsResponse(objectMetadata ObjectResourcesMetadata) ListPartsResponse {
+func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 	// TODO - support EncodingType in xml decoding
 	listPartsResponse := ListPartsResponse{}
-	listPartsResponse.Bucket = objectMetadata.Bucket
-	listPartsResponse.Key = objectMetadata.Object
-	listPartsResponse.UploadID = objectMetadata.UploadID
+	listPartsResponse.Bucket = partsInfo.Bucket
+	listPartsResponse.Key = partsInfo.Object
+	listPartsResponse.UploadID = partsInfo.UploadID
 	listPartsResponse.StorageClass = "STANDARD"
 	listPartsResponse.Initiator.ID = "minio"
 	listPartsResponse.Initiator.DisplayName = "minio"
 	listPartsResponse.Owner.ID = "minio"
 	listPartsResponse.Owner.DisplayName = "minio"
 
-	listPartsResponse.MaxParts = objectMetadata.MaxParts
-	listPartsResponse.PartNumberMarker = objectMetadata.PartNumberMarker
-	listPartsResponse.IsTruncated = objectMetadata.IsTruncated
-	listPartsResponse.NextPartNumberMarker = objectMetadata.NextPartNumberMarker
+	listPartsResponse.MaxParts = partsInfo.MaxParts
+	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker
+	listPartsResponse.IsTruncated = partsInfo.IsTruncated
+	listPartsResponse.NextPartNumberMarker = partsInfo.NextPartNumberMarker
 
-	listPartsResponse.Parts = make([]Part, len(objectMetadata.Part))
-	for index, part := range objectMetadata.Part {
+	listPartsResponse.Parts = make([]Part, len(partsInfo.Parts))
+	for index, part := range partsInfo.Parts {
 		newPart := Part{}
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
@@ -347,21 +347,21 @@ func generateListPartsResponse(objectMetadata ObjectResourcesMetadata) ListParts
 }
 
 // generateListMultipartUploadsResponse
-func generateListMultipartUploadsResponse(bucket string, metadata BucketMultipartResourcesMetadata) ListMultipartUploadsResponse {
+func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMultipartsInfo) ListMultipartUploadsResponse {
 	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
 	listMultipartUploadsResponse.Bucket = bucket
-	listMultipartUploadsResponse.Delimiter = metadata.Delimiter
-	listMultipartUploadsResponse.IsTruncated = metadata.IsTruncated
-	listMultipartUploadsResponse.EncodingType = metadata.EncodingType
-	listMultipartUploadsResponse.Prefix = metadata.Prefix
-	listMultipartUploadsResponse.KeyMarker = metadata.KeyMarker
-	listMultipartUploadsResponse.NextKeyMarker = metadata.NextKeyMarker
-	listMultipartUploadsResponse.MaxUploads = metadata.MaxUploads
-	listMultipartUploadsResponse.NextUploadIDMarker = metadata.NextUploadIDMarker
-	listMultipartUploadsResponse.UploadIDMarker = metadata.UploadIDMarker
+	listMultipartUploadsResponse.Delimiter = multipartsInfo.Delimiter
+	listMultipartUploadsResponse.IsTruncated = multipartsInfo.IsTruncated
+	listMultipartUploadsResponse.EncodingType = multipartsInfo.EncodingType
+	listMultipartUploadsResponse.Prefix = multipartsInfo.Prefix
+	listMultipartUploadsResponse.KeyMarker = multipartsInfo.KeyMarker
+	listMultipartUploadsResponse.NextKeyMarker = multipartsInfo.NextKeyMarker
+	listMultipartUploadsResponse.MaxUploads = multipartsInfo.MaxUploads
+	listMultipartUploadsResponse.NextUploadIDMarker = multipartsInfo.NextUploadIDMarker
+	listMultipartUploadsResponse.UploadIDMarker = multipartsInfo.UploadIDMarker
 
-	listMultipartUploadsResponse.Uploads = make([]Upload, len(metadata.Upload))
-	for index, upload := range metadata.Upload {
+	listMultipartUploadsResponse.Uploads = make([]Upload, len(multipartsInfo.Uploads))
+	for index, upload := range multipartsInfo.Uploads {
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object

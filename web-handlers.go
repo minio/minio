@@ -139,12 +139,12 @@ func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *Gene
 
 // ListBucketsRep - list buckets response
 type ListBucketsRep struct {
-	Buckets   []BketInfo `json:"buckets"`
-	UIVersion string     `json:"uiVersion"`
+	Buckets   []WebBucketInfo `json:"buckets"`
+	UIVersion string          `json:"uiVersion"`
 }
 
-// BketInfo container for list buckets.
-type BketInfo struct {
+// WebBucketInfo container for list buckets metadata.
+type WebBucketInfo struct {
 	// The name of the bucket.
 	Name string `json:"name"`
 	// Date the bucket was created.
@@ -163,7 +163,7 @@ func (web *webAPI) ListBuckets(r *http.Request, args *GenericArgs, reply *ListBu
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
 		if bucket.Name != path.Base(reservedBucket) {
-			reply.Buckets = append(reply.Buckets, BketInfo{
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.Created,
 			})
@@ -181,12 +181,12 @@ type ListObjectsArgs struct {
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []ObjInfo `json:"objects"`
-	UIVersion string    `json:"uiVersion"`
+	Objects   []WebObjectInfo `json:"objects"`
+	UIVersion string          `json:"uiVersion"`
 }
 
-// ObjInfo container for list objects.
-type ObjInfo struct {
+// WebObjectInfo container for list objects metadata.
+type WebObjectInfo struct {
 	// Name of the object
 	Key string `json:"name"`
 	// Date and time the object was last modified.
@@ -210,14 +210,14 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		}
 		marker = lo.NextMarker
 		for _, obj := range lo.Objects {
-			reply.Objects = append(reply.Objects, ObjInfo{
+			reply.Objects = append(reply.Objects, WebObjectInfo{
 				Key:          obj.Name,
 				LastModified: obj.ModifiedTime,
 				Size:         obj.Size,
 			})
 		}
 		for _, prefix := range lo.Prefixes {
-			reply.Objects = append(reply.Objects, ObjInfo{
+			reply.Objects = append(reply.Objects, WebObjectInfo{
 				Key: prefix,
 			})
 		}
