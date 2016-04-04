@@ -6,5 +6,5 @@ if [ -z "$1" ]; then
     echo "Usage: <export_dir>"
     exit 1
 else
-    /bin/mkdir -p "$2" && /minio server "$2"
+    /bin/mkdir -p "$1" && /minio server "$1"
 fi
