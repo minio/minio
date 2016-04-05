@@ -25,6 +25,7 @@ import (
 	"strings"
 )
 
+// Read all directory entries, returns a list of lexically sorted entries.
 func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 	f, err := os.Open(readDirPath)
 	if err != nil {
@@ -57,6 +58,6 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 		}
 	}
 	// Sort dirents.
-	sort.Sort(fsDirents(dirents))
+	sort.Sort(byDirentNames(dirents))
 	return dirents, nil
 }

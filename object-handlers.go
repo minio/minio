@@ -34,12 +34,7 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-const (
-	maxPartsList = 1000
-)
-
-// supportedGetReqParams - supported request parameters for GET
-// presigned request.
+// supportedGetReqParams - supported request parameters for GET presigned request.
 var supportedGetReqParams = map[string]string{
 	"response-expires":             "Expires",
 	"response-content-type":        "Content-Type",

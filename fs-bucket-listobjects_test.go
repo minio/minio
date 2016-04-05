@@ -448,11 +448,6 @@ func TestListObjects(t *testing.T) {
 		// Empty string < "" > and forward slash < / > are the ony two valid arguments for delimeter.
 		{"test-bucket-list-object", "", "", "*", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
 		{"test-bucket-list-object", "", "", "-", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
-		// Marker goes through url QueryUnescape, sending inputs for which QueryUnescape would fail (11-12).
-		// Here is how QueryUnescape behaves https://golang.org/pkg/net/url/#QueryUnescape.
-		// QueryUnescape is necessasry since marker is provided as URL query parameter.
-		{"test-bucket-list-object", "", "test%", "", 0, ListObjectsInfo{}, fmt.Errorf("invalid URL escape"), false},
-		{"test-bucket-list-object", "", "test%A", "", 0, ListObjectsInfo{}, fmt.Errorf("invalid URL escape"), false},
 		// Testing for failure cases with both perfix and marker (13).
 		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
