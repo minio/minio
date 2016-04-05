@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -421,6 +420,42 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 	return newObject, nil
 }
 
+func (fs *Filesystem) saveListMultipartObjectCh(params listMultipartObjectParams, ch multipartObjectInfoChannel) {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	channels := []multipartObjectInfoChannel{ch}
+	if _, ok := fs.listMultipartObjectMap[params]; ok {
+		channels = append(fs.listMultipartObjectMap[params], ch)
+	}
+
+	fs.listMultipartObjectMap[params] = channels
+}
+
+func (fs *Filesystem) lookupListMultipartObjectCh(params listMultipartObjectParams) *multipartObjectInfoChannel {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	if channels, ok := fs.listMultipartObjectMap[params]; ok {
+		for i, channel := range channels {
+			if !channel.IsTimedOut() {
+				chs := channels[i+1:]
+				if len(chs) > 0 {
+					fs.listMultipartObjectMap[params] = chs
+				} else {
+					delete(fs.listMultipartObjectMap, params)
+				}
+
+				return &channel
+			}
+		}
+
+		// As all channels are timed out, delete the map entry
+		delete(fs.listMultipartObjectMap, params)
+	}
+	return nil
+}
+
 // ListMultipartUploads - list incomplete multipart sessions for a given BucketMultipartResourcesMetadata
 func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, *probe.Error) {
 	result := ListMultipartsInfo{}
@@ -440,13 +475,6 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
 		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported", delimiter))
-	}
-
-	// Unescape keyMarker string
-	if tmpKeyMarker, err := url.QueryUnescape(keyMarker); err == nil {
-		keyMarker = tmpKeyMarker
-	} else {
-		return result, probe.NewError(err)
 	}
 
 	if keyMarker != "" && !strings.HasPrefix(keyMarker, objectPrefix) {
@@ -490,48 +518,48 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 
 	bucketDir := filepath.Join(fs.path, bucket)
 	// If listMultipartObjectChannel is available for given parameters, then use it, else create new one
-	objectInfoCh := fs.popListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, markerPath, prefixPath, uploadIDMarker})
-	if objectInfoCh == nil {
+	multipartObjectInfoCh := fs.lookupListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, markerPath, prefixPath, uploadIDMarker})
+	if multipartObjectInfoCh == nil {
 		ch := scanMultipartDir(bucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
-		objectInfoCh = &ch
+		multipartObjectInfoCh = &ch
 	}
 
 	nextKeyMarker := ""
 	nextUploadIDMarker := ""
 	for i := 0; i < maxUploads; {
-		objInfo, ok := objectInfoCh.Read()
+		multipartObjInfo, ok := multipartObjectInfoCh.Read()
 		if !ok {
 			// Closed channel.
 			return result, nil
 		}
 
-		if objInfo.Err != nil {
-			return ListMultipartsInfo{}, probe.NewError(objInfo.Err)
+		if multipartObjInfo.Err != nil {
+			return ListMultipartsInfo{}, probe.NewError(multipartObjInfo.Err)
 		}
 
-		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
+		if strings.Contains(multipartObjInfo.Name, "$multiparts") || strings.Contains(multipartObjInfo.Name, "$tmpobject") {
 			continue
 		}
 
-		if objInfo.IsDir && skipDir {
+		if multipartObjInfo.IsDir && skipDir {
 			continue
 		}
 
-		if objInfo.IsDir {
-			result.CommonPrefixes = append(result.CommonPrefixes, objInfo.Name)
+		if multipartObjInfo.IsDir {
+			result.CommonPrefixes = append(result.CommonPrefixes, multipartObjInfo.Name)
 		} else {
-			result.Uploads = append(result.Uploads, uploadMetadata{Object: objInfo.Name, UploadID: objInfo.UploadID, Initiated: objInfo.ModifiedTime})
+			result.Uploads = append(result.Uploads, uploadMetadata{Object: multipartObjInfo.Name, UploadID: multipartObjInfo.UploadID, Initiated: multipartObjInfo.ModifiedTime})
 		}
-		nextKeyMarker = objInfo.Name
-		nextUploadIDMarker = objInfo.UploadID
+		nextKeyMarker = multipartObjInfo.Name
+		nextUploadIDMarker = multipartObjInfo.UploadID
 		i++
 	}
 
-	if !objectInfoCh.IsClosed() {
+	if !multipartObjectInfoCh.IsClosed() {
 		result.IsTruncated = true
 		result.NextKeyMarker = nextKeyMarker
 		result.NextUploadIDMarker = nextUploadIDMarker
-		fs.pushListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, nextKeyMarker, objectPrefix, nextUploadIDMarker}, *objectInfoCh)
+		fs.saveListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, nextKeyMarker, objectPrefix, nextUploadIDMarker}, *multipartObjectInfoCh)
 	}
 
 	return result, nil
