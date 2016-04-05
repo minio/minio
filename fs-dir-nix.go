@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	// large enough buffer size for ReadDirent() syscall
+	// Large enough buffer size for ReadDirent() syscall
 	readDirentBufSize = 4096 * 25
 )
 
@@ -42,34 +42,38 @@ func clen(n []byte) int {
 	return len(n)
 }
 
-// parseDirents - inspired from syscall_<os>.go:parseDirents()
+// parseDirents - inspired from
+// https://golang.org/src/syscall/syscall_<os>.go
 func parseDirents(buf []byte) []fsDirent {
 	bufidx := 0
 	dirents := []fsDirent{}
 	for bufidx < len(buf) {
 		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
-		bufidx += int(dirent.Reclen)
-		if skipDirent(dirent) {
-			continue
+		// On non-Linux operating systems for rec length of zero means
+		// we have reached EOF break out.
+		if runtime.GOOS != "linux" && dirent.Reclen == 0 {
+			break
 		}
-		if runtime.GOOS != "linux" {
-			if dirent.Reclen == 0 {
-				break
-			}
+		bufidx += int(dirent.Reclen)
+		// Skip dirents if they are absent in directory.
+		if isEmptyDirent(dirent) {
+			continue
 		}
 		bytes := (*[10000]byte)(unsafe.Pointer(&dirent.Name[0]))
 		var name = string(bytes[0:clen(bytes[:])])
-		if name == "." || name == ".." { // Useless names
+		// Reserved names skip them.
+		if name == "." || name == ".." {
 			continue
 		}
 		dirents = append(dirents, fsDirent{
 			name:  name,
-			isDir: dirent.Type == syscall.DT_DIR,
+			isDir: (dirent.Type == syscall.DT_DIR),
 		})
 	}
 	return dirents
 }
 
+// Read all directory entries, returns a list of lexically sorted entries.
 func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 	buf := make([]byte, readDirentBufSize)
 	f, err := os.Open(readDirPath)
@@ -96,6 +100,6 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 			}
 		}
 	}
-	sort.Sort(fsDirents(dirents))
+	sort.Sort(byDirentNames(dirents))
 	return dirents, nil
 }

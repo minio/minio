@@ -20,6 +20,7 @@ package main
 
 import "syscall"
 
-func skipDirent(dirent *syscall.Dirent) bool {
+// True if dirent is absent in directory.
+func isEmptyDirent(dirent *syscall.Dirent) bool {
 	return dirent.Fileno == 0
 }

@@ -58,41 +58,6 @@ type multiparts struct {
 	ActiveSession map[string]*multipartSession `json:"activeSessions"`
 }
 
-func (fs *Filesystem) pushTreeWalker(params listObjectParams, walker *treeWalker) {
-	fs.listObjectMapMutex.Lock()
-	defer fs.listObjectMapMutex.Unlock()
-
-	walkers, _ := fs.listObjectMap[params]
-	walkers = append(walkers, walker)
-
-	fs.listObjectMap[params] = walkers
-}
-
-func (fs *Filesystem) popTreeWalker(params listObjectParams) *treeWalker {
-	fs.listObjectMapMutex.Lock()
-	defer fs.listObjectMapMutex.Unlock()
-
-	if walkers, ok := fs.listObjectMap[params]; ok {
-		for i, walker := range walkers {
-			if !walker.timedOut {
-				newWalkers := walkers[i+1:]
-				if len(newWalkers) > 0 {
-					fs.listObjectMap[params] = newWalkers
-				} else {
-					delete(fs.listObjectMap, params)
-				}
-
-				return walker
-			}
-		}
-
-		// As all channels are timed out, delete the map entry
-		delete(fs.listObjectMap, params)
-	}
-
-	return nil
-}
-
 // newFS instantiate a new filesystem.
 func newFS(rootPath string) (ObjectAPI, *probe.Error) {
 	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))

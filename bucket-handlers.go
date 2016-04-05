@@ -237,8 +237,26 @@ func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, r, ErrInvalidMaxKeys, r.URL.Path)
 		return
 	}
-	if maxkeys == 0 {
-		maxkeys = maxObjectList
+	// Verify if delimiter is anything other than '/', which we do not support.
+	if delimiter != "" && delimiter != "/" {
+		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+		return
+	}
+	// If marker is set unescape.
+	if marker != "" {
+		// Try to unescape marker.
+		markerUnescaped, e := url.QueryUnescape(marker)
+		if e != nil {
+			// Return 'NoSuchKey' to indicate invalid marker key.
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
+			return
+		}
+		marker = markerUnescaped
+		// Marker not common with prefix is not implemented.
+		if !strings.HasPrefix(marker, prefix) {
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			return
+		}
 	}
 
 	listObjectsInfo, err := api.ObjectAPI.ListObjects(bucket, prefix, marker, delimiter, maxkeys)

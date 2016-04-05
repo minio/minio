@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +37,38 @@ func isDirExist(dirname string) (status bool, err error) {
 		status = fi.IsDir()
 	}
 	return
+}
+
+func (fs *Filesystem) saveTreeWalk(params listObjectParams, walker *treeWalker) {
+	fs.listObjectMapMutex.Lock()
+	defer fs.listObjectMapMutex.Unlock()
+
+	walkers, _ := fs.listObjectMap[params]
+	walkers = append(walkers, walker)
+
+	fs.listObjectMap[params] = walkers
+}
+
+func (fs *Filesystem) lookupTreeWalk(params listObjectParams) *treeWalker {
+	fs.listObjectMapMutex.Lock()
+	defer fs.listObjectMapMutex.Unlock()
+
+	if walkChs, ok := fs.listObjectMap[params]; ok {
+		for i, walkCh := range walkChs {
+			if !walkCh.timedOut {
+				newWalkChs := walkChs[i+1:]
+				if len(newWalkChs) > 0 {
+					fs.listObjectMap[params] = newWalkChs
+				} else {
+					delete(fs.listObjectMap, params)
+				}
+				return walkCh
+			}
+		}
+		// As all channels are timed out, delete the map entry
+		delete(fs.listObjectMap, params)
+	}
+	return nil
 }
 
 // ListObjects - lists all objects for a given prefix, returns up to
@@ -73,14 +104,8 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported. Only '/' is supported", delimiter))
 	}
 
-	// Marker is set unescape.
+	// Verify if marker has prefix.
 	if marker != "" {
-		if markerUnescaped, err := url.QueryUnescape(marker); err == nil {
-			marker = markerUnescaped
-		} else {
-			return result, probe.NewError(err)
-		}
-
 		if !strings.HasPrefix(marker, prefix) {
 			return result, probe.NewError(fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", marker, prefix))
 		}
@@ -120,9 +145,9 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// popTreeWalker returns nil if the call to ListObject is done for the first time.
 	// On further calls to ListObjects to retrive more objects within the timeout period,
 	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
-	walker := fs.popTreeWalker(listObjectParams{bucket, delimiter, marker, prefix})
+	walker := fs.lookupTreeWalk(listObjectParams{bucket, delimiter, marker, prefix})
 	if walker == nil {
-		walker = startTreeWalker(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
+		walker = startTreeWalk(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
 	}
 
 	nextMarker := ""
@@ -132,29 +157,36 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 			// Closed channel.
 			return result, nil
 		}
+		// For any walk error return right away.
 		if walkResult.err != nil {
 			return ListObjectsInfo{}, probe.NewError(walkResult.err)
 		}
 		objInfo := walkResult.objectInfo
 		objInfo.Name = filepath.ToSlash(objInfo.Name)
+
+		// Skip temporary files.
 		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
 			continue
 		}
 
+		// For objects being directory and delimited we set Prefixes.
 		if objInfo.IsDir {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 		} else {
 			result.Objects = append(result.Objects, objInfo)
 		}
 
+		// We have listed everything return.
 		if walkResult.end {
 			return result, nil
 		}
 		nextMarker = objInfo.Name
 		i++
 	}
+	// We haven't exhaused the list yet, set IsTruncated to 'true' so
+	// that the client can send another request.
 	result.IsTruncated = true
 	result.NextMarker = nextMarker
-	fs.pushTreeWalker(listObjectParams{bucket, delimiter, nextMarker, prefix}, walker)
+	fs.saveTreeWalk(listObjectParams{bucket, delimiter, nextMarker, prefix}, walker)
 	return result, nil
 }

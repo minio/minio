@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -8,18 +24,20 @@ import (
 	"time"
 )
 
+// fsDirent carries directory entries.
 type fsDirent struct {
 	name         string
-	modifiedTime time.Time // On unix this is empty.
-	size         int64     // On unix this is empty.
+	modifiedTime time.Time // On Solaris and older unix distros this is empty.
+	size         int64     // On Solaris and older unix distros this is empty.
 	isDir        bool
 }
 
-type fsDirents []fsDirent
+// byDirentNames is a collection satisfying sort.Interface.
+type byDirentNames []fsDirent
 
-func (d fsDirents) Len() int      { return len(d) }
-func (d fsDirents) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d fsDirents) Less(i, j int) bool {
+func (d byDirentNames) Len() int      { return len(d) }
+func (d byDirentNames) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
+func (d byDirentNames) Less(i, j int) bool {
 	n1 := d[i].name
 	if d[i].isDir {
 		n1 = n1 + string(os.PathSeparator)
@@ -41,12 +59,16 @@ func searchDirents(dirents []fsDirent, x string) int {
 	return sort.Search(len(dirents), processFunc)
 }
 
+// Tree walk result carries results of tree walking.
 type treeWalkResult struct {
 	objectInfo ObjectInfo
 	err        error
 	end        bool
 }
 
+// Tree walk notify carries a channel which notifies tree walk
+// results, additionally it also carries information if treeWalk
+// should be timedOut.
 type treeWalker struct {
 	ch       <-chan treeWalkResult
 	timedOut bool
@@ -58,24 +80,23 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
 
-	// convert dirent to ObjectInfo
+	// Convert dirent to ObjectInfo
 	direntToObjectInfo := func(dirent fsDirent) (ObjectInfo, error) {
 		objectInfo := ObjectInfo{}
-		// objectInfo.Name has the full object name
+		// Convert to full object name.
 		objectInfo.Name = filepath.Join(prefixDir, dirent.name)
 		if dirent.modifiedTime.IsZero() && dirent.size == 0 {
-			// On linux/darwin/*bsd. Refer dir_nix.go:parseDirents() for details.
 			// ModifiedTime and Size are zero, Stat() and figure out
 			// the actual values that need to be set.
 			fi, err := os.Stat(filepath.Join(bucketDir, prefixDir, dirent.name))
 			if err != nil {
 				return ObjectInfo{}, err
 			}
+			// Fill size and modtime.
 			objectInfo.ModifiedTime = fi.ModTime()
 			objectInfo.Size = fi.Size()
 			objectInfo.IsDir = fi.IsDir()
 		} else {
-			// On windows. Refer dir_others.go:parseDirents() for details.
 			// If ModifiedTime or Size are set then use them
 			// without attempting another Stat operation.
 			objectInfo.ModifiedTime = dirent.modifiedTime
@@ -83,23 +104,22 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 			objectInfo.IsDir = dirent.isDir
 		}
 		if objectInfo.IsDir {
-			// Add os.PathSeparator suffix again as filepath would have removed it
+			// Add os.PathSeparator suffix again for directories as
+			// filepath.Join would have removed it.
 			objectInfo.Size = 0
 			objectInfo.Name += string(os.PathSeparator)
 		}
 		return objectInfo, nil
 	}
 
-	markerPart := ""
-	markerRest := ""
-
+	var markerBase, markerDir string
 	if marker != "" {
-		// ex: if marker="four/five.txt", markerPart="four/" markerRest="five.txt"
+		// Ex: if marker="four/five.txt", markerDir="four/" markerBase="five.txt"
 		markerSplit := strings.SplitN(marker, string(os.PathSeparator), 2)
-		markerPart = markerSplit[0]
+		markerDir = markerSplit[0]
 		if len(markerSplit) == 2 {
-			markerPart += string(os.PathSeparator)
-			markerRest = markerSplit[1]
+			markerDir += string(os.PathSeparator)
+			markerBase = markerSplit[1]
 		}
 	}
 
@@ -110,12 +130,12 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 		return false
 	}
 	// example:
-	// If markerPart="four/" searchDirents() returns the index of "four/" in the sorted
+	// If markerDir="four/" searchDirents() returns the index of "four/" in the sorted
 	// dirents list. We skip all the dirent entries till "four/"
-	dirents = dirents[searchDirents(dirents, markerPart):]
+	dirents = dirents[searchDirents(dirents, markerDir):]
 	*count += len(dirents)
 	for i, dirent := range dirents {
-		if i == 0 && markerPart == dirent.name && !dirent.isDir {
+		if i == 0 && markerDir == dirent.name && !dirent.isDir {
 			// If the first entry is not a directory
 			// we need to skip this entry.
 			*count--
@@ -124,9 +144,10 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 		if dirent.isDir && recursive {
 			// If the entry is a directory, we will need recurse into it.
 			markerArg := ""
-			if dirent.name == markerPart {
-				// we need to pass "five.txt" as marker only if we are recursing into "four/"
-				markerArg = markerRest
+			if dirent.name == markerDir {
+				// We need to pass "five.txt" as marker only if we are
+				// recursing into "four/"
+				markerArg = markerBase
 			}
 			*count--
 			if !treeWalk(bucketDir, filepath.Join(prefixDir, dirent.name), "", markerArg, recursive, send, count) {
@@ -148,7 +169,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalker(fsPath, bucket, prefix, marker string, recursive bool) *treeWalker {
+func startTreeWalk(fsPath, bucket, prefix, marker string, recursive bool) *treeWalker {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -158,9 +179,8 @@ func startTreeWalker(fsPath, bucket, prefix, marker string, recursive bool) *tre
 	// if prefix is "one/two/th" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
-
 	ch := make(chan treeWalkResult, listObjectsLimit)
-	walker := treeWalker{ch: ch}
+	walkNotify := treeWalker{ch: ch}
 	entryPrefixMatch := prefix
 	prefixDir := ""
 	lastIndex := strings.LastIndex(prefix, string(os.PathSeparator))
@@ -183,11 +203,11 @@ func startTreeWalker(fsPath, bucket, prefix, marker string, recursive bool) *tre
 			case ch <- walkResult:
 				return true
 			case <-timer:
-				walker.timedOut = true
+				walkNotify.timedOut = true
 				return false
 			}
 		}
 		treeWalk(filepath.Join(fsPath, bucket), prefixDir, entryPrefixMatch, marker, recursive, send, &count)
 	}()
-	return &walker
+	return &walkNotify
 }
