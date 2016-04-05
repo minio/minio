@@ -20,18 +20,30 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio/pkg/probe"
 )
 
+const (
+	// listObjectsLimit - maximum list objects limit.
+	listObjectsLimit = 1000
+)
+
+// isDirExist - returns whether given directory is exist or not.
+func isDirExist(dirname string) (status bool, err error) {
+	fi, err := os.Lstat(dirname)
+	if err == nil {
+		status = fi.IsDir()
+	}
+	return
+}
+
 // ListObjects - lists all objects for a given prefix, returns up to
 // maxKeys number of objects per call.
 func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error) {
 	result := ListObjectsInfo{}
-	var queryPrefix string
 
 	// Input validation.
 	if !IsValidBucketName(bucket) {
@@ -58,7 +70,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
-		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported", delimiter))
+		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported. Only '/' is supported", delimiter))
 	}
 
 	// Marker is set unescape.
@@ -72,7 +84,6 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		if !strings.HasPrefix(marker, prefix) {
 			return result, probe.NewError(fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", marker, prefix))
 		}
-
 	}
 
 	// Return empty response for a valid request when maxKeys is 0.
@@ -100,79 +111,50 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	}
 
 	recursive := true
-	skipDir := true
 	if delimiter == "/" {
-		skipDir = false
 		recursive = false
 	}
 
 	// Maximum 1000 objects returned in a single to listObjects.
 	// Further calls will set right marker value to continue reading the rest of the objectList.
-	// popListObjectCh returns nil if the call to ListObject is done for the first time.
+	// popTreeWalker returns nil if the call to ListObject is done for the first time.
 	// On further calls to ListObjects to retrive more objects within the timeout period,
-	// popListObjectCh returns the channel from which rest of the objects can be retrieved.
-	objectInfoCh := fs.popListObjectCh(listObjectParams{bucket, delimiter, marker, prefix})
-	if objectInfoCh == nil {
-		if prefix != "" {
-			// queryPrefix variable is set to value of the prefix to be searched.
-			// If prefix contains directory hierarchy queryPrefix is set to empty string,
-			// this ensure that all objects inside the prefixDir is listed.
-			// Otherwise the base name is extracted from path.Base and it'll be will be set to Querystring.
-			// if prefix = /Asia/India/, queryPrefix will be set to empty string(""), so that all objects in prefixDir are listed.
-			// if prefix = /Asia/India/summerpics , Querystring will be set to "summerpics",
-			// so those all objects with the prefix "summerpics" inside the /Asia/India/ prefix folder gets listed.
-			if prefix[len(prefix)-1:] == "/" {
-				queryPrefix = ""
-			} else {
-				queryPrefix = path.Base(prefix)
-			}
-		}
-		ch := treeWalk(rootDir, bucketDir, recursive, queryPrefix)
-		objectInfoCh = &ch
+	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
+	walker := fs.popTreeWalker(listObjectParams{bucket, delimiter, marker, prefix})
+	if walker == nil {
+		walker = startTreeWalker(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
 	}
 
 	nextMarker := ""
 	for i := 0; i < maxKeys; {
-
-		objInfo, ok := objectInfoCh.Read()
+		walkResult, ok := <-walker.ch
 		if !ok {
 			// Closed channel.
 			return result, nil
 		}
-
-		if objInfo.Err != nil {
-			return ListObjectsInfo{}, probe.NewError(objInfo.Err)
+		if walkResult.err != nil {
+			return ListObjectsInfo{}, probe.NewError(walkResult.err)
 		}
-
+		objInfo := walkResult.objectInfo
+		objInfo.Name = filepath.ToSlash(objInfo.Name)
 		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
 			continue
 		}
 
-		if objInfo.IsDir && skipDir {
-			continue
+		if objInfo.IsDir {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+		} else {
+			result.Objects = append(result.Objects, objInfo)
 		}
 
-		// Add the bucket.
-		objInfo.Bucket = bucket
-		// In case its not the first call to ListObjects (before timeout),
-		// The result is already inside the buffered channel.
-		if objInfo.Name > marker {
-			if objInfo.IsDir {
-				result.Prefixes = append(result.Prefixes, objInfo.Name)
-			} else {
-				result.Objects = append(result.Objects, objInfo)
-			}
-			nextMarker = objInfo.Name
-			i++
+		if walkResult.end {
+			return result, nil
 		}
-
+		nextMarker = objInfo.Name
+		i++
 	}
-
-	if !objectInfoCh.IsClosed() {
-		result.IsTruncated = true
-		result.NextMarker = nextMarker
-		fs.pushListObjectCh(listObjectParams{bucket, delimiter, nextMarker, prefix}, *objectInfoCh)
-	}
-
+	result.IsTruncated = true
+	result.NextMarker = nextMarker
+	fs.pushTreeWalker(listObjectParams{bucket, delimiter, nextMarker, prefix}, walker)
 	return result, nil
 }
