@@ -79,7 +79,7 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectAPI) {
 	}
 	objInfo, err := fs.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
-	c.Assert(objInfo.MD5Sum, check.Equals, "9b7d6f13ba00e24d0b02de92e814891b-10")
+	c.Assert(objInfo.MD5Sum, check.Equals, "3605d84b1c43b1a664aa7c0d5082d271-10")
 }
 
 func testMultipartObjectAbort(c *check.C, create func() ObjectAPI) {
