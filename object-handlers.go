@@ -253,6 +253,12 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
