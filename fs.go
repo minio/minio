@@ -17,10 +17,7 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/minio/minio/pkg/probe"
 )
@@ -33,58 +30,32 @@ type listObjectParams struct {
 	prefix    string
 }
 
+// listMultipartObjectParams - list multipart object params used for list multipart object map
+type listMultipartObjectParams struct {
+	bucket         string
+	delimiter      string
+	keyMarker      string
+	prefix         string
+	uploadIDMarker string
+}
+
 // Filesystem - local variables
 type Filesystem struct {
-	path               string
-	minFreeDisk        int64
-	rwLock             *sync.RWMutex
-	multiparts         *multiparts
-	listObjectMap      map[listObjectParams][]*treeWalker
-	listObjectMapMutex *sync.Mutex
-}
-
-// MultipartSession holds active session information
-type multipartSession struct {
-	TotalParts int
-	ObjectName string
-	UploadID   string
-	Initiated  time.Time
-	Parts      []partInfo
-}
-
-// multiparts collection of many parts
-type multiparts struct {
-	Version       string                       `json:"version"`
-	ActiveSession map[string]*multipartSession `json:"activeSessions"`
+	path                        string
+	minFreeDisk                 int64
+	rwLock                      *sync.RWMutex
+	listObjectMap               map[listObjectParams][]*treeWalker
+	listObjectMapMutex          *sync.Mutex
+	listMultipartObjectMap      map[listMultipartObjectParams][]multipartObjectInfoChannel
+	listMultipartObjectMapMutex *sync.Mutex
 }
 
 // newFS instantiate a new filesystem.
 func newFS(rootPath string) (ObjectAPI, *probe.Error) {
-	setFSMultipartsMetadataPath(filepath.Join(rootPath, "$multiparts-session.json"))
-
-	var err *probe.Error
-	// load multiparts session from disk
-	var mparts *multiparts
-	mparts, err = loadMultipartsSession()
-	if err != nil {
-		if os.IsNotExist(err.ToGoError()) {
-			mparts = &multiparts{
-				Version:       "1",
-				ActiveSession: make(map[string]*multipartSession),
-			}
-			if err = saveMultipartsSession(*mparts); err != nil {
-				return nil, err.Trace()
-			}
-		} else {
-			return nil, err.Trace()
-		}
-	}
-
 	fs := &Filesystem{
 		rwLock: &sync.RWMutex{},
 	}
 	fs.path = rootPath
-	fs.multiparts = mparts
 
 	/// Defaults
 
@@ -93,6 +64,9 @@ func newFS(rootPath string) (ObjectAPI, *probe.Error) {
 
 	fs.listObjectMap = make(map[listObjectParams][]*treeWalker)
 	fs.listObjectMapMutex = &sync.Mutex{}
+
+	fs.listMultipartObjectMap = make(map[listMultipartObjectParams][]multipartObjectInfoChannel)
+	fs.listMultipartObjectMapMutex = &sync.Mutex{}
 
 	// Return here.
 	return fs, nil

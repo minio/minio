@@ -31,12 +31,15 @@ const (
 )
 
 // isDirExist - returns whether given directory is exist or not.
-func isDirExist(dirname string) (status bool, err error) {
-	fi, err := os.Lstat(dirname)
-	if err == nil {
-		status = fi.IsDir()
+func isDirExist(dirname string) (bool, error) {
+	fi, e := os.Lstat(dirname)
+	if e != nil {
+		if os.IsNotExist(e) {
+			return false, nil
+		}
+		return false, e
 	}
-	return
+	return fi.IsDir(), nil
 }
 
 func (fs *Filesystem) saveTreeWalk(params listObjectParams, walker *treeWalker) {
@@ -124,9 +127,8 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// Verify if prefix exists.
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	rootDir := filepath.Join(bucketDir, prefixDir)
-	_, e := isDirExist(rootDir)
-	if e != nil {
-		if os.IsNotExist(e) {
+	if status, e := isDirExist(rootDir); !status {
+		if e == nil {
 			// Prefix does not exist, not an error just respond empty
 			// list response.
 			return result, nil

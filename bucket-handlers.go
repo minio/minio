@@ -179,8 +179,22 @@ func (api objectStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, r, ErrInvalidMaxUploads, r.URL.Path)
 		return
 	}
-	if maxUploads == 0 {
-		maxUploads = maxObjectList
+	if keyMarker != "" {
+		// Unescape keyMarker string
+		keyMarkerUnescaped, e := url.QueryUnescape(keyMarker)
+		if e != nil {
+			if e != nil {
+				// Return 'NoSuchKey' to indicate invalid marker key.
+				writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
+				return
+			}
+			keyMarker = keyMarkerUnescaped
+			// Marker not common with prefix is not implemented.
+			if !strings.HasPrefix(keyMarker, prefix) {
+				writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+				return
+			}
+		}
 	}
 
 	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
