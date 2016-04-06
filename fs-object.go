@@ -27,10 +27,10 @@ import (
 	"encoding/hex"
 	"runtime"
 
-	"github.com/minio/minio/pkg/atomic"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/safe"
 )
 
 // isDirEmpty - returns whether given directory is empty or not.
@@ -239,7 +239,7 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 	}
 
 	// Write object.
-	file, e := atomic.FileCreateWithPrefix(objectPath, md5Hex+"$tmpobject")
+	safeFile, e := safe.CreateFileWithPrefix(objectPath, md5Hex+"$tmpobject")
 	if e != nil {
 		switch e := e.(type) {
 		case *os.PathError:
@@ -253,23 +253,22 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
-	defer file.Close()
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
 	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, file)
+	multiWriter := io.MultiWriter(md5Writer, safeFile)
 
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			file.CloseAndPurge()
+			safeFile.CloseAndRemove()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			file.CloseAndPurge()
+			safeFile.CloseAndRemove()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 	}
@@ -282,7 +281,7 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 	}
 
 	// Set stat again to get the latest metadata.
-	st, e := os.Stat(file.Name())
+	st, e := os.Stat(safeFile.Name())
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
@@ -302,6 +301,10 @@ func (fs Filesystem) PutObject(bucket string, object string, size int64, data io
 		MD5Sum:       newMD5Hex,
 		ContentType:  contentType,
 	}
+
+	// Safely close and atomically rename the file.
+	safeFile.Close()
+
 	return newObject, nil
 }
 

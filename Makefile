@@ -68,7 +68,6 @@ checkdocker:
 
 getdeps: checks
 	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
-	@go get -u golang.org/x/tools/cmd/vet && echo "Installed vet:"
 	@go get -u github.com/fzipp/gocyclo && echo "Installed gocyclo:"
 	@go get -u github.com/remyoudompheng/go-misc/deadcode && echo "Installed deadcode:"
 	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"

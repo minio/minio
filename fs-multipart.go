@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
+	"github.com/minio/minio/pkg/safe"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -57,38 +58,41 @@ func removeFileTree(fileName string, level string) error {
 	return nil
 }
 
-func safeRemoveFile(file *os.File) error {
-	if e := file.Close(); e != nil {
-		return e
-	}
-	return os.Remove(file.Name())
-}
-
+// Takes an input stream and safely writes to disk, additionally
+// verifies checksum.
 func safeWriteFile(fileName string, data io.Reader, size int64, md5sum string) error {
-	tempFile, e := ioutil.TempFile(filepath.Dir(fileName), filepath.Base(fileName)+"-")
+	safeFile, e := safe.CreateFileWithSuffix(fileName, "-")
 	if e != nil {
 		return e
 	}
 
 	md5Hasher := md5.New()
-	multiWriter := io.MultiWriter(md5Hasher, tempFile)
-	if _, e := io.CopyN(multiWriter, data, size); e != nil {
-		safeRemoveFile(tempFile)
-		return e
+	multiWriter := io.MultiWriter(md5Hasher, safeFile)
+	if size > 0 {
+		if _, e = io.CopyN(multiWriter, data, size); e != nil {
+			// Closes the file safely and removes it in a single atomic operation.
+			safeFile.CloseAndRemove()
+			return e
+		}
+	} else {
+		if _, e = io.Copy(multiWriter, data); e != nil {
+			// Closes the file safely and removes it in a single atomic operation.
+			safeFile.CloseAndRemove()
+			return e
+		}
 	}
-	tempFile.Close()
 
 	dataMd5sum := hex.EncodeToString(md5Hasher.Sum(nil))
 	if md5sum != "" && !isMD5SumEqual(md5sum, dataMd5sum) {
-		os.Remove(tempFile.Name())
+		// Closes the file safely and removes it in a single atomic operation.
+		safeFile.CloseAndRemove()
 		return BadDigest{ExpectedMD5: md5sum, CalculatedMD5: dataMd5sum}
 	}
 
-	if e := os.Rename(tempFile.Name(), fileName); e != nil {
-		os.Remove(tempFile.Name())
-		return e
-	}
+	// Safely close the file and atomically renames it the actual filePath.
+	safeFile.Close()
 
+	// Safely wrote the file.
 	return nil
 }
 
@@ -290,11 +294,11 @@ func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partNumber i
 		return "", probe.NewError(e)
 	}
 
-	partFile := filepath.Join(fs.path, configDir, bucket, object, fmt.Sprintf("%s.%d.%s", uploadID, partNumber, md5Hex))
-	if e := safeWriteFile(partFile, data, size, md5Hex); e != nil {
+	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partNumber, md5Hex)
+	partFilePath := filepath.Join(fs.path, configDir, bucket, object, partSuffix)
+	if e := safeWriteFile(partFilePath, data, size, md5Hex); e != nil {
 		return "", probe.NewError(e)
 	}
-
 	return md5Hex, nil
 }
 
@@ -360,7 +364,8 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 		return ObjectInfo{}, err.Trace(md5Sums...)
 	}
 
-	tempFile, e := ioutil.TempFile(metaObjectDir, uploadID+".complete.")
+	completeObjectFile := filepath.Join(metaObjectDir, uploadID+".complete.")
+	safeFile, e := safe.CreateFileWithSuffix(completeObjectFile, "-")
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
@@ -373,18 +378,21 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 		var partFile *os.File
 		partFile, e = os.Open(partFileStr)
 		if e != nil {
-			safeRemoveFile(tempFile)
+			// Remove the complete file safely.
+			safeFile.CloseAndRemove()
 			return ObjectInfo{}, probe.NewError(e)
-		} else if _, e = io.Copy(tempFile, partFile); e != nil {
-			safeRemoveFile(tempFile)
+		} else if _, e = io.Copy(safeFile, partFile); e != nil {
+			// Remove the complete file safely.
+			safeFile.CloseAndRemove()
 			return ObjectInfo{}, probe.NewError(e)
 		}
 		partFile.Close() // Close part file after successful copy.
 	}
-	tempFile.Close()
+	// All parts concatenated, safely close the temp file.
+	safeFile.Close()
 
 	// Stat to gather fresh stat info.
-	objSt, e := os.Stat(tempFile.Name())
+	objSt, e := os.Stat(completeObjectFile)
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
@@ -392,11 +400,11 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 	bucketPath := filepath.Join(fs.path, bucket)
 	objectPath := filepath.Join(bucketPath, object)
 	if e = os.MkdirAll(filepath.Dir(objectPath), 0755); e != nil {
-		os.Remove(tempFile.Name())
+		os.Remove(completeObjectFile)
 		return ObjectInfo{}, probe.NewError(e)
 	}
-	if e = os.Rename(tempFile.Name(), objectPath); e != nil {
-		os.Remove(tempFile.Name())
+	if e = os.Rename(completeObjectFile, objectPath); e != nil {
+		os.Remove(completeObjectFile)
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
