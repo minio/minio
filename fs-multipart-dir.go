@@ -135,7 +135,6 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 	timeoutCh := make(chan struct{}, 1)
 
 	// TODO: check if bucketDir is absolute path
-
 	scanDir := bucketDir
 	dirDepth := bucketDir
 
@@ -145,7 +144,6 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 			if strings.HasSuffix(prefixPath, string(os.PathSeparator)) {
 				tmpPrefixPath += string(os.PathSeparator)
 			}
-
 			prefixPath = tmpPrefixPath
 		}
 
@@ -375,7 +373,6 @@ func (oic multipartObjectInfoChannel) IsClosed() bool {
 	if oic.objInfo != nil {
 		return false
 	}
-
 	return oic.closed
 }
 

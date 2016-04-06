@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,37 +38,43 @@ const configDir = ".minio"
 const uploadIDSuffix = ".uploadid"
 
 func removeFileTree(fileName string, level string) error {
-	if err := os.Remove(fileName); err != nil {
-		return err
+	if e := os.Remove(fileName); e != nil {
+		return e
 	}
 
 	for fileDir := filepath.Dir(fileName); fileDir > level; fileDir = filepath.Dir(fileDir) {
-		if status, err := isDirEmpty(fileDir); err != nil {
-			return err
+		if status, e := isDirEmpty(fileDir); e != nil {
+			return e
 		} else if !status {
 			break
 		}
 
-		if err := os.Remove(fileDir); err != nil {
-			return err
+		if e := os.Remove(fileDir); e != nil {
+			return e
 		}
 	}
 
 	return nil
 }
 
-func safeWrite(fileName string, data io.Reader, size int64, md5sum string) error {
-	tempFile, err := ioutil.TempFile(filepath.Dir(fileName), filepath.Base(fileName)+"-")
-	if err != nil {
-		return err
+func safeRemoveFile(file *os.File) error {
+	if e := file.Close(); e != nil {
+		return e
+	}
+	return os.Remove(file.Name())
+}
+
+func safeWriteFile(fileName string, data io.Reader, size int64, md5sum string) error {
+	tempFile, e := ioutil.TempFile(filepath.Dir(fileName), filepath.Base(fileName)+"-")
+	if e != nil {
+		return e
 	}
 
 	md5Hasher := md5.New()
 	multiWriter := io.MultiWriter(md5Hasher, tempFile)
-	if _, err := io.CopyN(multiWriter, data, size); err != nil {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-		return err
+	if _, e := io.CopyN(multiWriter, data, size); e != nil {
+		safeRemoveFile(tempFile)
+		return e
 	}
 	tempFile.Close()
 
@@ -79,22 +84,22 @@ func safeWrite(fileName string, data io.Reader, size int64, md5sum string) error
 		return BadDigest{ExpectedMD5: md5sum, CalculatedMD5: dataMd5sum}
 	}
 
-	if err := os.Rename(tempFile.Name(), fileName); err != nil {
+	if e := os.Rename(tempFile.Name(), fileName); e != nil {
 		os.Remove(tempFile.Name())
-		return err
+		return e
 	}
 
 	return nil
 }
 
 func isFileExist(filename string) (bool, error) {
-	fi, err := os.Lstat(filename)
-	if err != nil {
-		if os.IsNotExist(err) {
+	fi, e := os.Lstat(filename)
+	if e != nil {
+		if os.IsNotExist(e) {
 			return false, nil
 		}
 
-		return false, err
+		return false, e
 	}
 
 	return fi.Mode().IsRegular(), nil
@@ -120,30 +125,30 @@ func (fs Filesystem) newUploadID(bucket, object string) (string, error) {
 	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
 
 	// create metaObjectDir if not exist
-	if status, err := isDirExist(metaObjectDir); err != nil {
-		return "", err
+	if status, e := isDirExist(metaObjectDir); e != nil {
+		return "", e
 	} else if !status {
-		if err := os.MkdirAll(metaObjectDir, 0755); err != nil {
-			return "", err
+		if e := os.MkdirAll(metaObjectDir, 0755); e != nil {
+			return "", e
 		}
 	}
 
 	for {
-		uuid, err := uuid.New()
-		if err != nil {
-			return "", err
+		uuid, e := uuid.New()
+		if e != nil {
+			return "", e
 		}
 
 		uploadID := uuid.String()
 		uploadIDFile := filepath.Join(metaObjectDir, uploadID+uploadIDSuffix)
-		if _, err := os.Lstat(uploadIDFile); err != nil {
-			if !os.IsNotExist(err) {
-				return "", err
+		if _, e := os.Lstat(uploadIDFile); e != nil {
+			if !os.IsNotExist(e) {
+				return "", e
 			}
 
 			// uploadIDFile doesn't exist, so create empty file to reserve the name
-			if err := ioutil.WriteFile(uploadIDFile, []byte{}, 0644); err != nil {
-				return "", err
+			if e := ioutil.WriteFile(uploadIDFile, []byte{}, 0644); e != nil {
+				return "", e
 			}
 
 			return uploadID, nil
@@ -161,32 +166,32 @@ func (fs Filesystem) cleanupUploadID(bucket, object, uploadID string) error {
 	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
 	uploadIDPrefix := uploadID + "."
 
-	names, err := filteredReaddirnames(metaObjectDir,
+	names, e := filteredReaddirnames(metaObjectDir,
 		func(name string) bool {
 			return strings.HasPrefix(name, uploadIDPrefix)
 		},
 	)
 
-	if err != nil {
-		return err
+	if e != nil {
+		return e
 	}
 
 	for _, name := range names {
-		if err := os.Remove(filepath.Join(metaObjectDir, name)); err != nil {
+		if e := os.Remove(filepath.Join(metaObjectDir, name)); e != nil {
 			//return InternalError{Err: err}
-			return err
+			return e
 		}
 	}
 
-	if status, err := isDirEmpty(metaObjectDir); err != nil {
+	if status, e := isDirEmpty(metaObjectDir); e != nil {
 		// TODO: add log than returning error
 		//return InternalError{Err: err}
-		return err
+		return e
 	} else if status {
-		if err := removeFileTree(metaObjectDir, filepath.Join(fs.path, configDir, bucket)); err != nil {
+		if e := removeFileTree(metaObjectDir, filepath.Join(fs.path, configDir, bucket)); e != nil {
 			// TODO: add log than returning error
 			//return InternalError{Err: err}
-			return err
+			return e
 		}
 	}
 
@@ -199,9 +204,9 @@ func (fs Filesystem) checkBucketArg(bucket string) (string, error) {
 	}
 
 	bucket = getActualBucketname(fs.path, bucket)
-	if status, err := isDirExist(filepath.Join(fs.path, bucket)); err != nil {
+	if status, e := isDirExist(filepath.Join(fs.path, bucket)); e != nil {
 		//return "", InternalError{Err: err}
-		return "", err
+		return "", e
 	} else if !status {
 		return "", BucketNotFound{Bucket: bucket}
 	}
@@ -210,13 +215,12 @@ func (fs Filesystem) checkBucketArg(bucket string) (string, error) {
 }
 
 func (fs Filesystem) checkDiskFree() error {
-	di, err := disk.GetInfo(fs.path)
-	if err != nil {
-		return err
+	di, e := disk.GetInfo(fs.path)
+	if e != nil {
+		return e
 	}
 
-	// Remove 5% from total space for cumulative disk space used for
-	// journalling, inodes etc.
+	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= fs.minFreeDisk {
 		return RootPathFull{Path: fs.path}
@@ -226,9 +230,9 @@ func (fs Filesystem) checkDiskFree() error {
 }
 
 func (fs Filesystem) checkMultipartArgs(bucket, object string) (string, error) {
-	bucket, err := fs.checkBucketArg(bucket)
-	if err != nil {
-		return "", err
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
+		return "", e
 	}
 
 	if !IsValidObjectName(object) {
@@ -240,19 +244,19 @@ func (fs Filesystem) checkMultipartArgs(bucket, object string) (string, error) {
 
 // NewMultipartUpload - initiate a new multipart session
 func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.Error) {
-	if bucketDirName, err := fs.checkMultipartArgs(bucket, object); err == nil {
+	if bucketDirName, e := fs.checkMultipartArgs(bucket, object); e == nil {
 		bucket = bucketDirName
 	} else {
-		return "", probe.NewError(err)
+		return "", probe.NewError(e)
 	}
 
-	if err := fs.checkDiskFree(); err != nil {
-		return "", probe.NewError(err)
+	if e := fs.checkDiskFree(); e != nil {
+		return "", probe.NewError(e)
 	}
 
-	uploadID, err := fs.newUploadID(bucket, object)
-	if err != nil {
-		return "", probe.NewError(err)
+	uploadID, e := fs.newUploadID(bucket, object)
+	if e != nil {
+		return "", probe.NewError(e)
 	}
 
 	return uploadID, nil
@@ -260,15 +264,15 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 
 // PutObjectPart - create a part in a multipart session
 func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partNumber int, size int64, data io.Reader, md5Hex string) (string, *probe.Error) {
-	if bucketDirName, err := fs.checkMultipartArgs(bucket, object); err == nil {
+	if bucketDirName, e := fs.checkMultipartArgs(bucket, object); e == nil {
 		bucket = bucketDirName
 	} else {
-		return "", probe.NewError(err)
+		return "", probe.NewError(e)
 	}
 
-	if status, err := fs.isUploadIDExist(bucket, object, uploadID); err != nil {
+	if status, e := fs.isUploadIDExist(bucket, object, uploadID); e != nil {
 		//return "", probe.NewError(InternalError{Err: err})
-		return "", probe.NewError(err)
+		return "", probe.NewError(e)
 	} else if !status {
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
@@ -282,13 +286,13 @@ func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partNumber i
 		return "", probe.NewError(errors.New("invalid part id, should be not more than 10000"))
 	}
 
-	if err := fs.checkDiskFree(); err != nil {
-		return "", probe.NewError(err)
+	if e := fs.checkDiskFree(); e != nil {
+		return "", probe.NewError(e)
 	}
 
-	partFile := filepath.Join(fs.path, configDir, bucket, object, uploadID+"."+strconv.Itoa(partNumber)+"."+md5Hex)
-	if err := safeWrite(partFile, data, size, md5Hex); err != nil {
-		return "", probe.NewError(err)
+	partFile := filepath.Join(fs.path, configDir, bucket, object, fmt.Sprintf("%s.%d.%s", uploadID, partNumber, md5Hex))
+	if e := safeWriteFile(partFile, data, size, md5Hex); e != nil {
+		return "", probe.NewError(e)
 	}
 
 	return md5Hex, nil
@@ -296,21 +300,21 @@ func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partNumber i
 
 // AbortMultipartUpload - abort an incomplete multipart session
 func (fs Filesystem) AbortMultipartUpload(bucket, object, uploadID string) *probe.Error {
-	if bucketDirName, err := fs.checkMultipartArgs(bucket, object); err == nil {
+	if bucketDirName, e := fs.checkMultipartArgs(bucket, object); e == nil {
 		bucket = bucketDirName
 	} else {
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
 
-	if status, err := fs.isUploadIDExist(bucket, object, uploadID); err != nil {
+	if status, e := fs.isUploadIDExist(bucket, object, uploadID); e != nil {
 		//return probe.NewError(InternalError{Err: err})
-		return probe.NewError(err)
+		return probe.NewError(e)
 	} else if !status {
 		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	if err := fs.cleanupUploadID(bucket, object, uploadID); err != nil {
-		return probe.NewError(err)
+	if e := fs.cleanupUploadID(bucket, object, uploadID); e != nil {
+		return probe.NewError(e)
 	}
 
 	return nil
@@ -318,88 +322,82 @@ func (fs Filesystem) AbortMultipartUpload(bucket, object, uploadID string) *prob
 
 // CompleteMultipartUpload - complete a multipart upload and persist the data
 func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, parts []completePart) (ObjectInfo, *probe.Error) {
-	if bucketDirName, err := fs.checkMultipartArgs(bucket, object); err == nil {
+	if bucketDirName, e := fs.checkMultipartArgs(bucket, object); e == nil {
 		bucket = bucketDirName
 	} else {
-		return ObjectInfo{}, probe.NewError(err)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	if status, err := fs.isUploadIDExist(bucket, object, uploadID); err != nil {
+	if status, e := fs.isUploadIDExist(bucket, object, uploadID); e != nil {
 		//return probe.NewError(InternalError{Err: err})
-		return ObjectInfo{}, probe.NewError(err)
+		return ObjectInfo{}, probe.NewError(e)
 	} else if !status {
 		return ObjectInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	if err := fs.checkDiskFree(); err != nil {
-		return ObjectInfo{}, probe.NewError(err)
+	if e := fs.checkDiskFree(); e != nil {
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
 
-	var md5sums []string
+	var md5Sums []string
 	for _, part := range parts {
 		partNumber := part.PartNumber
 		md5sum := strings.Trim(part.ETag, "\"")
 		partFile := filepath.Join(metaObjectDir, uploadID+"."+strconv.Itoa(partNumber)+"."+md5sum)
 		if status, err := isFileExist(partFile); err != nil {
-			//return ObjectInfo{}, probe.NewError(InternalError{Err: err})
 			return ObjectInfo{}, probe.NewError(err)
 		} else if !status {
 			return ObjectInfo{}, probe.NewError(InvalidPart{})
 		}
-		md5sums = append(md5sums, md5sum)
+		md5Sums = append(md5Sums, md5sum)
 	}
 
 	// Save the s3 md5.
-	s3MD5, perr := makeS3MD5(md5sums...)
-	if perr != nil {
-		return ObjectInfo{}, perr
-	}
-
-	tempFile, err := ioutil.TempFile(metaObjectDir, uploadID+".complete.")
+	s3MD5, err := makeS3MD5(md5Sums...)
 	if err != nil {
-		//return ObjectInfo{}, probe.NewError(InternalError{Err: err})
-		return ObjectInfo{}, probe.NewError(err)
+		return ObjectInfo{}, err.Trace(md5Sums...)
 	}
 
+	tempFile, e := ioutil.TempFile(metaObjectDir, uploadID+".complete.")
+	if e != nil {
+		return ObjectInfo{}, probe.NewError(e)
+	}
 	for _, part := range parts {
 		partNumber := part.PartNumber
-		md5sum := strings.Trim(part.ETag, "\"")
-		partFile := filepath.Join(metaObjectDir, uploadID+"."+strconv.Itoa(partNumber)+"."+md5sum)
-		var f *os.File
-		f, err = os.Open(partFile)
-		if err != nil {
-			tempFile.Close()
-			os.Remove(tempFile.Name())
-			//return ObjectInfo{}, probe.NewError(InternalError{Err: err})
-			return ObjectInfo{}, probe.NewError(err)
-		} else if _, err = io.Copy(tempFile, f); err != nil {
-			tempFile.Close()
-			os.Remove(tempFile.Name())
-			//return ObjectInfo{}, probe.NewError(InternalError{Err: err})
-			return ObjectInfo{}, probe.NewError(err)
+		// Trim off the odd double quotes from ETag in the beginning and end.
+		md5sum := strings.TrimPrefix(part.ETag, "\"")
+		md5sum = strings.TrimSuffix(md5sum, "\"")
+		partFileStr := filepath.Join(metaObjectDir, fmt.Sprintf("%s.%d.%s", uploadID, partNumber, md5sum))
+		var partFile *os.File
+		partFile, e = os.Open(partFileStr)
+		if e != nil {
+			safeRemoveFile(tempFile)
+			return ObjectInfo{}, probe.NewError(e)
+		} else if _, e = io.Copy(tempFile, partFile); e != nil {
+			safeRemoveFile(tempFile)
+			return ObjectInfo{}, probe.NewError(e)
 		}
-		f.Close()
+		partFile.Close() // Close part file after successful copy.
 	}
 	tempFile.Close()
-	// fi is used later
-	fi, err := os.Stat(tempFile.Name())
-	if err != nil {
-		os.Remove(tempFile.Name())
-		return ObjectInfo{}, probe.NewError(err)
+
+	// Stat to gather fresh stat info.
+	objSt, e := os.Stat(tempFile.Name())
+	if e != nil {
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	bucketPath := filepath.Join(fs.path, bucket)
 	objectPath := filepath.Join(bucketPath, object)
-	if err = os.MkdirAll(filepath.Dir(objectPath), 0755); err != nil {
+	if e = os.MkdirAll(filepath.Dir(objectPath), 0755); e != nil {
 		os.Remove(tempFile.Name())
-		//return ObjectInfo{}, probe.NewError(InternalError{Err: err})
-		return ObjectInfo{}, probe.NewError(err)
+		return ObjectInfo{}, probe.NewError(e)
 	}
-	if err = os.Rename(tempFile.Name(), objectPath); err != nil {
+	if e = os.Rename(tempFile.Name(), objectPath); e != nil {
 		os.Remove(tempFile.Name())
-		return ObjectInfo{}, probe.NewError(err)
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	fs.cleanupUploadID(bucket, object, uploadID) // TODO: handle and log the error
@@ -414,13 +412,49 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 	newObject := ObjectInfo{
 		Bucket:       bucket,
 		Name:         object,
-		ModifiedTime: fi.ModTime(),
-		Size:         fi.Size(),
+		ModifiedTime: objSt.ModTime(),
+		Size:         objSt.Size(),
 		ContentType:  contentType,
 		MD5Sum:       s3MD5,
 	}
 
 	return newObject, nil
+}
+
+func (fs *Filesystem) saveListMultipartObjectCh(params listMultipartObjectParams, ch multipartObjectInfoChannel) {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	channels := []multipartObjectInfoChannel{ch}
+	if _, ok := fs.listMultipartObjectMap[params]; ok {
+		channels = append(fs.listMultipartObjectMap[params], ch)
+	}
+
+	fs.listMultipartObjectMap[params] = channels
+}
+
+func (fs *Filesystem) lookupListMultipartObjectCh(params listMultipartObjectParams) *multipartObjectInfoChannel {
+	fs.listMultipartObjectMapMutex.Lock()
+	defer fs.listMultipartObjectMapMutex.Unlock()
+
+	if channels, ok := fs.listMultipartObjectMap[params]; ok {
+		for i, channel := range channels {
+			if !channel.IsTimedOut() {
+				chs := channels[i+1:]
+				if len(chs) > 0 {
+					fs.listMultipartObjectMap[params] = chs
+				} else {
+					delete(fs.listMultipartObjectMap, params)
+				}
+
+				return &channel
+			}
+		}
+
+		// As all channels are timed out, delete the map entry
+		delete(fs.listMultipartObjectMap, params)
+	}
+	return nil
 }
 
 // ListMultipartUploads - list incomplete multipart sessions for a given BucketMultipartResourcesMetadata
@@ -444,30 +478,19 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		return result, probe.NewError(fmt.Errorf("delimiter '%s' is not supported", delimiter))
 	}
 
-	// Unescape keyMarker string
-	if tmpKeyMarker, err := url.QueryUnescape(keyMarker); err == nil {
-		keyMarker = tmpKeyMarker
-	} else {
-		return result, probe.NewError(err)
-	}
-
 	if keyMarker != "" && !strings.HasPrefix(keyMarker, objectPrefix) {
 		return result, probe.NewError(fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", keyMarker, objectPrefix))
 	}
 
 	markerPath := filepath.FromSlash(keyMarker)
-
 	if uploadIDMarker != "" {
 		if strings.HasSuffix(markerPath, string(os.PathSeparator)) {
 			return result, probe.NewError(fmt.Errorf("Invalid combination of uploadID marker '%s' and marker '%s'", uploadIDMarker, keyMarker))
 		}
-
-		id, err := uuid.Parse(uploadIDMarker)
-
-		if err != nil {
-			return result, probe.NewError(err)
+		id, e := uuid.Parse(uploadIDMarker)
+		if e != nil {
+			return result, probe.NewError(e)
 		}
-
 		if id.IsZero() {
 			return result, probe.NewError(fmt.Errorf("Invalid upload ID marker %s", uploadIDMarker))
 		}
@@ -490,50 +513,65 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		recursive = false
 	}
 
-	bucketDir := filepath.Join(fs.path, bucket)
-	// If listMultipartObjectChannel is available for given parameters, then use it, else create new one
-	objectInfoCh := fs.popListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, markerPath, prefixPath, uploadIDMarker})
-	if objectInfoCh == nil {
+	bucketDir := filepath.Join(fs.path, configDir, bucket)
+	// Lookup of if listMultipartObjectChannel is available for given
+	// parameters, else create a new one.
+	multipartObjectInfoCh := fs.lookupListMultipartObjectCh(listMultipartObjectParams{
+		bucket:         bucket,
+		delimiter:      delimiter,
+		keyMarker:      markerPath,
+		prefix:         prefixPath,
+		uploadIDMarker: uploadIDMarker,
+	})
+	if multipartObjectInfoCh == nil {
 		ch := scanMultipartDir(bucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
-		objectInfoCh = &ch
+		multipartObjectInfoCh = &ch
 	}
 
 	nextKeyMarker := ""
 	nextUploadIDMarker := ""
 	for i := 0; i < maxUploads; {
-		objInfo, ok := objectInfoCh.Read()
+		multipartObjInfo, ok := multipartObjectInfoCh.Read()
 		if !ok {
 			// Closed channel.
 			return result, nil
 		}
 
-		if objInfo.Err != nil {
-			return ListMultipartsInfo{}, probe.NewError(objInfo.Err)
+		if multipartObjInfo.Err != nil {
+			if os.IsNotExist(multipartObjInfo.Err) {
+				return ListMultipartsInfo{}, nil
+			}
+			return ListMultipartsInfo{}, probe.NewError(multipartObjInfo.Err)
 		}
 
-		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
+		if strings.Contains(multipartObjInfo.Name, "$multiparts") ||
+			strings.Contains(multipartObjInfo.Name, "$tmpobject") {
 			continue
 		}
 
-		if objInfo.IsDir && skipDir {
+		if multipartObjInfo.IsDir && skipDir {
 			continue
 		}
 
-		if objInfo.IsDir {
-			result.CommonPrefixes = append(result.CommonPrefixes, objInfo.Name)
+		if multipartObjInfo.IsDir {
+			result.CommonPrefixes = append(result.CommonPrefixes, multipartObjInfo.Name)
 		} else {
-			result.Uploads = append(result.Uploads, uploadMetadata{Object: objInfo.Name, UploadID: objInfo.UploadID, Initiated: objInfo.ModifiedTime})
+			result.Uploads = append(result.Uploads, uploadMetadata{
+				Object:    multipartObjInfo.Name,
+				UploadID:  multipartObjInfo.UploadID,
+				Initiated: multipartObjInfo.ModifiedTime,
+			})
 		}
-		nextKeyMarker = objInfo.Name
-		nextUploadIDMarker = objInfo.UploadID
+		nextKeyMarker = multipartObjInfo.Name
+		nextUploadIDMarker = multipartObjInfo.UploadID
 		i++
 	}
 
-	if !objectInfoCh.IsClosed() {
+	if !multipartObjectInfoCh.IsClosed() {
 		result.IsTruncated = true
 		result.NextKeyMarker = nextKeyMarker
 		result.NextUploadIDMarker = nextUploadIDMarker
-		fs.pushListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, nextKeyMarker, objectPrefix, nextUploadIDMarker}, *objectInfoCh)
+		fs.saveListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, nextKeyMarker, objectPrefix, nextUploadIDMarker}, *multipartObjectInfoCh)
 	}
 
 	return result, nil

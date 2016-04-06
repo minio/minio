@@ -359,7 +359,12 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 	listMultipartUploadsResponse.MaxUploads = multipartsInfo.MaxUploads
 	listMultipartUploadsResponse.NextUploadIDMarker = multipartsInfo.NextUploadIDMarker
 	listMultipartUploadsResponse.UploadIDMarker = multipartsInfo.UploadIDMarker
-
+	listMultipartUploadsResponse.CommonPrefixes = make([]CommonPrefix, len(multipartsInfo.CommonPrefixes))
+	for index, commonPrefix := range multipartsInfo.CommonPrefixes {
+		listMultipartUploadsResponse.CommonPrefixes[index] = CommonPrefix{
+			Prefix: commonPrefix,
+		}
+	}
 	listMultipartUploadsResponse.Uploads = make([]Upload, len(multipartsInfo.Uploads))
 	for index, upload := range multipartsInfo.Uploads {
 		newUpload := Upload{}
