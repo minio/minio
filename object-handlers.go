@@ -67,7 +67,7 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -254,7 +254,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -317,7 +317,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -594,7 +594,7 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -1053,7 +1053,7 @@ func (api objectStorageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return

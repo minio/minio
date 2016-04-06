@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/pkg/probe"
 )
 
-// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error APIErrorCode) {
 	// Read saved bucket policy.
 	policy, err := readBucketPolicy(bucket)
@@ -84,7 +84,7 @@ func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -233,7 +233,7 @@ func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -364,7 +364,7 @@ func (api objectStorageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, 
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
