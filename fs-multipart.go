@@ -515,9 +515,7 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 	}
 
 	recursive := true
-	skipDir := true
 	if delimiter == "/" {
-		skipDir = false
 		recursive = false
 	}
 
@@ -557,10 +555,7 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 			continue
 		}
 
-		if multipartObjInfo.IsDir && skipDir {
-			continue
-		}
-
+		// Directories are listed only if recursive is false
 		if multipartObjInfo.IsDir {
 			result.CommonPrefixes = append(result.CommonPrefixes, multipartObjInfo.Name)
 		} else {

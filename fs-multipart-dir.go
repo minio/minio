@@ -287,7 +287,8 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 					}
 				}
 
-				if subDirFound || len(subentries) == 0 {
+				// send directory only for non-recursive listing
+				if !recursive && (subDirFound || len(subentries) == 0) {
 					objInfo := multipartObjectInfo{
 						Name:         strings.Replace(entry.Name, bucketDir, "", 1),
 						ModifiedTime: entry.ModTime,
