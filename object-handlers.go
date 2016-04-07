@@ -17,7 +17,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
@@ -29,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/probe"
@@ -619,22 +620,13 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		}
 		// Create anonymous object.
 		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
-	case authTypePresigned:
-		validateRegion := true // Validate region.
-		// For presigned requests verify them right here.
-		if apiErr := doesPresignedSignatureMatch(r, validateRegion); apiErr != ErrNone {
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
-			return
-		}
-		// Create presigned object.
-		objInfo, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
-	case authTypeSigned:
+	case authTypePresigned, authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
 
 		// Start writing in a routine.
 		go func() {
-			shaWriter := sha256.New()
+			shaWriter := fastSha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
 			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
 				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
@@ -643,14 +635,21 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 			}
 			shaPayload := shaWriter.Sum(nil)
 			validateRegion := true // Validate region.
-			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion); apiErr != ErrNone {
-				if apiErr == ErrSignatureDoesNotMatch {
+			var s3Error APIErrorCode
+			if isRequestSignatureV4(r) {
+				s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+			} else if isRequestPresignedSignatureV4(r) {
+				s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+			}
+			if s3Error != ErrNone {
+				if s3Error == ErrSignatureDoesNotMatch {
 					writer.CloseWithError(errSignatureMismatch)
 					return
 				}
-				writer.CloseWithError(fmt.Errorf("%v", getAPIError(apiErr)))
+				writer.CloseWithError(fmt.Errorf("%v", getAPIError(s3Error)))
 				return
 			}
+			// Close the writer.
 			writer.Close()
 		}()
 
@@ -799,22 +798,14 @@ func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.
 		// No need to verify signature, anonymous request access is
 		// already allowed.
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hex.EncodeToString(md5Bytes))
-	case authTypePresigned:
+	case authTypePresigned, authTypeSigned:
 		validateRegion := true // Validate region.
-		// For presigned requests verify right here.
-		apiErr := doesPresignedSignatureMatch(r, validateRegion)
-		if apiErr != ErrNone {
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
-			return
-		}
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hex.EncodeToString(md5Bytes))
-	case authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
 
 		// Start writing in a routine.
 		go func() {
-			shaWriter := sha256.New()
+			shaWriter := fastSha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
 			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
 				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
@@ -822,15 +813,21 @@ func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
-			validateRegion := true // Validate region.
-			if apiErr := doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion); apiErr != ErrNone {
-				if apiErr == ErrSignatureDoesNotMatch {
+			var s3Error APIErrorCode
+			if isRequestSignatureV4(r) {
+				s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+			} else if isRequestPresignedSignatureV4(r) {
+				s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+			}
+			if s3Error != ErrNone {
+				if s3Error == ErrSignatureDoesNotMatch {
 					writer.CloseWithError(errSignatureMismatch)
 					return
 				}
-				writer.CloseWithError(fmt.Errorf("%v", getAPIError(apiErr)))
+				writer.CloseWithError(fmt.Errorf("%v", getAPIError(s3Error)))
 				return
 			}
+			// Close the writer.
 			writer.Close()
 		}()
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, hex.EncodeToString(md5Bytes))
