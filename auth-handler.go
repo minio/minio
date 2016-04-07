@@ -19,13 +19,13 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
+	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -98,7 +98,7 @@ func getRequestAuthType(r *http.Request) authType {
 
 // sum256 calculate sha256 sum for an input byte array
 func sum256(data []byte) []byte {
-	hash := sha256.New()
+	hash := fastSha256.New()
 	hash.Write(data)
 	return hash.Sum(nil)
 }
@@ -133,7 +133,7 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	if isRequestSignatureV4(r) {
 		return doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(r, validateRegion)
+		return doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 	}
 	return ErrAccessDenied
 }

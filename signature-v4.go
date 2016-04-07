@@ -113,32 +113,6 @@ func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, 
 	return canonicalRequest
 }
 
-// getCanonicalRequest generate a canonical request of style
-//
-// canonicalRequest =
-//  <HTTPMethod>\n
-//  <CanonicalURI>\n
-//  <CanonicalQueryString>\n
-//  <CanonicalHeaders>\n
-//  <SignedHeaders>\n
-//  <HashedPayload>
-//
-func getPresignCanonicalRequest(extractedSignedHeaders http.Header, presignedQuery, urlPath, method, host string) string {
-	rawQuery := strings.Replace(presignedQuery, "+", "%20", -1)
-	encodedPath := getURLEncodedName(urlPath)
-	// Convert any space strings back to "+".
-	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
-	canonicalRequest := strings.Join([]string{
-		method,
-		encodedPath,
-		rawQuery,
-		getCanonicalHeaders(extractedSignedHeaders, host),
-		getSignedHeaders(extractedSignedHeaders),
-		"UNSIGNED-PAYLOAD",
-	}, "\n")
-	return canonicalRequest
-}
-
 // getScope generate a string of a specific date, an AWS region, and a service.
 func getScope(t time.Time, region string) string {
 	scope := strings.Join([]string{
@@ -222,7 +196,7 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesPresignedSignatureMatch(r *http.Request, validateRegion bool) APIErrorCode {
+func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validateRegion bool) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
@@ -260,6 +234,11 @@ func doesPresignedSignatureMatch(r *http.Request, validateRegion bool) APIErrorC
 
 	// Construct new query.
 	query := make(url.Values)
+	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
+		query.Set("X-Amz-Content-Sha256", hashedPayload)
+	} else {
+		hashedPayload = "UNSIGNED-PAYLOAD"
+	}
 	query.Set("X-Amz-Algorithm", signV4Algorithm)
 
 	if time.Now().UTC().Sub(preSignValues.Date) > time.Duration(preSignValues.Expires) {
@@ -303,11 +282,17 @@ func doesPresignedSignatureMatch(r *http.Request, validateRegion bool) APIErrorC
 	if req.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
 		return ErrSignatureDoesNotMatch
 	}
+	// Verify if sha256 payload query is same.
+	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
+		if req.URL.Query().Get("X-Amz-Content-Sha256") != query.Get("X-Amz-Content-Sha256") {
+			return ErrSignatureDoesNotMatch
+		}
+	}
 
 	/// Verify finally if signature is same.
 
 	// Get canonical request.
-	presignedCanonicalReq := getPresignCanonicalRequest(extractedSignedHeaders, encodedQuery, req.URL.Path, req.Method, req.Host)
+	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method, req.Host)
 
 	// Get string to sign from canonical request.
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, region)

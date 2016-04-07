@@ -24,7 +24,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/crypto/sha256"
+	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 )
 
 // isValidRegion - verify if incoming region value is valid with configured Region.
@@ -42,7 +42,7 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 
 // sumHMAC calculate hmac between two input byte array.
 func sumHMAC(key []byte, data []byte) []byte {
-	hash := hmac.New(sha256.New, key)
+	hash := hmac.New(fastSha256.New, key)
 	hash.Write(data)
 	return hash.Sum(nil)
 }

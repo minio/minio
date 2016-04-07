@@ -109,7 +109,7 @@ func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *h
 		if isRequestSignatureV4(r) {
 			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 		} else if isRequestPresignedSignatureV4(r) {
-			s3Error = doesPresignedSignatureMatch(r, validateRegion)
+			s3Error = doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 		}
 		if s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -330,7 +330,7 @@ func (api objectStorageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Re
 		if isRequestSignatureV4(r) {
 			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 		} else if isRequestPresignedSignatureV4(r) {
-			s3Error = doesPresignedSignatureMatch(r, validateRegion)
+			s3Error = doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
 		}
 		if s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
