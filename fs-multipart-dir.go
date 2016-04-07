@@ -18,117 +18,11 @@ package main
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
-
-// DirEntry - directory entry
-type DirEntry struct {
-	Name    string
-	Size    int64
-	Mode    os.FileMode
-	ModTime time.Time
-}
-
-// IsDir - returns true if DirEntry is a directory
-func (entry DirEntry) IsDir() bool {
-	return entry.Mode.IsDir()
-}
-
-// IsSymlink - returns true if DirEntry is a symbolic link
-func (entry DirEntry) IsSymlink() bool {
-	return entry.Mode&os.ModeSymlink == os.ModeSymlink
-}
-
-// IsRegular - returns true if DirEntry is a regular file
-func (entry DirEntry) IsRegular() bool {
-	return entry.Mode.IsRegular()
-}
-
-// sort interface for DirEntry slice
-type byEntryName []DirEntry
-
-func (f byEntryName) Len() int           { return len(f) }
-func (f byEntryName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
-func (f byEntryName) Less(i, j int) bool { return f[i].Name < f[j].Name }
-
-func filteredReaddir(dirname string, filter func(DirEntry) bool, appendPath bool) ([]DirEntry, error) {
-	result := []DirEntry{}
-
-	d, err := os.Open(dirname)
-	if err != nil {
-		return result, err
-	}
-
-	defer d.Close()
-
-	for {
-		fis, err := d.Readdir(1000)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return result, err
-		}
-
-		for _, fi := range fis {
-			name := fi.Name()
-			if appendPath {
-				name = filepath.Join(dirname, name)
-			}
-
-			if fi.IsDir() {
-				name += string(os.PathSeparator)
-			}
-
-			entry := DirEntry{Name: name, Size: fi.Size(), Mode: fi.Mode(), ModTime: fi.ModTime()}
-
-			if filter == nil || filter(entry) {
-				result = append(result, entry)
-			}
-		}
-	}
-
-	sort.Sort(byEntryName(result))
-
-	return result, nil
-}
-
-func filteredReaddirnames(dirname string, filter func(string) bool) ([]string, error) {
-	result := []string{}
-	d, err := os.Open(dirname)
-	if err != nil {
-		return result, err
-	}
-
-	defer d.Close()
-
-	for {
-		names, err := d.Readdirnames(1000)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return result, err
-		}
-
-		for _, name := range names {
-			if filter == nil || filter(name) {
-				result = append(result, name)
-			}
-		}
-	}
-
-	sort.Strings(result)
-
-	return result, nil
-}
 
 func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, recursive bool) multipartObjectInfoChannel {
 	objectInfoCh := make(chan multipartObjectInfo, listObjectsLimit)
@@ -218,39 +112,49 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 		}
 
 		for {
-			entries, err := filteredReaddir(scanDir,
-				func(entry DirEntry) bool {
-					if entry.IsDir() || (entry.IsRegular() && strings.HasSuffix(entry.Name, uploadIDSuffix)) {
-						return strings.HasPrefix(entry.Name, prefixPath) && entry.Name > markerPath
+			dirents, err := scandir(scanDir,
+				func(dirent fsDirent) bool {
+					if dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, uploadIDSuffix)) {
+						return strings.HasPrefix(dirent.name, prefixPath) && dirent.name > markerPath
 					}
 
 					return false
 				},
-				true)
+				false)
 			if err != nil {
 				send(multipartObjectInfo{Err: err})
 				return
 			}
 
-			var entry DirEntry
-			for len(entries) > 0 {
-				entry, entries = entries[0], entries[1:]
+			var dirent fsDirent
+			for len(dirents) > 0 {
+				dirent, dirents = dirents[0], dirents[1:]
 
-				if entry.IsRegular() {
+				if dirent.IsRegular() {
 					// Handle uploadid file
-					name := strings.Replace(filepath.Dir(entry.Name), bucketDir, "", 1)
+					name := strings.Replace(filepath.Dir(dirent.name), bucketDir, "", 1)
 					if name == "" {
 						// This should not happen ie uploadid file should not be in bucket directory
 						send(multipartObjectInfo{Err: errors.New("corrupted meta data")})
 						return
 					}
 
-					uploadID := strings.Split(filepath.Base(entry.Name), uploadIDSuffix)[0]
+					uploadID := strings.Split(filepath.Base(dirent.name), uploadIDSuffix)[0]
+
+					// In some OS modTime is empty and use os.Stat() to fill missing values
+					if dirent.modTime.IsZero() {
+						if fi, e := os.Stat(dirent.name); e == nil {
+							dirent.modTime = fi.ModTime()
+						} else {
+							send(multipartObjectInfo{Err: e})
+							return
+						}
+					}
 
 					objInfo := multipartObjectInfo{
 						Name:         name,
 						UploadID:     uploadID,
-						ModifiedTime: entry.ModTime,
+						ModifiedTime: dirent.modTime,
 					}
 
 					if !send(objInfo) {
@@ -260,21 +164,21 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 					continue
 				}
 
-				subentries, err := filteredReaddir(entry.Name,
-					func(entry DirEntry) bool {
-						return entry.IsDir() || (entry.IsRegular() && strings.HasSuffix(entry.Name, uploadIDSuffix))
+				subDirents, err := scandir(dirent.name,
+					func(dirent fsDirent) bool {
+						return dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, uploadIDSuffix))
 					},
-					true)
+					false)
 				if err != nil {
 					send(multipartObjectInfo{Err: err})
 					return
 				}
 
 				subDirFound := false
-				uploadIDEntries := []DirEntry{}
-				// If subentries has a directory, then current entry needs to be sent
-				for _, subentry := range subentries {
-					if subentry.IsDir() {
+				uploadIDDirents := []fsDirent{}
+				// If subDirents has a directory, then current dirent needs to be sent
+				for _, subdirent := range subDirents {
+					if subdirent.IsDir() {
 						subDirFound = true
 
 						if recursive {
@@ -282,16 +186,26 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 						}
 					}
 
-					if !recursive && subentry.IsRegular() {
-						uploadIDEntries = append(uploadIDEntries, subentry)
+					if !recursive && subdirent.IsRegular() {
+						uploadIDDirents = append(uploadIDDirents, subdirent)
 					}
 				}
 
 				// send directory only for non-recursive listing
-				if !recursive && (subDirFound || len(subentries) == 0) {
+				if !recursive && (subDirFound || len(subDirents) == 0) {
+					// In some OS modTime is empty and use os.Stat() to fill missing values
+					if dirent.modTime.IsZero() {
+						if fi, e := os.Stat(dirent.name); e == nil {
+							dirent.modTime = fi.ModTime()
+						} else {
+							send(multipartObjectInfo{Err: e})
+							return
+						}
+					}
+
 					objInfo := multipartObjectInfo{
-						Name:         strings.Replace(entry.Name, bucketDir, "", 1),
-						ModifiedTime: entry.ModTime,
+						Name:         strings.Replace(dirent.name, bucketDir, "", 1),
+						ModifiedTime: dirent.modTime,
 						IsDir:        true,
 					}
 
@@ -301,9 +215,9 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 				}
 
 				if recursive {
-					entries = append(subentries, entries...)
+					dirents = append(subDirents, dirents...)
 				} else {
-					entries = append(uploadIDEntries, entries...)
+					dirents = append(uploadIDDirents, dirents...)
 				}
 			}
 

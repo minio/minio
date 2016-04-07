@@ -21,6 +21,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -43,12 +44,12 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 		}
 		for _, fi := range fis {
 			dirent := fsDirent{
-				name:         fi.Name(),
-				size:         fi.Size(),
-				modifiedTime: fi.ModTime(),
-				isDir:        fi.IsDir(),
+				name:    fi.Name(),
+				modTime: fi.ModTime(),
+				size:    fi.Size(),
+				mode:    fi.Mode(),
 			}
-			if dirent.isDir {
+			if dirent.IsDir() {
 				dirent.name += string(os.PathSeparator)
 				dirent.size = 0
 			}
@@ -58,6 +59,50 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 		}
 	}
 	// Sort dirents.
-	sort.Sort(byDirentNames(dirents))
+	sort.Sort(byDirentName(dirents))
+	return dirents, nil
+}
+
+// scans the directory dirPath, calling filter() on each directory
+// entry.  Entries for which filter() returns true are stored, lexically
+// sorted using sort.Sort(). If filter is NULL, all entries are selected.
+// If namesOnly is true, dirPath is not appended into entry name.
+func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDirent, error) {
+	d, err := os.Open(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+
+	var dirents []fsDirent
+	for {
+		fis, err := d.Readdir(1000)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		for _, fi := range fis {
+			dirent := fsDirent{
+				name:    fi.Name(),
+				modTime: fi.ModTime(),
+				size:    fi.Size(),
+				mode:    fi.Mode(),
+			}
+			if !namesOnly {
+				dirent.name = filepath.Join(dirPath, dirent.name)
+			}
+			if dirent.IsDir() {
+				dirent.name += string(os.PathSeparator)
+			}
+			if filter == nil || filter(dirent) {
+				dirents = append(dirents, dirent)
+			}
+		}
+	}
+
+	sort.Sort(byDirentName(dirents))
+
 	return dirents, nil
 }

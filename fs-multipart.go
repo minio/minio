@@ -170,18 +170,18 @@ func (fs Filesystem) cleanupUploadID(bucket, object, uploadID string) error {
 	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
 	uploadIDPrefix := uploadID + "."
 
-	names, e := filteredReaddirnames(metaObjectDir,
-		func(name string) bool {
-			return strings.HasPrefix(name, uploadIDPrefix)
+	dirents, e := scandir(metaObjectDir,
+		func(dirent fsDirent) bool {
+			return dirent.IsRegular() && strings.HasPrefix(dirent.name, uploadIDPrefix)
 		},
-	)
+		true)
 
 	if e != nil {
 		return e
 	}
 
-	for _, name := range names {
-		if e := os.Remove(filepath.Join(metaObjectDir, name)); e != nil {
+	for _, dirent := range dirents {
+		if e := os.Remove(filepath.Join(metaObjectDir, dirent.name)); e != nil {
 			//return InternalError{Err: err}
 			return e
 		}
@@ -595,49 +595,72 @@ func (fs Filesystem) ListObjectParts(bucket, object, uploadID string, partNumber
 		return ListPartsInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
+	// return empty ListPartsInfo
+	if maxParts == 0 {
+		return ListPartsInfo{}, nil
+	}
+
+	if maxParts < 0 || maxParts > 1000 {
+		maxParts = 1000
+	}
+
 	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
-	entries, err := filteredReaddir(metaObjectDir,
-		func(entry DirEntry) bool {
-			if tokens := strings.Split(entry.Name, "."); len(tokens) == 3 {
-				if tokens[0] == uploadID {
-					if partNumber, err := strconv.Atoi(tokens[1]); err == nil {
-						if partNumber >= 1 && partNumber <= 10000 && partNumber > partNumberMarker {
-							return true
-						}
-					}
+	uploadIDPrefix := uploadID + "."
+
+	dirents, e := scandir(metaObjectDir,
+		func(dirent fsDirent) bool {
+			// Part file is a regular file and has to be started with 'UPLOADID.'
+			if !(dirent.IsRegular() && strings.HasPrefix(dirent.name, uploadIDPrefix)) {
+				return false
+			}
+
+			// Valid part file has to be 'UPLOADID.PARTNUMBER.MD5SUM'
+			tokens := strings.Split(dirent.name, ".")
+			if len(tokens) != 3 {
+				return false
+			}
+
+			if partNumber, err := strconv.Atoi(tokens[1]); err == nil {
+				if partNumber >= 1 && partNumber <= 10000 && partNumber > partNumberMarker {
+					return true
 				}
 			}
 
 			return false
 		},
-		false,
-	)
-
-	if err != nil {
-		return ListPartsInfo{}, probe.NewError(err)
+		true)
+	if e != nil {
+		return ListPartsInfo{}, probe.NewError(e)
 	}
 
 	isTruncated := false
-	if maxParts <= 0 || maxParts > 1000 {
-		maxParts = 1000
-	}
 	nextPartNumberMarker := 0
 
 	parts := []partInfo{}
-	for i := range entries {
+	for i := range dirents {
 		if i == maxParts {
 			isTruncated = true
 			break
 		}
 
-		tokens := strings.Split(entries[i].Name, ".")
+		// In some OS modTime is empty and use os.Stat() to fill missing values
+		if dirents[i].modTime.IsZero() {
+			if fi, e := os.Stat(filepath.Join(metaObjectDir, dirents[i].name)); e == nil {
+				dirents[i].modTime = fi.ModTime()
+				dirents[i].size = fi.Size()
+			} else {
+				return ListPartsInfo{}, probe.NewError(e)
+			}
+		}
+
+		tokens := strings.Split(dirents[i].name, ".")
 		partNumber, _ := strconv.Atoi(tokens[1])
 		md5sum := tokens[2]
 		parts = append(parts, partInfo{
 			PartNumber:   partNumber,
-			LastModified: entries[i].ModTime,
+			LastModified: dirents[i].modTime,
 			ETag:         md5sum,
-			Size:         entries[i].Size,
+			Size:         dirents[i].size,
 		})
 	}
 
