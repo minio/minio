@@ -51,6 +51,24 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	}
 }
 
+// errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
+// this is in keeping with the permissions sections of the docs of both:
+//   HEAD Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
+//   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
+func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
+	if getRequestAuthType(r) == authTypeAnonymous {
+		//we care about the bucket as a whole, not a particular resource
+		url := *r.URL
+		url.Path = "/" + bucket
+
+		if s3Error := enforceBucketPolicy("s3:ListBucket", bucket, &url); s3Error != ErrNone {
+			return ErrAccessDenied
+		}
+	}
+
+	return ErrNoSuchKey
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -67,7 +85,7 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -87,7 +105,7 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
 		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
@@ -254,7 +272,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -275,7 +293,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
+			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
 		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
@@ -317,8 +335,8 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy("s3:GetBucketLocation", bucket, r.URL); s3Error != ErrNone {
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -594,7 +612,7 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
@@ -1053,7 +1071,7 @@ func (api objectStorageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy("s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
