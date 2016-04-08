@@ -268,8 +268,9 @@ func serverMain(c *cli.Context) {
 		_, e := os.Stat(fsPath)
 		fatalIf(probe.NewError(e), "Unable to validate the path", nil)
 		// Initialize filesystem storage layer.
-		objectAPI, err = newFS(fsPath)
-		fatalIf(err.Trace(fsPath), "Initializing filesystem failed.", nil)
+		storage, e := newFS(fsPath)
+		fatalIf(probe.NewError(e), "Initializing filesystem failed.", nil)
+		objectAPI = newObjectLayer(storage)
 	}
 
 	// Configure server.
