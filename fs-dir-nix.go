@@ -98,7 +98,8 @@ func parseDirents(buf []byte) []fsDirent {
 	return dirents
 }
 
-// Read all directory entries, returns a list of lexically sorted entries.
+// Read all directory entries, returns a list of lexically sorted
+// entries.
 func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 	buf := make([]byte, readDirentBufSize)
 	f, err := os.Open(readDirPath)
@@ -165,6 +166,5 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 	}
 
 	sort.Sort(byDirentName(dirents))
-
 	return dirents, nil
 }

@@ -97,7 +97,7 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-
+	// Fetch object stat info.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		switch err.ToGoError().(type) {
@@ -117,7 +117,7 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objInfo.ModifiedTime
+	lastModified := objInfo.ModTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -137,8 +137,15 @@ func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Requ
 	startOffset := hrange.start
 	readCloser, err := api.ObjectAPI.GetObject(bucket, object, startOffset)
 	if err != nil {
-		errorIf(err.Trace(), "GetObject failed.", nil)
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		switch err.ToGoError().(type) {
+		case BucketNotFound:
+			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
+		case ObjectNotFound:
+			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
+		default:
+			errorIf(err.Trace(), "GetObject failed.", nil)
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		}
 		return
 	}
 	defer readCloser.Close() // Close after this handler returns.
@@ -304,7 +311,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objInfo.ModifiedTime
+	lastModified := objInfo.ModTime
 	if checkLastModified(w, r, lastModified) {
 		return
 	}
@@ -399,7 +406,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Verify x-amz-copy-source-if-modified-since and
 	// x-amz-copy-source-if-unmodified-since.
-	lastModified := objInfo.ModifiedTime
+	lastModified := objInfo.ModTime
 	if checkCopySourceLastModified(w, r, lastModified) {
 		return
 	}
@@ -471,7 +478,7 @@ func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	response := generateCopyObjectResponse(objInfo.MD5Sum, objInfo.ModifiedTime)
+	response := generateCopyObjectResponse(objInfo.MD5Sum, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
 	setCommonHeaders(w)
