@@ -33,3 +33,15 @@ func isDirEmpty(dirname string) (status bool, err error) {
 	}
 	return status, err
 }
+
+// isDirExist - returns whether given directory exists or not.
+func isDirExist(dirname string) (bool, error) {
+	fi, e := os.Lstat(dirname)
+	if e != nil {
+		if os.IsNotExist(e) {
+			return false, nil
+		}
+		return false, e
+	}
+	return fi.IsDir(), nil
+}

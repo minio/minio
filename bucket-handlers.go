@@ -26,7 +26,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	mux "github.com/gorilla/mux"
@@ -285,33 +284,17 @@ func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Re
 		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
-	if _, found := err.ToGoError().(*os.PathError); found {
-		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	}
-	switch err.ToGoError() {
-	case errVolumeNotFound:
+	switch err.ToGoError().(type) {
+	case BucketNameInvalid:
+		writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
+	case BucketNotFound:
 		writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-	case errFileNotFound:
-		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	case os.ErrNotExist:
+	case ObjectNameInvalid:
 		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 	default:
 		errorIf(err.Trace(), "ListObjects failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 	}
-	// switch err.ToGoError().(type) {
-	// case BucketNameInvalid:
-	// 	writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-	// case BucketNotFound:
-	// 	writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-	// case ObjectNotFound:
-	// 	writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	// case ObjectNameInvalid:
-	// 	writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	// default:
-	// 	errorIf(err.Trace(), "ListObjects failed.", nil)
-	// 	writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-	// }
 }
 
 // ListBucketsHandler - GET Service

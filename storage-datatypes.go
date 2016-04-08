@@ -1,8 +1,11 @@
 package main
 
-// VolInfo - volume info
-import "time"
+import (
+	"os"
+	"time"
+)
 
+// VolInfo - volume info
 type VolInfo struct {
 	Name    string
 	Created time.Time
@@ -10,9 +13,9 @@ type VolInfo struct {
 
 // FileInfo - file stat information.
 type FileInfo struct {
-	Volume       string
-	Name         string
-	ModifiedTime time.Time
-	Size         int64
-	IsDir        bool
+	Volume  string
+	Name    string
+	ModTime time.Time
+	Size    int64
+	Mode    os.FileMode
 }

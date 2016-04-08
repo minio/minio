@@ -106,7 +106,7 @@ type DiskInfoRep struct {
 }
 
 // DiskInfo - get disk statistics.
-func (web *webAPI) DiskInfo(r *http.Request, args *GenericArgs, reply *DiskInfoRep) error {
+func (web *webAPI) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
 	// FIXME: bring in StatFS in StorageAPI interface and uncomment the below lines.
 	// if !isJWTReqAuthenticated(r) {
 	// 	return &json2.Error{Message: "Unauthorized request"}
@@ -213,7 +213,7 @@ func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *Li
 		for _, obj := range lo.Objects {
 			reply.Objects = append(reply.Objects, WebObjectInfo{
 				Key:          obj.Name,
-				LastModified: obj.ModifiedTime,
+				LastModified: obj.ModTime,
 				Size:         obj.Size,
 			})
 		}

@@ -260,7 +260,7 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 			continue
 		}
 		content.Key = object.Name
-		content.LastModified = object.ModifiedTime.UTC().Format(timeFormatAMZ)
+		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZ)
 		if object.MD5Sum != "" {
 			content.ETag = "\"" + object.MD5Sum + "\""
 		}

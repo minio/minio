@@ -19,7 +19,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -50,16 +49,18 @@ func (ent fsDirent) IsRegular() bool {
 // byDirentName is a collection satisfying sort.Interface.
 type byDirentName []fsDirent
 
-func (d byDirentName) Len() int           { return len(d) }
-func (d byDirentName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byDirentName) Less(i, j int) bool { return d[i].name < d[j].name }
-
-// Using sort.Search() internally to jump to the file entry containing the prefix.
-func searchDirents(dirents []fsDirent, x string) int {
-	processFunc := func(i int) bool {
-		return dirents[i].name >= x
+func (d byDirentName) Len() int      { return len(d) }
+func (d byDirentName) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
+func (d byDirentName) Less(i, j int) bool {
+	n1 := d[i].name
+	if d[i].mode.IsDir() {
+		n1 = n1 + string(os.PathSeparator)
 	}
-	return sort.Search(len(dirents), processFunc)
+
+	n2 := d[j].name
+	if d[j].mode.IsDir() {
+		n2 = n2 + string(os.PathSeparator)
+	}
 }
 
 // Tree walk result carries results of tree walking.
@@ -87,7 +88,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	direntToFileInfo := func(dirent fsDirent) (FileInfo, error) {
 		fileInfo := FileInfo{}
 		// Convert to full object name.
-		objectInfo.Name = filepath.Join(prefixDir, dirent.name)
+		fileInfo.Name = filepath.Join(prefixDir, dirent.name)
 		if dirent.modTime.IsZero() && dirent.size == 0 {
 			// ModifiedTime and Size are zero, Stat() and figure out
 			// the actual values that need to be set.
@@ -96,17 +97,17 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 				return FileInfo{}, err
 			}
 			// Fill size and modtime.
-			fileInfo.ModifiedTime = fi.ModTime()
+			fileInfo.ModTime = fi.ModTime()
 			fileInfo.Size = fi.Size()
-			fileInfo.IsDir = fi.IsDir()
+			fileInfo.Mode = fi.Mode()
 		} else {
-			// If ModifiedTime or Size are set then use them
+			// If ModTime or Size are set then use them
 			// without attempting another Stat operation.
-			fileInfo.ModifiedTime = dirent.modifiedTime
+			fileInfo.ModTime = dirent.modTime
 			fileInfo.Size = dirent.size
-			fileInfo.IsDir = dirent.isDir
+			fileInfo.Mode = dirent.mode
 		}
-		if fileInfo.IsDir {
+		if fileInfo.Mode.IsDir() {
 			// Add os.PathSeparator suffix again for directories as
 			// filepath.Join would have removed it.
 			fileInfo.Size = 0
