@@ -51,13 +51,13 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 	return token.Valid
 }
 
-// GenericArgs - empty struct for calls that don't accept arguments
+// WebGenericArgs - empty struct for calls that don't accept arguments
 // for ex. ServerInfo, GenerateAuth
-type GenericArgs struct{}
+type WebGenericArgs struct{}
 
-// GenericRep - reply structure for calls for which reply is success/failure
+// WebGenericRep - reply structure for calls for which reply is success/failure
 // for ex. RemoveObject MakeBucket
-type GenericRep struct {
+type WebGenericRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
@@ -71,7 +71,7 @@ type ServerInfoRep struct {
 }
 
 // ServerInfo - get server info.
-func (web *webAPI) ServerInfo(r *http.Request, args *GenericArgs, reply *ServerInfoRep) error {
+func (web *webAPI) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -106,7 +106,7 @@ type DiskInfoRep struct {
 }
 
 // DiskInfo - get disk statistics.
-func (web *webAPI) DiskInfo(r *http.Request, args *GenericArgs, reply *DiskInfoRep) error {
+func (web *webAPI) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -125,7 +125,7 @@ type MakeBucketArgs struct {
 }
 
 // MakeBucket - make a bucket.
-func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *GenericRep) error {
+func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -152,7 +152,7 @@ type WebBucketInfo struct {
 }
 
 // ListBuckets - list buckets api.
-func (web *webAPI) ListBuckets(r *http.Request, args *GenericArgs, reply *ListBucketsRep) error {
+func (web *webAPI) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -237,7 +237,7 @@ type RemoveObjectArgs struct {
 }
 
 // RemoveObject - removes an object.
-func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *GenericRep) error {
+func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -283,7 +283,7 @@ type GenerateAuthReply struct {
 	UIVersion string `json:"uiVersion"`
 }
 
-func (web webAPI) GenerateAuth(r *http.Request, args *GenericArgs, reply *GenerateAuthReply) error {
+func (web webAPI) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -344,7 +344,7 @@ type GetAuthReply struct {
 }
 
 // GetAuth - return accessKey and secretKey credentials.
-func (web *webAPI) GetAuth(r *http.Request, args *GenericArgs, reply *GetAuthReply) error {
+func (web *webAPI) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -387,6 +387,7 @@ func (web *webAPI) Download(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errInvalidToken)
 		return
 	}
+	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(object)))
 
 	objReader, err := web.ObjectAPI.GetObject(bucket, object, 0)
@@ -402,47 +403,35 @@ func (web *webAPI) Download(w http.ResponseWriter, r *http.Request) {
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.
 func writeWebErrorResponse(w http.ResponseWriter, err error) {
+	// Handle invalid token as a special case.
 	if err == errInvalidToken {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(err.Error()))
 		return
 	}
+	// Convert error type to api error code.
+	var apiErrCode APIErrorCode
 	switch err.(type) {
 	case RootPathFull:
-		apiErr := getAPIError(ErrRootPathFull)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrRootPathFull
 	case BucketNotFound:
-		apiErr := getAPIError(ErrNoSuchBucket)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrNoSuchBucket
 	case BucketNameInvalid:
-		apiErr := getAPIError(ErrInvalidBucketName)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrInvalidBucketName
 	case BadDigest:
-		apiErr := getAPIError(ErrBadDigest)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrBadDigest
 	case IncompleteBody:
-		apiErr := getAPIError(ErrIncompleteBody)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrIncompleteBody
 	case ObjectExistsAsPrefix:
-		apiErr := getAPIError(ErrObjectExistsAsPrefix)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrObjectExistsAsPrefix
 	case ObjectNotFound:
-		apiErr := getAPIError(ErrNoSuchKey)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrNoSuchKey
 	case ObjectNameInvalid:
-		apiErr := getAPIError(ErrNoSuchKey)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrNoSuchKey
 	default:
-		apiErr := getAPIError(ErrInternalError)
-		w.WriteHeader(apiErr.HTTPStatusCode)
-		w.Write([]byte(apiErr.Description))
+		apiErrCode = ErrInternalError
 	}
+	apiErr := getAPIError(apiErrCode)
+	w.WriteHeader(apiErr.HTTPStatusCode)
+	w.Write([]byte(apiErr.Description))
 }

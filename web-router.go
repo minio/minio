@@ -62,7 +62,7 @@ func registerWebRouter(mux *router.Router, web *webAPI) {
 	// Initialize a new json2 codec.
 	codec := json2.NewCodec()
 
-	// Minio rpc router
+	// Minio browser router.
 	webBrowserRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 
 	// Initialize json rpc handlers.
@@ -71,8 +71,8 @@ func registerWebRouter(mux *router.Router, web *webAPI) {
 	webRPC.RegisterCodec(codec, "application/json; charset=UTF-8")
 	webRPC.RegisterService(web, "Web")
 
-	// RPC handler at URI - /minio/rpc
-	webBrowserRouter.Methods("POST").Path("/rpc").Handler(webRPC)
+	// RPC handler at URI - /minio/webrpc
+	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
 	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "").HandlerFunc(web.Download)
 
