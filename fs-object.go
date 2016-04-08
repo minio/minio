@@ -33,23 +33,6 @@ import (
 	"github.com/minio/minio/pkg/safe"
 )
 
-// isDirEmpty - returns whether given directory is empty or not.
-func isDirEmpty(dirname string) (status bool, err error) {
-	f, err := os.Open(dirname)
-	if err == nil {
-		defer f.Close()
-		if _, err = f.Readdirnames(1); err == io.EOF {
-			status = true
-			err = nil
-
-		}
-
-	}
-
-	return
-
-}
-
 /// Object Operations
 
 // GetObject - GET object
