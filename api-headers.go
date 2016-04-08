@@ -63,7 +63,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	setCommonHeaders(w)
 
 	// set object-related metadata headers
-	lastModified := objInfo.ModifiedTime.UTC().Format(http.TimeFormat)
+	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
 	w.Header().Set("Last-Modified", lastModified)
 
 	w.Header().Set("Content-Type", objInfo.ContentType)

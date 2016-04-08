@@ -103,6 +103,5 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 	}
 
 	sort.Sort(byDirentName(dirents))
-
 	return dirents, nil
 }
