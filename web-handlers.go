@@ -106,16 +106,17 @@ type DiskInfoRep struct {
 }
 
 // DiskInfo - get disk statistics.
-func (web *webAPI) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-	info, e := disk.GetInfo(web.ObjectAPI.(*Filesystem).GetRootPath())
-	if e != nil {
-		return &json2.Error{Message: e.Error()}
-	}
-	reply.DiskInfo = info
-	reply.UIVersion = miniobrowser.UIVersion
+func (web *webAPI) DiskInfo(r *http.Request, args *GenericArgs, reply *DiskInfoRep) error {
+	// FIXME: bring in StatFS in StorageAPI interface and uncomment the below lines.
+	// if !isJWTReqAuthenticated(r) {
+	// 	return &json2.Error{Message: "Unauthorized request"}
+	// }
+	// info, e := disk.GetInfo(web.ObjectAPI.(*Filesystem).GetRootPath())
+	// if e != nil {
+	// 	return &json2.Error{Message: e.Error()}
+	// }
+	// reply.DiskInfo = info
+	// reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
