@@ -210,7 +210,8 @@ func startTreeWalk(fsPath, bucket, prefix, marker string, recursive bool) *treeW
 				return false
 			}
 		}
-		treeWalk(filepath.Join(fsPath, bucket), prefixDir, entryPrefixMatch, marker, recursive, send, &count)
+		bucketDir := filepath.Join(fsPath, bucket)
+		treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
 	}()
 	return &walkNotify
 }

@@ -80,24 +80,12 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	result := ListObjectsInfo{}
 
 	// Input validation.
-	if !IsValidBucketName(bucket) {
-		return result, probe.NewError(BucketNameInvalid{Bucket: bucket})
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
+		return result, probe.NewError(e)
 	}
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 
-	bucket = getActualBucketname(fs.path, bucket) // Get the right bucket name.
-	bucketDir := filepath.Join(fs.path, bucket)
-	// Verify if bucket exists.
-	if status, e := isDirExist(bucketDir); !status {
-		if e == nil {
-			// File exists, but its not a directory.
-			return result, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if os.IsNotExist(e) {
-			// File does not exist.
-			return result, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else {
-			return result, probe.NewError(e)
-		}
-	}
 	if !IsValidObjectPrefix(prefix) {
 		return result, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
@@ -149,7 +137,7 @@ func (fs Filesystem) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
 	walker := fs.lookupTreeWalk(listObjectParams{bucket, delimiter, marker, prefix})
 	if walker == nil {
-		walker = startTreeWalk(fs.path, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
+		walker = startTreeWalk(fs.diskPath, bucket, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
 	}
 
 	nextMarker := ""

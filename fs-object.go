@@ -27,7 +27,6 @@ import (
 	"encoding/hex"
 	"runtime"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/safe"
@@ -38,23 +37,21 @@ import (
 // GetObject - GET object
 func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, *probe.Error) {
 	// Input validation.
-	if !IsValidBucketName(bucket) {
-		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
+		return nil, probe.NewError(e)
 	}
 	if !IsValidObjectName(object) {
 		return nil, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// normalize buckets.
-	bucket = getActualBucketname(fs.path, bucket)
-	objectPath := filepath.Join(fs.path, bucket, object)
-
+	objectPath := filepath.Join(fs.diskPath, bucket, object)
 	file, e := os.Open(objectPath)
 	if e != nil {
 		// If the object doesn't exist, the bucket might not exist either. Stat for
 		// the bucket and give a better error message if that is true.
 		if os.IsNotExist(e) {
-			_, e = os.Stat(filepath.Join(fs.path, bucket))
+			_, e = os.Stat(filepath.Join(fs.diskPath, bucket))
 			if os.IsNotExist(e) {
 				return nil, probe.NewError(BucketNotFound{Bucket: bucket})
 			}
@@ -69,7 +66,10 @@ func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.Rea
 	}
 	// Object path is a directory prefix, return object not found error.
 	if st.IsDir() {
-		return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		return nil, probe.NewError(ObjectExistsAsPrefix{
+			Bucket: bucket,
+			Prefix: object,
+		})
 	}
 
 	// Seek to a starting offset.
@@ -87,25 +87,16 @@ func (fs Filesystem) GetObject(bucket, object string, startOffset int64) (io.Rea
 // GetObjectInfo - get object info.
 func (fs Filesystem) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Error) {
 	// Input validation.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
+		return ObjectInfo{}, probe.NewError(e)
 	}
 
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// Normalize buckets.
-	bucket = getActualBucketname(fs.path, bucket)
-	bucketPath := filepath.Join(fs.path, bucket)
-	if _, e := os.Stat(bucketPath); e != nil {
-		if os.IsNotExist(e) {
-			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return ObjectInfo{}, probe.NewError(e)
-	}
-
-	info, err := getObjectInfo(fs.path, bucket, object)
+	info, err := getObjectInfo(fs.diskPath, bucket, object)
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
 			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
@@ -145,7 +136,7 @@ func getObjectInfo(rootPath, bucket, object string) (ObjectInfo, *probe.Error) {
 			contentType = content.ContentType
 		}
 	}
-	metadata := ObjectInfo{
+	objInfo := ObjectInfo{
 		Bucket:       bucket,
 		Name:         object,
 		ModifiedTime: stat.ModTime(),
@@ -153,7 +144,7 @@ func getObjectInfo(rootPath, bucket, object string) (ObjectInfo, *probe.Error) {
 		ContentType:  contentType,
 		IsDir:        stat.Mode().IsDir(),
 	}
-	return metadata, nil
+	return objInfo, nil
 }
 
 // isMD5SumEqual - returns error if md5sum mismatches, success its `nil`
@@ -181,39 +172,25 @@ func isMD5SumEqual(expectedMD5Sum, actualMD5Sum string) bool {
 
 // PutObject - create an object.
 func (fs Filesystem) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (ObjectInfo, *probe.Error) {
-	di, e := disk.GetInfo(fs.path)
+	// Check bucket name valid.
+	bucket, e := fs.checkBucketArg(bucket)
 	if e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	// Remove 5% from total space for cumulative disk space used for
-	// journalling, inodes etc.
-	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= fs.minFreeDisk {
-		return ObjectInfo{}, probe.NewError(RootPathFull{Path: fs.path})
-	}
-
-	// Check bucket name valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-
-	bucket = getActualBucketname(fs.path, bucket)
-	bucketPath := filepath.Join(fs.path, bucket)
-	if _, e = os.Stat(bucketPath); e != nil {
-		if os.IsNotExist(e) {
-			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return ObjectInfo{}, probe.NewError(e)
-	}
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 
 	// Verify object path legal.
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
+	if e = checkDiskFree(fs.diskPath, fs.minFreeDisk); e != nil {
+		return ObjectInfo{}, probe.NewError(e)
+	}
+
 	// Get object path.
-	objectPath := filepath.Join(bucketPath, object)
+	objectPath := filepath.Join(bucketDir, object)
 
 	// md5Hex representation.
 	var md5Hex string
@@ -328,19 +305,12 @@ func deleteObjectPath(basePath, deletePath, bucket, object string) *probe.Error 
 // DeleteObject - delete object.
 func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 	// Check bucket name valid
-	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-
-	bucket = getActualBucketname(fs.path, bucket)
-	bucketPath := filepath.Join(fs.path, bucket)
-	// Check bucket exists
-	if _, e := os.Stat(bucketPath); e != nil {
-		if os.IsNotExist(e) {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		}
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
 		return probe.NewError(e)
 	}
+
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 
 	// Verify object path legal
 	if !IsValidObjectName(object) {
@@ -349,21 +319,20 @@ func (fs Filesystem) DeleteObject(bucket, object string) *probe.Error {
 
 	// Do not use filepath.Join() since filepath.Join strips off any
 	// object names with '/', use them as is in a static manner so
-	// that we can send a proper 'ObjectNotFound' reply back upon
-	// os.Stat().
+	// that we can send a proper 'ObjectNotFound' reply back upon os.Stat().
 	var objectPath string
 	if runtime.GOOS == "windows" {
-		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
+		objectPath = fs.diskPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	} else {
-		objectPath = fs.path + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
+		objectPath = fs.diskPath + string(os.PathSeparator) + bucket + string(os.PathSeparator) + object
 	}
 	// Delete object path if its empty.
-	err := deleteObjectPath(bucketPath, objectPath, bucket, object)
+	err := deleteObjectPath(bucketDir, objectPath, bucket, object)
 	if err != nil {
 		if os.IsNotExist(err.ToGoError()) {
 			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
-		return err.Trace(bucketPath, objectPath, bucket, object)
+		return err.Trace(bucketDir, objectPath, bucket, object)
 	}
 	return nil
 }
