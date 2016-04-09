@@ -1070,7 +1070,6 @@ func (s *MyAPISuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response3.StatusCode, Equals, http.StatusNoContent)
 }
 
-/*
 func (s *MyAPISuite) TestBucketMultipartList(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/bucketmultipartlist", 0, nil)
 	c.Assert(err, IsNil)
@@ -1159,7 +1158,6 @@ func (s *MyAPISuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
 }
-*/
 
 func (s *MyAPISuite) TestValidateObjectMultipartUploadID(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartlist-uploadid", 0, nil)

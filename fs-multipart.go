@@ -28,16 +28,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/safe"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
-const configDir = ".minio"
-const uploadIDSuffix = ".uploadid"
+const (
+	minioMetaDir            = ".minio"
+	multipartUploadIDSuffix = ".uploadid"
+)
 
+// Removes files and its parent directories up to a given level.
 func removeFileTree(fileName string, level string) error {
 	if e := os.Remove(fileName); e != nil {
 		return e
@@ -49,7 +51,6 @@ func removeFileTree(fileName string, level string) error {
 		} else if !status {
 			break
 		}
-
 		if e := os.Remove(fileDir); e != nil {
 			return e
 		}
@@ -126,7 +127,7 @@ func makeS3MD5(md5Strs ...string) (string, *probe.Error) {
 }
 
 func (fs Filesystem) newUploadID(bucket, object string) (string, error) {
-	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
+	metaObjectDir := filepath.Join(fs.diskPath, minioMetaDir, bucket, object)
 
 	// create metaObjectDir if not exist
 	if status, e := isDirExist(metaObjectDir); e != nil {
@@ -144,7 +145,7 @@ func (fs Filesystem) newUploadID(bucket, object string) (string, error) {
 		}
 
 		uploadID := uuid.String()
-		uploadIDFile := filepath.Join(metaObjectDir, uploadID+uploadIDSuffix)
+		uploadIDFile := filepath.Join(metaObjectDir, uploadID+multipartUploadIDSuffix)
 		if _, e := os.Lstat(uploadIDFile); e != nil {
 			if !os.IsNotExist(e) {
 				return "", e
@@ -163,11 +164,11 @@ func (fs Filesystem) newUploadID(bucket, object string) (string, error) {
 }
 
 func (fs Filesystem) isUploadIDExist(bucket, object, uploadID string) (bool, error) {
-	return isFileExist(filepath.Join(fs.path, configDir, bucket, object, uploadID+uploadIDSuffix))
+	return isFileExist(filepath.Join(fs.diskPath, minioMetaDir, bucket, object, uploadID+multipartUploadIDSuffix))
 }
 
 func (fs Filesystem) cleanupUploadID(bucket, object, uploadID string) error {
-	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
+	metaObjectDir := filepath.Join(fs.diskPath, minioMetaDir, bucket, object)
 	uploadIDPrefix := uploadID + "."
 
 	dirents, e := scandir(metaObjectDir,
@@ -182,52 +183,16 @@ func (fs Filesystem) cleanupUploadID(bucket, object, uploadID string) error {
 
 	for _, dirent := range dirents {
 		if e := os.Remove(filepath.Join(metaObjectDir, dirent.name)); e != nil {
-			//return InternalError{Err: err}
 			return e
 		}
 	}
 
 	if status, e := isDirEmpty(metaObjectDir); e != nil {
-		// TODO: add log than returning error
-		//return InternalError{Err: err}
 		return e
 	} else if status {
-		if e := removeFileTree(metaObjectDir, filepath.Join(fs.path, configDir, bucket)); e != nil {
-			// TODO: add log than returning error
-			//return InternalError{Err: err}
+		if e := removeFileTree(metaObjectDir, filepath.Join(fs.diskPath, minioMetaDir, bucket)); e != nil {
 			return e
 		}
-	}
-
-	return nil
-}
-
-func (fs Filesystem) checkBucketArg(bucket string) (string, error) {
-	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
-	}
-
-	bucket = getActualBucketname(fs.path, bucket)
-	if status, e := isDirExist(filepath.Join(fs.path, bucket)); e != nil {
-		//return "", InternalError{Err: err}
-		return "", e
-	} else if !status {
-		return "", BucketNotFound{Bucket: bucket}
-	}
-
-	return bucket, nil
-}
-
-func (fs Filesystem) checkDiskFree() error {
-	di, e := disk.GetInfo(fs.path)
-	if e != nil {
-		return e
-	}
-
-	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= fs.minFreeDisk {
-		return RootPathFull{Path: fs.path}
 	}
 
 	return nil
@@ -254,7 +219,7 @@ func (fs Filesystem) NewMultipartUpload(bucket, object string) (string, *probe.E
 		return "", probe.NewError(e)
 	}
 
-	if e := fs.checkDiskFree(); e != nil {
+	if e := checkDiskFree(fs.diskPath, fs.minFreeDisk); e != nil {
 		return "", probe.NewError(e)
 	}
 
@@ -290,12 +255,12 @@ func (fs Filesystem) PutObjectPart(bucket, object, uploadID string, partNumber i
 		return "", probe.NewError(errors.New("invalid part id, should be not more than 10000"))
 	}
 
-	if e := fs.checkDiskFree(); e != nil {
+	if e := checkDiskFree(fs.diskPath, fs.minFreeDisk); e != nil {
 		return "", probe.NewError(e)
 	}
 
 	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partNumber, md5Hex)
-	partFilePath := filepath.Join(fs.path, configDir, bucket, object, partSuffix)
+	partFilePath := filepath.Join(fs.diskPath, minioMetaDir, bucket, object, partSuffix)
 	if e := safeWriteFile(partFilePath, data, size, md5Hex); e != nil {
 		return "", probe.NewError(e)
 	}
@@ -339,11 +304,11 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 		return ObjectInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	if e := fs.checkDiskFree(); e != nil {
+	if e := checkDiskFree(fs.diskPath, fs.minFreeDisk); e != nil {
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
+	metaObjectDir := filepath.Join(fs.diskPath, minioMetaDir, bucket, object)
 
 	var md5Sums []string
 	for _, part := range parts {
@@ -397,7 +362,7 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 		return ObjectInfo{}, probe.NewError(e)
 	}
 
-	bucketPath := filepath.Join(fs.path, bucket)
+	bucketPath := filepath.Join(fs.diskPath, bucket)
 	objectPath := filepath.Join(bucketPath, object)
 	if e = os.MkdirAll(filepath.Dir(objectPath), 0755); e != nil {
 		os.Remove(completeObjectFile)
@@ -469,10 +434,9 @@ func (fs *Filesystem) lookupListMultipartObjectCh(params listMultipartObjectPara
 func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, *probe.Error) {
 	result := ListMultipartsInfo{}
 
-	if bucketDirName, err := fs.checkBucketArg(bucket); err == nil {
-		bucket = bucketDirName
-	} else {
-		return result, probe.NewError(err)
+	bucket, e := fs.checkBucketArg(bucket)
+	if e != nil {
+		return result, probe.NewError(e)
 	}
 
 	if !IsValidObjectPrefix(objectPrefix) {
@@ -519,7 +483,7 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		recursive = false
 	}
 
-	bucketDir := filepath.Join(fs.path, configDir, bucket)
+	metaBucketDir := filepath.Join(fs.diskPath, minioMetaDir, bucket)
 	// Lookup of if listMultipartObjectChannel is available for given
 	// parameters, else create a new one.
 	multipartObjectInfoCh := fs.lookupListMultipartObjectCh(listMultipartObjectParams{
@@ -530,7 +494,7 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		uploadIDMarker: uploadIDMarker,
 	})
 	if multipartObjectInfoCh == nil {
-		ch := scanMultipartDir(bucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
+		ch := scanMultipartDir(metaBucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
 		multipartObjectInfoCh = &ch
 	}
 
@@ -574,7 +538,13 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		result.IsTruncated = true
 		result.NextKeyMarker = nextKeyMarker
 		result.NextUploadIDMarker = nextUploadIDMarker
-		fs.saveListMultipartObjectCh(listMultipartObjectParams{bucket, delimiter, nextKeyMarker, objectPrefix, nextUploadIDMarker}, *multipartObjectInfoCh)
+		fs.saveListMultipartObjectCh(listMultipartObjectParams{
+			bucket:         bucket,
+			delimiter:      delimiter,
+			keyMarker:      nextKeyMarker,
+			prefix:         objectPrefix,
+			uploadIDMarker: nextUploadIDMarker,
+		}, *multipartObjectInfoCh)
 	}
 
 	return result, nil
@@ -604,7 +574,7 @@ func (fs Filesystem) ListObjectParts(bucket, object, uploadID string, partNumber
 		maxParts = 1000
 	}
 
-	metaObjectDir := filepath.Join(fs.path, configDir, bucket, object)
+	metaObjectDir := filepath.Join(fs.diskPath, minioMetaDir, bucket, object)
 	uploadIDPrefix := uploadID + "."
 
 	dirents, e := scandir(metaObjectDir,

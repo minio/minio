@@ -70,24 +70,6 @@ func newLocalStorage(diskPath string) (StorageAPI, error) {
 	return disk, nil
 }
 
-// checkDiskFree verifies if disk path has sufficient minium free disk
-// space.
-func checkDiskFree(diskPath string, minFreeDisk int64) error {
-	di, e := disk.GetInfo(diskPath)
-	if e != nil {
-		return e
-	}
-
-	// Remove 5% from total space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= minFreeDisk {
-		return ErrDiskPathFull
-	}
-
-	// Success.
-	return nil
-}
-
 // Make a volume entry.
 func (s localStorage) MakeVol(volume string) error {
 	if e := checkDiskFree(s.diskPath, s.minFreeDisk); e != nil {

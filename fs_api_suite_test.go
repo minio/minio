@@ -390,22 +390,22 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectAPI) 
 
 	_, err = fs.GetObject("bucket", "dir1", 0)
 	switch err := err.ToGoError().(type) {
-	case ObjectNotFound:
+	case ObjectExistsAsPrefix:
 		c.Assert(err.Bucket, check.Equals, "bucket")
-		c.Assert(err.Object, check.Equals, "dir1")
+		c.Assert(err.Prefix, check.Equals, "dir1")
 	default:
 		// force a failure with a line number
-		c.Assert(err, check.Equals, "ObjectNotFound")
+		c.Assert(err.Error(), check.Equals, "Object exists on : bucket as prefix dir1")
 	}
 
 	_, err = fs.GetObject("bucket", "dir1/", 0)
 	switch err := err.ToGoError().(type) {
-	case ObjectNotFound:
+	case ObjectExistsAsPrefix:
 		c.Assert(err.Bucket, check.Equals, "bucket")
-		c.Assert(err.Object, check.Equals, "dir1/")
+		c.Assert(err.Prefix, check.Equals, "dir1/")
 	default:
 		// force a failure with a line number
-		c.Assert(err, check.Equals, "ObjectNotFound")
+		c.Assert(err.Error(), check.Equals, "Object exists on : bucket as prefix dir1")
 	}
 }
 

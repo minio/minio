@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/probe"
 )
 
@@ -34,8 +33,8 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	bucket = getActualBucketname(fs.path, bucket)
-	bucketDir := filepath.Join(fs.path, bucket)
+	bucket = getActualBucketname(fs.diskPath, bucket)
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 	if e := os.Remove(bucketDir); e != nil {
 		// Error if there was no bucket in the first place.
 		if os.IsNotExist(e) {
@@ -57,7 +56,7 @@ func (fs Filesystem) DeleteBucket(bucket string) *probe.Error {
 
 // ListBuckets - Get service.
 func (fs Filesystem) ListBuckets() ([]BucketInfo, *probe.Error) {
-	files, e := ioutil.ReadDir(fs.path)
+	files, e := ioutil.ReadDir(fs.diskPath)
 	if e != nil {
 		return []BucketInfo{}, probe.NewError(e)
 	}
@@ -105,32 +104,16 @@ func removeDuplicateBuckets(buckets []BucketInfo) []BucketInfo {
 
 // MakeBucket - PUT Bucket
 func (fs Filesystem) MakeBucket(bucket string) *probe.Error {
-	di, err := disk.GetInfo(fs.path)
-	if err != nil {
-		return probe.NewError(err)
-	}
-
-	// Remove 5% from total space for cumulative disk space used for
-	// journalling, inodes etc.
-	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= fs.minFreeDisk {
-		return probe.NewError(RootPathFull{Path: fs.path})
-	}
-
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
+	if _, e := fs.checkBucketArg(bucket); e == nil {
+		return probe.NewError(BucketExists{Bucket: bucket})
+	} else if _, ok := e.(BucketNameInvalid); ok {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-
-	bucket = getActualBucketname(fs.path, bucket)
-	bucketDir := filepath.Join(fs.path, bucket)
-	if _, e := os.Stat(bucketDir); e == nil {
-		return probe.NewError(BucketExists{Bucket: bucket})
-	}
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 
 	// Make bucket.
 	if e := os.Mkdir(bucketDir, 0700); e != nil {
-		return probe.NewError(err)
+		return probe.NewError(e)
 	}
 	return nil
 }
@@ -162,9 +145,9 @@ func (fs Filesystem) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	bucket = getActualBucketname(fs.path, bucket)
+	bucket = getActualBucketname(fs.diskPath, bucket)
 	// Get bucket path.
-	bucketDir := filepath.Join(fs.path, bucket)
+	bucketDir := filepath.Join(fs.diskPath, bucket)
 	fi, e := os.Stat(bucketDir)
 	if e != nil {
 		// Check if bucket exists.
