@@ -46,6 +46,11 @@ func initConfig() *probe.Error {
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
+		// Enable console logger by default on a fresh run.
+		srvCfg.Logger.Console = consoleLogger{
+			Enable: true,
+			Level:  "fatal",
+		}
 		srvCfg.rwMutex = &sync.RWMutex{}
 		// Create config path.
 		err := createConfigPath()
