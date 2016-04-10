@@ -65,8 +65,8 @@ func mustGetKeyFile() string {
 
 // isCertFileExists verifies if cert file exists, returns true if
 // found, false otherwise.
-func isCertFileExists() bool {
-	st, e := os.Stat(filepath.Join(mustGetCertsPath(), globalMinioCertFile))
+func isCertFileExists(certFile string) bool {
+	st, e := os.Stat(certFile)
 	// If file exists and is regular return true.
 	if e == nil && st.Mode().IsRegular() {
 		return true
@@ -76,8 +76,8 @@ func isCertFileExists() bool {
 
 // isKeyFileExists verifies if key file exists, returns true if found,
 // false otherwise.
-func isKeyFileExists() bool {
-	st, e := os.Stat(filepath.Join(mustGetCertsPath(), globalMinioKeyFile))
+func isKeyFileExists(keyFile string) bool {
+	st, e := os.Stat(keyFile)
 	// If file exists and is regular return true.
 	if e == nil && st.Mode().IsRegular() {
 		return true
@@ -86,8 +86,8 @@ func isKeyFileExists() bool {
 }
 
 // isSSL - returns true with both cert and key exists.
-func isSSL() bool {
-	if isCertFileExists() && isKeyFileExists() {
+func isSSL(certFile, keyFile string) bool {
+	if isCertFileExists(certFile) && isKeyFileExists(keyFile) {
 		return true
 	}
 	return false

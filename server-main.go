@@ -42,6 +42,14 @@ var serverCmd = cli.Command{
 			Name:  "address",
 			Value: ":9000",
 		},
+		cli.StringFlag{
+			Name:  "cert",
+			Value: mustGetCertFile(),
+		},
+		cli.StringFlag{
+			Name:  "key",
+			Value: mustGetKeyFile(),
+		},
 	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
@@ -70,7 +78,7 @@ EXAMPLES:
 }
 
 // configureServer configure a new server instance
-func configureServer(serverAddr string, objectAPI ObjectAPI) *http.Server {
+func configureServer(serverAddr string, certFile string, keyFile string, objectAPI ObjectAPI) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           serverAddr,
@@ -79,11 +87,11 @@ func configureServer(serverAddr string, objectAPI ObjectAPI) *http.Server {
 	}
 
 	// Configure TLS if certs are available.
-	if isSSL() {
+	if isSSL(certFile, keyFile) {
 		var e error
 		apiServer.TLSConfig = &tls.Config{}
 		apiServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		apiServer.TLSConfig.Certificates[0], e = tls.LoadX509KeyPair(mustGetCertFile(), mustGetKeyFile())
+		apiServer.TLSConfig.Certificates[0], e = tls.LoadX509KeyPair(certFile, keyFile)
 		fatalIf(probe.NewError(e), "Unable to load certificates.", nil)
 	}
 
@@ -245,12 +253,16 @@ func serverMain(c *cli.Context) {
 	// Server address.
 	serverAddress := c.String("address")
 
+	// Certificates.
+	certFile := c.String("cert")
+	keyFile := c.String("key")
+
 	host, port, _ := net.SplitHostPort(serverAddress)
 	// If port empty, default to port '80'
 	if port == "" {
 		port = "80"
 		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
+		if isSSL(certFile, keyFile) {
 			port = "443"
 		}
 	}
@@ -273,7 +285,7 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Configure server.
-	apiServer := configureServer(serverAddress, objectAPI)
+	apiServer := configureServer(serverAddress, certFile, keyFile, objectAPI)
 
 	// Credential.
 	cred := serverConfig.GetCredential()

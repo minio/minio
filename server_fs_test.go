@@ -99,7 +99,7 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	fs, err := newFS(fsroot)
 	c.Assert(err, IsNil)
 
-	apiServer := configureServer(addr, fs)
+	apiServer := configureServer(addr, mustGetCertFile(), mustGetKeyFile(), fs)
 	testAPIFSCacheServer = httptest.NewServer(apiServer.Handler)
 }
 
