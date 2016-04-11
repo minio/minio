@@ -51,16 +51,27 @@ type fsStorage struct {
 	listObjectMapMutex *sync.Mutex
 }
 
+// isDirEmpty - returns whether given directory is empty or not.
+func isDirEmpty(dirname string) (status bool, err error) {
+	f, err := os.Open(dirname)
+	if err == nil {
+		defer f.Close()
+		if _, err = f.Readdirnames(1); err == io.EOF {
+			status = true
+			err = nil
+		}
+	}
+	return status, err
+}
+
 // isDirExist - returns whether given directory exists or not.
 func isDirExist(dirname string) (bool, error) {
 	fi, e := os.Lstat(dirname)
 	if e != nil {
 		if os.IsNotExist(e) {
 			return false, nil
-
 		}
 		return false, e
-
 	}
 	return fi.IsDir(), nil
 }
@@ -111,22 +122,22 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 }
 
 // Make a volume entry.
-func (s fsStorage) MakeVol(volume string) error {
+func (s fsStorage) MakeVol(volume string) (err error) {
 	if volume == "" {
 		return errInvalidArgument
 	}
-	if e := checkDiskFree(s.diskPath, s.minFreeDisk); e != nil {
-		return e
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return err
 	}
 
 	volumeDir := getVolumeDir(s.diskPath, volume)
-	if _, e := os.Stat(volumeDir); e == nil {
+	if _, err = os.Stat(volumeDir); err == nil {
 		return errVolumeExists
 	}
 
 	// Make a volume entry.
-	if e := os.Mkdir(volumeDir, 0700); e != nil {
-		return e
+	if err = os.Mkdir(volumeDir, 0700); err != nil {
+		return err
 	}
 
 	return nil
@@ -154,12 +165,11 @@ func removeDuplicateVols(vols []VolInfo) []VolInfo {
 }
 
 // ListVols - list volumes.
-func (s fsStorage) ListVols() ([]VolInfo, error) {
-	files, e := ioutil.ReadDir(s.diskPath)
-	if e != nil {
-		return nil, e
+func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
+	files, err := ioutil.ReadDir(s.diskPath)
+	if err != nil {
+		return nil, err
 	}
-	var volsInfo []VolInfo
 	for _, file := range files {
 		if !file.IsDir() {
 			// If not directory, ignore all file types.
@@ -195,13 +205,14 @@ func getVolumeDir(diskPath, volume string) string {
 }
 
 // StatVol - get volume info.
-func (s fsStorage) StatVol(volume string) (VolInfo, error) {
+func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	if volume == "" {
 		return VolInfo{}, errInvalidArgument
 	}
 	volumeDir := getVolumeDir(s.diskPath, volume)
 	// Stat a volume entry.
-	st, err := os.Stat(volumeDir)
+	var st os.FileInfo
+	st, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
@@ -260,7 +271,15 @@ func (s *fsStorage) lookupTreeWalk(params listParams) *treeWalker {
 	return nil
 }
 
-// List operaion
+// List of special prefixes for files, includes old and new ones.
+var specialPrefixes = []string{
+	"$multipart",
+	"$tmpobject",
+	"$tmpfile",
+	// Add new special prefixes if any used.
+}
+
+// List operation.
 func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, count int) ([]FileInfo, bool, error) {
 	if volume == "" {
 		return nil, true, errInvalidArgument
@@ -330,6 +349,16 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 		}
 		fileInfo := walkResult.fileInfo
 		fileInfo.Name = filepath.ToSlash(fileInfo.Name)
+		// TODO: Find a proper place to skip these files.
+		// Skip temporary files.
+		for _, specialPrefix := range specialPrefixes {
+			if strings.Contains(fileInfo.Name, specialPrefix) {
+				if walkResult.end {
+					return fileInfos, true, nil
+				}
+				continue
+			}
+		}
 		fileInfos = append(fileInfos, fileInfo)
 		// We have listed everything return.
 		if walkResult.end {

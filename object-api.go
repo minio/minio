@@ -82,6 +82,9 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 		return nil, probe.NewError(e)
 	}
 	for _, vol := range vols {
+		if !IsValidBucketName(vol.Name) {
+			continue
+		}
 		bucketInfos = append(bucketInfos, BucketInfo{vol.Name, vol.Created})
 	}
 	return bucketInfos, nil

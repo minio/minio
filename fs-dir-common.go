@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -49,18 +50,17 @@ func (ent fsDirent) IsRegular() bool {
 // byDirentName is a collection satisfying sort.Interface.
 type byDirentName []fsDirent
 
-func (d byDirentName) Len() int      { return len(d) }
-func (d byDirentName) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d byDirentName) Less(i, j int) bool {
-	n1 := d[i].name
-	if d[i].mode.IsDir() {
-		n1 = n1 + string(os.PathSeparator)
-	}
+func (d byDirentName) Len() int           { return len(d) }
+func (d byDirentName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d byDirentName) Less(i, j int) bool { return d[i].name < d[j].name }
 
-	n2 := d[j].name
-	if d[j].mode.IsDir() {
-		n2 = n2 + string(os.PathSeparator)
+// Using sort.Search() internally to jump to the file entry containing
+// the prefix.
+func searchDirents(dirents []fsDirent, x string) int {
+	processFunc := func(i int) bool {
+		return dirents[i].name >= x
 	}
+	return sort.Search(len(dirents), processFunc)
 }
 
 // Tree walk result carries results of tree walking.
