@@ -1022,7 +1022,12 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 		return
 	}
 	// Complete parts.
-	completeParts := complMultipartUpload.Parts
+	var completeParts []completePart
+	for _, part := range complMultipartUpload.Parts {
+		part.ETag = strings.TrimPrefix(part.ETag, "\"")
+		part.ETag = strings.TrimSuffix(part.ETag, "\"")
+		completeParts = append(completeParts, part)
+	}
 
 	// Complete multipart upload.
 	objInfo, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)

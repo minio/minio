@@ -19,8 +19,6 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -278,17 +276,22 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 		return ListObjectsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != "/" {
-		return ListObjectsInfo{}, probe.NewError(fmt.Errorf("delimiter '%s' is not supported. Only '/' is supported", delimiter))
+	if delimiter != "" && delimiter != slashPathSeparator {
+		return ListObjectsInfo{}, probe.NewError(UnsupportedDelimiter{
+			Delimiter: delimiter,
+		})
 	}
 	// Verify if marker has prefix.
 	if marker != "" {
 		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, probe.NewError(fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", marker, prefix))
+			return ListObjectsInfo{}, probe.NewError(InvalidMarkerPrefixCombination{
+				Marker: marker,
+				Prefix: prefix,
+			})
 		}
 	}
 	recursive := true
-	if delimiter == "/" {
+	if delimiter == slashPathSeparator {
 		recursive = false
 	}
 	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
@@ -316,70 +319,4 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 		})
 	}
 	return result, nil
-}
-
-func (o objectAPI) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, *probe.Error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ListMultipartsInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectPrefix(objectPrefix) {
-		return ListMultipartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: objectPrefix})
-	}
-	return ListMultipartsInfo{}, probe.NewError(errors.New("Not implemented"))
-}
-
-func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return "", probe.NewError(errors.New("Not implemented"))
-}
-
-func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, *probe.Error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return "", probe.NewError(errors.New("Not implemented"))
-}
-
-func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, *probe.Error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return ListPartsInfo{}, probe.NewError(errors.New("Not implemented"))
-}
-
-func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, *probe.Error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return ObjectInfo{}, probe.NewError(errors.New("Not implemented"))
-}
-
-func (o objectAPI) AbortMultipartUpload(bucket, object, uploadID string) *probe.Error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return probe.NewError(errors.New("Not implemented"))
 }
