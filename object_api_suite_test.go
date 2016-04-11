@@ -42,8 +42,8 @@ func APITestSuite(c *check.C, create func() ObjectAPI) {
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
 	testDefaultContentType(c, create)
-	//	testMultipartObjectCreation(c, create)
-	//	testMultipartObjectAbort(c, create)
+	testMultipartObjectCreation(c, create)
+	testMultipartObjectAbort(c, create)
 }
 
 func testMakeBucket(c *check.C, create func() ObjectAPI) {

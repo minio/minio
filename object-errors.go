@@ -134,6 +134,34 @@ func (e BadDigest) Error() string {
 	return "Bad digest expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
 }
 
+// UnsupportedDelimiter - unsupported delimiter.
+type UnsupportedDelimiter struct {
+	Delimiter string
+}
+
+func (e UnsupportedDelimiter) Error() string {
+	return fmt.Sprintf("delimiter '%s' is not supported. Only '/' is supported", e.Delimiter)
+}
+
+// InvalidUploadIDKeyCombination - invalid upload id and key marker
+// combination.
+type InvalidUploadIDKeyCombination struct {
+	UploadIDMarker, KeyMarker string
+}
+
+func (e InvalidUploadIDKeyCombination) Error() string {
+	return fmt.Sprintf("Invalid combination of uploadID marker '%s' and marker '%s'", e.UploadIDMarker, e.KeyMarker)
+}
+
+// InvalidMarkerPrefixCombination - invalid marker and prefix combination.
+type InvalidMarkerPrefixCombination struct {
+	Marker, Prefix string
+}
+
+func (e InvalidMarkerPrefixCombination) Error() string {
+	return fmt.Sprintf("Invalid combination of marker '%s' and prefix '%s'", e.Marker, e.Prefix)
+}
+
 // InternalError - generic internal error
 type InternalError struct{}
 
@@ -262,7 +290,16 @@ func (e InvalidRange) Error() string {
 
 /// Multipart related errors
 
-// InvalidUploadID invalid upload id
+// MalformedUploadID malformed upload id.
+type MalformedUploadID struct {
+	UploadID string
+}
+
+func (e MalformedUploadID) Error() string {
+	return "Malformed upload id " + e.UploadID
+}
+
+// InvalidUploadID invalid upload id.
 type InvalidUploadID struct {
 	UploadID string
 }
