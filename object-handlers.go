@@ -74,7 +74,7 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
-func (api objectStorageAPI) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -268,7 +268,7 @@ func checkETag(w http.ResponseWriter, r *http.Request) bool {
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -332,7 +332,7 @@ func (api objectStorageAPI) HeadObjectHandler(w http.ResponseWriter, r *http.Req
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
-func (api objectStorageAPI) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -583,7 +583,7 @@ func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
-func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// If the matching failed, it means that the X-Amz-Copy-Source was
 	// wrong, fail right here.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
@@ -699,10 +699,10 @@ func (api objectStorageAPI) PutObjectHandler(w http.ResponseWriter, r *http.Requ
 	writeSuccessResponse(w, nil)
 }
 
-/// Multipart objectStorageAPI
+/// Multipart objectAPIHandlers
 
 // NewMultipartUploadHandler - New multipart upload
-func (api objectStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
@@ -755,7 +755,7 @@ func (api objectStorageAPI) NewMultipartUploadHandler(w http.ResponseWriter, r *
 }
 
 // PutObjectPartHandler - Upload part
-func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -868,7 +868,7 @@ func (api objectStorageAPI) PutObjectPartHandler(w http.ResponseWriter, r *http.
 }
 
 // AbortMultipartUploadHandler - Abort multipart upload
-func (api objectStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -915,7 +915,7 @@ func (api objectStorageAPI) AbortMultipartUploadHandler(w http.ResponseWriter, r
 }
 
 // ListObjectPartsHandler - List object parts
-func (api objectStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -979,7 +979,7 @@ func (api objectStorageAPI) ListObjectPartsHandler(w http.ResponseWriter, r *htt
 }
 
 // CompleteMultipartUploadHandler - Complete multipart upload
-func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -1066,10 +1066,10 @@ func (api objectStorageAPI) CompleteMultipartUploadHandler(w http.ResponseWriter
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
-/// Delete objectStorageAPI
+/// Delete objectAPIHandlers
 
 // DeleteObjectHandler - delete an object
-func (api objectStorageAPI) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]

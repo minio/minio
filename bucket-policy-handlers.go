@@ -127,7 +127,7 @@ func bucketPolicyConditionMatch(conditions map[string]string, statement policySt
 // -----------------
 // This implementation of the PUT operation uses the policy
 // subresource to add to or replace a policy on a bucket
-func (api objectStorageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -201,7 +201,7 @@ func (api objectStorageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *htt
 // -----------------
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
-func (api objectStorageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -238,7 +238,7 @@ func (api objectStorageAPI) DeleteBucketPolicyHandler(w http.ResponseWriter, r *
 // -----------------
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
-func (api objectStorageAPI) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 

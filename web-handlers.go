@@ -71,7 +71,7 @@ type ServerInfoRep struct {
 }
 
 // ServerInfo - get server info.
-func (web *webAPI) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
+func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -106,7 +106,7 @@ type DiskInfoRep struct {
 }
 
 // DiskInfo - get disk statistics.
-func (web *webAPI) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
+func (web *webAPIHandlers) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
 	// FIXME: bring in StatFS in StorageAPI interface and uncomment the below lines.
 	// if !isJWTReqAuthenticated(r) {
 	// 	return &json2.Error{Message: "Unauthorized request"}
@@ -126,7 +126,7 @@ type MakeBucketArgs struct {
 }
 
 // MakeBucket - make a bucket.
-func (web *webAPI) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
+func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -153,7 +153,7 @@ type WebBucketInfo struct {
 }
 
 // ListBuckets - list buckets api.
-func (web *webAPI) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
+func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -199,7 +199,7 @@ type WebObjectInfo struct {
 }
 
 // ListObjects - list objects api.
-func (web *webAPI) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
+func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
 	marker := ""
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
@@ -238,7 +238,7 @@ type RemoveObjectArgs struct {
 }
 
 // RemoveObject - removes an object.
-func (web *webAPI) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
+func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -263,7 +263,7 @@ type LoginRep struct {
 }
 
 // Login - user login handler.
-func (web *webAPI) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
+func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	jwt := initJWT()
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
@@ -284,7 +284,7 @@ type GenerateAuthReply struct {
 	UIVersion string `json:"uiVersion"`
 }
 
-func (web webAPI) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
+func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -308,7 +308,7 @@ type SetAuthReply struct {
 }
 
 // SetAuth - Set accessKey and secretKey credentials.
-func (web *webAPI) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
+func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -345,7 +345,7 @@ type GetAuthReply struct {
 }
 
 // GetAuth - return accessKey and secretKey credentials.
-func (web *webAPI) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
+func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -357,7 +357,7 @@ func (web *webAPI) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuth
 }
 
 // Upload - file upload handler.
-func (web *webAPI) Upload(w http.ResponseWriter, r *http.Request) {
+func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if !isJWTReqAuthenticated(r) {
 		writeWebErrorResponse(w, errInvalidToken)
 		return
@@ -371,7 +371,7 @@ func (web *webAPI) Upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // Download - file download handler.
-func (web *webAPI) Download(w http.ResponseWriter, r *http.Request) {
+func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
