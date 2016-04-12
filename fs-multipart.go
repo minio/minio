@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015,2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -394,11 +394,11 @@ func (fs Filesystem) CompleteMultipartUpload(bucket, object, uploadID string, pa
 	return newObject, nil
 }
 
-func (fs *Filesystem) saveListMultipartObjectCh(params listMultipartObjectParams, ch multipartObjectInfoChannel) {
+func (fs *Filesystem) saveListMultipartObjectCh(params listMultipartObjectParams, ch <-chan multipartObjectInfo) {
 	fs.listMultipartObjectMapMutex.Lock()
 	defer fs.listMultipartObjectMapMutex.Unlock()
 
-	channels := []multipartObjectInfoChannel{ch}
+	channels := []<-chan multipartObjectInfo{ch}
 	if _, ok := fs.listMultipartObjectMap[params]; ok {
 		channels = append(fs.listMultipartObjectMap[params], ch)
 	}
@@ -406,27 +406,23 @@ func (fs *Filesystem) saveListMultipartObjectCh(params listMultipartObjectParams
 	fs.listMultipartObjectMap[params] = channels
 }
 
-func (fs *Filesystem) lookupListMultipartObjectCh(params listMultipartObjectParams) *multipartObjectInfoChannel {
+func (fs *Filesystem) lookupListMultipartObjectCh(params listMultipartObjectParams) <-chan multipartObjectInfo {
 	fs.listMultipartObjectMapMutex.Lock()
 	defer fs.listMultipartObjectMapMutex.Unlock()
 
 	if channels, ok := fs.listMultipartObjectMap[params]; ok {
-		for i, channel := range channels {
-			if !channel.IsTimedOut() {
-				chs := channels[i+1:]
-				if len(chs) > 0 {
-					fs.listMultipartObjectMap[params] = chs
-				} else {
-					delete(fs.listMultipartObjectMap, params)
-				}
-
-				return &channel
-			}
+		var channel <-chan multipartObjectInfo
+		channel, channels = channels[0], channels[1:]
+		if len(channels) > 0 {
+			fs.listMultipartObjectMap[params] = channels
+		} else {
+			// do not store empty channel list
+			delete(fs.listMultipartObjectMap, params)
 		}
 
-		// As all channels are timed out, delete the map entry
-		delete(fs.listMultipartObjectMap, params)
+		return channel
 	}
+
 	return nil
 }
 
@@ -484,8 +480,10 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 	}
 
 	metaBucketDir := filepath.Join(fs.diskPath, minioMetaDir, bucket)
+
 	// Lookup of if listMultipartObjectChannel is available for given
 	// parameters, else create a new one.
+	savedChannel := true
 	multipartObjectInfoCh := fs.lookupListMultipartObjectCh(listMultipartObjectParams{
 		bucket:         bucket,
 		delimiter:      delimiter,
@@ -493,58 +491,94 @@ func (fs Filesystem) ListMultipartUploads(bucket, objectPrefix, keyMarker, uploa
 		prefix:         prefixPath,
 		uploadIDMarker: uploadIDMarker,
 	})
+
 	if multipartObjectInfoCh == nil {
-		ch := scanMultipartDir(metaBucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
-		multipartObjectInfoCh = &ch
+		multipartObjectInfoCh = scanMultipartDir(metaBucketDir, objectPrefix, keyMarker, uploadIDMarker, recursive)
+		savedChannel = false
 	}
 
+	var objInfo *multipartObjectInfo
 	nextKeyMarker := ""
 	nextUploadIDMarker := ""
 	for i := 0; i < maxUploads; {
-		multipartObjInfo, ok := multipartObjectInfoCh.Read()
-		if !ok {
-			// Closed channel.
-			return result, nil
+		// read the channel
+		if oi, ok := <-multipartObjectInfoCh; ok {
+			objInfo = &oi
+		} else {
+			// closed channel
+			if i == 0 {
+				// first read
+				if !savedChannel {
+					// its valid to have a closed new channel for first read
+					multipartObjectInfoCh = nil
+					break
+				}
+
+				// invalid saved channel amd create new channel
+				multipartObjectInfoCh = scanMultipartDir(metaBucketDir, objectPrefix, keyMarker,
+					uploadIDMarker, recursive)
+			} else {
+				// TODO: FIX: there is a chance of infinite loop if we get closed channel always
+				// the channel got closed due to timeout
+				// create a new channel
+				multipartObjectInfoCh = scanMultipartDir(metaBucketDir, objectPrefix, nextKeyMarker,
+					nextUploadIDMarker, recursive)
+			}
+
+			// make it as new channel
+			savedChannel = false
+			continue
 		}
 
-		if multipartObjInfo.Err != nil {
-			if os.IsNotExist(multipartObjInfo.Err) {
+		if objInfo.Err != nil {
+			if os.IsNotExist(objInfo.Err) {
 				return ListMultipartsInfo{}, nil
 			}
-			return ListMultipartsInfo{}, probe.NewError(multipartObjInfo.Err)
+
+			return ListMultipartsInfo{}, probe.NewError(objInfo.Err)
 		}
 
-		if strings.Contains(multipartObjInfo.Name, "$multiparts") ||
-			strings.Contains(multipartObjInfo.Name, "$tmpobject") {
+		// backward compatibility check
+		if strings.Contains(objInfo.Name, "$multiparts") || strings.Contains(objInfo.Name, "$tmpobject") {
 			continue
 		}
 
 		// Directories are listed only if recursive is false
-		if multipartObjInfo.IsDir {
-			result.CommonPrefixes = append(result.CommonPrefixes, multipartObjInfo.Name)
+		if objInfo.IsDir {
+			result.CommonPrefixes = append(result.CommonPrefixes, objInfo.Name)
 		} else {
 			result.Uploads = append(result.Uploads, uploadMetadata{
-				Object:    multipartObjInfo.Name,
-				UploadID:  multipartObjInfo.UploadID,
-				Initiated: multipartObjInfo.ModifiedTime,
+				Object:    objInfo.Name,
+				UploadID:  objInfo.UploadID,
+				Initiated: objInfo.ModifiedTime,
 			})
 		}
-		nextKeyMarker = multipartObjInfo.Name
-		nextUploadIDMarker = multipartObjInfo.UploadID
+
+		nextKeyMarker = objInfo.Name
+		nextUploadIDMarker = objInfo.UploadID
 		i++
+
+		if objInfo.End {
+			// as we received last object, do not save this channel for later use
+			multipartObjectInfoCh = nil
+			break
+		}
 	}
 
-	if !multipartObjectInfoCh.IsClosed() {
+	if multipartObjectInfoCh != nil {
+		// we haven't received last object
 		result.IsTruncated = true
 		result.NextKeyMarker = nextKeyMarker
 		result.NextUploadIDMarker = nextUploadIDMarker
+
+		// save this channel for later use
 		fs.saveListMultipartObjectCh(listMultipartObjectParams{
 			bucket:         bucket,
 			delimiter:      delimiter,
 			keyMarker:      nextKeyMarker,
 			prefix:         objectPrefix,
 			uploadIDMarker: nextUploadIDMarker,
-		}, *multipartObjectInfoCh)
+		}, multipartObjectInfoCh)
 	}
 
 	return result, nil

@@ -49,7 +49,7 @@ type Filesystem struct {
 	rwLock                      *sync.RWMutex
 	listObjectMap               map[listObjectParams][]*treeWalker
 	listObjectMapMutex          *sync.Mutex
-	listMultipartObjectMap      map[listMultipartObjectParams][]multipartObjectInfoChannel
+	listMultipartObjectMap      map[listMultipartObjectParams][]<-chan multipartObjectInfo
 	listMultipartObjectMapMutex *sync.Mutex
 }
 
@@ -69,7 +69,7 @@ func newFS(diskPath string) (ObjectAPI, *probe.Error) {
 	fs.listObjectMapMutex = &sync.Mutex{}
 
 	// Initialize list multipart map.
-	fs.listMultipartObjectMap = make(map[listMultipartObjectParams][]multipartObjectInfoChannel)
+	fs.listMultipartObjectMap = make(map[listMultipartObjectParams][]<-chan multipartObjectInfo)
 	fs.listMultipartObjectMapMutex = &sync.Mutex{}
 
 	// Return here.
