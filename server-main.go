@@ -42,6 +42,11 @@ var serverCmd = cli.Command{
 			Name:  "address",
 			Value: ":9000",
 		},
+		cli.IntFlag{
+			Name:  "conn-limit",
+			Value: 0,
+			Usage: "Limit number of concurrent connections. [DEFAULT: unlimited]",
+		},
 	},
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
@@ -302,8 +307,15 @@ func serverMain(c *cli.Context) {
 		console.Println("    $ chmod 755 mc")
 		console.Println("    $ ./mc config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
 	}
-
-	// Start server.
-	err = minhttp.ListenAndServe(apiServer)
-	errorIf(err.Trace(), "Failed to start the minio server.", nil)
+	connLimit := c.Int("conn-limit")
+	// For zero and negative connection limits, no limits.
+	if connLimit <= 0 {
+		// Start server.
+		err = minhttp.ListenAndServe(apiServer)
+		errorIf(err.Trace(), "Failed to start the minio server.", nil)
+	} else {
+		// Start minio server with concurrent connection limit.
+		err = minhttp.ListenAndServeLimited(connLimit, apiServer)
+		errorIf(err.Trace(), "Failed to start the minio server.", nil)
+	}
 }
