@@ -24,9 +24,8 @@ import (
 	"time"
 )
 
-func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, recursive bool) multipartObjectInfoChannel {
+func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, recursive bool) <-chan multipartObjectInfo {
 	objectInfoCh := make(chan multipartObjectInfo, listObjectsLimit)
-	timeoutCh := make(chan struct{}, 1)
 
 	// TODO: check if bucketDir is absolute path
 	scanDir := bucketDir
@@ -96,7 +95,6 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 	// goroutine - retrieves directory entries, makes ObjectInfo and sends into the channel.
 	go func() {
 		defer close(objectInfoCh)
-		defer close(timeoutCh)
 
 		// send function - returns true if ObjectInfo is sent
 		// within (time.Second * 15) else false on timeout.
@@ -106,27 +104,45 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 			case objectInfoCh <- oi:
 				return true
 			case <-timer:
-				timeoutCh <- struct{}{}
 				return false
 			}
 		}
 
-		for {
-			// Filters scandir entries. This filter function is
-			// specific for multipart listing.
-			multipartFilterFn := func(dirent fsDirent) bool {
-				// Verify if dirent is a directory a regular file
-				// with match uploadID suffix.
-				if dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, multipartUploadIDSuffix)) {
-					// Return if dirent matches prefix and
-					// lexically higher than marker.
-					return strings.HasPrefix(dirent.name, prefixPath) && dirent.name > markerPath
-				}
-				return false
+		// filter function - filters directory entries matching multipart uploadids, prefix and marker
+		direntFilterFn := func(dirent fsDirent) bool {
+			// check if dirent is a directory (or) dirent is a regular file and it's name ends with Upload ID suffix string
+			if dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, multipartUploadIDSuffix)) {
+				// return if dirent's name starts with prefixPath and lexically higher than markerPath
+				return strings.HasPrefix(dirent.name, prefixPath) && dirent.name > markerPath
 			}
-			dirents, err := scandir(scanDir, multipartFilterFn, false)
+			return false
+		}
+
+		// filter function - filters directory entries matching multipart uploadids
+		subDirentFilterFn := func(dirent fsDirent) bool {
+			// check if dirent is a directory (or) dirent is a regular file and it's name ends with Upload ID suffix string
+			return dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, multipartUploadIDSuffix))
+		}
+
+		// lastObjInfo is used to save last object info which is sent at last with End=true
+		var lastObjInfo *multipartObjectInfo
+
+		sendError := func(err error) {
+			if lastObjInfo != nil {
+				if !send(*lastObjInfo) {
+					// as we got error sending lastObjInfo, we can't send the error
+					return
+				}
+			}
+
+			send(multipartObjectInfo{Err: err, End: true})
+			return
+		}
+
+		for {
+			dirents, err := scandir(scanDir, direntFilterFn, false)
 			if err != nil {
-				send(multipartObjectInfo{Err: err})
+				sendError(err)
 				return
 			}
 
@@ -138,19 +154,19 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 					name := strings.Replace(filepath.Dir(dirent.name), bucketDir, "", 1)
 					if name == "" {
 						// This should not happen ie uploadid file should not be in bucket directory
-						send(multipartObjectInfo{Err: errors.New("Corrupted metadata")})
+						sendError(errors.New("Corrupted metadata"))
 						return
 					}
 
 					uploadID := strings.Split(filepath.Base(dirent.name), multipartUploadIDSuffix)[0]
 
 					// Solaris and older unixes have modTime to be
-					// empty, fall back to os.Stat() to fill missing values.
+					// empty, fallback to os.Stat() to fill missing values.
 					if dirent.modTime.IsZero() {
 						if fi, e := os.Stat(dirent.name); e == nil {
 							dirent.modTime = fi.ModTime()
 						} else {
-							send(multipartObjectInfo{Err: e})
+							sendError(e)
 							return
 						}
 					}
@@ -161,20 +177,21 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 						ModifiedTime: dirent.modTime,
 					}
 
-					if !send(objInfo) {
-						return
+					// as we got new object info, send last object info and keep new object info as last object info
+					if lastObjInfo != nil {
+						if !send(*lastObjInfo) {
+							return
+						}
 					}
+					lastObjInfo = &objInfo
 
 					continue
 				}
 
-				multipartSubDirentFilterFn := func(dirent fsDirent) bool {
-					return dirent.IsDir() || (dirent.IsRegular() && strings.HasSuffix(dirent.name, multipartUploadIDSuffix))
-				}
 				// Fetch sub dirents.
-				subDirents, err := scandir(dirent.name, multipartSubDirentFilterFn, false)
+				subDirents, err := scandir(dirent.name, subDirentFilterFn, false)
 				if err != nil {
-					send(multipartObjectInfo{Err: err})
+					sendError(err)
 					return
 				}
 
@@ -198,12 +215,12 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 				// Send directory only for non-recursive listing
 				if !recursive && (subDirFound || len(subDirents) == 0) {
 					// Solaris and older unixes have modTime to be
-					// empty, fall back to os.Stat() to fill missing values.
+					// empty, fallback to os.Stat() to fill missing values.
 					if dirent.modTime.IsZero() {
 						if fi, e := os.Stat(dirent.name); e == nil {
 							dirent.modTime = fi.ModTime()
 						} else {
-							send(multipartObjectInfo{Err: e})
+							sendError(e)
 							return
 						}
 					}
@@ -214,9 +231,13 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 						IsDir:        true,
 					}
 
-					if !send(objInfo) {
-						return
+					// as we got new object info, send last object info and keep new object info as last object info
+					if lastObjInfo != nil {
+						if !send(*lastObjInfo) {
+							return
+						}
 					}
+					lastObjInfo = &objInfo
 				}
 
 				if recursive {
@@ -235,10 +256,17 @@ func scanMultipartDir(bucketDir, prefixPath, markerPath, uploadIDMarker string, 
 				break
 			}
 		}
+
+		if lastObjInfo != nil {
+			// we got last object
+			lastObjInfo.End = true
+			if !send(*lastObjInfo) {
+				return
+			}
+		}
 	}()
 
-	// Return multipart info.
-	return multipartObjectInfoChannel{ch: objectInfoCh, timeoutCh: timeoutCh}
+	return objectInfoCh
 }
 
 // multipartObjectInfo - Multipart object info
@@ -248,67 +276,5 @@ type multipartObjectInfo struct {
 	ModifiedTime time.Time
 	IsDir        bool
 	Err          error
-}
-
-// multipartObjectInfoChannel - multipart object info channel
-type multipartObjectInfoChannel struct {
-	ch        <-chan multipartObjectInfo
-	objInfo   *multipartObjectInfo
-	closed    bool
-	timeoutCh <-chan struct{}
-	timedOut  bool
-}
-
-func (oic *multipartObjectInfoChannel) Read() (multipartObjectInfo, bool) {
-	if oic.closed {
-		return multipartObjectInfo{}, false
-	}
-	if oic.objInfo == nil {
-		// First read.
-		if oi, ok := <-oic.ch; ok {
-			oic.objInfo = &oi
-		} else {
-			oic.closed = true
-			return multipartObjectInfo{}, false
-		}
-	}
-
-	retObjInfo := *oic.objInfo
-	status := true
-	oic.objInfo = nil
-
-	// Read once more to know whether it was last read.
-	if oi, ok := <-oic.ch; ok {
-		oic.objInfo = &oi
-	} else {
-		oic.closed = true
-	}
-
-	return retObjInfo, status
-}
-
-// IsClosed - return whether channel is closed or not.
-func (oic multipartObjectInfoChannel) IsClosed() bool {
-	if oic.objInfo != nil {
-		return false
-	}
-	return oic.closed
-}
-
-// IsTimedOut - return whether channel is closed due to timeout.
-func (oic multipartObjectInfoChannel) IsTimedOut() bool {
-	if oic.timedOut {
-		return true
-	}
-
-	select {
-	case _, ok := <-oic.timeoutCh:
-		if ok {
-			oic.timedOut = true
-			return true
-		}
-		return false
-	default:
-		return false
-	}
+	End          bool
 }
