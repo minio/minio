@@ -42,29 +42,6 @@ type ListFilesReply struct {
 	EOF   bool
 }
 
-// ReadFileArgs read file args.
-type ReadFileArgs struct {
-	Vol    string
-	Path   string
-	Offset int64
-}
-
-// ReadFileReply read file reply.
-type ReadFileReply struct {
-	URL string
-}
-
-// CreateFileArgs create file args.
-type CreateFileArgs struct {
-	Vol  string
-	Path string
-}
-
-// CreateFileReply create file reply.
-type CreateFileReply struct {
-	URL string
-}
-
 // StatFileArgs stat file args.
 type StatFileArgs struct {
 	Vol  string

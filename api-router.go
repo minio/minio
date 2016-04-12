@@ -18,13 +18,13 @@ package main
 
 import router "github.com/gorilla/mux"
 
-// objectStorageAPI container for S3 compatible API.
-type objectStorageAPI struct {
-	ObjectAPI ObjectAPI
+// objectAPIHandler implements and provides http handlers for S3 API.
+type objectAPIHandlers struct {
+	ObjectAPI *objectAPI
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(mux *router.Router, api objectStorageAPI) {
+func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	// API Router
 	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 

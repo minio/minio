@@ -74,7 +74,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 // GetBucketLocationHandler - GET Bucket location.
 // -------------------------
 // This operation returns bucket location.
-func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -152,7 +152,7 @@ func (api objectStorageAPI) GetBucketLocationHandler(w http.ResponseWriter, r *h
 // completed or aborted. This operation returns at most 1,000 multipart
 // uploads in the response.
 //
-func (api objectStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -223,7 +223,7 @@ func (api objectStorageAPI) ListMultipartUploadsHandler(w http.ResponseWriter, r
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
-func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -301,7 +301,7 @@ func (api objectStorageAPI) ListObjectsHandler(w http.ResponseWriter, r *http.Re
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
-func (api objectStorageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	// List buckets does not support bucket policies.
 	switch getRequestAuthType(r) {
 	default:
@@ -352,7 +352,7 @@ func (api objectStorageAPI) ListBucketsHandler(w http.ResponseWriter, r *http.Re
 }
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
-func (api objectStorageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -463,7 +463,7 @@ func (api objectStorageAPI) DeleteMultipleObjectsHandler(w http.ResponseWriter, 
 // PutBucketHandler - PUT Bucket
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
-func (api objectStorageAPI) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -528,7 +528,7 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 // ----------
 // This implementation of the POST operation handles object creation with a specified
 // signature policy in multipart/form-data
-func (api objectStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, e := r.MultipartReader()
@@ -589,7 +589,7 @@ func (api objectStorageAPI) PostPolicyBucketHandler(w http.ResponseWriter, r *ht
 // The operation returns a 200 OK if the bucket exists and you
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
-func (api objectStorageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -628,7 +628,7 @@ func (api objectStorageAPI) HeadBucketHandler(w http.ResponseWriter, r *http.Req
 }
 
 // DeleteBucketHandler - Delete bucket
-func (api objectStorageAPI) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
