@@ -29,8 +29,8 @@ import (
 )
 
 // webAPI container for Web API.
-type webAPI struct {
-	ObjectAPI ObjectAPI
+type webAPIHandlers struct {
+	ObjectAPI *objectAPI
 }
 
 // indexHandler - Handler to serve index.html
@@ -58,7 +58,7 @@ func assetFS() *assetfs.AssetFS {
 const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
 
 // registerWebRouter - registers web router for serving minio browser.
-func registerWebRouter(mux *router.Router, web *webAPI) {
+func registerWebRouter(mux *router.Router, web *webAPIHandlers) {
 	// Initialize a new json2 codec.
 	codec := json2.NewCodec()
 
@@ -74,7 +74,7 @@ func registerWebRouter(mux *router.Router, web *webAPI) {
 	// RPC handler at URI - /minio/webrpc
 	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
-	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "").HandlerFunc(web.Download)
+	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
 
 	// Add compression for assets.
 	compressedAssets := handlers.CompressHandler(http.StripPrefix(reservedBucket, http.FileServer(assetFS())))

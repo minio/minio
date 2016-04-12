@@ -96,12 +96,10 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	// Save config.
 	c.Assert(serverConfig.Save(), IsNil)
 
-	fs, err := newFS(fsroot)
-	c.Assert(err, IsNil)
-
-	obj := newObjectLayer(fs)
-
-	apiServer := configureServer(addr, obj)
+	apiServer := configureServer(serverCmdConfig{
+		serverAddr:  addr,
+		exportPaths: []string{fsroot},
+	})
 	testAPIFSCacheServer = httptest.NewServer(apiServer.Handler)
 }
 

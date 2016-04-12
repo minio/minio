@@ -66,7 +66,7 @@ func isDirEmpty(dirname string) (status bool, err error) {
 
 // isDirExist - returns whether given directory exists or not.
 func isDirExist(dirname string) (bool, error) {
-	fi, e := os.Lstat(dirname)
+	fi, e := os.Stat(dirname)
 	if e != nil {
 		if os.IsNotExist(e) {
 			return false, nil
@@ -322,6 +322,8 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
+		} else if strings.Contains(err.Error(), "not a directory") {
+			return nil, true, nil
 		}
 		// Rest errors should be treated as failure.
 		return nil, true, err
@@ -464,6 +466,9 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return FileInfo{}, errFileNotFound
+		}
+		if strings.Contains(err.Error(), "not a directory") {
+			return FileInfo{}, errIsNotRegular
 		}
 		return FileInfo{}, err
 	}

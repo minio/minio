@@ -18,19 +18,39 @@ package main
 
 import (
 	"net/http"
+	"os"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/probe"
 )
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(objectAPI ObjectAPI) http.Handler {
+func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
+	var storageHandlers StorageAPI
+	if len(srvCmdConfig.exportPaths) == 1 {
+		// Verify if export path is a local file system path.
+		st, e := os.Stat(srvCmdConfig.exportPaths[0])
+		if e == nil && st.Mode().IsDir() {
+			// Initialize storage API.
+			storageHandlers, e = newFS(srvCmdConfig.exportPaths[0])
+			fatalIf(probe.NewError(e), "Initializing fs failed.", nil)
+		} else {
+			// Initialize storage API.
+			storageHandlers, e = newNetworkFS(srvCmdConfig.exportPaths[0])
+			fatalIf(probe.NewError(e), "Initializing network fs failed.", nil)
+		}
+	} // else if - XL part.
+
+	// Initialize object layer.
+	objectAPI := newObjectLayer(storageHandlers)
+
 	// Initialize API.
-	api := objectStorageAPI{
+	apiHandlers := objectAPIHandlers{
 		ObjectAPI: objectAPI,
 	}
 
 	// Initialize Web.
-	web := &webAPI{
+	webHandlers := &webAPIHandlers{
 		ObjectAPI: objectAPI,
 	}
 
@@ -38,8 +58,9 @@ func configureServerHandler(objectAPI ObjectAPI) http.Handler {
 	mux := router.NewRouter()
 
 	// Register all routers.
-	registerWebRouter(mux, web)
-	registerAPIRouter(mux, api)
+	registerStorageRPCRouter(mux, storageHandlers)
+	registerWebRouter(mux, webHandlers)
+	registerAPIRouter(mux, apiHandlers)
 	// Add new routers here.
 
 	// List of some generic handlers which are applied for all
