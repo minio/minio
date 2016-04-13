@@ -1172,6 +1172,7 @@ func (s *MyAPISuite) TestValidateObjectMultipartUploadID(c *C) {
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)
