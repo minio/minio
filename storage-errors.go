@@ -32,3 +32,11 @@ var errIsNotRegular = errors.New("Not a regular file type.")
 
 // errVolumeNotFound - cannot find the volume.
 var errVolumeNotFound = errors.New("Volume not found.")
+
+// errVolumeAccessDenied - cannot access volume, insufficient
+// permissions.
+var errVolumeAccessDenied = errors.New("Volume access denied.")
+
+// errVolumeAccessDenied - cannot access file, insufficient
+// permissions.
+var errFileAccessDenied = errors.New("File access denied.")

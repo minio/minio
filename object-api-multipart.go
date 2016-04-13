@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -111,10 +110,13 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	}
 	result.IsTruncated = true
 	newMaxUploads := 0
-	prefixPath := bucket + slashPathSeparator + prefix // do not use filepath.Join so that we retain trailing '/' if any
-
+	prefixPath := path.Join(bucket, prefix)
+	if strings.HasSuffix(prefix, slashPathSeparator) {
+		// Add back the slash separator removed after 'path.Join'.
+		prefixPath = prefixPath + slashPathSeparator
+	}
 	if recursive {
-		keyMarkerPath := filepath.Join(keyMarker, uploadIDMarker)
+		keyMarkerPath := path.Join(keyMarker, uploadIDMarker)
 	outerLoop:
 		for {
 			fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, keyMarkerPath, recursive, maxUploads-newMaxUploads)
@@ -123,17 +125,17 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 			}
 			for _, fi := range fileInfos {
 				keyMarkerPath = fi.Name
-				fileName := filepath.Base(fi.Name)
+				fileName := path.Base(fi.Name)
 				if strings.Contains(fileName, ".") {
 					// fileName contains partnumber and md5sum info, skip this.
 					continue
 				}
 				result.Uploads = append(result.Uploads, uploadMetadata{
-					Object:    filepath.Dir(fi.Name),
+					Object:    path.Dir(fi.Name),
 					UploadID:  fileName,
 					Initiated: fi.ModTime,
 				})
-				result.NextKeyMarker = filepath.Dir(fi.Name)
+				result.NextKeyMarker = path.Dir(fi.Name)
 				result.NextUploadIDMarker = fileName
 				newMaxUploads++
 				if newMaxUploads == maxUploads {
@@ -244,7 +246,7 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 			return "", probe.NewError(e)
 		}
 		uploadID := uuid.String()
-		uploadIDFile := filepath.Join(bucket, object, uploadID)
+		uploadIDFile := path.Join(bucket, object, uploadID)
 		if _, e = o.storage.StatFile(minioMetaVolume, uploadIDFile); e != nil {
 			if e != errFileNotFound {
 				return "", probe.NewError(e)
@@ -266,7 +268,7 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 }
 
 func (o objectAPI) isUploadIDExist(bucket, object, uploadID string) (bool, error) {
-	st, e := o.storage.StatFile(minioMetaVolume, filepath.Join(bucket, object, uploadID))
+	st, e := o.storage.StatFile(minioMetaVolume, path.Join(bucket, object, uploadID))
 	if e != nil {
 		if e == errFileNotFound {
 			return false, nil
@@ -291,7 +293,7 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	}
 
 	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partID, md5Hex)
-	fileWriter, e := o.storage.CreateFile(minioMetaVolume, filepath.Join(bucket, object, partSuffix))
+	fileWriter, e := o.storage.CreateFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
 	if e != nil {
 		if e == errVolumeNotFound {
 			return "", probe.NewError(BucketNotFound{
@@ -356,7 +358,7 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	marker := ""
 	nextPartNumberMarker := 0
 	if partNumberMarker > 0 {
-		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, filepath.Join(bucket, object, uploadID)+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
+		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, path.Join(bucket, object, uploadID)+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
 		if e != nil {
 			return result, probe.NewError(e)
 		}
@@ -365,12 +367,12 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 		}
 		marker = fileInfos[0].Name
 	}
-	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, filepath.Join(bucket, object, uploadID)+".", marker, false, maxParts)
+	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, path.Join(bucket, object, uploadID)+".", marker, false, maxParts)
 	if e != nil {
 		return result, probe.NewError(InvalidPart{})
 	}
 	for _, fileInfo := range fileInfos {
-		fileName := filepath.Base(fileInfo.Name)
+		fileName := path.Base(fileInfo.Name)
 		splitResult := strings.Split(fileName, ".")
 		partNum, e := strconv.Atoi(splitResult[1])
 		if e != nil {
@@ -415,7 +417,7 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 	for _, part := range parts {
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
 		var fileReader io.ReadCloser
-		fileReader, e = o.storage.ReadFile(minioMetaVolume, filepath.Join(bucket, object, partSuffix), 0)
+		fileReader, e = o.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
 		if e != nil {
 			return ObjectInfo{}, probe.NewError(e)
 		}
@@ -456,7 +458,8 @@ func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe
 	}
 	marker := ""
 	for {
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, filepath.Join(bucket, object, uploadID), marker, false, 1000)
+		uploadIDFile := path.Join(bucket, object, uploadID)
+		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDFile, marker, false, 1000)
 		if e != nil {
 			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}

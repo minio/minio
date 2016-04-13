@@ -18,6 +18,7 @@ package main
 
 import (
 	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -41,7 +42,27 @@ func IsValidBucketName(bucket string) bool {
 // IsValidObjectName verifies an object name in accordance with Amazon's
 // requirements. It cannot exceed 1024 characters and must be a valid UTF8
 // string.
-// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+//
+// See:
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+//
+// You should avoid the following characters in a key name because of
+// significant special handling for consistency across all
+// applications.
+//
+// Rejects strings with following characters.
+//
+// - Backslash ("\")
+// - Left curly brace ("{")
+// - Caret ("^")
+// - Right curly brace ("}")
+// - Grave accent / back tick ("`")
+// - Right square bracket ("]")
+// - Left square bracket ("[")
+// - Tilde ("~")
+// - 'Greater Than' symbol (">")
+// - 'Less Than' symbol ("<")
+// - Vertical bar / pipe ("|")
 func IsValidObjectName(object string) bool {
 	if len(object) > 1024 || len(object) == 0 {
 		return false
@@ -49,7 +70,8 @@ func IsValidObjectName(object string) bool {
 	if !utf8.ValidString(object) {
 		return false
 	}
-	return true
+	// Reject unsupported characters in object name.
+	return !strings.ContainsAny(object, "`^*{}[]|\\\"'")
 }
 
 // IsValidObjectPrefix verifies whether the prefix is a valid object name.

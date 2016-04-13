@@ -1012,7 +1012,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
-	fmt.Println(string(completeMultipartBytes))
 	complMultipartUpload := &completeMultipartUpload{}
 	if e = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); e != nil {
 		errorIf(probe.NewError(e), "XML Unmarshal failed", nil)
