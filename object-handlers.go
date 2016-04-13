@@ -1012,8 +1012,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
+	fmt.Println(string(completeMultipartBytes))
 	complMultipartUpload := &completeMultipartUpload{}
 	if e = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); e != nil {
+		errorIf(probe.NewError(e), "XML Unmarshal failed", nil)
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
@@ -1028,7 +1030,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		part.ETag = strings.TrimSuffix(part.ETag, "\"")
 		completeParts = append(completeParts, part)
 	}
-
 	// Complete multipart upload.
 	objInfo, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
