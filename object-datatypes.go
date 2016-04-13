@@ -16,10 +16,7 @@
 
 package main
 
-import (
-	"encoding/xml"
-	"time"
-)
+import "time"
 
 // BucketInfo - bucket name and create date
 type BucketInfo struct {
@@ -107,6 +104,5 @@ func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 
 // completeMultipartUpload container for completing multipart upload
 type completeMultipartUpload struct {
-	XMLName xml.Name       `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUpload" json:"-"`
-	Parts   []completePart `xml:"Part"`
+	Parts []completePart `xml:"Part"`
 }
