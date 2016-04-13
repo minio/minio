@@ -80,10 +80,15 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 		return nil, probe.NewError(e)
 	}
 	for _, vol := range vols {
+		// StorageAPI can send volume names which are incompatible
+		// with buckets, handle it and skip them.
 		if !IsValidBucketName(vol.Name) {
 			continue
 		}
-		bucketInfos = append(bucketInfos, BucketInfo{vol.Name, vol.Created})
+		bucketInfos = append(bucketInfos, BucketInfo{
+			Name:    vol.Name,
+			Created: vol.Created,
+		})
 	}
 	return bucketInfos, nil
 }

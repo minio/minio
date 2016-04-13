@@ -121,26 +121,63 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
+// checkVolumeArg - will convert incoming volume names to
+// corresponding valid volume names on the backend in a platform
+// compatible way for all operating systems. If volume is not found
+// an error is generated.
+func (s fsStorage) checkVolumeArg(volume string) (string, error) {
+	if !isValidVolname(volume) {
+		return "", errInvalidArgument
+	}
+	volumeDir := filepath.Join(s.diskPath, volume)
+	_, err := os.Stat(volumeDir)
+	if err == nil {
+		return volumeDir, nil
+	}
+	if os.IsNotExist(err) {
+		var volumes []os.FileInfo
+		volumes, err = ioutil.ReadDir(s.diskPath)
+		if err != nil {
+			return volumeDir, errVolumeNotFound
+		}
+		for _, vol := range volumes {
+			if vol.IsDir() {
+				// Verify if lowercase version of the volume
+				// is equal to the incoming volume, then use the proper name.
+				if strings.ToLower(vol.Name()) == volume {
+					volumeDir = filepath.Join(s.diskPath, vol.Name())
+					return volumeDir, nil
+				}
+			}
+		}
+		return volumeDir, errVolumeNotFound
+	} else if os.IsPermission(err) {
+		return volumeDir, errVolumeAccessDenied
+	}
+	return volumeDir, err
+}
+
 // Make a volume entry.
 func (s fsStorage) MakeVol(volume string) (err error) {
-	if volume == "" {
-		return errInvalidArgument
-	}
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
-		return err
-	}
-
-	volumeDir := getVolumeDir(s.diskPath, volume)
-	if _, err = os.Stat(volumeDir); err == nil {
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err == nil {
+		// Volume already exists, return error.
 		return errVolumeExists
 	}
 
-	// Make a volume entry.
-	if err = os.Mkdir(volumeDir, 0700); err != nil {
-		return err
+	// Validate if disk is free.
+	if e := checkDiskFree(s.diskPath, s.minFreeDisk); e != nil {
+		return e
 	}
 
-	return nil
+	// If volume not found create it.
+	if err == errVolumeNotFound {
+		// Make a volume entry.
+		return os.Mkdir(volumeDir, 0700)
+	}
+
+	// For all other errors return here.
+	return err
 }
 
 // removeDuplicateVols - remove duplicate volumes.
@@ -175,9 +212,15 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 			// If not directory, ignore all file types.
 			continue
 		}
+		// Volname on case sensitive fs backends can come in as
+		// capitalized, but object layer cannot consume it
+		// directly. Convert it as we see fit.
+		volName := strings.ToLower(file.Name())
+		// Modtime is used as created time.
+		createdTime := file.ModTime()
 		volInfo := VolInfo{
-			Name:    file.Name(),
-			Created: file.ModTime(),
+			Name:    volName,
+			Created: createdTime,
 		}
 		volsInfo = append(volsInfo, volInfo)
 	}
@@ -186,30 +229,13 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 	return volsInfo, nil
 }
 
-// getVolumeDir - will convert incoming volume names to
-// corresponding valid volume names on the backend in a platform
-// compatible way for all operating systems.
-func getVolumeDir(diskPath, volume string) string {
-	volumes, e := ioutil.ReadDir(diskPath)
-	if e != nil {
-		return volume
-	}
-	for _, vol := range volumes {
-		// Verify if lowercase version of the volume
-		// is equal to the incoming volume, then use the proper name.
-		if strings.ToLower(vol.Name()) == volume {
-			return filepath.Join(diskPath, vol.Name())
-		}
-	}
-	return filepath.Join(diskPath, volume)
-}
-
 // StatVol - get volume info.
 func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
-	if volume == "" {
-		return VolInfo{}, errInvalidArgument
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return VolInfo{}, err
 	}
-	volumeDir := getVolumeDir(s.diskPath, volume)
 	// Stat a volume entry.
 	var st os.FileInfo
 	st, err = os.Stat(volumeDir)
@@ -219,18 +245,23 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 		}
 		return VolInfo{}, err
 	}
+	// Modtime is used as created time since operating systems lack a
+	// portable way of knowing the actual created time of a directory.
+	createdTime := st.ModTime()
 	return VolInfo{
-		Name:    st.Name(),
-		Created: st.ModTime(),
+		Name:    volume,
+		Created: createdTime,
 	}, nil
 }
 
 // DeleteVol - delete a volume.
 func (s fsStorage) DeleteVol(volume string) error {
-	if volume == "" {
-		return errInvalidArgument
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return err
 	}
-	err := os.Remove(getVolumeDir(s.diskPath, volume))
+	err = os.Remove(volumeDir)
 	if err != nil && os.IsNotExist(err) {
 		return errVolumeNotFound
 	}
@@ -281,23 +312,13 @@ var specialPrefixes = []string{
 
 // List operation.
 func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, count int) ([]FileInfo, bool, error) {
-	if volume == "" {
-		return nil, true, errInvalidArgument
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return nil, true, err
 	}
-
 	var fileInfos []FileInfo
 
-	volumeDir := getVolumeDir(s.diskPath, volume)
-	// Verify if volume directory exists
-	if exists, err := isDirExist(volumeDir); !exists {
-		if err == nil {
-			return nil, true, errVolumeNotFound
-		} else if os.IsNotExist(err) {
-			return nil, true, errVolumeNotFound
-		} else {
-			return nil, true, err
-		}
-	}
 	if marker != "" {
 		// Verify if marker has prefix.
 		if marker != "" && !strings.HasPrefix(marker, prefix) {
@@ -323,6 +344,7 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
 		} else if strings.Contains(err.Error(), "not a directory") {
+			// Prefix exists as a file.
 			return nil, true, nil
 		}
 		// Rest errors should be treated as failure.
@@ -375,26 +397,18 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 
 // ReadFile - read a file at a given offset.
 func (s fsStorage) ReadFile(volume string, path string, offset int64) (readCloser io.ReadCloser, err error) {
-	if volume == "" || path == "" {
-		return nil, errInvalidArgument
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return nil, err
 	}
-	volumeDir := getVolumeDir(s.diskPath, volume)
-	// Verify if volume directory exists
-	var exists bool
-	if exists, err = isDirExist(volumeDir); !exists {
-		if err == nil {
-			return nil, errVolumeNotFound
-		} else if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else {
-			return nil, err
-		}
-	}
-	filePath := filepath.Join(volumeDir, path)
+
+	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound
+		} else if os.IsPermission(err) {
+			return nil, errFileAccessDenied
 		}
 		return nil, err
 	}
@@ -416,22 +430,12 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 
 // CreateFile - create a file at path.
 func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
-	if volume == "" || path == "" {
-		return nil, errInvalidArgument
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return nil, err
 	}
-	if e := checkDiskFree(s.diskPath, s.minFreeDisk); e != nil {
-		return nil, e
-	}
-	volumeDir := getVolumeDir(s.diskPath, volume)
-	// Verify if volume directory exists
-	if exists, err := isDirExist(volumeDir); !exists {
-		if err == nil {
-			return nil, errVolumeNotFound
-		} else if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else {
-			return nil, err
-		}
+	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return nil, err
 	}
 	filePath := filepath.Join(volumeDir, path)
 	// Verify if the file already exists and is not of regular type.
@@ -445,33 +449,26 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 
 // StatFile - get file info.
 func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
-	if volume == "" || path == "" {
-		return FileInfo{}, errInvalidArgument
-	}
-	volumeDir := getVolumeDir(s.diskPath, volume)
-	// Verify if volume directory exists
-	var exists bool
-	if exists, err = isDirExist(volumeDir); !exists {
-		if err == nil {
-			return FileInfo{}, errVolumeNotFound
-		} else if os.IsNotExist(err) {
-			return FileInfo{}, errVolumeNotFound
-		} else {
-			return FileInfo{}, err
-		}
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return FileInfo{}, err
 	}
 
-	filePath := filepath.Join(volumeDir, path)
+	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
 	st, err := os.Stat(filePath)
 	if err != nil {
+		// File is really not found.
 		if os.IsNotExist(err) {
 			return FileInfo{}, errFileNotFound
 		}
+		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return FileInfo{}, errIsNotRegular
 		}
+		// Return all errors here.
 		return FileInfo{}, err
 	}
+	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		return FileInfo{}, errIsNotRegular
 	}
@@ -486,49 +483,55 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 }
 
 // deleteFile - delete file path if its empty.
-func deleteFile(basePath, deletePath, volume, path string) error {
+func deleteFile(basePath, deletePath string) error {
 	if basePath == deletePath {
 		return nil
 	}
 	// Verify if the path exists.
-	pathSt, e := os.Stat(deletePath)
-	if e != nil {
-		return e
+	pathSt, err := os.Stat(deletePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		} else if os.IsPermission(err) {
+			return errFileAccessDenied
+		}
+		return err
 	}
 	if pathSt.IsDir() {
 		// Verify if directory is empty.
-		empty, e := isDirEmpty(deletePath)
-		if e != nil {
-			return e
+		empty, err := isDirEmpty(deletePath)
+		if err != nil {
+			return err
 		}
 		if !empty {
 			return nil
 		}
 	}
 	// Attempt to remove path.
-	if e := os.Remove(deletePath); e != nil {
-		return e
+	if err := os.Remove(deletePath); err != nil {
+		return err
 	}
 	// Recursively go down the next path and delete again.
-	if e := deleteFile(basePath, filepath.Dir(deletePath), volume, path); e != nil {
-		return e
+	if err := deleteFile(basePath, filepath.Dir(deletePath)); err != nil {
+		return err
 	}
 	return nil
 }
 
 // DeleteFile - delete a file at path.
 func (s fsStorage) DeleteFile(volume, path string) error {
-	if volume == "" || path == "" {
-		return errInvalidArgument
+	volumeDir, err := s.checkVolumeArg(volume)
+	if err != nil {
+		return err
 	}
 
-	volumeDir := getVolumeDir(s.diskPath, volume)
-
 	// Following code is needed so that we retain "/" suffix if any in
-	// path argument. Do not use filepath.Join() since it would strip
-	// off any suffixes.
-	filePath := s.diskPath + string(os.PathSeparator) + volume + string(os.PathSeparator) + path
+	// path argument.
+	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
+	if strings.HasSuffix(filepath.FromSlash(path), string(os.PathSeparator)) {
+		filePath = filePath + string(os.PathSeparator)
+	}
 
 	// Delete file and delete parent directory as well if its empty.
-	return deleteFile(volumeDir, filePath, volume, path)
+	return deleteFile(volumeDir, filePath)
 }
