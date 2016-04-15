@@ -44,6 +44,19 @@ var supportedActionMap = map[string]struct{}{
 	"s3:ListMultipartUploadParts":   {},
 }
 
+// supported Conditions type.
+var supportedConditionsType = map[string]struct{}{
+	"StringEquals":    {},
+	"StringNotEquals": {},
+}
+
+// Validate s3:prefix, s3:max-keys are present if not
+// supported keys for the conditions.
+var supportedConditionsKey = map[string]struct{}{
+	"s3:prefix":   {},
+	"s3:max-keys": {},
+}
+
 // User - canonical users list.
 type policyUser struct {
 	AWS []string
@@ -130,52 +143,50 @@ func isValidPrincipals(principals []string) (err error) {
 		err = errors.New("Principal cannot be empty.")
 		return err
 	}
-	var ok bool
 	for _, principal := range principals {
 		// Minio does not support or implement IAM, "*" is the only valid value.
-		if principal == "*" {
-			ok = true
-			continue
+		// Amazon s3 doc on principals: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Principal
+		if principal != "*" {
+			err = fmt.Errorf("Unsupported principal style found: ‘%s’, please validate your policy document.", principal)
+			return err
 		}
-		ok = false
-	}
-	if !ok {
-		err = errors.New("Unsupported principal style found: ‘" + strings.Join(principals, " ") + "’, please validate your policy document.")
-		return err
 	}
 	return nil
 }
 
+// isValidConditions - are valid conditions.
 func isValidConditions(conditions map[string]map[string]string) (err error) {
+	// Returns true if string 'a' is found in the list.
+	findString := func(a string, list []string) bool {
+		for _, b := range list {
+			if b == a {
+				return true
+			}
+		}
+		return false
+	}
+	conditionKeyVal := make(map[string][]string)
 	// Verify conditions should be valid.
-	if len(conditions) > 0 {
-		// Validate if stringEquals, stringNotEquals are present
-		// if not throw an error.
-		_, stringEqualsOK := conditions["StringEquals"]
-		_, stringNotEqualsOK := conditions["StringNotEquals"]
-		if !stringEqualsOK && !stringNotEqualsOK {
-			err = fmt.Errorf("Unsupported condition type found: ‘%s’, please validate your policy document.", conditions)
+	// Validate if stringEquals, stringNotEquals are present
+	// if not throw an error.
+	for conditionType := range conditions {
+		_, validType := supportedConditionsType[conditionType]
+		if !validType {
+			err = fmt.Errorf("Unsupported condition type '%s', please validate your policy document.", conditionType)
 			return err
 		}
-		// Validate s3:prefix, s3:max-keys are present if not
-		// throw an error.
-		if len(conditions["StringEquals"]) > 0 {
-			_, s3PrefixOK := conditions["StringEquals"]["s3:prefix"]
-			_, s3MaxKeysOK := conditions["StringEquals"]["s3:max-keys"]
-			if !s3PrefixOK && !s3MaxKeysOK {
-				err = fmt.Errorf("Unsupported condition keys found: ‘%s’, please validate your policy document.",
-					conditions["StringEquals"])
+		for key := range conditions[conditionType] {
+			_, validKey := supportedConditionsKey[key]
+			if !validKey {
+				err = fmt.Errorf("Unsupported condition key '%s', please validate your policy document.", conditionType)
 				return err
 			}
-		}
-		if len(conditions["StringNotEquals"]) > 0 {
-			_, s3PrefixOK := conditions["StringNotEquals"]["s3:prefix"]
-			_, s3MaxKeysOK := conditions["StringNotEquals"]["s3:max-keys"]
-			if !s3PrefixOK && !s3MaxKeysOK {
-				err = fmt.Errorf("Unsupported condition keys found: ‘%s’, please validate your policy document.",
-					conditions["StringNotEquals"])
+			conditionArray, ok := conditionKeyVal[key]
+			if ok && findString(conditions[conditionType][key], conditionArray) {
+				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document.", key)
 				return err
 			}
+			conditionKeyVal[key] = append(conditionKeyVal[key], conditions[conditionType][key])
 		}
 	}
 	return nil
@@ -189,8 +200,10 @@ var invalidPrefixActions = map[string]struct{}{
 	// Add actions which do not honor prefixes.
 }
 
-// checkBucketPolicy validates unmarshalled bucket policy structure.
-func checkBucketPolicy(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
+// checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
+// First valation of Resources done for given set of Actions.
+// Later its validated for recursive Resources.
+func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
 	var resourceMap = make(map[string]struct{})
@@ -205,9 +218,9 @@ func checkBucketPolicy(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
 						return ErrMalformedPolicy
 					}
 				} else {
-					// For all other actions validate if prefix begins
-					// with bucket, if not reject them.
-					if !strings.HasPrefix(resourcePrefix, bucket) {
+					// For all other actions validate if resourcePrefix begins
+					// with bucket name, if not reject them.
+					if strings.Split(resourcePrefix, "/")[0] != bucket {
 						return ErrMalformedPolicy
 					}
 					// All valid resources collect them separately to verify nesting.

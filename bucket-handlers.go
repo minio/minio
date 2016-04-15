@@ -61,7 +61,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	// Get conditions for policy verification.
 	conditions := make(map[string]string)
 	for queryParam := range reqURL.Query() {
-		conditions[queryParam] = reqURL.Query().Get("queryParam")
+		conditions[queryParam] = reqURL.Query().Get(queryParam)
 	}
 
 	// Validate action, resource and conditions with current policy statements.
