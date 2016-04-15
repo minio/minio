@@ -31,8 +31,7 @@ import (
 )
 
 const (
-	minioMetaVolume    = ".minio"
-	slashPathSeparator = "/"
+	minioMetaVolume = ".minio"
 )
 
 // checkLeafDirectory - verifies if a given path is leaf directory if
@@ -109,14 +108,16 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		recursive = false
 	}
 	result.IsTruncated = true
+	result.MaxUploads = maxUploads
 	newMaxUploads := 0
-	prefixPath := path.Join(bucket, prefix)
-	if strings.HasSuffix(prefix, slashPathSeparator) {
-		// Add back the slash separator removed after 'path.Join'.
-		prefixPath = prefixPath + slashPathSeparator
-	}
+	// not using path.Join() as it strips off the trailing '/'.
+	// Also bucket should always be followed by '/' even if prefix is empty.
+	prefixPath := pathJoin(bucket, prefix)
 	if recursive {
-		keyMarkerPath := path.Join(keyMarker, uploadIDMarker)
+		keyMarkerPath := ""
+		if keyMarker != "" {
+			keyMarkerPath = path.Join(bucket, keyMarker, uploadIDMarker)
+		}
 	outerLoop:
 		for {
 			fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, keyMarkerPath, recursive, maxUploads-newMaxUploads)
@@ -125,26 +126,31 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 			}
 			for _, fi := range fileInfos {
 				keyMarkerPath = fi.Name
-				fileName := path.Base(fi.Name)
-				if strings.Contains(fileName, ".") {
-					// fileName contains partnumber and md5sum info, skip this.
+				// fi.Name will look like bucket/object/uploadID, extract object and uploadID.
+				uploadID := path.Base(fi.Name)
+				objectName := strings.TrimPrefix(path.Dir(fi.Name), bucket+slashPathSeparator)
+				if strings.Contains(uploadID, ".") {
+					// contains partnumber and md5sum info, skip this.
 					continue
 				}
 				result.Uploads = append(result.Uploads, uploadMetadata{
-					Object:    path.Dir(fi.Name),
-					UploadID:  fileName,
+					Object:    objectName,
+					UploadID:  uploadID,
 					Initiated: fi.ModTime,
 				})
-				result.NextKeyMarker = path.Dir(fi.Name)
-				result.NextUploadIDMarker = fileName
+				result.NextKeyMarker = objectName
+				result.NextUploadIDMarker = uploadID
 				newMaxUploads++
 				if newMaxUploads == maxUploads {
+					if eof {
+						result.IsTruncated = false
+					}
 					break outerLoop
 				}
 			}
 			if eof {
 				result.IsTruncated = false
-				break outerLoop
+				break
 			}
 		}
 		if !result.IsTruncated {
@@ -176,21 +182,22 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	var uploads []uploadMetadata
 	for _, fi := range fileInfos {
 		leaf, entries := o.checkLeafDirectory(fi.Name)
+		objectName := strings.TrimPrefix(fi.Name, bucket+slashPathSeparator)
 		if leaf {
 			for _, entry := range entries {
 				if strings.Contains(entry.Name, ".") {
 					continue
 				}
 				uploads = append(uploads, uploadMetadata{
-					Object:    strings.TrimSuffix(fi.Name, slashPathSeparator),
-					UploadID:  entry.Name,
+					Object:    strings.TrimSuffix(objectName, slashPathSeparator),
+					UploadID:  path.Base(entry.Name),
 					Initiated: entry.ModTime,
 				})
 			}
 			continue
 		}
 		uploads = append(uploads, uploadMetadata{
-			Object: fi.Name,
+			Object: objectName,
 		})
 	}
 	index := 0
@@ -199,27 +206,27 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		if upload.Object > keyMarker {
 			break
 		}
-		if uploads[index].Object == keyMarker && uploadIDMarker != "" {
-			if upload.UploadID > uploadIDMarker {
-				break
-			}
+		if uploads[index].Object == keyMarker && upload.UploadID > uploadIDMarker {
+			break
 		}
 	}
 	for ; index < len(uploads); index++ {
-		newMaxUploads++
-		if newMaxUploads == maxUploads {
+		if (len(result.Uploads) + len(result.CommonPrefixes)) == maxUploads {
 			break
 		}
+		result.NextKeyMarker = uploads[index].Object
 		if strings.HasSuffix(uploads[index].Object, slashPathSeparator) {
+			// for a directory entry
 			result.CommonPrefixes = append(result.CommonPrefixes, uploads[index].Object)
 			continue
 		}
+		result.NextUploadIDMarker = uploads[index].UploadID
 		result.Uploads = append(result.Uploads, uploads[index])
 	}
-	result.MaxUploads = newMaxUploads
-	result.IsTruncated = true
-	if index >= len(uploads)-1 {
+	if index == len(uploads) {
 		result.IsTruncated = false
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
 	}
 	return result, nil
 }
