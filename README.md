@@ -58,6 +58,15 @@ Download ``minio`` for:
 C:\Users\Username\Downloads> minio.exe --help
 ~~~
 
+#### FreeBSD
+
+Download ``minio`` from https://dl.minio.io/server/minio/release/freebsd-amd64/minio
+
+~~~
+$ chmod 755 minio
+$ ./minio --help
+~~~
+
 #### Docker container
 
 Download ``minio`` for docker.
