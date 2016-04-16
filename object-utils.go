@@ -22,6 +22,10 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	slashPathSeparator = "/"
+)
+
 // validBucket regexp.
 var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 
@@ -84,4 +88,8 @@ func IsValidObjectPrefix(object string) bool {
 	// Verify if prefix is a valid object name.
 	return IsValidObjectName(object)
 
+}
+
+func pathJoin(path1 string, path2 string) string {
+	return strings.TrimSuffix(path1, slashPathSeparator) + slashPathSeparator + path2
 }
