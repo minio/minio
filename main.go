@@ -71,7 +71,7 @@ func init() {
 	// It is an unsafe practice to run network services as
 	// root. Containers are an exception.
 	if !isContainerized() && os.Geteuid() == 0 {
-		console.Fatalln("Please run ‘minio’ as a non-root user.")
+		console.Infoln("Please run ‘minio’ as a non-root user.")
 	}
 }
 
