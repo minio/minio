@@ -127,12 +127,25 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 		}
 	}
 
-	// readDirAll returns entries that begins with entryPrefixMatch
-	dirents, err := readDirAll(filepath.Join(bucketDir, prefixDir), entryPrefixMatch)
+	// Entry prefix match function.
+	prefixMatchFn := func(dirent fsDirent) bool {
+		if dirent.IsDir() || dirent.IsRegular() {
+			// Does dirent name has reserved prefixes or suffixes.
+			hasReserved := hasReservedPrefix(dirent.name) || hasReservedSuffix(dirent.name)
+			// All dirents which match prefix and do not have reserved
+			// keywords in them are valid entries.
+			return strings.HasPrefix(dirent.name, entryPrefixMatch) && !hasReserved
+		}
+		return false
+	}
+
+	// scandir returns entries that begins with entryPrefixMatch
+	dirents, err := scandir(filepath.Join(bucketDir, prefixDir), prefixMatchFn, true)
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
 	}
+
 	// example:
 	// If markerDir="four/" searchDirents() returns the index of "four/" in the sorted
 	// dirents list. We skip all the dirent entries till "four/"

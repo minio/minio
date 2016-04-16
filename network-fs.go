@@ -30,6 +30,7 @@ import (
 )
 
 type networkFS struct {
+	netScheme  string
 	netAddr    string
 	netPath    string
 	rpcClient  *rpc.Client
@@ -37,8 +38,7 @@ type networkFS struct {
 }
 
 const (
-	connected       = "200 Connected to Go RPC"
-	dialTimeoutSecs = 30 // 30 seconds.
+	storageRPCPath = reservedBucket + "/rpc/storage"
 )
 
 // splits network path into its components Address and Path.
@@ -47,6 +47,29 @@ func splitNetPath(networkPath string) (netAddr, netPath string) {
 	netAddr = networkPath[:index]
 	netPath = networkPath[index+1:]
 	return netAddr, netPath
+}
+
+// Converts rpc.ServerError to underlying error. This function is
+// written so that the storageAPI errors are consistent across network
+// disks as well.
+func toStorageErr(err error) error {
+	switch err.Error() {
+	case errVolumeNotFound.Error():
+		return errVolumeNotFound
+	case errVolumeExists.Error():
+		return errVolumeExists
+	case errFileNotFound.Error():
+		return errFileNotFound
+	case errIsNotRegular.Error():
+		return errIsNotRegular
+	case errVolumeNotEmpty.Error():
+		return errVolumeNotEmpty
+	case errFileAccessDenied.Error():
+		return errFileAccessDenied
+	case errVolumeAccessDenied.Error():
+		return errVolumeAccessDenied
+	}
+	return err
 }
 
 // Initialize new network file system.
@@ -60,7 +83,7 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 	netAddr, netPath := splitNetPath(networkPath)
 
 	// Dial minio rpc storage http path.
-	rpcClient, err := rpc.DialHTTPPath("tcp", netAddr, "/minio/rpc/storage")
+	rpcClient, err := rpc.DialHTTPPath("tcp", netAddr, storageRPCPath)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +99,7 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 
 	// Initialize network storage.
 	ndisk := &networkFS{
+		netScheme:  "http", // TODO: fix for ssl rpc support.
 		netAddr:    netAddr,
 		netPath:    netPath,
 		rpcClient:  rpcClient,
@@ -90,10 +114,7 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 func (n networkFS) MakeVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.MakeVolHandler", volume, &reply); err != nil {
-		if err.Error() == errVolumeExists.Error() {
-			return errVolumeExists
-		}
-		return err
+		return toStorageErr(err)
 	}
 	return nil
 }
@@ -111,10 +132,7 @@ func (n networkFS) ListVols() (vols []VolInfo, err error) {
 // StatVol - get current Stat volume info.
 func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatVolHandler", volume, &volInfo); err != nil {
-		if err.Error() == errVolumeNotFound.Error() {
-			return VolInfo{}, errVolumeNotFound
-		}
-		return VolInfo{}, err
+		return VolInfo{}, toStorageErr(err)
 	}
 	return volInfo, nil
 }
@@ -123,10 +141,7 @@ func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
 func (n networkFS) DeleteVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.DeleteVolHandler", volume, &reply); err != nil {
-		if err.Error() == errVolumeNotFound.Error() {
-			return errVolumeNotFound
-		}
-		return err
+		return toStorageErr(err)
 	}
 	return nil
 }
@@ -136,9 +151,9 @@ func (n networkFS) DeleteVol(volume string) error {
 // CreateFile - create file.
 func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
 	writeURL := new(url.URL)
-	writeURL.Scheme = "http" // TODO fix this.
+	writeURL.Scheme = n.netScheme
 	writeURL.Host = n.netAddr
-	writeURL.Path = fmt.Sprintf("/minio/rpc/storage/upload/%s", urlpath.Join(volume, path))
+	writeURL.Path = fmt.Sprintf("%s/upload/%s", storageRPCPath, urlpath.Join(volume, path))
 
 	contentType := "application/octet-stream"
 	readCloser, writeCloser := io.Pipe()
@@ -149,11 +164,16 @@ func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 			return
 		}
 		if resp != nil {
-			if resp.StatusCode != http.StatusNotFound {
-				readCloser.CloseWithError(errFileNotFound)
+			if resp.StatusCode != http.StatusOK {
+				if resp.StatusCode == http.StatusNotFound {
+					readCloser.CloseWithError(errFileNotFound)
+					return
+				}
+				readCloser.CloseWithError(errors.New("Invalid response."))
 				return
 			}
-			readCloser.CloseWithError(errors.New("Invalid response."))
+			// Close the reader.
+			readCloser.Close()
 		}
 	}()
 	return writeCloser, nil
@@ -165,14 +185,7 @@ func (n networkFS) StatFile(volume, path string) (fileInfo FileInfo, err error) 
 		Vol:  volume,
 		Path: path,
 	}, &fileInfo); err != nil {
-		if err.Error() == errVolumeNotFound.Error() {
-			return FileInfo{}, errVolumeNotFound
-		} else if err.Error() == errFileNotFound.Error() {
-			return FileInfo{}, errFileNotFound
-		} else if err.Error() == errIsNotRegular.Error() {
-			return FileInfo{}, errFileNotFound
-		}
-		return FileInfo{}, err
+		return FileInfo{}, toStorageErr(err)
 	}
 	return fileInfo, nil
 }
@@ -180,9 +193,9 @@ func (n networkFS) StatFile(volume, path string) (fileInfo FileInfo, err error) 
 // ReadFile - reads a file.
 func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io.ReadCloser, err error) {
 	readURL := new(url.URL)
-	readURL.Scheme = "http" // TODO fix this.
+	readURL.Scheme = n.netScheme
 	readURL.Host = n.netAddr
-	readURL.Path = fmt.Sprintf("/minio/rpc/storage/download/%s", urlpath.Join(volume, path))
+	readURL.Path = fmt.Sprintf("%s/download/%s", storageRPCPath, urlpath.Join(volume, path))
 	readQuery := make(url.Values)
 	readQuery.Set("offset", strconv.FormatInt(offset, 10))
 	readURL.RawQuery = readQuery.Encode()
@@ -190,11 +203,13 @@ func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, errFileNotFound
+	if resp != nil {
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusNotFound {
+				return nil, errFileNotFound
+			}
+			return nil, errors.New("Invalid response")
 		}
-		return nil, errors.New("Invalid response")
 	}
 	return resp.Body, nil
 }
@@ -209,16 +224,10 @@ func (n networkFS) ListFiles(volume, prefix, marker string, recursive bool, coun
 		Recursive: recursive,
 		Count:     count,
 	}, &listFilesReply); err != nil {
-		if err.Error() == errVolumeNotFound.Error() {
-			return nil, true, errVolumeNotFound
-		}
-		return nil, true, err
+		return nil, true, toStorageErr(err)
 	}
-	// List of files.
-	files = listFilesReply.Files
-	// EOF.
-	eof = listFilesReply.EOF
-	return files, eof, nil
+	// Return successfully unmarshalled results.
+	return listFilesReply.Files, listFilesReply.EOF, nil
 }
 
 // DeleteFile - Delete a file at path.
@@ -228,12 +237,7 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 		Vol:  volume,
 		Path: path,
 	}, &reply); err != nil {
-		if err.Error() == errVolumeNotFound.Error() {
-			return errVolumeNotFound
-		} else if err.Error() == errFileNotFound.Error() {
-			return errFileNotFound
-		}
-		return err
+		return toStorageErr(err)
 	}
 	return nil
 }

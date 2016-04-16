@@ -18,6 +18,8 @@ package main
 
 import (
 	"regexp"
+	"runtime"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -27,7 +29,17 @@ var validVolname = regexp.MustCompile(`^.{3,63}$`)
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
-	return validVolname.MatchString(volname)
+	if !validVolname.MatchString(volname) {
+		return false
+	}
+	switch runtime.GOOS {
+	case "windows":
+		// Volname shouldn't have reserved characters on windows in it.
+		return !strings.ContainsAny(volname, "/\\:*?\"<>|")
+	default:
+		// Volname shouldn't have '/' in it.
+		return !strings.ContainsAny(volname, "/")
+	}
 }
 
 // Keeping this as lower bound value supporting Linux, Darwin and Windows operating systems.
@@ -53,4 +65,36 @@ func isValidPrefix(prefix string) bool {
 	}
 	// Verify if prefix is a valid path.
 	return isValidPath(prefix)
+}
+
+// List of reserved words for files, includes old and new ones.
+var reservedKeywords = []string{
+	"$multiparts",
+	"$tmpobject",
+	"$tmpfile",
+	// Add new reserved words if any used in future.
+}
+
+// hasReservedPrefix - returns true if name has a reserved keyword suffixed.
+func hasReservedSuffix(name string) (isReserved bool) {
+	for _, reservedKey := range reservedKeywords {
+		if strings.HasSuffix(name, reservedKey) {
+			isReserved = true
+			break
+		}
+		isReserved = false
+	}
+	return isReserved
+}
+
+// hasReservedPrefix - has reserved prefix.
+func hasReservedPrefix(name string) (isReserved bool) {
+	for _, reservedKey := range reservedKeywords {
+		if strings.HasPrefix(name, reservedKey) {
+			isReserved = true
+			break
+		}
+		isReserved = false
+	}
+	return isReserved
 }

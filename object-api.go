@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"io"
 	"path/filepath"
 	"strings"
@@ -67,7 +68,7 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 		return BucketInfo{}, probe.NewError(e)
 	}
 	return BucketInfo{
-		Name:    vi.Name,
+		Name:    bucket,
 		Created: vi.Created,
 	}, nil
 }
@@ -102,6 +103,8 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 	if e := o.storage.DeleteVol(bucket); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
+		} else if e == errVolumeNotEmpty {
+			return probe.NewError(BucketNotEmpty{Bucket: bucket})
 		}
 		return probe.NewError(e)
 	}
@@ -161,8 +164,8 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 		}
 	}
 	return ObjectInfo{
-		Bucket:      fi.Volume,
-		Name:        fi.Name,
+		Bucket:      bucket,
+		Name:        object,
 		ModTime:     fi.ModTime,
 		Size:        fi.Size,
 		IsDir:       fi.Mode.IsDir(),
@@ -171,13 +174,28 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}, nil
 }
 
-func (o objectAPI) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (ObjectInfo, *probe.Error) {
+// safeCloseAndRemove - safely closes and removes underlying temporary
+// file writer if possible.
+func safeCloseAndRemove(writer io.WriteCloser) error {
+	// If writer is a safe file, Attempt to close and remove.
+	safeWriter, ok := writer.(*safe.File)
+	if ok {
+		return safeWriter.CloseAndRemove()
+	}
+	pipeWriter, ok := writer.(*io.PipeWriter)
+	if ok {
+		return pipeWriter.CloseWithError(errors.New("Close and error out."))
+	}
+	return nil
+}
+
+func (o objectAPI) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, *probe.Error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{
+		return "", probe.NewError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
@@ -185,16 +203,16 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
 		if e == errVolumeNotFound {
-			return ObjectInfo{}, probe.NewError(BucketNotFound{
+			return "", probe.NewError(BucketNotFound{
 				Bucket: bucket,
 			})
 		} else if e == errIsNotRegular {
-			return ObjectInfo{}, probe.NewError(ObjectExistsAsPrefix{
+			return "", probe.NewError(ObjectExistsAsPrefix{
 				Bucket: bucket,
 				Prefix: object,
 			})
 		}
-		return ObjectInfo{}, probe.NewError(e)
+		return "", probe.NewError(e)
 	}
 
 	// Initialize md5 writer.
@@ -206,13 +224,13 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
-			return ObjectInfo{}, probe.NewError(e)
+			safeCloseAndRemove(fileWriter)
+			return "", probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
-			return ObjectInfo{}, probe.NewError(e)
+			safeCloseAndRemove(fileWriter)
+			return "", probe.NewError(e)
 		}
 	}
 
@@ -224,35 +242,17 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			fileWriter.(*safe.File).CloseAndRemove()
-			return ObjectInfo{}, probe.NewError(BadDigest{md5Hex, newMD5Hex})
+			safeCloseAndRemove(fileWriter)
+			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 	e = fileWriter.Close()
 	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
-	}
-	fi, e := o.storage.StatFile(bucket, object)
-	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+		return "", probe.NewError(e)
 	}
 
-	contentType := "application/octet-stream"
-	if objectExt := filepath.Ext(object); objectExt != "" {
-		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-		if ok {
-			contentType = content.ContentType
-		}
-	}
-
-	return ObjectInfo{
-		Bucket:      fi.Volume,
-		Name:        fi.Name,
-		ModTime:     fi.ModTime,
-		Size:        fi.Size,
-		ContentType: contentType,
-		MD5Sum:      newMD5Hex,
-	}, nil
+	// Return md5sum.
+	return newMD5Hex, nil
 }
 
 func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
@@ -266,6 +266,12 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 	if e := o.storage.DeleteFile(bucket, object); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
+		}
+		if e == errFileNotFound {
+			return probe.NewError(ObjectNotFound{
+				Bucket: bucket,
+				Object: object,
+			})
 		}
 		return probe.NewError(e)
 	}
@@ -311,10 +317,13 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	}
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, fileInfo := range fileInfos {
-		result.NextMarker = fileInfo.Name
-		if fileInfo.Mode.IsDir() {
-			result.Prefixes = append(result.Prefixes, fileInfo.Name)
-			continue
+		// With delimiter set we fill in NextMarker and Prefixes.
+		if delimiter == slashPathSeparator {
+			result.NextMarker = fileInfo.Name
+			if fileInfo.Mode.IsDir() {
+				result.Prefixes = append(result.Prefixes, fileInfo.Name)
+				continue
+			}
 		}
 		result.Objects = append(result.Objects, ObjectInfo{
 			Name:    fileInfo.Name,

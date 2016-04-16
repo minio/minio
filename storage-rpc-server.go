@@ -4,11 +4,9 @@ import (
 	"io"
 	"net/http"
 	"net/rpc"
-	"os"
 	"strconv"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/safe"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
@@ -58,8 +56,12 @@ func (s *storageServer) ListFilesHandler(arg *ListFilesArgs, reply *ListFilesRep
 	if err != nil {
 		return err
 	}
+
+	// Fill reply structure.
 	reply.Files = files
 	reply.EOF = eof
+
+	// Return success.
 	return nil
 }
 
@@ -95,12 +97,18 @@ func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
 		path := vars["path"]
 		writeCloser, err := stServer.storage.CreateFile(volume, path)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpErr := http.StatusInternalServerError
+			if err == errVolumeNotFound {
+				httpErr = http.StatusNotFound
+			} else if err == errIsNotRegular {
+				httpErr = http.StatusConflict
+			}
+			http.Error(w, err.Error(), httpErr)
 			return
 		}
 		reader := r.Body
 		if _, err = io.Copy(writeCloser, reader); err != nil {
-			writeCloser.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(writeCloser)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -120,14 +128,22 @@ func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
 		readCloser, err := stServer.storage.ReadFile(volume, path, offset)
 		if err != nil {
 			httpErr := http.StatusBadRequest
-			if os.IsNotExist(err) {
+			if err == errVolumeNotFound {
+				httpErr = http.StatusNotFound
+			} else if err == errFileNotFound {
 				httpErr = http.StatusNotFound
 			}
 			http.Error(w, err.Error(), httpErr)
 			return
 		}
+
+		// Copy reader to writer.
 		io.Copy(w, readCloser)
+
+		// Flush out any remaining buffers to client.
 		w.(http.Flusher).Flush()
+
+		// Close the reader.
 		readCloser.Close()
 	})
 }

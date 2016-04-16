@@ -77,9 +77,9 @@ func testMultipartObjectCreation(c *check.C, create func() *objectAPI) {
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
 		completedParts.Parts = append(completedParts.Parts, completePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
-	objInfo, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
+	md5Sum, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
-	c.Assert(objInfo.MD5Sum, check.Equals, "3605d84b1c43b1a664aa7c0d5082d271-10")
+	c.Assert(md5Sum, check.Equals, "3605d84b1c43b1a664aa7c0d5082d271-10")
 }
 
 func testMultipartObjectAbort(c *check.C, create func() *objectAPI) {
@@ -133,9 +133,9 @@ func testMultipleObjectCreation(c *check.C, create func() *objectAPI) {
 		objects[key] = []byte(randomString)
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = expectedMD5Sumhex
-		objInfo, err := obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
+		md5Sum, err := obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
-		c.Assert(objInfo.MD5Sum, check.Equals, expectedMD5Sumhex)
+		c.Assert(md5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {

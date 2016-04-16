@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/safe"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -71,6 +70,14 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	}
 	if !IsValidObjectPrefix(prefix) {
 		return ListMultipartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
+	}
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListMultipartsInfo{}, probe.NewError(e)
+			}
+		}
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashPathSeparator {
@@ -253,14 +260,14 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 			return "", probe.NewError(e)
 		}
 		uploadID := uuid.String()
-		uploadIDFile := path.Join(bucket, object, uploadID)
-		if _, e = o.storage.StatFile(minioMetaVolume, uploadIDFile); e != nil {
+		uploadIDPath := path.Join(bucket, object, uploadID)
+		if _, e = o.storage.StatFile(minioMetaVolume, uploadIDPath); e != nil {
 			if e != errFileNotFound {
 				return "", probe.NewError(e)
 			}
-			// uploadIDFile doesn't exist, so create empty file to reserve the name
+			// uploadIDPath doesn't exist, so create empty file to reserve the name
 			var w io.WriteCloser
-			if w, e = o.storage.CreateFile(minioMetaVolume, uploadIDFile); e == nil {
+			if w, e = o.storage.CreateFile(minioMetaVolume, uploadIDPath); e == nil {
 				if e = w.Close(); e != nil {
 					return "", probe.NewError(e)
 				}
@@ -269,19 +276,23 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 			}
 			return uploadID, nil
 		}
-		// uploadIDFile already exists.
+		// uploadIDPath already exists.
 		// loop again to try with different uuid generated.
 	}
 }
 
-func (o objectAPI) isUploadIDExist(bucket, object, uploadID string) (bool, error) {
-	st, e := o.storage.StatFile(minioMetaVolume, path.Join(bucket, object, uploadID))
+// isUploadIDExists - verify if a given uploadID exists and is valid.
+func (o objectAPI) isUploadIDExists(bucket, object, uploadID string) (bool, error) {
+	uploadIDPath := path.Join(bucket, object, uploadID)
+	st, e := o.storage.StatFile(minioMetaVolume, uploadIDPath)
 	if e != nil {
+		// Upload id does not exist.
 		if e == errFileNotFound {
 			return false, nil
 		}
 		return false, e
 	}
+	// Upload id exists and is a regular file.
 	return st.Mode.IsRegular(), nil
 }
 
@@ -293,7 +304,7 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	if !IsValidObjectName(object) {
 		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
+	if status, e := o.isUploadIDExists(bucket, object, uploadID); e != nil {
 		return "", probe.NewError(e)
 	} else if !status {
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
@@ -324,12 +335,12 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(e)
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(e)
 		}
 	}
@@ -337,7 +348,7 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			fileWriter.(*safe.File).CloseAndRemove()
+			safeCloseAndRemove(fileWriter)
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -356,7 +367,16 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
+	// Create minio meta volume, if it doesn't exist yet.
+	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+		if e == errVolumeNotFound {
+			e = o.storage.MakeVol(minioMetaVolume)
+			if e != nil {
+				return ListPartsInfo{}, probe.NewError(e)
+			}
+		}
+	}
+	if status, e := o.isUploadIDExists(bucket, object, uploadID); e != nil {
 		return ListPartsInfo{}, probe.NewError(e)
 	} else if !status {
 		return ListPartsInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
@@ -364,8 +384,11 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	result := ListPartsInfo{}
 	marker := ""
 	nextPartNumberMarker := 0
+	uploadIDPath := path.Join(bucket, object, uploadID)
+	// Figure out the marker for the next subsequent calls, if the
+	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
-		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, path.Join(bucket, object, uploadID)+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
+		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
 		if e != nil {
 			return result, probe.NewError(e)
 		}
@@ -374,7 +397,7 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 		}
 		marker = fileInfos[0].Name
 	}
-	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, path.Join(bucket, object, uploadID)+".", marker, false, maxParts)
+	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+".", marker, false, maxParts)
 	if e != nil {
 		return result, probe.NewError(InvalidPart{})
 	}
@@ -404,55 +427,89 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	return result, nil
 }
 
-func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, *probe.Error) {
+// Create an s3 compatible MD5sum for complete multipart transaction.
+func makeS3MD5(md5Strs ...string) (string, *probe.Error) {
+	var finalMD5Bytes []byte
+	for _, md5Str := range md5Strs {
+		md5Bytes, e := hex.DecodeString(md5Str)
+		if e != nil {
+			return "", probe.NewError(e)
+		}
+		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
+	}
+	md5Hasher := md5.New()
+	md5Hasher.Write(finalMD5Bytes)
+	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(md5Strs))
+	return s3MD5, nil
+}
+
+func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, *probe.Error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return "", probe.NewError(ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		})
 	}
-	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+	if status, e := o.isUploadIDExists(bucket, object, uploadID); e != nil {
+		return "", probe.NewError(e)
 	} else if !status {
-		return ObjectInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
+		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
-		return ObjectInfo{}, nil
+		if e == errVolumeNotFound {
+			return "", probe.NewError(BucketNotFound{
+				Bucket: bucket,
+			})
+		} else if e == errIsNotRegular {
+			return "", probe.NewError(ObjectExistsAsPrefix{
+				Bucket: bucket,
+				Prefix: object,
+			})
+		}
+		return "", probe.NewError(e)
 	}
+
+	var md5Sums []string
 	for _, part := range parts {
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
 		var fileReader io.ReadCloser
 		fileReader, e = o.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			if e == errFileNotFound {
+				return "", probe.NewError(InvalidPart{})
+			}
+			return "", probe.NewError(e)
 		}
 		_, e = io.Copy(fileWriter, fileReader)
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			return "", probe.NewError(e)
 		}
 		e = fileReader.Close()
 		if e != nil {
-			return ObjectInfo{}, probe.NewError(e)
+			return "", probe.NewError(e)
 		}
+		md5Sums = append(md5Sums, part.ETag)
 	}
 	e = fileWriter.Close()
 	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+		return "", probe.NewError(e)
 	}
-	fi, e := o.storage.StatFile(bucket, object)
-	if e != nil {
-		return ObjectInfo{}, probe.NewError(e)
+
+	// Save the s3 md5.
+	s3MD5, err := makeS3MD5(md5Sums...)
+	if err != nil {
+		return "", err.Trace(md5Sums...)
 	}
+
+	// Cleanup all the parts.
 	o.removeMultipartUpload(bucket, object, uploadID)
-	return ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		ModTime: fi.ModTime,
-		Size:    fi.Size,
-		IsDir:   false,
-	}, nil
+
+	return s3MD5, nil
 }
 
 func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe.Error {
@@ -465,8 +522,8 @@ func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe
 	}
 	marker := ""
 	for {
-		uploadIDFile := path.Join(bucket, object, uploadID)
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDFile, marker, false, 1000)
+		uploadIDPath := path.Join(bucket, object, uploadID)
+		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath, marker, false, 1000)
 		if e != nil {
 			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
@@ -489,14 +546,14 @@ func (o objectAPI) AbortMultipartUpload(bucket, object, uploadID string) *probe.
 	if !IsValidObjectName(object) {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if status, e := o.isUploadIDExist(bucket, object, uploadID); e != nil {
+	if status, e := o.isUploadIDExists(bucket, object, uploadID); e != nil {
 		return probe.NewError(e)
 	} else if !status {
 		return probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
-	e := o.removeMultipartUpload(bucket, object, uploadID)
-	if e != nil {
-		return e.Trace()
+	err := o.removeMultipartUpload(bucket, object, uploadID)
+	if err != nil {
+		return err.Trace(bucket, object, uploadID)
 	}
 	return nil
 }

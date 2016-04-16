@@ -81,8 +81,8 @@ func IsValidObjectName(object string) bool {
 // IsValidObjectPrefix verifies whether the prefix is a valid object name.
 // Its valid to have a empty prefix.
 func IsValidObjectPrefix(object string) bool {
-	// Prefix can be empty.
-	if object == "" {
+	// Prefix can be empty or "/".
+	if object == "" || object == "/" {
 		return true
 	}
 	// Verify if prefix is a valid object name.
