@@ -3,7 +3,7 @@
 ## Test Minio Docker Container
 Minio generates new access and secret keys each time you run this command. Container state is lost after you end this session. This mode is only intended for testing purpose.
 ```bash
-docker run -p 9000:9000 minio/minio server /export
+docker run -p 9000:9000 minio/minio /export
 ```
 
 ## Run Minio Docker Container
@@ -13,7 +13,7 @@ Minio container requires a persistent volume to store configuration and applicat
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/export/minio1:/export \
   -v /mnt/config/minio1:/root/.minio \
-  minio/minio server /export
+  minio/minio /export
 ```
 
 ## Custom Access and Secret Keys
@@ -24,5 +24,5 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v /mnt/export/minio1:/export \
   -v /mnt/config/minio1:/root/.minio \
-  minio/minio server /export
+  minio/minio /export
 ```
