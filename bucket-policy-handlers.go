@@ -177,7 +177,7 @@ func (api objectStorageAPI) PutBucketPolicyHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Parse check bucket policy.
-	if s3Error := checkBucketPolicy(bucket, bucketPolicy); s3Error != ErrNone {
+	if s3Error := checkBucketPolicyResources(bucket, bucketPolicy); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
