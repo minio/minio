@@ -60,7 +60,7 @@ func isValidPath(path string) bool {
 // isValidPrefix verifies where the prefix is a valid path.
 func isValidPrefix(prefix string) bool {
 	// Prefix can be empty.
-	if prefix == "" {
+	if prefix == "" || prefix == "/" {
 		return true
 	}
 	// Verify if prefix is a valid path.
