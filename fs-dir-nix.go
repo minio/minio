@@ -48,7 +48,7 @@ func clen(n []byte) int {
 
 // parseDirents - inspired from
 // https://golang.org/src/syscall/syscall_<os>.go
-func parseDirents(buf []byte) []fsDirent {
+func parseDirents(dirPath string, buf []byte) []fsDirent {
 	bufidx := 0
 	dirents := []fsDirent{}
 	for bufidx < len(buf) {
@@ -87,7 +87,16 @@ func parseDirents(buf []byte) []fsDirent {
 		case syscall.DT_SOCK:
 			mode = os.ModeSocket
 		case syscall.DT_UNKNOWN:
-			mode = 0xffffffff
+			// On Linux XFS and few other file systems do not implement d_type in dirents.
+			// Fall back to Stat() in these scenarios.
+			if fi, err := os.Stat(filepath.Join(dirPath, name)); err == nil {
+				mode = fi.Mode()
+			} else {
+				// Stat failed, caller listing files would fail. But we will not crash
+				// the server.
+				mode = 0xffffffff
+			}
+
 		}
 
 		dirents = append(dirents, fsDirent{
@@ -115,7 +124,7 @@ func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
 		if nbuf <= 0 {
 			break
 		}
-		for _, dirent := range parseDirents(buf[:nbuf]) {
+		for _, dirent := range parseDirents(readDirPath, buf[:nbuf]) {
 			if dirent.IsDir() {
 				dirent.name += string(os.PathSeparator)
 				dirent.size = 0
@@ -151,7 +160,7 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 		if nbuf <= 0 {
 			break
 		}
-		for _, dirent := range parseDirents(buf[:nbuf]) {
+		for _, dirent := range parseDirents(dirPath, buf[:nbuf]) {
 			if !namesOnly {
 				dirent.name = filepath.Join(dirPath, dirent.name)
 			}
