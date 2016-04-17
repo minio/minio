@@ -134,7 +134,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 			hasReserved := hasReservedPrefix(dirent.name) || hasReservedSuffix(dirent.name)
 			// All dirents which match prefix and do not have reserved
 			// keywords in them are valid entries.
-			return strings.HasPrefix(dirent.name, entryPrefixMatch) && !hasReserved
+			return strings.HasPrefix(dirent.name, entryPrefixMatch) && !hasReserved && isValidPath(dirent.name)
 		}
 		return false
 	}

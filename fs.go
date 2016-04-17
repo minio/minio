@@ -143,7 +143,7 @@ func removeDuplicateVols(vols []VolInfo) []VolInfo {
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	volumeFn := func(dirent fsDirent) bool {
 		// Return all directories.
-		return dirent.IsDir()
+		return dirent.IsDir() && isValidVolname(dirent.name)
 	}
 	namesOnly := false // Returned dirent names are absolute.
 	dirents, err := scandir(dirPath, volumeFn, namesOnly)
