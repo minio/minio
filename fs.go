@@ -143,16 +143,16 @@ func removeDuplicateVols(vols []VolInfo) []VolInfo {
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	volumeFn := func(dirent fsDirent) bool {
 		// Return all directories.
-		return dirent.IsDir() && isValidVolname(dirent.name)
+		return dirent.IsDir() && isValidVolname(filepath.Clean(dirent.name))
 	}
-	namesOnly := false // Returned dirent names are absolute.
+	namesOnly := true // Returned are only names.
 	dirents, err := scandir(dirPath, volumeFn, namesOnly)
 	if err != nil {
 		return nil, err
 	}
 	var volsInfo []VolInfo
 	for _, dirent := range dirents {
-		fi, err := os.Stat(dirent.name)
+		fi, err := os.Stat(filepath.Join(dirPath, dirent.name))
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,7 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, vol := range volsInfo {
+	for i, vol := range volsInfo {
 		// Volname on case sensitive fs backends can come in as
 		// capitalized, but object layer cannot consume it
 		// directly. Convert it as we see fit.
@@ -239,7 +239,7 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 			Name:    volName,
 			Created: vol.Created,
 		}
-		volsInfo = append(volsInfo, volInfo)
+		volsInfo[i] = volInfo
 	}
 	return volsInfo, nil
 }
