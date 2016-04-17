@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
+
+	"github.com/minio/minio/pkg/probe"
 )
 
 // Testing GetObjectInfo().
@@ -38,17 +37,21 @@ func TestGetObjectInfo(t *testing.T) {
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the fs.
-	fs, err := newFS(directory)
-	if err != nil {
-		t.Fatal(err)
+	// Create the obj.
+	fs, e := newFS(directory)
+	if e != nil {
+		t.Fatal(e)
 	}
+
+	obj := newObjectLayer(fs)
+	var err *probe.Error
+
 	// This bucket is used for testing getObjectInfo operations.
-	err = fs.MakeBucket("test-getobjectinfo")
+	err = obj.MakeBucket("test-getobjectinfo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fs.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
+	_, err = obj.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +79,8 @@ func TestGetObjectInfo(t *testing.T) {
 		{"abcdefgh", "abc", ObjectInfo{}, BucketNotFound{Bucket: "abcdefgh"}, false},
 		{"ijklmnop", "efg", ObjectInfo{}, BucketNotFound{Bucket: "ijklmnop"}, false},
 		// Test cases with valid but non-existing bucket names and invalid object name (Test number 8-9).
-		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
-		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
+		{"abcdefgh", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "abcdefgh", Object: ""}, false},
+		{"ijklmnop", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "ijklmnop", Object: ""}, false},
 		// Test cases with non-existing object name with existing bucket (Test number 10-12).
 		{"test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
@@ -88,7 +91,7 @@ func TestGetObjectInfo(t *testing.T) {
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {
-		result, err := fs.GetObjectInfo(testCase.bucketName, testCase.objectName)
+		result, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
 		}
@@ -120,107 +123,25 @@ func TestGetObjectInfo(t *testing.T) {
 	}
 }
 
-// Testing getObjectInfo().
-func TestGetObjectInfoCore(t *testing.T) {
-	directory, e := ioutil.TempDir("", "minio-get-objinfo-test")
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer os.RemoveAll(directory)
-
-	// Create the fs.
-	fs, err := newFS(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// This bucket is used for testing getObjectInfo operations.
-	err = fs.MakeBucket("test-getobjinfo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = fs.PutObject("test-getobjinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resultCases := []ObjectInfo{
-		// ObjectInfo - 1.
-		// ObjectName object name set to a existing directory in the test case.
-		{Bucket: "test-getobjinfo", Name: "Asia", Size: 0, ContentType: "application/octet-stream", IsDir: true},
-		// ObjectInfo -2.
-		// ObjectName set to a existing object in the test case.
-		{Bucket: "test-getobjinfo", Name: "Asia/asiapics.jpg", Size: int64(len("asiapics")), ContentType: "image/jpeg", IsDir: false},
-		// ObjectInfo-3.
-		// Object name set to a non-existing object in the test case.
-		{Bucket: "test-getobjinfo", Name: "Africa", Size: 0, ContentType: "image/jpeg", IsDir: false},
-	}
-	testCases := []struct {
-		bucketName string
-		objectName string
-
-		// Expected output of getObjectInfo.
-		result ObjectInfo
-		err    error
-
-		// Flag indicating whether the test is expected to pass or not.
-		shouldPass bool
-	}{
-		// Testcase with object name set to a existing directory ( Test number 1).
-		{"test-getobjinfo", "Asia", resultCases[0], nil, true},
-		// ObjectName set to a existing object ( Test number 2).
-		{"test-getobjinfo", "Asia/asiapics.jpg", resultCases[1], nil, true},
-		// Object name set to a non-existing object. (Test number 3).
-		{"test-getobjinfo", "Africa", resultCases[2], fmt.Errorf("%s", filepath.FromSlash("test-getobjinfo/Africa")), false},
-	}
-	rootPath := fs.(*Filesystem).GetRootPath()
-	for i, testCase := range testCases {
-		result, err := getObjectInfo(rootPath, testCase.bucketName, testCase.objectName)
-		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
-		}
-		if err == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
-		}
-		// Failed as expected, but does it fail for the expected reason.
-		if err != nil && !testCase.shouldPass {
-			if !strings.Contains(err.Cause.Error(), testCase.err.Error()) {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Cause.Error())
-			}
-		}
-
-		// Test passes as expected, but the output values are verified for correctness here.
-		if err == nil && testCase.shouldPass {
-			if testCase.result.Bucket != result.Bucket {
-				t.Fatalf("Test %d: Expected Bucket name to be '%s', but found '%s' instead", i+1, testCase.result.Bucket, result.Bucket)
-			}
-			if testCase.result.Name != result.Name {
-				t.Errorf("Test %d: Expected Object name to be %s, but instead found it to be %s", i+1, testCase.result.Name, result.Name)
-			}
-			if testCase.result.ContentType != result.ContentType {
-				t.Errorf("Test %d: Expected Content Type of the object to be %v, but instead found it to be %v", i+1, testCase.result.ContentType, result.ContentType)
-			}
-			if testCase.result.IsDir != result.IsDir {
-				t.Errorf("Test %d: Expected IsDir flag of the object to be %v, but instead found it to be %v", i+1, testCase.result.IsDir, result.IsDir)
-			}
-		}
-	}
-}
-
 func BenchmarkGetObject(b *testing.B) {
-	// Make a temporary directory to use as the fs.
+	// Make a temporary directory to use as the obj.
 	directory, e := ioutil.TempDir("", "minio-benchmark-getobject")
 	if e != nil {
 		b.Fatal(e)
 	}
 	defer os.RemoveAll(directory)
 
-	// Create the fs.
-	fs, err := newFS(directory)
-	if err != nil {
-		b.Fatal(err)
+	// Create the obj.
+	fs, e := newFS(directory)
+	if e != nil {
+		b.Fatal(e)
 	}
 
+	obj := newObjectLayer(fs)
+	var err *probe.Error
+
 	// Make a bucket and put in a few objects.
-	err = fs.MakeBucket("bucket")
+	err = obj.MakeBucket("bucket")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -231,7 +152,7 @@ func BenchmarkGetObject(b *testing.B) {
 	metadata := make(map[string]string)
 	for i := 0; i < 10; i++ {
 		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
-		_, err = fs.PutObject("bucket", "object"+strconv.Itoa(i), int64(len(text)), bytes.NewBufferString(text), metadata)
+		_, err = obj.PutObject("bucket", "object"+strconv.Itoa(i), int64(len(text)), bytes.NewBufferString(text), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -240,7 +161,7 @@ func BenchmarkGetObject(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var buffer = new(bytes.Buffer)
-		r, err := fs.GetObject("bucket", "object"+strconv.Itoa(i%10), 0)
+		r, err := obj.GetObject("bucket", "object"+strconv.Itoa(i%10), 0)
 		if err != nil {
 			b.Error(err)
 		}

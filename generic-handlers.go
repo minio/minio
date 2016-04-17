@@ -58,10 +58,10 @@ func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Re-direction handled specifically for browsers.
 	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
 		// '/' is redirected to 'locationPrefix/'
-		// '/rpc' is redirected to 'locationPrefix/rpc'
+		// '/webrpc' is redirected to 'locationPrefix/webrpc'
 		// '/login' is redirected to 'locationPrefix/login'
 		switch r.URL.Path {
-		case "/", "/rpc", "/login", "/favicon.ico":
+		case "/", "/webrpc", "/login", "/favicon.ico":
 			location := h.locationPrefix + r.URL.Path
 			// Redirect to new location.
 			http.Redirect(w, r, location, http.StatusTemporaryRedirect)

@@ -69,12 +69,17 @@ EXAMPLES:
 `,
 }
 
+type serverCmdConfig struct {
+	serverAddr  string
+	exportPaths []string
+}
+
 // configureServer configure a new server instance
-func configureServer(serverAddr string, objectAPI ObjectAPI) *http.Server {
+func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
-		Addr:           serverAddr,
-		Handler:        configureServerHandler(objectAPI),
+		Addr:           srvCmdConfig.serverAddr,
+		Handler:        configureServerHandler(srvCmdConfig),
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -148,7 +153,7 @@ func initServerConfig(c *cli.Context) {
 
 // Check server arguments.
 func checkServerSyntax(c *cli.Context) {
-	if c.Args().First() == "help" {
+	if !c.Args().Present() && c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 	if len(c.Args()) > 2 {
@@ -255,25 +260,17 @@ func serverMain(c *cli.Context) {
 		}
 	}
 
-	// Check configured ports.
+	// Check if requested port is available.
 	checkPortAvailability(getPort(net.JoinHostPort(host, port)))
 
-	var objectAPI ObjectAPI
-	var err *probe.Error
-
-	// Set backend FS type.
-	fsPath := strings.TrimSpace(c.Args().Get(0))
-	if fsPath != "" {
-		// Last argument is always a file system path, verify if it exists and is accessible.
-		_, e := os.Stat(fsPath)
-		fatalIf(probe.NewError(e), "Unable to validate the path", nil)
-		// Initialize filesystem storage layer.
-		objectAPI, err = newFS(fsPath)
-		fatalIf(err.Trace(fsPath), "Initializing filesystem failed.", nil)
-	}
+	// Save all command line args as export paths.
+	exportPaths := c.Args()
 
 	// Configure server.
-	apiServer := configureServer(serverAddress, objectAPI)
+	apiServer := configureServer(serverCmdConfig{
+		serverAddr:  serverAddress,
+		exportPaths: exportPaths,
+	})
 
 	// Credential.
 	cred := serverConfig.GetCredential()
@@ -304,6 +301,6 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	err = minhttp.ListenAndServe(apiServer)
+	err := minhttp.ListenAndServe(apiServer)
 	errorIf(err.Trace(), "Failed to start the minio server.", nil)
 }

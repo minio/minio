@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,48 +18,83 @@ package main
 
 import (
 	"regexp"
+	"runtime"
+	"strings"
 	"unicode/utf8"
 )
 
-// validBucket regexp.
-var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
+// validVolname regexp.
+var validVolname = regexp.MustCompile(`^.{3,63}$`)
 
-// IsValidBucketName verifies a bucket name in accordance with Amazon's
-// requirements. It must be 3-63 characters long, can contain dashes
-// and periods, but must begin and end with a lowercase letter or a number.
-// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
-func IsValidBucketName(bucket string) bool {
-	if len(bucket) < 3 || len(bucket) > 63 {
+// isValidVolname verifies a volname name in accordance with object
+// layer requirements.
+func isValidVolname(volname string) bool {
+	if !validVolname.MatchString(volname) {
 		return false
 	}
-	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
-		return false
+	switch runtime.GOOS {
+	case "windows":
+		// Volname shouldn't have reserved characters on windows in it.
+		return !strings.ContainsAny(volname, "/\\:*?\"<>|")
+	default:
+		// Volname shouldn't have '/' in it.
+		return !strings.ContainsAny(volname, "/")
 	}
-	return validBucket.MatchString(bucket)
 }
 
-// IsValidObjectName verifies an object name in accordance with Amazon's
-// requirements. It cannot exceed 1024 characters and must be a valid UTF8
-// string.
-// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
-func IsValidObjectName(object string) bool {
-	if len(object) > 1024 || len(object) == 0 {
+// Keeping this as lower bound value supporting Linux, Darwin and Windows operating systems.
+const pathMax = 4096
+
+// isValidPath verifies if a path name is in accordance with FS limitations.
+func isValidPath(path string) bool {
+	// TODO: Make this FSType or Operating system specific.
+	if len(path) > pathMax || len(path) == 0 {
 		return false
 	}
-	if !utf8.ValidString(object) {
+	if !utf8.ValidString(path) {
 		return false
 	}
 	return true
 }
 
-// IsValidObjectPrefix verifies whether the prefix is a valid object name.
-// Its valid to have a empty prefix.
-func IsValidObjectPrefix(object string) bool {
+// isValidPrefix verifies where the prefix is a valid path.
+func isValidPrefix(prefix string) bool {
 	// Prefix can be empty.
-	if object == "" {
+	if prefix == "" {
 		return true
 	}
-	// Verify if prefix is a valid object name.
-	return IsValidObjectName(object)
+	// Verify if prefix is a valid path.
+	return isValidPath(prefix)
+}
 
+// List of reserved words for files, includes old and new ones.
+var reservedKeywords = []string{
+	"$multiparts",
+	"$tmpobject",
+	"$tmpfile",
+	// Add new reserved words if any used in future.
+}
+
+// hasReservedPrefix - returns true if name has a reserved keyword suffixed.
+func hasReservedSuffix(name string) (isReserved bool) {
+	for _, reservedKey := range reservedKeywords {
+		if strings.HasSuffix(name, reservedKey) {
+			isReserved = true
+			break
+		}
+		isReserved = false
+	}
+	return isReserved
+}
+
+// hasReservedPrefix - has reserved prefix.
+func hasReservedPrefix(name string) (isReserved bool) {
+	for _, reservedKey := range reservedKeywords {
+		if strings.HasPrefix(name, reservedKey) {
+			isReserved = true
+			break
+		}
+		isReserved = false
+	}
+	return isReserved
 }

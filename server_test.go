@@ -96,10 +96,10 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	// Save config.
 	c.Assert(serverConfig.Save(), IsNil)
 
-	fs, err := newFS(fsroot)
-	c.Assert(err, IsNil)
-
-	apiServer := configureServer(addr, fs)
+	apiServer := configureServer(serverCmdConfig{
+		serverAddr:  addr,
+		exportPaths: []string{fsroot},
+	})
 	testAPIFSCacheServer = httptest.NewServer(apiServer.Handler)
 }
 
@@ -1172,6 +1172,7 @@ func (s *MyAPISuite) TestValidateObjectMultipartUploadID(c *C) {
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	decoder := xml.NewDecoder(response.Body)

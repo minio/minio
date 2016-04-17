@@ -23,45 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 )
-
-// Read all directory entries, returns a list of lexically sorted entries.
-func readDirAll(readDirPath, entryPrefixMatch string) ([]fsDirent, error) {
-	f, err := os.Open(readDirPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var dirents []fsDirent
-	for {
-		fis, err := f.Readdir(1000)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		for _, fi := range fis {
-			dirent := fsDirent{
-				name:    fi.Name(),
-				modTime: fi.ModTime(),
-				size:    fi.Size(),
-				mode:    fi.Mode(),
-			}
-			if dirent.IsDir() {
-				dirent.name += string(os.PathSeparator)
-				dirent.size = 0
-			}
-			if strings.HasPrefix(fi.Name(), entryPrefixMatch) {
-				dirents = append(dirents, dirent)
-			}
-		}
-	}
-	// Sort dirents.
-	sort.Sort(byDirentName(dirents))
-	return dirents, nil
-}
 
 // scans the directory dirPath, calling filter() on each directory
 // entry.  Entries for which filter() returns true are stored, lexically
@@ -103,6 +65,5 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 	}
 
 	sort.Sort(byDirentName(dirents))
-
 	return dirents, nil
 }
