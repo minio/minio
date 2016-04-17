@@ -16,10 +16,17 @@
 
 package main
 
-import "io"
+import (
+	"io"
+
+	"github.com/minio/minio/pkg/disk"
+)
 
 // StorageAPI interface.
 type StorageAPI interface {
+	// Storage disk operations.
+	GetDiskInfo() (disk.Info, error)
+
 	// Volume operations.
 	MakeVol(volume string) (err error)
 	ListVols() (vols []VolInfo, err error)

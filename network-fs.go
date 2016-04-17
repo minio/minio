@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 type networkFS struct {
@@ -108,6 +110,15 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 
 	// Returns successfully here.
 	return ndisk, nil
+}
+
+// DiskInfo - get storage disk info.
+func (n networkFS) GetDiskInfo() (disk.Info, error) {
+	reply := disk.Info{}
+	if err := n.rpcClient.Call("Storage.GetDiskInfoHandler", "", &reply); err != nil {
+		return disk.Info{}, toStorageErr(err)
+	}
+	return reply, nil
 }
 
 // MakeVol - make a volume.

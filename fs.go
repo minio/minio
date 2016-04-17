@@ -43,7 +43,6 @@ type listParams struct {
 // fsStorage - implements StorageAPI interface.
 type fsStorage struct {
 	diskPath           string
-	diskInfo           disk.Info
 	minFreeDisk        int64
 	listObjectMap      map[listParams][]*treeWalker
 	listObjectMapMutex *sync.Mutex
@@ -86,13 +85,8 @@ func newFS(diskPath string) (StorageAPI, error) {
 	if !st.IsDir() {
 		return nil, syscall.ENOTDIR
 	}
-	diskInfo, e := disk.GetInfo(diskPath)
-	if e != nil {
-		return nil, e
-	}
 	fs := fsStorage{
 		diskPath:           diskPath,
-		diskInfo:           diskInfo,
 		minFreeDisk:        5, // Minimum 5% disk should be free.
 		listObjectMap:      make(map[listParams][]*treeWalker),
 		listObjectMapMutex: &sync.Mutex{},
@@ -199,6 +193,11 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 		return volumeDir, errVolumeAccessDenied
 	}
 	return volumeDir, err
+}
+
+// GetDiskInfo - get disk info.
+func (s fsStorage) GetDiskInfo() (disk.Info, error) {
+	return disk.GetInfo(s.diskPath)
 }
 
 // Make a volume entry.
