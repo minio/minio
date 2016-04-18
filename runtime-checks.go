@@ -41,6 +41,11 @@ func isContainerized() bool {
 		}
 	}
 
+	// Check if env var explicitly set
+	if allow := os.Getenv("ALLOW_CONTAINER_ROOT"); allow == "1" || strings.ToLower(allow) == "true" {
+		return true
+	}
+
 	/* Add checks for non-docker containers here. */
 	return false
 }
