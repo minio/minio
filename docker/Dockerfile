@@ -5,4 +5,5 @@ ADD minio.dockerimage /minio
 ADD export /export
 EXPOSE 9000
 COPY start.sh /start.sh
+ENV ALLOW_CONTAINER_ROOT=1
 ENTRYPOINT ["/start.sh"]
