@@ -18,44 +18,56 @@ package main
 
 import "sync"
 
+// nameSpaceParam - carries name space resource.
 type nameSpaceParam struct {
 	volume string
 	path   string
 }
 
+// nameSpaceLock - provides primitives for locking critical namespace regions.
 type nameSpaceLock struct {
 	rwMutex *sync.RWMutex
-	count   uint
+	rcount  uint
+	wcount  uint
 }
 
-func (nsLock nameSpaceLock) InUse() bool {
-	return nsLock.count != 0
+func (nsLock *nameSpaceLock) InUse() bool {
+	return nsLock.rcount != 0 || nsLock.wcount != 0
 }
 
-func (nsLock nameSpaceLock) Lock() {
+// Lock acquires write lock and increments the namespace counter.
+func (nsLock *nameSpaceLock) Lock() {
 	nsLock.Lock()
-	nsLock.count++
+	nsLock.wcount++
 }
 
-func (nsLock nameSpaceLock) Unlock() {
+// Unlock releases write lock and decrements the namespace counter.
+func (nsLock *nameSpaceLock) Unlock() {
 	nsLock.Unlock()
-	if nsLock.count != 0 {
-		nsLock.count--
+	if nsLock.wcount != 0 {
+		nsLock.wcount--
 	}
 }
 
-func (nsLock nameSpaceLock) RLock() {
+// RLock acquires read lock and increments the namespace counter.
+func (nsLock *nameSpaceLock) RLock() {
 	nsLock.RLock()
-	nsLock.count++
+	nsLock.rcount++
 }
 
-func (nsLock nameSpaceLock) RUnlock() {
+// RUnlock release read lock and decrements the namespace counter.
+func (nsLock *nameSpaceLock) RUnlock() {
 	nsLock.RUnlock()
-	if nsLock.count != 0 {
-		nsLock.count--
+	if nsLock.rcount != 0 {
+		nsLock.rcount--
 	}
 }
 
-func newNameSpaceLock() nameSpaceLock {
-	return nameSpaceLock{rwMutex: &sync.RWMutex{}, count: 0}
+// newNSLock - provides a new instance of namespace locking primitives.
+func newNSLock() *nameSpaceLock {
+	return &nameSpaceLock{
+		rwMutex: &sync.RWMutex{},
+		rcount:  0,
+		wcount:  0,
+	}
 }
