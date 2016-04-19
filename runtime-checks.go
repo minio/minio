@@ -29,8 +29,8 @@ import (
 
 // isContainerized returns true if we are inside a containerized environment.
 func isContainerized() bool {
-	// Docker containers contain ".dockerinit" at its root path.
-	if _, e := os.Stat("/.dockerinit"); e == nil {
+	// Docker containers contain ".dockerenv" at their root path.
+	if _, e := os.Stat("/.dockerenv"); e == nil {
 		return true
 	}
 
