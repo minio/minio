@@ -149,6 +149,11 @@ func initServerConfig(c *cli.Context) {
 			SecretAccessKey: secretKey,
 		})
 	}
+
+	// Set maxOpenFiles, This is necessary since default operating
+	// system limits of 1024, 2048 are not enough for Minio server.
+	setMaxOpenFiles()
+	// Do not fail if this is not allowed, lower limits are fine as well.
 }
 
 // Check server arguments.
