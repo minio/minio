@@ -29,6 +29,16 @@ const (
 	b = "bytes="
 )
 
+// InvalidRange - invalid range
+type InvalidRange struct {
+	Start  int64
+	Length int64
+}
+
+func (e InvalidRange) Error() string {
+	return fmt.Sprintf("Invalid range start:%d length:%d", e.Start, e.Length)
+}
+
 // HttpRange specifies the byte range to be sent to the client.
 type httpRange struct {
 	start, length, size int64

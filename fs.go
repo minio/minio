@@ -111,7 +111,7 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	// space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= minFreeDisk {
-		return errDiskPathFull
+		return errDiskFull
 	}
 
 	// Success.

@@ -54,6 +54,8 @@ func splitNetPath(networkPath string) (netAddr, netPath string) {
 // disks as well.
 func toStorageErr(err error) error {
 	switch err.Error() {
+	case errDiskFull.Error():
+		return errDiskFull
 	case errVolumeNotFound.Error():
 		return errVolumeNotFound
 	case errVolumeExists.Error():
