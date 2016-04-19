@@ -133,17 +133,19 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
-	xl.lockNameSpace(volume, path, true)
-	defer xl.unlockNameSpace(volume, path, true)
+	// Acquire a read lock.
+	readLock := true
+	xl.lockNS(volume, path, readLock)
+	defer xl.unlockNS(volume, path, readLock)
 
-	// check read quorum
+	// Check read quorum.
 	quorumDisks := xl.getReadFileQuorumDisks(volume, path)
 	if len(quorumDisks) < xl.readQuorum {
-		return nil, errors.New("I/O error.  do not meet read quorum")
+		return nil, errReadQuorum
 	}
 
-	// get file size
-	size, err := xl.getFileSize(volume, path, quorumDisks[0].disk)
+	// Get file size.
+	fileSize, err := xl.getFileSize(volume, path, quorumDisks[0].disk)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		var totalLeft = size
+		var totalLeft = fileSize
 		// Read until the totalLeft.
 		for totalLeft > 0 {
 			// Figure out the right blockSize as it was encoded before.
@@ -210,6 +212,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				pipeWriter.CloseWithError(err)
 				return
 			}
+
 			// Verify the blocks.
 			var ok bool
 			ok, err = xl.ReedSolomon.Verify(enBlocks)
@@ -217,6 +220,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				pipeWriter.CloseWithError(err)
 				return
 			}
+
 			// Verification failed, blocks require reconstruction.
 			if !ok {
 				err = xl.ReedSolomon.Reconstruct(enBlocks)
@@ -237,15 +241,18 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					return
 				}
 			}
+
 			// Join the decoded blocks.
 			err = xl.ReedSolomon.Join(pipeWriter, enBlocks, curBlockSize)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				return
 			}
+
 			// Save what's left after reading erasureBlockSize.
 			totalLeft = totalLeft - erasureBlockSize
 		}
+
 		// Cleanly end the pipe after a successful decoding.
 		pipeWriter.Close()
 

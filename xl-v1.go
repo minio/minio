@@ -45,23 +45,25 @@ type XL struct {
 	DataBlocks            int
 	ParityBlocks          int
 	storageDisks          []StorageAPI
-	nameSpaceLockMap      map[nameSpaceParam]nameSpaceLock
+	nameSpaceLockMap      map[nameSpaceParam]*nameSpaceLock
 	nameSpaceLockMapMutex *sync.Mutex
 	readQuorum            int
 	writeQuorum           int
 }
 
-func (xl XL) lockNameSpace(volume, path string, readOnly bool) {
+// lockNS - locks the given resource, using a previously allocated
+// name space lock or initializing a new one.
+func (xl XL) lockNS(volume, path string, readLock bool) {
 	xl.nameSpaceLockMapMutex.Lock()
 	defer xl.nameSpaceLockMapMutex.Unlock()
 
 	param := nameSpaceParam{volume, path}
 	nsLock, found := xl.nameSpaceLockMap[param]
 	if !found {
-		nsLock = newNameSpaceLock()
+		nsLock = newNSLock()
 	}
 
-	if readOnly {
+	if readLock {
 		nsLock.RLock()
 	} else {
 		nsLock.Lock()
@@ -70,13 +72,14 @@ func (xl XL) lockNameSpace(volume, path string, readOnly bool) {
 	xl.nameSpaceLockMap[param] = nsLock
 }
 
-func (xl XL) unlockNameSpace(volume, path string, readOnly bool) {
+// unlockNS - unlocks any previously acquired read or write locks.
+func (xl XL) unlockNS(volume, path string, readLock bool) {
 	xl.nameSpaceLockMapMutex.Lock()
 	defer xl.nameSpaceLockMapMutex.Unlock()
 
 	param := nameSpaceParam{volume, path}
 	if nsLock, found := xl.nameSpaceLockMap[param]; found {
-		if readOnly {
+		if readLock {
 			nsLock.RUnlock()
 		} else {
 			nsLock.Unlock()
@@ -136,10 +139,17 @@ func newXL(disks ...string) (StorageAPI, error) {
 	// Save all the initialized storage disks.
 	xl.storageDisks = storageDisks
 
-	xl.nameSpaceLockMap = make(map[nameSpaceParam]nameSpaceLock)
+	// Initialize name space lock map.
+	xl.nameSpaceLockMap = make(map[nameSpaceParam]*nameSpaceLock)
 	xl.nameSpaceLockMapMutex = &sync.Mutex{}
-	xl.readQuorum = len(xl.storageDisks) / 2
-	xl.writeQuorum = xl.readQuorum + 3
+
+	// Figure out read and write quorum based on number of storage disks.
+	// Read quorum should be always N/2 + 1 (due to Vandermonde matrix
+	// erasure requirements)
+	xl.readQuorum = len(xl.storageDisks)/2 + 1
+	// Write quorum is assumed if we have total disks + 3
+	// parity. (Need to discuss this again)
+	xl.writeQuorum = len(xl.storageDisks)/2 + 3
 	if xl.writeQuorum > len(xl.storageDisks) {
 		xl.writeQuorum = len(xl.storageDisks)
 	}
@@ -430,13 +440,6 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		ModTime: metadata.ModTime,
 		Mode:    os.FileMode(0644),
 	}, nil
-}
-
-// Delete all path.
-func deletePathAll(volume, path string, disks ...StorageAPI) {
-	for _, disk := range disks {
-		disk.DeleteFile(volume, path)
-	}
 }
 
 // DeleteFile - delete a file
