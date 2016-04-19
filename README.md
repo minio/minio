@@ -168,6 +168,7 @@ host_bucket = localhost:9000
 access_key = YOUR_ACCESS_KEY_HERE
 secret_key = YOUR_SECRET_KEY_HERE
 signature_v2 = False
+bucket_location = us-east-1
 ```
 
 To make a bucket
