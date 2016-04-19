@@ -32,6 +32,15 @@ import (
 // Erasure block size.
 const erasureBlockSize = 4 * 1024 * 1024 // 4MiB.
 
+// cleanupCreateFileOps - cleans up all the temporary files and other
+// temporary data upon any failure.
+func (xl XL) cleanupCreateFileOps(volume, path string, writers ...io.WriteCloser) {
+	closeAndRemoveWriters(writers...)
+	for _, disk := range xl.storageDisks {
+		disk.DeleteFile(volume, path)
+	}
+}
+
 // Close and remove writers if they are safeFile.
 func closeAndRemoveWriters(writers ...io.WriteCloser) {
 	for _, writer := range writers {
@@ -54,9 +63,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		writers[index], err = disk.CreateFile(volume, erasurePart)
 		if err != nil {
 			// Remove previous temp writers for any failure.
-			closeAndRemoveWriters(writers...)
-			closeAndRemoveWriters(metadataWriters...)
-			deletePathAll(volume, path, xl.storageDisks...)
+			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
 			return
 		}
@@ -64,9 +71,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		metadataWriters[index], err = disk.CreateFile(volume, metadataFilePath)
 		if err != nil {
 			// Remove previous temp writers for any failure.
-			closeAndRemoveWriters(writers...)
-			closeAndRemoveWriters(metadataWriters...)
-			deletePathAll(volume, path, xl.storageDisks...)
+			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
 			return
 		}
@@ -83,9 +88,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			// Any unexpected errors, close the pipe reader with error.
 			if err != io.ErrUnexpectedEOF && err != io.EOF {
 				// Remove all temp writers.
-				closeAndRemoveWriters(writers...)
-				closeAndRemoveWriters(metadataWriters...)
-				deletePathAll(volume, path, xl.storageDisks...)
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return
 			}
@@ -100,9 +103,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			blocks, err = xl.ReedSolomon.Split(buffer[0:n])
 			if err != nil {
 				// Remove all temp writers.
-				closeAndRemoveWriters(writers...)
-				closeAndRemoveWriters(metadataWriters...)
-				deletePathAll(volume, path, xl.storageDisks...)
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return
 			}
@@ -110,9 +111,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			err = xl.ReedSolomon.Encode(blocks)
 			if err != nil {
 				// Remove all temp writers upon error.
-				closeAndRemoveWriters(writers...)
-				closeAndRemoveWriters(metadataWriters...)
-				deletePathAll(volume, path, xl.storageDisks...)
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return
 			}
@@ -121,9 +120,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 				_, err = writers[index].Write(encodedData)
 				if err != nil {
 					// Remove all temp writers upon error.
-					closeAndRemoveWriters(writers...)
-					closeAndRemoveWriters(metadataWriters...)
-					deletePathAll(volume, path, xl.storageDisks...)
+					xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 					reader.CloseWithError(err)
 					return
 				}
@@ -157,18 +154,16 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		// Marshal metadata into json strings.
 		metadataBytes, err := json.Marshal(metadata)
 		if err != nil {
-			closeAndRemoveWriters(writers...)
-			closeAndRemoveWriters(metadataWriters...)
-			deletePathAll(volume, path, xl.storageDisks...)
+			// Remove temporary files.
+			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
 			return
 		}
 
+		// Write metadata to disk.
 		_, err = metadataWriter.Write(metadataBytes)
 		if err != nil {
-			closeAndRemoveWriters(writers...)
-			closeAndRemoveWriters(metadataWriters...)
-			deletePathAll(volume, path, xl.storageDisks...)
+			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
 			return
 		}
