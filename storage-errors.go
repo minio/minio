@@ -43,3 +43,6 @@ var errVolumeAccessDenied = errors.New("Volume access denied.")
 // errVolumeAccessDenied - cannot access file, insufficient
 // permissions.
 var errFileAccessDenied = errors.New("File access denied.")
+
+// errReadQuorum - did not meet read quorum.
+var errReadQuorum = errors.New("I/O error.  do not meet read quorum")
