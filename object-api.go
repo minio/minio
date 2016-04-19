@@ -30,11 +30,13 @@ import (
 )
 
 type objectAPI struct {
-	storage StorageAPI
+	Storage StorageAPI
 }
 
 func newObjectLayer(storage StorageAPI) *objectAPI {
-	return &objectAPI{storage}
+	return &objectAPI{
+		Storage: storage,
+	}
 }
 
 /// Bucket operations
@@ -45,7 +47,7 @@ func (o objectAPI) MakeBucket(bucket string) *probe.Error {
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	if e := o.storage.MakeVol(bucket); e != nil {
+	if e := o.Storage.MakeVol(bucket); e != nil {
 		if e == errVolumeExists {
 			return probe.NewError(BucketExists{Bucket: bucket})
 		}
@@ -60,7 +62,7 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	vi, e := o.storage.StatVol(bucket)
+	vi, e := o.Storage.StatVol(bucket)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return BucketInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
@@ -76,7 +78,7 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 // ListBuckets - list buckets.
 func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 	var bucketInfos []BucketInfo
-	vols, e := o.storage.ListVols()
+	vols, e := o.Storage.ListVols()
 	if e != nil {
 		return nil, probe.NewError(e)
 	}
@@ -100,7 +102,7 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 	if !IsValidBucketName(bucket) {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
-	if e := o.storage.DeleteVol(bucket); e != nil {
+	if e := o.Storage.DeleteVol(bucket); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		} else if e == errVolumeNotEmpty {
@@ -123,7 +125,7 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 	if !IsValidObjectName(object) {
 		return nil, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	r, e := o.storage.ReadFile(bucket, object, startOffset)
+	r, e := o.Storage.ReadFile(bucket, object, startOffset)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return nil, probe.NewError(BucketNotFound{Bucket: bucket})
@@ -145,7 +147,7 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	fi, e := o.storage.StatFile(bucket, object)
+	fi, e := o.Storage.StatFile(bucket, object)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
@@ -200,7 +202,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 			Object: object,
 		})
 	}
-	fileWriter, e := o.storage.CreateFile(bucket, object)
+	fileWriter, e := o.Storage.CreateFile(bucket, object)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return "", probe.NewError(BucketNotFound{
@@ -263,7 +265,7 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 	if !IsValidObjectName(object) {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if e := o.storage.DeleteFile(bucket, object); e != nil {
+	if e := o.Storage.DeleteFile(bucket, object); e != nil {
 		if e == errVolumeNotFound {
 			return probe.NewError(BucketNotFound{Bucket: bucket})
 		}
@@ -305,7 +307,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	if delimiter == slashPathSeparator {
 		recursive = false
 	}
-	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
+	fileInfos, eof, e := o.Storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return ListObjectsInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})

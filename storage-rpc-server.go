@@ -7,12 +7,25 @@ import (
 	"strconv"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/disk"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
 // disk over a network.
 type storageServer struct {
 	storage StorageAPI
+}
+
+/// Storage operation handlers
+
+// GetDiskInfoHandler - get remote disk info.
+func (s *storageServer) GetDiskInfoHandler(arg *string, reply *disk.Info) error {
+	diskInfo, err := s.storage.GetDiskInfo()
+	if err != nil {
+		return err
+	}
+	*reply = diskInfo
+	return nil
 }
 
 /// Volume operations handlers

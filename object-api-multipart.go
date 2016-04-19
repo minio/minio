@@ -38,7 +38,7 @@ const (
 func (o objectAPI) checkLeafDirectory(prefixPath string) (isLeaf bool, fis []FileInfo) {
 	var allFileInfos []FileInfo
 	for {
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, "", false, 1000)
+		fileInfos, eof, e := o.Storage.ListFiles(minioMetaVolume, prefixPath, "", false, 1000)
 		if e != nil {
 			break
 		}
@@ -71,9 +71,9 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	if !IsValidObjectPrefix(prefix) {
 		return ListMultipartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
-	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+	if _, e := o.Storage.StatVol(minioMetaVolume); e != nil {
 		if e == errVolumeNotFound {
-			e = o.storage.MakeVol(minioMetaVolume)
+			e = o.Storage.MakeVol(minioMetaVolume)
 			if e != nil {
 				return ListMultipartsInfo{}, probe.NewError(e)
 			}
@@ -127,7 +127,7 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		}
 	outerLoop:
 		for {
-			fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, keyMarkerPath, recursive, maxUploads-newMaxUploads)
+			fileInfos, eof, e := o.Storage.ListFiles(minioMetaVolume, prefixPath, keyMarkerPath, recursive, maxUploads-newMaxUploads)
 			if e != nil {
 				return ListMultipartsInfo{}, probe.NewError(e)
 			}
@@ -171,7 +171,7 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	// read all the "fileInfos" in the prefix
 	for {
 		marker := ""
-		fis, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, marker, recursive, 1000)
+		fis, eof, e := o.Storage.ListFiles(minioMetaVolume, prefixPath, marker, recursive, 1000)
 		if e != nil {
 			return ListMultipartsInfo{}, probe.NewError(e)
 		}
@@ -246,9 +246,9 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 	if !IsValidObjectName(object) {
 		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+	if _, e := o.Storage.StatVol(minioMetaVolume); e != nil {
 		if e == errVolumeNotFound {
-			e = o.storage.MakeVol(minioMetaVolume)
+			e = o.Storage.MakeVol(minioMetaVolume)
 			if e != nil {
 				return "", probe.NewError(e)
 			}
@@ -261,13 +261,13 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 		}
 		uploadID := uuid.String()
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		if _, e = o.storage.StatFile(minioMetaVolume, uploadIDPath); e != nil {
+		if _, e = o.Storage.StatFile(minioMetaVolume, uploadIDPath); e != nil {
 			if e != errFileNotFound {
 				return "", probe.NewError(e)
 			}
 			// uploadIDPath doesn't exist, so create empty file to reserve the name
 			var w io.WriteCloser
-			if w, e = o.storage.CreateFile(minioMetaVolume, uploadIDPath); e == nil {
+			if w, e = o.Storage.CreateFile(minioMetaVolume, uploadIDPath); e == nil {
 				if e = w.Close(); e != nil {
 					return "", probe.NewError(e)
 				}
@@ -284,7 +284,7 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 // isUploadIDExists - verify if a given uploadID exists and is valid.
 func (o objectAPI) isUploadIDExists(bucket, object, uploadID string) (bool, error) {
 	uploadIDPath := path.Join(bucket, object, uploadID)
-	st, e := o.storage.StatFile(minioMetaVolume, uploadIDPath)
+	st, e := o.Storage.StatFile(minioMetaVolume, uploadIDPath)
 	if e != nil {
 		// Upload id does not exist.
 		if e == errFileNotFound {
@@ -311,7 +311,7 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	}
 
 	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partID, md5Hex)
-	fileWriter, e := o.storage.CreateFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
+	fileWriter, e := o.Storage.CreateFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
 	if e != nil {
 		if e == errVolumeNotFound {
 			return "", probe.NewError(BucketNotFound{
@@ -368,9 +368,9 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 		return ListPartsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	// Create minio meta volume, if it doesn't exist yet.
-	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
+	if _, e := o.Storage.StatVol(minioMetaVolume); e != nil {
 		if e == errVolumeNotFound {
-			e = o.storage.MakeVol(minioMetaVolume)
+			e = o.Storage.MakeVol(minioMetaVolume)
 			if e != nil {
 				return ListPartsInfo{}, probe.NewError(e)
 			}
@@ -388,7 +388,7 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 	// Figure out the marker for the next subsequent calls, if the
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
-		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
+		fileInfos, _, e := o.Storage.ListFiles(minioMetaVolume, uploadIDPath+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
 		if e != nil {
 			return result, probe.NewError(e)
 		}
@@ -397,7 +397,7 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 		}
 		marker = fileInfos[0].Name
 	}
-	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+".", marker, false, maxParts)
+	fileInfos, eof, e := o.Storage.ListFiles(minioMetaVolume, uploadIDPath+".", marker, false, maxParts)
 	if e != nil {
 		return result, probe.NewError(InvalidPart{})
 	}
@@ -459,7 +459,7 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 	} else if !status {
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
-	fileWriter, e := o.storage.CreateFile(bucket, object)
+	fileWriter, e := o.Storage.CreateFile(bucket, object)
 	if e != nil {
 		if e == errVolumeNotFound {
 			return "", probe.NewError(BucketNotFound{
@@ -478,7 +478,7 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 	for _, part := range parts {
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
 		var fileReader io.ReadCloser
-		fileReader, e = o.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
+		fileReader, e = o.Storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
 		if e != nil {
 			if e == errFileNotFound {
 				return "", probe.NewError(InvalidPart{})
@@ -523,12 +523,12 @@ func (o objectAPI) removeMultipartUpload(bucket, object, uploadID string) *probe
 	marker := ""
 	for {
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath, marker, false, 1000)
+		fileInfos, eof, e := o.Storage.ListFiles(minioMetaVolume, uploadIDPath, marker, false, 1000)
 		if e != nil {
 			return probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
 		}
 		for _, fileInfo := range fileInfos {
-			o.storage.DeleteFile(minioMetaVolume, fileInfo.Name)
+			o.Storage.DeleteFile(minioMetaVolume, fileInfo.Name)
 			marker = fileInfo.Name
 		}
 		if eof {
