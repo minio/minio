@@ -243,3 +243,8 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 	}
 	return nil
 }
+
+// HealFile is not implemented.
+func (n networkFS) HealFile(volume, path string) error {
+	return errors.New("Not implemented")
+}

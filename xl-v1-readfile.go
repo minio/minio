@@ -90,7 +90,7 @@ func (xl XL) getReadFileQuorumDisks(volume, path string) (quorumDisks []quorumDi
 	for disk, version := range diskVersionMap {
 		if version > higherVersion {
 			higherVersion = version
-			quorumDisks = []quorumDisk{quorumDisk{disk, i}}
+			quorumDisks = []quorumDisk{{disk, i}}
 		} else if version == higherVersion {
 			quorumDisks = append(quorumDisks, quorumDisk{disk, i})
 		}
@@ -133,10 +133,10 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
-	// Acquire a read lock.
-	readLock := true
-	xl.lockNS(volume, path, readLock)
-	defer xl.unlockNS(volume, path, readLock)
+	// Acquire a read lock. - TODO - disable this due to stack overflow bug.
+	// readLock := true
+	// xl.lockNS(volume, path, readLock)
+	// defer xl.unlockNS(volume, path, readLock)
 
 	// Check read quorum.
 	quorumDisks := xl.getReadFileQuorumDisks(volume, path)
