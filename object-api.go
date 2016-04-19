@@ -48,6 +48,8 @@ func (o objectAPI) MakeBucket(bucket string) *probe.Error {
 	if e := o.storage.MakeVol(bucket); e != nil {
 		if e == errVolumeExists {
 			return probe.NewError(BucketExists{Bucket: bucket})
+		} else if e == errDiskFull {
+			return probe.NewError(StorageFull{})
 		}
 		return probe.NewError(e)
 	}
@@ -209,8 +211,10 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 		} else if e == errIsNotRegular {
 			return "", probe.NewError(ObjectExistsAsPrefix{
 				Bucket: bucket,
-				Prefix: object,
+				Object: object,
 			})
+		} else if e == errDiskFull {
+			return "", probe.NewError(StorageFull{})
 		}
 		return "", probe.NewError(e)
 	}
@@ -225,6 +229,9 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
 			safeCloseAndRemove(fileWriter)
+			if e == io.ErrUnexpectedEOF {
+				return "", probe.NewError(IncompleteBody{})
+			}
 			return "", probe.NewError(e)
 		}
 	} else {

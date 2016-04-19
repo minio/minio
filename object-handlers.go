@@ -460,8 +460,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
 		switch err.ToGoError().(type) {
-		case RootPathFull:
-			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
+		case StorageFull:
+			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:
@@ -684,8 +684,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		switch e.(type) {
-		case RootPathFull:
-			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
+		case StorageFull:
+			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:
@@ -738,8 +738,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if err != nil {
 		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
 		switch err.ToGoError().(type) {
-		case RootPathFull:
-			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
+		case StorageFull:
+			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -856,8 +856,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		switch e.(type) {
-		case RootPathFull:
-			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
+		case StorageFull:
+			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case InvalidUploadID:
 			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
 		case BadDigest:

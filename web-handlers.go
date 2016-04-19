@@ -413,8 +413,8 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 	// Convert error type to api error code.
 	var apiErrCode APIErrorCode
 	switch err.(type) {
-	case RootPathFull:
-		apiErrCode = ErrRootPathFull
+	case StorageFull:
+		apiErrCode = ErrStorageFull
 	case BucketNotFound:
 		apiErrCode = ErrNoSuchBucket
 	case BucketNameInvalid:

@@ -562,8 +562,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if err != nil {
 		errorIf(err.Trace(), "PutObject failed.", nil)
 		switch err.ToGoError().(type) {
-		case RootPathFull:
-			writeErrorResponse(w, r, ErrRootPathFull, r.URL.Path)
+		case StorageFull:
+			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:

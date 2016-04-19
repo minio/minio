@@ -83,7 +83,7 @@ const (
 	ErrMalformedPOSTRequest
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
-	ErrRootPathFull
+	ErrStorageFull
 	ErrObjectExistsAsPrefix
 	ErrAllAccessDisabled
 	ErrMalformedPolicy
@@ -295,9 +295,9 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The bucket you tried to delete is not empty.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrRootPathFull: {
-		Code:           "RootPathFull",
-		Description:    "Root path has reached its minimum free disk threshold. Please delete few objects to proceed.",
+	ErrStorageFull: {
+		Code:           "StorageFull",
+		Description:    "Storage backend has reached its minimum free disk threshold. Please delete few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrObjectExistsAsPrefix: {

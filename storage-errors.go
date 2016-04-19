@@ -18,8 +18,8 @@ package main
 
 import "errors"
 
-// errDiskPathFull - cannot create volume or files when disk is full.
-var errDiskPathFull = errors.New("Disk path full.")
+// errDiskFull - cannot create volume or files when disk is full.
+var errDiskFull = errors.New("Disk path full.")
 
 // errFileNotFound - cannot find the file.
 var errFileNotFound = errors.New("File not found.")

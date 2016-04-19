@@ -250,6 +250,9 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 		if e == errVolumeNotFound {
 			e = o.storage.MakeVol(minioMetaVolume)
 			if e != nil {
+				if e == errDiskFull {
+					return "", probe.NewError(StorageFull{})
+				}
 				return "", probe.NewError(e)
 			}
 		}
@@ -272,6 +275,9 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 					return "", probe.NewError(e)
 				}
 			} else {
+				if e == errDiskFull {
+					return "", probe.NewError(StorageFull{})
+				}
 				return "", probe.NewError(e)
 			}
 			return uploadID, nil
@@ -320,8 +326,10 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 		} else if e == errIsNotRegular {
 			return "", probe.NewError(ObjectExistsAsPrefix{
 				Bucket: bucket,
-				Prefix: object,
+				Object: object,
 			})
+		} else if e == errDiskFull {
+			return "", probe.NewError(StorageFull{})
 		}
 		return "", probe.NewError(e)
 	}
@@ -336,6 +344,9 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
 			safeCloseAndRemove(fileWriter)
+			if e == io.ErrUnexpectedEOF {
+				return "", probe.NewError(IncompleteBody{})
+			}
 			return "", probe.NewError(e)
 		}
 	} else {
@@ -468,8 +479,10 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 		} else if e == errIsNotRegular {
 			return "", probe.NewError(ObjectExistsAsPrefix{
 				Bucket: bucket,
-				Prefix: object,
+				Object: object,
 			})
+		} else if e == errDiskFull {
+			return "", probe.NewError(StorageFull{})
 		}
 		return "", probe.NewError(e)
 	}

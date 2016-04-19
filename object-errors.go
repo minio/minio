@@ -18,110 +18,52 @@ package main
 
 import "fmt"
 
-// InvalidArgument invalid argument
-type InvalidArgument struct{}
+// StorageFull storage ran out of space
+type StorageFull struct{}
 
-func (e InvalidArgument) Error() string {
-	return "Invalid argument"
+func (e StorageFull) Error() string {
+	return "Storage reached its minimum free disk threshold."
 }
 
-// UnsupportedFilesystem unsupported filesystem type
-type UnsupportedFilesystem struct {
-	Type string
-}
-
-func (e UnsupportedFilesystem) Error() string {
-	return "Unsupported filesystem: " + e.Type
-}
-
-// RootPathFull root path out of space
-type RootPathFull struct {
-	Path string
-}
-
-func (e RootPathFull) Error() string {
-	return "Root path " + e.Path + " reached its minimum free disk threshold."
+// GenericError - generic object layer error.
+type GenericError struct {
+	Bucket string
+	Object string
 }
 
 // BucketNotFound bucket does not exist
-type BucketNotFound struct {
-	Bucket string
-}
+type BucketNotFound GenericError
 
 func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
 }
 
 // BucketNotEmpty bucket is not empty
-type BucketNotEmpty struct {
-	Bucket string
-}
+type BucketNotEmpty GenericError
 
 func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
 // ObjectNotFound object does not exist
-type ObjectNotFound struct {
-	Bucket string
-	Object string
-}
+type ObjectNotFound GenericError
 
 func (e ObjectNotFound) Error() string {
 	return "Object not found: " + e.Bucket + "#" + e.Object
 }
 
 // ObjectExistsAsPrefix object already exists with a requested prefix.
-type ObjectExistsAsPrefix struct {
-	Bucket string
-	Prefix string
-}
+type ObjectExistsAsPrefix GenericError
 
 func (e ObjectExistsAsPrefix) Error() string {
-	return "Object exists on : " + e.Bucket + " as prefix " + e.Prefix
-}
-
-// ObjectCorrupted object found to be corrupted
-type ObjectCorrupted struct {
-	Object string
-}
-
-func (e ObjectCorrupted) Error() string {
-	return "Object found corrupted: " + e.Object
+	return "Object exists on : " + e.Bucket + " as prefix " + e.Object
 }
 
 // BucketExists bucket exists
-type BucketExists struct {
-	Bucket string
-}
+type BucketExists GenericError
 
 func (e BucketExists) Error() string {
 	return "Bucket exists: " + e.Bucket
-}
-
-// CorruptedBackend backend found to be corrupted
-type CorruptedBackend struct {
-	Backend string
-}
-
-func (e CorruptedBackend) Error() string {
-	return "Corrupted backend: " + e.Backend
-}
-
-// NotImplemented function not implemented
-type NotImplemented struct {
-	Function string
-}
-
-func (e NotImplemented) Error() string {
-	return "Not implemented: " + e.Function
-}
-
-// InvalidDisksArgument invalid number of disks per node
-type InvalidDisksArgument struct{}
-
-func (e InvalidDisksArgument) Error() string {
-	return "Invalid number of disks per node"
 }
 
 // BadDigest - Content-MD5 you specified did not match what we received.
@@ -143,8 +85,7 @@ func (e UnsupportedDelimiter) Error() string {
 	return fmt.Sprintf("delimiter '%s' is not supported. Only '/' is supported", e.Delimiter)
 }
 
-// InvalidUploadIDKeyCombination - invalid upload id and key marker
-// combination.
+// InvalidUploadIDKeyCombination - invalid upload id and key marker combination.
 type InvalidUploadIDKeyCombination struct {
 	UploadIDMarker, KeyMarker string
 }
@@ -162,93 +103,27 @@ func (e InvalidMarkerPrefixCombination) Error() string {
 	return fmt.Sprintf("Invalid combination of marker '%s' and prefix '%s'", e.Marker, e.Prefix)
 }
 
-// InternalError - generic internal error
-type InternalError struct{}
-
-// BackendError - generic disk backend error
-type BackendError struct {
-	Path string
-}
-
-// BackendCorrupted - path has corrupted data
-type BackendCorrupted BackendError
-
-// APINotImplemented - generic API not implemented error
-type APINotImplemented struct {
-	API string
-}
-
-// GenericBucketError - generic bucket error
-type GenericBucketError struct {
-	Bucket string
-}
-
 // BucketPolicyNotFound - no bucket policy found.
-type BucketPolicyNotFound GenericBucketError
+type BucketPolicyNotFound GenericError
 
 func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
-// GenericObjectError - generic object error
-type GenericObjectError struct {
-	Bucket string
-	Object string
-}
-
-// ImplementationError - generic implementation error
-type ImplementationError struct {
-	Bucket string
-	Object string
-	Err    error
-}
-
 /// Bucket related errors
 
 // BucketNameInvalid - bucketname provided is invalid
-type BucketNameInvalid GenericBucketError
-
-/// Object related errors
-
-// ObjectNameInvalid - object name provided is invalid
-type ObjectNameInvalid GenericObjectError
-
-// Return string an error formatted as the given text
-func (e ImplementationError) Error() string {
-	error := ""
-	if e.Bucket != "" {
-		error = error + "Bucket: " + e.Bucket + " "
-	}
-	if e.Object != "" {
-		error = error + "Object: " + e.Object + " "
-	}
-	error = error + "Error: " + e.Err.Error()
-	return error
-}
-
-// EmbedError - wrapper function for error object
-func EmbedError(bucket, object string, err error) ImplementationError {
-	return ImplementationError{
-		Bucket: bucket,
-		Object: object,
-		Err:    err,
-	}
-}
-
-// Return string an error formatted as the given text
-func (e InternalError) Error() string {
-	return "Internal error occured"
-}
-
-// Return string an error formatted as the given text
-func (e APINotImplemented) Error() string {
-	return "Api not implemented: " + e.API
-}
+type BucketNameInvalid GenericError
 
 // Return string an error formatted as the given text
 func (e BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + e.Bucket
 }
+
+/// Object related errors
+
+// ObjectNameInvalid - object name provided is invalid
+type ObjectNameInvalid GenericError
 
 // Return string an error formatted as the given text
 func (e ObjectNameInvalid) Error() string {
@@ -256,36 +131,11 @@ func (e ObjectNameInvalid) Error() string {
 }
 
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header
-type IncompleteBody GenericObjectError
+type IncompleteBody GenericError
 
 // Return string an error formatted as the given text
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
-}
-
-// Return string an error formatted as the given text
-func (e BackendCorrupted) Error() string {
-	return "Backend corrupted: " + e.Path
-}
-
-// OperationNotPermitted - operation not permitted
-type OperationNotPermitted struct {
-	Op     string
-	Reason string
-}
-
-func (e OperationNotPermitted) Error() string {
-	return "Operation " + e.Op + " not permitted for reason: " + e.Reason
-}
-
-// InvalidRange - invalid range
-type InvalidRange struct {
-	Start  int64
-	Length int64
-}
-
-func (e InvalidRange) Error() string {
-	return fmt.Sprintf("Invalid range start:%d length:%d", e.Start, e.Length)
 }
 
 /// Multipart related errors
@@ -322,11 +172,4 @@ type InvalidPartOrder struct {
 
 func (e InvalidPartOrder) Error() string {
 	return "Invalid part order sent for " + e.UploadID
-}
-
-// MalformedXML invalid xml format
-type MalformedXML struct{}
-
-func (e MalformedXML) Error() string {
-	return "Malformed XML"
 }
