@@ -82,10 +82,9 @@ type quorumDisk struct {
 	index int
 }
 
-// getReadFileQuorumDisks - get the current quorum disks.
-func (xl XL) getReadFileQuorumDisks(volume, path string) (quorumDisks []quorumDisk) {
+// getQuorumDisks - get the current quorum disks.
+func (xl XL) getQuorumDisks(volume, path string) (quorumDisks []quorumDisk, higherVersion int64) {
 	diskVersionMap := xl.getMetaFileVersionMap(volume, path)
-	higherVersion := int64(0)
 	for diskIndex, formatVersion := range diskVersionMap {
 		if formatVersion > higherVersion {
 			higherVersion = formatVersion
@@ -142,7 +141,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	defer xl.unlockNS(volume, path, readLock)
 
 	// Check read quorum.
-	quorumDisks := xl.getReadFileQuorumDisks(volume, path)
+	quorumDisks, _ := xl.getQuorumDisks(volume, path)
 	if len(quorumDisks) < xl.readQuorum {
 		return nil, errReadQuorum
 	}
