@@ -38,7 +38,7 @@ type networkFS struct {
 }
 
 const (
-	storageRPCPath = reservedBucket + "/rpc/storage"
+	storageRPCPath = reservedBucket + "/storage"
 )
 
 // splits network path into its components Address and Path.

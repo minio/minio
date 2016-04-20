@@ -26,7 +26,7 @@ import (
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	var storageHandlers StorageAPI
+	var storageAPI StorageAPI
 	var e error
 	if len(srvCmdConfig.exportPaths) == 1 {
 		// Verify if export path is a local file system path.
@@ -34,23 +34,29 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		st, e = os.Stat(srvCmdConfig.exportPaths[0])
 		if e == nil && st.Mode().IsDir() {
 			// Initialize storage API.
-			storageHandlers, e = newFS(srvCmdConfig.exportPaths[0])
+			storageAPI, e = newFS(srvCmdConfig.exportPaths[0])
 			fatalIf(probe.NewError(e), "Initializing fs failed.", nil)
 		} else {
 			// Initialize network storage API.
-			storageHandlers, e = newNetworkFS(srvCmdConfig.exportPaths[0])
+			storageAPI, e = newNetworkFS(srvCmdConfig.exportPaths[0])
 			fatalIf(probe.NewError(e), "Initializing network fs failed.", nil)
 		}
 	} else {
 		// Initialize XL storage API.
-		storageHandlers, e = newXL(srvCmdConfig.exportPaths...)
+		storageAPI, e = newXL(srvCmdConfig.exportPaths...)
 		fatalIf(probe.NewError(e), "Initializing XL failed.", nil)
 	}
 
 	// Initialize object layer.
-	objAPI := newObjectLayer(storageHandlers)
+	objAPI := newObjectLayer(storageAPI)
 
-	// Initialize API.
+	// Initialize controller.
+	ctrlAPI := newController(storageAPI)
+
+	// Initialize storage rpc layer.
+	storageRPC := newStorageRPC(storageAPI)
+
+	// Initialize S3 API.
 	apiHandlers := objectAPIHandlers{
 		ObjectAPI: objAPI,
 	}
@@ -60,11 +66,19 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		ObjectAPI: objAPI,
 	}
 
+	// Initialize controller API.
+	ctrlAPIHandlers := controllerAPIHandlers{
+		ControllerAPI: ctrlAPI,
+	}
+
+	// Initialize RPC storage API.
+
 	// Initialize router.
 	mux := router.NewRouter()
 
 	// Register all routers.
-	registerStorageRPCRouter(mux, storageHandlers)
+	registerStorageRPCRouter(mux, storageRPC)
+	registerControllerAPIRouter(mux, ctrlAPIHandlers)
 	registerWebRouter(mux, webHandlers)
 	registerAPIRouter(mux, apiHandlers)
 	// Add new routers here.
