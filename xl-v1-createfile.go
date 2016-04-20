@@ -55,6 +55,9 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	var sha512Writers = make([]hash.Hash, len(xl.storageDisks))
 	var metadataWriters = make([]io.WriteCloser, len(xl.storageDisks))
 
+	// Save additional erasureMetadata.
+	modTime := time.Now().UTC()
+
 	// Initialize storage disks, get all the writers and corresponding
 	// metadata writers.
 	for index, disk := range xl.storageDisks {
@@ -130,9 +133,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			totalSize += int64(n)
 		}
 	}
-
-	// Save additional erasureMetadata.
-	modTime := time.Now().UTC()
 
 	// Initialize metadata map, save all erasure related metadata.
 	metadata := make(map[string]string)
