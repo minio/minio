@@ -99,11 +99,15 @@ func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericRep
 	return nil
 }
 
-// registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
-	stServer := &storageServer{
+// Initialize new storage rpc.
+func newStorageRPC(storageAPI StorageAPI) *storageServer {
+	return &storageServer{
 		storage: storageAPI,
 	}
+}
+
+// registerStorageRPCRouter - register storage rpc router.
+func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 	storageRPCServer := rpc.NewServer()
 	storageRPCServer.RegisterName("Storage", stServer)
 	storageRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
