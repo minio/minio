@@ -32,4 +32,7 @@ type StorageAPI interface {
 	CreateFile(volume string, path string) (writeCloser io.WriteCloser, err error)
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
+
+	// File level heal operations.
+	HealFile(volume string, path string) error
 }

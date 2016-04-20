@@ -37,8 +37,9 @@ const (
 // yes returns all the files inside it.
 func (o objectAPI) checkLeafDirectory(prefixPath string) (isLeaf bool, fis []FileInfo) {
 	var allFileInfos []FileInfo
+	var markerPath string
 	for {
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, "", false, 1000)
+		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
 		if e != nil {
 			break
 		}
@@ -46,6 +47,7 @@ func (o objectAPI) checkLeafDirectory(prefixPath string) (isLeaf bool, fis []Fil
 		if eof {
 			break
 		}
+		markerPath = allFileInfos[len(allFileInfos)-1].Name
 	}
 	for _, fileInfo := range allFileInfos {
 		if fileInfo.Mode.IsDir() {

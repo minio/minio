@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -542,4 +543,9 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 
 	// Delete file and delete parent directory as well if its empty.
 	return deleteFile(volumeDir, filePath)
+}
+
+// HealFile is not implemented.
+func (s fsStorage) HealFile(volume, path string) error {
+	return errors.New("Not implemented")
 }
