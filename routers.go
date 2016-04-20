@@ -48,16 +48,16 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	}
 
 	// Initialize object layer.
-	objectAPI := newObjectLayer(storageHandlers)
+	objAPI := newObjectLayer(storageHandlers)
 
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{
-		ObjectAPI: objectAPI,
+		ObjectAPI: objAPI,
 	}
 
 	// Initialize Web.
 	webHandlers := &webAPIHandlers{
-		ObjectAPI: objectAPI,
+		ObjectAPI: objAPI,
 	}
 
 	// Initialize router.

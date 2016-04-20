@@ -44,38 +44,33 @@ func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
 	return
 }
 
-func (xl XL) getMetaDataFileVersions(volume, path string) (diskVersionMap map[StorageAPI]int64) {
+func (xl XL) getMetaDataFileFormat(volume, path string) (diskFormatMap map[int]uint64) {
 	metadataFilePath := slashpath.Join(path, metadataFile)
-	// set offset to 0 to read entire file
+	// Set offset to 0 to read entire file.
 	offset := int64(0)
 	metadata := make(map[string]string)
 
-	// read meta data from all disks
-	for _, disk := range xl.storageDisks {
-		diskVersionMap[disk] = -1
+	// Allocate disk index format map - do not use maps directly without allocating.
+	diskFormatMap = make(map[int]uint64)
 
-		if metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset); err != nil {
-			// error reading meta data file
-			// TODO: log it
+	// TODO - all errors should be logged here.
+
+	// Read meta data from all disks
+	for index, disk := range xl.storageDisks {
+		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
+		if err != nil {
 			continue
-		} else if err := json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
-			// error in parsing json
-			// TODO: log it
+		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
 			continue
-		} else if _, ok := metadata["file.version"]; !ok {
-			// missing "file.version" is completely valid
-			diskVersionMap[disk] = 0
-			continue
-		} else if fileVersion, err := strconv.ParseInt(metadata["file.version"], 10, 64); err != nil {
-			// version is not a number
-			// TODO: log it
-			continue
-		} else {
-			diskVersionMap[disk] = fileVersion
 		}
+		// TODO - use minor and patch, for now major will do.
+		formatVersion, err := strconv.ParseUint(metadata["format.major"], 10, 64)
+		if err != nil {
+			continue
+		}
+		diskFormatMap[index] = formatVersion
 	}
-
-	return
+	return diskFormatMap
 }
 
 type quorumDisk struct {
@@ -84,20 +79,22 @@ type quorumDisk struct {
 }
 
 func (xl XL) getReadFileQuorumDisks(volume, path string) (quorumDisks []quorumDisk) {
-	diskVersionMap := xl.getMetaDataFileVersions(volume, path)
-	higherVersion := int64(0)
-	i := 0
-	for disk, version := range diskVersionMap {
-		if version > higherVersion {
-			higherVersion = version
-			quorumDisks = []quorumDisk{{disk, i}}
-		} else if version == higherVersion {
-			quorumDisks = append(quorumDisks, quorumDisk{disk, i})
+	diskFormatMap := xl.getMetaDataFileFormat(volume, path)
+	higherVersion := uint64(0)
+	for diskIndex, formatVersion := range diskFormatMap {
+		if formatVersion > higherVersion {
+			higherVersion = formatVersion
+			quorumDisks = []quorumDisk{{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			}}
+		} else if formatVersion == higherVersion {
+			quorumDisks = append(quorumDisks, quorumDisk{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			})
 		}
-
-		i++
 	}
-
 	return
 }
 
@@ -151,26 +148,30 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 	totalBlocks := xl.DataBlocks + xl.ParityBlocks // Total blocks.
 
-	readers := []io.ReadCloser{}
+	readers := make([]io.ReadCloser, len(quorumDisks))
 	readFileError := 0
-	i := 0
 	for _, quorumDisk := range quorumDisks {
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", quorumDisk.index))
 		var erasuredPartReader io.ReadCloser
 		if erasuredPartReader, err = quorumDisk.disk.ReadFile(volume, erasurePart, offset); err != nil {
-			// we can safely allow ReadFile errors up to len(quorumDisks) - xl.readQuorum
+			// We can safely allow ReadFile errors up to len(quorumDisks) - xl.readQuorum
 			// otherwise return failure
 			if readFileError < len(quorumDisks)-xl.readQuorum {
+				// Set the reader to 'nil' to be able to reconstruct later.
+				readers[quorumDisk.index] = nil
 				readFileError++
 				continue
 			}
-
-			// TODO: handle currently available io.Reader in readers variable
-			return nil, err
+			// Control reaches here we do not have quorum
+			// anymore. Close all the readers.
+			for _, reader := range readers {
+				if reader != nil {
+					reader.Close()
+				}
+			}
+			return nil, errReadQuorum
 		}
-
-		readers[i] = erasuredPartReader
-		i++
+		readers[quorumDisk.index] = erasuredPartReader
 	}
 
 	// Initialize pipe.
