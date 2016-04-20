@@ -80,18 +80,22 @@ func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericRep
 	return s.storage.DeleteFile(arg.Vol, arg.Path)
 }
 
-// registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
-	stServer := &storageServer{
+// Initialize new storage rpc.
+func newStorageRPC(storageAPI StorageAPI) *storageServer {
+	return &storageServer{
 		storage: storageAPI,
 	}
+}
+
+// registerStorageRPCRouter - register storage rpc router.
+func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 	storageRPCServer := rpc.NewServer()
 	storageRPCServer.RegisterName("Storage", stServer)
 	storageRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	// Add minio storage routes.
-	storageRouter.Path("/rpc/storage").Handler(storageRPCServer)
+	storageRouter.Path("/storage").Handler(storageRPCServer)
 	// StreamUpload - stream upload handler.
-	storageRouter.Methods("POST").Path("/rpc/storage/upload/{volume}/{path:.+}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	storageRouter.Methods("POST").Path("/storage/upload/{volume}/{path:.+}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vars := router.Vars(r)
 		volume := vars["volume"]
 		path := vars["path"]
@@ -116,7 +120,7 @@ func registerStorageRPCRouter(mux *router.Router, storageAPI StorageAPI) {
 		reader.Close()
 	})
 	// StreamDownloadHandler - stream download handler.
-	storageRouter.Methods("GET").Path("/rpc/storage/download/{volume}/{path:.+}").Queries("offset", "{offset:.*}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	storageRouter.Methods("GET").Path("/storage/download/{volume}/{path:.+}").Queries("offset", "{offset:.*}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vars := router.Vars(r)
 		volume := vars["volume"]
 		path := vars["path"]

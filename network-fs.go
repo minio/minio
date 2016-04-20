@@ -38,7 +38,7 @@ type networkFS struct {
 }
 
 const (
-	storageRPCPath = reservedBucket + "/rpc/storage"
+	storageRPCPath = reservedBucket + "/storage"
 )
 
 // splits network path into its components Address and Path.
@@ -242,4 +242,9 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 		return toStorageErr(err)
 	}
 	return nil
+}
+
+// HealFile is not implemented.
+func (n networkFS) HealFile(volume, path string) error {
+	return errors.New("Not implemented")
 }
