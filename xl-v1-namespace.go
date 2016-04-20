@@ -27,39 +27,38 @@ type nameSpaceParam struct {
 // nameSpaceLock - provides primitives for locking critical namespace regions.
 type nameSpaceLock struct {
 	rwMutex *sync.RWMutex
-	rcount  uint
-	wcount  uint
+	count   uint
 }
 
 func (nsLock *nameSpaceLock) InUse() bool {
-	return nsLock.rcount != 0 || nsLock.wcount != 0
+	return nsLock.count != 0
 }
 
 // Lock acquires write lock and increments the namespace counter.
 func (nsLock *nameSpaceLock) Lock() {
-	nsLock.Lock()
-	nsLock.wcount++
+	nsLock.rwMutex.Lock()
+	nsLock.count++
 }
 
 // Unlock releases write lock and decrements the namespace counter.
 func (nsLock *nameSpaceLock) Unlock() {
-	nsLock.Unlock()
-	if nsLock.wcount != 0 {
-		nsLock.wcount--
+	nsLock.rwMutex.Unlock()
+	if nsLock.count != 0 {
+		nsLock.count--
 	}
 }
 
 // RLock acquires read lock and increments the namespace counter.
 func (nsLock *nameSpaceLock) RLock() {
-	nsLock.RLock()
-	nsLock.rcount++
+	nsLock.rwMutex.RLock()
+	nsLock.count++
 }
 
 // RUnlock release read lock and decrements the namespace counter.
 func (nsLock *nameSpaceLock) RUnlock() {
-	nsLock.RUnlock()
-	if nsLock.rcount != 0 {
-		nsLock.rcount--
+	nsLock.rwMutex.RUnlock()
+	if nsLock.count != 0 {
+		nsLock.count--
 	}
 }
 
@@ -67,7 +66,6 @@ func (nsLock *nameSpaceLock) RUnlock() {
 func newNSLock() *nameSpaceLock {
 	return &nameSpaceLock{
 		rwMutex: &sync.RWMutex{},
-		rcount:  0,
-		wcount:  0,
+		count:   0,
 	}
 }
