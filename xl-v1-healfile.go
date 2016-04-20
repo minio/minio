@@ -26,11 +26,11 @@ import (
 )
 
 func (xl XL) selfHeal(volume string, path string) error {
-	totalShards := xl.DataBlocks + xl.ParityBlocks
-	needsSelfHeal := make([]bool, totalShards)
+	totalBlocks := xl.DataBlocks + xl.ParityBlocks
+	needsSelfHeal := make([]bool, totalBlocks)
 	var metadata = make(map[string]string)
-	var readers = make([]io.Reader, totalShards)
-	var writers = make([]io.WriteCloser, totalShards)
+	var readers = make([]io.Reader, totalBlocks)
+	var writers = make([]io.WriteCloser, totalBlocks)
 	for index, disk := range xl.storageDisks {
 		metadataFile := slashpath.Join(path, metadataFile)
 
@@ -108,59 +108,59 @@ func (xl XL) selfHeal(volume string, path string) error {
 		} else {
 			curBlockSize = int(totalLeft)
 		}
-		// Calculate the current shard size.
-		curShardSize := getEncodedBlockLen(curBlockSize, xl.DataBlocks)
-		enShards := make([][]byte, totalShards)
+		// Calculate the current block size.
+		curBlockSize = getEncodedBlockLen(curBlockSize, xl.DataBlocks)
+		enBlocks := make([][]byte, totalBlocks)
 		// Loop through all readers and read.
 		for index, reader := range readers {
-			// Initialize shard slice and fill the data from each parts.
+			// Initialize block slice and fill the data from each parts.
 			// ReedSolomon.Verify() expects that slice is not nil even if the particular
 			// part needs healing.
-			enShards[index] = make([]byte, curShardSize)
+			enBlocks[index] = make([]byte, curBlockSize)
 			if needsSelfHeal[index] {
 				// Skip reading if the part needs healing.
 				continue
 			}
-			_, e := io.ReadFull(reader, enShards[index])
+			_, e := io.ReadFull(reader, enBlocks[index])
 			if e != nil && e != io.ErrUnexpectedEOF {
-				enShards[index] = nil
+				enBlocks[index] = nil
 			}
 		}
 
 		// Check blocks if they are all zero in length.
-		if checkBlockSize(enShards) == 0 {
+		if checkBlockSize(enBlocks) == 0 {
 			err = errors.New("Data likely corrupted, all blocks are zero in length.")
 			return err
 		}
 
-		// Verify the shards.
-		ok, e := xl.ReedSolomon.Verify(enShards)
+		// Verify the blocks.
+		ok, e := xl.ReedSolomon.Verify(enBlocks)
 		if e != nil {
 			closeAndRemoveWriters(writers...)
 			return e
 		}
 
-		// Verification failed, shards require reconstruction.
+		// Verification failed, blocks require reconstruction.
 		if !ok {
 			for index, shNeeded := range needsSelfHeal {
 				if shNeeded {
 					// Reconstructs() reconstructs the parts if the array is nil.
-					enShards[index] = nil
+					enBlocks[index] = nil
 				}
 			}
-			e = xl.ReedSolomon.Reconstruct(enShards)
+			e = xl.ReedSolomon.Reconstruct(enBlocks)
 			if e != nil {
 				closeAndRemoveWriters(writers...)
 				return e
 			}
-			// Verify reconstructed shards again.
-			ok, e = xl.ReedSolomon.Verify(enShards)
+			// Verify reconstructed blocks again.
+			ok, e = xl.ReedSolomon.Verify(enBlocks)
 			if e != nil {
 				closeAndRemoveWriters(writers...)
 				return e
 			}
 			if !ok {
-				// Shards cannot be reconstructed, corrupted data.
+				// Blocks cannot be reconstructed, corrupted data.
 				e = errors.New("Verification failed after reconstruction, data likely corrupted.")
 				closeAndRemoveWriters(writers...)
 				return e
@@ -170,7 +170,7 @@ func (xl XL) selfHeal(volume string, path string) error {
 			if !shNeeded {
 				continue
 			}
-			_, e := writers[index].Write(enShards[index])
+			_, e := writers[index].Write(enBlocks[index])
 			if e != nil {
 				closeAndRemoveWriters(writers...)
 				return e
