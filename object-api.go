@@ -33,8 +33,8 @@ type objectAPI struct {
 	storage StorageAPI
 }
 
-func newObjectLayer(storage StorageAPI) *objectAPI {
-	return &objectAPI{storage}
+func newObjectLayer(storage StorageAPI) objectAPI {
+	return objectAPI{storage}
 }
 
 /// Bucket operations
