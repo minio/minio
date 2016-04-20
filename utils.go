@@ -18,10 +18,17 @@ package main
 
 import (
 	"encoding/base64"
-	"strings"
-
+	"encoding/xml"
 	"github.com/minio/minio/pkg/probe"
+	"io"
+	"strings"
 )
+
+// xmlDecoder provide decoded value in xml.
+func xmlDecoder(body io.Reader, v interface{}) error {
+	d := xml.NewDecoder(body)
+	return d.Decode(v)
+}
 
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
 func checkValidMD5(md5 string) ([]byte, *probe.Error) {
