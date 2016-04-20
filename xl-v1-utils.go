@@ -12,12 +12,12 @@ func (xl XL) getMetadata(volume, path string) ([]map[string]string, []error) {
 	errSlice := make([]error, len(xl.storageDisks))
 	metadataSlice := make([]map[string]string, len(xl.storageDisks))
 	metadataFilePath := filepath.Join(path, metadataFile)
-	for i, disk := range xl.storageDisks {
+	for index, disk := range xl.storageDisks {
 		metadata := make(map[string]string)
 		offset := int64(0)
 		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 		if err != nil {
-			errSlice[i] = err
+			errSlice[index] = err
 			continue
 		}
 		defer metadataReader.Close()
@@ -25,10 +25,10 @@ func (xl XL) getMetadata(volume, path string) ([]map[string]string, []error) {
 		decoder := json.NewDecoder(metadataReader)
 		if err = decoder.Decode(&metadata); err != nil {
 			// Unable to parse parts.json, set error.
-			errSlice[i] = err
+			errSlice[index] = err
 			continue
 		}
-		metadataSlice[i] = metadata
+		metadataSlice[index] = metadata
 	}
 	return metadataSlice, errSlice
 }
@@ -39,30 +39,30 @@ func (xl XL) setMetadata(volume, path string, metadata map[string]string, update
 	metadataFilePath := filepath.Join(path, metadataFile)
 	errSlice := make([]error, len(xl.storageDisks))
 
-	for i := range updateSlice {
-		errSlice[i] = errors.New("metadata not updated")
+	for index := range updateSlice {
+		errSlice[index] = errors.New("metadata not updated")
 	}
 
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
-		for i := range updateSlice {
-			errSlice[i] = err
+		for index := range updateSlice {
+			errSlice[index] = err
 		}
 		return errSlice
 	}
 
-	for i, update := range updateSlice {
+	for index, update := range updateSlice {
 		if !update {
 			continue
 		}
-		writer, err := xl.storageDisks[i].CreateFile(volume, metadataFilePath)
-		errSlice[i] = err
+		writer, err := xl.storageDisks[index].CreateFile(volume, metadataFilePath)
+		errSlice[index] = err
 		if err != nil {
 			continue
 		}
 		_, err = writer.Write(metadataBytes)
 		if err != nil {
-			errSlice[i] = err
+			errSlice[index] = err
 			safeCloseAndRemove(writer)
 			continue
 		}

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -54,14 +53,14 @@ func (xl XL) getReadFileInfo(volume, path string) ([]bool, int64, error) {
 	versions := make([]int64, len(xl.storageDisks))
 	quorumDisks := make([]bool, len(xl.storageDisks))
 	fileSize := int64(0)
-	for i, metadata := range metadatas {
-		if errs[i] != nil {
-			versions[i] = -1
+	for index, metadata := range metadatas {
+		if errs[index] != nil {
+			versions[index] = -1
 			continue
 		}
 		versionStr, ok := metadata["file.version"]
 		if !ok {
-			versions[i] = 0
+			versions[index] = 0
 			continue
 		}
 		// Convert string to integer.
@@ -73,23 +72,23 @@ func (xl XL) getReadFileInfo(volume, path string) ([]bool, int64, error) {
 		if version > highestVersion {
 			highestVersion = version
 		}
-		versions[i] = version
+		versions[index] = version
 	}
 	quorumCount := 0
-	for i, version := range versions {
+	for index, version := range versions {
 		if version == highestVersion {
-			quorumDisks[i] = true
+			quorumDisks[index] = true
 			quorumCount++
 		}
 	}
 	if quorumCount < xl.readQuorum {
 		return nil, 0, errReadQuorum
 	}
-	for i, read := range quorumDisks {
+	for index, read := range quorumDisks {
 		if !read {
 			continue
 		}
-		sizeStr, ok := metadatas[i]["file.size"]
+		sizeStr, ok := metadatas[index]["file.size"]
 		if !ok {
 			return nil, 0, errors.New("missing 'file.size' in meta data")
 		}
@@ -101,29 +100,6 @@ func (xl XL) getReadFileInfo(volume, path string) ([]bool, int64, error) {
 		break
 	}
 	return quorumDisks, fileSize, nil
-}
-
-// getFileSize - extract file size from metadata.
-func (xl XL) getFileSize(volume, path string, disk StorageAPI) (size int64, err error) {
-	metadataFilePath := slashpath.Join(path, metadataFile)
-	// set offset to 0 to read entire file
-	offset := int64(0)
-	metadata := make(map[string]string)
-
-	metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
-	if err != nil {
-		return 0, err
-	}
-
-	if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
-		return 0, err
-	}
-
-	if _, ok := metadata["file.size"]; !ok {
-		return 0, errors.New("missing 'file.size' in meta data")
-	}
-
-	return strconv.ParseInt(metadata["file.size"], 10, 64)
 }
 
 // ReadFile - read file
@@ -147,16 +123,16 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	readers := make([]io.ReadCloser, len(quorumDisks))
-	for i, read := range quorumDisks {
+	for index, read := range quorumDisks {
 		if !read {
 			continue
 		}
-		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", i))
+		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
 		// ReedSolomon.Reconstruct() will fail later.
 		var reader io.ReadCloser
-		if reader, err = xl.storageDisks[i].ReadFile(volume, erasurePart, offset); err == nil {
-			readers[i] = reader
+		if reader, err = xl.storageDisks[index].ReadFile(volume, erasurePart, offset); err == nil {
+			readers[index] = reader
 		}
 	}
 
@@ -208,10 +184,10 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 
 			// Verification failed, blocks require reconstruction.
 			if !ok {
-				for i, reader := range readers {
+				for index, reader := range readers {
 					if reader == nil {
 						// Reconstruct expects missing shard to be nil.
-						enBlocks[i] = nil
+						enBlocks[index] = nil
 					}
 				}
 				err = xl.ReedSolomon.Reconstruct(enBlocks)
