@@ -48,18 +48,82 @@ func closeAndRemoveWriters(writers ...io.WriteCloser) {
 	}
 }
 
+type quorumDisk struct {
+	disk  StorageAPI
+	index int
+}
+
+// getQuorumDisks - get the current quorum disks.
+func (xl XL) getQuorumDisks(volume, path string) (quorumDisks []quorumDisk, higherVersion int64) {
+	fileQuorumVersionMap := xl.getFileQuorumVersionMap(volume, path)
+	for diskIndex, formatVersion := range fileQuorumVersionMap {
+		if formatVersion > higherVersion {
+			higherVersion = formatVersion
+			quorumDisks = []quorumDisk{{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			}}
+
+		} else if formatVersion == higherVersion {
+			quorumDisks = append(quorumDisks, quorumDisk{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			})
+
+		}
+	}
+	return quorumDisks, higherVersion
+}
+
+func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
+	metadataFilePath := slashpath.Join(path, metadataFile)
+	// Set offset to 0 to read entire file.
+	offset := int64(0)
+	metadata := make(map[string]string)
+
+	// Allocate disk index format map - do not use maps directly
+	// without allocating.
+	fileQuorumVersionMap := make(map[int]int64)
+
+	// TODO - all errors should be logged here.
+
+	// Read meta data from all disks
+	for index, disk := range xl.storageDisks {
+		fileQuorumVersionMap[index] = -1
+
+		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
+		if err != nil {
+			continue
+
+		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
+			continue
+
+		} else if _, ok := metadata["file.version"]; !ok {
+			fileQuorumVersionMap[index] = 0
+
+		}
+		// Convert string to integer.
+		fileVersion, err := strconv.ParseInt(metadata["file.version"], 10, 64)
+		if err != nil {
+			continue
+
+		}
+		fileQuorumVersionMap[index] = fileVersion
+	}
+	return fileQuorumVersionMap
+}
+
 // WriteErasure reads predefined blocks, encodes them and writes to
 // configured storage disks.
 func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	xl.lockNS(volume, path, false)
 	defer xl.unlockNS(volume, path, false)
 
-	// get available quorum for existing file path
+	// Get available quorum for existing file path.
 	_, higherVersion := xl.getQuorumDisks(volume, path)
-	// increment to have next higher version
+	// Increment to have next higher version.
 	higherVersion++
 
-	quorumDisks := make([]quorumDisk, len(xl.storageDisks))
 	writers := make([]io.WriteCloser, len(xl.storageDisks))
 	sha512Writers := make([]hash.Hash, len(xl.storageDisks))
 
@@ -70,15 +134,14 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	modTime := time.Now().UTC()
 
 	createFileError := 0
-	maxIndex := 0
 	for index, disk := range xl.storageDisks {
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		writer, err := disk.CreateFile(volume, erasurePart)
 		if err != nil {
 			createFileError++
 
-			// we can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure
+			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// otherwise return failure.
 			if createFileError <= len(xl.storageDisks)-xl.writeQuorum {
 				continue
 			}
@@ -95,8 +158,8 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		if err != nil {
 			createFileError++
 
-			// we can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure
+			// We can safely allow CreateFile errors up to
+			// len(xl.storageDisks) - xl.writeQuorum otherwise return failure.
 			if createFileError <= len(xl.storageDisks)-xl.writeQuorum {
 				continue
 			}
@@ -107,19 +170,17 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			return
 		}
 
-		writers[maxIndex] = writer
-		metadataWriters[maxIndex] = metadataWriter
-		sha512Writers[maxIndex] = fastSha512.New()
-		quorumDisks[maxIndex] = quorumDisk{disk, index}
-		maxIndex++
+		writers[index] = writer
+		metadataWriters[index] = metadataWriter
+		sha512Writers[index] = fastSha512.New()
 	}
 
 	// Allocate 4MiB block size buffer for reading.
-	buffer := make([]byte, erasureBlockSize)
+	dataBuffer := make([]byte, erasureBlockSize)
 	var totalSize int64 // Saves total incoming stream size.
 	for {
 		// Read up to allocated block size.
-		n, err := io.ReadFull(reader, buffer)
+		n, err := io.ReadFull(reader, dataBuffer)
 		if err != nil {
 			// Any unexpected errors, close the pipe reader with error.
 			if err != io.ErrUnexpectedEOF && err != io.EOF {
@@ -135,16 +196,17 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		}
 		if n > 0 {
 			// Split the input buffer into data and parity blocks.
-			var blocks [][]byte
-			blocks, err = xl.ReedSolomon.Split(buffer[0:n])
+			var dataBlocks [][]byte
+			dataBlocks, err = xl.ReedSolomon.Split(dataBuffer[0:n])
 			if err != nil {
 				// Remove all temp writers.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return
 			}
+
 			// Encode parity blocks using data blocks.
-			err = xl.ReedSolomon.Encode(blocks)
+			err = xl.ReedSolomon.Encode(dataBlocks)
 			if err != nil {
 				// Remove all temp writers upon error.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
@@ -153,18 +215,23 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			}
 
 			// Loop through and write encoded data to quorum disks.
-			for i := 0; i < maxIndex; i++ {
-				encodedData := blocks[quorumDisks[i].index]
-
-				_, err = writers[i].Write(encodedData)
+			for index, writer := range writers {
+				if writer == nil {
+					continue
+				}
+				encodedData := dataBlocks[index]
+				_, err = writers[index].Write(encodedData)
 				if err != nil {
 					// Remove all temp writers upon error.
 					xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 					reader.CloseWithError(err)
 					return
 				}
-				sha512Writers[i].Write(encodedData)
+				if sha512Writers[index] != nil {
+					sha512Writers[index].Write(encodedData)
+				}
 			}
+
 			// Update total written.
 			totalSize += int64(n)
 		}
@@ -178,7 +245,8 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	metadata["format.patch"] = "0"
 	metadata["file.size"] = strconv.FormatInt(totalSize, 10)
 	if len(xl.storageDisks) > len(writers) {
-		// save file.version only if we wrote to less disks than all disks
+		// Save file.version only if we wrote to less disks than all
+		// storage disks.
 		metadata["file.version"] = strconv.FormatInt(higherVersion, 10)
 	}
 	metadata["file.modTime"] = modTime.Format(timeFormatAMZ)
@@ -191,9 +259,14 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	// Case: when storageDisks is 16 and write quorumDisks is 13,
 	//       meta data write failure up to 2 can be considered.
 	//       currently we fail for any meta data writes
-	for i := 0; i < maxIndex; i++ {
-		// Save sha512 checksum of each encoded blocks.
-		metadata["file.xl.block512Sum"] = hex.EncodeToString(sha512Writers[i].Sum(nil))
+	for index, metadataWriter := range metadataWriters {
+		if metadataWriter == nil {
+			continue
+		}
+		if sha512Writers[index] != nil {
+			// Save sha512 checksum of each encoded blocks.
+			metadata["file.xl.block512Sum"] = hex.EncodeToString(sha512Writers[index].Sum(nil))
+		}
 
 		// Marshal metadata into json strings.
 		metadataBytes, err := json.Marshal(metadata)
@@ -205,7 +278,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		}
 
 		// Write metadata to disk.
-		_, err = metadataWriters[i].Write(metadataBytes)
+		_, err = metadataWriter.Write(metadataBytes)
 		if err != nil {
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
@@ -214,10 +287,18 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	}
 
 	// Close all writers and metadata writers in routines.
-	for i := 0; i < maxIndex; i++ {
+	for index, writer := range writers {
+		if writer == nil {
+			continue
+		}
 		// Safely wrote, now rename to its actual location.
-		writers[i].Close()
-		metadataWriters[i].Close()
+		writer.Close()
+
+		if metadataWriters[index] == nil {
+			continue
+		}
+		// Safely wrote, now rename to its actual location.
+		metadataWriters[index].Close()
 	}
 
 	// Close the pipe reader and return.
