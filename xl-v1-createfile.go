@@ -48,6 +48,71 @@ func closeAndRemoveWriters(writers ...io.WriteCloser) {
 	}
 }
 
+type quorumDisk struct {
+	disk  StorageAPI
+	index int
+}
+
+// getQuorumDisks - get the current quorum disks.
+func (xl XL) getQuorumDisks(volume, path string) (quorumDisks []quorumDisk, higherVersion int64) {
+	diskVersionMap := xl.getMetaFileVersionMap(volume, path)
+	for diskIndex, formatVersion := range diskVersionMap {
+		if formatVersion > higherVersion {
+			higherVersion = formatVersion
+			quorumDisks = []quorumDisk{{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			}}
+
+		} else if formatVersion == higherVersion {
+			quorumDisks = append(quorumDisks, quorumDisk{
+				disk:  xl.storageDisks[diskIndex],
+				index: diskIndex,
+			})
+
+		}
+
+	}
+	return
+}
+
+func (xl XL) getMetaFileVersionMap(volume, path string) (diskFileVersionMap map[int]int64) {
+	metadataFilePath := slashpath.Join(path, metadataFile)
+	// Set offset to 0 to read entire file.
+	offset := int64(0)
+	metadata := make(map[string]string)
+
+	// Allocate disk index format map - do not use maps directly without allocating.
+	diskFileVersionMap = make(map[int]int64)
+
+	// TODO - all errors should be logged here.
+
+	// Read meta data from all disks
+	for index, disk := range xl.storageDisks {
+		diskFileVersionMap[index] = -1
+
+		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
+		if err != nil {
+			continue
+
+		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
+			continue
+
+		} else if _, ok := metadata["file.version"]; !ok {
+			diskFileVersionMap[index] = 0
+
+		}
+		// Convert string to integer.
+		fileVersion, err := strconv.ParseInt(metadata["file.version"], 10, 64)
+		if err != nil {
+			continue
+
+		}
+		diskFileVersionMap[index] = fileVersion
+	}
+	return diskFileVersionMap
+}
+
 // WriteErasure reads predefined blocks, encodes them and writes to
 // configured storage disks.
 func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
