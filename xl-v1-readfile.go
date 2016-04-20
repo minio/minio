@@ -44,62 +44,63 @@ func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
 	return
 }
 
-func (xl XL) getMetaFileVersionMap(volume, path string) (diskFileVersionMap map[int]int64) {
-	metadataFilePath := slashpath.Join(path, metadataFile)
-	// Set offset to 0 to read entire file.
-	offset := int64(0)
-	metadata := make(map[string]string)
-
-	// Allocate disk index format map - do not use maps directly without allocating.
-	diskFileVersionMap = make(map[int]int64)
-
-	// TODO - all errors should be logged here.
-
-	// Read meta data from all disks
-	for index, disk := range xl.storageDisks {
-		diskFileVersionMap[index] = -1
-
-		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
-		if err != nil {
+// Returns data needed to for ReadFile operation:
+// - slice indicating which shard is readable
+// - file size
+// - error
+func (xl XL) getReadFileInfo(volume, path string) ([]bool, int64, error) {
+	metadatas, errs := xl.getMetadata(volume, path)
+	highestVersion := int64(0)
+	versions := make([]int64, len(xl.storageDisks))
+	quorumDisks := make([]bool, len(xl.storageDisks))
+	fileSize := int64(0)
+	for i, metadata := range metadatas {
+		if errs[i] != nil {
+			versions[i] = -1
 			continue
-		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
+		}
+		versionStr, ok := metadata["file.version"]
+		if !ok {
+			versions[i] = 0
 			continue
-		} else if _, ok := metadata["file.version"]; !ok {
-			diskFileVersionMap[index] = 0
 		}
 		// Convert string to integer.
-		fileVersion, err := strconv.ParseInt(metadata["file.version"], 10, 64)
+		version, err := strconv.ParseInt(versionStr, 10, 64)
 		if err != nil {
+			// Unexpected, return error.
+			return nil, 0, err
+		}
+		if version > highestVersion {
+			highestVersion = version
+		}
+		versions[i] = version
+	}
+	quorumCount := 0
+	for i, version := range versions {
+		if version == highestVersion {
+			quorumDisks[i] = true
+			quorumCount++
+		}
+	}
+	if quorumCount < xl.readQuorum {
+		return nil, 0, errReadQuorum
+	}
+	for i, read := range quorumDisks {
+		if !read {
 			continue
 		}
-		diskFileVersionMap[index] = fileVersion
-	}
-	return diskFileVersionMap
-}
-
-type quorumDisk struct {
-	disk  StorageAPI
-	index int
-}
-
-// getQuorumDisks - get the current quorum disks.
-func (xl XL) getQuorumDisks(volume, path string) (quorumDisks []quorumDisk, higherVersion int64) {
-	diskVersionMap := xl.getMetaFileVersionMap(volume, path)
-	for diskIndex, formatVersion := range diskVersionMap {
-		if formatVersion > higherVersion {
-			higherVersion = formatVersion
-			quorumDisks = []quorumDisk{{
-				disk:  xl.storageDisks[diskIndex],
-				index: diskIndex,
-			}}
-		} else if formatVersion == higherVersion {
-			quorumDisks = append(quorumDisks, quorumDisk{
-				disk:  xl.storageDisks[diskIndex],
-				index: diskIndex,
-			})
+		sizeStr, ok := metadatas[i]["file.size"]
+		if !ok {
+			return nil, 0, errors.New("missing 'file.size' in meta data")
 		}
+		var err error
+		fileSize, err = strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			return nil, 0, err
+		}
+		break
 	}
-	return
+	return quorumDisks, fileSize, nil
 }
 
 // getFileSize - extract file size from metadata.
@@ -140,43 +141,23 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	// Check read quorum.
-	quorumDisks, _ := xl.getQuorumDisks(volume, path)
-	if len(quorumDisks) < xl.readQuorum {
-		return nil, errReadQuorum
-	}
-
-	// Get file size.
-	fileSize, err := xl.getFileSize(volume, path, quorumDisks[0].disk)
+	quorumDisks, fileSize, err := xl.getReadFileInfo(volume, path)
 	if err != nil {
 		return nil, err
 	}
-	totalBlocks := xl.DataBlocks + xl.ParityBlocks // Total blocks.
 
 	readers := make([]io.ReadCloser, len(quorumDisks))
-	readFileError := 0
-	for _, quorumDisk := range quorumDisks {
-		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", quorumDisk.index))
-		var erasuredPartReader io.ReadCloser
-		if erasuredPartReader, err = quorumDisk.disk.ReadFile(volume, erasurePart, offset); err != nil {
-			// We can safely allow ReadFile errors up to len(quorumDisks) - xl.readQuorum
-			// otherwise return failure
-			if readFileError < len(quorumDisks)-xl.readQuorum {
-				// Set the reader to 'nil' to be able to reconstruct later.
-				readers[quorumDisk.index] = nil
-				readFileError++
-				continue
-			}
-			// Control reaches here we do not have quorum
-			// anymore. Close all the readers.
-			for _, reader := range readers {
-				if reader != nil {
-					reader.Close()
-				}
-			}
-			return nil, errReadQuorum
+	for i, read := range quorumDisks {
+		if !read {
+			continue
 		}
-		readers[quorumDisk.index] = erasuredPartReader
+		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", i))
+		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
+		// ReedSolomon.Reconstruct() will fail later.
+		var reader io.ReadCloser
+		if reader, err = xl.storageDisks[i].ReadFile(volume, erasurePart, offset); err == nil {
+			readers[i] = reader
+		}
 	}
 
 	// Initialize pipe.
@@ -194,19 +175,17 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			}
 			// Calculate the current encoded block size.
 			curEncBlockSize := getEncodedBlockLen(curBlockSize, xl.DataBlocks)
-			enBlocks := make([][]byte, totalBlocks)
+			enBlocks := make([][]byte, len(xl.storageDisks))
 			// Loop through all readers and read.
 			for index, reader := range readers {
-				if reader == nil {
-					// One of files missing, save it for reconstruction.
-					enBlocks[index] = nil
-					continue
-				}
 				// Initialize shard slice and fill the data from each parts.
 				enBlocks[index] = make([]byte, curEncBlockSize)
+				if reader == nil {
+					continue
+				}
 				_, err = io.ReadFull(reader, enBlocks[index])
 				if err != nil && err != io.ErrUnexpectedEOF {
-					enBlocks[index] = nil
+					readers[index] = nil
 				}
 			}
 
@@ -229,6 +208,12 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 
 			// Verification failed, blocks require reconstruction.
 			if !ok {
+				for i, reader := range readers {
+					if reader == nil {
+						// Reconstruct expects missing shard to be nil.
+						enBlocks[i] = nil
+					}
+				}
 				err = xl.ReedSolomon.Reconstruct(enBlocks)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
@@ -264,6 +249,9 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 
 		// Cleanly close all the underlying data readers.
 		for _, reader := range readers {
+			if reader == nil {
+				continue
+			}
 			reader.Close()
 		}
 	}()
