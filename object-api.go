@@ -46,12 +46,16 @@ func (o objectAPI) MakeBucket(bucket string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if e := o.storage.MakeVol(bucket); e != nil {
-		if e == errVolumeExists {
-			return probe.NewError(BucketExists{Bucket: bucket})
-		} else if e == errDiskFull {
-			return probe.NewError(StorageFull{})
+		return probe.NewError(toObjectErr(e, bucket))
+	}
+	// This happens for the first time, but keep this here since this
+	// is the only place where it can be made expensive optimizing all
+	// other calls.
+	// Create minio meta volume, if it doesn't exist yet.
+	if e := o.storage.MakeVol(minioMetaVolume); e != nil {
+		if e != errVolumeExists {
+			return probe.NewError(toObjectErr(e, minioMetaVolume))
 		}
-		return probe.NewError(e)
 	}
 	return nil
 }
@@ -64,10 +68,7 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	}
 	vi, e := o.storage.StatVol(bucket)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return BucketInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return BucketInfo{}, probe.NewError(e)
+		return BucketInfo{}, probe.NewError(toObjectErr(e, bucket))
 	}
 	return BucketInfo{
 		Name:    bucket,
@@ -82,7 +83,7 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 	var bucketInfos []BucketInfo
 	vols, e := o.storage.ListVols()
 	if e != nil {
-		return nil, probe.NewError(e)
+		return nil, probe.NewError(toObjectErr(e))
 	}
 	for _, vol := range vols {
 		// StorageAPI can send volume names which are incompatible
@@ -107,12 +108,7 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if e := o.storage.DeleteVol(bucket); e != nil {
-		if e == errVolumeNotFound {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errVolumeNotEmpty {
-			return probe.NewError(BucketNotEmpty{Bucket: bucket})
-		}
-		return probe.NewError(e)
+		return probe.NewError(toObjectErr(e))
 	}
 	return nil
 }
@@ -131,17 +127,7 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 	}
 	r, e := o.storage.ReadFile(bucket, object, startOffset)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return nil, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errFileNotFound {
-			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		} else if e == errIsNotRegular {
-			return nil, probe.NewError(ObjectExistsAsPrefix{
-				Bucket: bucket,
-				Object: object,
-			})
-		}
-		return nil, probe.NewError(e)
+		return nil, probe.NewError(toObjectErr(e, bucket, object))
 	}
 	return r, nil
 }
@@ -158,14 +144,7 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}
 	fi, e := o.storage.StatFile(bucket, object)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errFileNotFound || e == errIsNotRegular {
-			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-			// Handle more lower level errors if needed.
-		} else {
-			return ObjectInfo{}, probe.NewError(e)
-		}
+		return ObjectInfo{}, probe.NewError(toObjectErr(e, bucket, object))
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {
@@ -213,19 +192,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return "", probe.NewError(BucketNotFound{
-				Bucket: bucket,
-			})
-		} else if e == errIsNotRegular {
-			return "", probe.NewError(ObjectExistsAsPrefix{
-				Bucket: bucket,
-				Object: object,
-			})
-		} else if e == errDiskFull {
-			return "", probe.NewError(StorageFull{})
-		}
-		return "", probe.NewError(e)
+		return "", probe.NewError(toObjectErr(e, bucket, object))
 	}
 
 	// Initialize md5 writer.
@@ -240,10 +207,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
 				return "", probe.NewError(clErr)
 			}
-			if e == io.ErrUnexpectedEOF {
-				return "", probe.NewError(IncompleteBody{})
-			}
-			return "", probe.NewError(e)
+			return "", probe.NewError(toObjectErr(e))
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
@@ -286,18 +250,7 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	if e := o.storage.DeleteFile(bucket, object); e != nil {
-		if e == errVolumeNotFound {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errFileNotFound {
-			return probe.NewError(ObjectNotFound{Bucket: bucket})
-		}
-		if e == errFileNotFound {
-			return probe.NewError(ObjectNotFound{
-				Bucket: bucket,
-				Object: object,
-			})
-		}
-		return probe.NewError(e)
+		return probe.NewError(toObjectErr(e, bucket, object))
 	}
 	return nil
 }
@@ -331,10 +284,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	}
 	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return ListObjectsInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return ListObjectsInfo{}, probe.NewError(e)
+		return ListObjectsInfo{}, probe.NewError(toObjectErr(e, bucket))
 	}
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil
