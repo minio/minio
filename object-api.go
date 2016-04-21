@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/minio/minio/pkg/mimedb"
@@ -78,6 +79,13 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	}, nil
 }
 
+// byBucketName is a collection satisfying sort.Interface.
+type byBucketName []BucketInfo
+
+func (d byBucketName) Len() int           { return len(d) }
+func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
 // ListBuckets - list buckets.
 func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 	var bucketInfos []BucketInfo
@@ -98,6 +106,7 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 			Free:    vol.Free,
 		})
 	}
+	sort.Sort(byBucketName(bucketInfos))
 	return bucketInfos, nil
 }
 

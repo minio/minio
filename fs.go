@@ -132,25 +132,24 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
-// removeDuplicateVols - remove duplicate volumes.
-func removeDuplicateVols(vols []VolInfo) []VolInfo {
-	length := len(vols) - 1
-	for i := 0; i < length; i++ {
-		for j := i + 1; j <= length; j++ {
-			if vols[i].Name == vols[j].Name {
-				// Pick the latest volume, if there is a duplicate.
-				if vols[i].Created.Sub(vols[j].Created) > 0 {
-					vols[i] = vols[length]
-				} else {
-					vols[j] = vols[length]
-				}
-				vols = vols[0:length]
-				length--
-				j--
-			}
+func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
+	// Use map to record duplicates as we find them.
+	result := []VolInfo{}
+
+	m := make(map[string]VolInfo)
+	for _, v := range volsInfo {
+		if _, found := m[v.Name]; !found {
+			m[v.Name] = v
 		}
 	}
-	return vols
+
+	result = make([]VolInfo, 0, len(m))
+	for _, v := range m {
+		result = append(result, v)
+	}
+
+	// Return the new slice.
+	return result
 }
 
 // gets all the unique directories from diskPath.
@@ -184,8 +183,7 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 			Created: fi.ModTime(),
 		})
 	}
-	volsInfo = removeDuplicateVols(volsInfo)
-	return volsInfo, nil
+	return removeDuplicateVols(volsInfo), nil
 }
 
 // getVolumeDir - will convert incoming volume names to
