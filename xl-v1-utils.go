@@ -9,12 +9,11 @@ import (
 
 // Get parts.json metadata as a map slice.
 // Returns error slice indicating the failed metadata reads.
-func (xl XL) getPartsMetadata(volume, path string) ([]map[string]string, []error) {
+func (xl XL) getPartsMetadata(volume, path string) ([]fileMetadata, []error) {
 	errs := make([]error, len(xl.storageDisks))
-	metadataArray := make([]map[string]string, len(xl.storageDisks))
+	metadataArray := make([]fileMetadata, len(xl.storageDisks))
 	metadataFilePath := slashpath.Join(path, metadataFile)
 	for index, disk := range xl.storageDisks {
-		metadata := make(map[string]string)
 		offset := int64(0)
 		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 		if err != nil {
@@ -23,8 +22,8 @@ func (xl XL) getPartsMetadata(volume, path string) ([]map[string]string, []error
 		}
 		defer metadataReader.Close()
 
-		decoder := json.NewDecoder(metadataReader)
-		if err = decoder.Decode(&metadata); err != nil {
+		metadata, err := fileMetadataDecode(metadataReader)
+		if err != nil {
 			// Unable to parse parts.json, set error.
 			errs[index] = err
 			continue
@@ -39,12 +38,12 @@ func (xl XL) getPartsMetadata(volume, path string) ([]map[string]string, []error
 //
 // Returns collection of errors, indexed in accordance with input
 // updateParts order.
-func (xl XL) setPartsMetadata(volume, path string, metadata map[string]string, updateParts []bool) []error {
+func (xl XL) setPartsMetadata(volume, path string, metadata fileMetadata, updateParts []bool) []error {
 	metadataFilePath := filepath.Join(path, metadataFile)
 	errs := make([]error, len(xl.storageDisks))
 
 	for index := range updateParts {
-		errs[index] = errors.New("metadata not updated")
+		errs[index] = errors.New("Metadata not updated")
 	}
 
 	metadataBytes, err := json.Marshal(metadata)
