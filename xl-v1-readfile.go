@@ -55,9 +55,9 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) 
 	fileSize := int64(0)
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
-			if versionStr, ok := metadata["file.version"]; ok {
+			if version := metadata.Get("file.version"); version != nil {
 				// Convert string to integer.
-				version, err := strconv.ParseInt(versionStr, 10, 64)
+				version, err := strconv.ParseInt(version[0], 10, 64)
 				if err != nil {
 					// Unexpected, return error.
 					return nil, 0, err
@@ -91,15 +91,15 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) 
 		if disk == nil {
 			continue
 		}
-		if sizeStr, ok := partsMetadata[index]["file.size"]; ok {
+		if size := partsMetadata[index].Get("file.size"); size != nil {
 			var err error
-			fileSize, err = strconv.ParseInt(sizeStr, 10, 64)
+			fileSize, err = strconv.ParseInt(size[0], 10, 64)
 			if err != nil {
 				return nil, 0, err
 			}
 			break
 		} else {
-			return nil, 0, errors.New("Missing 'file.size' in meta data.")
+			return nil, 0, errFileSize
 		}
 	}
 	return quorumDisks, fileSize, nil
