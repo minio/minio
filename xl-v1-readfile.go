@@ -47,7 +47,7 @@ func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
 // - slice returing readable disks.
 // - file size
 // - error if any.
-func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, map[string]string, error) {
+func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, map[string]string, bool, error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	highestVersion := int64(0)
 	versions := make([]int64, len(xl.storageDisks))
@@ -59,7 +59,7 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, map[string]str
 				version, err := strconv.ParseInt(versionStr, 10, 64)
 				if err != nil {
 					// Unexpected, return error.
-					return nil, nil, err
+					return nil, nil, false, err
 				}
 				if version > highestVersion {
 					highestVersion = version
@@ -83,7 +83,7 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, map[string]str
 		}
 	}
 	if quorumCount < xl.readQuorum {
-		return nil, nil, errReadQuorum
+		return nil, nil, false, errReadQuorum
 	}
 	var metadata map[string]string
 	for index, disk := range quorumDisks {
@@ -93,7 +93,12 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, map[string]str
 		metadata = partsMetadata[index]
 		break
 	}
-	return quorumDisks, metadata, nil
+	// FIXME: take care of the situation when a disk has failed and been removed
+	// by looking at the error returned from the fs layer. fs-layer will have
+	// to return an error indicating that the disk is not available and should be
+	// different from ErrNotExist.
+	doSelfHeal := quorumCount != len(xl.storageDisks)
+	return quorumDisks, metadata, doSelfHeal, nil
 }
 
 // Returns file size from the metadata.
@@ -115,18 +120,23 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
-	if err := xl.selfHeal(volume, path); err != nil {
-		return nil, err
-	}
-	// Acquire a read lock.
 	readLock := true
 	xl.lockNS(volume, path, readLock)
-	defer xl.unlockNS(volume, path, readLock)
-
-	quorumDisks, metadata, err := xl.getReadableDisks(volume, path)
+	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
 	if err != nil {
 		return nil, err
 	}
+
+	if doSelfHeal {
+		if err := xl.selfHeal(volume, path); err != nil {
+			return nil, err
+		}
+	}
+
+	xl.lockNS(volume, path, readLock)
+	defer xl.unlockNS(volume, path, readLock)
+
 	fileSize, err := getFileSize(metadata)
 	if err != nil {
 		return nil, err
