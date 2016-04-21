@@ -34,10 +34,14 @@ func (xl XL) selfHeal(volume string, path string) error {
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	quorumDisks, metadata, err := xl.getReadableDisks(volume, path)
+	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
 	if err != nil {
 		return err
 	}
+	if !doSelfHeal {
+		return nil
+	}
+
 	size, err := metadata.GetSize()
 	if err != nil {
 		return err
