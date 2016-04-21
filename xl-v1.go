@@ -17,9 +17,6 @@
 package main
 
 import (
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	slashpath "path"
@@ -102,7 +99,7 @@ func newXL(disks ...string) (StorageAPI, error) {
 	// Verify disks.
 	totalDisks := len(disks)
 	if totalDisks > maxErasureBlocks {
-		return nil, errors.New("Total number of disks specified is higher than supported maximum of '16'")
+		return nil, errMaxDisks
 	}
 
 	// isEven function to verify if a given number if even.
@@ -112,7 +109,7 @@ func newXL(disks ...string) (StorageAPI, error) {
 
 	// TODO: verify if this makes sense in future.
 	if !isEven(totalDisks) {
-		return nil, errors.New("Invalid number of directories provided, should be always multiples of '2'")
+		return nil, errNumDisks
 	}
 
 	// Calculate data and parity blocks.
@@ -125,9 +122,9 @@ func newXL(disks ...string) (StorageAPI, error) {
 	}
 
 	// Save the reedsolomon.
-	xl.ReedSolomon = rs
 	xl.DataBlocks = dataBlocks
 	xl.ParityBlocks = parityBlocks
+	xl.ReedSolomon = rs
 
 	// Initialize all storage disks.
 	storageDisks := make([]StorageAPI, len(disks))
@@ -150,6 +147,7 @@ func newXL(disks ...string) (StorageAPI, error) {
 	// Read quorum should be always N/2 + 1 (due to Vandermonde matrix
 	// erasure requirements)
 	xl.readQuorum = len(xl.storageDisks)/2 + 1
+
 	// Write quorum is assumed if we have total disks + 3
 	// parity. (Need to discuss this again)
 	xl.writeQuorum = len(xl.storageDisks)/2 + 3
@@ -302,16 +300,21 @@ func (xl XL) isLeafDirectory(volume, leafPath string) (isLeaf bool) {
 	return isLeaf
 }
 
-// fileMetadata - file metadata is a structured representation of the
-// unmarshalled metadata file.
-type fileMetadata struct {
-	Size         int64
-	ModTime      time.Time
-	BlockSize    int64
-	Block512Sum  string
-	DataBlocks   int
-	ParityBlocks int
-	fileVersion  int64
+// Returns file size from the metadata.
+func getFileSize(metadata fileMetadata) (int64, error) {
+	size := metadata.Get("file.size")
+	if size == nil {
+		return 0, errFileSize
+	}
+	return strconv.ParseInt(size[0], 10, 64)
+}
+
+func getModTime(metadata fileMetadata) (time.Time, error) {
+	modTime := metadata.Get("file.modTime")
+	if modTime == nil {
+		return time.Time{}, errModTime
+	}
+	return time.Parse(timeFormatAMZ, modTime[0])
 }
 
 // extractMetadata - extract file metadata.
@@ -323,83 +326,40 @@ func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
 	disk := xl.storageDisks[0]
 	metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 	if err != nil {
-		return fileMetadata{}, err
+		return nil, err
 	}
 	// Close metadata reader.
 	defer metadataReader.Close()
 
-	var metadata = make(map[string]string)
-	decoder := json.NewDecoder(metadataReader)
-	// Unmarshalling failed, file possibly corrupted.
-	if err = decoder.Decode(&metadata); err != nil {
-		return fileMetadata{}, err
-	}
-	modTime, err := time.Parse(timeFormatAMZ, metadata["file.modTime"])
+	metadata, err := fileMetadataDecode(metadataReader)
 	if err != nil {
-		return fileMetadata{}, err
+		return nil, err
 	}
-
-	// Verify if size is parsable.
-	var size int64
-	size, err = strconv.ParseInt(metadata["file.size"], 10, 64)
-	if err != nil {
-		return fileMetadata{}, err
-	}
-
-	// Verify if file.version is parsable.
-	var fileVersion int64
-	// missing file.version is valid
-	if _, ok := metadata["file.version"]; ok {
-		fileVersion, err = strconv.ParseInt(metadata["file.version"], 10, 64)
-		if err != nil {
-			return fileMetadata{}, err
-		}
-	}
-
-	// Verify if block size is parsable.
-	var blockSize int64
-	blockSize, err = strconv.ParseInt(metadata["file.xl.blockSize"], 10, 64)
-	if err != nil {
-		return fileMetadata{}, err
-	}
-
-	// Verify if data blocks and parity blocks are parsable.
-	var dataBlocks, parityBlocks int
-	dataBlocks, err = strconv.Atoi(metadata["file.xl.dataBlocks"])
-	if err != nil {
-		return fileMetadata{}, err
-	}
-	parityBlocks, err = strconv.Atoi(metadata["file.xl.parityBlocks"])
-	if err != nil {
-		return fileMetadata{}, err
-	}
-
-	// Verify if sha512sum is of proper hex format.
-	sha512Sum := metadata["file.xl.block512Sum"]
-	_, err = hex.DecodeString(sha512Sum)
-	if err != nil {
-		return fileMetadata{}, err
-	}
-
-	// Return the concocted metadata.
-	return fileMetadata{
-		Size:         size,
-		ModTime:      modTime,
-		BlockSize:    blockSize,
-		Block512Sum:  sha512Sum,
-		DataBlocks:   dataBlocks,
-		ParityBlocks: parityBlocks,
-		fileVersion:  fileVersion,
-	}, nil
+	return metadata, nil
 }
 
-const (
-	slashSeparator = "/"
-)
+// Extract file info from paths.
+func (xl XL) extractFileInfo(volume, path string) (FileInfo, error) {
+	fileInfo := FileInfo{}
+	fileInfo.Volume = volume
+	fileInfo.Name = path
 
-// retainSlash - retains slash from a path.
-func retainSlash(path string) string {
-	return strings.TrimSuffix(path, slashSeparator) + slashSeparator
+	metadata, err := xl.extractMetadata(volume, path)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	fileSize, err := getFileSize(metadata)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	fileModTime, err := getModTime(metadata)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	fileInfo.Size = fileSize
+	fileInfo.Mode = os.FileMode(0644)
+	fileInfo.ModTime = fileModTime
+	return fileInfo, nil
 }
 
 // byFileInfoName is a collection satisfying sort.Interface.
@@ -427,21 +387,6 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 		}
 	}
 
-	// Extract file info from paths.
-	extractFileInfo := func(volume, path string) (FileInfo, error) {
-		var fileInfo = FileInfo{}
-		var metadata fileMetadata
-		fileInfo.Name = slashpath.Dir(path)
-		metadata, err = xl.extractMetadata(volume, fileInfo.Name)
-		if err != nil {
-			return FileInfo{}, err
-		}
-		fileInfo.Size = metadata.Size
-		fileInfo.ModTime = metadata.ModTime
-		fileInfo.Mode = os.FileMode(0644)
-		return fileInfo, nil
-	}
-
 	// List files.
 	fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, count)
 	if err != nil {
@@ -459,7 +404,10 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 			isLeaf = xl.isLeafDirectory(volume, fsFileInfo.Name)
 		}
 		if isLeaf || !fsFileInfo.Mode.IsDir() {
-			fileInfo, err = extractFileInfo(volume, fsFileInfo.Name)
+			// Extract the parent of leaf directory or file to get the
+			// actual name.
+			path := slashpath.Dir(fsFileInfo.Name)
+			fileInfo, err = xl.extractFileInfo(volume, path)
 			if err != nil {
 				// For a leaf directory, if err is FileNotFound then
 				// perhaps has a missing metadata. Ignore it and let
@@ -491,19 +439,13 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	}
 
 	// Extract metadata.
-	metadata, err := xl.extractMetadata(volume, path)
+	fileInfo, err := xl.extractFileInfo(volume, path)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
-	// Return file info.
-	return FileInfo{
-		Volume:  volume,
-		Name:    path,
-		Size:    metadata.Size,
-		ModTime: metadata.ModTime,
-		Mode:    os.FileMode(0644),
-	}, nil
+	// Return fileinfo.
+	return fileInfo, nil
 }
 
 // DeleteFile - delete a file
