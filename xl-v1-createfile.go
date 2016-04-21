@@ -79,7 +79,7 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 	metadataFilePath := slashpath.Join(path, metadataFile)
 	// Set offset to 0 to read entire file.
 	offset := int64(0)
-	metadata := make(map[string]string)
+	metadata := make(fileMetadata)
 
 	// Allocate disk index format map - do not use maps directly
 	// without allocating.
@@ -94,21 +94,20 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 		if err != nil {
 			continue
-
 		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
 			continue
+		}
 
-		} else if _, ok := metadata["file.version"]; !ok {
+		if version := metadata.Get("file.version"); version == nil {
 			fileQuorumVersionMap[index] = 0
-
+		} else {
+			// Convert string to integer.
+			fileVersion, err := strconv.ParseInt(version[0], 10, 64)
+			if err != nil {
+				continue
+			}
+			fileQuorumVersionMap[index] = fileVersion
 		}
-		// Convert string to integer.
-		fileVersion, err := strconv.ParseInt(metadata["file.version"], 10, 64)
-		if err != nil {
-			continue
-
-		}
-		fileQuorumVersionMap[index] = fileVersion
 	}
 	return fileQuorumVersionMap
 }
@@ -238,21 +237,21 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 	}
 
 	// Initialize metadata map, save all erasure related metadata.
-	metadata := make(map[string]string)
-	metadata["version"] = minioVersion
-	metadata["format.major"] = "1"
-	metadata["format.minor"] = "0"
-	metadata["format.patch"] = "0"
-	metadata["file.size"] = strconv.FormatInt(totalSize, 10)
+	metadata := make(fileMetadata)
+	metadata.Set("version", minioVersion)
+	metadata.Set("format.major", "1")
+	metadata.Set("format.minor", "0")
+	metadata.Set("format.patch", "0")
+	metadata.Set("file.size", strconv.FormatInt(totalSize, 10))
 	if len(xl.storageDisks) > len(writers) {
 		// Save file.version only if we wrote to less disks than all
 		// storage disks.
-		metadata["file.version"] = strconv.FormatInt(higherVersion, 10)
+		metadata.Set("file.version", strconv.FormatInt(higherVersion, 10))
 	}
-	metadata["file.modTime"] = modTime.Format(timeFormatAMZ)
-	metadata["file.xl.blockSize"] = strconv.Itoa(erasureBlockSize)
-	metadata["file.xl.dataBlocks"] = strconv.Itoa(xl.DataBlocks)
-	metadata["file.xl.parityBlocks"] = strconv.Itoa(xl.ParityBlocks)
+	metadata.Set("file.modTime", modTime.Format(timeFormatAMZ))
+	metadata.Set("file.xl.blockSize", strconv.Itoa(erasureBlockSize))
+	metadata.Set("file.xl.dataBlocks", strconv.Itoa(xl.DataBlocks))
+	metadata.Set("file.xl.parityBlocks", strconv.Itoa(xl.ParityBlocks))
 
 	// Write all the metadata.
 	// below case is not handled here
@@ -265,21 +264,13 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		}
 		if sha512Writers[index] != nil {
 			// Save sha512 checksum of each encoded blocks.
-			metadata["file.xl.block512Sum"] = hex.EncodeToString(sha512Writers[index].Sum(nil))
+			metadata.Set("file.xl.block512Sum", hex.EncodeToString(sha512Writers[index].Sum(nil)))
 		}
 
-		// Marshal metadata into json strings.
-		metadataBytes, err := json.Marshal(metadata)
+		// Write metadata.
+		err := metadata.Write(metadataWriter)
 		if err != nil {
 			// Remove temporary files.
-			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
-			reader.CloseWithError(err)
-			return
-		}
-
-		// Write metadata to disk.
-		_, err = metadataWriter.Write(metadataBytes)
-		if err != nil {
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
 			return
