@@ -16,13 +16,69 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+)
+
+// Converts underlying storage error. Convenience function written to
+// handle all cases where we have known types of errors returned by
+// underlying storage layer.
+func toObjectErr(err error, params ...string) error {
+	switch err {
+	case errVolumeNotFound:
+		if len(params) >= 1 {
+			return BucketNotFound{Bucket: params[0]}
+		}
+	case errVolumeExists:
+		if len(params) >= 1 {
+			return BucketExists{Bucket: params[0]}
+		}
+	case errDiskFull:
+		return StorageFull{}
+	case errReadQuorum:
+		return StorageInsufficientReadResources{}
+	case errWriteQuorum:
+		return StorageInsufficientWriteResources{}
+	case errFileNotFound:
+		if len(params) >= 2 {
+			return ObjectNotFound{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errIsNotRegular:
+		if len(params) >= 2 {
+			return ObjectExistsAsPrefix{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+		return IncompleteBody{}
+	}
+	return err
+}
 
 // StorageFull storage ran out of space
 type StorageFull struct{}
 
 func (e StorageFull) Error() string {
 	return "Storage reached its minimum free disk threshold."
+}
+
+// StorageInsufficientReadResources storage cannot satisfy quorum for read operation.
+type StorageInsufficientReadResources struct{}
+
+func (e StorageInsufficientReadResources) Error() string {
+	return "Storage resources are insufficient for the read operation."
+}
+
+// StorageInsufficientWriteResources storage cannot satisfy quorum for write operation.
+type StorageInsufficientWriteResources struct{}
+
+func (e StorageInsufficientWriteResources) Error() string {
+	return "Stroage resources are insufficient for the write operation."
 }
 
 // GenericError - generic object layer error.
