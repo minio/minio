@@ -429,8 +429,26 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		return FileInfo{}, errInvalidArgument
 	}
 
+	readLock := true
+	xl.lockNS(volume, path, readLock)
+	_, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
+	if err != nil {
+		return FileInfo{}, err
+	}
+
+	if doSelfHeal {
+		if err = xl.selfHeal(volume, path); err != nil {
+			return FileInfo{}, err
+		}
+	}
+
 	// Extract metadata.
-	metadata, err := xl.extractMetadata(volume, path)
+	size, err := getFileSize(metadata)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	modTime, err := getModTime(metadata)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -439,8 +457,8 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
-		Size:    metadata.Size,
-		ModTime: metadata.ModTime,
+		Size:    size,
+		ModTime: modTime,
 		Mode:    os.FileMode(0644),
 	}, nil
 }

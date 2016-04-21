@@ -22,6 +22,7 @@ import (
 	"io"
 	slashpath "path"
 	"strconv"
+	"time"
 )
 
 // checkBlockSize return the size of a single block.
@@ -110,6 +111,14 @@ func getFileSize(metadata map[string]string) (int64, error) {
 	return strconv.ParseInt(sizeStr, 10, 64)
 }
 
+func getModTime(metadata map[string]string) (time.Time, error) {
+	timeStr, ok := metadata["file.modTime"]
+	if !ok {
+		return time.Time{}, errors.New("missing 'file.modTime' in meta data")
+	}
+	return time.Parse(timeFormatAMZ, timeStr)
+}
+
 // ReadFile - read file
 func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) {
 	// Input validation.
@@ -129,7 +138,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	if doSelfHeal {
-		if err := xl.selfHeal(volume, path); err != nil {
+		if err = xl.selfHeal(volume, path); err != nil {
 			return nil, err
 		}
 	}
