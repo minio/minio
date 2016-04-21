@@ -19,27 +19,26 @@ package main
 import "errors"
 
 // errDiskFull - cannot create volume or files when disk is full.
-var errDiskFull = errors.New("Disk path full.")
+var errDiskFull = errors.New("disk path full")
 
 // errFileNotFound - cannot find the file.
-var errFileNotFound = errors.New("File not found.")
+var errFileNotFound = errors.New("file not found")
 
 // errVolumeExists - cannot create same volume again.
-var errVolumeExists = errors.New("Volume already exists.")
+var errVolumeExists = errors.New("volume already exists")
 
-// errIsNotRegular - not a regular file type.
-var errIsNotRegular = errors.New("Not a regular file type.")
+// errIsNotRegular - not of regular file type.
+var errIsNotRegular = errors.New("not of regular file type")
 
 // errVolumeNotFound - cannot find the volume.
-var errVolumeNotFound = errors.New("Volume not found.")
+var errVolumeNotFound = errors.New("volume not found")
 
 // errVolumeNotEmpty - volume not empty.
-var errVolumeNotEmpty = errors.New("Volume is not empty.")
+var errVolumeNotEmpty = errors.New("volume is not empty")
 
 // errVolumeAccessDenied - cannot access volume, insufficient
 // permissions.
-var errVolumeAccessDenied = errors.New("Volume access denied.")
+var errVolumeAccessDenied = errors.New("volume access denied")
 
-// errVolumeAccessDenied - cannot access file, insufficient
-// permissions.
-var errFileAccessDenied = errors.New("File access denied.")
+// errVolumeAccessDenied - cannot access file, insufficient permissions.
+var errFileAccessDenied = errors.New("file access denied")

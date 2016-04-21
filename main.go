@@ -85,6 +85,7 @@ func migrate() {
 func enableLoggers() {
 	// Enable all loggers here.
 	enableConsoleLogger()
+	enableFileLogger()
 
 	// Add your logger here.
 }
