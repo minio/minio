@@ -148,7 +148,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 
 			// Remove previous temp writers for any failure.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
-			reader.CloseWithError(err)
+			reader.CloseWithError(errWriteQuorum)
 			return
 		}
 
@@ -166,7 +166,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 
 			// Remove previous temp writers for any failure.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
-			reader.CloseWithError(err)
+			reader.CloseWithError(errWriteQuorum)
 			return
 		}
 
