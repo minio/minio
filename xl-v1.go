@@ -21,10 +21,8 @@ import (
 	"os"
 	slashpath "path"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/klauspost/reedsolomon"
 )
@@ -294,23 +292,6 @@ func (xl XL) isLeafDirectory(volume, leafPath string) (isLeaf bool) {
 	return isLeaf
 }
 
-// Returns file size from the metadata.
-func getFileSize(metadata fileMetadata) (int64, error) {
-	size := metadata.Get("file.size")
-	if size == nil {
-		return 0, errFileSize
-	}
-	return strconv.ParseInt(size[0], 10, 64)
-}
-
-func getModTime(metadata fileMetadata) (time.Time, error) {
-	modTime := metadata.Get("file.modTime")
-	if modTime == nil {
-		return time.Time{}, errModTime
-	}
-	return time.Parse(timeFormatAMZ, modTime[0])
-}
-
 // extractMetadata - extract file metadata.
 func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
 	metadataFilePath := slashpath.Join(path, metadataFile)
@@ -342,11 +323,11 @@ func (xl XL) extractFileInfo(volume, path string) (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, err
 	}
-	fileSize, err := getFileSize(metadata)
+	fileSize, err := metadata.GetSize()
 	if err != nil {
 		return FileInfo{}, err
 	}
-	fileModTime, err := getModTime(metadata)
+	fileModTime, err := metadata.GetModTime()
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -432,14 +413,38 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		return FileInfo{}, errInvalidArgument
 	}
 
-	// Extract metadata.
-	fileInfo, err := xl.extractFileInfo(volume, path)
+	readLock := true
+	xl.lockNS(volume, path, readLock)
+	_, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
-	// Return fileinfo.
-	return fileInfo, nil
+	if doSelfHeal {
+		if err = xl.selfHeal(volume, path); err != nil {
+			return FileInfo{}, err
+		}
+	}
+
+	// Extract metadata.
+	size, err := metadata.GetSize()
+	if err != nil {
+		return FileInfo{}, err
+	}
+	modTime, err := metadata.GetModTime()
+	if err != nil {
+		return FileInfo{}, err
+	}
+
+	// Return file info.
+	return FileInfo{
+		Volume:  volume,
+		Name:    path,
+		Size:    size,
+		ModTime: modTime,
+		Mode:    os.FileMode(0644),
+	}, nil
 }
 
 // DeleteFile - delete a file

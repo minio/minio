@@ -120,7 +120,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	if doSelfHeal {
-		if err := xl.selfHeal(volume, path); err != nil {
+		if err = xl.selfHeal(volume, path); err != nil {
 			return nil, err
 		}
 	}

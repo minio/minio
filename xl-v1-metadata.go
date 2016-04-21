@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"strconv"
+	"time"
 )
 
 // error type when key is not found.
@@ -77,16 +78,22 @@ func (f fileMetadata) GetSize() (int64, error) {
 	if sizes == nil {
 		return 0, errMetadataKeyNotExist
 	}
-	if len(sizes) == 0 {
-		return 0, errMetadataKeyNotExist
-	}
 	sizeStr := sizes[0]
 	return strconv.ParseInt(sizeStr, 10, 64)
 }
 
 // Set file size.
-func (f *fileMetadata) SetSize(size int64) {
+func (f fileMetadata) SetSize(size int64) {
 	f.Set("file.size", strconv.FormatInt(size, 10))
+}
+
+// Get file Modification time.
+func (f fileMetadata) GetModTime() (time.Time, error) {
+	timeStrs := f.Get("file.modTime")
+	if timeStrs == nil {
+		return time.Time{}, errMetadataKeyNotExist
+	}
+	return time.Parse(timeFormatAMZ, timeStrs[0])
 }
 
 // fileMetadataDecode - file metadata decode.
