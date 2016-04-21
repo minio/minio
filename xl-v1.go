@@ -172,6 +172,10 @@ func (xl XL) MakeVol(volume string) error {
 	// Make a volume entry on all underlying storage disks.
 	for _, disk := range xl.storageDisks {
 		if err := disk.MakeVol(volume); err != nil {
+			// We ignore error if errVolumeExists and creating a volume again.
+			if err == errVolumeExists {
+				continue
+			}
 			return err
 		}
 	}
@@ -185,6 +189,10 @@ func (xl XL) DeleteVol(volume string) error {
 	}
 	for _, disk := range xl.storageDisks {
 		if err := disk.DeleteVol(volume); err != nil {
+			// We ignore error if errVolumeNotFound.
+			if err == errVolumeNotFound {
+				continue
+			}
 			return err
 		}
 	}
@@ -193,13 +201,40 @@ func (xl XL) DeleteVol(volume string) error {
 
 // ListVols - list volumes.
 func (xl XL) ListVols() (volsInfo []VolInfo, err error) {
-	// Pick the first node and list there always.
-	disk := xl.storageDisks[0]
-	volsInfo, err = disk.ListVols()
-	if err == nil {
-		return volsInfo, nil
+	emptyCount := 0
+	// Success vols map carries successful results of ListVols from
+	// each disks.
+	var successVolsMap = make(map[int][]VolInfo)
+	for index, disk := range xl.storageDisks {
+		var vlsInfo []VolInfo
+		vlsInfo, err = disk.ListVols()
+		if err == nil {
+			if len(vlsInfo) == 0 {
+				emptyCount++
+			} else {
+				successVolsMap[index] = vlsInfo
+			}
+		}
 	}
-	return nil, err
+
+	// If all list operations resulted in an empty count which is same
+	// as your total storage disks, then it is a valid case return
+	// success with empty vols.
+	if emptyCount == len(xl.storageDisks) {
+		return []VolInfo{}, nil
+	} else if len(successVolsMap) < xl.readQuorum {
+		// If there is data and not empty, then we attempt quorum verification.
+		// Verify if we have enough quorum to list vols.
+		return nil, errReadQuorum
+	}
+	// Loop through success vols map and return the first value.
+	for index := range xl.storageDisks {
+		if _, ok := successVolsMap[index]; ok {
+			volsInfo = successVolsMap[index]
+			break
+		}
+	}
+	return volsInfo, nil
 }
 
 // StatVol - get volume stat info.
@@ -207,13 +242,33 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	if !isValidVolname(volume) {
 		return VolInfo{}, errInvalidArgument
 	}
-	// Pick the first node and list there always.
-	disk := xl.storageDisks[0]
-	volInfo, err = disk.StatVol(volume)
-	if err == nil {
-		return volInfo, nil
+	var statVols []VolInfo
+	volumeNotFoundErrCnt := 0
+	for _, disk := range xl.storageDisks {
+		volInfo, err = disk.StatVol(volume)
+		if err == nil {
+			// Collect all the successful attempts to verify quorum
+			// subsequently.
+			statVols = append(statVols, volInfo)
+		} else if err == errVolumeNotFound {
+			// Count total amount of volume not found errors.
+			volumeNotFoundErrCnt++
+		}
 	}
-	return VolInfo{}, err
+
+	// If volume not found err count is same as total storage disks, we
+	// really don't have the bucket, report a valid error.
+	if volumeNotFoundErrCnt == len(xl.storageDisks) {
+		return VolInfo{}, errVolumeNotFound
+	} else if len(statVols) < xl.readQuorum {
+		// If one of the disks have bucket we need to validate if we
+		// have read quorum, if not fail.
+		return VolInfo{}, errReadQuorum
+	}
+
+	// If successful remove all the duplicates and keep the latest one.
+	volInfo = removeDuplicateVols(statVols)[0]
+	return volInfo, nil
 }
 
 // isLeafDirectory - check if a given path is leaf directory. i.e
