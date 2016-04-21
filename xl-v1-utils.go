@@ -1,76 +1,51 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
-	slashpath "path"
-	"path/filepath"
+	"strconv"
+	"time"
 )
 
-// Get parts.json metadata as a map slice.
-// Returns error slice indicating the failed metadata reads.
-func (xl XL) getPartsMetadata(volume, path string) ([]map[string]string, []error) {
-	errs := make([]error, len(xl.storageDisks))
-	metadataArray := make([]map[string]string, len(xl.storageDisks))
-	metadataFilePath := slashpath.Join(path, metadataFile)
-	for index, disk := range xl.storageDisks {
-		metadata := make(map[string]string)
-		offset := int64(0)
-		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
-		if err != nil {
-			errs[index] = err
-			continue
-		}
-		defer metadataReader.Close()
+// checkBlockSize return the size of a single block.
+// The first non-zero size is returned,
+// or 0 if all blocks are size 0.
+func checkBlockSize(blocks [][]byte) int {
+	for _, block := range blocks {
+		if len(block) != 0 {
+			return len(block)
 
-		decoder := json.NewDecoder(metadataReader)
-		if err = decoder.Decode(&metadata); err != nil {
-			// Unable to parse parts.json, set error.
-			errs[index] = err
-			continue
 		}
-		metadataArray[index] = metadata
+
 	}
-	return metadataArray, errs
+	return 0
+
 }
 
-// Writes/Updates `parts.json` for given file. updateParts carries
-// index of disks where `parts.json` needs to be updated.
-//
-// Returns collection of errors, indexed in accordance with input
-// updateParts order.
-func (xl XL) setPartsMetadata(volume, path string, metadata map[string]string, updateParts []bool) []error {
-	metadataFilePath := filepath.Join(path, metadataFile)
-	errs := make([]error, len(xl.storageDisks))
+// calculate the blockSize based on input length and total number of
+// data blocks.
+func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
+	curBlockSize = (inputLen + dataBlocks - 1) / dataBlocks
+	return
 
-	for index := range updateParts {
-		errs[index] = errors.New("metadata not updated")
-	}
+}
 
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		for index := range updateParts {
-			errs[index] = err
-		}
-		return errs
-	}
+// Returns file size from the metadata.
+func getFileSize(metadata map[string]string) (int64, error) {
+	sizeStr, ok := metadata["file.size"]
+	if !ok {
+		return 0, errors.New("missing 'file.size' in meta data")
 
-	for index, shouldUpdate := range updateParts {
-		if !shouldUpdate {
-			continue
-		}
-		writer, err := xl.storageDisks[index].CreateFile(volume, metadataFilePath)
-		errs[index] = err
-		if err != nil {
-			continue
-		}
-		_, err = writer.Write(metadataBytes)
-		if err != nil {
-			errs[index] = err
-			safeCloseAndRemove(writer)
-			continue
-		}
-		writer.Close()
 	}
-	return errs
+	return strconv.ParseInt(sizeStr, 10, 64)
+
+}
+
+func getModTime(metadata map[string]string) (time.Time, error) {
+	timeStr, ok := metadata["file.modTime"]
+	if !ok {
+		return time.Time{}, errors.New("missing 'file.modTime' in meta data")
+
+	}
+	return time.Parse(timeFormatAMZ, timeStr)
+
 }

@@ -21,89 +21,7 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
-	"strconv"
 )
-
-// checkBlockSize return the size of a single block.
-// The first non-zero size is returned,
-// or 0 if all blocks are size 0.
-func checkBlockSize(blocks [][]byte) int {
-	for _, block := range blocks {
-		if len(block) != 0 {
-			return len(block)
-		}
-	}
-	return 0
-}
-
-// calculate the blockSize based on input length and total number of
-// data blocks.
-func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
-	curBlockSize = (inputLen + dataBlocks - 1) / dataBlocks
-	return
-}
-
-// Returns slice of disks needed for ReadFile operation:
-// - slice returing readable disks.
-// - file size
-// - error if any.
-func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) {
-	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	highestVersion := int64(0)
-	versions := make([]int64, len(xl.storageDisks))
-	quorumDisks := make([]StorageAPI, len(xl.storageDisks))
-	fileSize := int64(0)
-	for index, metadata := range partsMetadata {
-		if errs[index] == nil {
-			if versionStr, ok := metadata["file.version"]; ok {
-				// Convert string to integer.
-				version, err := strconv.ParseInt(versionStr, 10, 64)
-				if err != nil {
-					// Unexpected, return error.
-					return nil, 0, err
-				}
-				if version > highestVersion {
-					highestVersion = version
-				}
-				versions[index] = version
-			} else {
-				versions[index] = 0
-			}
-		} else {
-			versions[index] = -1
-		}
-	}
-
-	quorumCount := 0
-	for index, version := range versions {
-		if version == highestVersion {
-			quorumDisks[index] = xl.storageDisks[index]
-			quorumCount++
-		} else {
-			quorumDisks[index] = nil
-		}
-	}
-	if quorumCount < xl.readQuorum {
-		return nil, 0, errReadQuorum
-	}
-
-	for index, disk := range quorumDisks {
-		if disk == nil {
-			continue
-		}
-		if sizeStr, ok := partsMetadata[index]["file.size"]; ok {
-			var err error
-			fileSize, err = strconv.ParseInt(sizeStr, 10, 64)
-			if err != nil {
-				return nil, 0, err
-			}
-			break
-		} else {
-			return nil, 0, errors.New("Missing 'file.size' in meta data.")
-		}
-	}
-	return quorumDisks, fileSize, nil
-}
 
 // ReadFile - read file
 func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) {
@@ -115,12 +33,24 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
-	// Acquire a read lock.
 	readLock := true
+	xl.lockNS(volume, path, readLock)
+	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
+	if err != nil {
+		return nil, err
+	}
+
+	if doSelfHeal {
+		if err = xl.selfHeal(volume, path); err != nil {
+			return nil, err
+		}
+	}
+
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	quorumDisks, fileSize, err := xl.getReadableDisks(volume, path)
+	fileSize, err := getFileSize(metadata)
 	if err != nil {
 		return nil, err
 	}

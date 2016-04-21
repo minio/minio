@@ -49,9 +49,6 @@ type XL struct {
 	nameSpaceLockMapMutex *sync.Mutex
 	readQuorum            int
 	writeQuorum           int
-
-	// Heal input/output channel.
-	selfHealCh chan selfHeal
 }
 
 // lockNS - locks the given resource, using a previously allocated
@@ -156,9 +153,6 @@ func newXL(disks ...string) (StorageAPI, error) {
 	if xl.writeQuorum > len(xl.storageDisks) {
 		xl.writeQuorum = len(xl.storageDisks)
 	}
-
-	// Start self heal go routine, taking inputs over self heal channel.
-	xl.selfHealRoutine()
 
 	// Return successfully initialized.
 	return xl, nil
@@ -490,8 +484,26 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		return FileInfo{}, errInvalidArgument
 	}
 
+	readLock := true
+	xl.lockNS(volume, path, readLock)
+	_, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
+	if err != nil {
+		return FileInfo{}, err
+	}
+
+	if doSelfHeal {
+		if err = xl.selfHeal(volume, path); err != nil {
+			return FileInfo{}, err
+		}
+	}
+
 	// Extract metadata.
-	metadata, err := xl.extractMetadata(volume, path)
+	size, err := getFileSize(metadata)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	modTime, err := getModTime(metadata)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -500,8 +512,8 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
-		Size:    metadata.Size,
-		ModTime: metadata.ModTime,
+		Size:    size,
+		ModTime: modTime,
 		Mode:    os.FileMode(0644),
 	}, nil
 }
