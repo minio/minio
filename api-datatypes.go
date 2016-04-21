@@ -16,9 +16,20 @@
 
 package main
 
+import (
+	"encoding/xml"
+)
+
 // ObjectIdentifier carries key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`
+}
+
+// createBucketConfiguration container for bucket configuration request from client.
+// Used for parsing the location from the request body for MakeBucketbucket.
+type createBucketLocationConfiguration struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CreateBucketConfiguration" json:"-"`
+	Location string   `xml:"LocationConstraint"`
 }
 
 // DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.

@@ -464,6 +464,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -480,6 +481,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	// the location value in the request body should match the Region in serverConfig.
+	// other values of location are not accepted.
+	// make bucket fails in such cases.
+	errCode := isValidLocationContraint(r.Body, serverConfig.GetRegion())
+	if errCode != ErrNone {
+		writeErrorResponse(w, r, errCode, r.URL.Path)
+	}
 	// Make bucket.
 	err := api.ObjectAPI.MakeBucket(bucket)
 	if err != nil {

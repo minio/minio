@@ -17,20 +17,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
+	"io/ioutil"
+	"net/http"
 	"testing"
 )
 
-//Validating bucket name.
-func ensureBucketName(t *testing.T, name string, testNum int, pass bool) {
-	isValidBucketName := IsValidBucketName(name)
-	if pass && !isValidBucketName {
-		t.Errorf("Test case %d: Expected \"%s\" to be a valid bucket name", testNum, name)
-	}
-	if !pass && isValidBucketName {
-		t.Errorf("Test case %d: Expected bucket name \"%s\" to be invalid", testNum, name)
-	}
-}
-
+// Tests validate bucket name.
 func TestIsValidBucketName(t *testing.T) {
 	testCases := []struct {
 		bucketName string
@@ -73,22 +67,17 @@ func TestIsValidBucketName(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		ensureBucketName(t, testCase.bucketName, i+1, testCase.shouldPass)
+		isValidBucketName := IsValidBucketName(testCase.bucketName)
+		if testCase.shouldPass && !isValidBucketName {
+			t.Errorf("Test case %d: Expected \"%s\" to be a valid bucket name", i+1, testCase.bucketName)
+		}
+		if !testCase.shouldPass && isValidBucketName {
+			t.Errorf("Test case %d: Expected bucket name \"%s\" to be invalid", i+1, testCase.bucketName)
+		}
 	}
 }
 
-//Test for validating object name.
-func ensureObjectName(t *testing.T, name string, testNum int, pass bool) {
-	isValidObjectName := IsValidObjectName(name)
-	if pass && !isValidObjectName {
-		t.Errorf("Test case %d: Expected \"%s\" to be a valid object name", testNum, name)
-	}
-	if !pass && isValidObjectName {
-		t.Errorf("Test case %d: Expected object name \"%s\" to be invalid", testNum, name)
-	}
-
-}
-
+// Tests for validate object name.
 func TestIsValidObjectName(t *testing.T) {
 	testCases := []struct {
 		objectName string
@@ -109,6 +98,53 @@ func TestIsValidObjectName(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		ensureObjectName(t, testCase.objectName, i+1, testCase.shouldPass)
+		isValidObjectName := IsValidObjectName(testCase.objectName)
+		if testCase.shouldPass && !isValidObjectName {
+			t.Errorf("Test case %d: Expected \"%s\" to be a valid object name", i+1, testCase.objectName)
+		}
+		if !testCase.shouldPass && isValidObjectName {
+			t.Errorf("Test case %d: Expected object name \"%s\" to be invalid", i+1, testCase.objectName)
+		}
+	}
+}
+
+// Tests validate bucket LocationConstraint.
+func TestIsValidLocationContraint(t *testing.T) {
+	// generates the input request with XML bucket configuration set to the request body.
+	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
+		createBucketConfig := createBucketLocationConfiguration{}
+		createBucketConfig.Location = location
+		var createBucketConfigBytes []byte
+		createBucketConfigBytes, e := xml.Marshal(createBucketConfig)
+		if e != nil {
+			return nil, e
+		}
+		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
+		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
+		return req, nil
+	}
+
+	testCases := []struct {
+		locationForInputRequest string
+		serverConfigRegion      string
+		expectedCode            APIErrorCode
+	}{
+		// Test case - 1.
+		{"us-east-1", "us-east-1", ErrNone},
+		// Test case - 2.
+		// In case of empty request body ErrNone is returned.
+		{"", "us-east-1", ErrNone},
+		// Test case - 3.
+		{"eu-central-1", "us-east-1", ErrInvalidRegion},
+	}
+	for i, testCase := range testCases {
+		inputRequest, e := createExpectedRequest(&http.Request{}, testCase.locationForInputRequest)
+		if e != nil {
+			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
+		}
+		actualCode := isValidLocationContraint(inputRequest.Body, testCase.serverConfigRegion)
+		if testCase.expectedCode != actualCode {
+			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
+		}
 	}
 }

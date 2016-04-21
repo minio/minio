@@ -17,6 +17,7 @@
 package main
 
 import (
+	"io"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -92,4 +93,37 @@ func IsValidObjectPrefix(object string) bool {
 
 func pathJoin(path1 string, path2 string) string {
 	return strings.TrimSuffix(path1, slashPathSeparator) + slashPathSeparator + path2
+}
+
+// validates location constraint from the request body.
+// the location value in the request body should match the Region in serverConfig.
+// other values of location are not accepted.
+// make bucket fails in such cases.
+func isValidLocationContraint(reqBody io.Reader, serverRegion string) APIErrorCode {
+	var locationContraint createBucketLocationConfiguration
+	var errCode APIErrorCode
+	errCode = ErrNone
+	e := xmlDecoder(reqBody, &locationContraint)
+	if e != nil {
+		if e == io.EOF {
+			// Do nothing.
+			// failed due to empty body. The location will be set to default value from the serverConfig.
+			// this is valid.
+			errCode = ErrNone
+		} else {
+			// Failed due to malformed configuration.
+			errCode = ErrMalformedXML
+			//writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		}
+	} else {
+		// Region obtained from the body.
+		// It should be equal to Region in serverConfig.
+		// Else ErrInvalidRegion returned.
+		// For empty value location will be to set to  default value from the serverConfig.
+		if locationContraint.Location != "" && serverRegion != locationContraint.Location {
+			//writeErrorResponse(w, r, ErrInvalidRegion, r.URL.Path)
+			errCode = ErrInvalidRegion
+		}
+	}
+	return errCode
 }
