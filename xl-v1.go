@@ -46,9 +46,6 @@ type XL struct {
 	nameSpaceLockMapMutex *sync.Mutex
 	readQuorum            int
 	writeQuorum           int
-
-	// Heal input/output channel.
-	selfHealCh chan selfHeal
 }
 
 // lockNS - locks the given resource, using a previously allocated
@@ -154,9 +151,6 @@ func newXL(disks ...string) (StorageAPI, error) {
 	if xl.writeQuorum > len(xl.storageDisks) {
 		xl.writeQuorum = len(xl.storageDisks)
 	}
-
-	// Start self heal go routine, taking inputs over self heal channel.
-	xl.selfHealRoutine()
 
 	// Return successfully initialized.
 	return xl, nil
