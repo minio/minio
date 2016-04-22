@@ -52,6 +52,7 @@ func testMakeBucket(c *check.C, create func() *objectAPI) {
 	c.Assert(err, check.IsNil)
 }
 
+// Tests verifies the functionality of PutObjectPart.
 func testMultipartObjectCreation(c *check.C, create func() *objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -390,22 +391,22 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() *objectAPI)
 
 	_, err = obj.GetObject("bucket", "dir1", 0)
 	switch err := err.ToGoError().(type) {
-	case ObjectExistsAsPrefix:
+	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1")
 	default:
 		// force a failure with a line number
-		c.Assert(err, check.Equals, "ObjectExistsAsPrefix")
+		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
 
 	_, err = obj.GetObject("bucket", "dir1/", 0)
 	switch err := err.ToGoError().(type) {
-	case ObjectExistsAsPrefix:
+	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1/")
 	default:
 		// force a failure with a line number
-		c.Assert(err, check.Equals, "ObjectExistsAsPrefix")
+		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
 }
 
