@@ -40,16 +40,16 @@ func toObjectErr(err error, params ...string) error {
 		return StorageInsufficientReadResources{}
 	case errWriteQuorum:
 		return StorageInsufficientWriteResources{}
-	case errFileNotFound:
+	case errIsNotRegular:
 		if len(params) >= 2 {
-			return ObjectNotFound{
+			return ObjectExistsAsPrefix{
 				Bucket: params[0],
 				Object: params[1],
 			}
 		}
-	case errIsNotRegular:
+	case errFileNotFound:
 		if len(params) >= 2 {
-			return ObjectExistsAsPrefix{
+			return ObjectNotFound{
 				Bucket: params[0],
 				Object: params[1],
 			}

@@ -27,7 +27,7 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
-func (s *MySuite) TestAPISuite(c *C) {
+func (s *MySuite) TestFSAPISuite(c *C) {
 	var storageList []string
 	create := func() objectAPI {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
@@ -35,6 +35,26 @@ func (s *MySuite) TestAPISuite(c *C) {
 		storageAPI, err := newFS(path)
 		objAPI := newObjectLayer(storageAPI)
 		storageList = append(storageList, path)
+		return objAPI
+	}
+	APITestSuite(c, create)
+	defer removeRoots(c, storageList)
+}
+
+func (s *MySuite) TestXLAPISuite(c *C) {
+	var storageList []string
+	create := func() objectAPI {
+		var nDisks = 16 // Maximum disks.
+		var erasureDisks []string
+		for i := 0; i < nDisks; i++ {
+			path, err := ioutil.TempDir(os.TempDir(), "minio-")
+			c.Check(err, IsNil)
+			erasureDisks = append(erasureDisks, path)
+		}
+		storageList = append(storageList, erasureDisks...)
+		storageAPI, err := newXL(erasureDisks...)
+		c.Check(err, IsNil)
+		objAPI := newObjectLayer(storageAPI)
 		return objAPI
 	}
 	APITestSuite(c, create)
