@@ -22,6 +22,8 @@ import "time"
 type BucketInfo struct {
 	Name    string
 	Created time.Time
+	Total   int64
+	Free    int64
 }
 
 // ObjectInfo - object info.
