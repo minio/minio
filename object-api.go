@@ -72,6 +72,8 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	return BucketInfo{
 		Name:    bucket,
 		Created: vi.Created,
+		Total:   vi.Total,
+		Free:    vi.Free,
 	}, nil
 }
 
@@ -91,6 +93,8 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name:    vol.Name,
 			Created: vol.Created,
+			Total:   vol.Total,
+			Free:    vol.Free,
 		})
 	}
 	return bucketInfos, nil

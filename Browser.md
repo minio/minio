@@ -35,5 +35,3 @@ JSON RPC namespace is `Web`.
 * PutObjectURL - generates a URL for upload access, requies a valid token.
   (generated URL is valid for 1hr)
 
-#### Server Operations. 
-* DiskInfo - get backend disk statistics.

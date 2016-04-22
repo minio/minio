@@ -31,7 +31,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/miniobrowser"
 )
 
@@ -99,27 +98,6 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	return nil
 }
 
-// DiskInfoRep - disk info reply.
-type DiskInfoRep struct {
-	DiskInfo  disk.Info `json:"diskInfo"`
-	UIVersion string    `json:"uiVersion"`
-}
-
-// DiskInfo - get disk statistics.
-func (web *webAPIHandlers) DiskInfo(r *http.Request, args *WebGenericArgs, reply *DiskInfoRep) error {
-	// FIXME: bring in StatFS in StorageAPI interface and uncomment the below lines.
-	// if !isJWTReqAuthenticated(r) {
-	// 	return &json2.Error{Message: "Unauthorized request"}
-	// }
-	// info, e := disk.GetInfo(web.ObjectAPI.(*Filesystem).GetRootPath())
-	// if e != nil {
-	// 	return &json2.Error{Message: e.Error()}
-	// }
-	// reply.DiskInfo = info
-	// reply.UIVersion = miniobrowser.UIVersion
-	return nil
-}
-
 // MakeBucketArgs - make bucket args.
 type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
@@ -150,6 +128,10 @@ type WebBucketInfo struct {
 	Name string `json:"name"`
 	// Date the bucket was created.
 	CreationDate time.Time `json:"creationDate"`
+	// Total storage space where the bucket resides.
+	Total int64 `json:"total"`
+	// Free storage space where the bucket resides.
+	Free int64 `json:"free"`
 }
 
 // ListBuckets - list buckets api.
@@ -167,6 +149,8 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			reply.Buckets = append(reply.Buckets, WebBucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.Created,
+				Total:        bucket.Total,
+				Free:         bucket.Free,
 			})
 		}
 	}
