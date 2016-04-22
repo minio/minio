@@ -294,7 +294,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 		return ListObjectsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashPathSeparator {
+	if delimiter != "" && delimiter != slashSeparator {
 		return ListObjectsInfo{}, probe.NewError(UnsupportedDelimiter{
 			Delimiter: delimiter,
 		})
@@ -309,7 +309,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 		}
 	}
 	recursive := true
-	if delimiter == slashPathSeparator {
+	if delimiter == slashSeparator {
 		recursive = false
 	}
 	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
@@ -325,7 +325,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
-		if delimiter == slashPathSeparator {
+		if delimiter == slashSeparator {
 			result.NextMarker = fileInfo.Name
 			if fileInfo.Mode.IsDir() {
 				result.Prefixes = append(result.Prefixes, fileInfo.Name)
