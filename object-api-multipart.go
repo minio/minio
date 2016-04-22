@@ -30,6 +30,7 @@ import (
 )
 
 const (
+	// Minio meta volume.
 	minioMetaVolume = ".minio"
 )
 
@@ -37,8 +38,9 @@ const (
 // yes returns all the files inside it.
 func (o objectAPI) checkLeafDirectory(prefixPath string) (isLeaf bool, fis []FileInfo) {
 	var allFileInfos []FileInfo
+	var markerPath string
 	for {
-		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, "", false, 1000)
+		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
 		if e != nil {
 			break
 		}
@@ -46,6 +48,7 @@ func (o objectAPI) checkLeafDirectory(prefixPath string) (isLeaf bool, fis []Fil
 		if eof {
 			break
 		}
+		markerPath = allFileInfos[len(allFileInfos)-1].Name
 	}
 	for _, fileInfo := range allFileInfos {
 		if fileInfo.Mode.IsDir() {
@@ -80,7 +83,7 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		}
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashPathSeparator {
+	if delimiter != "" && delimiter != slashSeparator {
 		return ListMultipartsInfo{}, probe.NewError(UnsupportedDelimiter{
 			Delimiter: delimiter,
 		})
@@ -93,7 +96,7 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		})
 	}
 	if uploadIDMarker != "" {
-		if strings.HasSuffix(keyMarker, slashPathSeparator) {
+		if strings.HasSuffix(keyMarker, slashSeparator) {
 			return result, probe.NewError(InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
@@ -111,13 +114,13 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	}
 
 	recursive := true
-	if delimiter == slashPathSeparator {
+	if delimiter == slashSeparator {
 		recursive = false
 	}
 	result.IsTruncated = true
 	result.MaxUploads = maxUploads
 	newMaxUploads := 0
-	// not using path.Join() as it strips off the trailing '/'.
+	// Not using path.Join() as it strips off the trailing '/'.
 	// Also bucket should always be followed by '/' even if prefix is empty.
 	prefixPath := pathJoin(bucket, prefix)
 	if recursive {
@@ -135,9 +138,9 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 				keyMarkerPath = fi.Name
 				// fi.Name will look like bucket/object/uploadID, extract object and uploadID.
 				uploadID := path.Base(fi.Name)
-				objectName := strings.TrimPrefix(path.Dir(fi.Name), bucket+slashPathSeparator)
+				objectName := strings.TrimPrefix(path.Dir(fi.Name), retainSlash(bucket))
 				if strings.Contains(uploadID, ".") {
-					// contains partnumber and md5sum info, skip this.
+					// Contains partnumber and md5sum info, skip this.
 					continue
 				}
 				result.Uploads = append(result.Uploads, uploadMetadata{
@@ -189,14 +192,14 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	var uploads []uploadMetadata
 	for _, fi := range fileInfos {
 		leaf, entries := o.checkLeafDirectory(fi.Name)
-		objectName := strings.TrimPrefix(fi.Name, bucket+slashPathSeparator)
+		objectName := strings.TrimPrefix(fi.Name, retainSlash(bucket))
 		if leaf {
 			for _, entry := range entries {
-				if strings.Contains(entry.Name, ".") {
+				if strings.Contains(path.Base(entry.Name), ".") {
 					continue
 				}
 				uploads = append(uploads, uploadMetadata{
-					Object:    strings.TrimSuffix(objectName, slashPathSeparator),
+					Object:    path.Dir(objectName),
 					UploadID:  path.Base(entry.Name),
 					Initiated: entry.ModTime,
 				})
@@ -222,7 +225,7 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 			break
 		}
 		result.NextKeyMarker = uploads[index].Object
-		if strings.HasSuffix(uploads[index].Object, slashPathSeparator) {
+		if strings.HasSuffix(uploads[index].Object, slashSeparator) {
 			// for a directory entry
 			result.CommonPrefixes = append(result.CommonPrefixes, uploads[index].Object)
 			continue
@@ -393,22 +396,24 @@ func (o objectAPI) ListObjectParts(bucket, object, uploadID string, partNumberMa
 		return ListPartsInfo{}, probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 	result := ListPartsInfo{}
-	marker := ""
+	var markerPath string
 	nextPartNumberMarker := 0
 	uploadIDPath := path.Join(bucket, object, uploadID)
 	// Figure out the marker for the next subsequent calls, if the
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
-		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+"."+strconv.Itoa(partNumberMarker)+".", "", false, 1)
+		uploadIDPartPrefix := uploadIDPath + "." + strconv.Itoa(partNumberMarker) + "."
+		fileInfos, _, e := o.storage.ListFiles(minioMetaVolume, uploadIDPartPrefix, "", false, 1)
 		if e != nil {
 			return result, probe.NewError(e)
 		}
 		if len(fileInfos) == 0 {
 			return result, probe.NewError(InvalidPart{})
 		}
-		marker = fileInfos[0].Name
+		markerPath = fileInfos[0].Name
 	}
-	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPath+".", marker, false, maxParts)
+	uploadIDPrefix := uploadIDPath + "."
+	fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, uploadIDPrefix, markerPath, false, maxParts)
 	if e != nil {
 		return result, probe.NewError(InvalidPart{})
 	}

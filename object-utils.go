@@ -23,10 +23,6 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	slashPathSeparator = "/"
-)
-
 // validBucket regexp.
 var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 
@@ -91,8 +87,17 @@ func IsValidObjectPrefix(object string) bool {
 
 }
 
-func pathJoin(path1 string, path2 string) string {
-	return strings.TrimSuffix(path1, slashPathSeparator) + slashPathSeparator + path2
+// Slash separator.
+const slashSeparator = "/"
+
+// retainSlash - retains slash from a path.
+func retainSlash(s string) string {
+	return strings.TrimSuffix(s, slashSeparator) + slashSeparator
+}
+
+// pathJoin - path join.
+func pathJoin(s1 string, s2 string) string {
+	return retainSlash(s1) + s2
 }
 
 // validates location constraint from the request body.
