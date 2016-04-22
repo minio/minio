@@ -45,13 +45,24 @@ func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
 
 // Returns slice of disks needed for ReadFile operation:
 // - slice returing readable disks.
-// - file size
+// - fileMetadata
+// - bool value indicating if selfHeal is needed.
 // - error if any.
 func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, fileMetadata, bool, error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	highestVersion := int64(0)
 	versions := make([]int64, len(xl.storageDisks))
 	quorumDisks := make([]StorageAPI, len(xl.storageDisks))
+	notFoundCount := 0
+	// If quorum says errFileNotFound return errFileNotFound
+	for _, err := range errs {
+		if err == errFileNotFound {
+			notFoundCount++
+		}
+	}
+	if notFoundCount > xl.readQuorum {
+		return nil, fileMetadata{}, false, errFileNotFound
+	}
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
 			if version := metadata.Get("file.version"); version != nil {
@@ -72,7 +83,6 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, fileMetadata, 
 			versions[index] = -1
 		}
 	}
-
 	quorumCount := 0
 	for index, version := range versions {
 		if version == highestVersion {

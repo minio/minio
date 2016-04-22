@@ -413,6 +413,7 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		return FileInfo{}, errInvalidArgument
 	}
 
+	// Acquire read lock.
 	readLock := true
 	xl.lockNS(volume, path, readLock)
 	_, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
