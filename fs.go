@@ -436,7 +436,7 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 	}
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return nil, errIsNotRegular
+		return nil, errFileNotFound
 	}
 	// Seek to requested offset.
 	_, err = file.Seek(offset, os.SEEK_SET)
