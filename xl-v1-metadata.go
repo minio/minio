@@ -96,6 +96,25 @@ func (f fileMetadata) GetModTime() (time.Time, error) {
 	return time.Parse(timeFormatAMZ, timeStrs[0])
 }
 
+// Set file Modification time.
+func (f fileMetadata) SetModTime(modTime time.Time) {
+	f.Set("file.modTime", modTime.Format(timeFormatAMZ))
+}
+
+// Get file version.
+func (f fileMetadata) GetFileVersion() (int64, error) {
+	version := f.Get("file.version")
+	if version == nil {
+		return 0, errMetadataKeyNotExist
+	}
+	return strconv.ParseInt(version[0], 10, 64)
+}
+
+// Set file version.
+func (f fileMetadata) SetFileVersion(fileVersion int64) {
+	f.Set("file.version", strconv.FormatInt(fileVersion, 10))
+}
+
 // fileMetadataDecode - file metadata decode.
 func fileMetadataDecode(reader io.Reader) (fileMetadata, error) {
 	metadata := make(fileMetadata)
