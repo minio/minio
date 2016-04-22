@@ -135,6 +135,11 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 			return nil, probe.NewError(BucketNotFound{Bucket: bucket})
 		} else if e == errFileNotFound {
 			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
+		} else if e == errIsNotRegular {
+			return nil, probe.NewError(ObjectExistsAsPrefix{
+				Bucket: bucket,
+				Object: object,
+			})
 		}
 		return nil, probe.NewError(e)
 	}
