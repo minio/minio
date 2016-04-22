@@ -487,6 +487,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	errCode := isValidLocationContraint(r.Body, serverConfig.GetRegion())
 	if errCode != ErrNone {
 		writeErrorResponse(w, r, errCode, r.URL.Path)
+		return
 	}
 	// Make bucket.
 	err := api.ObjectAPI.MakeBucket(bucket)
