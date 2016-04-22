@@ -17,54 +17,50 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	slashpath "path"
-	"strconv"
 )
 
 func (xl XL) selfHeal(volume string, path string) error {
 	totalBlocks := xl.DataBlocks + xl.ParityBlocks
 	needsSelfHeal := make([]bool, totalBlocks)
-	var metadata = make(map[string]string)
 	var readers = make([]io.Reader, totalBlocks)
 	var writers = make([]io.WriteCloser, totalBlocks)
-	for index, disk := range xl.storageDisks {
-		metadataFile := slashpath.Join(path, metadataFile)
 
-		// Start from the beginning, we are not reading partial metadata files.
-		offset := int64(0)
+	// Acquire a read lock.
+	readLock := true
+	xl.lockNS(volume, path, readLock)
+	defer xl.unlockNS(volume, path, readLock)
 
-		metadataReader, err := disk.ReadFile(volume, metadataFile, offset)
-		if err != nil {
-			if err != errFileNotFound {
-				continue
-			}
-			// Needs healing if part.json is not found
+	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	if err != nil {
+		return err
+	}
+	if !doSelfHeal {
+		return nil
+	}
+
+	size, err := metadata.GetSize()
+	if err != nil {
+		return err
+	}
+
+	for index, disk := range quorumDisks {
+		if disk == nil {
 			needsSelfHeal[index] = true
 			continue
 		}
-		defer metadataReader.Close()
-
-		decoder := json.NewDecoder(metadataReader)
-		if err = decoder.Decode(&metadata); err != nil {
-			// needs healing if parts.json is not parsable
-			needsSelfHeal[index] = true
-		}
-
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
-		erasuredPartReader, err := disk.ReadFile(volume, erasurePart, offset)
-		if err != nil {
-			if err == errFileNotFound {
-				// Needs healing if part file not found
-				needsSelfHeal[index] = true
-			}
-			return err
+		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
+		// ReedSolomon.Reconstruct() will fail later.
+		var reader io.ReadCloser
+		offset := int64(0)
+		if reader, err = xl.storageDisks[index].ReadFile(volume, erasurePart, offset); err == nil {
+			readers[index] = reader
+			defer reader.Close()
 		}
-		readers[index] = erasuredPartReader
-		defer erasuredPartReader.Close()
 	}
 
 	// Check if there is atleast one part that needs to be healed.
@@ -85,7 +81,6 @@ func (xl XL) selfHeal(volume string, path string) error {
 		if !shNeeded {
 			continue
 		}
-		var err error
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		writers[index], err = xl.storageDisks[index].CreateFile(volume, erasurePart)
 		if err != nil {
@@ -93,11 +88,6 @@ func (xl XL) selfHeal(volume string, path string) error {
 			closeAndRemoveWriters(writers...)
 			return err
 		}
-	}
-	size, err := strconv.ParseInt(metadata["file.size"], 10, 64)
-	if err != nil {
-		closeAndRemoveWriters(writers...)
-		return err
 	}
 	var totalLeft = size
 	for totalLeft > 0 {
@@ -188,69 +178,12 @@ func (xl XL) selfHeal(volume string, path string) error {
 		writers[index].Close()
 	}
 
-	// Write part.json where ever healing was done.
-	var metadataWriters = make([]io.WriteCloser, len(xl.storageDisks))
+	// Update the quorum metadata after selfheal.
+	errs := xl.setPartsMetadata(volume, path, metadata, needsSelfHeal)
 	for index, shNeeded := range needsSelfHeal {
-		if !shNeeded {
-			continue
+		if shNeeded && errs[index] != nil {
+			return errs[index]
 		}
-		metadataFile := slashpath.Join(path, metadataFile)
-		metadataWriters[index], err = xl.storageDisks[index].CreateFile(volume, metadataFile)
-		if err != nil {
-			closeAndRemoveWriters(writers...)
-			return err
-		}
-	}
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		closeAndRemoveWriters(metadataWriters...)
-		return err
-	}
-	for index, shNeeded := range needsSelfHeal {
-		if !shNeeded {
-			continue
-		}
-		_, err = metadataWriters[index].Write(metadataBytes)
-		if err != nil {
-			closeAndRemoveWriters(metadataWriters...)
-			return err
-		}
-	}
-
-	// Metadata written for all the healed parts hence Close() so that
-	// temp files can be committed.
-	for index := range xl.storageDisks {
-		if !needsSelfHeal[index] {
-			continue
-		}
-		metadataWriters[index].Close()
 	}
 	return nil
-}
-
-// self heal.
-type selfHeal struct {
-	volume string
-	path   string
-	errCh  chan<- error
-}
-
-// selfHealRoutine - starts a go routine and listens on a channel for healing requests.
-func (xl *XL) selfHealRoutine() {
-	xl.selfHealCh = make(chan selfHeal)
-
-	// Healing request can be made like this:
-	// errCh := make(chan error)
-	// xl.selfHealCh <- selfHeal{"testbucket", "testobject", errCh}
-	// fmt.Println(<-errCh)
-	go func() {
-		for sh := range xl.selfHealCh {
-			if sh.volume == "" || sh.path == "" {
-				sh.errCh <- errors.New("volume or path can not be empty")
-				continue
-			}
-			xl.selfHeal(sh.volume, sh.path)
-			sh.errCh <- nil
-		}
-	}()
 }

@@ -18,8 +18,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"strconv"
+	"time"
 )
+
+// error type when key is not found.
+var errMetadataKeyNotExist = errors.New("Key not found in fileMetadata.")
 
 // This code is built on similar ideas of http.Header.
 // Ref - https://golang.org/pkg/net/http/#Header
@@ -64,6 +70,30 @@ func (f fileMetadata) Write(writer io.Writer) error {
 	}
 	_, err = writer.Write(metadataBytes)
 	return err
+}
+
+// Get file size.
+func (f fileMetadata) GetSize() (int64, error) {
+	sizes := f.Get("file.size")
+	if sizes == nil {
+		return 0, errMetadataKeyNotExist
+	}
+	sizeStr := sizes[0]
+	return strconv.ParseInt(sizeStr, 10, 64)
+}
+
+// Set file size.
+func (f fileMetadata) SetSize(size int64) {
+	f.Set("file.size", strconv.FormatInt(size, 10))
+}
+
+// Get file Modification time.
+func (f fileMetadata) GetModTime() (time.Time, error) {
+	timeStrs := f.Get("file.modTime")
+	if timeStrs == nil {
+		return time.Time{}, errMetadataKeyNotExist
+	}
+	return time.Parse(timeFormatAMZ, timeStrs[0])
 }
 
 // fileMetadataDecode - file metadata decode.
