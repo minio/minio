@@ -45,14 +45,24 @@ func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
 
 // Returns slice of disks needed for ReadFile operation:
 // - slice returing readable disks.
-// - file size
+// - fileMetadata
+// - bool value indicating if selfHeal is needed.
 // - error if any.
-func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) {
+func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, fileMetadata, bool, error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	highestVersion := int64(0)
 	versions := make([]int64, len(xl.storageDisks))
 	quorumDisks := make([]StorageAPI, len(xl.storageDisks))
-	fileSize := int64(0)
+	notFoundCount := 0
+	// If quorum says errFileNotFound return errFileNotFound
+	for _, err := range errs {
+		if err == errFileNotFound {
+			notFoundCount++
+		}
+	}
+	if notFoundCount > xl.readQuorum {
+		return nil, fileMetadata{}, false, errFileNotFound
+	}
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
 			if version := metadata.Get("file.version"); version != nil {
@@ -60,7 +70,7 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) 
 				version, err := strconv.ParseInt(version[0], 10, 64)
 				if err != nil {
 					// Unexpected, return error.
-					return nil, 0, err
+					return nil, fileMetadata{}, false, err
 				}
 				if version > highestVersion {
 					highestVersion = version
@@ -73,7 +83,6 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) 
 			versions[index] = -1
 		}
 	}
-
 	quorumCount := 0
 	for index, version := range versions {
 		if version == highestVersion {
@@ -84,25 +93,22 @@ func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, int64, error) 
 		}
 	}
 	if quorumCount < xl.readQuorum {
-		return nil, 0, errReadQuorum
+		return nil, fileMetadata{}, false, errReadQuorum
 	}
-
+	var metadata fileMetadata
 	for index, disk := range quorumDisks {
 		if disk == nil {
 			continue
 		}
-		if size := partsMetadata[index].Get("file.size"); size != nil {
-			var err error
-			fileSize, err = strconv.ParseInt(size[0], 10, 64)
-			if err != nil {
-				return nil, 0, err
-			}
-			break
-		} else {
-			return nil, 0, errFileSize
-		}
+		metadata = partsMetadata[index]
+		break
 	}
-	return quorumDisks, fileSize, nil
+	// FIXME: take care of the situation when a disk has failed and been removed
+	// by looking at the error returned from the fs layer. fs-layer will have
+	// to return an error indicating that the disk is not available and should be
+	// different from ErrNotExist.
+	doSelfHeal := quorumCount != len(xl.storageDisks)
+	return quorumDisks, metadata, doSelfHeal, nil
 }
 
 // ReadFile - read file
@@ -115,12 +121,24 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
-	// Acquire a read lock.
 	readLock := true
+	xl.lockNS(volume, path, readLock)
+	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	xl.unlockNS(volume, path, readLock)
+	if err != nil {
+		return nil, err
+	}
+
+	if doSelfHeal {
+		if err = xl.selfHeal(volume, path); err != nil {
+			return nil, err
+		}
+	}
+
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	quorumDisks, fileSize, err := xl.getReadableDisks(volume, path)
+	fileSize, err := metadata.GetSize()
 	if err != nil {
 		return nil, err
 	}
