@@ -159,15 +159,22 @@ func (xl XL) MakeVol(volume string) error {
 	if !isValidVolname(volume) {
 		return errInvalidArgument
 	}
+	// Collect if all disks report volume exists.
+	var volumeExistsMap = make(map[int]struct{})
 	// Make a volume entry on all underlying storage disks.
-	for _, disk := range xl.storageDisks {
+	for index, disk := range xl.storageDisks {
 		if err := disk.MakeVol(volume); err != nil {
 			// We ignore error if errVolumeExists and creating a volume again.
 			if err == errVolumeExists {
+				volumeExistsMap[index] = struct{}{}
 				continue
 			}
 			return err
 		}
+	}
+	// Return err if all disks report volume exists.
+	if len(volumeExistsMap) == len(xl.storageDisks) {
+		return errVolumeExists
 	}
 	return nil
 }
@@ -177,14 +184,24 @@ func (xl XL) DeleteVol(volume string) error {
 	if !isValidVolname(volume) {
 		return errInvalidArgument
 	}
-	for _, disk := range xl.storageDisks {
+
+	// Collect if all disks report volume not found.
+	var volumeNotFoundMap = make(map[int]struct{})
+
+	// Remove a volume entry on all underlying storage disks.
+	for index, disk := range xl.storageDisks {
 		if err := disk.DeleteVol(volume); err != nil {
 			// We ignore error if errVolumeNotFound.
 			if err == errVolumeNotFound {
+				volumeNotFoundMap[index] = struct{}{}
 				continue
 			}
 			return err
 		}
+	}
+	// Return err if all disks report volume not found.
+	if len(volumeNotFoundMap) == len(xl.storageDisks) {
+		return errVolumeNotFound
 	}
 	return nil
 }
