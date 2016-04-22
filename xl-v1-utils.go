@@ -1,77 +1,36 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
-import (
-	"encoding/json"
-	"errors"
-	slashpath "path"
-	"path/filepath"
-)
-
-// Get parts.json metadata as a map slice.
-// Returns error slice indicating the failed metadata reads.
-// Read lockNS() should be done by caller.
-func (xl XL) getPartsMetadata(volume, path string) ([]fileMetadata, []error) {
-	errs := make([]error, len(xl.storageDisks))
-	metadataArray := make([]fileMetadata, len(xl.storageDisks))
-	metadataFilePath := slashpath.Join(path, metadataFile)
-	for index, disk := range xl.storageDisks {
-		offset := int64(0)
-		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
-		if err != nil {
-			errs[index] = err
-			continue
+// checkBlockSize return the size of a single block.
+// The first non-zero size is returned,
+// or 0 if all blocks are size 0.
+func checkBlockSize(blocks [][]byte) int {
+	for _, block := range blocks {
+		if len(block) != 0 {
+			return len(block)
 		}
-		defer metadataReader.Close()
-
-		metadata, err := fileMetadataDecode(metadataReader)
-		if err != nil {
-			// Unable to parse parts.json, set error.
-			errs[index] = err
-			continue
-		}
-		metadataArray[index] = metadata
 	}
-	return metadataArray, errs
+	return 0
 }
 
-// Writes/Updates `parts.json` for given file. updateParts carries
-// index of disks where `parts.json` needs to be updated.
-//
-// Returns collection of errors, indexed in accordance with input
-// updateParts order.
-// Write lockNS() should be done by caller.
-func (xl XL) setPartsMetadata(volume, path string, metadata fileMetadata, updateParts []bool) []error {
-	metadataFilePath := filepath.Join(path, metadataFile)
-	errs := make([]error, len(xl.storageDisks))
-
-	for index := range updateParts {
-		errs[index] = errors.New("Metadata not updated")
-	}
-
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		for index := range updateParts {
-			errs[index] = err
-		}
-		return errs
-	}
-
-	for index, shouldUpdate := range updateParts {
-		if !shouldUpdate {
-			continue
-		}
-		writer, err := xl.storageDisks[index].CreateFile(volume, metadataFilePath)
-		errs[index] = err
-		if err != nil {
-			continue
-		}
-		_, err = writer.Write(metadataBytes)
-		if err != nil {
-			errs[index] = err
-			safeCloseAndRemove(writer)
-			continue
-		}
-		writer.Close()
-	}
-	return errs
+// calculate the blockSize based on input length and total number of
+// data blocks.
+func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
+	curBlockSize = (inputLen + dataBlocks - 1) / dataBlocks
+	return
 }
