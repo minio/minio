@@ -43,7 +43,6 @@ type listParams struct {
 // fsStorage - implements StorageAPI interface.
 type fsStorage struct {
 	diskPath           string
-	diskInfo           disk.Info
 	minFreeDisk        int64
 	listObjectMap      map[listParams][]*treeWalker
 	listObjectMapMutex *sync.Mutex
@@ -79,20 +78,15 @@ func newFS(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
 		return nil, errInvalidArgument
 	}
-	st, e := os.Stat(diskPath)
-	if e != nil {
-		return nil, e
+	st, err := os.Stat(diskPath)
+	if err != nil {
+		return nil, err
 	}
 	if !st.IsDir() {
 		return nil, syscall.ENOTDIR
 	}
-	diskInfo, e := disk.GetInfo(diskPath)
-	if e != nil {
-		return nil, e
-	}
 	fs := fsStorage{
 		diskPath:           diskPath,
-		diskInfo:           diskInfo,
 		minFreeDisk:        5, // Minimum 5% disk should be free.
 		listObjectMap:      make(map[listParams][]*treeWalker),
 		listObjectMapMutex: &sync.Mutex{},
