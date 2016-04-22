@@ -98,16 +98,15 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 			continue
 		}
 
-		if version := metadata.Get("file.version"); version == nil {
+		version, err := metadata.GetFileVersion()
+		if err == errMetadataKeyNotExist {
 			fileQuorumVersionMap[index] = 0
-		} else {
-			// Convert string to integer.
-			fileVersion, err := strconv.ParseInt(version[0], 10, 64)
-			if err != nil {
-				continue
-			}
-			fileQuorumVersionMap[index] = fileVersion
+			continue
 		}
+		if err != nil {
+			continue
+		}
+		fileQuorumVersionMap[index] = version
 	}
 	return fileQuorumVersionMap
 }

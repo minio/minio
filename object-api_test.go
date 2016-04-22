@@ -29,7 +29,7 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestAPISuite(c *C) {
 	var storageList []string
-	create := func() *objectAPI {
+	create := func() objectAPI {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
 		storageAPI, err := newFS(path)

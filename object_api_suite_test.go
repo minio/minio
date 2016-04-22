@@ -28,7 +28,7 @@ import (
 )
 
 // APITestSuite - collection of API tests
-func APITestSuite(c *check.C, create func() *objectAPI) {
+func APITestSuite(c *check.C, create func() objectAPI) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -46,14 +46,13 @@ func APITestSuite(c *check.C, create func() *objectAPI) {
 	testMultipartObjectAbort(c, create)
 }
 
-func testMakeBucket(c *check.C, create func() *objectAPI) {
+func testMakeBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 }
 
-// Tests verifies the functionality of PutObjectPart.
-func testMultipartObjectCreation(c *check.C, create func() *objectAPI) {
+func testMultipartObjectCreation(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -83,7 +82,7 @@ func testMultipartObjectCreation(c *check.C, create func() *objectAPI) {
 	c.Assert(md5Sum, check.Equals, "3605d84b1c43b1a664aa7c0d5082d271-10")
 }
 
-func testMultipartObjectAbort(c *check.C, create func() *objectAPI) {
+func testMultipartObjectAbort(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -114,7 +113,7 @@ func testMultipartObjectAbort(c *check.C, create func() *objectAPI) {
 	c.Assert(err, check.IsNil)
 }
 
-func testMultipleObjectCreation(c *check.C, create func() *objectAPI) {
+func testMultipleObjectCreation(c *check.C, create func() objectAPI) {
 	objects := make(map[string][]byte)
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -155,7 +154,7 @@ func testMultipleObjectCreation(c *check.C, create func() *objectAPI) {
 	}
 }
 
-func testPaging(c *check.C, create func() *objectAPI) {
+func testPaging(c *check.C, create func() objectAPI) {
 	obj := create()
 	obj.MakeBucket("bucket")
 	result, err := obj.ListObjects("bucket", "", "", "", 0)
@@ -255,7 +254,7 @@ func testPaging(c *check.C, create func() *objectAPI) {
 	}
 }
 
-func testObjectOverwriteWorks(c *check.C, create func() *objectAPI) {
+func testObjectOverwriteWorks(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -276,13 +275,13 @@ func testObjectOverwriteWorks(c *check.C, create func() *objectAPI) {
 	c.Assert(r.Close(), check.IsNil)
 }
 
-func testNonExistantBucketOperations(c *check.C, create func() *objectAPI) {
+func testNonExistantBucketOperations(c *check.C, create func() objectAPI) {
 	obj := create()
 	_, err := obj.PutObject("bucket", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testBucketRecreateFails(c *check.C, create func() *objectAPI) {
+func testBucketRecreateFails(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("string")
 	c.Assert(err, check.IsNil)
@@ -290,7 +289,7 @@ func testBucketRecreateFails(c *check.C, create func() *objectAPI) {
 	c.Assert(err, check.Not(check.IsNil))
 }
 
-func testPutObjectInSubdir(c *check.C, create func() *objectAPI) {
+func testPutObjectInSubdir(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -308,7 +307,7 @@ func testPutObjectInSubdir(c *check.C, create func() *objectAPI) {
 	c.Assert(r.Close(), check.IsNil)
 }
 
-func testListBuckets(c *check.C, create func() *objectAPI) {
+func testListBuckets(c *check.C, create func() objectAPI) {
 	obj := create()
 
 	// test empty list
@@ -340,7 +339,7 @@ func testListBuckets(c *check.C, create func() *objectAPI) {
 	c.Assert(err, check.IsNil)
 }
 
-func testListBucketsOrder(c *check.C, create func() *objectAPI) {
+func testListBucketsOrder(c *check.C, create func() objectAPI) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time
 	for i := 0; i < 10; i++ {
@@ -358,7 +357,7 @@ func testListBucketsOrder(c *check.C, create func() *objectAPI) {
 	}
 }
 
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() *objectAPI) {
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	result, err := obj.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
@@ -366,7 +365,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() *objectA
 	c.Assert(len(result.Objects), check.Equals, 0)
 }
 
-func testNonExistantObjectInBucket(c *check.C, create func() *objectAPI) {
+func testNonExistantObjectInBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -381,7 +380,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() *objectAPI) {
 	}
 }
 
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() *objectAPI) {
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -410,7 +409,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() *objectAPI)
 	}
 }
 
-func testDefaultContentType(c *check.C, create func() *objectAPI) {
+func testDefaultContentType(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
