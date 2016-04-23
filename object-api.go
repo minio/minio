@@ -287,6 +287,8 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 			})
 		}
 	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
 		recursive = false
@@ -298,6 +300,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil
 	}
+
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
