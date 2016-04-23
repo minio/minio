@@ -17,8 +17,10 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"os"
+	"runtime"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/probe"
@@ -42,6 +44,9 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 			fatalIf(probe.NewError(e), "Initializing network fs failed.", nil)
 		}
 	} else {
+		if runtime.GOOS == "windows" {
+			fatalIf(probe.NewError(errors.New("")), "Initializing XL failed, not supported on windows yet.", nil)
+		}
 		// Initialize XL storage API.
 		storageAPI, e = newXL(srvCmdConfig.exportPaths...)
 		fatalIf(probe.NewError(e), "Initializing XL failed.", nil)

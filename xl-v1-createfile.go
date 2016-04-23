@@ -113,10 +113,7 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 
 // WriteErasure reads predefined blocks, encodes them and writes to
 // configured storage disks.
-func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
-	xl.lockNS(volume, path, false)
-	defer xl.unlockNS(volume, path, false)
-
+func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, bwriter *blockingWriteCloser) {
 	// Get available quorum for existing file path.
 	_, higherVersion := xl.getQuorumDisks(volume, path)
 	// Increment to have next higher version.
@@ -147,6 +144,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			// Remove previous temp writers for any failure.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(errWriteQuorum)
+			bwriter.Release(errWriteQuorum)
 			return
 		}
 
@@ -165,6 +163,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			// Remove previous temp writers for any failure.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(errWriteQuorum)
+			bwriter.Release(errWriteQuorum)
 			return
 		}
 
@@ -185,6 +184,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 				// Remove all temp writers.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
+				bwriter.Release(err)
 				return
 			}
 		}
@@ -200,6 +200,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 				// Remove all temp writers.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
+				bwriter.Release(err)
 				return
 			}
 
@@ -209,6 +210,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 				// Remove all temp writers upon error.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
+				bwriter.Release(err)
 				return
 			}
 
@@ -223,6 +225,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 					// Remove all temp writers upon error.
 					xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 					reader.CloseWithError(err)
+					bwriter.Release(err)
 					return
 				}
 				if sha512Writers[index] != nil {
@@ -272,9 +275,14 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 			// Remove temporary files.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
+			bwriter.Release(err)
 			return
 		}
 	}
+
+	// Lock right before commit to disk.
+	xl.lockNS(volume, path, false)
+	defer xl.unlockNS(volume, path, false)
 
 	// Close all writers and metadata writers in routines.
 	for index, writer := range writers {
@@ -290,6 +298,9 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader) {
 		// Safely wrote, now rename to its actual location.
 		metadataWriters[index].Close()
 	}
+
+	// Release the blocking writer.
+	bwriter.Release(nil)
 
 	// Close the pipe reader and return.
 	reader.Close()
@@ -308,9 +319,12 @@ func (xl XL) CreateFile(volume, path string) (writeCloser io.WriteCloser, err er
 	// Initialize pipe for data pipe line.
 	pipeReader, pipeWriter := io.Pipe()
 
-	// Start erasure encoding in routine, reading data block by block from pipeReader.
-	go xl.writeErasure(volume, path, pipeReader)
+	// Initialize a new blocking writer closer.
+	blockingWriter := newBlockingWriteCloser(pipeWriter)
 
-	// Return the piped writer, caller should start writing to this.
-	return pipeWriter, nil
+	// Start erasure encoding in routine, reading data block by block from pipeReader.
+	go xl.writeErasure(volume, path, pipeReader, blockingWriter)
+
+	// Return the blocking writer, caller should start writing to this.
+	return blockingWriter, nil
 }

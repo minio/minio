@@ -289,10 +289,6 @@ func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Err
 			// uploadIDPath doesn't exist, so create empty file to reserve the name
 			var w io.WriteCloser
 			if w, e = o.storage.CreateFile(minioMetaVolume, uploadIDPath); e == nil {
-				// Just write some data for erasure code, rather than zero bytes.
-				if _, e = w.Write([]byte(uploadID)); e != nil {
-					return "", probe.NewError(toObjectErr(e, minioMetaVolume, uploadIDPath))
-				}
 				// Close the writer.
 				if e = w.Close(); e != nil {
 					return "", probe.NewError(e)
