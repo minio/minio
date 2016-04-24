@@ -38,7 +38,7 @@ type networkFS struct {
 }
 
 const (
-	storageRPCPath = reservedBucket + "/rpc/storage"
+	storageRPCPath = reservedBucket + "/storage"
 )
 
 // splits network path into its components Address and Path.
@@ -78,6 +78,7 @@ func toStorageErr(err error) error {
 func newNetworkFS(networkPath string) (StorageAPI, error) {
 	// Input validation.
 	if networkPath == "" && strings.LastIndex(networkPath, ":") != -1 {
+		log.Debugf("Network path %s is malformed", networkPath)
 		return nil, errInvalidArgument
 	}
 
@@ -87,6 +88,7 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 	// Dial minio rpc storage http path.
 	rpcClient, err := rpc.DialHTTPPath("tcp", netAddr, storageRPCPath)
 	if err != nil {
+		log.Debugf("RPC HTTP dial failed for %s at path %s", netAddr, storageRPCPath)
 		return nil, err
 	}
 
@@ -116,6 +118,7 @@ func newNetworkFS(networkPath string) (StorageAPI, error) {
 func (n networkFS) MakeVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.MakeVolHandler", volume, &reply); err != nil {
+		log.Debugf("Storage.MakeVolHandler returned an error %s", err)
 		return toStorageErr(err)
 	}
 	return nil
@@ -126,6 +129,7 @@ func (n networkFS) ListVols() (vols []VolInfo, err error) {
 	ListVols := ListVolsReply{}
 	err = n.rpcClient.Call("Storage.ListVolsHandler", "", &ListVols)
 	if err != nil {
+		log.Debugf("Storage.ListVolsHandler returned an error %s", err)
 		return nil, err
 	}
 	return ListVols.Vols, nil
@@ -134,6 +138,7 @@ func (n networkFS) ListVols() (vols []VolInfo, err error) {
 // StatVol - get current Stat volume info.
 func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatVolHandler", volume, &volInfo); err != nil {
+		log.Debugf("Storage.StatVolHandler returned an error %s", err)
 		return VolInfo{}, toStorageErr(err)
 	}
 	return volInfo, nil
@@ -143,6 +148,7 @@ func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
 func (n networkFS) DeleteVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.DeleteVolHandler", volume, &reply); err != nil {
+		log.Debugf("Storage.DeleteVolHandler returned an error %s", err)
 		return toStorageErr(err)
 	}
 	return nil
@@ -162,6 +168,7 @@ func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 	go func() {
 		resp, err := n.httpClient.Post(writeURL.String(), contentType, readCloser)
 		if err != nil {
+			log.Debugf("CreateFile http POST failed to upload the data with error %s", err)
 			readCloser.CloseWithError(err)
 			return
 		}
@@ -187,6 +194,7 @@ func (n networkFS) StatFile(volume, path string) (fileInfo FileInfo, err error) 
 		Vol:  volume,
 		Path: path,
 	}, &fileInfo); err != nil {
+		log.Debugf("Storage.StatFileHandler failed with %s", err)
 		return FileInfo{}, toStorageErr(err)
 	}
 	return fileInfo, nil
@@ -203,6 +211,7 @@ func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io
 	readURL.RawQuery = readQuery.Encode()
 	resp, err := n.httpClient.Get(readURL.String())
 	if err != nil {
+		log.Debugf("ReadFile http Get failed with error %s", err)
 		return nil, err
 	}
 	if resp != nil {
@@ -226,6 +235,7 @@ func (n networkFS) ListFiles(volume, prefix, marker string, recursive bool, coun
 		Recursive: recursive,
 		Count:     count,
 	}, &listFilesReply); err != nil {
+		log.Debugf("Storage.ListFilesHandlers failed with %s", err)
 		return nil, true, toStorageErr(err)
 	}
 	// Return successfully unmarshalled results.
@@ -239,6 +249,7 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 		Vol:  volume,
 		Path: path,
 	}, &reply); err != nil {
+		log.Debugf("Storage.DeleteFileHandler failed with %s", err)
 		return toStorageErr(err)
 	}
 	return nil

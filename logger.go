@@ -43,12 +43,12 @@ type logger struct {
 }
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
-func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
+func errorIf(err *probe.Error, msg string, fields logrus.Fields) {
 	if err == nil {
 		return
 	}
 	if fields == nil {
-		fields = make(map[string]interface{})
+		fields = make(logrus.Fields)
 	}
 	fields["Error"] = struct {
 		Cause     string             `json:"cause,omitempty"`
@@ -65,12 +65,12 @@ func errorIf(err *probe.Error, msg string, fields map[string]interface{}) {
 }
 
 // fatalIf wrapper function which takes error and prints jsonic error messages.
-func fatalIf(err *probe.Error, msg string, fields map[string]interface{}) {
+func fatalIf(err *probe.Error, msg string, fields logrus.Fields) {
 	if err == nil {
 		return
 	}
 	if fields == nil {
-		fields = make(map[string]interface{})
+		fields = make(logrus.Fields)
 	}
 
 	fields["error"] = err.ToGoError()

@@ -34,15 +34,24 @@ type localFile struct {
 	*os.File
 }
 
-func enableFileLogger(filename string) {
-	file, e := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+func enableFileLogger() {
+	flogger := serverConfig.GetFileLogger()
+	if !flogger.Enable || flogger.Filename != "" {
+		return
+	}
+
+	file, e := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	fatalIf(probe.NewError(e), "Unable to open log file.", nil)
 
 	// Add a local file hook.
 	log.Hooks.Add(&localFile{file})
+
+	lvl, e := logrus.ParseLevel(flogger.Level)
+	fatalIf(probe.NewError(e), "Unknown log level detected, please fix your console logger configuration.", nil)
+
 	// Set default JSON formatter.
 	log.Formatter = new(logrus.JSONFormatter)
-	log.Level = logrus.InfoLevel // Minimum log level.
+	log.Level = lvl // Minimum log level.
 }
 
 // Fire fires the file logger hook and logs to the file.
