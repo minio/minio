@@ -471,6 +471,7 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 		}
 		lenFsFilesInfo := len(fsFilesInfo)
 		if lenFsFilesInfo != 0 {
+			// markerPath for the next disk.ListFiles() iteration.
 			markerPath = fsFilesInfo[lenFsFilesInfo-1].Name
 		}
 		if count == 0 && recursive && !strings.HasSuffix(markerPath, metadataFile) {

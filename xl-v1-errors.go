@@ -31,4 +31,4 @@ var errNumDisks = errors.New("Invalid number of disks provided, should be always
 var errModTime = errors.New("Missing 'file.modTime' in metadata")
 
 // errUnexpected - returned for any unexpected error.
-var errUnexpected = errors.New("Unexpected error")
+var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
