@@ -32,7 +32,8 @@ func (s *MySuite) TestFSAPISuite(c *C) {
 	create := func() objectAPI {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
-		storageAPI, err := newFS(path)
+		storageAPI, err := newStorageAPI(path)
+		c.Check(err, IsNil)
 		objAPI := newObjectLayer(storageAPI)
 		storageList = append(storageList, path)
 		return objAPI
@@ -52,7 +53,7 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 			erasureDisks = append(erasureDisks, path)
 		}
 		storageList = append(storageList, erasureDisks...)
-		storageAPI, err := newXL(erasureDisks...)
+		storageAPI, err := newStorageAPI(erasureDisks...)
 		c.Check(err, IsNil)
 		objAPI := newObjectLayer(storageAPI)
 		return objAPI

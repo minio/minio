@@ -79,7 +79,7 @@ func toStorageErr(err error) error {
 // Initialize new network file system.
 func newNetworkFS(networkPath string) (StorageAPI, error) {
 	// Input validation.
-	if networkPath == "" && strings.LastIndex(networkPath, ":") != -1 {
+	if networkPath == "" || strings.LastIndex(networkPath, ":") == -1 {
 		log.WithFields(logrus.Fields{
 			"networkPath": networkPath,
 		}).Debugf("Network path is malformed, should be of form <ip>:<port>:<export_dir>")
