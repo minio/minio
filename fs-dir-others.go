@@ -56,7 +56,8 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 				dirent.name = filepath.Join(dirPath, dirent.name)
 			}
 			if dirent.IsDir() {
-				dirent.name += string(os.PathSeparator)
+				// append "/" instead of "\" so that sorting is done as expected.
+				dirent.name += slashSeparator
 			}
 			if filter == nil || filter(dirent) {
 				dirents = append(dirents, dirent)
