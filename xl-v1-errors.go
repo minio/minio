@@ -29,3 +29,6 @@ var errNumDisks = errors.New("Invalid number of disks provided, should be always
 
 // errModTime - returned for missing file modtime.
 var errModTime = errors.New("Missing 'file.modTime' in metadata")
+
+// errUnexpected - returned for any unexpected error.
+var errUnexpected = errors.New("Unexpected error")
