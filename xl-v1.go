@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	slashpath "path"
-	"sort"
 	"strings"
 	"sync"
 
@@ -416,58 +415,98 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 		if isLeaf {
 			// For leaf for now we just point to the first block, make it
 			// dynamic in future based on the availability of storage disks.
-			markerPath = slashpath.Join(marker, "part.0")
+			markerPath = slashpath.Join(marker, metadataFile)
 		}
 	}
 
-	// List files.
-	fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, count)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume":    volume,
-			"prefix":    prefix,
-			"marker":    markerPath,
-			"recursive": recursive,
-			"count":     count,
-		}).Debugf("ListFiles failed with %s", err)
-		return nil, true, err
-	}
-
-	for _, fsFileInfo := range fsFilesInfo {
-		// Skip metadata files.
-		if strings.HasSuffix(fsFileInfo.Name, metadataFile) {
-			continue
+	for {
+		fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, count)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume":    volume,
+				"prefix":    prefix,
+				"marker":    markerPath,
+				"recursive": recursive,
+				"count":     count,
+			}).Debugf("ListFiles failed with %s", err)
+			return nil, true, err
 		}
-		var fileInfo FileInfo
-		var isLeaf bool
-		if fsFileInfo.Mode.IsDir() {
-			isLeaf = xl.isLeafDirectory(volume, fsFileInfo.Name)
+		for _, fsFileInfo := range fsFilesInfo {
+			// Skip metadata files.
+			if strings.HasSuffix(fsFileInfo.Name, metadataFile) {
+				continue
+			}
+			var fileInfo FileInfo
+			var isLeaf bool
+			if fsFileInfo.Mode.IsDir() {
+				isLeaf = xl.isLeafDirectory(volume, fsFileInfo.Name)
+			}
+			if isLeaf || !fsFileInfo.Mode.IsDir() {
+				// Extract the parent of leaf directory or file to get the
+				// actual name.
+				path := slashpath.Dir(fsFileInfo.Name)
+				fileInfo, err = xl.extractFileInfo(volume, path)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"volume": volume,
+						"path":   path,
+					}).Debugf("extractFileInfo failed with %s", err)
+					// For a leaf directory, if err is FileNotFound then
+					// perhaps has a missing metadata. Ignore it and let
+					// healing finish its job it will become available soon.
+					if err == errFileNotFound {
+						continue
+					}
+					// For any other errors return to the caller.
+					return nil, true, err
+				}
+			} else {
+				fileInfo = fsFileInfo
+			}
+			filesInfo = append(filesInfo, fileInfo)
+			count--
+			if count == 0 {
+				break
+			}
 		}
-		if isLeaf || !fsFileInfo.Mode.IsDir() {
-			// Extract the parent of leaf directory or file to get the
-			// actual name.
-			path := slashpath.Dir(fsFileInfo.Name)
-			fileInfo, err = xl.extractFileInfo(volume, path)
+		lenFsFilesInfo := len(fsFilesInfo)
+		if lenFsFilesInfo != 0 {
+			markerPath = fsFilesInfo[lenFsFilesInfo-1].Name
+		}
+		if count == 0 && recursive && !strings.HasSuffix(markerPath, metadataFile) {
+			// If last entry is not part.json then loop once more to check if we
+			// have reached eof.
+			fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, 1)
 			if err != nil {
 				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Debugf("extractFileInfo failed with %s", err)
-				// For a leaf directory, if err is FileNotFound then
-				// perhaps has a missing metadata. Ignore it and let
-				// healing finish its job it will become available soon.
-				if err == errFileNotFound {
-					continue
-				}
-				// For any other errors return to the caller.
+					"volume":    volume,
+					"prefix":    prefix,
+					"marker":    markerPath,
+					"recursive": recursive,
+					"count":     1,
+				}).Debugf("ListFiles failed with %s", err)
 				return nil, true, err
 			}
-		} else {
-			fileInfo = fsFileInfo
+			if !eof {
+				// part.N and part.json are always in pairs and hence this
+				// entry has to be part.json. If not better to manually investigate
+				// and fix it.
+				// For the next ListFiles() call we can safely assume that the
+				// marker is "object/part.json"
+				if !strings.HasSuffix(fsFilesInfo[0].Name, metadataFile) {
+					log.WithFields(logrus.Fields{
+						"volume":          volume,
+						"prefix":          prefix,
+						"fsFileInfo.Name": fsFilesInfo[0].Name,
+					}).Debugf("ListFiles failed with %s, expected %s to be a part.json file.", err, fsFilesInfo[0].Name)
+					return nil, true, errUnexpected
+				}
+			}
 		}
-		filesInfo = append(filesInfo, fileInfo)
+		if count == 0 || eof {
+			break
+		}
 	}
-	sort.Sort(byFileInfoName(filesInfo))
 	return filesInfo, eof, nil
 }
 
