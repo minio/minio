@@ -106,10 +106,7 @@ func TestObjectAPIIsUploadIDExists(t *testing.T) {
 
 	// UploadID file shouldn't exist.
 	isExists, e := obj.isUploadIDExists(bucket, object, "abc")
-	if e == nil {
-		t.Fatal(e.Error())
-	}
-	if isExists {
+	if e == nil && isExists {
 		t.Fatal("Expected uploadIDPath to not to exist.")
 	}
 
