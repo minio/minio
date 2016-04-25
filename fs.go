@@ -132,25 +132,24 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
-// removeDuplicateVols - remove duplicate volumes.
-func removeDuplicateVols(vols []VolInfo) []VolInfo {
-	length := len(vols) - 1
-	for i := 0; i < length; i++ {
-		for j := i + 1; j <= length; j++ {
-			if vols[i].Name == vols[j].Name {
-				// Pick the latest volume, if there is a duplicate.
-				if vols[i].Created.Sub(vols[j].Created) > 0 {
-					vols[i] = vols[length]
-				} else {
-					vols[j] = vols[length]
-				}
-				vols = vols[0:length]
-				length--
-				j--
-			}
+func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
+	// Use map to record duplicates as we find them.
+	result := []VolInfo{}
+
+	m := make(map[string]VolInfo)
+	for _, v := range volsInfo {
+		if _, found := m[v.Name]; !found {
+			m[v.Name] = v
 		}
 	}
-	return vols
+
+	result = make([]VolInfo, 0, len(m))
+	for _, v := range m {
+		result = append(result, v)
+	}
+
+	// Return the new slice.
+	return result
 }
 
 // gets all the unique directories from diskPath.
@@ -184,8 +183,7 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 			Created: fi.ModTime(),
 		})
 	}
-	volsInfo = removeDuplicateVols(volsInfo)
-	return volsInfo, nil
+	return removeDuplicateVols(volsInfo), nil
 }
 
 // getVolumeDir - will convert incoming volume names to
@@ -359,9 +357,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		} else if strings.Contains(err.Error(), "directory is not empty") {
-			// On windows the string is
-			// slightly different, handle it
-			// here.
+			// On windows the string is slightly different, handle it here.
 			return errVolumeNotEmpty
 		} else if strings.Contains(err.Error(), "directory not empty") {
 			// Hopefully for all other
@@ -371,7 +367,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 		}
 		return err
 	}
-	return err
+	return nil
 }
 
 // Save the goroutine reference in the map
@@ -466,7 +462,8 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 	// Verify if prefix exists.
 	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
 	prefixRootDir := filepath.Join(volumeDir, prefixDir)
-	if status, err := isDirExist(prefixRootDir); !status {
+	var status bool
+	if status, err = isDirExist(prefixRootDir); !status {
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
@@ -648,7 +645,10 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
-		log.Debugf("File is %s", errIsNotRegular)
+		log.WithFields(logrus.Fields{
+			"diskPath": s.diskPath,
+			"filePath": filePath,
+		}).Debugf("File is %s.", errIsNotRegular)
 		return FileInfo{}, errFileNotFound
 	}
 	return FileInfo{

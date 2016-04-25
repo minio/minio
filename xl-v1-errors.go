@@ -16,26 +16,16 @@
 
 package main
 
-import (
-	"os"
-	"time"
-)
+import "errors"
 
-// VolInfo - volume info
-type VolInfo struct {
-	Name    string
-	Created time.Time
-	Total   int64
-	Free    int64
-	FSType  string
-}
+// errFileSize - returned for missing file size.
+var errFileSize = errors.New("Missing 'file.size' in metadata")
 
-// FileInfo - file stat information.
-type FileInfo struct {
-	Volume  string
-	Name    string
-	MD5Sum  string
-	ModTime time.Time
-	Size    int64
-	Mode    os.FileMode
-}
+// errMaxDisks - returned for reached maximum of disks.
+var errMaxDisks = errors.New("Total number of disks specified is higher than supported maximum of '16'")
+
+// errNumDisks - returned for odd numebr of disks.
+var errNumDisks = errors.New("Invalid number of disks provided, should be always multiples of '2'")
+
+// errModTime - returned for missing file modtime.
+var errModTime = errors.New("Missing 'file.modTime' in metadata")

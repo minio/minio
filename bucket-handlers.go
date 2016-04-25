@@ -348,7 +348,13 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	errorIf(err.Trace(), "ListBuckets failed.", nil)
-	writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+	switch err.ToGoError().(type) {
+	case StorageInsufficientReadResources:
+		writeErrorResponse(w, r, ErrInsufficientReadResources, r.URL.Path)
+	default:
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+	}
+
 }
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
@@ -628,6 +634,8 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
+		case StorageInsufficientReadResources:
+			writeErrorResponse(w, r, ErrInsufficientReadResources, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}

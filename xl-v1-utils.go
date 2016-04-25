@@ -16,26 +16,21 @@
 
 package main
 
-import (
-	"os"
-	"time"
-)
-
-// VolInfo - volume info
-type VolInfo struct {
-	Name    string
-	Created time.Time
-	Total   int64
-	Free    int64
-	FSType  string
+// checkBlockSize return the size of a single block.
+// The first non-zero size is returned,
+// or 0 if all blocks are size 0.
+func checkBlockSize(blocks [][]byte) int {
+	for _, block := range blocks {
+		if len(block) != 0 {
+			return len(block)
+		}
+	}
+	return 0
 }
 
-// FileInfo - file stat information.
-type FileInfo struct {
-	Volume  string
-	Name    string
-	MD5Sum  string
-	ModTime time.Time
-	Size    int64
-	Mode    os.FileMode
+// calculate the blockSize based on input length and total number of
+// data blocks.
+func getEncodedBlockLen(inputLen, dataBlocks int) (curBlockSize int) {
+	curBlockSize = (inputLen + dataBlocks - 1) / dataBlocks
+	return
 }

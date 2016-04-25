@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/minio/minio/pkg/mimedb"
@@ -33,8 +34,8 @@ type objectAPI struct {
 	storage StorageAPI
 }
 
-func newObjectLayer(storage StorageAPI) *objectAPI {
-	return &objectAPI{storage}
+func newObjectLayer(storage StorageAPI) objectAPI {
+	return objectAPI{storage}
 }
 
 /// Bucket operations
@@ -46,12 +47,16 @@ func (o objectAPI) MakeBucket(bucket string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if e := o.storage.MakeVol(bucket); e != nil {
-		if e == errVolumeExists {
-			return probe.NewError(BucketExists{Bucket: bucket})
-		} else if e == errDiskFull {
-			return probe.NewError(StorageFull{})
+		return probe.NewError(toObjectErr(e, bucket))
+	}
+	// This happens for the first time, but keep this here since this
+	// is the only place where it can be made expensive optimizing all
+	// other calls.
+	// Create minio meta volume, if it doesn't exist yet.
+	if e := o.storage.MakeVol(minioMetaVolume); e != nil {
+		if e != errVolumeExists {
+			return probe.NewError(toObjectErr(e, minioMetaVolume))
 		}
-		return probe.NewError(e)
 	}
 	return nil
 }
@@ -64,10 +69,7 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	}
 	vi, e := o.storage.StatVol(bucket)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return BucketInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return BucketInfo{}, probe.NewError(e)
+		return BucketInfo{}, probe.NewError(toObjectErr(e, bucket))
 	}
 	return BucketInfo{
 		Name:    bucket,
@@ -77,12 +79,19 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	}, nil
 }
 
+// byBucketName is a collection satisfying sort.Interface.
+type byBucketName []BucketInfo
+
+func (d byBucketName) Len() int           { return len(d) }
+func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
 // ListBuckets - list buckets.
 func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 	var bucketInfos []BucketInfo
 	vols, e := o.storage.ListVols()
 	if e != nil {
-		return nil, probe.NewError(e)
+		return nil, probe.NewError(toObjectErr(e))
 	}
 	for _, vol := range vols {
 		// StorageAPI can send volume names which are incompatible
@@ -97,6 +106,7 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 			Free:    vol.Free,
 		})
 	}
+	sort.Sort(byBucketName(bucketInfos))
 	return bucketInfos, nil
 }
 
@@ -107,12 +117,7 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 		return probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
 	if e := o.storage.DeleteVol(bucket); e != nil {
-		if e == errVolumeNotFound {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errVolumeNotEmpty {
-			return probe.NewError(BucketNotEmpty{Bucket: bucket})
-		}
-		return probe.NewError(e)
+		return probe.NewError(toObjectErr(e))
 	}
 	return nil
 }
@@ -131,17 +136,7 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 	}
 	r, e := o.storage.ReadFile(bucket, object, startOffset)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return nil, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errFileNotFound {
-			return nil, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-		} else if e == errIsNotRegular {
-			return nil, probe.NewError(ObjectExistsAsPrefix{
-				Bucket: bucket,
-				Object: object,
-			})
-		}
-		return nil, probe.NewError(e)
+		return nil, probe.NewError(toObjectErr(e, bucket, object))
 	}
 	return r, nil
 }
@@ -158,14 +153,7 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}
 	fi, e := o.storage.StatFile(bucket, object)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return ObjectInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		} else if e == errFileNotFound || e == errIsNotRegular {
-			return ObjectInfo{}, probe.NewError(ObjectNotFound{Bucket: bucket, Object: object})
-			// Handle more lower level errors if needed.
-		} else {
-			return ObjectInfo{}, probe.NewError(e)
-		}
+		return ObjectInfo{}, probe.NewError(toObjectErr(e, bucket, object))
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {
@@ -213,19 +201,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return "", probe.NewError(BucketNotFound{
-				Bucket: bucket,
-			})
-		} else if e == errIsNotRegular {
-			return "", probe.NewError(ObjectExistsAsPrefix{
-				Bucket: bucket,
-				Object: object,
-			})
-		} else if e == errDiskFull {
-			return "", probe.NewError(StorageFull{})
-		}
-		return "", probe.NewError(e)
+		return "", probe.NewError(toObjectErr(e, bucket, object))
 	}
 
 	// Initialize md5 writer.
@@ -237,15 +213,16 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
-			safeCloseAndRemove(fileWriter)
-			if e == io.ErrUnexpectedEOF {
-				return "", probe.NewError(IncompleteBody{})
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", probe.NewError(clErr)
 			}
-			return "", probe.NewError(e)
+			return "", probe.NewError(toObjectErr(e))
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", probe.NewError(clErr)
+			}
 			return "", probe.NewError(e)
 		}
 	}
@@ -258,7 +235,9 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			safeCloseAndRemove(fileWriter)
+			if e = safeCloseAndRemove(fileWriter); e != nil {
+				return "", probe.NewError(e)
+			}
 			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -267,7 +246,7 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 		return "", probe.NewError(e)
 	}
 
-	// Return md5sum.
+	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
 
@@ -280,16 +259,7 @@ func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
 		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	if e := o.storage.DeleteFile(bucket, object); e != nil {
-		if e == errVolumeNotFound {
-			return probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		if e == errFileNotFound {
-			return probe.NewError(ObjectNotFound{
-				Bucket: bucket,
-				Object: object,
-			})
-		}
-		return probe.NewError(e)
+		return probe.NewError(toObjectErr(e, bucket, object))
 	}
 	return nil
 }
@@ -317,20 +287,20 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 			})
 		}
 	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
 		recursive = false
 	}
 	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
 	if e != nil {
-		if e == errVolumeNotFound {
-			return ListObjectsInfo{}, probe.NewError(BucketNotFound{Bucket: bucket})
-		}
-		return ListObjectsInfo{}, probe.NewError(e)
+		return ListObjectsInfo{}, probe.NewError(toObjectErr(e, bucket))
 	}
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil
 	}
+
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
@@ -345,7 +315,7 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 			Name:    fileInfo.Name,
 			ModTime: fileInfo.ModTime,
 			Size:    fileInfo.Size,
-			IsDir:   fileInfo.Mode.IsDir(),
+			IsDir:   false,
 		})
 	}
 	return result, nil

@@ -71,6 +71,7 @@ getdeps: checks
 	@go get -u github.com/fzipp/gocyclo && echo "Installed gocyclo:"
 	@go get -u github.com/remyoudompheng/go-misc/deadcode && echo "Installed deadcode:"
 	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"
+	@go get -u github.com/gordonklaus/ineffassign && echo "Installed ineffassign:"
 
 verifiers: vet fmt lint cyclo spelling
 
@@ -90,6 +91,10 @@ lint:
 	@echo "Running $@:"
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint *.go
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint github.com/minio/minio/pkg...
+
+ineffassign:
+	@echo "Running $@:"
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/ineffassign .
 
 cyclo:
 	@echo "Running $@:"

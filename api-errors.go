@@ -105,6 +105,10 @@ const (
 	ErrInvalidQuerySignatureAlgo
 	ErrInvalidQueryParams
 	// Add new error codes here.
+
+	// Extended errors.
+	ErrInsufficientReadResources
+	ErrInsufficientWriteResources
 )
 
 // error code to APIError structure, these fields carry respective
@@ -183,6 +187,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInternalError: {
 		Code:           "InternalError",
 		Description:    "We encountered an internal error, please try again.",
+		HTTPStatusCode: http.StatusInternalServerError,
+	},
+	ErrInsufficientReadResources: {
+		Code:           "InternalError",
+		Description:    "We cannot satisfy sufficient read resources requested at this moment, please try again.",
+		HTTPStatusCode: http.StatusInternalServerError,
+	},
+	ErrInsufficientWriteResources: {
+		Code:           "InternalError",
+		Description:    "We cannot satisfy sufficient write resources requested at this moment, please try again.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrInvalidAccessKeyID: {
