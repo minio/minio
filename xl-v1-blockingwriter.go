@@ -25,43 +25,26 @@ import (
 type blockingWriteCloser struct {
 	writer  io.WriteCloser  // Embedded writer.
 	release *sync.WaitGroup // Waitgroup for atomicity.
-	mutex   *sync.Mutex     // Mutex for thread safety.
 	err     error
 }
 
 // Write to the underlying writer.
 func (b *blockingWriteCloser) Write(data []byte) (int, error) {
-	n, err := b.writer.Write(data)
-	if err != nil {
-		b.mutex.Lock()
-		b.err = err
-		b.mutex.Unlock()
-	}
-	return n, b.err
+	return b.writer.Write(data)
 }
 
 // Close blocks until another goroutine calls Release(error). Returns
 // error code if either writer fails or Release is called with an error.
 func (b *blockingWriteCloser) Close() error {
 	err := b.writer.Close()
-	if err != nil {
-		b.mutex.Lock()
-		b.err = err
-		b.mutex.Unlock()
-	}
 	b.release.Wait()
-	return b.err
+	return err
 }
 
 // Release the Close, causing it to unblock. Only call this
 // once. Calling it multiple times results in a panic.
-func (b *blockingWriteCloser) Release(err error) {
+func (b *blockingWriteCloser) Release() {
 	b.release.Done()
-	if err != nil {
-		b.mutex.Lock()
-		b.err = err
-		b.mutex.Unlock()
-	}
 	return
 }
 
@@ -74,7 +57,6 @@ func newBlockingWriteCloser(writer io.WriteCloser) *blockingWriteCloser {
 	wg.Add(1)
 	return &blockingWriteCloser{
 		writer:  writer,
-		mutex:   &sync.Mutex{},
 		release: wg,
 	}
 }
