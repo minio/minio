@@ -21,42 +21,44 @@ import (
 	"sync"
 )
 
-// blockingWriteCloser is a WriteCloser that blocks until released.
-type blockingWriteCloser struct {
-	writer  io.WriteCloser  // Embedded writer.
-	release *sync.WaitGroup // Waitgroup for atomicity.
-	err     error
+// waitCloser implements a Closer that blocks until released, this
+// prevents the writer closing one end of a pipe while making sure
+// that all data is written and committed to disk on the end.
+// Additionally this also implements Write().
+type waitCloser struct {
+	wg     *sync.WaitGroup // Waitgroup for atomicity.
+	writer io.WriteCloser  // Embedded writer.
 }
 
 // Write to the underlying writer.
-func (b *blockingWriteCloser) Write(data []byte) (int, error) {
+func (b *waitCloser) Write(data []byte) (int, error) {
 	return b.writer.Write(data)
 }
 
 // Close blocks until another goroutine calls Release(error). Returns
 // error code if either writer fails or Release is called with an error.
-func (b *blockingWriteCloser) Close() error {
+func (b *waitCloser) Close() error {
 	err := b.writer.Close()
-	b.release.Wait()
+	b.wg.Wait()
 	return err
 }
 
-// Release the Close, causing it to unblock. Only call this
+// release the Close, causing it to unblock. Only call this
 // once. Calling it multiple times results in a panic.
-func (b *blockingWriteCloser) Release() {
-	b.release.Done()
+func (b *waitCloser) release() {
+	b.wg.Done()
 	return
 }
 
-// newBlockingWriteCloser Creates a new write closer that must be
+// newWaitCloser creates a new write closer that must be
 // released by the read consumer.
-func newBlockingWriteCloser(writer io.WriteCloser) *blockingWriteCloser {
+func newWaitCloser(writer io.WriteCloser) *waitCloser {
 	// Wait group for the go-routine.
 	wg := &sync.WaitGroup{}
 	// Add to the wait group to wait for.
 	wg.Add(1)
-	return &blockingWriteCloser{
-		writer:  writer,
-		release: wg,
+	return &waitCloser{
+		wg:     wg,
+		writer: writer,
 	}
 }
