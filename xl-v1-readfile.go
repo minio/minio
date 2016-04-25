@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
+
+	"github.com/Sirupsen/logrus"
 )
 
 // ReadFile - read file
@@ -33,25 +35,39 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, errInvalidArgument
 	}
 
+	// Acquire a read lock.
 	readLock := true
 	xl.lockNS(volume, path, readLock)
 	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
 	xl.unlockNS(volume, path, readLock)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("Get readable disks failed with %s", err)
 		return nil, err
 	}
 
 	if doSelfHeal {
-		if err = xl.selfHeal(volume, path); err != nil {
+		if err = xl.doHealFile(volume, path); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("doHealFile failed with %s", err)
 			return nil, err
 		}
 	}
 
+	// Acquire read lock again.
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
 	fileSize, err := metadata.GetSize()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("Failed to get file size, %s", err)
 		return nil, err
 	}
 
@@ -102,8 +118,11 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
-				err = errors.New("Data likely corrupted, all blocks are zero in length.")
-				pipeWriter.CloseWithError(err)
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("%s", errDataCorrupt)
+				pipeWriter.CloseWithError(errDataCorrupt)
 				return
 			}
 
@@ -111,6 +130,10 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			var ok bool
 			ok, err = xl.ReedSolomon.Verify(enBlocks)
 			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("ReedSolomon verify failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}
@@ -125,18 +148,30 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				}
 				err = xl.ReedSolomon.Reconstruct(enBlocks)
 				if err != nil {
+					log.WithFields(logrus.Fields{
+						"volume": volume,
+						"path":   path,
+					}).Debugf("ReedSolomon reconstruct failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
 				// Verify reconstructed blocks again.
 				ok, err = xl.ReedSolomon.Verify(enBlocks)
 				if err != nil {
+					log.WithFields(logrus.Fields{
+						"volume": volume,
+						"path":   path,
+					}).Debugf("ReedSolomon verify failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
 				if !ok {
 					// Blocks cannot be reconstructed, corrupted data.
 					err = errors.New("Verification failed after reconstruction, data likely corrupted.")
+					log.WithFields(logrus.Fields{
+						"volume": volume,
+						"path":   path,
+					}).Debugf("%s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
@@ -145,6 +180,10 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			// Join the decoded blocks.
 			err = xl.ReedSolomon.Join(pipeWriter, enBlocks, curBlockSize)
 			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("ReedSolomon joining decoded blocks failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}
