@@ -38,14 +38,21 @@ const erasureBlockSize = 4 * 1024 * 1024 // 4MiB.
 func (xl XL) cleanupCreateFileOps(volume, path string, writers ...io.WriteCloser) {
 	closeAndRemoveWriters(writers...)
 	for _, disk := range xl.storageDisks {
-		disk.DeleteFile(volume, path)
+		if err := disk.DeleteFile(volume, path); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Errorf("DeleteFile failed with %s", err)
+		}
 	}
 }
 
 // Close and remove writers if they are safeFile.
 func closeAndRemoveWriters(writers ...io.WriteCloser) {
 	for _, writer := range writers {
-		safeCloseAndRemove(writer)
+		if err := safeCloseAndRemove(writer); err != nil {
+			log.Errorf("Closing writer failed with %s", err)
+		}
 	}
 }
 
@@ -128,9 +135,9 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 
 // WriteErasure reads predefined blocks, encodes them and writes to
 // configured storage disks.
-func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, bwriter *blockingWriteCloser) {
+func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *waitCloser) {
 	// Release the block writer upon function return.
-	defer bwriter.Release()
+	defer wcloser.release()
 
 	// Get available quorum for existing file path.
 	_, higherVersion := xl.getQuorumDisks(volume, path)
@@ -335,12 +342,12 @@ func (xl XL) CreateFile(volume, path string) (writeCloser io.WriteCloser, err er
 	// Initialize pipe for data pipe line.
 	pipeReader, pipeWriter := io.Pipe()
 
-	// Initialize a new blocking writer closer.
-	blockingWriter := newBlockingWriteCloser(pipeWriter)
+	// Initialize a new wait closer, implements both Write and Close.
+	wcloser := newWaitCloser(pipeWriter)
 
 	// Start erasure encoding in routine, reading data block by block from pipeReader.
-	go xl.writeErasure(volume, path, pipeReader, blockingWriter)
+	go xl.writeErasure(volume, path, pipeReader, wcloser)
 
-	// Return the blocking writer, caller should start writing to this.
-	return blockingWriter, nil
+	// Return the writer, caller should start writing to this.
+	return wcloser, nil
 }

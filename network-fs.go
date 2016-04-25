@@ -184,7 +184,7 @@ func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Debugf("CreateFile http POST failed to upload the data with error %s", err)
+			}).Debugf("CreateFile HTTP POST failed to upload data with error %s", err)
 			readCloser.CloseWithError(err)
 			return
 		}
