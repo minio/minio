@@ -86,7 +86,7 @@ func TestGetObjectInfo(t *testing.T) {
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
 		{"test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
 		// Test case with existing bucket but object name set to a directory (Test number 13).
-		{"test-getobjectinfo", "Asia", ObjectInfo{}, ObjectExistsAsPrefix{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
+		{"test-getobjectinfo", "Asia", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
 		// Valid case with existing object (Test number 14).
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}

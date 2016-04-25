@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -164,6 +165,9 @@ func (xl XL) MakeVol(volume string) error {
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
 		if err := disk.MakeVol(volume); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+			}).Debugf("MakeVol failed with %s", err)
 			// We ignore error if errVolumeExists and creating a volume again.
 			if err == errVolumeExists {
 				volumeExistsMap[index] = struct{}{}
@@ -191,6 +195,9 @@ func (xl XL) DeleteVol(volume string) error {
 	// Remove a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
 		if err := disk.DeleteVol(volume); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+			}).Debugf("DeleteVol failed with %s", err)
 			// We ignore error if errVolumeNotFound.
 			if err == errVolumeNotFound {
 				volumeNotFoundMap[index] = struct{}{}
@@ -260,6 +267,11 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 		} else if err == errVolumeNotFound {
 			// Count total amount of volume not found errors.
 			volumeNotFoundErrCnt++
+		} else if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+			}).Debugf("StatVol failed with %s", err)
+			return VolInfo{}, err
 		}
 	}
 
@@ -285,8 +297,15 @@ func (xl XL) isLeafDirectory(volume, leafPath string) (isLeaf bool) {
 	var allFileInfos []FileInfo
 	var markerPath string
 	for {
-		fileInfos, eof, e := xl.storageDisks[0].ListFiles(volume, leafPath, markerPath, false, 1000)
-		if e != nil {
+		fileInfos, eof, err := xl.storageDisks[0].ListFiles(volume, leafPath, markerPath, false, 1000)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume":     volume,
+				"leafPath":   leafPath,
+				"markerPath": markerPath,
+				"recursive":  false,
+				"count":      1000,
+			}).Debugf("ListFiles failed with %s", err)
 			break
 		}
 		allFileInfos = append(allFileInfos, fileInfos...)
@@ -318,6 +337,11 @@ func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
 	disk := xl.storageDisks[0]
 	metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   metadataFilePath,
+			"offset": offset,
+		}).Debugf("ReadFile failed with %s", err)
 		return nil, err
 	}
 	// Close metadata reader.
@@ -325,6 +349,11 @@ func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
 
 	metadata, err := fileMetadataDecode(metadataReader)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   metadataFilePath,
+			"offset": offset,
+		}).Debugf("fileMetadataDecode failed with %s", err)
 		return nil, err
 	}
 	return metadata, nil
@@ -338,14 +367,26 @@ func (xl XL) extractFileInfo(volume, path string) (FileInfo, error) {
 
 	metadata, err := xl.extractMetadata(volume, path)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("extractMetadata failed with %s", err)
 		return FileInfo{}, err
 	}
 	fileSize, err := metadata.GetSize()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("GetSize failed with %s", err)
 		return FileInfo{}, err
 	}
 	fileModTime, err := metadata.GetModTime()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("GetModTime failed with %s", err)
 		return FileInfo{}, err
 	}
 	fileInfo.Size = fileSize
@@ -382,6 +423,13 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 	// List files.
 	fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, count)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume":    volume,
+			"prefix":    prefix,
+			"marker":    markerPath,
+			"recursive": recursive,
+			"count":     count,
+		}).Debugf("ListFiles failed with %s", err)
 		return nil, true, err
 	}
 
@@ -401,6 +449,10 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 			path := slashpath.Dir(fsFileInfo.Name)
 			fileInfo, err = xl.extractFileInfo(volume, path)
 			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("extractFileInfo failed with %s", err)
 				// For a leaf directory, if err is FileNotFound then
 				// perhaps has a missing metadata. Ignore it and let
 				// healing finish its job it will become available soon.
@@ -436,11 +488,19 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	_, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
 	xl.unlockNS(volume, path, readLock)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("getReadableDisks failed with %s", err)
 		return FileInfo{}, err
 	}
 
 	if doSelfHeal {
-		if err = xl.selfHeal(volume, path); err != nil {
+		if err = xl.doHealFile(volume, path); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("doHealFile failed with %s", err)
 			return FileInfo{}, err
 		}
 	}
@@ -448,10 +508,18 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	// Extract metadata.
 	size, err := metadata.GetSize()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("GetSize failed with %s", err)
 		return FileInfo{}, err
 	}
 	modTime, err := metadata.GetModTime()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("GetModTime failed with %s", err)
 		return FileInfo{}, err
 	}
 
@@ -478,11 +546,19 @@ func (xl XL) DeleteFile(volume, path string) error {
 		erasureFilePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		err := disk.DeleteFile(volume, erasureFilePart)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("DeleteFile failed with %s", err)
 			return err
 		}
 		metadataFilePath := slashpath.Join(path, metadataFile)
 		err = disk.DeleteFile(volume, metadataFilePath)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("DeleteFile failed with %s", err)
 			return err
 		}
 	}

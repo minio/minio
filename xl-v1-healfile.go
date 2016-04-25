@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
+
+	"github.com/Sirupsen/logrus"
 )
 
-func (xl XL) selfHeal(volume string, path string) error {
+// doSelfHeal - heals the file at path.
+func (xl XL) doHealFile(volume string, path string) error {
 	totalBlocks := xl.DataBlocks + xl.ParityBlocks
-	needsSelfHeal := make([]bool, totalBlocks)
+	needsHeal := make([]bool, totalBlocks)
 	var readers = make([]io.Reader, totalBlocks)
 	var writers = make([]io.WriteCloser, totalBlocks)
 
@@ -34,22 +37,30 @@ func (xl XL) selfHeal(volume string, path string) error {
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	quorumDisks, metadata, doHeal, err := xl.getReadableDisks(volume, path)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("Get readable disks failed with %s", err)
 		return err
 	}
-	if !doSelfHeal {
+	if !doHeal {
 		return nil
 	}
 
 	size, err := metadata.GetSize()
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Debugf("Failed to get file size, %s", err)
 		return err
 	}
 
 	for index, disk := range quorumDisks {
 		if disk == nil {
-			needsSelfHeal[index] = true
+			needsHeal[index] = true
 			continue
 		}
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
@@ -64,26 +75,30 @@ func (xl XL) selfHeal(volume string, path string) error {
 	}
 
 	// Check if there is atleast one part that needs to be healed.
-	atleastOneSelfHeal := false
-	for _, shNeeded := range needsSelfHeal {
-		if shNeeded {
-			atleastOneSelfHeal = true
+	atleastOneHeal := false
+	for _, healNeeded := range needsHeal {
+		if healNeeded {
+			atleastOneHeal = true
 			break
 		}
 	}
-	if !atleastOneSelfHeal {
+	if !atleastOneHeal {
 		// Return if healing not needed anywhere.
 		return nil
 	}
 
 	// create writers for parts where healing is needed.
-	for index, shNeeded := range needsSelfHeal {
-		if !shNeeded {
+	for index, healNeeded := range needsHeal {
+		if !healNeeded {
 			continue
 		}
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		writers[index], err = xl.storageDisks[index].CreateFile(volume, erasurePart)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("CreateFile failed with error %s", err)
 			// Unexpected error
 			closeAndRemoveWriters(writers...)
 			return err
@@ -107,63 +122,86 @@ func (xl XL) selfHeal(volume string, path string) error {
 			// ReedSolomon.Verify() expects that slice is not nil even if the particular
 			// part needs healing.
 			enBlocks[index] = make([]byte, curBlockSize)
-			if needsSelfHeal[index] {
+			if needsHeal[index] {
 				// Skip reading if the part needs healing.
 				continue
 			}
-			_, e := io.ReadFull(reader, enBlocks[index])
-			if e != nil && e != io.ErrUnexpectedEOF {
+			_, err = io.ReadFull(reader, enBlocks[index])
+			if err != nil && err != io.ErrUnexpectedEOF {
 				enBlocks[index] = nil
 			}
 		}
 
 		// Check blocks if they are all zero in length.
 		if checkBlockSize(enBlocks) == 0 {
-			err = errors.New("Data likely corrupted, all blocks are zero in length.")
-			return err
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("%s", errDataCorrupt)
+			return errDataCorrupt
 		}
 
 		// Verify the blocks.
-		ok, e := xl.ReedSolomon.Verify(enBlocks)
-		if e != nil {
+		ok, err := xl.ReedSolomon.Verify(enBlocks)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("ReedSolomon verify failed with %s", err)
 			closeAndRemoveWriters(writers...)
-			return e
+			return err
 		}
 
 		// Verification failed, blocks require reconstruction.
 		if !ok {
-			for index, shNeeded := range needsSelfHeal {
-				if shNeeded {
+			for index, healNeeded := range needsHeal {
+				if healNeeded {
 					// Reconstructs() reconstructs the parts if the array is nil.
 					enBlocks[index] = nil
 				}
 			}
-			e = xl.ReedSolomon.Reconstruct(enBlocks)
-			if e != nil {
+			err = xl.ReedSolomon.Reconstruct(enBlocks)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("ReedSolomon reconstruct failed with %s", err)
 				closeAndRemoveWriters(writers...)
-				return e
+				return err
 			}
 			// Verify reconstructed blocks again.
-			ok, e = xl.ReedSolomon.Verify(enBlocks)
-			if e != nil {
+			ok, err = xl.ReedSolomon.Verify(enBlocks)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("ReedSolomon verify failed with %s", err)
 				closeAndRemoveWriters(writers...)
-				return e
+				return err
 			}
 			if !ok {
 				// Blocks cannot be reconstructed, corrupted data.
-				e = errors.New("Verification failed after reconstruction, data likely corrupted.")
+				err = errors.New("Verification failed after reconstruction, data likely corrupted.")
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("%s", err)
 				closeAndRemoveWriters(writers...)
-				return e
+				return err
 			}
 		}
-		for index, shNeeded := range needsSelfHeal {
-			if !shNeeded {
+		for index, healNeeded := range needsHeal {
+			if !healNeeded {
 				continue
 			}
-			_, e := writers[index].Write(enBlocks[index])
-			if e != nil {
+			_, err := writers[index].Write(enBlocks[index])
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Debugf("Write failed with %s", err)
 				closeAndRemoveWriters(writers...)
-				return e
+				return err
 			}
 		}
 		totalLeft = totalLeft - erasureBlockSize
@@ -171,17 +209,17 @@ func (xl XL) selfHeal(volume string, path string) error {
 
 	// After successful healing Close() the writer so that the temp
 	// files are committed to their location.
-	for index, shNeeded := range needsSelfHeal {
-		if !shNeeded {
+	for _, writer := range writers {
+		if writer == nil {
 			continue
 		}
-		writers[index].Close()
+		writer.Close()
 	}
 
 	// Update the quorum metadata after selfheal.
-	errs := xl.setPartsMetadata(volume, path, metadata, needsSelfHeal)
-	for index, shNeeded := range needsSelfHeal {
-		if shNeeded && errs[index] != nil {
+	errs := xl.setPartsMetadata(volume, path, metadata, needsHeal)
+	for index, healNeeded := range needsHeal {
+		if healNeeded && errs[index] != nil {
 			return errs[index]
 		}
 	}

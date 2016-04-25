@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"strconv"
 
+	"github.com/Sirupsen/logrus"
 	router "github.com/gorilla/mux"
 )
 
@@ -21,7 +22,9 @@ type storageServer struct {
 func (s *storageServer) MakeVolHandler(arg *string, reply *GenericReply) error {
 	err := s.storage.MakeVol(*arg)
 	if err != nil {
-		log.Debugf("MakeVol failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume": *arg,
+		}).Debugf("MakeVol failed with error %s", err)
 		return err
 	}
 	return nil
@@ -42,7 +45,9 @@ func (s *storageServer) ListVolsHandler(arg *string, reply *ListVolsReply) error
 func (s *storageServer) StatVolHandler(arg *string, reply *VolInfo) error {
 	volInfo, err := s.storage.StatVol(*arg)
 	if err != nil {
-		log.Debugf("StatVol failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume": *arg,
+		}).Debugf("StatVol failed with error %s", err)
 		return err
 	}
 	*reply = volInfo
@@ -54,7 +59,9 @@ func (s *storageServer) StatVolHandler(arg *string, reply *VolInfo) error {
 func (s *storageServer) DeleteVolHandler(arg *string, reply *GenericReply) error {
 	err := s.storage.DeleteVol(*arg)
 	if err != nil {
-		log.Debugf("DeleteVol failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume": *arg,
+		}).Debugf("DeleteVol failed with error %s", err)
 		return err
 	}
 	return nil
@@ -66,7 +73,13 @@ func (s *storageServer) DeleteVolHandler(arg *string, reply *GenericReply) error
 func (s *storageServer) ListFilesHandler(arg *ListFilesArgs, reply *ListFilesReply) error {
 	files, eof, err := s.storage.ListFiles(arg.Vol, arg.Prefix, arg.Marker, arg.Recursive, arg.Count)
 	if err != nil {
-		log.Debugf("ListFiles failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume":    arg.Vol,
+			"prefix":    arg.Prefix,
+			"marker":    arg.Marker,
+			"recursive": arg.Recursive,
+			"count":     arg.Count,
+		}).Debugf("ListFiles failed with error %s", err)
 		return err
 	}
 
@@ -82,7 +95,10 @@ func (s *storageServer) ListFilesHandler(arg *ListFilesArgs, reply *ListFilesRep
 func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) error {
 	fileInfo, err := s.storage.StatFile(arg.Vol, arg.Path)
 	if err != nil {
-		log.Debugf("StatFile failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume": arg.Vol,
+			"path":   arg.Path,
+		}).Debugf("StatFile failed with error %s", err)
 		return err
 	}
 	*reply = fileInfo
@@ -93,7 +109,10 @@ func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) erro
 func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericReply) error {
 	err := s.storage.DeleteFile(arg.Vol, arg.Path)
 	if err != nil {
-		log.Debugf("DeleteFile failed with error %s", err)
+		log.WithFields(logrus.Fields{
+			"volume": arg.Vol,
+			"path":   arg.Path,
+		}).Debugf("DeleteFile failed with error %s", err)
 		return err
 	}
 	return nil
@@ -120,7 +139,10 @@ func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 		path := vars["path"]
 		writeCloser, err := stServer.storage.CreateFile(volume, path)
 		if err != nil {
-			log.Debugf("CreateFile failed with error %s", err)
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("CreateFile failed with error %s", err)
 			httpErr := http.StatusInternalServerError
 			if err == errVolumeNotFound {
 				httpErr = http.StatusNotFound
@@ -132,7 +154,10 @@ func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 		}
 		reader := r.Body
 		if _, err = io.Copy(writeCloser, reader); err != nil {
-			log.Debugf("Copying incoming reader to writer failed %s", err)
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("Copying incoming reader to writer failed %s", err)
 			safeCloseAndRemove(writeCloser)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -147,13 +172,19 @@ func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 		path := vars["path"]
 		offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
 		if err != nil {
-			log.Debugf("Parse offset failure with error %s", err)
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("Parse offset failure with error %s", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		readCloser, err := stServer.storage.ReadFile(volume, path, offset)
 		if err != nil {
-			log.Debugf("ReadFile failed with error %s", err)
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("ReadFile failed with error %s", err)
 			httpErr := http.StatusBadRequest
 			if err == errVolumeNotFound {
 				httpErr = http.StatusNotFound
