@@ -571,7 +571,7 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 			"diskPath": s.diskPath,
 			"filePath": filePath,
 		}).Debugf("Unexpected type %s", errIsNotRegular)
-		return nil, errIsNotRegular
+		return nil, errFileNotFound
 	}
 	// Seek to requested offset.
 	_, err = file.Seek(offset, os.SEEK_SET)
@@ -639,7 +639,7 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
-			return FileInfo{}, errIsNotRegular
+			return FileInfo{}, errFileNotFound
 		}
 
 		// Return all errors here.
@@ -649,7 +649,7 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		log.Debugf("File is %s", errIsNotRegular)
-		return FileInfo{}, errIsNotRegular
+		return FileInfo{}, errFileNotFound
 	}
 	return FileInfo{
 		Volume:  volume,

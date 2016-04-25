@@ -130,6 +130,15 @@ func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
 }
 
+// UnExpectedDataSize - Reader contains more/less data than specified.
+type UnExpectedDataSize struct {
+	Size int
+}
+
+func (e UnExpectedDataSize) Error() string {
+	return fmt.Sprintf("Contains more data than specified size of %d bytes.", e.Size)
+}
+
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header
 type IncompleteBody GenericError
 

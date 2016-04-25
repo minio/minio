@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"path"
 	"strconv"
 	"strings"
@@ -33,6 +34,18 @@ const (
 	// Minio meta volume.
 	minioMetaVolume = ".minio"
 )
+
+// checks whether bucket exists.
+func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
+	// Check whether bucket exists.
+	if _, e := o.storage.StatVol(bucketName); e != nil {
+		if e == errVolumeNotFound {
+			return false, nil
+		}
+		return false, e
+	}
+	return true, nil
+}
 
 // checkLeafDirectory - verifies if a given path is leaf directory if
 // yes returns all the files inside it.
@@ -242,13 +255,23 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 }
 
 func (o objectAPI) NewMultipartUpload(bucket, object string) (string, *probe.Error) {
-	// Verify if bucket is valid.
+	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
 	}
+	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
 		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	// Verify whether the bucket exists.
+	isExist, err := o.isBucketExist(bucket)
+	if err != nil {
+		return "", probe.NewError(err)
+	}
+	if !isExist {
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
+	}
+
 	if _, e := o.storage.StatVol(minioMetaVolume); e != nil {
 		if e == errVolumeNotFound {
 			e = o.storage.MakeVol(minioMetaVolume)
@@ -305,6 +328,7 @@ func (o objectAPI) isUploadIDExists(bucket, object, uploadID string) (bool, erro
 	return st.Mode.IsRegular(), nil
 }
 
+// PutObjectPart - writes the multipart upload chunks.
 func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, *probe.Error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -313,6 +337,15 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	if !IsValidObjectName(object) {
 		return "", probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	// Verify whether the bucket exists.
+	isExist, err := o.isBucketExist(bucket)
+	if err != nil {
+		return "", probe.NewError(err)
+	}
+	if !isExist {
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
+	}
+
 	if status, e := o.isUploadIDExists(bucket, object, uploadID); e != nil {
 		return "", probe.NewError(e)
 	} else if !status {
@@ -347,10 +380,17 @@ func (o objectAPI) PutObjectPart(bucket, object, uploadID string, partID int, si
 	if size > 0 {
 		if _, e = io.CopyN(multiWriter, data, size); e != nil {
 			safeCloseAndRemove(fileWriter)
-			if e == io.ErrUnexpectedEOF {
+			if e == io.ErrUnexpectedEOF || e == io.ErrShortWrite {
 				return "", probe.NewError(IncompleteBody{})
 			}
 			return "", probe.NewError(e)
+		}
+		// Reader shouldn't have more data what mentioned in size argument.
+		// reading one more byte from the reader to validate it.
+		// expected to fail, success validates existence of more data in the reader.
+		if _, e = io.CopyN(ioutil.Discard, data, 1); e == nil {
+			safeCloseAndRemove(fileWriter)
+			return "", probe.NewError(UnExpectedDataSize{Size: int(size)})
 		}
 	} else {
 		if _, e = io.Copy(multiWriter, data); e != nil {
