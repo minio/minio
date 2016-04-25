@@ -645,7 +645,10 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
-		log.Debugf("File is %s", errIsNotRegular)
+		log.WithFields(logrus.Fields{
+			"diskPath": s.diskPath,
+			"filePath": filePath,
+		}).Debugf("File is %s.", errIsNotRegular)
 		return FileInfo{}, errFileNotFound
 	}
 	return FileInfo{

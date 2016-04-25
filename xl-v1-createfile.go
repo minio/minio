@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	fastSha512 "github.com/minio/minio/pkg/crypto/sha512"
 )
 
@@ -85,25 +86,39 @@ func (xl XL) getFileQuorumVersionMap(volume, path string) map[int]int64 {
 	// without allocating.
 	fileQuorumVersionMap := make(map[int]int64)
 
-	// TODO - all errors should be logged here.
-
 	// Read meta data from all disks
 	for index, disk := range xl.storageDisks {
 		fileQuorumVersionMap[index] = -1
 
 		metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("ReadFile failed with %s", err)
 			continue
 		} else if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("JSON decoding failed with %s", err)
 			continue
 		}
 
 		version, err := metadata.GetFileVersion()
 		if err == errMetadataKeyNotExist {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("Missing 'file.version', %s", errMetadataKeyNotExist)
 			fileQuorumVersionMap[index] = 0
 			continue
 		}
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("'file.version' decoding failed with %s", err)
 			continue
 		}
 		fileQuorumVersionMap[index] = version
@@ -133,6 +148,10 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, bwriter *b
 		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
 		writer, err := disk.CreateFile(volume, erasurePart)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("CreateFile failed with %s", err)
 			createFileError++
 
 			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
@@ -152,6 +171,10 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, bwriter *b
 		var metadataWriter io.WriteCloser
 		metadataWriter, err = disk.CreateFile(volume, metadataFilePath)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Debugf("CreateFile failed with %s", err)
 			createFileError++
 
 			// We can safely allow CreateFile errors up to

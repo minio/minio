@@ -48,3 +48,6 @@ var errReadQuorum = errors.New("I/O error.  did not meet read quorum.")
 
 // errWriteQuorum - did not meet write quorum.
 var errWriteQuorum = errors.New("I/O error.  did not meet write quorum.")
+
+// errDataCorrupt - err data corrupt.
+var errDataCorrupt = errors.New("data likely corrupted, all blocks are zero in length")
