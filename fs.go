@@ -19,6 +19,7 @@ package main
 import (
 	"io"
 	"os"
+	slashpath "path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -460,10 +461,9 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 	}
 
 	// Verify if prefix exists.
-	prefixDir := filepath.Dir(filepath.FromSlash(prefix))
-	prefixRootDir := filepath.Join(volumeDir, prefixDir)
-	var status bool
-	if status, err = isDirExist(prefixRootDir); !status {
+	prefixDir := slashpath.Dir(prefix)
+	prefixRootDir := slashpath.Join(volumeDir, prefixDir)
+	if status, err := isDirExist(prefixRootDir); !status {
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
@@ -487,7 +487,7 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
 	walker := s.lookupTreeWalk(listParams{volume, recursive, marker, prefix})
 	if walker == nil {
-		walker = startTreeWalk(s.diskPath, volume, filepath.FromSlash(prefix), filepath.FromSlash(marker), recursive)
+		walker = startTreeWalk(filepath.ToSlash(s.diskPath), volume, prefix, marker, recursive)
 	}
 	nextMarker := ""
 	log.Debugf("Reading from the tree walk channel has begun.")

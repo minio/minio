@@ -20,7 +20,7 @@ package main
 
 import (
 	"os"
-	"path/filepath"
+	"path"
 	"runtime"
 	"sort"
 	"syscall"
@@ -88,7 +88,7 @@ func parseDirents(dirPath string, buf []byte) []fsDirent {
 		case syscall.DT_UNKNOWN:
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to Stat().
-			if fi, err := os.Stat(filepath.Join(dirPath, name)); err == nil {
+			if fi, err := os.Stat(path.Join(dirPath, name)); err == nil {
 				mode = fi.Mode()
 			} else {
 				// Caller listing would fail, if Stat failed but we
@@ -129,7 +129,7 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 		}
 		for _, dirent := range parseDirents(dirPath, buf[:nbuf]) {
 			if !namesOnly {
-				dirent.name = filepath.Join(dirPath, dirent.name)
+				dirent.name = path.Join(dirPath, dirent.name)
 			}
 			if dirent.IsDir() {
 				dirent.name += string(os.PathSeparator)

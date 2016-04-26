@@ -18,7 +18,7 @@ package main
 
 import (
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -88,11 +88,11 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	direntToFileInfo := func(dirent fsDirent) (FileInfo, error) {
 		fileInfo := FileInfo{}
 		// Convert to full object name.
-		fileInfo.Name = filepath.Join(prefixDir, dirent.name)
+		fileInfo.Name = path.Join(prefixDir, dirent.name)
 		if dirent.modTime.IsZero() && dirent.size == 0 {
 			// ModifiedTime and Size are zero, Stat() and figure out
 			// the actual values that need to be set.
-			fi, err := os.Stat(filepath.Join(bucketDir, prefixDir, dirent.name))
+			fi, err := os.Stat(path.Join(bucketDir, prefixDir, dirent.name))
 			if err != nil {
 				return FileInfo{}, err
 			}
@@ -119,10 +119,10 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	var markerBase, markerDir string
 	if marker != "" {
 		// Ex: if marker="four/five.txt", markerDir="four/" markerBase="five.txt"
-		markerSplit := strings.SplitN(marker, string(os.PathSeparator), 2)
+		markerSplit := strings.SplitN(marker, slashSeparator, 2)
 		markerDir = markerSplit[0]
 		if len(markerSplit) == 2 {
-			markerDir += string(os.PathSeparator)
+			markerDir += slashSeparator
 			markerBase = markerSplit[1]
 		}
 	}
@@ -140,7 +140,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	}
 
 	// scandir returns entries that begins with entryPrefixMatch
-	dirents, err := scandir(filepath.Join(bucketDir, prefixDir), prefixMatchFn, true)
+	dirents, err := scandir(path.Join(bucketDir, prefixDir), prefixMatchFn, true)
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
@@ -167,7 +167,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 				markerArg = markerBase
 			}
 			*count--
-			if !treeWalk(bucketDir, filepath.Join(prefixDir, dirent.name), "", markerArg, recursive, send, count) {
+			if !treeWalk(bucketDir, path.Join(prefixDir, dirent.name), "", markerArg, recursive, send, count) {
 				return false
 			}
 			continue
@@ -200,7 +200,7 @@ func startTreeWalk(fsPath, bucket, prefix, marker string, recursive bool) *treeW
 	walkNotify := treeWalker{ch: ch}
 	entryPrefixMatch := prefix
 	prefixDir := ""
-	lastIndex := strings.LastIndex(prefix, string(os.PathSeparator))
+	lastIndex := strings.LastIndex(prefix, slashSeparator)
 	if lastIndex != -1 {
 		entryPrefixMatch = prefix[lastIndex+1:]
 		prefixDir = prefix[:lastIndex+1]
@@ -222,7 +222,7 @@ func startTreeWalk(fsPath, bucket, prefix, marker string, recursive bool) *treeW
 				return false
 			}
 		}
-		bucketDir := filepath.Join(fsPath, bucket)
+		bucketDir := path.Join(fsPath, bucket)
 		treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
 	}()
 	return &walkNotify

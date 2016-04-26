@@ -21,7 +21,7 @@ package main
 import (
 	"io"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 )
 
@@ -53,10 +53,11 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 				mode:    fi.Mode(),
 			}
 			if !namesOnly {
-				dirent.name = filepath.Join(dirPath, dirent.name)
+				dirent.name = path.Join(dirPath, dirent.name)
 			}
 			if dirent.IsDir() {
-				dirent.name += string(os.PathSeparator)
+				// append "/" instead of "\" so that sorting is done as expected.
+				dirent.name += slashSeparator
 			}
 			if filter == nil || filter(dirent) {
 				dirents = append(dirents, dirent)

@@ -163,24 +163,21 @@ func testPaging(c *check.C, create func() objectAPI) {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject("bucket", key, int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 		c.Assert(err, check.IsNil)
-		/*
-			result, err = obj.ListObjects("bucket", "", "", "", 5)
-			c.Assert(err, check.IsNil)
-			c.Assert(len(result.Objects), check.Equals, i+1)
-			c.Assert(result.IsTruncated, check.Equals, false)
-		*/
+
+		result, err = obj.ListObjects("bucket", "", "", "", 5)
+		c.Assert(err, check.IsNil)
+		c.Assert(len(result.Objects), check.Equals, i+1)
+		c.Assert(result.IsTruncated, check.Equals, false)
 	}
 	// check after paging occurs pages work
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject("bucket", key, int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 		c.Assert(err, check.IsNil)
-		/*
-			result, err = obj.ListObjects("bucket", "obj", "", "", 5)
-			c.Assert(err, check.IsNil)
-			c.Assert(len(result.Objects), check.Equals, 5)
-			c.Assert(result.IsTruncated, check.Equals, true)
-		*/
+		result, err = obj.ListObjects("bucket", "obj", "", "", 5)
+		c.Assert(err, check.IsNil)
+		c.Assert(len(result.Objects), check.Equals, 5)
+		c.Assert(result.IsTruncated, check.Equals, true)
 	}
 	// check paging with prefix at end returns less objects
 	{
@@ -188,11 +185,9 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(err, check.IsNil)
 		_, err = obj.PutObject("bucket", "newPrefix2", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 		c.Assert(err, check.IsNil)
-		/*
-			result, err = obj.ListObjects("bucket", "new", "", "", 5)
-			c.Assert(err, check.IsNil)
-			c.Assert(len(result.Objects), check.Equals, 2)
-		*/
+		result, err = obj.ListObjects("bucket", "new", "", "", 5)
+		c.Assert(err, check.IsNil)
+		c.Assert(len(result.Objects), check.Equals, 2)
 	}
 
 	// check ordering of pages
@@ -232,13 +227,13 @@ func testPaging(c *check.C, create func() objectAPI) {
 
 	// check results with Marker
 	{
-		/*
-			result, err = obj.ListObjects("bucket", "", "newPrefix", "", 3)
-			c.Assert(err, check.IsNil)
-			c.Assert(result.Objects[0].Name, check.Equals, "newPrefix2")
-			c.Assert(result.Objects[1].Name, check.Equals, "obj0")
-			c.Assert(result.Objects[2].Name, check.Equals, "obj1")
-		*/
+
+		result, err = obj.ListObjects("bucket", "", "newPrefix", "", 3)
+		c.Assert(err, check.IsNil)
+		c.Assert(result.Objects[0].Name, check.Equals, "newPrefix2")
+		c.Assert(result.Objects[1].Name, check.Equals, "obj0")
+		c.Assert(result.Objects[2].Name, check.Equals, "obj1")
+
 	}
 	// check ordering of results with prefix
 	{
