@@ -19,7 +19,6 @@ package main
 import (
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -93,7 +92,7 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 		if dirent.modTime.IsZero() && dirent.size == 0 {
 			// ModifiedTime and Size are zero, Stat() and figure out
 			// the actual values that need to be set.
-			fi, err := os.Stat(filepath.Join(filepath.FromSlash(bucketDir), filepath.FromSlash(prefixDir), filepath.FromSlash(dirent.name)))
+			fi, err := os.Stat(path.Join(bucketDir, prefixDir, dirent.name))
 			if err != nil {
 				return FileInfo{}, err
 			}
@@ -120,10 +119,10 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 	var markerBase, markerDir string
 	if marker != "" {
 		// Ex: if marker="four/five.txt", markerDir="four/" markerBase="five.txt"
-		markerSplit := strings.SplitN(marker, "/", 2)
+		markerSplit := strings.SplitN(marker, slashSeparator, 2)
 		markerDir = markerSplit[0]
 		if len(markerSplit) == 2 {
-			markerDir += "/"
+			markerDir += slashSeparator
 			markerBase = markerSplit[1]
 		}
 	}
@@ -201,7 +200,7 @@ func startTreeWalk(fsPath, bucket, prefix, marker string, recursive bool) *treeW
 	walkNotify := treeWalker{ch: ch}
 	entryPrefixMatch := prefix
 	prefixDir := ""
-	lastIndex := strings.LastIndex(prefix, "/")
+	lastIndex := strings.LastIndex(prefix, slashSeparator)
 	if lastIndex != -1 {
 		entryPrefixMatch = prefix[lastIndex+1:]
 		prefixDir = prefix[:lastIndex+1]

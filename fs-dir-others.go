@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 )
 
@@ -31,7 +30,7 @@ import (
 // sorted using sort.Sort(). If filter is NULL, all entries are selected.
 // If namesOnly is true, dirPath is not appended into entry name.
 func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDirent, error) {
-	d, err := os.Open(filepath.FromSlash(dirPath))
+	d, err := os.Open(dirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +47,7 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 		}
 		for _, fi := range fis {
 			dirent := fsDirent{
-				name:    filepath.ToSlash(fi.Name()),
+				name:    fi.Name(),
 				modTime: fi.ModTime(),
 				size:    fi.Size(),
 				mode:    fi.Mode(),
