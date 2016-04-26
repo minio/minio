@@ -25,8 +25,8 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-// doSelfHeal - heals the file at path.
-func (xl XL) doHealFile(volume string, path string) error {
+// healHeal - heals the file at path.
+func (xl XL) healFile(volume string, path string) error {
 	totalBlocks := xl.DataBlocks + xl.ParityBlocks
 	needsHeal := make([]bool, totalBlocks)
 	var readers = make([]io.Reader, totalBlocks)
@@ -37,15 +37,15 @@ func (xl XL) doHealFile(volume string, path string) error {
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	quorumDisks, metadata, doHeal, err := xl.getReadableDisks(volume, path)
+	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Debugf("Get readable disks failed with %s", err)
+		}).Errorf("List online disks failed with %s", err)
 		return err
 	}
-	if !doHeal {
+	if !heal {
 		return nil
 	}
 
@@ -54,11 +54,11 @@ func (xl XL) doHealFile(volume string, path string) error {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Debugf("Failed to get file size, %s", err)
+		}).Errorf("Failed to get file size, %s", err)
 		return err
 	}
 
-	for index, disk := range quorumDisks {
+	for index, disk := range onlineDisks {
 		if disk == nil {
 			needsHeal[index] = true
 			continue
@@ -98,7 +98,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Debugf("CreateFile failed with error %s", err)
+			}).Errorf("CreateFile failed with error %s", err)
 			// Unexpected error
 			closeAndRemoveWriters(writers...)
 			return err
@@ -137,7 +137,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Debugf("%s", errDataCorrupt)
+			}).Errorf("%s", errDataCorrupt)
 			return errDataCorrupt
 		}
 
@@ -147,7 +147,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Debugf("ReedSolomon verify failed with %s", err)
+			}).Errorf("ReedSolomon verify failed with %s", err)
 			closeAndRemoveWriters(writers...)
 			return err
 		}
@@ -165,7 +165,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("ReedSolomon reconstruct failed with %s", err)
+				}).Errorf("ReedSolomon reconstruct failed with %s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
@@ -175,7 +175,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("ReedSolomon verify failed with %s", err)
+				}).Errorf("ReedSolomon verify failed with %s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
@@ -185,7 +185,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("%s", err)
+				}).Errorf("%s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
@@ -199,7 +199,7 @@ func (xl XL) doHealFile(volume string, path string) error {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("Write failed with %s", err)
+				}).Errorf("Write failed with %s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}

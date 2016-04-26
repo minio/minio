@@ -38,22 +38,22 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	// Acquire a read lock.
 	readLock := true
 	xl.lockNS(volume, path, readLock)
-	quorumDisks, metadata, doSelfHeal, err := xl.getReadableDisks(volume, path)
+	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	xl.unlockNS(volume, path, readLock)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Debugf("Get readable disks failed with %s", err)
+		}).Errorf("Get readable disks failed with %s", err)
 		return nil, err
 	}
 
-	if doSelfHeal {
-		if err = xl.doHealFile(volume, path); err != nil {
+	if heal {
+		if err = xl.healFile(volume, path); err != nil {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Debugf("doHealFile failed with %s", err)
+			}).Errorf("healFile failed with %s", err)
 			return nil, err
 		}
 	}
@@ -67,12 +67,12 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Debugf("Failed to get file size, %s", err)
+		}).Errorf("Failed to get file size, %s", err)
 		return nil, err
 	}
 
 	readers := make([]io.ReadCloser, len(xl.storageDisks))
-	for index, disk := range quorumDisks {
+	for index, disk := range onlineDisks {
 		if disk == nil {
 			continue
 		}
@@ -121,7 +121,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("%s", errDataCorrupt)
+				}).Errorf("%s", errDataCorrupt)
 				pipeWriter.CloseWithError(errDataCorrupt)
 				return
 			}
@@ -133,7 +133,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("ReedSolomon verify failed with %s", err)
+				}).Errorf("ReedSolomon verify failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}
@@ -151,7 +151,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					log.WithFields(logrus.Fields{
 						"volume": volume,
 						"path":   path,
-					}).Debugf("ReedSolomon reconstruct failed with %s", err)
+					}).Errorf("ReedSolomon reconstruct failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
@@ -161,7 +161,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					log.WithFields(logrus.Fields{
 						"volume": volume,
 						"path":   path,
-					}).Debugf("ReedSolomon verify failed with %s", err)
+					}).Errorf("ReedSolomon verify failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
@@ -171,7 +171,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					log.WithFields(logrus.Fields{
 						"volume": volume,
 						"path":   path,
-					}).Debugf("%s", err)
+					}).Errorf("%s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
@@ -183,7 +183,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Debugf("ReedSolomon joining decoded blocks failed with %s", err)
+				}).Errorf("ReedSolomon joining decoded blocks failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}
