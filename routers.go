@@ -17,40 +17,33 @@
 package main
 
 import (
-	"errors"
 	"net/http"
-	"os"
-	"runtime"
+	"path/filepath"
+	"strings"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/probe"
 )
 
+// newStorageAPI - initialize any storage API depending on the export path style.
+func newStorageAPI(exportPaths ...string) (StorageAPI, error) {
+	if len(exportPaths) == 1 {
+		exportPath := exportPaths[0]
+		if !strings.ContainsRune(exportPath, ':') || filepath.VolumeName(exportPath) != "" {
+			// Initialize filesystem storage API.
+			return newFS(exportPath)
+		}
+		// Initialize network storage API.
+		return newNetworkFS(exportPath)
+	}
+	// Initialize XL storage API.
+	return newXL(exportPaths...)
+}
+
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	var storageAPI StorageAPI
-	var e error
-	if len(srvCmdConfig.exportPaths) == 1 {
-		// Verify if export path is a local file system path.
-		var st os.FileInfo
-		st, e = os.Stat(srvCmdConfig.exportPaths[0])
-		if e == nil && st.Mode().IsDir() {
-			// Initialize storage API.
-			storageAPI, e = newFS(srvCmdConfig.exportPaths[0])
-			fatalIf(probe.NewError(e), "Initializing fs failed.", nil)
-		} else {
-			// Initialize network storage API.
-			storageAPI, e = newNetworkFS(srvCmdConfig.exportPaths[0])
-			fatalIf(probe.NewError(e), "Initializing network fs failed.", nil)
-		}
-	} else {
-		if runtime.GOOS == "windows" {
-			fatalIf(probe.NewError(errors.New("")), "Initializing XL failed, not supported on windows yet.", nil)
-		}
-		// Initialize XL storage API.
-		storageAPI, e = newXL(srvCmdConfig.exportPaths...)
-		fatalIf(probe.NewError(e), "Initializing XL failed.", nil)
-	}
+	storageAPI, e := newStorageAPI(srvCmdConfig.exportPaths...)
+	fatalIf(probe.NewError(e), "Initializing storage API failed.", nil)
 
 	// Initialize object layer.
 	objAPI := newObjectLayer(storageAPI)

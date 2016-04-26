@@ -162,7 +162,7 @@ func initServerConfig(c *cli.Context) {
 
 // Check server arguments.
 func checkServerSyntax(c *cli.Context) {
-	if !c.Args().Present() && c.Args().First() == "help" {
+	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 }
