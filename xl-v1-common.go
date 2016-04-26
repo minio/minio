@@ -21,70 +21,119 @@ import (
 	"errors"
 	slashpath "path"
 	"path/filepath"
+
+	"github.com/Sirupsen/logrus"
 )
 
-// Returns slice of disks needed for ReadFile operation:
-// - slice returing readable disks.
-// - fileMetadata
-// - bool value indicating if selfHeal is needed.
-// - error if any.
-func (xl XL) getReadableDisks(volume, path string) ([]StorageAPI, fileMetadata, bool, error) {
-	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	highestVersion := int64(0)
-	versions := make([]int64, len(xl.storageDisks))
-	quorumDisks := make([]StorageAPI, len(xl.storageDisks))
-	notFoundCount := 0
-	// If quorum says errFileNotFound return errFileNotFound
-	for _, err := range errs {
-		if err == errFileNotFound {
-			notFoundCount++
+// Get the highest integer from a given integer slice.
+func highestInt(intSlice []int64) (highestInteger int64) {
+	highestInteger = int64(0)
+	for _, integer := range intSlice {
+		if highestInteger < integer {
+			highestInteger = integer
 		}
 	}
-	if notFoundCount > xl.readQuorum {
-		return nil, fileMetadata{}, false, errFileNotFound
-	}
+	return highestInteger
+}
+
+// Extracts file versions from partsMetadata slice and returns version slice.
+func listFileVersions(partsMetadata []fileMetadata, errs []error) (versions []int64, err error) {
+	versions = make([]int64, len(partsMetadata))
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
-			version, err := metadata.GetFileVersion()
+			var version int64
+			version, err = metadata.GetFileVersion()
 			if err == errMetadataKeyNotExist {
+				log.WithFields(logrus.Fields{
+					"metadata": metadata,
+				}).Errorf("Missing 'file.version', %s", errMetadataKeyNotExist)
 				versions[index] = 0
 				continue
 			}
 			if err != nil {
+				log.WithFields(logrus.Fields{
+					"metadata": metadata,
+				}).Errorf("'file.version' decoding failed with %s", err)
 				// Unexpected, return error.
-				return nil, fileMetadata{}, false, err
+				return nil, err
 			}
 			versions[index] = version
 		} else {
 			versions[index] = -1
 		}
 	}
-	quorumCount := 0
-	for index, version := range versions {
-		if version == highestVersion {
-			quorumDisks[index] = xl.storageDisks[index]
-			quorumCount++
-		} else {
-			quorumDisks[index] = nil
-		}
-	}
-	if quorumCount < xl.readQuorum {
-		return nil, fileMetadata{}, false, errReadQuorum
-	}
-	var metadata fileMetadata
-	for index, disk := range quorumDisks {
-		if disk == nil {
-			continue
-		}
-		metadata = partsMetadata[index]
-		break
-	}
+	return versions, nil
+}
+
+// Returns slice of online disks needed.
+// - slice returing readable disks.
+// - fileMetadata
+// - bool value indicating if healing is needed.
+// - error if any.
+func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata fileMetadata, heal bool, err error) {
+	partsMetadata, errs := xl.getPartsMetadata(volume, path)
+	notFoundCount := 0
 	// FIXME: take care of the situation when a disk has failed and been removed
 	// by looking at the error returned from the fs layer. fs-layer will have
 	// to return an error indicating that the disk is not available and should be
 	// different from ErrNotExist.
-	doSelfHeal := quorumCount != len(xl.storageDisks)
-	return quorumDisks, metadata, doSelfHeal, nil
+	for _, err := range errs {
+		if err == errFileNotFound {
+			notFoundCount++
+			// If we have errors with file not found greater than allowed read
+			// quorum we return err as errFileNotFound.
+			if notFoundCount > xl.readQuorum {
+				return nil, fileMetadata{}, false, errFileNotFound
+			}
+		}
+	}
+	highestVersion := int64(0)
+	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
+	// List all the file versions from partsMetadata list.
+	versions, err := listFileVersions(partsMetadata, errs)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Errorf("Extracting file versions failed with %s", err)
+		return nil, fileMetadata{}, false, err
+	}
+
+	// Get highest file version.
+	highestVersion = highestInt(versions)
+
+	// Pick online disks with version set to highestVersion.
+	onlineDiskCount := 0
+	for index, version := range versions {
+		if version == highestVersion {
+			mdata = partsMetadata[index]
+			onlineDisks[index] = xl.storageDisks[index]
+			onlineDiskCount++
+		} else {
+			onlineDisks[index] = nil
+		}
+	}
+
+	// If online disks count is lesser than configured disks, most
+	// probably we need to heal the file, additionally verify if the
+	// count is lesser than readQuorum, if not we throw an error.
+	if onlineDiskCount < len(xl.storageDisks) {
+		// Online disks lesser than total storage disks, needs to be
+		// healed. unless we do not have readQuorum.
+		heal = true
+		// Verify if online disks count are lesser than readQuorum
+		// threshold, return an error if yes.
+		if onlineDiskCount < xl.readQuorum {
+			log.WithFields(logrus.Fields{
+				"volume":          volume,
+				"path":            path,
+				"onlineDiskCount": onlineDiskCount,
+				"readQuorumCount": xl.readQuorum,
+			}).Errorf("%s", errReadQuorum)
+			return nil, fileMetadata{}, false, errReadQuorum
+		}
+	}
+	return onlineDisks, mdata, heal, nil
 }
 
 // Get parts.json metadata as a map slice.
