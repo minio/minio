@@ -66,6 +66,7 @@ Download ``minio`` from https://dl.minio.io/server/minio/release/freebsd-amd64/m
 $ chmod 755 minio
 $ ./minio --help
 ~~~
+Read more here on [How to configure Minio on FreeBSD with ZFS backend.](./FreeBSD.md)
 
 #### Docker container
 
