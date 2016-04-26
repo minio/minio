@@ -213,7 +213,7 @@ func TestObjectAPIPutObjectPart(t *testing.T) {
 		// Test case - 11.
 		// Input to replicate Md5 mismatch.
 		{bucket, object, uploadID, 1, "", "a35", 0, false, "",
-			fmt.Errorf("%s", "Bad digest expected a35 is not valid with what we calculated "+"d41d8cd98f00b204e9800998ecf8427e")},
+			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated "+"d41d8cd98f00b204e9800998ecf8427e")},
 		// Test case - 12.
 		// Input with size more than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") + 1), false, "", fmt.Errorf("%s", "EOF")},

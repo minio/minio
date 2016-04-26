@@ -36,18 +36,6 @@ const (
 	minioMetaVolume = ".minio"
 )
 
-// checks whether bucket exists.
-func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
-	// Check whether bucket exists.
-	if _, e := o.storage.StatVol(bucketName); e != nil {
-		if e == errVolumeNotFound {
-			return false, nil
-		}
-		return false, e
-	}
-	return true, nil
-}
-
 // listLeafEntries - lists all entries if a given prefixPath is a leaf
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.

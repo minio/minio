@@ -467,10 +467,11 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 		if err == nil {
 			// Prefix does not exist, not an error just respond empty list response.
 			return nil, true, nil
-		} else if strings.Contains(err.Error(), "not a directory") {
+		} else if err.Error() == syscall.ENOTDIR.Error() {
 			// Prefix exists as a file.
 			return nil, true, nil
 		}
+
 		log.WithFields(logrus.Fields{
 			"volumeDir":     volumeDir,
 			"prefixRootDir": prefixRootDir,
