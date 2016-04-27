@@ -202,6 +202,9 @@ func main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
+		// Initialize name space lock.
+		initNSLock()
+
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
 			// Do not print any errors in release update function.
