@@ -122,38 +122,37 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 			// Set markerPath for next batch of listing.
 			markerPath = fi.Name
 			if len(entries) > 0 {
+
+				// We reach here for non-recursive case and a leaf entry.
+
 				for _, entry := range entries {
-					// Skip the entries for erasure parts if any.
-					if strings.Contains(path.Base(entry.Name), ".") {
-						continue
-					}
 					allFileInfos = append(allFileInfos, entry)
+					newMaxKeys++
+					if newMaxKeys == maxKeys {
+						// eof value is automatically taken care of.
+						return
+					}
 				}
-			} else {
-				// Skip special files.
+				continue
+			}
+
+			// We reach here for a non-recursive case non-leaf entry
+			// OR recursive case with fi.Name matching pattern bucket/object/uploadID[.partNum.md5sum]
+
+			if !fi.Mode.IsDir() { // Do not skip non-recursive case directory entries.
+				// Skip files matching pattern bucket/object/uploadID.partNum.md5sum
+				// and retain files matching pattern bucket/object/uploadID
 				specialFile := path.Base(fi.Name)
 				if strings.Contains(specialFile, ".") {
 					// Contains partnumber and md5sum info, skip this.
 					continue
 				}
-				allFileInfos = append(allFileInfos, fi)
 			}
+			allFileInfos = append(allFileInfos, fi)
 			newMaxKeys++
-			// If we have reached the maxKeys, it means we have listed
-			// everything that was requested. Return right here.
 			if newMaxKeys == maxKeys {
-				// Returns all the entries until maxKeys entries.
-				//
-				// eof is deliberately set as false since most of the
-				// time if newMaxKeys == maxKeys, there are most
-				// probably more than 1000 multipart sessions in
-				// progress.
-				//
-				// Setting this here allows us to set proper Markers
-				// so that the subsequent call returns the next set of
-				// entries.
-				eof = false
-				return allFileInfos, eof, nil
+				// eof value is automatically taken care of.
+				return
 			}
 		}
 		// If we have reached eof then we break out.
