@@ -52,7 +52,6 @@ func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.
 func (o objectAPI) listLeafEntries(prefixPath string) (entries []FileInfo, e error) {
-	var allFileInfos []FileInfo
 	var markerPath string
 	for {
 		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
@@ -63,20 +62,22 @@ func (o objectAPI) listLeafEntries(prefixPath string) (entries []FileInfo, e err
 			}).Errorf("%s", e)
 			return nil, e
 		}
-		allFileInfos = append(allFileInfos, fileInfos...)
+		for _, fileInfo := range fileInfos {
+			// Set marker for next batch of ListFiles.
+			markerPath = fileInfo.Name
+			if fileInfo.Mode.IsDir() {
+				// If a directory is found, doesn't return anything.
+				return nil, nil
+			}
+			fileName := path.Base(fileInfo.Name)
+			if !strings.Contains(fileName, ".") {
+				// Skip the entry if it is of the pattern bucket/object/uploadID.partNum.md5sum
+				// and retain entries of the pattern bucket/object/uploadID
+				entries = append(entries, fileInfo)
+			}
+		}
 		if eof {
 			break
-		}
-		markerPath = allFileInfos[len(allFileInfos)-1].Name
-	}
-	for _, fileInfo := range allFileInfos {
-		if fileInfo.Mode.IsDir() {
-			// If a directory is found, doesn't return anything.
-			return nil, nil
-		}
-		fileName := path.Base(fileInfo.Name)
-		if !strings.Contains(fileName, ".") {
-			entries = append(entries, fileInfo)
 		}
 	}
 	return entries, nil
@@ -106,51 +107,62 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 		// Loop through and validate individual file.
 		for _, fi := range fileInfos {
 			var entries []FileInfo
-			// List all the entries if fi.Name is a leaf directory, if
-			// fi.Name is not a leaf directory them the resulting
-			// entries are empty.
-			entries, e = o.listLeafEntries(fi.Name)
-			if e != nil {
-				log.WithFields(logrus.Fields{
-					"prefixPath": fi.Name,
-				}).Errorf("%s", e)
-				return nil, false, e
+			if fi.Mode.IsDir() {
+				// List all the entries if fi.Name is a leaf directory, if
+				// fi.Name is not a leaf directory then the resulting
+				// entries are empty.
+				entries, e = o.listLeafEntries(fi.Name)
+				if e != nil {
+					log.WithFields(logrus.Fields{
+						"prefixPath": fi.Name,
+					}).Errorf("%s", e)
+					return nil, false, e
+				}
 			}
 			// Set markerPath for next batch of listing.
 			markerPath = fi.Name
 			if len(entries) > 0 {
+
+				// We reach here for non-recursive case and a leaf entry.
+
 				for _, entry := range entries {
-					// Skip the entries for erasure parts if any.
-					if strings.Contains(path.Base(entry.Name), ".") {
-						continue
-					}
 					allFileInfos = append(allFileInfos, entry)
+					newMaxKeys++
+					// If we have reached the maxKeys, it means we have listed
+					// everything that was requested. Return right here.
+					if newMaxKeys == maxKeys {
+						// Return values:
+						// allFileInfos : "maxKeys" number of entries.
+						// eof : eof returned by o.storage.ListFiles()
+						// error : nil
+						return
+					}
 				}
-			} else {
-				// Skip special files.
+				continue
+			}
+
+			// We reach here for a non-recursive case non-leaf entry
+			// OR recursive case with fi.Name matching pattern bucket/object/uploadID[.partNum.md5sum]
+
+			if !fi.Mode.IsDir() { // Do not skip non-recursive case directory entries.
+				// Skip files matching pattern bucket/object/uploadID.partNum.md5sum
+				// and retain files matching pattern bucket/object/uploadID
 				specialFile := path.Base(fi.Name)
 				if strings.Contains(specialFile, ".") {
 					// Contains partnumber and md5sum info, skip this.
 					continue
 				}
-				allFileInfos = append(allFileInfos, fi)
 			}
+			allFileInfos = append(allFileInfos, fi)
 			newMaxKeys++
 			// If we have reached the maxKeys, it means we have listed
 			// everything that was requested. Return right here.
 			if newMaxKeys == maxKeys {
-				// Returns all the entries until maxKeys entries.
-				//
-				// eof is deliberately set as false since most of the
-				// time if newMaxKeys == maxKeys, there are most
-				// probably more than 1000 multipart sessions in
-				// progress.
-				//
-				// Setting this here allows us to set proper Markers
-				// so that the subsequent call returns the next set of
-				// entries.
-				eof = false
-				return allFileInfos, eof, nil
+				// Return values:
+				// allFileInfos : "maxKeys" number of entries.
+				// eof : eof returned by o.storage.ListFiles()
+				// error : nil
+				return
 			}
 		}
 		// If we have reached eof then we break out.
