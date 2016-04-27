@@ -49,12 +49,21 @@ func (xl XL) healFile(volume string, path string) error {
 		return nil
 	}
 
-	size, err := metadata.GetSize()
+	fi, err := metadata.GetFileInfo()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Errorf("Failed to get file size, %s", err)
+		}).Errorf("Failed to get file info, %s", err)
+		return err
+	}
+
+	eInfo, err := metadata.GetXLErasureInfo()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Errorf("Failed to get erasure info, %s", err)
 		return err
 	}
 
@@ -104,7 +113,7 @@ func (xl XL) healFile(volume string, path string) error {
 			return err
 		}
 	}
-	var totalLeft = size
+	var totalLeft = fi.Size
 	for totalLeft > 0 {
 		// Figure out the right blockSize.
 		var curBlockSize int
@@ -114,7 +123,7 @@ func (xl XL) healFile(volume string, path string) error {
 			curBlockSize = int(totalLeft)
 		}
 		// Calculate the current block size.
-		curBlockSize = getEncodedBlockLen(curBlockSize, xl.DataBlocks)
+		curBlockSize = getEncodedBlockLen(curBlockSize, eInfo.dataBlocks)
 		enBlocks := make([][]byte, totalBlocks)
 		// Loop through all readers and read.
 		for index, reader := range readers {

@@ -17,16 +17,12 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	slashpath "path"
-	"strconv"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	fastSha512 "github.com/minio/minio/pkg/crypto/sha512"
 )
 
 // Erasure block size.
@@ -92,7 +88,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	higherVersion++
 
 	writers := make([]io.WriteCloser, len(xl.storageDisks))
-	sha512Writers := make([]hash.Hash, len(xl.storageDisks))
 
 	metadataFilePath := slashpath.Join(path, metadataFile)
 	metadataWriters := make([]io.WriteCloser, len(xl.storageDisks))
@@ -148,7 +143,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 
 		writers[index] = writer
 		metadataWriters[index] = metadataWriter
-		sha512Writers[index] = fastSha512.New()
 	}
 
 	// Allocate 4MiB block size buffer for reading.
@@ -221,9 +215,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 					reader.CloseWithError(err)
 					return
 				}
-				if sha512Writers[index] != nil {
-					sha512Writers[index].Write(encodedData)
-				}
 			}
 
 			// Update total written.
@@ -232,21 +223,22 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	}
 
 	// Initialize metadata map, save all erasure related metadata.
-	metadata := make(fileMetadata)
-	metadata.Set("version", minioVersion)
-	metadata.Set("format.major", "1")
-	metadata.Set("format.minor", "0")
-	metadata.Set("format.patch", "0")
-	metadata.Set("file.size", strconv.FormatInt(totalSize, 10))
+	metadata := make(xlMetadata)
+	metadata.SetXLVersion("1.0.0")
+	metadata.SetFileInfo(FileInfo{
+		Size:    totalSize,
+		ModTime: modTime,
+	})
 	if len(xl.storageDisks) > len(writers) {
 		// Save file.version only if we wrote to less disks than all
 		// storage disks.
-		metadata.Set("file.version", strconv.FormatInt(higherVersion, 10))
+		metadata.SetFileVersion(higherVersion)
 	}
-	metadata.Set("file.modTime", modTime.Format(timeFormatAMZ))
-	metadata.Set("file.xl.blockSize", strconv.Itoa(erasureBlockSize))
-	metadata.Set("file.xl.dataBlocks", strconv.Itoa(xl.DataBlocks))
-	metadata.Set("file.xl.parityBlocks", strconv.Itoa(xl.ParityBlocks))
+	metadata.SetXLErasureInfo(erasureInfo{
+		dataBlocks:   xl.DataBlocks,
+		parityBlocks: xl.ParityBlocks,
+		blockSize:    erasureBlockSize,
+	})
 
 	// Write all the metadata.
 	// below case is not handled here
@@ -256,10 +248,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	for index, metadataWriter := range metadataWriters {
 		if metadataWriter == nil {
 			continue
-		}
-		if sha512Writers[index] != nil {
-			// Save sha512 checksum of each encoded blocks.
-			metadata.Set("file.xl.block512Sum", hex.EncodeToString(sha512Writers[index].Sum(nil)))
 		}
 
 		// Write metadata.

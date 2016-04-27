@@ -19,51 +19,24 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"strconv"
 	"time"
 )
 
 // error type when key is not found.
-var errMetadataKeyNotExist = errors.New("Key not found in fileMetadata.")
+var errMetadataKeyNotExist = errors.New("Key not found in xlMetadata.")
 
-// This code is built on similar ideas of http.Header.
-// Ref - https://golang.org/pkg/net/http/#Header
+// error type when key is malformed, or doesn't contain the required
+// data type.
+var errMetadataFormatErr = errors.New("Key cannot be decoded to xlMetadata.")
 
-// A fileMetadata represents a metadata header mapping
+// A xlMetadata represents a metadata header mapping
 // keys to sets of values.
-type fileMetadata map[string][]string
-
-// Add adds the key, value pair to the header.
-// It appends to any existing values associated with key.
-func (f fileMetadata) Add(key, value string) {
-	f[key] = append(f[key], value)
-}
-
-// Set sets the header entries associated with key to
-// the single element value. It replaces any existing
-// values associated with key.
-func (f fileMetadata) Set(key, value string) {
-	f[key] = []string{value}
-}
-
-// Get gets the first value associated with the given key.
-// If there are no values associated with the key, Get returns "".
-// Get is a convenience method.  For more complex queries,
-// access the map directly.
-func (f fileMetadata) Get(key string) []string {
-	if f == nil {
-		return nil
-	}
-	v, ok := f[key]
-	if !ok {
-		return nil
-	}
-	return v
-}
+type xlMetadata map[string]interface{}
 
 // Write writes a metadata in wire format.
-func (f fileMetadata) Write(writer io.Writer) error {
+func (f xlMetadata) Write(writer io.Writer) error {
 	metadataBytes, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -72,52 +45,117 @@ func (f fileMetadata) Write(writer io.Writer) error {
 	return err
 }
 
-// Get file size.
-func (f fileMetadata) GetSize() (int64, error) {
-	sizes := f.Get("file.size")
-	if sizes == nil {
-		return 0, errMetadataKeyNotExist
+type erasureInfo struct {
+	dataBlocks   int
+	parityBlocks int
+	blockSize    int64
+}
+
+func (f xlMetadata) SetXLErasureInfo(eInfo erasureInfo) {
+	f["xl.erasure"] = map[string]interface{}{
+		"data":      eInfo.dataBlocks,
+		"parity":    eInfo.parityBlocks,
+		"blockSize": eInfo.blockSize,
 	}
-	sizeStr := sizes[0]
-	return strconv.ParseInt(sizeStr, 10, 64)
+}
+
+func (f xlMetadata) GetXLErasureInfo() (eInfo erasureInfo, err error) {
+	xlErasureParams, ok := f["xl.erasure"]
+	if !ok {
+		return erasureInfo{}, errMetadataKeyNotExist
+	}
+	erasureParams, ok := xlErasureParams.(map[string]interface{})
+	if !ok {
+		return erasureInfo{}, errMetadataFormatErr
+	}
+	eInfo.dataBlocks, ok = erasureParams["data"].(int)
+	if !ok {
+		return erasureInfo{}, errMetadataFormatErr
+	}
+	eInfo.parityBlocks, ok = erasureParams["parity"].(int)
+	if !ok {
+		return erasureInfo{}, errMetadataFormatErr
+	}
+	eInfo.blockSize, ok = erasureParams["blockSize"].(int64)
+	if !ok {
+		return erasureInfo{}, errMetadataFormatErr
+	}
+	return eInfo, nil
+}
+
+func (f xlMetadata) GetXLVersion() (string, error) {
+	xlVersion, ok := f["xl.version"]
+	if !ok {
+		return "", errMetadataKeyNotExist
+	}
+	xlVersionStr, ok := xlVersion.(string)
+	if !ok {
+		return "", errMetadataFormatErr
+	}
+	return xlVersionStr, nil
+}
+
+func (f xlMetadata) SetXLVersion(version string) {
+	f["xl.version"] = version
+}
+
+// Get file info.
+func (f xlMetadata) GetFileInfo() (FileInfo, error) {
+	xlFile, ok := f["xl.file"]
+	if !ok {
+		return FileInfo{}, errMetadataKeyNotExist
+	}
+	fileInfo, ok := xlFile.(map[string]interface{})
+	if !ok {
+		return FileInfo{}, errMetadataFormatErr
+	}
+	fi := FileInfo{}
+	fi.Size, ok = fileInfo["size"].(int64)
+	if !ok {
+		return FileInfo{}, errMetadataFormatErr
+	}
+	modTimeStr, ok := fileInfo["modTime"].(string)
+	if !ok {
+		return FileInfo{}, errMetadataFormatErr
+	}
+	var err error
+	fi.ModTime, err = time.Parse(timeFormatAMZ, modTimeStr)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return fi, nil
 }
 
 // Set file size.
-func (f fileMetadata) SetSize(size int64) {
-	f.Set("file.size", strconv.FormatInt(size, 10))
-}
-
-// Get file Modification time.
-func (f fileMetadata) GetModTime() (time.Time, error) {
-	timeStrs := f.Get("file.modTime")
-	if timeStrs == nil {
-		return time.Time{}, errMetadataKeyNotExist
+func (f xlMetadata) SetFileInfo(fileInfo FileInfo) {
+	f["xl.file"] = map[string]interface{}{
+		"size":    fileInfo.Size,
+		"modTime": fileInfo.ModTime.Format(timeFormatAMZ),
 	}
-	return time.Parse(timeFormatAMZ, timeStrs[0])
-}
-
-// Set file Modification time.
-func (f fileMetadata) SetModTime(modTime time.Time) {
-	f.Set("file.modTime", modTime.Format(timeFormatAMZ))
+	fmt.Println(f)
 }
 
 // Get file version.
-func (f fileMetadata) GetFileVersion() (int64, error) {
-	version := f.Get("file.version")
-	if version == nil {
+func (f xlMetadata) GetFileVersion() (int64, error) {
+	xlFileVersion, ok := f["xl.file.Version"]
+	if !ok {
 		return 0, errMetadataKeyNotExist
 	}
-	return strconv.ParseInt(version[0], 10, 64)
+	version, ok := xlFileVersion.(int64)
+	if !ok {
+		return 0, errMetadataFormatErr
+	}
+	return version, nil
 }
 
 // Set file version.
-func (f fileMetadata) SetFileVersion(fileVersion int64) {
-	f.Set("file.version", strconv.FormatInt(fileVersion, 10))
+func (f xlMetadata) SetFileVersion(fileVersion int64) {
+	f["xl.file.version"] = fileVersion
 }
 
-// fileMetadataDecode - file metadata decode.
-func fileMetadataDecode(reader io.Reader) (fileMetadata, error) {
-	metadata := make(fileMetadata)
+// xlMetadataDecode - xl metadata decode.
+func xlMetadataDecode(reader io.Reader) (xlMetadata, error) {
+	metadata := make(xlMetadata)
 	decoder := json.NewDecoder(reader)
 	// Unmarshalling failed, file possibly corrupted.
 	if err := decoder.Decode(&metadata); err != nil {

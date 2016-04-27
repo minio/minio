@@ -328,7 +328,7 @@ func (xl XL) isLeafDirectory(volume, leafPath string) (isLeaf bool) {
 }
 
 // extractMetadata - extract file metadata.
-func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
+func (xl XL) extractMetadata(volume, path string) (xlMetadata, error) {
 	metadataFilePath := slashpath.Join(path, metadataFile)
 	// We are not going to read partial data from metadata file,
 	// read the whole file always.
@@ -346,13 +346,13 @@ func (xl XL) extractMetadata(volume, path string) (fileMetadata, error) {
 	// Close metadata reader.
 	defer metadataReader.Close()
 
-	metadata, err := fileMetadataDecode(metadataReader)
+	metadata, err := xlMetadataDecode(metadataReader)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   metadataFilePath,
 			"offset": offset,
-		}).Errorf("fileMetadataDecode failed with %s", err)
+		}).Errorf("xlMetadataDecode failed with %s", err)
 		return nil, err
 	}
 	return metadata, nil
@@ -372,25 +372,17 @@ func (xl XL) extractFileInfo(volume, path string) (FileInfo, error) {
 		}).Errorf("extractMetadata failed with %s", err)
 		return FileInfo{}, err
 	}
-	fileSize, err := metadata.GetSize()
+	fi, err := metadata.GetFileInfo()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Errorf("GetSize failed with %s", err)
+		}).Errorf("GetFileInfo failed with %s", err)
 		return FileInfo{}, err
 	}
-	fileModTime, err := metadata.GetModTime()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetModTime failed with %s", err)
-		return FileInfo{}, err
-	}
-	fileInfo.Size = fileSize
+	fileInfo.Size = fi.Size
+	fileInfo.ModTime = fi.ModTime
 	fileInfo.Mode = os.FileMode(0644)
-	fileInfo.ModTime = fileModTime
 	return fileInfo, nil
 }
 
@@ -545,21 +537,13 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		}
 	}
 
-	// Extract metadata.
-	size, err := metadata.GetSize()
+	// Extract file info
+	fi, err := metadata.GetFileInfo()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Errorf("GetSize failed with %s", err)
-		return FileInfo{}, err
-	}
-	modTime, err := metadata.GetModTime()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetModTime failed with %s", err)
+		}).Errorf("GetFileInfo failed with %s", err)
 		return FileInfo{}, err
 	}
 
@@ -567,8 +551,8 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
-		Size:    size,
-		ModTime: modTime,
+		Size:    fi.Size,
+		ModTime: fi.ModTime,
 		Mode:    os.FileMode(0644),
 	}, nil
 }

@@ -62,12 +62,21 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
-	fileSize, err := metadata.GetSize()
+	fi, err := metadata.GetFileInfo()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Errorf("Failed to get file size, %s", err)
+		}).Errorf("Failed to get file info, %s", err)
+		return nil, err
+	}
+
+	eInfo, err := metadata.GetXLErasureInfo()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Errorf("Failed to get erasure info, %s", err)
 		return nil, err
 	}
 
@@ -88,7 +97,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		var totalLeft = fileSize
+		var totalLeft = fi.Size
 		// Read until the totalLeft.
 		for totalLeft > 0 {
 			// Figure out the right blockSize as it was encoded before.
@@ -99,7 +108,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 				curBlockSize = int(totalLeft)
 			}
 			// Calculate the current encoded block size.
-			curEncBlockSize := getEncodedBlockLen(curBlockSize, xl.DataBlocks)
+			curEncBlockSize := getEncodedBlockLen(curBlockSize, eInfo.dataBlocks)
 			enBlocks := make([][]byte, len(xl.storageDisks))
 			// Loop through all readers and read.
 			for index, reader := range readers {
@@ -113,8 +122,6 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					readers[index] = nil
 				}
 			}
-
-			// TODO need to verify block512Sum.
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
