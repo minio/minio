@@ -229,10 +229,9 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 	prefixPath := pathJoin(bucket, prefix)
 	keyMarkerPath := ""
 	if keyMarker != "" {
-		keyMarkerPath = path.Join(bucket, keyMarker, uploadIDMarker)
+		keyMarkerPath = pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
 	}
-	// List all the multipart files at prefixPath, starting with
-	// marker keyMarkerPath.
+	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
 	fileInfos, eof, e := o.listMetaVolumeFiles(prefixPath, keyMarkerPath, recursive, maxUploads)
 	if e != nil {
 		log.WithFields(logrus.Fields{
@@ -243,14 +242,16 @@ func (o objectAPI) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarke
 		}).Errorf("listMetaVolumeFiles failed with %s", e)
 		return ListMultipartsInfo{}, probe.NewError(e)
 	}
+
+	// Loop through all the received files fill in the multiparts result.
 	for _, fi := range fileInfos {
 		var objectName string
 		var uploadID string
 		if fi.Mode.IsDir() {
+			// All directory entries are common prefixes.
+			uploadID = "" // Upload ids are empty for CommonPrefixes.
 			objectName = strings.TrimPrefix(fi.Name, retainSlash(bucket))
-			// For a directory entry
 			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
-			continue
 		} else {
 			uploadID = path.Base(fi.Name)
 			objectName = strings.TrimPrefix(path.Dir(fi.Name), retainSlash(bucket))
