@@ -52,7 +52,6 @@ func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.
 func (o objectAPI) listLeafEntries(prefixPath string) (entries []FileInfo, e error) {
-	var allFileInfos []FileInfo
 	var markerPath string
 	for {
 		fileInfos, eof, e := o.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
@@ -63,20 +62,22 @@ func (o objectAPI) listLeafEntries(prefixPath string) (entries []FileInfo, e err
 			}).Errorf("%s", e)
 			return nil, e
 		}
-		allFileInfos = append(allFileInfos, fileInfos...)
+		for _, fileInfo := range fileInfos {
+			// Set marker for next batch of ListFiles.
+			markerPath = fileInfo.Name
+			if fileInfo.Mode.IsDir() {
+				// If a directory is found, doesn't return anything.
+				return nil, nil
+			}
+			fileName := path.Base(fileInfo.Name)
+			if !strings.Contains(fileName, ".") {
+				// Skip the entry if it is of the pattern bucket/object/uploadID.partNum.md5sum
+				// and retain entries of the pattern bucket/object/uploadID
+				entries = append(entries, fileInfo)
+			}
+		}
 		if eof {
 			break
-		}
-		markerPath = allFileInfos[len(allFileInfos)-1].Name
-	}
-	for _, fileInfo := range allFileInfos {
-		if fileInfo.Mode.IsDir() {
-			// If a directory is found, doesn't return anything.
-			return nil, nil
-		}
-		fileName := path.Base(fileInfo.Name)
-		if !strings.Contains(fileName, ".") {
-			entries = append(entries, fileInfo)
 		}
 	}
 	return entries, nil
