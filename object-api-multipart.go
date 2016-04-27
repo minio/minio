@@ -107,15 +107,17 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 		// Loop through and validate individual file.
 		for _, fi := range fileInfos {
 			var entries []FileInfo
-			// List all the entries if fi.Name is a leaf directory, if
-			// fi.Name is not a leaf directory them the resulting
-			// entries are empty.
-			entries, e = o.listLeafEntries(fi.Name)
-			if e != nil {
-				log.WithFields(logrus.Fields{
-					"prefixPath": fi.Name,
-				}).Errorf("%s", e)
-				return nil, false, e
+			if fi.Mode.IsDir() {
+				// List all the entries if fi.Name is a leaf directory, if
+				// fi.Name is not a leaf directory them the resulting
+				// entries are empty.
+				entries, e = o.listLeafEntries(fi.Name)
+				if e != nil {
+					log.WithFields(logrus.Fields{
+						"prefixPath": fi.Name,
+					}).Errorf("%s", e)
+					return nil, false, e
+				}
 			}
 			// Set markerPath for next batch of listing.
 			markerPath = fi.Name
