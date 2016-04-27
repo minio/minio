@@ -536,13 +536,16 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	}
 
 	if heal {
-		if err = xl.healFile(volume, path); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("healFile failed with %s", err)
-			return FileInfo{}, err
-		}
+		// Heal in background safely, since we already have read quorum disks.
+		go func() {
+			if err = xl.healFile(volume, path); err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Errorf("healFile failed with %s", err)
+				return
+			}
+		}()
 	}
 
 	// Extract metadata.
