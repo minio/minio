@@ -32,4 +32,5 @@ type StorageAPI interface {
 	CreateFile(volume string, path string) (writeCloser io.WriteCloser, err error)
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
+	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 }

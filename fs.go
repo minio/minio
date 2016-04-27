@@ -25,6 +25,8 @@ import (
 	"sync"
 	"syscall"
 
+	"path"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/safe"
@@ -729,4 +731,29 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 
 	// Delete file and delete parent directory as well if its empty.
 	return deleteFile(volumeDir, filePath)
+}
+
+// RenameFile - rename file.
+func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+	srcVolumeDir, err := s.getVolumeDir(srcVolume)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"diskPath": s.diskPath,
+			"volume":   srcVolume,
+		}).Debugf("getVolumeDir failed with %s", err)
+		return err
+	}
+	dstVolumeDir, err := s.getVolumeDir(dstVolume)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"diskPath": s.diskPath,
+			"volume":   dstVolume,
+		}).Debugf("getVolumeDir failed with %s", err)
+		return err
+	}
+	if err = os.MkdirAll(path.Join(dstVolumeDir, path.Dir(dstPath)), 0755); err != nil {
+		log.Debug("os.MkdirAll failed with %s", err)
+		return err
+	}
+	return os.Rename(path.Join(srcVolumeDir, srcPath), path.Join(dstVolumeDir, dstPath))
 }
