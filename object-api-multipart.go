@@ -109,7 +109,7 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 			var entries []FileInfo
 			if fi.Mode.IsDir() {
 				// List all the entries if fi.Name is a leaf directory, if
-				// fi.Name is not a leaf directory them the resulting
+				// fi.Name is not a leaf directory then the resulting
 				// entries are empty.
 				entries, e = o.listLeafEntries(fi.Name)
 				if e != nil {
@@ -128,8 +128,13 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 				for _, entry := range entries {
 					allFileInfos = append(allFileInfos, entry)
 					newMaxKeys++
+					// If we have reached the maxKeys, it means we have listed
+					// everything that was requested. Return right here.
 					if newMaxKeys == maxKeys {
-						// eof value is automatically taken care of.
+						// Return values:
+						// allFileInfos : "maxKeys" number of entries.
+						// eof : eof returned by o.storage.ListFiles()
+						// error : nil
 						return
 					}
 				}
@@ -150,8 +155,13 @@ func (o objectAPI) listMetaVolumeFiles(prefixPath string, markerPath string, rec
 			}
 			allFileInfos = append(allFileInfos, fi)
 			newMaxKeys++
+			// If we have reached the maxKeys, it means we have listed
+			// everything that was requested. Return right here.
 			if newMaxKeys == maxKeys {
-				// eof value is automatically taken care of.
+				// Return values:
+				// allFileInfos : "maxKeys" number of entries.
+				// eof : eof returned by o.storage.ListFiles()
+				// error : nil
 				return
 			}
 		}
