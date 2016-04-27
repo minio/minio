@@ -49,18 +49,18 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	if heal {
-		if err = xl.healFile(volume, path); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("healFile failed with %s", err)
-			return nil, err
-		}
+		// Heal in background safely, since we already have read
+		// quorum disks. Let the reads continue.
+		go func() {
+			if err = xl.healFile(volume, path); err != nil {
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Errorf("healFile failed with %s", err)
+				return
+			}
+		}()
 	}
-
-	// Acquire read lock again.
-	xl.lockNS(volume, path, readLock)
-	defer xl.unlockNS(volume, path, readLock)
 
 	fileSize, err := metadata.GetSize()
 	if err != nil {
@@ -71,6 +71,8 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		return nil, err
 	}
 
+	// Acquire read lock again.
+	xl.lockNS(volume, path, readLock)
 	readers := make([]io.ReadCloser, len(xl.storageDisks))
 	for index, disk := range onlineDisks {
 		if disk == nil {
@@ -84,6 +86,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			readers[index] = reader
 		}
 	}
+	xl.unlockNS(volume, path, readLock)
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()

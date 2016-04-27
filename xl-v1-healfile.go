@@ -37,6 +37,7 @@ func (xl XL) healFile(volume string, path string) error {
 	xl.lockNS(volume, path, readLock)
 	defer xl.unlockNS(volume, path, readLock)
 
+	// Fetch all online disks.
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	if err != nil {
 		log.WithFields(logrus.Fields{
