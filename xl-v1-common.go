@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	slashpath "path"
 	"path/filepath"
@@ -37,7 +36,7 @@ func highestInt(intSlice []int64) (highestInteger int64) {
 }
 
 // Extracts file versions from partsMetadata slice and returns version slice.
-func listFileVersions(partsMetadata []fileMetadata, errs []error) (versions []int64, err error) {
+func listFileVersions(partsMetadata []xlMetadata, errs []error) (versions []int64, err error) {
 	versions = make([]int64, len(partsMetadata))
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
@@ -46,14 +45,14 @@ func listFileVersions(partsMetadata []fileMetadata, errs []error) (versions []in
 			if err == errMetadataKeyNotExist {
 				log.WithFields(logrus.Fields{
 					"metadata": metadata,
-				}).Errorf("Missing 'file.version', %s", errMetadataKeyNotExist)
+				}).Errorf("Missing 'xl.file.version', %s", errMetadataKeyNotExist)
 				versions[index] = 0
 				continue
 			}
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"metadata": metadata,
-				}).Errorf("'file.version' decoding failed with %s", err)
+				}).Errorf("'xl.file.version' decoding failed with %s", err)
 				// Unexpected, return error.
 				return nil, err
 			}
@@ -67,10 +66,10 @@ func listFileVersions(partsMetadata []fileMetadata, errs []error) (versions []in
 
 // Returns slice of online disks needed.
 // - slice returing readable disks.
-// - fileMetadata
+// - xlMetadata
 // - bool value indicating if healing is needed.
 // - error if any.
-func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata fileMetadata, heal bool, err error) {
+func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata xlMetadata, heal bool, err error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	notFoundCount := 0
 	// FIXME: take care of the situation when a disk has failed and been removed
@@ -83,7 +82,7 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 			// If we have errors with file not found greater than allowed read
 			// quorum we return err as errFileNotFound.
 			if notFoundCount > xl.readQuorum {
-				return nil, fileMetadata{}, false, errFileNotFound
+				return nil, xlMetadata{}, false, errFileNotFound
 			}
 		}
 	}
@@ -96,7 +95,7 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 			"volume": volume,
 			"path":   path,
 		}).Errorf("Extracting file versions failed with %s", err)
-		return nil, fileMetadata{}, false, err
+		return nil, xlMetadata{}, false, err
 	}
 
 	// Get highest file version.
@@ -130,7 +129,7 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 				"onlineDiskCount": onlineDiskCount,
 				"readQuorumCount": xl.readQuorum,
 			}).Errorf("%s", errReadQuorum)
-			return nil, fileMetadata{}, false, errReadQuorum
+			return nil, xlMetadata{}, false, errReadQuorum
 		}
 	}
 	return onlineDisks, mdata, heal, nil
@@ -139,9 +138,9 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 // Get parts.json metadata as a map slice.
 // Returns error slice indicating the failed metadata reads.
 // Read lockNS() should be done by caller.
-func (xl XL) getPartsMetadata(volume, path string) ([]fileMetadata, []error) {
+func (xl XL) getPartsMetadata(volume, path string) ([]xlMetadata, []error) {
 	errs := make([]error, len(xl.storageDisks))
-	metadataArray := make([]fileMetadata, len(xl.storageDisks))
+	metadataArray := make([]xlMetadata, len(xl.storageDisks))
 	metadataFilePath := slashpath.Join(path, metadataFile)
 	for index, disk := range xl.storageDisks {
 		offset := int64(0)
@@ -152,7 +151,7 @@ func (xl XL) getPartsMetadata(volume, path string) ([]fileMetadata, []error) {
 		}
 		defer metadataReader.Close()
 
-		metadata, err := fileMetadataDecode(metadataReader)
+		metadata, err := xlMetadataDecode(metadataReader)
 		if err != nil {
 			// Unable to parse parts.json, set error.
 			errs[index] = err
@@ -169,20 +168,12 @@ func (xl XL) getPartsMetadata(volume, path string) ([]fileMetadata, []error) {
 // Returns collection of errors, indexed in accordance with input
 // updateParts order.
 // Write lockNS() should be done by caller.
-func (xl XL) setPartsMetadata(volume, path string, metadata fileMetadata, updateParts []bool) []error {
+func (xl XL) setPartsMetadata(volume, path string, metadata xlMetadata, updateParts []bool) []error {
 	metadataFilePath := filepath.Join(path, metadataFile)
 	errs := make([]error, len(xl.storageDisks))
 
 	for index := range updateParts {
 		errs[index] = errors.New("Metadata not updated")
-	}
-
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		for index := range updateParts {
-			errs[index] = err
-		}
-		return errs
 	}
 
 	for index, shouldUpdate := range updateParts {
@@ -194,7 +185,7 @@ func (xl XL) setPartsMetadata(volume, path string, metadata fileMetadata, update
 		if err != nil {
 			continue
 		}
-		_, err = writer.Write(metadataBytes)
+		err = metadata.Write(writer)
 		if err != nil {
 			errs[index] = err
 			safeCloseAndRemove(writer)
