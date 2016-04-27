@@ -531,7 +531,7 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
 			"path":   path,
-		}).Errorf("getReadableDisks failed with %s", err)
+		}).Errorf("listOnlineDisks failed with %s", err)
 		return FileInfo{}, err
 	}
 
@@ -540,7 +540,7 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
-			}).Errorf("doHealFile failed with %s", err)
+			}).Errorf("healFile failed with %s", err)
 			return FileInfo{}, err
 		}
 	}
