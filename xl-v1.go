@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	slashpath "path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -554,6 +555,8 @@ func (xl XL) listFiles(disk StorageAPI, volume, prefix, marker string, recursive
 			break
 		}
 	}
+	// Sort to make sure we sort entries back properly.
+	sort.Sort(byFileInfoName(filesInfo))
 	return filesInfo, eof, nil
 }
 
