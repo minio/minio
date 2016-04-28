@@ -406,8 +406,54 @@ func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int)
 	if !isValidVolname(volume) {
 		return nil, true, errInvalidArgument
 	}
-	// Pick the first disk and list there always.
-	disk := xl.storageDisks[0]
+
+	// TODO: Fix: If readQuorum is met, its assumed that disks are in consistent file list.
+	// exclude disks those are not in consistent file list and check count of remaining disks
+	// are met readQuorum.
+
+	// Treat empty file list specially
+	emptyCount := 0
+	errCount := 0
+	successCount := 0
+
+	var firstFilesInfo []FileInfo
+	var firstEOF bool
+	var firstErr error
+
+	for _, disk := range xl.storageDisks {
+		if filesInfo, eof, err = xl.listFiles(disk, volume, prefix, marker, recursive, count); err == nil {
+			// we need to return first successful result
+			if firstFilesInfo == nil {
+				firstFilesInfo = filesInfo
+				firstEOF = eof
+			}
+
+			if len(filesInfo) == 0 {
+				emptyCount++
+			} else {
+				successCount++
+			}
+		} else {
+			if firstErr == nil {
+				firstErr = err
+			}
+
+			errCount++
+		}
+	}
+
+	if errCount >= xl.readQuorum {
+		return nil, false, firstErr
+	} else if successCount >= xl.readQuorum {
+		return firstFilesInfo, firstEOF, nil
+	} else if emptyCount >= xl.readQuorum {
+		return []FileInfo{}, true, nil
+	}
+
+	return nil, false, errReadQuorum
+}
+
+func (xl XL) listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, count int) (filesInfo []FileInfo, eof bool, err error) {
 	var fsFilesInfo []FileInfo
 	var markerPath = marker
 	if marker != "" {
