@@ -38,6 +38,18 @@ func newObjectLayer(storage StorageAPI) objectAPI {
 	return objectAPI{storage}
 }
 
+// checks whether bucket exists.
+func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
+	// Check whether bucket exists.
+	if _, e := o.storage.StatVol(bucketName); e != nil {
+		if e == errVolumeNotFound {
+			return false, nil
+		}
+		return false, e
+	}
+	return true, nil
+}
+
 /// Bucket operations
 
 // MakeBucket - make a bucket.
@@ -199,6 +211,15 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 			Object: object,
 		})
 	}
+	// Check whether the bucket exists.
+	isExist, err := o.isBucketExist(bucket)
+	if err != nil {
+		return "", probe.NewError(err)
+	}
+	if !isExist {
+		return "", probe.NewError(BucketNotFound{Bucket: bucket})
+	}
+
 	fileWriter, e := o.storage.CreateFile(bucket, object)
 	if e != nil {
 		return "", probe.NewError(toObjectErr(e, bucket, object))

@@ -30,7 +30,7 @@ import (
 
 // TODO - enable all the commented tests.
 
-// APITestSuite - collection of API tests
+// APITestSuite - collection of API tests.
 func APITestSuite(c *check.C, create func() objectAPI) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
@@ -49,12 +49,15 @@ func APITestSuite(c *check.C, create func() objectAPI) {
 	testMultipartObjectAbort(c, create)
 }
 
+// Tests validate bucket creation.
 func testMakeBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket-unknown")
 	c.Assert(err, check.IsNil)
+
 }
 
+// Tests validate creation of part files during Multipart operation.
 func testMultipartObjectCreation(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -79,6 +82,7 @@ func testMultipartObjectCreation(c *check.C, create func() objectAPI) {
 	c.Assert(md5Sum, check.Equals, "7dd76eded6f7c3580a78463a7cf539bd-10")
 }
 
+// Tests validate abortion of Multipart operation.
 func testMultipartObjectAbort(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -110,6 +114,7 @@ func testMultipartObjectAbort(c *check.C, create func() objectAPI) {
 	c.Assert(err, check.IsNil)
 }
 
+// Tests validate object creation.
 func testMultipleObjectCreation(c *check.C, create func() objectAPI) {
 	objects := make(map[string][]byte)
 	obj := create()
@@ -151,6 +156,7 @@ func testMultipleObjectCreation(c *check.C, create func() objectAPI) {
 	}
 }
 
+// Tests validate creation of objects and the order of listing using various filters for ListObjects operation.
 func testPaging(c *check.C, create func() objectAPI) {
 	obj := create()
 	obj.MakeBucket("bucket")
@@ -158,7 +164,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 	c.Assert(err, check.IsNil)
 	c.Assert(len(result.Objects), check.Equals, 0)
 	c.Assert(result.IsTruncated, check.Equals, false)
-	// check before paging occurs
+	// check before paging occurs.
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject("bucket", key, int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
@@ -169,7 +175,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(len(result.Objects), check.Equals, i+1)
 		c.Assert(result.IsTruncated, check.Equals, false)
 	}
-	// check after paging occurs pages work
+	// check after paging occurs pages work.
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject("bucket", key, int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
@@ -179,7 +185,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(len(result.Objects), check.Equals, 5)
 		c.Assert(result.IsTruncated, check.Equals, true)
 	}
-	// check paging with prefix at end returns less objects
+	// check paging with prefix at end returns less objects.
 	{
 		_, err = obj.PutObject("bucket", "newPrefix", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 		c.Assert(err, check.IsNil)
@@ -190,7 +196,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(len(result.Objects), check.Equals, 2)
 	}
 
-	// check ordering of pages
+	// check ordering of pages.
 	{
 		result, err = obj.ListObjects("bucket", "", "", "", 1000)
 		c.Assert(err, check.IsNil)
@@ -201,7 +207,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(result.Objects[4].Name, check.Equals, "obj10")
 	}
 
-	// check delimited results with delimiter and prefix
+	// check delimited results with delimiter and prefix.
 	{
 		_, err = obj.PutObject("bucket", "this/is/delimited", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 		c.Assert(err, check.IsNil)
@@ -213,7 +219,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(result.Prefixes[0], check.Equals, "this/is/also/")
 	}
 
-	// check delimited results with delimiter without prefix
+	// check delimited results with delimiter without prefix.
 	{
 		result, err = obj.ListObjects("bucket", "", "", "/", 1000)
 		c.Assert(err, check.IsNil)
@@ -225,7 +231,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(result.Prefixes[0], check.Equals, "this/")
 	}
 
-	// check results with Marker
+	// check results with Marker.
 	{
 
 		result, err = obj.ListObjects("bucket", "", "newPrefix", "", 3)
@@ -235,7 +241,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(result.Objects[2].Name, check.Equals, "obj1")
 
 	}
-	// check ordering of results with prefix
+	// check ordering of results with prefix.
 	{
 		result, err = obj.ListObjects("bucket", "obj", "", "", 1000)
 		c.Assert(err, check.IsNil)
@@ -245,7 +251,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 		c.Assert(result.Objects[3].Name, check.Equals, "obj2")
 		c.Assert(result.Objects[4].Name, check.Equals, "obj3")
 	}
-	// check ordering of results with prefix and no paging
+	// check ordering of results with prefix and no paging.
 	{
 		result, err = obj.ListObjects("bucket", "new", "", "", 5)
 		c.Assert(err, check.IsNil)
@@ -254,6 +260,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 	}
 }
 
+// Tests validate overwriting of an existing object.
 func testObjectOverwriteWorks(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -276,20 +283,25 @@ func testObjectOverwriteWorks(c *check.C, create func() objectAPI) {
 	c.Assert(r.Close(), check.IsNil)
 }
 
+// Tests validate that bucket operation on non-existent bucket fails.
 func testNonExistantBucketOperations(c *check.C, create func() objectAPI) {
 	obj := create()
 	_, err := obj.PutObject("bucket1", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
+	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket not found: bucket1")
 }
 
+// Tests validate that recreation of the bucket fails.
 func testBucketRecreateFails(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("string")
 	c.Assert(err, check.IsNil)
 	err = obj.MakeBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
+	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket exists: string")
 }
 
+// Tests validate PutObject with subdirectory prefix.
 func testPutObjectInSubdir(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -308,15 +320,16 @@ func testPutObjectInSubdir(c *check.C, create func() objectAPI) {
 	c.Assert(r.Close(), check.IsNil)
 }
 
+// Tests validate ListBuckets.
 func testListBuckets(c *check.C, create func() objectAPI) {
 	obj := create()
 
-	// test empty list
+	// test empty list.
 	buckets, err := obj.ListBuckets()
 	c.Assert(err, check.IsNil)
 	c.Assert(len(buckets), check.Equals, 0)
 
-	// add one and test exists
+	// add one and test exists.
 	err = obj.MakeBucket("bucket1")
 	c.Assert(err, check.IsNil)
 
@@ -324,7 +337,7 @@ func testListBuckets(c *check.C, create func() objectAPI) {
 	c.Assert(len(buckets), check.Equals, 1)
 	c.Assert(err, check.IsNil)
 
-	// add two and test exists
+	// add two and test exists.
 	err = obj.MakeBucket("bucket2")
 	c.Assert(err, check.IsNil)
 
@@ -332,7 +345,7 @@ func testListBuckets(c *check.C, create func() objectAPI) {
 	c.Assert(len(buckets), check.Equals, 2)
 	c.Assert(err, check.IsNil)
 
-	// add three and test exists + prefix
+	// add three and test exists + prefix.
 	err = obj.MakeBucket("bucket22")
 
 	buckets, err = obj.ListBuckets()
@@ -340,12 +353,13 @@ func testListBuckets(c *check.C, create func() objectAPI) {
 	c.Assert(err, check.IsNil)
 }
 
+// Tests validate the order of result of ListBuckets.
 func testListBucketsOrder(c *check.C, create func() objectAPI) {
 	// if implementation contains a map, order of map keys will vary.
-	// this ensures they return in the same order each time
+	// this ensures they return in the same order each time.
 	for i := 0; i < 10; i++ {
 		obj := create()
-		// add one and test exists
+		// add one and test exists.
 		err := obj.MakeBucket("bucket1")
 		c.Assert(err, check.IsNil)
 		err = obj.MakeBucket("bucket2")
@@ -358,14 +372,17 @@ func testListBucketsOrder(c *check.C, create func() objectAPI) {
 	}
 }
 
+// Tests validate that ListObjects operation on a non-existent bucket fails as expected.
 func testListObjectsTestsForNonExistantBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	result, err := obj.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(result.IsTruncated, check.Equals, false)
 	c.Assert(len(result.Objects), check.Equals, 0)
+	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket not found: bucket")
 }
 
+// Tests validate that GetObject fails on a non-existent bucket as expected.
 func testNonExistantObjectInBucket(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -381,6 +398,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() objectAPI) {
 	}
 }
 
+// Tests validate that GetObject on an existing directory fails as expected.
 func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -395,7 +413,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) 
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1")
 	default:
-		// force a failure with a line number
+		// force a failure with a line number.
 		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
 
@@ -405,17 +423,18 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) 
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1/")
 	default:
-		// force a failure with a line number
+		// force a failure with a line number.
 		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
 }
 
+// Tests valdiate the default ContentType.
 func testDefaultContentType(c *check.C, create func() objectAPI) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	// Test empty
+	// Test empty.
 	_, err = obj.PutObject("bucket", "one", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 	c.Assert(err, check.IsNil)
 	objInfo, err := obj.GetObjectInfo("bucket", "one")

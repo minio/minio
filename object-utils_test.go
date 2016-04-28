@@ -30,8 +30,8 @@ func TestIsValidBucketName(t *testing.T) {
 		bucketName string
 		shouldPass bool
 	}{
-		//cases which should pass the test
-		//passing in valid bucket names
+		// cases which should pass the test.
+		// passing in valid bucket names.
 		{"lol", true},
 		{"1-this-is-valid", true},
 		{"1-this-too-is-valid-1", true},
@@ -43,8 +43,8 @@ func TestIsValidBucketName(t *testing.T) {
 		{"testbucket", true},
 		{"1bucket", true},
 		{"bucket1", true},
-		//cases for which test should fail
-		//passing invalid bucket names
+		// cases for which test should fail.
+		// passing invalid bucket names.
 		{"------", false},
 		{"$this-is-not-valid-too", false},
 		{"contains-$-dollar", false},
@@ -83,16 +83,16 @@ func TestIsValidObjectName(t *testing.T) {
 		objectName string
 		shouldPass bool
 	}{
-		//cases which should pass the test
-		//passing in valid object name
+		// cases which should pass the test.
+		// passing in valid object name.
 		{"object", true},
 		{"The Shining Script <v1>.pdf", true},
 		{"Cost Benefit Analysis (2009-2010).pptx", true},
 		{"117Gn8rfHL2ACARPAhaFd0AGzic9pUbIA/5OCn5A", true},
 		{"SHØRT", true},
 		{"There are far too many object names, and far too few bucket names!", true},
-		//cases for which test should fail
-		//passing invalid object names
+		// cases for which test should fail.
+		// passing invalid object names.
 		{"", false},
 		{string([]byte{0xff, 0xfe, 0xfd}), false},
 	}

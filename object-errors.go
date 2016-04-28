@@ -60,7 +60,7 @@ func toObjectErr(err error, params ...string) error {
 	return err
 }
 
-// StorageFull storage ran out of space
+// StorageFull storage ran out of space.
 type StorageFull struct{}
 
 func (e StorageFull) Error() string {
@@ -87,21 +87,21 @@ type GenericError struct {
 	Object string
 }
 
-// BucketNotFound bucket does not exist
+// BucketNotFound bucket does not exist.
 type BucketNotFound GenericError
 
 func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
 }
 
-// BucketNotEmpty bucket is not empty
+// BucketNotEmpty bucket is not empty.
 type BucketNotEmpty GenericError
 
 func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
-// ObjectNotFound object does not exist
+// ObjectNotFound object does not exist.
 type ObjectNotFound GenericError
 
 func (e ObjectNotFound) Error() string {
@@ -115,7 +115,7 @@ func (e ObjectExistsAsPrefix) Error() string {
 	return "Object exists on : " + e.Bucket + " as prefix " + e.Object
 }
 
-// BucketExists bucket exists
+// BucketExists bucket exists.
 type BucketExists GenericError
 
 func (e BucketExists) Error() string {
@@ -129,7 +129,7 @@ type BadDigest struct {
 }
 
 func (e BadDigest) Error() string {
-	return "Bad digest expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
+	return "Bad digest: Expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
 }
 
 // UnsupportedDelimiter - unsupported delimiter.
@@ -166,22 +166,22 @@ func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
-/// Bucket related errors
+/// Bucket related errors.
 
-// BucketNameInvalid - bucketname provided is invalid
+// BucketNameInvalid - bucketname provided is invalid.
 type BucketNameInvalid GenericError
 
-// Return string an error formatted as the given text
+// Return string an error formatted as the given text.
 func (e BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + e.Bucket
 }
 
-/// Object related errors
+/// Object related errors.
 
-// ObjectNameInvalid - object name provided is invalid
+// ObjectNameInvalid - object name provided is invalid.
 type ObjectNameInvalid GenericError
 
-// Return string an error formatted as the given text
+// Return string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
 }
@@ -195,15 +195,15 @@ func (e UnExpectedDataSize) Error() string {
 	return fmt.Sprintf("Contains more data than specified size of %d bytes.", e.Size)
 }
 
-// IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header
+// IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
 type IncompleteBody GenericError
 
-// Return string an error formatted as the given text
+// Return string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
 }
 
-/// Multipart related errors
+/// Multipart related errors.
 
 // MalformedUploadID malformed upload id.
 type MalformedUploadID struct {
