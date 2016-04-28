@@ -30,7 +30,7 @@ import (
 
 const (
 	// Part metadata file.
-	metadataFile = "part.json"
+	xlMetaV1File = "xl.json"
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
 )
@@ -325,32 +325,32 @@ func isLeafDirectory(disk StorageAPI, volume, leafPath string) (isLeaf bool) {
 	return true
 }
 
-// extractMetadata - extract file metadata.
-func extractMetadata(disk StorageAPI, volume, path string) (fileMetadata, error) {
-	metadataFilePath := slashpath.Join(path, metadataFile)
+// extractMetadata - extract xl metadata.
+func extractMetadata(disk StorageAPI, volume, path string) (xlMetaV1, error) {
+	xlMetaV1FilePath := slashpath.Join(path, xlMetaV1File)
 	// We are not going to read partial data from metadata file,
 	// read the whole file always.
 	offset := int64(0)
-	metadataReader, err := disk.ReadFile(volume, metadataFilePath, offset)
+	metadataReader, err := disk.ReadFile(volume, xlMetaV1FilePath, offset)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
-			"path":   metadataFilePath,
+			"path":   xlMetaV1FilePath,
 			"offset": offset,
 		}).Errorf("ReadFile failed with %s", err)
-		return nil, err
+		return xlMetaV1{}, err
 	}
 	// Close metadata reader.
 	defer metadataReader.Close()
 
-	metadata, err := fileMetadataDecode(metadataReader)
+	metadata, err := xlMetaV1Decode(metadataReader)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
-			"path":   metadataFilePath,
+			"path":   xlMetaV1FilePath,
 			"offset": offset,
-		}).Errorf("fileMetadataDecode failed with %s", err)
-		return nil, err
+		}).Errorf("xlMetaV1Decode failed with %s", err)
+		return xlMetaV1{}, err
 	}
 	return metadata, nil
 }
@@ -369,25 +369,9 @@ func extractFileInfo(disk StorageAPI, volume, path string) (FileInfo, error) {
 		}).Errorf("extractMetadata failed with %s", err)
 		return FileInfo{}, err
 	}
-	fileSize, err := metadata.GetSize()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetSize failed with %s", err)
-		return FileInfo{}, err
-	}
-	fileModTime, err := metadata.GetModTime()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetModTime failed with %s", err)
-		return FileInfo{}, err
-	}
-	fileInfo.Size = fileSize
-	fileInfo.Mode = os.FileMode(0644)
-	fileInfo.ModTime = fileModTime
+	fileInfo.Size = metadata.Stat.Size
+	fileInfo.ModTime = metadata.Stat.ModTime
+	fileInfo.Mode = os.FileMode(0644) // This is a file already.
 	return fileInfo, nil
 }
 
@@ -458,7 +442,7 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 		if isLeaf {
 			// For leaf for now we just point to the first block, make it
 			// dynamic in future based on the availability of storage disks.
-			markerPath = slashpath.Join(marker, metadataFile)
+			markerPath = slashpath.Join(marker, xlMetaV1File)
 		}
 	}
 
@@ -478,7 +462,7 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 		}
 		for _, fsFileInfo := range fsFilesInfo {
 			// Skip metadata files.
-			if strings.HasSuffix(fsFileInfo.Name, metadataFile) {
+			if strings.HasSuffix(fsFileInfo.Name, xlMetaV1File) {
 				continue
 			}
 			var fileInfo FileInfo
@@ -518,9 +502,8 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 			// markerPath for the next disk.ListFiles() iteration.
 			markerPath = fsFilesInfo[len(fsFilesInfo)-1].Name
 		}
-		if count == 0 && recursive && !strings.HasSuffix(markerPath, metadataFile) {
-			// If last entry is not part.json then loop once more to check if we
-			// have reached eof.
+		if count == 0 && recursive && !strings.HasSuffix(markerPath, xlMetaV1File) {
+			// If last entry is not xl.json then loop once more to check if we have reached eof.
 			fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, 1)
 			if err != nil {
 				log.WithFields(logrus.Fields{
@@ -533,17 +516,17 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 				return nil, true, err
 			}
 			if !eof {
-				// part.N and part.json are always in pairs and hence this
-				// entry has to be part.json. If not better to manually investigate
+				// file.N and xl.json are always in pairs and hence this
+				// entry has to be xl.json. If not better to manually investigate
 				// and fix it.
 				// For the next ListFiles() call we can safely assume that the
-				// marker is "object/part.json"
-				if !strings.HasSuffix(fsFilesInfo[0].Name, metadataFile) {
+				// marker is "object/xl.json"
+				if !strings.HasSuffix(fsFilesInfo[0].Name, xlMetaV1File) {
 					log.WithFields(logrus.Fields{
 						"volume":          volume,
 						"prefix":          prefix,
 						"fsFileInfo.Name": fsFilesInfo[0].Name,
-					}).Errorf("ListFiles failed with %s, expected %s to be a part.json file.", err, fsFilesInfo[0].Name)
+					}).Errorf("ListFiles failed with %s, expected %s to be a xl.json file.", err, fsFilesInfo[0].Name)
 					return nil, true, errUnexpected
 				}
 			}
@@ -594,30 +577,12 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		}()
 	}
 
-	// Extract metadata.
-	size, err := metadata.GetSize()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetSize failed with %s", err)
-		return FileInfo{}, err
-	}
-	modTime, err := metadata.GetModTime()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("GetModTime failed with %s", err)
-		return FileInfo{}, err
-	}
-
 	// Return file info.
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
-		Size:    size,
-		ModTime: modTime,
+		Size:    metadata.Stat.Size,
+		ModTime: metadata.Stat.ModTime,
 		Mode:    os.FileMode(0644),
 	}, nil
 }
@@ -632,7 +597,7 @@ func (xl XL) DeleteFile(volume, path string) error {
 	}
 	// Loop through and delete each chunks.
 	for index, disk := range xl.storageDisks {
-		erasureFilePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
+		erasureFilePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		err := disk.DeleteFile(volume, erasureFilePart)
 		if err != nil {
 			log.WithFields(logrus.Fields{
@@ -641,8 +606,8 @@ func (xl XL) DeleteFile(volume, path string) error {
 			}).Errorf("DeleteFile failed with %s", err)
 			return err
 		}
-		metadataFilePath := slashpath.Join(path, metadataFile)
-		err = disk.DeleteFile(volume, metadataFilePath)
+		xlMetaV1FilePath := slashpath.Join(path, xlMetaV1File)
+		err = disk.DeleteFile(volume, xlMetaV1FilePath)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"volume": volume,

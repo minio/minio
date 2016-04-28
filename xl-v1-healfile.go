@@ -50,21 +50,12 @@ func (xl XL) healFile(volume string, path string) error {
 		return nil
 	}
 
-	size, err := metadata.GetSize()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("Failed to get file size, %s", err)
-		return err
-	}
-
 	for index, disk := range onlineDisks {
 		if disk == nil {
 			needsHeal[index] = true
 			continue
 		}
-		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
+		erasurePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
 		// ReedSolomon.Reconstruct() will fail later.
 		var reader io.ReadCloser
@@ -93,7 +84,7 @@ func (xl XL) healFile(volume string, path string) error {
 		if !healNeeded {
 			continue
 		}
-		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
+		erasurePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		writers[index], err = xl.storageDisks[index].CreateFile(volume, erasurePart)
 		if err != nil {
 			log.WithFields(logrus.Fields{
@@ -105,17 +96,17 @@ func (xl XL) healFile(volume string, path string) error {
 			return err
 		}
 	}
-	var totalLeft = size
+	var totalLeft = metadata.Stat.Size
 	for totalLeft > 0 {
 		// Figure out the right blockSize.
-		var curBlockSize int
-		if erasureBlockSize < totalLeft {
-			curBlockSize = erasureBlockSize
+		var curBlockSize int64
+		if metadata.Erasure.BlockSize < totalLeft {
+			curBlockSize = metadata.Erasure.BlockSize
 		} else {
-			curBlockSize = int(totalLeft)
+			curBlockSize = totalLeft
 		}
 		// Calculate the current block size.
-		curBlockSize = getEncodedBlockLen(curBlockSize, xl.DataBlocks)
+		curBlockSize = getEncodedBlockLen(curBlockSize, metadata.Erasure.DataBlocks)
 		enBlocks := make([][]byte, totalBlocks)
 		// Loop through all readers and read.
 		for index, reader := range readers {
@@ -205,7 +196,7 @@ func (xl XL) healFile(volume string, path string) error {
 				return err
 			}
 		}
-		totalLeft = totalLeft - erasureBlockSize
+		totalLeft = totalLeft - metadata.Erasure.BlockSize
 	}
 
 	// After successful healing Close() the writer so that the temp

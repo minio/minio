@@ -62,15 +62,6 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		}()
 	}
 
-	fileSize, err := metadata.GetSize()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("Failed to get file size, %s", err)
-		return nil, err
-	}
-
 	// Acquire read lock again.
 	xl.lockNS(volume, path, readLock)
 	readers := make([]io.ReadCloser, len(xl.storageDisks))
@@ -78,7 +69,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 		if disk == nil {
 			continue
 		}
-		erasurePart := slashpath.Join(path, fmt.Sprintf("part.%d", index))
+		erasurePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
 		// ReedSolomon.Reconstruct() will fail later.
 		var reader io.ReadCloser
@@ -91,18 +82,18 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		var totalLeft = fileSize
+		var totalLeft = metadata.Stat.Size
 		// Read until the totalLeft.
 		for totalLeft > 0 {
 			// Figure out the right blockSize as it was encoded before.
-			var curBlockSize int
-			if erasureBlockSize < totalLeft {
-				curBlockSize = erasureBlockSize
+			var curBlockSize int64
+			if metadata.Erasure.BlockSize < totalLeft {
+				curBlockSize = metadata.Erasure.BlockSize
 			} else {
-				curBlockSize = int(totalLeft)
+				curBlockSize = totalLeft
 			}
 			// Calculate the current encoded block size.
-			curEncBlockSize := getEncodedBlockLen(curBlockSize, xl.DataBlocks)
+			curEncBlockSize := getEncodedBlockLen(curBlockSize, metadata.Erasure.DataBlocks)
 			enBlocks := make([][]byte, len(xl.storageDisks))
 			// Loop through all readers and read.
 			for index, reader := range readers {
@@ -116,8 +107,6 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 					readers[index] = nil
 				}
 			}
-
-			// TODO need to verify block512Sum.
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
@@ -181,7 +170,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			}
 
 			// Join the decoded blocks.
-			err = xl.ReedSolomon.Join(pipeWriter, enBlocks, curBlockSize)
+			err = xl.ReedSolomon.Join(pipeWriter, enBlocks, int(curBlockSize))
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
@@ -192,7 +181,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			}
 
 			// Save what's left after reading erasureBlockSize.
-			totalLeft = totalLeft - erasureBlockSize
+			totalLeft = totalLeft - metadata.Erasure.BlockSize
 		}
 
 		// Cleanly end the pipe after a successful decoding.
