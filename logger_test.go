@@ -22,7 +22,6 @@ import (
 	"errors"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
 
 	. "gopkg.in/check.v1"
 )
@@ -37,7 +36,7 @@ func (s *LoggerSuite) TestLogger(c *C) {
 	log.Out = &buffer
 	log.Formatter = new(logrus.JSONFormatter)
 
-	errorIf(probe.NewError(errors.New("Fake error")), "Failed with error.", nil)
+	errorIf(errors.New("Fake error"), "Failed with error.", nil)
 	err := json.Unmarshal(buffer.Bytes(), &fields)
 	c.Assert(err, IsNil)
 	c.Assert(fields["level"], Equals, "error")

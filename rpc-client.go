@@ -76,8 +76,8 @@ func toStorageErr(err error) error {
 	return err
 }
 
-// Initialize new network file system.
-func newNetworkFS(networkPath string) (StorageAPI, error) {
+// Initialize new rpc client.
+func newRPCClient(networkPath string) (StorageAPI, error) {
 	// Input validation.
 	if networkPath == "" || strings.LastIndex(networkPath, ":") == -1 {
 		log.WithFields(logrus.Fields{

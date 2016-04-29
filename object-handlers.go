@@ -32,7 +32,6 @@ import (
 	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // supportedGetReqParams - supported request parameters for GET presigned request.
@@ -100,7 +99,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Fetch object stat info.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		switch err.ToGoError().(type) {
+		errorIf(err, "GetObjectInfo failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -110,7 +110,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		case ObjectNameInvalid:
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 		default:
-			errorIf(err.Trace(), "GetObjectInfo failed.", nil)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
@@ -137,13 +136,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	startOffset := hrange.start
 	readCloser, err := api.ObjectAPI.GetObject(bucket, object, startOffset)
 	if err != nil {
-		switch err.ToGoError().(type) {
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case ObjectNotFound:
 			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
 		default:
-			errorIf(err.Trace(), "GetObject failed.", nil)
+			errorIf(err, "GetObject failed.", nil)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
@@ -157,14 +156,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setGetRespHeaders(w, r.URL.Query())
 
 	if hrange.length > 0 {
-		if _, e := io.CopyN(w, readCloser, hrange.length); e != nil {
-			errorIf(probe.NewError(e), "Writing to client failed", nil)
+		if _, err := io.CopyN(w, readCloser, hrange.length); err != nil {
+			errorIf(err, "Writing to client failed", nil)
 			// Do not send error response here, since client could have died.
 			return
 		}
 	} else {
-		if _, e := io.Copy(w, readCloser); e != nil {
-			errorIf(probe.NewError(e), "Writing to client failed", nil)
+		if _, err := io.Copy(w, readCloser); err != nil {
+			errorIf(err, "Writing to client failed", nil)
 			// Do not send error response here, since client could have died.
 			return
 		}
@@ -294,8 +293,8 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err.Trace(bucket, object), "GetObjectInfo failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "GetObjectInfo failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -387,8 +386,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
-		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "GetObjectInfo failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, objectSource)
 		case BucketNotFound:
@@ -425,10 +424,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var md5Bytes []byte
 	if objInfo.MD5Sum != "" {
-		var e error
-		md5Bytes, e = hex.DecodeString(objInfo.MD5Sum)
-		if e != nil {
-			errorIf(probe.NewError(e), "Decoding md5 failed.", nil)
+		md5Bytes, err = hex.DecodeString(objInfo.MD5Sum)
+		if err != nil {
+			errorIf(err, "Decoding md5 failed.", nil)
 			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 			return
 		}
@@ -436,10 +434,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	startOffset := int64(0) // Read the whole file.
 	// Get the object.
-	readCloser, getErr := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
-	if getErr != nil {
-		errorIf(getErr.Trace(sourceBucket, sourceObject), "Reading "+objectSource+" failed.", nil)
-		switch err.ToGoError().(type) {
+	readCloser, err := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
+	if err != nil {
+		errorIf(err, "Reading "+objectSource+" failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, objectSource)
 		case ObjectNotFound:
@@ -459,7 +457,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Create the object.
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
-		switch err.ToGoError().(type) {
+		errorIf(err, "PutObject failed.", nil)
+		switch err.(type) {
 		case StorageFull:
 			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
@@ -473,7 +472,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		case ObjectExistsAsPrefix:
 			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
 		default:
-			errorIf(err.Trace(), "PutObject failed.", nil)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
 		return
@@ -481,7 +479,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err.Trace(), "GetObjectInfo failed.", nil)
+		errorIf(err, "GetObjectInfo failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
@@ -605,7 +603,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err.Trace(r.Header.Get("Content-Md5")), "Decoding md5 failed.", nil)
+		errorIf(err, "Decoding md5 failed.", nil)
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -643,9 +641,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		go func() {
 			shaWriter := fastSha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
-				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
-				writer.CloseWithError(e)
+			if _, cerr := io.CopyN(multiWriter, r.Body, size); cerr != nil {
+				errorIf(cerr, "Unable to read HTTP body.", nil)
+				writer.CloseWithError(err)
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
@@ -676,14 +674,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
-		errorIf(err.Trace(), "PutObject failed.", nil)
-		e := err.ToGoError()
+		errorIf(err, "PutObject failed.", nil)
 		// Verify if the underlying error is signature mismatch.
-		if e == errSignatureMismatch {
+		if err == errSignatureMismatch {
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		switch e.(type) {
+		switch err.(type) {
 		case StorageFull:
 			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
@@ -736,8 +733,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object)
 	if err != nil {
-		errorIf(err.Trace(), "NewMultipartUpload failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "NewMultipartUpload failed.", nil)
+		switch err.(type) {
 		case StorageFull:
 			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNameInvalid:
@@ -771,7 +768,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err.Trace(r.Header.Get("Content-Md5")), "Decoding md5 failed.", nil)
+		errorIf(err, "Decoding md5 failed.", nil)
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -792,8 +789,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	uploadID := r.URL.Query().Get("uploadId")
 	partIDString := r.URL.Query().Get("partNumber")
 
-	partID, e := strconv.Atoi(partIDString)
-	if e != nil {
+	partID, err := strconv.Atoi(partIDString)
+	if err != nil {
 		writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
 		return
 	}
@@ -822,9 +819,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		go func() {
 			shaWriter := fastSha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, e := io.CopyN(multiWriter, r.Body, size); e != nil {
-				errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
-				writer.CloseWithError(e)
+			if _, err = io.CopyN(multiWriter, r.Body, size); err != nil {
+				errorIf(err, "Unable to read HTTP body.", nil)
+				writer.CloseWithError(err)
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
@@ -848,14 +845,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, hex.EncodeToString(md5Bytes))
 	}
 	if err != nil {
-		errorIf(err.Trace(), "PutObjectPart failed.", nil)
-		e := err.ToGoError()
+		errorIf(err, "PutObjectPart failed.", nil)
 		// Verify if the underlying error is signature mismatch.
-		if e == errSignatureMismatch {
+		if err == errSignatureMismatch {
 			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
 			return
 		}
-		switch e.(type) {
+		switch err.(type) {
 		case StorageFull:
 			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case InvalidUploadID:
@@ -900,10 +896,9 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	}
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
-	err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID)
-	if err != nil {
-		errorIf(err.Trace(), "AbortMutlipartUpload failed.", nil)
-		switch err.ToGoError().(type) {
+	if err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
+		errorIf(err, "AbortMutlipartUpload failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -961,8 +956,8 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		errorIf(err.Trace(), "ListObjectParts failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "ListObjectParts failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -998,7 +993,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
 	var md5Sum string
-	var err *probe.Error
+	var err error
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -1016,15 +1011,15 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			return
 		}
 	}
-	completeMultipartBytes, e := ioutil.ReadAll(r.Body)
-	if e != nil {
-		errorIf(probe.NewError(e), "CompleteMultipartUpload failed.", nil)
+	completeMultipartBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errorIf(err, "CompleteMultipartUpload failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 	complMultipartUpload := &completeMultipartUpload{}
-	if e = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); e != nil {
-		errorIf(probe.NewError(e), "XML Unmarshal failed", nil)
+	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
+		errorIf(err, "XML Unmarshal failed", nil)
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
@@ -1042,8 +1037,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Complete multipart upload.
 	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
-		errorIf(err.Trace(), "CompleteMultipartUpload failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "CompleteMultipartUpload failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:
@@ -1099,10 +1094,9 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	err := api.ObjectAPI.DeleteObject(bucket, object)
-	if err != nil {
-		errorIf(err.Trace(), "DeleteObject failed.", nil)
-		switch err.ToGoError().(type) {
+	if err := api.ObjectAPI.DeleteObject(bucket, object); err != nil {
+		errorIf(err, "DeleteObject failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketNotFound:

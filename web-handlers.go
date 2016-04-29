@@ -109,9 +109,8 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.ObjectAPI.MakeBucket(args.BucketName)
-	if e != nil {
-		return &json2.Error{Message: e.Cause.Error()}
+	if err := web.ObjectAPI.MakeBucket(args.BucketName); err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
 	return nil
 }
@@ -139,9 +138,9 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, e := web.ObjectAPI.ListBuckets()
-	if e != nil {
-		return &json2.Error{Message: e.Cause.Error()}
+	buckets, err := web.ObjectAPI.ListBuckets()
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
@@ -191,7 +190,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	for {
 		lo, err := web.ObjectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
-			return &json2.Error{Message: err.Cause.Error()}
+			return &json2.Error{Message: err.Error()}
 		}
 		marker = lo.NextMarker
 		for _, obj := range lo.Objects {
@@ -227,9 +226,8 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	e := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName)
-	if e != nil {
-		return &json2.Error{Message: e.Cause.Error()}
+	if err := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
 	return nil
 }
@@ -252,7 +250,7 @@ func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginR
 	if jwt.Authenticate(args.Username, args.Password) {
 		token, err := jwt.GenerateToken(args.Username)
 		if err != nil {
-			return &json2.Error{Message: err.Cause.Error(), Data: err.String()}
+			return &json2.Error{Message: err.Error()}
 		}
 		reply.Token = token
 		reply.UIVersion = miniobrowser.UIVersion
@@ -305,7 +303,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	cred := credential{args.AccessKey, args.SecretKey}
 	serverConfig.SetCredential(cred)
 	if err := serverConfig.Save(); err != nil {
-		return &json2.Error{Message: err.Cause.Error()}
+		return &json2.Error{Message: err.Error()}
 	}
 
 	jwt := initJWT()
@@ -314,7 +312,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 	token, err := jwt.GenerateToken(args.AccessKey)
 	if err != nil {
-		return &json2.Error{Message: err.Cause.Error()}
+		return &json2.Error{Message: err.Error()}
 	}
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
@@ -350,7 +348,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, nil); err != nil {
-		writeWebErrorResponse(w, err.ToGoError())
+		writeWebErrorResponse(w, err)
 	}
 }
 
@@ -377,10 +375,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	objReader, err := web.ObjectAPI.GetObject(bucket, object, 0)
 	if err != nil {
-		writeWebErrorResponse(w, err.ToGoError())
+		writeWebErrorResponse(w, err)
 		return
 	}
-	if _, e := io.Copy(w, objReader); e != nil {
+	if _, err := io.Copy(w, objReader); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}

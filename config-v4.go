@@ -20,7 +20,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -40,7 +39,7 @@ type serverConfigV4 struct {
 }
 
 // initConfig - initialize server config. config version (called only once).
-func initConfig() *probe.Error {
+func initConfig() error {
 	if !isConfigFileExists() {
 		srvCfg := &serverConfigV4{}
 		srvCfg.Version = globalMinioConfigVersion
@@ -55,41 +54,37 @@ func initConfig() *probe.Error {
 		// Create config path.
 		err := createConfigPath()
 		if err != nil {
-			return err.Trace()
+			return err
 		}
 
 		// Create certs path.
 		err = createCertsPath()
 		if err != nil {
-			return err.Trace()
+			return err
 		}
 
 		// Save the new config globally.
 		serverConfig = srvCfg
 
 		// Save config into file.
-		err = serverConfig.Save()
-		if err != nil {
-			return err.Trace()
-		}
-		return nil
+		return serverConfig.Save()
 	}
 	configFile, err := getConfigFile()
 	if err != nil {
-		return err.Trace()
+		return err
 	}
-	if _, e := os.Stat(configFile); err != nil {
-		return probe.NewError(e)
+	if _, err = os.Stat(configFile); err != nil {
+		return err
 	}
 	srvCfg := &serverConfigV4{}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
 	if err != nil {
-		return err.Trace()
+		return err
 	}
 	if err := qc.Load(configFile); err != nil {
-		return err.Trace()
+		return err
 	}
 	// Save the loaded config globally.
 	serverConfig = qc.Data().(*serverConfigV4)
@@ -181,27 +176,22 @@ func (s serverConfigV4) GetCredential() credential {
 }
 
 // Save config.
-func (s serverConfigV4) Save() *probe.Error {
+func (s serverConfigV4) Save() error {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 
 	// get config file.
 	configFile, err := getConfigFile()
 	if err != nil {
-		return err.Trace()
+		return err
 	}
 
 	// initialize quick.
 	qc, err := quick.New(&s)
 	if err != nil {
-		return err.Trace()
+		return err
 	}
 
 	// Save config file.
-	if err := qc.Save(configFile); err != nil {
-		return err.Trace()
-	}
-
-	// Return success.
-	return nil
+	return qc.Save(configFile)
 }

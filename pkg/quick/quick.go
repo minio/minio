@@ -30,7 +30,6 @@ import (
 	"sync"
 
 	"github.com/fatih/structs"
-	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/safe"
 )
 
@@ -38,11 +37,11 @@ import (
 type Config interface {
 	String() string
 	Version() string
-	Save(string) *probe.Error
-	Load(string) *probe.Error
+	Save(string) error
+	Load(string) error
 	Data() interface{}
-	Diff(Config) ([]structs.Field, *probe.Error)
-	DeepDiff(Config) ([]structs.Field, *probe.Error)
+	Diff(Config) ([]structs.Field, error)
+	DeepDiff(Config) ([]structs.Field, error)
 }
 
 // config - implements quick.Config interface
@@ -53,28 +52,28 @@ type config struct {
 
 // CheckData - checks the validity of config data. Data should be of
 // type struct and contain a string type field called "Version".
-func CheckData(data interface{}) *probe.Error {
+func CheckData(data interface{}) error {
 	if !structs.IsStruct(data) {
-		return probe.NewError(fmt.Errorf("Invalid argument type. Expecing \"struct\" type."))
+		return fmt.Errorf("Invalid argument type. Expecing \"struct\" type.")
 	}
 
 	st := structs.New(data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return probe.NewError(fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name()))
+		return fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name())
 	}
 
 	if f.Kind() != reflect.String {
-		return probe.NewError(fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name()))
+		return fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name())
 	}
 
 	return nil
 }
 
 // New - instantiate a new config
-func New(data interface{}) (Config, *probe.Error) {
+func New(data interface{}) (Config, error) {
 	if err := CheckData(data); err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 
 	d := new(config)
@@ -85,15 +84,15 @@ func New(data interface{}) (Config, *probe.Error) {
 
 // CheckVersion - loads json and compares the version number provided returns back true or false - any failure
 // is returned as error.
-func CheckVersion(filename string, version string) (bool, *probe.Error) {
-	_, e := os.Stat(filename)
-	if e != nil {
-		return false, probe.NewError(e)
+func CheckVersion(filename string, version string) (bool, error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		return false, err
 	}
 
-	fileData, e := ioutil.ReadFile(filename)
-	if e != nil {
-		return false, probe.NewError(e)
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return false, err
 	}
 
 	if runtime.GOOS == "windows" {
@@ -104,18 +103,18 @@ func CheckVersion(filename string, version string) (bool, *probe.Error) {
 	}{
 		Version: "",
 	}
-	e = json.Unmarshal(fileData, &data)
-	if e != nil {
-		switch e := e.(type) {
+	err = json.Unmarshal(fileData, &data)
+	if err != nil {
+		switch err := err.(type) {
 		case *json.SyntaxError:
-			return false, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
+			return false, FormatJSONSyntaxError(bytes.NewReader(fileData), err)
 		default:
-			return false, probe.NewError(e)
+			return false, err
 		}
 	}
 	config, err := New(data)
 	if err != nil {
-		return false, err.Trace()
+		return false, err
 	}
 	if config.Version() != version {
 		return false, nil
@@ -124,34 +123,34 @@ func CheckVersion(filename string, version string) (bool, *probe.Error) {
 }
 
 // Load - loads json config from filename for the a given struct data
-func Load(filename string, data interface{}) (Config, *probe.Error) {
-	_, e := os.Stat(filename)
-	if e != nil {
-		return nil, probe.NewError(e)
+func Load(filename string, data interface{}) (Config, error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		return nil, err
 	}
 
-	fileData, e := ioutil.ReadFile(filename)
-	if e != nil {
-		return nil, probe.NewError(e)
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
 	}
 
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
 
-	e = json.Unmarshal(fileData, &data)
-	if e != nil {
-		switch e := e.(type) {
+	err = json.Unmarshal(fileData, &data)
+	if err != nil {
+		switch err := err.(type) {
 		case *json.SyntaxError:
-			return nil, probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
+			return nil, FormatJSONSyntaxError(bytes.NewReader(fileData), err)
 		default:
-			return nil, probe.NewError(e)
+			return nil, err
 		}
 	}
 
 	config, err := New(data)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 
 	return config, nil
@@ -177,20 +176,16 @@ func (d config) Version() string {
 // writeFile writes data to a file named by filename.
 // If the file does not exist, writeFile creates it;
 // otherwise writeFile truncates it before writing.
-func writeFile(filename string, data []byte) *probe.Error {
-	safeFile, e := safe.CreateFile(filename)
-	if e != nil {
-		return probe.NewError(e)
+func writeFile(filename string, data []byte) error {
+	safeFile, err := safe.CreateFile(filename)
+	if err != nil {
+		return err
 	}
-	_, e = safeFile.Write(data)
-	if e != nil {
-		return probe.NewError(e)
+	_, err = safeFile.Write(data)
+	if err != nil {
+		return err
 	}
-	e = safeFile.Close()
-	if e != nil {
-		return probe.NewError(e)
-	}
-	return nil
+	return safeFile.Close()
 }
 
 // String converts JSON config to printable string
@@ -200,37 +195,37 @@ func (d config) String() string {
 }
 
 // Save writes config data in JSON format to a file.
-func (d config) Save(filename string) *probe.Error {
+func (d config) Save(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	// Check for existing file, if yes create a backup.
-	st, e := os.Stat(filename)
+	st, err := os.Stat(filename)
 	// If file exists and stat failed return here.
-	if e != nil && !os.IsNotExist(e) {
-		return probe.NewError(e)
+	if err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	// File exists and proceed to take backup.
-	if e == nil {
+	if err == nil {
 		// File exists and is not a regular file return error.
 		if !st.Mode().IsRegular() {
-			return probe.NewError(fmt.Errorf("%s is not a regular file", filename))
+			return fmt.Errorf("%s is not a regular file", filename)
 		}
 		// Read old data.
 		var oldData []byte
-		oldData, e = ioutil.ReadFile(filename)
-		if e != nil {
-			return probe.NewError(e)
+		oldData, err = ioutil.ReadFile(filename)
+		if err != nil {
+			return err
 		}
 		// Save read data to the backup file.
-		if err := writeFile(filename+".old", oldData); err != nil {
-			return err.Trace(filename + ".old")
+		if err = writeFile(filename+".old", oldData); err != nil {
+			return err
 		}
 	}
 	// Proceed to create or overwrite file.
-	jsonData, e := json.MarshalIndent(d.data, "", "\t")
-	if e != nil {
-		return probe.NewError(e)
+	jsonData, err := json.MarshalIndent(d.data, "", "\t")
+	if err != nil {
+		return err
 	}
 
 	if runtime.GOOS == "windows" {
@@ -238,23 +233,22 @@ func (d config) Save(filename string) *probe.Error {
 	}
 
 	// Save data.
-	err := writeFile(filename, jsonData)
-	return err.Trace(filename)
+	return writeFile(filename, jsonData)
 }
 
 // Load - loads JSON config from file and merge with currently set values
-func (d *config) Load(filename string) *probe.Error {
+func (d *config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	_, e := os.Stat(filename)
-	if e != nil {
-		return probe.NewError(e)
+	_, err := os.Stat(filename)
+	if err != nil {
+		return err
 	}
 
-	fileData, e := ioutil.ReadFile(filename)
-	if e != nil {
-		return probe.NewError(e)
+	fileData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
 	}
 
 	if runtime.GOOS == "windows" {
@@ -264,25 +258,25 @@ func (d *config) Load(filename string) *probe.Error {
 	st := structs.New(d.data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return probe.NewError(fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name()))
+		return fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name())
 	}
 
-	e = json.Unmarshal(fileData, d.data)
-	if e != nil {
-		switch e := e.(type) {
+	err = json.Unmarshal(fileData, d.data)
+	if err != nil {
+		switch err := err.(type) {
 		case *json.SyntaxError:
-			return probe.NewError(FormatJSONSyntaxError(bytes.NewReader(fileData), e))
+			return FormatJSONSyntaxError(bytes.NewReader(fileData), err)
 		default:
-			return probe.NewError(e)
+			return err
 		}
 	}
 
 	if err := CheckData(d.data); err != nil {
-		return err.Trace(filename)
+		return err
 	}
 
 	if (*d).Version() != f.Value() {
-		return probe.NewError(fmt.Errorf("Version mismatch"))
+		return fmt.Errorf("Version mismatch")
 	}
 
 	return nil
@@ -294,11 +288,11 @@ func (d config) Data() interface{} {
 }
 
 //Diff  - list fields that are in A but not in B
-func (d config) Diff(c Config) ([]structs.Field, *probe.Error) {
+func (d config) Diff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 	err := CheckData(c.Data())
 	if err != nil {
-		return []structs.Field{}, err.Trace()
+		return []structs.Field{}, err
 	}
 
 	currFields := structs.Fields(d.Data())
@@ -320,11 +314,11 @@ func (d config) Diff(c Config) ([]structs.Field, *probe.Error) {
 }
 
 //DeepDiff  - list fields in A that are missing or not equal to fields in B
-func (d config) DeepDiff(c Config) ([]structs.Field, *probe.Error) {
+func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 	err := CheckData(c.Data())
 	if err != nil {
-		return []structs.Field{}, err.Trace()
+		return []structs.Field{}, err
 	}
 
 	currFields := structs.Fields(d.Data())

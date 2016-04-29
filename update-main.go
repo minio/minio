@@ -28,7 +28,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // command specific flags.
@@ -90,7 +89,7 @@ func (u updateMessage) String() string {
 		return updateMessage("You are already running the most recent version of ‘minio’.")
 	}
 	msg, err := colorizeUpdateMessage(u.Download)
-	fatalIf(err.Trace(msg), "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
+	fatalIf(err, "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
 	return msg
 }
 
@@ -98,38 +97,38 @@ func (u updateMessage) String() string {
 func (u updateMessage) JSON() string {
 	u.Status = "success"
 	updateMessageJSONBytes, err := json.Marshal(u)
-	fatalIf(probe.NewError(err), "Unable to marshal into JSON.", nil)
+	fatalIf((err), "Unable to marshal into JSON.", nil)
 
 	return string(updateMessageJSONBytes)
 }
 
-func parseReleaseData(data string) (time.Time, *probe.Error) {
+func parseReleaseData(data string) (time.Time, error) {
 	releaseStr := strings.Fields(data)
 	if len(releaseStr) < 2 {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed"))
+		return time.Time{}, errors.New("Update data malformed")
 	}
 	releaseDate := releaseStr[1]
 	releaseDateSplits := strings.SplitN(releaseDate, ".", 3)
 	if len(releaseDateSplits) < 3 {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed"))
+		return time.Time{}, (errors.New("Update data malformed"))
 	}
 	if releaseDateSplits[0] != "minio" {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing minio tag"))
+		return time.Time{}, (errors.New("Update data malformed, missing minio tag"))
 	}
 	// "OFFICIAL" tag is still kept for backward compatibility, we should remove this for the next release.
 	if releaseDateSplits[1] != "RELEASE" && releaseDateSplits[1] != "OFFICIAL" {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed, missing RELEASE tag"))
+		return time.Time{}, (errors.New("Update data malformed, missing RELEASE tag"))
 	}
 	dateSplits := strings.SplitN(releaseDateSplits[2], "T", 2)
 	if len(dateSplits) < 2 {
-		return time.Time{}, probe.NewError(errors.New("Update data malformed, not in modified RFC3359 form"))
+		return time.Time{}, (errors.New("Update data malformed, not in modified RFC3359 form"))
 	}
 	dateSplits[1] = strings.Replace(dateSplits[1], "-", ":", -1)
 	date := strings.Join(dateSplits, "T")
 
-	parsedDate, e := time.Parse(time.RFC3339, date)
-	if e != nil {
-		return time.Time{}, probe.NewError(e)
+	parsedDate, err := time.Parse(time.RFC3339, date)
+	if err != nil {
+		return time.Time{}, err
 	}
 	return parsedDate, nil
 }
@@ -159,32 +158,32 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 
 	// Instantiate a new client with 1 sec timeout.
 	client := &http.Client{
-		Timeout: 500 * time.Millisecond,
+		Timeout: 1 * time.Millisecond,
 	}
 
 	// Fetch new update.
-	data, e := client.Get(newUpdateURL)
-	if e != nil && noError {
+	data, err := client.Get(newUpdateURL)
+	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf(probe.NewError(e), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
+	fatalIf((err), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
 
 	// Error out if 'update' command is issued for development based builds.
 	if minioVersion == "DEVELOPMENT.GOGET" && !noError {
-		fatalIf(probe.NewError(errors.New("")),
+		fatalIf((errors.New("")),
 			"Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio", nil)
 	}
 
 	// Parse current minio version into RFC3339.
-	current, e := time.Parse(time.RFC3339, minioVersion)
-	if e != nil && noError {
+	current, err := time.Parse(time.RFC3339, minioVersion)
+	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf(probe.NewError(e), "Unable to parse version string as time.", nil)
+	fatalIf((err), "Unable to parse version string as time.", nil)
 
 	// Verify if current minio version is zero.
 	if current.IsZero() && !noError {
-		fatalIf(probe.NewError(errors.New("")),
+		fatalIf((errors.New("")),
 			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
 	}
 
@@ -195,27 +194,27 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 			if noError {
 				return updateMsg
 			}
-			fatalIf(probe.NewError(errors.New("")), "Update server responsed with "+data.Status, nil)
+			fatalIf((errors.New("")), "Update server responsed with "+data.Status, nil)
 		}
 	}
 
 	// Read the response body.
-	updateBody, e := ioutil.ReadAll(data.Body)
-	if e != nil && noError {
+	updateBody, err := ioutil.ReadAll(data.Body)
+	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf(probe.NewError(e), "Fetching updates failed. Please try again.", nil)
+	fatalIf((err), "Fetching updates failed. Please try again.", nil)
 
 	// Parse the date if its valid.
 	latest, err := parseReleaseData(string(updateBody))
 	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf(err.Trace(updateURL), "Please report this issue at https://github.com/minio/minio/issues.", nil)
+	fatalIf(err, "Please report this issue at https://github.com/minio/minio/issues.", nil)
 
 	// Verify if the date is not zero.
 	if latest.IsZero() && !noError {
-		fatalIf(probe.NewError(errors.New("")),
+		fatalIf((errors.New("")),
 			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
 	}
 

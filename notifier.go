@@ -22,12 +22,11 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/minio/minio/pkg/probe"
 	"github.com/olekukonko/ts"
 )
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
-func colorizeUpdateMessage(updateString string) (string, *probe.Error) {
+func colorizeUpdateMessage(updateString string) (string, error) {
 	// Initialize coloring.
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
@@ -47,7 +46,7 @@ func colorizeUpdateMessage(updateString string) (string, *probe.Error) {
 
 	terminal, err := ts.GetSize()
 	if err != nil {
-		return "", probe.NewError(err)
+		return "", err
 	}
 
 	var message string

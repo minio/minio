@@ -22,8 +22,6 @@ import (
 	"net/url"
 	"os"
 	"time"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 type accessLogHandler struct {
@@ -60,14 +58,14 @@ type LogMessage struct {
 
 func (h *accessLogHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	message, err := getLogMessage(w, req)
-	fatalIf(err.Trace(), "Unable to extract http message.", nil)
-	_, e := h.accessLogFile.Write(message)
-	fatalIf(probe.NewError(e), "Writing to log file failed.", nil)
+	fatalIf(err, "Unable to extract http message.", nil)
+	_, err = h.accessLogFile.Write(message)
+	fatalIf(err, "Writing to log file failed.", nil)
 
 	h.Handler.ServeHTTP(w, req)
 }
 
-func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Error) {
+func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, error) {
 	logMessage := &LogMessage{
 		StartTime: time.Now().UTC(),
 	}
@@ -103,9 +101,9 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Err
 
 	// logMessage.HTTP.Request = req
 	logMessage.Duration = time.Now().UTC().Sub(logMessage.StartTime)
-	js, e := json.Marshal(logMessage)
-	if e != nil {
-		return nil, probe.NewError(e)
+	js, err := json.Marshal(logMessage)
+	if err != nil {
+		return nil, err
 	}
 	js = append(js, byte('\n')) // append a new line
 	return js, nil
@@ -113,8 +111,8 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, *probe.Err
 
 // setAccessLogHandler logs requests
 func setAccessLogHandler(h http.Handler) http.Handler {
-	file, e := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	fatalIf(probe.NewError(e), "Unable to open access log.", nil)
+	file, err := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	fatalIf(err, "Unable to open access log.", nil)
 
 	return &accessLogHandler{Handler: h, accessLogFile: file}
 }

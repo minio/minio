@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"github.com/minio/minio/pkg/probe"
 	"io"
 	"strings"
 )
@@ -31,12 +30,8 @@ func xmlDecoder(body io.Reader, v interface{}) error {
 }
 
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
-func checkValidMD5(md5 string) ([]byte, *probe.Error) {
-	md5Bytes, e := base64.StdEncoding.DecodeString(strings.TrimSpace(md5))
-	if e != nil {
-		return nil, probe.NewError(e)
-	}
-	return md5Bytes, nil
+func checkValidMD5(md5 string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(strings.TrimSpace(md5))
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
@@ -56,6 +51,5 @@ func contains(stringList []string, element string) bool {
 			return true
 		}
 	}
-
 	return false
 }

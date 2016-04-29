@@ -18,38 +18,30 @@ package main
 
 import (
 	"net/http"
-	"path/filepath"
-	"strings"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/probe"
 )
 
-// newStorageAPI - initialize any storage API depending on the export path style.
-func newStorageAPI(exportPaths ...string) (StorageAPI, error) {
+// newObjectLayer - initialize any object layer depending on the
+// number of export paths.
+func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
 	if len(exportPaths) == 1 {
 		exportPath := exportPaths[0]
-		if !strings.ContainsRune(exportPath, ':') || filepath.VolumeName(exportPath) != "" {
-			// Initialize filesystem storage API.
-			return newFS(exportPath)
-		}
-		// Initialize network storage API.
-		return newNetworkFS(exportPath)
+		// Initialize FS object layer.
+		return newFSObjects(exportPath)
 	}
-	// Initialize XL storage API.
-	return newXL(exportPaths...)
+	// Initialize XL object layer.
+	return newXLObjects(exportPaths...)
 }
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	storageAPI, e := newStorageAPI(srvCmdConfig.exportPaths...)
-	fatalIf(probe.NewError(e), "Initializing storage API failed.", nil)
+	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths...)
+	fatalIf(err, "Initializing object layer failed.", nil)
 
-	// Initialize object layer.
-	objAPI := newObjectLayer(storageAPI)
-
-	// Initialize storage rpc.
-	storageRPC := newStorageRPC(storageAPI)
+	// Initialize storage rpc server.
+	storageRPC, err := newRPCServer(srvCmdConfig.exportPaths[0]) // FIXME: should only have one path.
+	fatalIf(err, "Initializing storage rpc server failed.", nil)
 
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{

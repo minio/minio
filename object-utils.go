@@ -17,9 +17,21 @@
 package main
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/minio/minio/pkg/safe"
+)
+
+const (
+	// Minio meta volume.
+	minioMetaVolume = ".minio"
 )
 
 // validBucket regexp.
@@ -95,4 +107,42 @@ func retainSlash(s string) string {
 // pathJoin - path join.
 func pathJoin(s1 string, s2 string) string {
 	return retainSlash(s1) + s2
+}
+
+// Create an s3 compatible MD5sum for complete multipart transaction.
+func makeS3MD5(md5Strs ...string) (string, error) {
+	var finalMD5Bytes []byte
+	for _, md5Str := range md5Strs {
+		md5Bytes, err := hex.DecodeString(md5Str)
+		if err != nil {
+			return "", err
+		}
+		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
+	}
+	md5Hasher := md5.New()
+	md5Hasher.Write(finalMD5Bytes)
+	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(md5Strs))
+	return s3MD5, nil
+}
+
+// byBucketName is a collection satisfying sort.Interface.
+type byBucketName []BucketInfo
+
+func (d byBucketName) Len() int           { return len(d) }
+func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
+// safeCloseAndRemove - safely closes and removes underlying temporary
+// file writer if possible.
+func safeCloseAndRemove(writer io.WriteCloser) error {
+	// If writer is a safe file, Attempt to close and remove.
+	safeWriter, ok := writer.(*safe.File)
+	if ok {
+		return safeWriter.CloseAndRemove()
+	}
+	pipeWriter, ok := writer.(*io.PipeWriter)
+	if ok {
+		return pipeWriter.CloseWithError(errors.New("Close and error out."))
+	}
+	return nil
 }

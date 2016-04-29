@@ -197,7 +197,7 @@ func main() {
 
 		// Initialize config.
 		err := initConfig()
-		fatalIf(err.Trace(), "Unable to initialize minio config.", nil)
+		fatalIf(err, "Unable to initialize minio config.", nil)
 
 		// Enable all loggers by now.
 		enableLoggers()

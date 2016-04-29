@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // maximum supported access policy size.
@@ -67,8 +66,8 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	for _, policyAction := range statement.Actions {
 		// Policy action can be a regex, validate the action with matching string.
-		matched, e := regexp.MatchString(policyAction, action)
-		fatalIf(probe.NewError(e), "Invalid pattern, please verify the pattern string.", nil)
+		matched, err := regexp.MatchString(policyAction, action)
+		fatalIf(err, "Invalid pattern, please verify the pattern string.", nil)
 		if matched {
 			return true
 		}
@@ -79,8 +78,8 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 // Verify if given resource matches with policy statement.
 func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
 	for _, presource := range statement.Resources {
-		matched, e := regexp.MatchString(presource, strings.TrimPrefix(resource, "/"))
-		fatalIf(probe.NewError(e), "Invalid pattern, please verify the pattern string.", nil)
+		matched, err := regexp.MatchString(presource, strings.TrimPrefix(resource, "/"))
+		fatalIf(err, "Invalid pattern, please verify the pattern string.", nil)
 		// For any path matches, we return quickly and the let the caller continue.
 		if matched {
 			return true
@@ -161,17 +160,17 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Read access policy up to maxAccessPolicySize.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 	// bucket policies are limited to 20KB in size, using a limit reader.
-	bucketPolicyBuf, e := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
-	if e != nil {
-		errorIf(probe.NewError(e).Trace(bucket), "Reading policy failed.", nil)
+	bucketPolicyBuf, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
+	if err != nil {
+		errorIf(err, "Reading policy failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
 	// Parse bucket policy.
-	bucketPolicy, e := parseBucketPolicy(bucketPolicyBuf)
-	if e != nil {
-		errorIf(probe.NewError(e), "Unable to parse bucket policy.", nil)
+	bucketPolicy, err := parseBucketPolicy(bucketPolicyBuf)
+	if err != nil {
+		errorIf(err, "Unable to parse bucket policy.", nil)
 		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
 		return
 	}
@@ -183,10 +182,9 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	err := writeBucketPolicy(bucket, bucketPolicyBuf)
-	if err != nil {
-		errorIf(err.Trace(bucket, string(bucketPolicyBuf)), "SaveBucketPolicy failed.", nil)
-		switch err.ToGoError().(type) {
+	if err := writeBucketPolicy(bucket, bucketPolicyBuf); err != nil {
+		errorIf(err, "SaveBucketPolicy failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		default:
@@ -218,10 +216,9 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	// Delete bucket access policy.
-	err := removeBucketPolicy(bucket)
-	if err != nil {
-		errorIf(err.Trace(bucket), "DeleteBucketPolicy failed.", nil)
-		switch err.ToGoError().(type) {
+	if err := removeBucketPolicy(bucket); err != nil {
+		errorIf(err, "DeleteBucketPolicy failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketPolicyNotFound:
@@ -257,8 +254,8 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Read bucket access policy.
 	p, err := readBucketPolicy(bucket)
 	if err != nil {
-		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "GetBucketPolicy failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketPolicyNotFound:

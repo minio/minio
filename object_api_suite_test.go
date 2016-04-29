@@ -31,7 +31,7 @@ import (
 // TODO - enable all the commented tests.
 
 // APITestSuite - collection of API tests.
-func APITestSuite(c *check.C, create func() objectAPI) {
+func APITestSuite(c *check.C, create func() ObjectLayer) {
 	testMakeBucket(c, create)
 	testMultipleObjectCreation(c, create)
 	testPaging(c, create)
@@ -50,7 +50,7 @@ func APITestSuite(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate bucket creation.
-func testMakeBucket(c *check.C, create func() objectAPI) {
+func testMakeBucket(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket-unknown")
 	c.Assert(err, check.IsNil)
@@ -58,7 +58,7 @@ func testMakeBucket(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate creation of part files during Multipart operation.
-func testMultipartObjectCreation(c *check.C, create func() objectAPI) {
+func testMultipartObjectCreation(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -83,7 +83,7 @@ func testMultipartObjectCreation(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate abortion of Multipart operation.
-func testMultipartObjectAbort(c *check.C, create func() objectAPI) {
+func testMultipartObjectAbort(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -115,7 +115,7 @@ func testMultipartObjectAbort(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate object creation.
-func testMultipleObjectCreation(c *check.C, create func() objectAPI) {
+func testMultipleObjectCreation(c *check.C, create func() ObjectLayer) {
 	objects := make(map[string][]byte)
 	obj := create()
 	err := obj.MakeBucket("bucket")
@@ -157,7 +157,7 @@ func testMultipleObjectCreation(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate creation of objects and the order of listing using various filters for ListObjects operation.
-func testPaging(c *check.C, create func() objectAPI) {
+func testPaging(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	obj.MakeBucket("bucket")
 	result, err := obj.ListObjects("bucket", "", "", "", 0)
@@ -261,7 +261,7 @@ func testPaging(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate overwriting of an existing object.
-func testObjectOverwriteWorks(c *check.C, create func() objectAPI) {
+func testObjectOverwriteWorks(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -284,25 +284,25 @@ func testObjectOverwriteWorks(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate that bucket operation on non-existent bucket fails.
-func testNonExistantBucketOperations(c *check.C, create func() objectAPI) {
+func testNonExistantBucketOperations(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	_, err := obj.PutObject("bucket1", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket not found: bucket1")
+	c.Assert(err.Error(), check.Equals, "Bucket not found: bucket1")
 }
 
 // Tests validate that recreation of the bucket fails.
-func testBucketRecreateFails(c *check.C, create func() objectAPI) {
+func testBucketRecreateFails(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("string")
 	c.Assert(err, check.IsNil)
 	err = obj.MakeBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket exists: string")
+	c.Assert(err.Error(), check.Equals, "Bucket exists: string")
 }
 
 // Tests validate PutObject with subdirectory prefix.
-func testPutObjectInSubdir(c *check.C, create func() objectAPI) {
+func testPutObjectInSubdir(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -321,7 +321,7 @@ func testPutObjectInSubdir(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate ListBuckets.
-func testListBuckets(c *check.C, create func() objectAPI) {
+func testListBuckets(c *check.C, create func() ObjectLayer) {
 	obj := create()
 
 	// test empty list.
@@ -354,7 +354,7 @@ func testListBuckets(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate the order of result of ListBuckets.
-func testListBucketsOrder(c *check.C, create func() objectAPI) {
+func testListBucketsOrder(c *check.C, create func() ObjectLayer) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time.
 	for i := 0; i < 10; i++ {
@@ -373,24 +373,24 @@ func testListBucketsOrder(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate that ListObjects operation on a non-existent bucket fails as expected.
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() objectAPI) {
+func testListObjectsTestsForNonExistantBucket(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	result, err := obj.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(result.IsTruncated, check.Equals, false)
 	c.Assert(len(result.Objects), check.Equals, 0)
-	c.Assert(err.ToGoError().Error(), check.Equals, "Bucket not found: bucket")
+	c.Assert(err.Error(), check.Equals, "Bucket not found: bucket")
 }
 
 // Tests validate that GetObject fails on a non-existent bucket as expected.
-func testNonExistantObjectInBucket(c *check.C, create func() objectAPI) {
+func testNonExistantObjectInBucket(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	_, err = obj.GetObject("bucket", "dir1", 0)
 	c.Assert(err, check.Not(check.IsNil))
-	switch err := err.ToGoError().(type) {
+	switch err := err.(type) {
 	case ObjectNotFound:
 		c.Assert(err, check.ErrorMatches, "Object not found: bucket#dir1")
 	default:
@@ -399,7 +399,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() objectAPI) {
 }
 
 // Tests validate that GetObject on an existing directory fails as expected.
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) {
+func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
@@ -408,7 +408,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) 
 	c.Assert(err, check.IsNil)
 
 	_, err = obj.GetObject("bucket", "dir1", 0)
-	switch err := err.ToGoError().(type) {
+	switch err := err.(type) {
 	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1")
@@ -418,7 +418,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) 
 	}
 
 	_, err = obj.GetObject("bucket", "dir1/", 0)
-	switch err := err.ToGoError().(type) {
+	switch err := err.(type) {
 	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1/")
@@ -429,7 +429,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() objectAPI) 
 }
 
 // Tests valdiate the default ContentType.
-func testDefaultContentType(c *check.C, create func() objectAPI) {
+func testDefaultContentType(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)

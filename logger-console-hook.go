@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // consoleLogger - default logger if not other logging is enabled.
@@ -39,8 +38,8 @@ func enableConsoleLogger() {
 	}
 	// log.Out and log.Formatter use the default versions.
 	// Only set specific log level.
-	lvl, e := logrus.ParseLevel(clogger.Level)
-	fatalIf(probe.NewError(e), "Unknown log level detected, please fix your console logger configuration.", nil)
+	lvl, err := logrus.ParseLevel(clogger.Level)
+	fatalIf(err, "Unknown log level detected, please fix your console logger configuration.", nil)
 
 	log.Level = lvl
 }

@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 const (
@@ -50,7 +48,7 @@ func (r *httpRange) String() string {
 }
 
 // Grab new range from request header
-func getRequestedRange(hrange string, size int64) (*httpRange, *probe.Error) {
+func getRequestedRange(hrange string, size int64) (*httpRange, error) {
 	r := &httpRange{
 		start:  0,
 		length: 0,
@@ -60,16 +58,16 @@ func getRequestedRange(hrange string, size int64) (*httpRange, *probe.Error) {
 	if hrange != "" {
 		err := r.parseRange(hrange)
 		if err != nil {
-			return nil, err.Trace()
+			return nil, err
 		}
 	}
 	return r, nil
 }
 
-func (r *httpRange) parse(ra string) *probe.Error {
+func (r *httpRange) parse(ra string) error {
 	i := strings.Index(ra, "-")
 	if i < 0 {
-		return probe.NewError(InvalidRange{})
+		return InvalidRange{}
 	}
 	start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
 	if start == "" {
@@ -77,7 +75,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 		// range start relative to the end of the file.
 		i, err := strconv.ParseInt(end, 10, 64)
 		if err != nil {
-			return probe.NewError(InvalidRange{})
+			return InvalidRange{}
 		}
 		if i > r.size {
 			i = r.size
@@ -87,7 +85,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 	} else {
 		i, err := strconv.ParseInt(start, 10, 64)
 		if err != nil || i > r.size || i < 0 {
-			return probe.NewError(InvalidRange{})
+			return InvalidRange{}
 		}
 		r.start = i
 		if end == "" {
@@ -96,7 +94,7 @@ func (r *httpRange) parse(ra string) *probe.Error {
 		} else {
 			i, err := strconv.ParseInt(end, 10, 64)
 			if err != nil || r.start > i {
-				return probe.NewError(InvalidRange{})
+				return InvalidRange{}
 			}
 			if i >= r.size {
 				i = r.size - 1
@@ -108,26 +106,26 @@ func (r *httpRange) parse(ra string) *probe.Error {
 }
 
 // parseRange parses a Range header string as per RFC 2616.
-func (r *httpRange) parseRange(s string) *probe.Error {
+func (r *httpRange) parseRange(s string) error {
 	if s == "" {
-		return probe.NewError(errors.New("header not present"))
+		return errors.New("header not present")
 	}
 	if !strings.HasPrefix(s, b) {
-		return probe.NewError(InvalidRange{})
+		return InvalidRange{}
 	}
 
 	ras := strings.Split(s[len(b):], ",")
 	if len(ras) == 0 {
-		return probe.NewError(errors.New("invalid request"))
+		return errors.New("invalid request")
 	}
 	// Just pick the first one and ignore the rest, we only support one range per object
 	if len(ras) > 1 {
-		return probe.NewError(errors.New("multiple ranges specified"))
+		return errors.New("multiple ranges specified")
 	}
 
 	ra := strings.TrimSpace(ras[0])
 	if ra == "" {
-		return probe.NewError(InvalidRange{})
+		return InvalidRange{}
 	}
 	return r.parse(ra)
 }

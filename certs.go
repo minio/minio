@@ -21,26 +21,22 @@ import (
 	"path/filepath"
 
 	"github.com/minio/go-homedir"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // createCertsPath create certs path.
-func createCertsPath() *probe.Error {
+func createCertsPath() error {
 	certsPath, err := getCertsPath()
 	if err != nil {
-		return err.Trace()
+		return err
 	}
-	if err := os.MkdirAll(certsPath, 0700); err != nil {
-		return probe.NewError(err)
-	}
-	return nil
+	return os.MkdirAll(certsPath, 0700)
 }
 
 // getCertsPath get certs path.
-func getCertsPath() (string, *probe.Error) {
-	homeDir, e := homedir.Dir()
-	if e != nil {
-		return "", probe.NewError(e)
+func getCertsPath() (string, error) {
+	homeDir, err := homedir.Dir()
+	if err != nil {
+		return "", err
 	}
 	certsPath := filepath.Join(homeDir, globalMinioCertsDir)
 	return certsPath, nil
@@ -49,7 +45,7 @@ func getCertsPath() (string, *probe.Error) {
 // mustGetCertsPath must get certs path.
 func mustGetCertsPath() string {
 	certsPath, err := getCertsPath()
-	fatalIf(err.Trace(), "Unable to retrieve certs path.", nil)
+	fatalIf(err, "Unable to retrieve certs path.", nil)
 	return certsPath
 }
 

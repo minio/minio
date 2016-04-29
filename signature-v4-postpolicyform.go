@@ -23,8 +23,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 // toString - Safely convert interface to string without causing panic.
@@ -70,7 +68,7 @@ type PostPolicyForm struct {
 }
 
 // parsePostPolicyFormV4 - Parse JSON policy string into typed POostPolicyForm structure.
-func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
+func parsePostPolicyFormV4(policy string) (PostPolicyForm, error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
@@ -78,17 +76,17 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 		Conditions []interface{} `json:"conditions"`
 	}
 
-	e := json.Unmarshal([]byte(policy), &rawPolicy)
-	if e != nil {
-		return PostPolicyForm{}, probe.NewError(e)
+	err := json.Unmarshal([]byte(policy), &rawPolicy)
+	if err != nil {
+		return PostPolicyForm{}, err
 	}
 
 	parsedPolicy := PostPolicyForm{}
 
 	// Parse expiry time.
-	parsedPolicy.Expiration, e = time.Parse(time.RFC3339Nano, rawPolicy.Expiration)
-	if e != nil {
-		return PostPolicyForm{}, probe.NewError(e)
+	parsedPolicy.Expiration, err = time.Parse(time.RFC3339Nano, rawPolicy.Expiration)
+	if err != nil {
+		return PostPolicyForm{}, err
 	}
 	parsedPolicy.Conditions.Policies = make(map[string]struct {
 		Operator string
@@ -102,8 +100,7 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 			for k, v := range condt {
 				if !isString(v) { // Pre-check value type.
 					// All values must be of type string.
-					return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
-						reflect.TypeOf(condt).String(), condt))
+					return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
 				}
 				// {"acl": "public-read" } is an alternate way to indicate - [ "eq", "$acl", "public-read" ]
 				// In this case we will just collapse this into "eq" for all use cases.
@@ -117,16 +114,14 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 			}
 		case []interface{}: // Handle array types.
 			if len(condt) != 3 { // Return error if we have insufficient elements.
-				return parsedPolicy, probe.NewError(fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form.",
-					condt, reflect.TypeOf(condt).String()))
+				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form.", condt, reflect.TypeOf(condt).String())
 			}
 			switch toString(condt[0]) {
 			case "eq", "starts-with":
 				for _, v := range condt { // Pre-check all values for type.
 					if !isString(v) {
 						// All values must be of type string.
-						return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
-							reflect.TypeOf(condt).String(), condt))
+						return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
 					}
 				}
 				operator, matchType, value := toString(condt[0]), toString(condt[1]), toString(condt[2])
@@ -147,12 +142,10 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, *probe.Error) {
 				}
 			default:
 				// Condition should be valid.
-				return parsedPolicy, probe.NewError(fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.",
-					reflect.TypeOf(condt).String(), condt))
+				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
 			}
 		default:
-			return parsedPolicy, probe.NewError(fmt.Errorf("Unknown field %s of type %s found in POST policy form.",
-				condt, reflect.TypeOf(condt).String()))
+			return parsedPolicy, fmt.Errorf("Unknown field %s of type %s found in POST policy form.", condt, reflect.TypeOf(condt).String())
 		}
 	}
 	return parsedPolicy, nil

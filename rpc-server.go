@@ -119,10 +119,15 @@ func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericRep
 }
 
 // Initialize new storage rpc.
-func newStorageRPC(storageAPI StorageAPI) *storageServer {
-	return &storageServer{
-		storage: storageAPI,
+func newRPCServer(exportPath string) (*storageServer, error) {
+	// Initialize posix storage API.
+	storage, err := newPosix(exportPath)
+	if err != nil {
+		return nil, err
 	}
+	return &storageServer{
+		storage: storage,
+	}, nil
 }
 
 // registerStorageRPCRouter - register storage rpc router.

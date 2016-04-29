@@ -17,11 +17,9 @@
 package main
 
 import (
-	"encoding/json"
 	"reflect"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
 )
 
 type fields map[string]interface{}
@@ -43,7 +41,7 @@ type logger struct {
 }
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
-func errorIf(err *probe.Error, msg string, fields logrus.Fields) {
+func errorIf(err error, msg string, fields logrus.Fields) {
 	if err == nil {
 		return
 	}
@@ -51,21 +49,17 @@ func errorIf(err *probe.Error, msg string, fields logrus.Fields) {
 		fields = make(logrus.Fields)
 	}
 	fields["Error"] = struct {
-		Cause     string             `json:"cause,omitempty"`
-		Type      string             `json:"type,omitempty"`
-		CallTrace []probe.TracePoint `json:"trace,omitempty"`
-		SysInfo   map[string]string  `json:"sysinfo,omitempty"`
+		Cause string `json:"cause,omitempty"`
+		Type  string `json:"type,omitempty"`
 	}{
-		err.Cause.Error(),
-		reflect.TypeOf(err.Cause).String(),
-		err.CallTrace,
-		err.SysInfo,
+		err.Error(),
+		reflect.TypeOf(err).String(),
 	}
 	log.WithFields(fields).Error(msg)
 }
 
 // fatalIf wrapper function which takes error and prints jsonic error messages.
-func fatalIf(err *probe.Error, msg string, fields logrus.Fields) {
+func fatalIf(err error, msg string, fields logrus.Fields) {
 	if err == nil {
 		return
 	}
@@ -73,9 +67,12 @@ func fatalIf(err *probe.Error, msg string, fields logrus.Fields) {
 		fields = make(logrus.Fields)
 	}
 
-	fields["error"] = err.ToGoError()
-	if jsonErr, e := json.Marshal(err); e == nil {
-		fields["probe"] = string(jsonErr)
+	fields["Error"] = struct {
+		Cause string `json:"cause,omitempty"`
+		Type  string `json:"type,omitempty"`
+	}{
+		err.Error(),
+		reflect.TypeOf(err).String(),
 	}
 	log.WithFields(fields).Fatal(msg)
 }
