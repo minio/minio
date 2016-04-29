@@ -17,10 +17,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/xml"
-	"io/ioutil"
-	"net/http"
 	"testing"
 )
 
@@ -104,47 +100,6 @@ func TestIsValidObjectName(t *testing.T) {
 		}
 		if !testCase.shouldPass && isValidObjectName {
 			t.Errorf("Test case %d: Expected object name \"%s\" to be invalid", i+1, testCase.objectName)
-		}
-	}
-}
-
-// Tests validate bucket LocationConstraint.
-func TestIsValidLocationContraint(t *testing.T) {
-	// generates the input request with XML bucket configuration set to the request body.
-	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
-		createBucketConfig := createBucketLocationConfiguration{}
-		createBucketConfig.Location = location
-		var createBucketConfigBytes []byte
-		createBucketConfigBytes, e := xml.Marshal(createBucketConfig)
-		if e != nil {
-			return nil, e
-		}
-		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
-		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
-		return req, nil
-	}
-
-	testCases := []struct {
-		locationForInputRequest string
-		serverConfigRegion      string
-		expectedCode            APIErrorCode
-	}{
-		// Test case - 1.
-		{"us-east-1", "us-east-1", ErrNone},
-		// Test case - 2.
-		// In case of empty request body ErrNone is returned.
-		{"", "us-east-1", ErrNone},
-		// Test case - 3.
-		{"eu-central-1", "us-east-1", ErrInvalidRegion},
-	}
-	for i, testCase := range testCases {
-		inputRequest, e := createExpectedRequest(&http.Request{}, testCase.locationForInputRequest)
-		if e != nil {
-			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
-		}
-		actualCode := isValidLocationContraint(inputRequest.Body, testCase.serverConfigRegion)
-		if testCase.expectedCode != actualCode {
-			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
 		}
 	}
 }
