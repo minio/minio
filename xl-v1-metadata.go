@@ -18,53 +18,31 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
-	"strconv"
 	"time"
 )
 
-// error type when key is not found.
-var errMetadataKeyNotExist = errors.New("Key not found in fileMetadata.")
-
-// This code is built on similar ideas of http.Header.
-// Ref - https://golang.org/pkg/net/http/#Header
-
-// A fileMetadata represents a metadata header mapping
-// keys to sets of values.
-type fileMetadata map[string][]string
-
-// Add adds the key, value pair to the header.
-// It appends to any existing values associated with key.
-func (f fileMetadata) Add(key, value string) {
-	f[key] = append(f[key], value)
-}
-
-// Set sets the header entries associated with key to
-// the single element value. It replaces any existing
-// values associated with key.
-func (f fileMetadata) Set(key, value string) {
-	f[key] = []string{value}
-}
-
-// Get gets the first value associated with the given key.
-// If there are no values associated with the key, Get returns "".
-// Get is a convenience method.  For more complex queries,
-// access the map directly.
-func (f fileMetadata) Get(key string) []string {
-	if f == nil {
-		return nil
+// A xlMetaV1 represents a metadata header mapping keys to sets of values.
+type xlMetaV1 struct {
+	Version string `json:"version"`
+	Stat    struct {
+		Size    int64     `json:"size"`
+		ModTime time.Time `json:"modTime"`
+		Version int64     `json:"version"`
+	} `json:"stat"`
+	Erasure struct {
+		DataBlocks   int   `json:"data"`
+		ParityBlocks int   `json:"parity"`
+		BlockSize    int64 `json:"blockSize"`
 	}
-	v, ok := f[key]
-	if !ok {
-		return nil
-	}
-	return v
+	Minio struct {
+		Release string `json:"release"`
+	} `json:"minio"`
 }
 
 // Write writes a metadata in wire format.
-func (f fileMetadata) Write(writer io.Writer) error {
-	metadataBytes, err := json.Marshal(f)
+func (m xlMetaV1) Write(writer io.Writer) error {
+	metadataBytes, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
@@ -72,56 +50,12 @@ func (f fileMetadata) Write(writer io.Writer) error {
 	return err
 }
 
-// Get file size.
-func (f fileMetadata) GetSize() (int64, error) {
-	sizes := f.Get("file.size")
-	if sizes == nil {
-		return 0, errMetadataKeyNotExist
-	}
-	sizeStr := sizes[0]
-	return strconv.ParseInt(sizeStr, 10, 64)
-}
-
-// Set file size.
-func (f fileMetadata) SetSize(size int64) {
-	f.Set("file.size", strconv.FormatInt(size, 10))
-}
-
-// Get file Modification time.
-func (f fileMetadata) GetModTime() (time.Time, error) {
-	timeStrs := f.Get("file.modTime")
-	if timeStrs == nil {
-		return time.Time{}, errMetadataKeyNotExist
-	}
-	return time.Parse(timeFormatAMZ, timeStrs[0])
-}
-
-// Set file Modification time.
-func (f fileMetadata) SetModTime(modTime time.Time) {
-	f.Set("file.modTime", modTime.Format(timeFormatAMZ))
-}
-
-// Get file version.
-func (f fileMetadata) GetFileVersion() (int64, error) {
-	version := f.Get("file.version")
-	if version == nil {
-		return 0, errMetadataKeyNotExist
-	}
-	return strconv.ParseInt(version[0], 10, 64)
-}
-
-// Set file version.
-func (f fileMetadata) SetFileVersion(fileVersion int64) {
-	f.Set("file.version", strconv.FormatInt(fileVersion, 10))
-}
-
-// fileMetadataDecode - file metadata decode.
-func fileMetadataDecode(reader io.Reader) (fileMetadata, error) {
-	metadata := make(fileMetadata)
+// xlMetaV1Decode - file metadata decode.
+func xlMetaV1Decode(reader io.Reader) (metadata xlMetaV1, err error) {
 	decoder := json.NewDecoder(reader)
 	// Unmarshalling failed, file possibly corrupted.
-	if err := decoder.Decode(&metadata); err != nil {
-		return nil, err
+	if err = decoder.Decode(&metadata); err != nil {
+		return xlMetaV1{}, err
 	}
 	return metadata, nil
 }
