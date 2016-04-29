@@ -178,10 +178,7 @@ func (m matrix) SwapRows(r1, r2 int) error {
 // IsSquare will return true if the matrix is square
 // and nil if the matrix is square
 func (m matrix) IsSquare() bool {
-	if len(m) != len(m[0]) {
-		return false
-	}
-	return true
+	return len(m) == len(m[0])
 }
 
 // errSingular is returned if the matrix is singular and cannot be inversed

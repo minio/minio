@@ -189,7 +189,7 @@ func (r reedSolomon) Verify(shards [][]byte) (bool, error) {
 // number of matrix rows used, is determined by
 // outputCount, which is the number of outputs to compute.
 func (r reedSolomon) codeSomeShards(matrixRows, inputs, outputs [][]byte, outputCount, byteCount int) {
-	if runtime.GOMAXPROCS(0) > 1 && len(inputs[0]) > splitSize {
+	if runtime.GOMAXPROCS(0) > 1 && len(inputs[0]) > minSplitSize {
 		r.codeSomeShardsP(matrixRows, inputs, outputs, outputCount, byteCount)
 		return
 	}
@@ -205,24 +205,24 @@ func (r reedSolomon) codeSomeShards(matrixRows, inputs, outputs [][]byte, output
 	}
 }
 
-// How many bytes per goroutine.
-const splitSize = 512
+const (
+	minSplitSize  = 512 // min split size per goroutine
+	maxGoroutines = 50  // max goroutines number for encoding & decoding
+)
 
 // Perform the same as codeSomeShards, but split the workload into
 // several goroutines.
 func (r reedSolomon) codeSomeShardsP(matrixRows, inputs, outputs [][]byte, outputCount, byteCount int) {
 	var wg sync.WaitGroup
-	left := byteCount
+	do := byteCount / maxGoroutines
+	if do < minSplitSize {
+		do = minSplitSize
+	}
 	start := 0
-	for {
-		do := left
-		if do > splitSize {
-			do = splitSize
+	for start < byteCount {
+		if start+do > byteCount {
+			do = byteCount - start
 		}
-		if do == 0 {
-			break
-		}
-		left -= do
 		wg.Add(1)
 		go func(start, stop int) {
 			for c := 0; c < r.DataShards; c++ {
@@ -246,22 +246,19 @@ func (r reedSolomon) codeSomeShardsP(matrixRows, inputs, outputs [][]byte, outpu
 // except this will check values and return
 // as soon as a difference is found.
 func (r reedSolomon) checkSomeShards(matrixRows, inputs, toCheck [][]byte, outputCount, byteCount int) bool {
-	var wg sync.WaitGroup
-	left := byteCount
-	start := 0
-
 	same := true
 	var mu sync.RWMutex // For above
 
-	for {
-		do := left
-		if do > splitSize {
-			do = splitSize
+	var wg sync.WaitGroup
+	do := byteCount / maxGoroutines
+	if do < minSplitSize {
+		do = minSplitSize
+	}
+	start := 0
+	for start < byteCount {
+		if start+do > byteCount {
+			do = byteCount - start
 		}
-		if do == 0 {
-			break
-		}
-		left -= do
 		wg.Add(1)
 		go func(start, do int) {
 			defer wg.Done()
@@ -283,7 +280,7 @@ func (r reedSolomon) checkSomeShards(matrixRows, inputs, toCheck [][]byte, outpu
 			}
 
 			for i, calc := range outputs {
-				if bytes.Compare(calc, toCheck[i][start:start+do]) != 0 {
+				if !bytes.Equal(calc, toCheck[i][start:start+do]) {
 					mu.Lock()
 					same = false
 					mu.Unlock()
