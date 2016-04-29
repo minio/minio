@@ -110,7 +110,7 @@ Thanks for using Minio, awaiting feedback :-)
 
 It is possible to build the minio server from source on FreeBSD.  To do this we will used the golang distribution provided by the FreeBSD pkg infrastructure.
 
-First we will need to install glang as well as GNU make:
+First we will need to install golang as well as GNU make:
 
 ```
 $ sudo pkg install go gmake
