@@ -67,47 +67,11 @@ func TestObjectNewMultipartUpload(t *testing.T) {
 	if err != nil {
 		switch err.(type) {
 		case InvalidUploadID:
-			t.Fatalf("New Multipart upload failed to create uuid file.")
+			t.Fatal("Expected uploadIDPath to exist.")
 		default:
-			t.Fatalf(err.Error())
+			t.Fatal("Abort Multipart failed")
+
 		}
-	}
-}
-
-// Tests validates the validator for existence of uploadID.
-func TestObjectAPIIsUploadIDExists(t *testing.T) {
-	directory, err := ioutil.TempDir("", "minio-multipart-2-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(directory)
-
-	// Initialize fs object layer.
-	obj, err := newFSObjects(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bucket := "minio-bucket"
-	object := "minio-object"
-
-	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucket(bucket)
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatal(err)
-	}
-
-	_, err = obj.NewMultipartUpload(bucket, object)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = obj.AbortMultipartUpload(bucket, object, "abc")
-	switch err.(type) {
-	case InvalidUploadID:
-	default:
-		t.Fatal("Expected uploadIDPath to exist.")
 	}
 }
 
