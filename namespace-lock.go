@@ -16,7 +16,11 @@
 
 package main
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/Sirupsen/logrus"
+)
 
 // nsParam - carries name space resource.
 type nsParam struct {
@@ -48,11 +52,9 @@ func initNSLock() {
 	}
 }
 
-// Lock - locks the given resource for writes, using a previously
-// allocated name space lock or initializing a new one.
-func (n *nsLockMap) Lock(volume, path string) {
+// Lock the namespace resource.
+func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	n.mutex.Lock()
-	defer n.mutex.Unlock()
 
 	param := nsParam{volume, path}
 	nsLk, found := n.lockMap[param]
@@ -61,68 +63,70 @@ func (n *nsLockMap) Lock(volume, path string) {
 			RWMutex: &sync.RWMutex{},
 			ref:     0,
 		}
+		n.lockMap[param] = nsLk
 	}
-
-	// Acquire a write lock and update reference counter.
-	nsLk.Lock()
 	nsLk.ref++
+	// Unlock map before Locking NS which might block.
+	n.mutex.Unlock()
 
-	n.lockMap[param] = nsLk
+	// Locking here can block.
+	if readLock {
+		nsLk.RLock()
+	} else {
+		nsLk.Lock()
+	}
+}
+
+// Unlock the namespace resource.
+func (n *nsLockMap) unlock(volume, path string, readLock bool) {
+	// nsLk.Unlock() will not block, hence locking the map for the entire function is fine.
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
+	param := nsParam{volume, path}
+	if nsLk, found := n.lockMap[param]; found {
+		if readLock {
+			nsLk.RUnlock()
+		} else {
+			nsLk.Unlock()
+		}
+		if nsLk.ref == 0 {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Error("ref count in NS lock can not be 0.")
+		}
+		if nsLk.ref != 0 {
+			nsLk.ref--
+		}
+		if nsLk.ref == 0 {
+			// Remove from the map if there are no more references.
+			delete(n.lockMap, param)
+		}
+	}
+}
+
+// Lock - locks the given resource for writes, using a previously
+// allocated name space lock or initializing a new one.
+func (n *nsLockMap) Lock(volume, path string) {
+	readLock := false
+	n.lock(volume, path, readLock)
 }
 
 // Unlock - unlocks any previously acquired write locks.
 func (n *nsLockMap) Unlock(volume, path string) {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-
-	param := nsParam{volume, path}
-	if nsLk, found := n.lockMap[param]; found {
-		// Unlock a write lock and update reference counter.
-		nsLk.Unlock()
-		if nsLk.ref != 0 {
-			nsLk.ref--
-		}
-		if nsLk.ref != 0 {
-			n.lockMap[param] = nsLk
-		}
-	}
+	readLock := false
+	n.unlock(volume, path, readLock)
 }
 
 // RLock - locks any previously acquired read locks.
 func (n *nsLockMap) RLock(volume, path string) {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-
-	param := nsParam{volume, path}
-	nsLk, found := n.lockMap[param]
-	if !found {
-		nsLk = &nsLock{
-			RWMutex: &sync.RWMutex{},
-			ref:     0,
-		}
-	}
-
-	// Acquire a read lock and update reference counter.
-	nsLk.RLock()
-	nsLk.ref++
-
-	n.lockMap[param] = nsLk
+	readLock := true
+	n.lock(volume, path, readLock)
 }
 
 // RUnlock - unlocks any previously acquired read locks.
 func (n *nsLockMap) RUnlock(volume, path string) {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-
-	param := nsParam{volume, path}
-	if nsLk, found := n.lockMap[param]; found {
-		// Unlock a read lock and update reference counter.
-		nsLk.RUnlock()
-		if nsLk.ref != 0 {
-			nsLk.ref--
-		}
-		if nsLk.ref != 0 {
-			n.lockMap[param] = nsLk
-		}
-	}
+	readLock := true
+	n.unlock(volume, path, readLock)
 }
