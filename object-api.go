@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
@@ -28,6 +29,10 @@ import (
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/safe"
+)
+
+const (
+	multipartMetaFile = "multipart.json"
 )
 
 type objectAPI struct {
@@ -138,6 +143,28 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 
 // GetObject - get an object.
 func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, *probe.Error) {
+	findPathOffset := func() (i int, partOffset int64, err error) {
+		partOffset = startOffset
+		for i = 1; i < 10000; i++ {
+			var fileInfo FileInfo
+			fileInfo, err = o.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+			if err != nil {
+				if err == errFileNotFound {
+					continue
+				}
+				return
+			}
+			if partOffset < fileInfo.Size {
+				return
+
+			}
+			partOffset -= fileInfo.Size
+
+		}
+		err = errors.New("offset too high")
+		return
+	}
+
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -146,15 +173,59 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 	if !IsValidObjectName(object) {
 		return nil, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	r, e := o.storage.ReadFile(bucket, object, startOffset)
-	if e != nil {
-		return nil, probe.NewError(toObjectErr(e, bucket, object))
+	_, err := o.storage.StatFile(bucket, object)
+	if err == nil {
+		fmt.Println("1", err)
+		r, e := o.storage.ReadFile(bucket, object, startOffset)
+		if e != nil {
+			fmt.Println("1.5", err)
+			return nil, probe.NewError(toObjectErr(e, bucket, object))
+		}
+		return r, nil
 	}
-	return r, nil
+	_, err = o.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
+	if err != nil {
+		fmt.Println("2", err)
+		return nil, probe.NewError(toObjectErr(err, bucket, object))
+	}
+	fileReader, fileWriter := io.Pipe()
+	partNum, offset, err := findPathOffset()
+	if err != nil {
+		fmt.Println("3", err)
+		return nil, probe.NewError(toObjectErr(err, bucket, object))
+	}
+	go func() {
+		for ; partNum < 10000; partNum++ {
+			r, err := o.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(partNum)), offset)
+			if err != nil {
+				if err == errFileNotFound {
+					continue
+				}
+				fileWriter.CloseWithError(err)
+				return
+			}
+			if _, err := io.Copy(fileWriter, r); err != nil {
+				fileWriter.CloseWithError(err)
+				return
+			}
+		}
+		fileWriter.Close()
+	}()
+	return fileReader, nil
 }
 
 // GetObjectInfo - get object info.
 func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Error) {
+	getMultpartFileSize := func() (size int64) {
+		for i := 0; i < 10000; i++ {
+			fi, err := o.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+			if err != nil {
+				continue
+			}
+			size += fi.Size
+		}
+		return size
+	}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
@@ -165,7 +236,11 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}
 	fi, e := o.storage.StatFile(bucket, object)
 	if e != nil {
-		return ObjectInfo{}, probe.NewError(toObjectErr(e, bucket, object))
+		fi, e = o.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
+		if e != nil {
+			return ObjectInfo{}, probe.NewError(toObjectErr(e, bucket, object))
+		}
+		fi.Size = getMultpartFileSize()
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {

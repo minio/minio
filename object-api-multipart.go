@@ -496,39 +496,21 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 		return "", probe.NewError(InvalidUploadID{UploadID: uploadID})
 	}
 
-	fileWriter, e := o.storage.CreateFile(bucket, object)
-	if e != nil {
-		return "", probe.NewError(toObjectErr(e, bucket, object))
-	}
-
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
-		var fileReader io.ReadCloser
-		fileReader, e = o.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
-		if e != nil {
-			if e == errFileNotFound {
-				return "", probe.NewError(InvalidPart{})
-			}
-			return "", probe.NewError(e)
-		}
-		_, e = io.Copy(fileWriter, fileReader)
-		if e != nil {
-			return "", probe.NewError(e)
-		}
-		e = fileReader.Close()
+		e := o.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, fmt.Sprint(part.PartNumber)))
 		if e != nil {
 			return "", probe.NewError(e)
 		}
 		md5Sums = append(md5Sums, part.ETag)
 	}
-
-	e = fileWriter.Close()
+	fileWriter, e := o.storage.CreateFile(bucket, path.Join(object, "multipart.json"))
 	if e != nil {
 		return "", probe.NewError(e)
 	}
-
+	fileWriter.Close()
 	// Save the s3 md5.
 	s3MD5, err := makeS3MD5(md5Sums...)
 	if err != nil {
@@ -536,7 +518,7 @@ func (o objectAPI) CompleteMultipartUpload(bucket string, object string, uploadI
 	}
 
 	// Cleanup all the parts.
-	o.removeMultipartUpload(bucket, object, uploadID)
+	// o.removeMultipartUpload(bucket, object, uploadID)
 
 	// Return md5sum.
 	return s3MD5, nil

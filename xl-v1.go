@@ -570,3 +570,25 @@ func (xl XL) DeleteFile(volume, path string) error {
 	}
 	return nil
 }
+
+// RenameFile - rename file.
+func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+	if !isValidVolname(srcVolume) {
+		return errInvalidArgument
+	}
+	if !isValidPath(srcPath) {
+		return errInvalidArgument
+	}
+	if !isValidVolname(dstVolume) {
+		return errInvalidArgument
+	}
+	if !isValidPath(dstPath) {
+		return errInvalidArgument
+	}
+	for _, disk := range xl.storageDisks {
+		if err := disk.RenameFile(srcVolume, srcPath, dstVolume, dstPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}

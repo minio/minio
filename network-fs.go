@@ -285,3 +285,8 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 	}
 	return nil
 }
+
+// RenameFile - Rename file.
+func (n networkFS) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+	return errUnexpected
+}
