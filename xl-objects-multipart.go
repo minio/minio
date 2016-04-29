@@ -260,7 +260,7 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	// Verify whether the bucket exists.
-	if isExist, err := xl.isBucketExist(bucket); err != nil {
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
 		return "", err
 	} else if !isExist {
 		return "", BucketNotFound{Bucket: bucket}
@@ -302,21 +302,6 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
 	}
 }
 
-// isUploadIDExists - verify if a given uploadID exists and is valid.
-func (xl xlObjects) isUploadIDExists(bucket, object, uploadID string) (bool, error) {
-	uploadIDPath := path.Join(bucket, object, uploadID)
-	st, err := xl.storage.StatFile(minioMetaVolume, uploadIDPath)
-	if err != nil {
-		// Upload id does not exist.
-		if err == errFileNotFound {
-			return false, nil
-		}
-		return false, err
-	}
-	// Upload id exists and is a regular file.
-	return st.Mode.IsRegular(), nil
-}
-
 // PutObjectPart - writes the multipart upload chunks.
 func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
@@ -327,13 +312,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	// Verify whether the bucket exists.
-	if isExist, err := xl.isBucketExist(bucket); err != nil {
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
 		return "", err
 	} else if !isExist {
 		return "", BucketNotFound{Bucket: bucket}
 	}
 
-	if status, err := xl.isUploadIDExists(bucket, object, uploadID); err != nil {
+	if status, err := isUploadIDExists(xl.storage, bucket, object, uploadID); err != nil {
 		return "", err
 	} else if !status {
 		return "", InvalidUploadID{UploadID: uploadID}
@@ -393,7 +378,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, (ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if status, err := xl.isUploadIDExists(bucket, object, uploadID); err != nil {
+	if status, err := isUploadIDExists(xl.storage, bucket, object, uploadID); err != nil {
 		return ListPartsInfo{}, err
 	} else if !status {
 		return ListPartsInfo{}, (InvalidUploadID{UploadID: uploadID})
@@ -457,31 +442,22 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			Object: object,
 		})
 	}
-	if status, err := xl.isUploadIDExists(bucket, object, uploadID); err != nil {
+	if status, err := isUploadIDExists(xl.storage, bucket, object, uploadID); err != nil {
 		return "", err
 	} else if !status {
 		return "", (InvalidUploadID{UploadID: uploadID})
-	}
-
-	fileWriter, err := xl.storage.CreateFile(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
 	}
 
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
-		err = xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, fmt.Sprint(part.PartNumber)))
+		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, fmt.Sprint(part.PartNumber)))
+		// We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err
 		}
 		md5Sums = append(md5Sums, part.ETag)
-	}
-
-	err = fileWriter.Close()
-	if err != nil {
-		return "", err
 	}
 
 	// Save the s3 md5.
@@ -503,7 +479,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	if !IsValidObjectName(object) {
 		return (ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	if status, err := xl.isUploadIDExists(bucket, object, uploadID); err != nil {
+	if status, err := isUploadIDExists(xl.storage, bucket, object, uploadID); err != nil {
 		return err
 	} else if !status {
 		return (InvalidUploadID{UploadID: uploadID})

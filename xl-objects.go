@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/minio/minio/pkg/mimedb"
@@ -47,93 +46,26 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	return xlObjects{storage}, nil
 }
 
-// checks whether bucket exists.
-func (xl xlObjects) isBucketExist(bucketName string) (bool, error) {
-	// Check whether bucket exists.
-	if _, e := xl.storage.StatVol(bucketName); e != nil {
-		if e == errVolumeNotFound {
-			return false, nil
-		}
-		return false, e
-	}
-	return true, nil
-}
-
 /// Bucket operations
 
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucket(bucket string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	if err := xl.storage.MakeVol(bucket); err != nil {
-		return toObjectErr(err, bucket)
-	}
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls.
-	// Create minio meta volume, if it doesn't exist yet.
-	if err := xl.storage.MakeVol(minioMetaVolume); err != nil {
-		if err != errVolumeExists {
-			return toObjectErr(err, minioMetaVolume)
-		}
-	}
-	return nil
+	return makeBucket(xl.storage, bucket)
 }
 
 // GetBucketInfo - get bucket info.
 func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
-	}
-	vi, err := xl.storage.StatVol(bucket)
-	if err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
-	}
-	return BucketInfo{
-		Name:    bucket,
-		Created: vi.Created,
-		Total:   vi.Total,
-		Free:    vi.Free,
-	}, nil
+	return getBucketInfo(xl.storage, bucket)
 }
 
 // ListBuckets - list buckets.
 func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
-	var bucketInfos []BucketInfo
-	vols, err := xl.storage.ListVols()
-	if err != nil {
-		return nil, toObjectErr(err)
-	}
-	for _, vol := range vols {
-		// StorageAPI can send volume names which are incompatible
-		// with buckets, handle it and skip them.
-		if !IsValidBucketName(vol.Name) {
-			continue
-		}
-		bucketInfos = append(bucketInfos, BucketInfo{
-			Name:    vol.Name,
-			Created: vol.Created,
-			Total:   vol.Total,
-			Free:    vol.Free,
-		})
-	}
-	sort.Sort(byBucketName(bucketInfos))
-	return bucketInfos, nil
+	return listBuckets(xl.storage)
 }
 
 // DeleteBucket - delete a bucket.
 func (xl xlObjects) DeleteBucket(bucket string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	if err := xl.storage.DeleteVol(bucket); err != nil {
-		return toObjectErr(err)
-	}
-	return nil
+	return deleteBucket(xl.storage, bucket)
 }
 
 /// Object Operations
@@ -264,11 +196,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		})
 	}
 	// Check whether the bucket exists.
-	isExist, err := xl.isBucketExist(bucket)
-	if err != nil {
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
 		return "", err
-	}
-	if !isExist {
+	} else if !isExist {
 		return "", BucketNotFound{Bucket: bucket}
 	}
 

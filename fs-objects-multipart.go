@@ -302,21 +302,6 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string) (string, error) {
 	}
 }
 
-// isUploadIDExists - verify if a given uploadID exists and is valid.
-func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) (bool, error) {
-	uploadIDPath := path.Join(bucket, object, uploadID)
-	st, err := storage.StatFile(minioMetaVolume, uploadIDPath)
-	if err != nil {
-		// Upload id does not exist.
-		if err == errFileNotFound {
-			return false, nil
-		}
-		return false, err
-	}
-	// Upload id exists and is a regular file.
-	return st.Mode.IsRegular(), nil
-}
-
 // PutObjectPart - writes the multipart upload chunks.
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
