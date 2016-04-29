@@ -58,10 +58,9 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	defer wcloser.release()
 
 	// Lock right before reading from disk.
-	readLock := true
-	xl.lockNS(volume, path, readLock)
+	nsMutex.RLock(volume, path)
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	xl.unlockNS(volume, path, readLock)
+	nsMutex.RUnlock(volume, path)
 
 	// Count errors other than fileNotFound, bigger than the allowed
 	// readQuorum, if yes throw an error.
@@ -263,9 +262,8 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	}
 
 	// Lock right before commit to disk.
-	readLock = false // false means writeLock.
-	xl.lockNS(volume, path, readLock)
-	defer xl.unlockNS(volume, path, readLock)
+	nsMutex.Lock(volume, path)
+	defer nsMutex.Unlock(volume, path)
 
 	// Close all writers and metadata writers in routines.
 	for index, writer := range writers {

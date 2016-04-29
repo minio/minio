@@ -81,6 +81,9 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 	// Initialize server config.
 	initConfig()
 
+	// Initialize name space lock.
+	initNSLock()
+
 	// Set port.
 	addr := ":" + strconv.Itoa(getFreePort())
 

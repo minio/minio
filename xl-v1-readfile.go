@@ -36,10 +36,9 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	// Acquire a read lock.
-	readLock := true
-	xl.lockNS(volume, path, readLock)
+	nsMutex.RLock(volume, path)
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
-	xl.unlockNS(volume, path, readLock)
+	nsMutex.RUnlock(volume, path)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
@@ -63,7 +62,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 	}
 
 	// Acquire read lock again.
-	xl.lockNS(volume, path, readLock)
+	nsMutex.RLock(volume, path)
 	readers := make([]io.ReadCloser, len(xl.storageDisks))
 	for index, disk := range onlineDisks {
 		if disk == nil {
@@ -77,7 +76,7 @@ func (xl XL) ReadFile(volume, path string, offset int64) (io.ReadCloser, error) 
 			readers[index] = reader
 		}
 	}
-	xl.unlockNS(volume, path, readLock)
+	nsMutex.RUnlock(volume, path)
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()

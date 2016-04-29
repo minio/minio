@@ -33,11 +33,10 @@ func (xl XL) healFile(volume string, path string) error {
 	var writers = make([]io.WriteCloser, totalBlocks)
 
 	// Acquire a read lock.
-	readLock := true
-	xl.lockNS(volume, path, readLock)
-	defer xl.unlockNS(volume, path, readLock)
+	nsMutex.RLock(volume, path)
+	defer nsMutex.RUnlock(volume, path)
 
-	// Fetch all online disks.
+	// List all online disks to verify if we need to heal.
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	if err != nil {
 		log.WithFields(logrus.Fields{

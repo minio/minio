@@ -44,6 +44,10 @@ func (s *MySuite) TestFSAPISuite(c *C) {
 
 func (s *MySuite) TestXLAPISuite(c *C) {
 	var storageList []string
+
+	// Initialize name space lock.
+	initNSLock()
+
 	create := func() objectAPI {
 		var nDisks = 16 // Maximum disks.
 		var erasureDisks []string

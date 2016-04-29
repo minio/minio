@@ -22,7 +22,6 @@ import (
 	slashpath "path"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/klauspost/reedsolomon"
@@ -37,54 +36,12 @@ const (
 
 // XL layer structure.
 type XL struct {
-	ReedSolomon           reedsolomon.Encoder // Erasure encoder/decoder.
-	DataBlocks            int
-	ParityBlocks          int
-	storageDisks          []StorageAPI
-	nameSpaceLockMap      map[nameSpaceParam]*nameSpaceLock
-	nameSpaceLockMapMutex *sync.Mutex
-	readQuorum            int
-	writeQuorum           int
-}
-
-// lockNS - locks the given resource, using a previously allocated
-// name space lock or initializing a new one.
-func (xl XL) lockNS(volume, path string, readLock bool) {
-	xl.nameSpaceLockMapMutex.Lock()
-	defer xl.nameSpaceLockMapMutex.Unlock()
-
-	param := nameSpaceParam{volume, path}
-	nsLock, found := xl.nameSpaceLockMap[param]
-	if !found {
-		nsLock = newNSLock()
-	}
-
-	if readLock {
-		nsLock.RLock()
-	} else {
-		nsLock.Lock()
-	}
-
-	xl.nameSpaceLockMap[param] = nsLock
-}
-
-// unlockNS - unlocks any previously acquired read or write locks.
-func (xl XL) unlockNS(volume, path string, readLock bool) {
-	xl.nameSpaceLockMapMutex.Lock()
-	defer xl.nameSpaceLockMapMutex.Unlock()
-
-	param := nameSpaceParam{volume, path}
-	if nsLock, found := xl.nameSpaceLockMap[param]; found {
-		if readLock {
-			nsLock.RUnlock()
-		} else {
-			nsLock.Unlock()
-		}
-
-		if nsLock.InUse() {
-			xl.nameSpaceLockMap[param] = nsLock
-		}
-	}
+	ReedSolomon  reedsolomon.Encoder // Erasure encoder/decoder.
+	DataBlocks   int
+	ParityBlocks int
+	storageDisks []StorageAPI
+	readQuorum   int
+	writeQuorum  int
 }
 
 // newXL instantiate a new XL.
@@ -134,10 +91,6 @@ func newXL(disks ...string) (StorageAPI, error) {
 
 	// Save all the initialized storage disks.
 	xl.storageDisks = storageDisks
-
-	// Initialize name space lock map.
-	xl.nameSpaceLockMap = make(map[nameSpaceParam]*nameSpaceLock)
-	xl.nameSpaceLockMapMutex = &sync.Mutex{}
 
 	// Figure out read and write quorum based on number of storage disks.
 	// Read quorum should be always N/2 + 1 (due to Vandermonde matrix
@@ -552,10 +505,9 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	}
 
 	// Acquire read lock.
-	readLock := true
-	xl.lockNS(volume, path, readLock)
+	nsMutex.RLock(volume, path)
 	_, metadata, heal, err := xl.listOnlineDisks(volume, path)
-	xl.unlockNS(volume, path, readLock)
+	nsMutex.RUnlock(volume, path)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
