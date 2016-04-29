@@ -29,12 +29,11 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestFSAPISuite(c *C) {
 	var storageList []string
-	create := func() objectAPI {
+	create := func() ObjectLayer {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)
-		storageAPI, err := newStorageAPI(path)
+		objAPI, err := newFSObjects(path)
 		c.Check(err, IsNil)
-		objAPI := newObjectLayer(storageAPI)
 		storageList = append(storageList, path)
 		return objAPI
 	}
@@ -48,7 +47,7 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 	// Initialize name space lock.
 	initNSLock()
 
-	create := func() objectAPI {
+	create := func() ObjectLayer {
 		var nDisks = 16 // Maximum disks.
 		var erasureDisks []string
 		for i := 0; i < nDisks; i++ {
@@ -56,10 +55,8 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 			c.Check(err, IsNil)
 			erasureDisks = append(erasureDisks, path)
 		}
-		storageList = append(storageList, erasureDisks...)
-		storageAPI, err := newStorageAPI(erasureDisks...)
+		objAPI, err := newXLObjects(erasureDisks...)
 		c.Check(err, IsNil)
-		objAPI := newObjectLayer(storageAPI)
 		return objAPI
 	}
 	APITestSuite(c, create)

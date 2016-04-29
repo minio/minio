@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // Verify if request has JWT.
@@ -113,12 +112,12 @@ func sumMD5(data []byte) []byte {
 // Verify if request has valid AWS Signature Version '4'.
 func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	if r == nil {
-		errorIf(probe.NewError(errInvalidArgument), "HTTP request cannot be empty.", nil)
+		errorIf(errInvalidArgument, "HTTP request cannot be empty.", nil)
 		return ErrInternalError
 	}
-	payload, e := ioutil.ReadAll(r.Body)
-	if e != nil {
-		errorIf(probe.NewError(e), "Unable to read HTTP body.", nil)
+	payload, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errorIf(err, "Unable to read HTTP body.", nil)
 		return ErrInternalError
 	}
 	// Verify Content-Md5, if payload is set.

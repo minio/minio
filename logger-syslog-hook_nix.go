@@ -23,7 +23,6 @@ import (
 	"log/syslog"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
 )
 
 type syslogLogger struct {
@@ -41,8 +40,8 @@ type syslogHook struct {
 
 // enableSyslogLogger - enable logger at raddr.
 func enableSyslogLogger(raddr string) {
-	syslogHook, e := newSyslog("udp", raddr, syslog.LOG_ERR, "MINIO")
-	fatalIf(probe.NewError(e), "Unable to instantiate syslog.", nil)
+	syslogHook, err := newSyslog("udp", raddr, syslog.LOG_ERR, "MINIO")
+	fatalIf(err, "Unable to instantiate syslog.", nil)
 
 	log.Hooks.Add(syslogHook)               // Add syslog hook.
 	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
@@ -51,15 +50,15 @@ func enableSyslogLogger(raddr string) {
 
 // newSyslog - Creates a hook to be added to an instance of logger.
 func newSyslog(network, raddr string, priority syslog.Priority, tag string) (*syslogHook, error) {
-	w, e := syslog.Dial(network, raddr, priority, tag)
-	return &syslogHook{w, network, raddr}, e
+	w, err := syslog.Dial(network, raddr, priority, tag)
+	return &syslogHook{w, network, raddr}, err
 }
 
 // Fire - fire the log event
 func (hook *syslogHook) Fire(entry *logrus.Entry) error {
-	line, e := entry.String()
-	if e != nil {
-		return fmt.Errorf("Unable to read entry, %v", e)
+	line, err := entry.String()
+	if err != nil {
+		return fmt.Errorf("Unable to read entry, %v", err)
 	}
 	switch entry.Level {
 	case logrus.PanicLevel:

@@ -25,26 +25,21 @@ import (
 	"os"
 	"strconv"
 	"testing"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 // Testing GetObjectInfo().
 func TestGetObjectInfo(t *testing.T) {
-	directory, e := ioutil.TempDir("", "minio-get-objinfo-test")
-	if e != nil {
-		t.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-get-objinfo-test")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
 	// Create the obj.
-	fs, e := newFS(directory)
-	if e != nil {
-		t.Fatal(e)
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	obj := newObjectLayer(fs)
-	var err *probe.Error
 
 	// This bucket is used for testing getObjectInfo operations.
 	err = obj.MakeBucket("test-getobjectinfo")
@@ -93,15 +88,15 @@ func TestGetObjectInfo(t *testing.T) {
 	for i, testCase := range testCases {
 		result, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
 		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
+			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
 		if err == nil && !testCase.shouldPass {
 			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if err != nil && !testCase.shouldPass {
-			if testCase.err.Error() != err.Cause.Error() {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Cause.Error())
+			if testCase.err.Error() != err.Error() {
+				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Error())
 			}
 		}
 
@@ -125,20 +120,17 @@ func TestGetObjectInfo(t *testing.T) {
 
 func BenchmarkGetObject(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, e := ioutil.TempDir("", "minio-benchmark-getobject")
-	if e != nil {
-		b.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-benchmark-getobject")
+	if err != nil {
+		b.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
 	// Create the obj.
-	fs, e := newFS(directory)
-	if e != nil {
-		b.Fatal(e)
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		b.Fatal(err)
 	}
-
-	obj := newObjectLayer(fs)
-	var err *probe.Error
 
 	// Make a bucket and put in a few objects.
 	err = obj.MakeBucket("bucket")
@@ -165,8 +157,8 @@ func BenchmarkGetObject(b *testing.B) {
 		if err != nil {
 			b.Error(err)
 		}
-		if _, e := io.Copy(buffer, r); e != nil {
-			b.Error(e)
+		if _, err := io.Copy(buffer, r); err != nil {
+			b.Error(err)
 		}
 		if buffer.Len() != len(text) {
 			b.Errorf("GetObject returned incorrect length %d (should be %d)\n", buffer.Len(), len(text))

@@ -83,7 +83,7 @@ func newXL(disks ...string) (StorageAPI, error) {
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		var err error
-		storageDisks[index], err = newFS(disk)
+		storageDisks[index], err = newPosix(disk)
 		if err != nil {
 			return nil, err
 		}
@@ -573,6 +573,7 @@ func (xl XL) DeleteFile(volume, path string) error {
 
 // RenameFile - rename file.
 func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+	// Validate inputs.
 	if !isValidVolname(srcVolume) {
 		return errInvalidArgument
 	}
@@ -587,6 +588,12 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	}
 	for _, disk := range xl.storageDisks {
 		if err := disk.RenameFile(srcVolume, srcPath, dstVolume, dstPath); err != nil {
+			log.WithFields(logrus.Fields{
+				"srcVolume": srcVolume,
+				"srcPath":   srcPath,
+				"dstVolume": dstVolume,
+				"dstPath":   dstPath,
+			}).Errorf("RenameFile failed with %s", err)
 			return err
 		}
 	}

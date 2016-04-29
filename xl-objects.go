@@ -27,26 +27,30 @@ import (
 	"strings"
 
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/minio/minio/pkg/probe"
-	"github.com/minio/minio/pkg/safe"
 )
 
 const (
 	multipartMetaFile = "multipart.json"
 )
 
-type objectAPI struct {
+// xlObjects - Implements fs object layer.
+type xlObjects struct {
 	storage StorageAPI
 }
 
-func newObjectLayer(storage StorageAPI) objectAPI {
-	return objectAPI{storage}
+// newXLObjects - initialize new xl object layer.
+func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
+	storage, err := newXL(exportPaths...)
+	if err != nil {
+		return nil, err
+	}
+	return xlObjects{storage}, nil
 }
 
 // checks whether bucket exists.
-func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
+func (xl xlObjects) isBucketExist(bucketName string) (bool, error) {
 	// Check whether bucket exists.
-	if _, e := o.storage.StatVol(bucketName); e != nil {
+	if _, e := xl.storage.StatVol(bucketName); e != nil {
 		if e == errVolumeNotFound {
 			return false, nil
 		}
@@ -58,35 +62,35 @@ func (o objectAPI) isBucketExist(bucketName string) (bool, error) {
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (o objectAPI) MakeBucket(bucket string) *probe.Error {
+func (xl xlObjects) MakeBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
-	if e := o.storage.MakeVol(bucket); e != nil {
-		return probe.NewError(toObjectErr(e, bucket))
+	if err := xl.storage.MakeVol(bucket); err != nil {
+		return toObjectErr(err, bucket)
 	}
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls.
 	// Create minio meta volume, if it doesn't exist yet.
-	if e := o.storage.MakeVol(minioMetaVolume); e != nil {
-		if e != errVolumeExists {
-			return probe.NewError(toObjectErr(e, minioMetaVolume))
+	if err := xl.storage.MakeVol(minioMetaVolume); err != nil {
+		if err != errVolumeExists {
+			return toObjectErr(err, minioMetaVolume)
 		}
 	}
 	return nil
 }
 
 // GetBucketInfo - get bucket info.
-func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
+func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-	vi, e := o.storage.StatVol(bucket)
-	if e != nil {
-		return BucketInfo{}, probe.NewError(toObjectErr(e, bucket))
+	vi, err := xl.storage.StatVol(bucket)
+	if err != nil {
+		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 	return BucketInfo{
 		Name:    bucket,
@@ -96,19 +100,12 @@ func (o objectAPI) GetBucketInfo(bucket string) (BucketInfo, *probe.Error) {
 	}, nil
 }
 
-// byBucketName is a collection satisfying sort.Interface.
-type byBucketName []BucketInfo
-
-func (d byBucketName) Len() int           { return len(d) }
-func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
 // ListBuckets - list buckets.
-func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
+func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 	var bucketInfos []BucketInfo
-	vols, e := o.storage.ListVols()
-	if e != nil {
-		return nil, probe.NewError(toObjectErr(e))
+	vols, err := xl.storage.ListVols()
+	if err != nil {
+		return nil, toObjectErr(err)
 	}
 	for _, vol := range vols {
 		// StorageAPI can send volume names which are incompatible
@@ -128,13 +125,13 @@ func (o objectAPI) ListBuckets() ([]BucketInfo, *probe.Error) {
 }
 
 // DeleteBucket - delete a bucket.
-func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
+func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
-	if e := o.storage.DeleteVol(bucket); e != nil {
-		return probe.NewError(toObjectErr(e))
+	if err := xl.storage.DeleteVol(bucket); err != nil {
+		return toObjectErr(err)
 	}
 	return nil
 }
@@ -142,12 +139,12 @@ func (o objectAPI) DeleteBucket(bucket string) *probe.Error {
 /// Object Operations
 
 // GetObject - get an object.
-func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, *probe.Error) {
+func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, error) {
 	findPathOffset := func() (i int, partOffset int64, err error) {
 		partOffset = startOffset
 		for i = 1; i < 10000; i++ {
 			var fileInfo FileInfo
-			fileInfo, err = o.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
 			if err != nil {
 				if err == errFileNotFound {
 					continue
@@ -167,36 +164,31 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return nil, BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return nil, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	_, err := o.storage.StatFile(bucket, object)
-	if err == nil {
-		fmt.Println("1", err)
-		r, e := o.storage.ReadFile(bucket, object, startOffset)
-		if e != nil {
-			fmt.Println("1.5", err)
-			return nil, probe.NewError(toObjectErr(e, bucket, object))
+	if _, err := xl.storage.StatFile(bucket, pathJoin(object, multipartMetaFile)); err != nil {
+		if _, err = xl.storage.StatFile(bucket, object); err == nil {
+			var reader io.ReadCloser
+			reader, err = xl.storage.ReadFile(bucket, object, startOffset)
+			if err != nil {
+				return nil, toObjectErr(err, bucket, object)
+			}
+			return reader, nil
 		}
-		return r, nil
-	}
-	_, err = o.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
-	if err != nil {
-		fmt.Println("2", err)
-		return nil, probe.NewError(toObjectErr(err, bucket, object))
+		return nil, toObjectErr(err, bucket, object)
 	}
 	fileReader, fileWriter := io.Pipe()
 	partNum, offset, err := findPathOffset()
 	if err != nil {
-		fmt.Println("3", err)
-		return nil, probe.NewError(toObjectErr(err, bucket, object))
+		return nil, toObjectErr(err, bucket, object)
 	}
 	go func() {
 		for ; partNum < 10000; partNum++ {
-			r, err := o.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(partNum)), offset)
+			r, err := xl.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(partNum)), offset)
 			if err != nil {
 				if err == errFileNotFound {
 					continue
@@ -215,10 +207,10 @@ func (o objectAPI) GetObject(bucket, object string, startOffset int64) (io.ReadC
 }
 
 // GetObjectInfo - get object info.
-func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Error) {
+func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	getMultpartFileSize := func() (size int64) {
 		for i := 0; i < 10000; i++ {
-			fi, err := o.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+			fi, err := xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
 			if err != nil {
 				continue
 			}
@@ -228,17 +220,17 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return ObjectInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	fi, e := o.storage.StatFile(bucket, object)
-	if e != nil {
-		fi, e = o.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
-		if e != nil {
-			return ObjectInfo{}, probe.NewError(toObjectErr(e, bucket, object))
+	fi, err := xl.storage.StatFile(bucket, object)
+	if err != nil {
+		fi, err = xl.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		fi.Size = getMultpartFileSize()
 	}
@@ -260,44 +252,29 @@ func (o objectAPI) GetObjectInfo(bucket, object string) (ObjectInfo, *probe.Erro
 	}, nil
 }
 
-// safeCloseAndRemove - safely closes and removes underlying temporary
-// file writer if possible.
-func safeCloseAndRemove(writer io.WriteCloser) error {
-	// If writer is a safe file, Attempt to close and remove.
-	safeWriter, ok := writer.(*safe.File)
-	if ok {
-		return safeWriter.CloseAndRemove()
-	}
-	pipeWriter, ok := writer.(*io.PipeWriter)
-	if ok {
-		return pipeWriter.CloseWithError(errors.New("Close and error out."))
-	}
-	return nil
-}
-
-func (o objectAPI) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, *probe.Error) {
+func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return "", (BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", probe.NewError(ObjectNameInvalid{
+		return "", (ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
 	}
 	// Check whether the bucket exists.
-	isExist, err := o.isBucketExist(bucket)
+	isExist, err := xl.isBucketExist(bucket)
 	if err != nil {
-		return "", probe.NewError(err)
+		return "", err
 	}
 	if !isExist {
-		return "", probe.NewError(BucketNotFound{Bucket: bucket})
+		return "", BucketNotFound{Bucket: bucket}
 	}
 
-	fileWriter, e := o.storage.CreateFile(bucket, object)
-	if e != nil {
-		return "", probe.NewError(toObjectErr(e, bucket, object))
+	fileWriter, err := xl.storage.CreateFile(bucket, object)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Initialize md5 writer.
@@ -308,18 +285,18 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
-		if _, e = io.CopyN(multiWriter, data, size); e != nil {
+		if _, err = io.CopyN(multiWriter, data, size); err != nil {
 			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", probe.NewError(clErr)
+				return "", clErr
 			}
-			return "", probe.NewError(toObjectErr(e))
+			return "", toObjectErr(err)
 		}
 	} else {
-		if _, e = io.Copy(multiWriter, data); e != nil {
+		if _, err = io.Copy(multiWriter, data); err != nil {
 			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", probe.NewError(clErr)
+				return "", clErr
 			}
-			return "", probe.NewError(e)
+			return "", err
 		}
 	}
 
@@ -331,56 +308,56 @@ func (o objectAPI) PutObject(bucket string, object string, size int64, data io.R
 	}
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			if e = safeCloseAndRemove(fileWriter); e != nil {
-				return "", probe.NewError(e)
+			if err = safeCloseAndRemove(fileWriter); err != nil {
+				return "", err
 			}
-			return "", probe.NewError(BadDigest{md5Hex, newMD5Hex})
+			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
-	e = fileWriter.Close()
-	if e != nil {
-		return "", probe.NewError(e)
+	err = fileWriter.Close()
+	if err != nil {
+		return "", err
 	}
 
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
 
-func (o objectAPI) DeleteObject(bucket, object string) *probe.Error {
+func (xl xlObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
-		return probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if e := o.storage.DeleteFile(bucket, object); e != nil {
-		return probe.NewError(toObjectErr(e, bucket, object))
+	if err := xl.storage.DeleteFile(bucket, object); err != nil {
+		return toObjectErr(err, bucket, object)
 	}
 	return nil
 }
 
-func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, *probe.Error) {
+func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, probe.NewError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
+		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, probe.NewError(UnsupportedDelimiter{
+		return ListObjectsInfo{}, UnsupportedDelimiter{
 			Delimiter: delimiter,
-		})
+		}
 	}
 	// Verify if marker has prefix.
 	if marker != "" {
 		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, probe.NewError(InvalidMarkerPrefixCombination{
+			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
 				Marker: marker,
 				Prefix: prefix,
-			})
+			}
 		}
 	}
 
@@ -389,9 +366,9 @@ func (o objectAPI) ListObjects(bucket, prefix, marker, delimiter string, maxKeys
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	fileInfos, eof, e := o.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
-	if e != nil {
-		return ListObjectsInfo{}, probe.NewError(toObjectErr(e, bucket))
+	fileInfos, eof, err := xl.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
+	if err != nil {
+		return ListObjectsInfo{}, toObjectErr(err, bucket)
 	}
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil

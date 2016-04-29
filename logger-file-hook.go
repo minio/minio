@@ -21,7 +21,6 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
 )
 
 type fileLogger struct {
@@ -40,14 +39,14 @@ func enableFileLogger() {
 		return
 	}
 
-	file, e := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	fatalIf(probe.NewError(e), "Unable to open log file.", nil)
+	file, err := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	fatalIf(err, "Unable to open log file.", nil)
 
 	// Add a local file hook.
 	log.Hooks.Add(&localFile{file})
 
-	lvl, e := logrus.ParseLevel(flogger.Level)
-	fatalIf(probe.NewError(e), "Unknown log level detected, please fix your console logger configuration.", nil)
+	lvl, err := logrus.ParseLevel(flogger.Level)
+	fatalIf(err, "Unknown log level detected, please fix your console logger configuration.", nil)
 
 	// Set default JSON formatter.
 	log.Formatter = new(logrus.JSONFormatter)

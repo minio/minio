@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/minio/minio/pkg/probe"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -16,23 +15,23 @@ type configV1 struct {
 }
 
 // loadConfigV1 load config
-func loadConfigV1() (*configV1, *probe.Error) {
+func loadConfigV1() (*configV1, error) {
 	configPath, err := getConfigPath()
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	configFile := filepath.Join(configPath, "fsUsers.json")
-	if _, err := os.Stat(configFile); err != nil {
-		return nil, probe.NewError(err)
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
 	}
 	a := &configV1{}
 	a.Version = "1"
 	qc, err := quick.New(a)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	return qc.Data().(*configV1), nil
 }
@@ -60,22 +59,22 @@ type configV2 struct {
 }
 
 // loadConfigV2 load config version '2'.
-func loadConfigV2() (*configV2, *probe.Error) {
+func loadConfigV2() (*configV2, error) {
 	configFile, err := getConfigFile()
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
-	if _, err := os.Stat(configFile); err != nil {
-		return nil, probe.NewError(err)
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
 	}
 	a := &configV2{}
 	a.Version = "2"
 	qc, err := quick.New(a)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	return qc.Data().(*configV2), nil
 }
@@ -127,22 +126,22 @@ type configV3 struct {
 }
 
 // loadConfigV3 load config version '3'.
-func loadConfigV3() (*configV3, *probe.Error) {
+func loadConfigV3() (*configV3, error) {
 	configFile, err := getConfigFile()
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
-	if _, err := os.Stat(configFile); err != nil {
-		return nil, probe.NewError(err)
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
 	}
 	a := &configV3{}
 	a.Version = "3"
 	qc, err := quick.New(a)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 	return qc.Data().(*configV3), nil
 }

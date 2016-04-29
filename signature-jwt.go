@@ -21,7 +21,6 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
-	"github.com/minio/minio/pkg/probe"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -49,17 +48,13 @@ func initJWT() *JWT {
 }
 
 // GenerateToken - generates a new Json Web Token based on the incoming user id.
-func (jwt *JWT) GenerateToken(userName string) (string, *probe.Error) {
+func (jwt *JWT) GenerateToken(userName string) (string, error) {
 	token := jwtgo.New(jwtgo.SigningMethodHS512)
 	// Token expires in 10hrs.
 	token.Claims["exp"] = time.Now().Add(time.Hour * tokenExpires).Unix()
 	token.Claims["iat"] = time.Now().Unix()
 	token.Claims["sub"] = userName
-	tokenString, e := token.SignedString([]byte(jwt.SecretAccessKey))
-	if e != nil {
-		return "", probe.NewError(e)
-	}
-	return tokenString, nil
+	return token.SignedString([]byte(jwt.SecretAccessKey))
 }
 
 // Authenticate - authenticates incoming username and password.

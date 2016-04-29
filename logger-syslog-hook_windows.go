@@ -18,8 +18,6 @@
 
 package main
 
-import "github.com/minio/minio/pkg/probe"
-
 type syslogLogger struct {
 	Enable bool   `json:"enable"`
 	Addr   string `json:"address"`
@@ -28,5 +26,5 @@ type syslogLogger struct {
 
 // enableSyslogLogger - unsupported on windows.
 func enableSyslogLogger(raddr string) {
-	fatalIf(probe.NewError(errSyslogNotSupported), "Unable to enable syslog.", nil)
+	fatalIf(errSyslogNotSupported, "Unable to enable syslog.", nil)
 }

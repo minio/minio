@@ -21,26 +21,22 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"testing"
 )
 
 // Tests validate creation of new multipart upload instance.
 func TestObjectNewMultipartUpload(t *testing.T) {
-	directory, e := ioutil.TempDir("", "minio-multipart-1-test")
-	if e != nil {
-		t.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-multipart-1-test")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
-	// Initialize fs layer.
-	fs, e := newFS(directory)
-	if e != nil {
-		t.Fatal(e)
+	// Initialize fs object layer.
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// Initialize object layer.
-	obj := newObjectLayer(fs)
 
 	bucket := "minio-bucket"
 	object := "minio-object"
@@ -49,77 +45,68 @@ func TestObjectNewMultipartUpload(t *testing.T) {
 	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
 	uploadID, err := obj.NewMultipartUpload(bucket, object)
 	if err == nil {
-		t.Fatalf("Expcected to fail since the NewMultipartUpload is intialized on a non-existant bucket.")
+		t.Fatalf("Expected to fail since the NewMultipartUpload is intialized on a non-existant bucket.")
 	}
-	if errMsg != err.ToGoError().Error() {
-		t.Errorf("Expected to fail with Error \"%s\", but instead found \"%s\".", errMsg, err.ToGoError().Error())
+	if errMsg != err.Error() {
+		t.Errorf("Expected to fail with Error \"%s\", but instead found \"%s\".", errMsg, err.Error())
 	}
 
 	// Create bucket before intiating NewMultipartUpload.
 	err = obj.MakeBucket(bucket)
 	if err != nil {
 		// failed to create newbucket, abort.
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 
 	uploadID, err = obj.NewMultipartUpload(bucket, object)
 	if err != nil {
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 
-	uploadIDPath := path.Join(bucket, object, uploadID)
-	_, e = obj.storage.StatFile(minioMetaVolume, uploadIDPath)
-	if e != nil {
-		if e == errFileNotFound {
+	err = obj.AbortMultipartUpload(bucket, object, uploadID)
+	if err != nil {
+		switch err.(type) {
+		case InvalidUploadID:
 			t.Fatalf("New Multipart upload failed to create uuid file.")
+		default:
+			t.Fatalf(err.Error())
 		}
-		t.Fatalf(e.Error())
 	}
 }
 
 // Tests validates the validator for existence of uploadID.
 func TestObjectAPIIsUploadIDExists(t *testing.T) {
-	directory, e := ioutil.TempDir("", "minio-multipart-2-test")
-	if e != nil {
-		t.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-multipart-2-test")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
-	// Initialize fs layer.
-	fs, e := newFS(directory)
-	if e != nil {
-		t.Fatal(e)
+	// Initialize fs object layer.
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// Initialize object layer.
-	obj := newObjectLayer(fs)
 
 	bucket := "minio-bucket"
 	object := "minio-object"
 
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucket)
+	err = obj.MakeBucket(bucket)
 	if err != nil {
 		// Failed to create newbucket, abort.
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 
-	// UploadID file shouldn't exist.
-	isExists, e := obj.isUploadIDExists(bucket, object, "abc")
-	if e == nil && isExists {
-		t.Fatal("Expected uploadIDPath to not to exist.")
-	}
-
-	uploadID, err := obj.NewMultipartUpload(bucket, object)
+	_, err = obj.NewMultipartUpload(bucket, object)
 	if err != nil {
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
-	// UploadID file should exist.
-	isExists, e = obj.isUploadIDExists(bucket, object, uploadID)
-	if e != nil {
-		t.Fatal(e.Error())
-	}
-	if !isExists {
+
+	err = obj.AbortMultipartUpload(bucket, object, "abc")
+	switch err.(type) {
+	case InvalidUploadID:
+	default:
 		t.Fatal("Expected uploadIDPath to exist.")
 	}
 }
@@ -127,40 +114,38 @@ func TestObjectAPIIsUploadIDExists(t *testing.T) {
 // Tests validate correctness of PutObjectPart.
 func TestObjectAPIPutObjectPart(t *testing.T) {
 	// Generating cases for which the PutObjectPart fails.
-	directory, e := ioutil.TempDir("", "minio-multipart-3-test")
-	if e != nil {
-		t.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-multipart-3-test")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
-	// Initializing fs layer.
-	fs, e := newFS(directory)
-	if e != nil {
-		t.Fatal(e)
+	// Initializing fs object layer.
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
+
 	bucket := "minio-bucket"
 	object := "minio-object"
 
-	// Initializing object layer.
-	obj := newObjectLayer(fs)
-
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucket)
+	err = obj.MakeBucket(bucket)
 	if err != nil {
 		// Failed to create newbucket, abort.
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 	// Initiate Multipart Upload on the above created bucket.
 	uploadID, err := obj.NewMultipartUpload(bucket, object)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 	// Creating a dummy bucket for tests.
 	err = obj.MakeBucket("unused-bucket")
 	if err != nil {
 		// Failed to create newbucket, abort.
-		t.Fatal(err.ToGoError())
+		t.Fatal(err)
 	}
 
 	failCases := []struct {
@@ -235,30 +220,23 @@ func TestObjectAPIPutObjectPart(t *testing.T) {
 		// All are test cases above are expected to fail.
 
 		if actualErr != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s.", i+1, actualErr.ToGoError().Error())
+			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s.", i+1, actualErr.Error())
 		}
 		if actualErr == nil && !testCase.shouldPass {
 			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead.", i+1, testCase.expectedError.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
-			if testCase.expectedError.Error() != actualErr.ToGoError().Error() {
+			if testCase.expectedError.Error() != actualErr.Error() {
 				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1,
-					testCase.expectedError.Error(), actualErr.ToGoError().Error())
+					testCase.expectedError.Error(), actualErr.Error())
 			}
 		}
-		// Since there are cases for which ListObjects fails, this is necessary.
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil && testCase.shouldPass {
 			// Asserting whether the md5 output is correct.
 			if testCase.inputMd5 != actualMd5Hex {
 				t.Errorf("Test %d: Calculated Md5 different from the actual one %s.", i+1, actualMd5Hex)
-			}
-			partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, testCase.PartID, testCase.inputMd5)
-			// Verifying whether the part file is created.
-			_, e := obj.storage.StatFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
-			if e != nil {
-				t.Errorf("Test %d: Failed to create the Part file.", i+1)
 			}
 		}
 	}

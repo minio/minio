@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 
 	"github.com/minio/go-homedir"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // configPath for custom config path only for testing purposes
@@ -33,13 +32,13 @@ func setGlobalConfigPath(configPath string) {
 }
 
 // getConfigPath get server config path
-func getConfigPath() (string, *probe.Error) {
+func getConfigPath() (string, error) {
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
-	homeDir, e := homedir.Dir()
-	if e != nil {
-		return "", probe.NewError(e)
+	homeDir, err := homedir.Dir()
+	if err != nil {
+		return "", err
 	}
 	configPath := filepath.Join(homeDir, globalMinioConfigDir)
 	return configPath, nil
@@ -48,27 +47,24 @@ func getConfigPath() (string, *probe.Error) {
 // mustGetConfigPath must get server config path.
 func mustGetConfigPath() string {
 	configPath, err := getConfigPath()
-	fatalIf(err.Trace(), "Unable to get config path.", nil)
+	fatalIf(err, "Unable to get config path.", nil)
 	return configPath
 }
 
 // createConfigPath create server config path.
-func createConfigPath() *probe.Error {
+func createConfigPath() error {
 	configPath, err := getConfigPath()
 	if err != nil {
-		return err.Trace()
+		return err
 	}
-	if err := os.MkdirAll(configPath, 0700); err != nil {
-		return probe.NewError(err)
-	}
-	return nil
+	return os.MkdirAll(configPath, 0700)
 }
 
 // isConfigFileExists - returns true if config file exists.
 func isConfigFileExists() bool {
-	st, e := os.Stat(mustGetConfigFile())
+	st, err := os.Stat(mustGetConfigFile())
 	// If file exists and is regular return true.
-	if e == nil && st.Mode().IsRegular() {
+	if err == nil && st.Mode().IsRegular() {
 		return true
 	}
 	return false
@@ -77,16 +73,16 @@ func isConfigFileExists() bool {
 // mustGetConfigFile must get server config file.
 func mustGetConfigFile() string {
 	configFile, err := getConfigFile()
-	fatalIf(err.Trace(), "Unable to get config file.", nil)
+	fatalIf(err, "Unable to get config file.", nil)
 
 	return configFile
 }
 
 // getConfigFile get server config file.
-func getConfigFile() (string, *probe.Error) {
+func getConfigFile() (string, error) {
 	configPath, err := getConfigPath()
 	if err != nil {
-		return "", err.Trace()
+		return "", err
 	}
 	return filepath.Join(configPath, globalMinioConfigFile), nil
 }

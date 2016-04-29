@@ -78,7 +78,7 @@ func isDirExist(dirname string) (bool, error) {
 }
 
 // Initialize a new storage disk.
-func newFS(diskPath string) (StorageAPI, error) {
+func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
 		log.Debug("Disk cannot be empty")
 		return nil, errInvalidArgument

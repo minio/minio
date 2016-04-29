@@ -20,132 +20,115 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 // getBucketsConfigPath - get buckets path.
-func getBucketsConfigPath() (string, *probe.Error) {
+func getBucketsConfigPath() (string, error) {
 	configPath, err := getConfigPath()
 	if err != nil {
-		return "", err.Trace()
+		return "", err
 	}
 	return filepath.Join(configPath, "buckets"), nil
 }
 
 // createBucketsConfigPath - create buckets directory.
-func createBucketsConfigPath() *probe.Error {
+func createBucketsConfigPath() error {
 	bucketsConfigPath, err := getBucketsConfigPath()
 	if err != nil {
 		return err
 	}
-	if e := os.MkdirAll(bucketsConfigPath, 0700); e != nil {
-		return probe.NewError(e)
-	}
-	return nil
+	return os.MkdirAll(bucketsConfigPath, 0700)
 }
 
 // getBucketConfigPath - get bucket config path.
-func getBucketConfigPath(bucket string) (string, *probe.Error) {
+func getBucketConfigPath(bucket string) (string, error) {
 	bucketsConfigPath, err := getBucketsConfigPath()
 	if err != nil {
-		return "", err.Trace()
+		return "", err
 	}
 	return filepath.Join(bucketsConfigPath, bucket), nil
 }
 
 // createBucketConfigPath - create bucket config directory.
-func createBucketConfigPath(bucket string) *probe.Error {
+func createBucketConfigPath(bucket string) error {
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
 		return err
 	}
-	if e := os.MkdirAll(bucketConfigPath, 0700); e != nil {
-		return probe.NewError(e)
-	}
-	return nil
+	return os.MkdirAll(bucketConfigPath, 0700)
 }
 
 // readBucketPolicy - read bucket policy.
-func readBucketPolicy(bucket string) ([]byte, *probe.Error) {
+func readBucketPolicy(bucket string) ([]byte, error) {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return nil, probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return nil, BucketNameInvalid{Bucket: bucket}
 	}
 
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
-		return nil, err.Trace()
+		return nil, err
 	}
 
 	// Get policy file.
 	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, e := os.Stat(bucketPolicyFile); e != nil {
-		if os.IsNotExist(e) {
-			return nil, probe.NewError(BucketPolicyNotFound{Bucket: bucket})
+	if _, err = os.Stat(bucketPolicyFile); err != nil {
+		if os.IsNotExist(err) {
+			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
-		return nil, probe.NewError(e)
+		return nil, err
 	}
-
-	accessPolicyBytes, e := ioutil.ReadFile(bucketPolicyFile)
-	if e != nil {
-		return nil, probe.NewError(e)
-	}
-	return accessPolicyBytes, nil
+	return ioutil.ReadFile(bucketPolicyFile)
 }
 
 // removeBucketPolicy - remove bucket policy.
-func removeBucketPolicy(bucket string) *probe.Error {
+func removeBucketPolicy(bucket string) error {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
-		return err.Trace(bucket)
+		return err
 	}
 
 	// Get policy file.
 	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, e := os.Stat(bucketPolicyFile); e != nil {
-		if os.IsNotExist(e) {
-			return probe.NewError(BucketPolicyNotFound{Bucket: bucket})
+	if _, err = os.Stat(bucketPolicyFile); err != nil {
+		if os.IsNotExist(err) {
+			return BucketPolicyNotFound{Bucket: bucket}
 		}
-		return probe.NewError(e)
+		return err
 	}
 	return nil
 }
 
 // writeBucketPolicy - save bucket policy.
-func writeBucketPolicy(bucket string, accessPolicyBytes []byte) *probe.Error {
+func writeBucketPolicy(bucket string, accessPolicyBytes []byte) error {
 	// Verify if bucket path legal
 	if !IsValidBucketName(bucket) {
-		return probe.NewError(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 
 	// Create bucket config path.
 	if err := createBucketConfigPath(bucket); err != nil {
-		return err.Trace()
+		return err
 	}
 
 	bucketConfigPath, err := getBucketConfigPath(bucket)
 	if err != nil {
-		return err.Trace()
+		return err
 	}
 
 	// Get policy file.
 	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, e := os.Stat(bucketPolicyFile); e != nil {
-		if !os.IsNotExist(e) {
-			return probe.NewError(e)
+	if _, err := os.Stat(bucketPolicyFile); err != nil {
+		if !os.IsNotExist(err) {
+			return err
 		}
 	}
 
 	// Write bucket policy.
-	if e := ioutil.WriteFile(bucketPolicyFile, accessPolicyBytes, 0600); e != nil {
-		return probe.NewError(e)
-	}
-
-	return nil
+	return ioutil.WriteFile(bucketPolicyFile, accessPolicyBytes, 0600)
 }

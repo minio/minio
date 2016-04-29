@@ -24,26 +24,22 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 func TestListObjects(t *testing.T) {
 	// Make a temporary directory to use as the obj.
-	directory, e := ioutil.TempDir("", "minio-list-object-test")
-	if e != nil {
-		t.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-list-object-test")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
 	// Create the obj.
-	fs, e := newFS(directory)
-	if e != nil {
-		t.Fatal(e)
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	obj := newObjectLayer(fs)
-	var err *probe.Error
 	// This bucket is used for testing ListObject operations.
 	err = obj.MakeBucket("test-bucket-list-object")
 	if err != nil {
@@ -56,25 +52,25 @@ func TestListObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tmpfile, e := ioutil.TempFile("", "simple-file.txt")
-	if e != nil {
-		t.Fatal(e)
+	tmpfile, err := ioutil.TempFile("", "simple-file.txt")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia-maps", int64(len("asia-maps")), bytes.NewBufferString("asia-maps"), nil)
 	if err != nil {
-		t.Fatal(e)
+		t.Fatal(err)
 	}
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/India-summer-photos-1", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
-		t.Fatal(e)
+		t.Fatal(err)
 	}
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/Karnataka/Bangalore/Koramangala/pics", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
-		t.Fatal(e)
+		t.Fatal(err)
 	}
 
 	for i := 0; i < 2; i++ {
@@ -86,7 +82,7 @@ func TestListObjects(t *testing.T) {
 	}
 	_, err = obj.PutObject("test-bucket-list-object", "newzen/zen/recurse/again/again/again/pics", int64(len("recurse")), bytes.NewBufferString("recurse"), nil)
 	if err != nil {
-		t.Fatal(e)
+		t.Fatal(err)
 	}
 
 	for i := 0; i < 3; i++ {
@@ -536,15 +532,15 @@ func TestListObjects(t *testing.T) {
 	for i, testCase := range testCases {
 		result, err := obj.ListObjects(testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, testCase.maxKeys)
 		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Cause.Error())
+			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
 		if err == nil && !testCase.shouldPass {
 			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if err != nil && !testCase.shouldPass {
-			if !strings.Contains(err.Cause.Error(), testCase.err.Error()) {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Cause.Error())
+			if !strings.Contains(err.Error(), testCase.err.Error()) {
+				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Error())
 			}
 		}
 		// Since there are cases for which ListObjects fails, this is necessary.
@@ -571,20 +567,17 @@ func TestListObjects(t *testing.T) {
 
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, e := ioutil.TempDir("", "minio-list-benchmark")
-	if e != nil {
-		b.Fatal(e)
+	directory, err := ioutil.TempDir("", "minio-list-benchmark")
+	if err != nil {
+		b.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
 
 	// Create the obj.
-	fs, e := newFS(directory)
-	if e != nil {
-		b.Fatal(e)
+	obj, err := newFSObjects(directory)
+	if err != nil {
+		b.Fatal(err)
 	}
-
-	obj := newObjectLayer(fs)
-	var err *probe.Error
 
 	// Create a bucket.
 	err = obj.MakeBucket("ls-benchmark-bucket")

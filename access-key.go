@@ -21,8 +21,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
-
-	"github.com/minio/minio/pkg/probe"
 )
 
 // credential container for access and secret keys.
@@ -52,19 +50,19 @@ var isValidAccessKey = regexp.MustCompile(`^[a-zA-Z0-9\\-\\.\\_\\~]{5,20}$`)
 // mustGenAccessKeys - must generate access credentials.
 func mustGenAccessKeys() (creds credential) {
 	creds, err := genAccessKeys()
-	fatalIf(err.Trace(), "Unable to generate access keys.", nil)
+	fatalIf(err, "Unable to generate access keys.", nil)
 	return creds
 }
 
 // genAccessKeys - generate access credentials.
-func genAccessKeys() (credential, *probe.Error) {
+func genAccessKeys() (credential, error) {
 	accessKeyID, err := genAccessKeyID()
 	if err != nil {
-		return credential{}, err.Trace()
+		return credential{}, err
 	}
 	secretAccessKey, err := genSecretAccessKey()
 	if err != nil {
-		return credential{}, err.Trace()
+		return credential{}, err
 	}
 	creds := credential{
 		AccessKeyID:     string(accessKeyID),
@@ -75,10 +73,10 @@ func genAccessKeys() (credential, *probe.Error) {
 
 // genAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
-func genAccessKeyID() ([]byte, *probe.Error) {
+func genAccessKeyID() ([]byte, error) {
 	alpha := make([]byte, minioAccessID)
-	if _, e := rand.Read(alpha); e != nil {
-		return nil, probe.NewError(e)
+	if _, err := rand.Read(alpha); err != nil {
+		return nil, err
 	}
 	for i := 0; i < minioAccessID; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
@@ -87,10 +85,10 @@ func genAccessKeyID() ([]byte, *probe.Error) {
 }
 
 // genSecretAccessKey - generate random base64 numeric value from a random seed.
-func genSecretAccessKey() ([]byte, *probe.Error) {
+func genSecretAccessKey() ([]byte, error) {
 	rb := make([]byte, minioSecretID)
-	if _, e := rand.Read(rb); e != nil {
-		return nil, probe.NewError(e)
+	if _, err := rand.Read(rb); err != nil {
+		return nil, err
 	}
 	return []byte(base64.StdEncoding.EncodeToString(rb))[:minioSecretID], nil
 }

@@ -29,7 +29,6 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
@@ -37,8 +36,8 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	// Read saved bucket policy.
 	policy, err := readBucketPolicy(bucket)
 	if err != nil {
-		errorIf(err.Trace(bucket), "GetBucketPolicy failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "GetBucketPolicy failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			return ErrNoSuchBucket
 		case BucketNameInvalid:
@@ -49,9 +48,9 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 		}
 	}
 	// Parse the saved policy.
-	bucketPolicy, e := parseBucketPolicy(policy)
-	if e != nil {
-		errorIf(probe.NewError(e), "Parse policy failed.", nil)
+	bucketPolicy, err := parseBucketPolicy(policy)
+	if err != nil {
+		errorIf(err, "Parse policy failed.", nil)
 		return ErrAccessDenied
 	}
 
@@ -90,8 +89,8 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		payload, e := ioutil.ReadAll(r.Body)
-		if e != nil {
+		payload, err := ioutil.ReadAll(r.Body)
+		if err != nil {
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
@@ -117,10 +116,9 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		}
 	}
 
-	_, err := api.ObjectAPI.GetBucketInfo(bucket)
-	if err != nil {
-		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
-		switch err.ToGoError().(type) {
+	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
+		errorIf(err, "GetBucketInfo failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:
@@ -181,26 +179,24 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	}
 	if keyMarker != "" {
 		// Unescape keyMarker string
-		keyMarkerUnescaped, e := url.QueryUnescape(keyMarker)
-		if e != nil {
-			if e != nil {
-				// Return 'NoSuchKey' to indicate invalid marker key.
-				writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-				return
-			}
-			keyMarker = keyMarkerUnescaped
-			// Marker not common with prefix is not implemented.
-			if !strings.HasPrefix(keyMarker, prefix) {
-				writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
-				return
-			}
+		keyMarkerUnescaped, err := url.QueryUnescape(keyMarker)
+		if err != nil {
+			// Return 'NoSuchKey' to indicate invalid marker key.
+			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
+			return
+		}
+		keyMarker = keyMarkerUnescaped
+		// Marker not common with prefix is not implemented.
+		if !strings.HasPrefix(keyMarker, prefix) {
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			return
 		}
 	}
 
 	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
-		errorIf(err.Trace(), "ListMultipartUploads failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "ListMultipartUploads failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		default:
@@ -259,8 +255,8 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 	// If marker is set unescape.
 	if marker != "" {
 		// Try to unescape marker.
-		markerUnescaped, e := url.QueryUnescape(marker)
-		if e != nil {
+		markerUnescaped, err := url.QueryUnescape(marker)
+		if err != nil {
 			// Return 'NoSuchKey' to indicate invalid marker key.
 			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 			return
@@ -284,7 +280,8 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
-	switch err.ToGoError().(type) {
+	errorIf(err, "ListObjects failed.", nil)
+	switch err.(type) {
 	case BucketNameInvalid:
 		writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 	case BucketNotFound:
@@ -292,7 +289,6 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 	case ObjectNameInvalid:
 		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 	default:
-		errorIf(err.Trace(), "ListObjects failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 	}
 }
@@ -347,8 +343,8 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
-	errorIf(err.Trace(), "ListBuckets failed.", nil)
-	switch err.ToGoError().(type) {
+	errorIf(err, "ListBuckets failed.", nil)
+	switch err.(type) {
 	case StorageInsufficientReadResources:
 		writeErrorResponse(w, r, ErrInsufficientReadResources, r.URL.Path)
 	default:
@@ -398,16 +394,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteXMLBytes := make([]byte, r.ContentLength)
 
 	// Read incoming body XML bytes.
-	_, e := io.ReadFull(r.Body, deleteXMLBytes)
-	if e != nil {
-		errorIf(probe.NewError(e), "DeleteMultipleObjects failed.", nil)
+	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
+		errorIf(err, "DeleteMultipleObjects failed.", nil)
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
 	// Unmarshal list of keys to be deleted.
 	deleteObjects := &DeleteObjectsRequest{}
-	if e := xml.Unmarshal(deleteXMLBytes, deleteObjects); e != nil {
+	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
+		errorIf(err, "DeleteMultipartObjects xml decoding failed.", nil)
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
@@ -422,8 +418,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				ObjectName: object.ObjectName,
 			})
 		} else {
-			errorIf(err.Trace(object.ObjectName), "DeleteObject failed.", nil)
-			switch err.ToGoError().(type) {
+			errorIf(err, "DeleteObject failed.", nil)
+			switch err.(type) {
 			case BucketNameInvalid:
 				deleteErrors = append(deleteErrors, DeleteError{
 					Code:    errorCodeResponse[ErrInvalidBucketName].Code,
@@ -498,8 +494,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// Make bucket.
 	err := api.ObjectAPI.MakeBucket(bucket)
 	if err != nil {
-		errorIf(err.Trace(), "MakeBucket failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "MakeBucket failed.", nil)
+		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketExists:
@@ -514,24 +510,25 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponse(w, nil)
 }
 
-func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, *probe.Error) {
+func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, error) {
 	/// HTML Form values
 	formValues := make(map[string]string)
 	filePart := new(bytes.Buffer)
-	var e error
-	for e == nil {
+	var err error
+	for err == nil {
 		var part *multipart.Part
-		part, e = reader.NextPart()
+		part, err = reader.NextPart()
 		if part != nil {
 			if part.FileName() == "" {
-				buffer, e := ioutil.ReadAll(part)
-				if e != nil {
-					return nil, nil, probe.NewError(e)
+				var buffer []byte
+				buffer, err = ioutil.ReadAll(part)
+				if err != nil {
+					return nil, nil, err
 				}
 				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
 			} else {
-				if _, e := io.Copy(filePart, part); e != nil {
-					return nil, nil, probe.NewError(e)
+				if _, err = io.Copy(filePart, part); err != nil {
+					return nil, nil, err
 				}
 			}
 		}
@@ -546,16 +543,16 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary files.
-	reader, e := r.MultipartReader()
-	if e != nil {
-		errorIf(probe.NewError(e), "Unable to initialize multipart reader.", nil)
+	reader, err := r.MultipartReader()
+	if err != nil {
+		errorIf(err, "Unable to initialize multipart reader.", nil)
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
 
 	fileBody, formValues, err := extractHTTPFormValues(reader)
 	if err != nil {
-		errorIf(err.Trace(), "Unable to parse form values.", nil)
+		errorIf(err, "Unable to parse form values.", nil)
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
@@ -575,8 +572,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
-		errorIf(err.Trace(), "PutObject failed.", nil)
-		switch err.ToGoError().(type) {
+		errorIf(err, "PutObject failed.", nil)
+		switch err.(type) {
 		case StorageFull:
 			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
 		case BucketNotFound:
@@ -626,10 +623,9 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	_, err := api.ObjectAPI.GetBucketInfo(bucket)
-	if err != nil {
-		errorIf(err.Trace(), "GetBucketInfo failed.", nil)
-		switch err.ToGoError().(type) {
+	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
+		errorIf(err, "GetBucketInfo failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNameInvalid:
@@ -661,10 +657,9 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	err := api.ObjectAPI.DeleteBucket(bucket)
-	if err != nil {
-		errorIf(err.Trace(), "DeleteBucket failed.", nil)
-		switch err.ToGoError().(type) {
+	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
+		errorIf(err, "DeleteBucket failed.", nil)
+		switch err.(type) {
 		case BucketNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
 		case BucketNotEmpty:
