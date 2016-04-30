@@ -195,13 +195,26 @@ func (xl XL) ListVols() (volsInfo []VolInfo, err error) {
 		// Verify if we have enough quorum to list vols.
 		return nil, errReadQuorum
 	}
-	// Loop through success vols map and return the first value.
+
+	var total, free int64
+	// Loop through success vols map and get aggregated usage values.
 	for index := range xl.storageDisks {
 		if _, ok := successVolsMap[index]; ok {
 			volsInfo = successVolsMap[index]
-			break
+			free += volsInfo[0].Free
+			total += volsInfo[0].Total
 		}
 	}
+	// Save the updated usage values back into the vols.
+	for index := range volsInfo {
+		volsInfo[index].Free = free
+		volsInfo[index].Total = total
+	}
+
+	// TODO: the assumption here is that volumes across all disks in
+	// readQuorum have consistent view i.e they all have same number
+	// of buckets. This is essentially not verified since healing
+	// should take care of this.
 	return volsInfo, nil
 }
 
@@ -239,8 +252,16 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 		return VolInfo{}, errReadQuorum
 	}
 
-	// If successful remove all the duplicates and keep the latest one.
+	// Loop through all statVols, calculate the actual usage values.
+	var total, free int64
+	for _, statVolInfo := range statVols {
+		free += statVolInfo.Free
+		total += statVolInfo.Total
+	}
+	// Filter statVols and update the volInfo.
 	volInfo = removeDuplicateVols(statVols)[0]
+	volInfo.Free = free
+	volInfo.Total = total
 	return volInfo, nil
 }
 
