@@ -79,8 +79,9 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		}
 	}
 
+	var err error
 	// List all the file versions on existing files.
-	versions, err := listFileVersions(partsMetadata, errs)
+	versions := listFileVersions(partsMetadata, errs)
 	// Get highest file version.
 	higherVersion := highestInt(versions)
 	// Increment to have next higher version.

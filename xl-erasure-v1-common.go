@@ -36,7 +36,7 @@ func highestInt(intSlice []int64) (highestInteger int64) {
 }
 
 // Extracts file versions from partsMetadata slice and returns version slice.
-func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64, err error) {
+func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64) {
 	versions = make([]int64, len(partsMetadata))
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
@@ -45,7 +45,7 @@ func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64,
 			versions[index] = -1
 		}
 	}
-	return versions, nil
+	return versions
 }
 
 // Returns slice of online disks needed.
@@ -73,14 +73,7 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 	highestVersion := int64(0)
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
 	// List all the file versions from partsMetadata list.
-	versions, err := listFileVersions(partsMetadata, errs)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("Extracting file versions failed with %s", err)
-		return nil, xlMetaV1{}, false, err
-	}
+	versions := listFileVersions(partsMetadata, errs)
 
 	// Get highest file version.
 	highestVersion = highestInt(versions)
