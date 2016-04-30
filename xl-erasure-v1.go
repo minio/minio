@@ -554,8 +554,10 @@ func (xl XL) DeleteFile(volume, path string) error {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	nsMutex.RUnlock(volume, path)
 
+	var err error
+
 	// List all the file versions on existing files.
-	versions, err := listFileVersions(partsMetadata, errs)
+	versions := listFileVersions(partsMetadata, errs)
 	// Get highest file version.
 	higherVersion := highestInt(versions)
 
