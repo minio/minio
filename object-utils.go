@@ -65,13 +65,8 @@ func IsValidBucketName(bucket string) bool {
 // Rejects strings with following characters.
 //
 // - Backslash ("\")
-// - Left curly brace ("{")
 // - Caret ("^")
-// - Right curly brace ("}")
 // - Grave accent / back tick ("`")
-// - Tilde ("~")
-// - 'Greater Than' symbol (">")
-// - 'Less Than' symbol ("<")
 // - Vertical bar / pipe ("|")
 func IsValidObjectName(object string) bool {
 	if len(object) > 1024 || len(object) == 0 {
@@ -81,7 +76,7 @@ func IsValidObjectName(object string) bool {
 		return false
 	}
 	// Reject unsupported characters in object name.
-	return !strings.ContainsAny(object, "`^*{}|\\\"'")
+	return !strings.ContainsAny(object, "`^*|\\\"")
 }
 
 // IsValidObjectPrefix verifies whether the prefix is a valid object name.
