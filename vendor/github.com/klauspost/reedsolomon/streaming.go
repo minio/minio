@@ -77,8 +77,8 @@ type StreamEncoder interface {
 	// the last shard will contain extra zeros.
 	//
 	// You must supply the total size of your input.
-	// 'ErrShortData' will be returned if it is unable to retrieve the number of bytes
-	// indicated.
+	// 'ErrShortData' will be returned if it is unable to retrieve the
+	// number of bytes indicated.
 	Split(data io.Reader, dst []io.Writer, size int64) (err error)
 
 	// Join the shards and write the data segment to dst.
@@ -537,13 +537,12 @@ func (r rsStream) Join(dst io.Writer, shards []io.Reader, outSize int64) error {
 // the last shard will contain extra zeros.
 //
 // You must supply the total size of your input.
-// 'ErrShortData' will be returned if it is unable to retrieve the number of bytes
-// indicated.
+// 'ErrShortData' will be returned if it is unable to retrieve the
+// number of bytes indicated.
 func (r rsStream) Split(data io.Reader, dst []io.Writer, size int64) error {
-	if size < int64(r.r.DataShards) {
+	if size == 0 {
 		return ErrShortData
 	}
-
 	if len(dst) != r.r.DataShards {
 		return ErrInvShardNum
 	}
