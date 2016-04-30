@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"io"
 	"math/rand"
-	"runtime"
 	"strconv"
 
 	"gopkg.in/check.v1"
@@ -277,9 +276,7 @@ func testObjectOverwriteWorks(c *check.C, create func() ObjectLayer) {
 	c.Assert(err, check.IsNil)
 	_, e := io.Copy(&bytesBuffer, r)
 	c.Assert(e, check.IsNil)
-	if runtime.GOOS != "windows" {
-		c.Assert(string(bytesBuffer.Bytes()), check.Equals, "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")
-	}
+	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")
 	c.Assert(r.Close(), check.IsNil)
 }
 
