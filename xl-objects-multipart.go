@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -274,6 +275,7 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
 			}
 		}
 	}
+
 	for {
 		uuid, err := uuid.New()
 		if err != nil {
@@ -460,6 +462,26 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		md5Sums = append(md5Sums, part.ETag)
 	}
 
+	if w, err := xl.storage.CreateFile(bucket, pathJoin(object, multipartMetaFile)); err == nil {
+		var b []byte
+		b, err = json.Marshal(parts)
+		if err != nil {
+			return "", err
+		}
+		_, err = w.Write(b)
+		if err != nil {
+			return "", err
+		}
+		// Close the writer.
+		if err = w.Close(); err != nil {
+			return "", err
+		}
+	} else {
+		return "", toObjectErr(err, bucket, object)
+	}
+	if err := xl.storage.DeleteFile(minioMetaVolume, path.Join(bucket, object, uploadID)); err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
 	// Save the s3 md5.
 	s3MD5, err := makeS3MD5(md5Sums...)
 	if err != nil {

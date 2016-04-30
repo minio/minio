@@ -65,7 +65,7 @@ func (fs fsObjects) listLeafEntries(prefixPath string) (entries []FileInfo, e er
 	return entries, nil
 }
 
-// listMetaVolumeFiles - list all files at a given prefix inside minioMetaVolume.
+// listMetaVolumeFiles - list all files at a given prefix inside MetaVolume.
 func (fs fsObjects) listMetaVolumeFiles(prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
 	// newMaxKeys tracks the size of entries which are going to be
 	// returned back.
