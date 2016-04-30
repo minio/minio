@@ -90,9 +90,8 @@ func (xl XL) healFile(volume string, path string) error {
 				"volume": volume,
 				"path":   path,
 			}).Errorf("CreateFile failed with error %s", err)
-			// Unexpected error
-			closeAndRemoveWriters(writers...)
-			return err
+			safeCloseAndRemove(writers[index])
+			continue
 		}
 	}
 	var totalLeft = metadata.Stat.Size
@@ -191,8 +190,8 @@ func (xl XL) healFile(volume string, path string) error {
 					"volume": volume,
 					"path":   path,
 				}).Errorf("Write failed with %s", err)
-				closeAndRemoveWriters(writers...)
-				return err
+				safeCloseAndRemove(writers[index])
+				continue
 			}
 		}
 		totalLeft = totalLeft - metadata.Erasure.BlockSize
