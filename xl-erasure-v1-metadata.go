@@ -29,6 +29,7 @@ type xlMetaV1 struct {
 		Size    int64     `json:"size"`
 		ModTime time.Time `json:"modTime"`
 		Version int64     `json:"version"`
+		Deleted bool      `json:"deleted"`
 	} `json:"stat"`
 	Erasure struct {
 		DataBlocks   int   `json:"data"`
