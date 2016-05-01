@@ -19,7 +19,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -72,25 +72,22 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 // GetObject - get an object.
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, error) {
-	findPathOffset := func() (i int, partOffset int64, err error) {
+	findPartOffset := func(parts completedParts) (partIndex int, partOffset int64, err error) {
 		partOffset = startOffset
-		for i = 1; i < 10000; i++ {
+		for i, part := range parts {
+			partIndex = i
 			var fileInfo FileInfo
-			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)))
 			if err != nil {
-				if err == errFileNotFound {
-					continue
-				}
 				return
 			}
 			if partOffset < fileInfo.Size {
 				return
-
 			}
 			partOffset -= fileInfo.Size
-
 		}
-		err = errors.New("offset too high")
+		// Offset beyond the size of the object
+		err = errUnexpected
 		return
 	}
 
@@ -114,17 +111,19 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 	fileReader, fileWriter := io.Pipe()
-	partNum, offset, err := findPathOffset()
+	parts, err := xl.getParts(bucket, object)
+	if err != nil {
+		return nil, toObjectErr(err, bucket, object)
+	}
+	partIndex, offset, err := findPartOffset(parts)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
 	go func() {
-		for ; partNum < 10000; partNum++ {
-			r, err := xl.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(partNum)), offset)
+		for ; partIndex < len(parts); partIndex++ {
+			part := parts[partIndex]
+			r, err := xl.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)), offset)
 			if err != nil {
-				if err == errFileNotFound {
-					continue
-				}
 				fileWriter.CloseWithError(err)
 				return
 			}
@@ -138,11 +137,32 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	return fileReader, nil
 }
 
+// Return the parts of a multipart upload.
+func (xl xlObjects) getParts(bucket, object string) (parts completedParts, err error) {
+	offset := int64(0)
+	r, err := xl.storage.ReadFile(bucket, pathJoin(object, multipartMetaFile), offset)
+	if err != nil {
+		return
+	}
+	// FIXME: what if multipart.json is > 4MB
+	b := make([]byte, 4*1024*1024)
+	n, err := io.ReadFull(r, b)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return
+	}
+	b = b[:n]
+	err = json.Unmarshal(b, &parts)
+	if err != nil {
+		return
+	}
+	return
+}
+
 // GetObjectInfo - get object info.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	getMultpartFileSize := func() (size int64) {
-		for i := 0; i < 10000; i++ {
-			fi, err := xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(i)))
+	getMultpartFileSize := func(parts completedParts) (size int64) {
+		for _, part := range parts {
+			fi, err := xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)))
 			if err != nil {
 				continue
 			}
@@ -160,11 +180,11 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
-		fi, err = xl.storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
+		parts, err := xl.getParts(bucket, object)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		fi.Size = getMultpartFileSize()
+		fi.Size = getMultpartFileSize(parts)
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {
