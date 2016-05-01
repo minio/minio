@@ -31,6 +31,10 @@ import (
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
+func partNumToPartFileName(partNum int) string {
+	return fmt.Sprintf("%.5d%s", partNum, multipartSuffix)
+}
+
 // listLeafEntries - lists all entries if a given prefixPath is a leaf
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.
@@ -454,7 +458,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
-		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, fmt.Sprint(part.PartNumber)))
+		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, partNumToPartFileName(part.PartNumber)))
 		// We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err

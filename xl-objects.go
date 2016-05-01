@@ -20,16 +20,19 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"strings"
+
+	"os"
 
 	"github.com/minio/minio/pkg/mimedb"
 )
 
 const (
-	multipartMetaFile = "multipart.json"
+	multipartSuffix   = ".minio.multipart"
+	multipartMetaFile = "00000" + multipartSuffix
 )
 
 // xlObjects - Implements fs object layer.
@@ -77,7 +80,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		for i, part := range parts {
 			partIndex = i
 			var fileInfo FileInfo
-			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)))
+			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
 			if err != nil {
 				return
 			}
@@ -122,7 +125,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	go func() {
 		for ; partIndex < len(parts); partIndex++ {
 			part := parts[partIndex]
-			r, err := xl.storage.ReadFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)), offset)
+			r, err := xl.storage.ReadFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)), offset)
 			if err != nil {
 				fileWriter.CloseWithError(err)
 				return
@@ -153,7 +156,7 @@ func (xl xlObjects) getParts(bucket, object string) (parts completedParts, err e
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	getMultpartFileSize := func(parts completedParts) (size int64) {
 		for _, part := range parts {
-			fi, err := xl.storage.StatFile(bucket, pathJoin(object, fmt.Sprint(part.PartNumber)))
+			fi, err := xl.storage.StatFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
 			if err != nil {
 				continue
 			}
@@ -278,6 +281,8 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
+// TODO - support non-recursive case, figure out file size for files uploaded using multipart.
+
 func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -302,21 +307,59 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 	}
 
+	if maxKeys == 0 {
+		return ListObjectsInfo{}, nil
+	}
+
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	fileInfos, eof, err := xl.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
-	if err != nil {
-		return ListObjectsInfo{}, toObjectErr(err, bucket)
-	}
-	if maxKeys == 0 {
-		return ListObjectsInfo{}, nil
+	var allFileInfos, fileInfos []FileInfo
+	var eof bool
+	var err error
+	for {
+		fileInfos, eof, err = xl.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
+		if err != nil {
+			return ListObjectsInfo{}, toObjectErr(err, bucket)
+		}
+		for _, fileInfo := range fileInfos {
+			if fileInfo.Mode.IsDir() {
+				if isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
+					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
+					// Set the Mode to a "regular" file.
+					fileInfo.Mode = fileInfo.Mode | (^os.ModeType)
+					// FIXME: figure out the size of the file
+					allFileInfos = append(allFileInfos, fileInfo)
+					maxKeys--
+					continue
+				}
+			}
+			if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
+				fileInfo.Name = path.Dir(fileInfo.Name)
+				// FIXME: figure size for fileInfo.Size
+				allFileInfos = append(allFileInfos, fileInfo)
+				maxKeys--
+				continue
+			}
+			if strings.HasSuffix(fileInfo.Name, multipartSuffix) {
+				continue
+			}
+			allFileInfos = append(allFileInfos, fileInfo)
+			maxKeys--
+		}
+		if maxKeys == 0 {
+			break
+		}
+		if eof {
+			break
+		}
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}
-	for _, fileInfo := range fileInfos {
+
+	for _, fileInfo := range allFileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
 		if delimiter == slashSeparator {
 			result.NextMarker = fileInfo.Name
