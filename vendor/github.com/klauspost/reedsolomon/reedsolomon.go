@@ -57,8 +57,8 @@ type Encoder interface {
 	// If the data size isn't dividable by the number of shards,
 	// the last shard will contain extra zeros.
 	//
-	// There must be at least the same number of bytes as there are data shards,
-	// otherwise ErrShortData will be returned.
+	// There must be at least 1 byte otherwise ErrShortData will be
+	// returned.
 	//
 	// The data will not be copied, except for the last shard, so you
 	// should not modify the data of the input slice afterwards.
@@ -457,16 +457,15 @@ var ErrShortData = errors.New("not enough data to fill the number of requested s
 // If the data size isn't divisible by the number of shards,
 // the last shard will contain extra zeros.
 //
-// There must be at least the same number of bytes as there are data shards,
-// otherwise ErrShortData will be returned.
+// There must be at least 1 byte otherwise ErrShortData will be
+// returned.
 //
 // The data will not be copied, except for the last shard, so you
 // should not modify the data of the input slice afterwards.
 func (r reedSolomon) Split(data []byte) ([][]byte, error) {
-	if len(data) < r.DataShards {
+	if len(data) == 0 {
 		return nil, ErrShortData
 	}
-
 	// Calculate number of bytes per shard.
 	perShard := (len(data) + r.DataShards - 1) / r.DataShards
 
