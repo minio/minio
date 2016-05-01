@@ -144,17 +144,8 @@ func (xl xlObjects) getParts(bucket, object string) (parts completedParts, err e
 	if err != nil {
 		return
 	}
-	// FIXME: what if multipart.json is > 4MB
-	b := make([]byte, 4*1024*1024)
-	n, err := io.ReadFull(r, b)
-	if err != nil && err != io.ErrUnexpectedEOF {
-		return
-	}
-	b = b[:n]
-	err = json.Unmarshal(b, &parts)
-	if err != nil {
-		return
-	}
+	decoder := json.NewDecoder(r)
+	err = decoder.Decode(&parts)
 	return
 }
 
