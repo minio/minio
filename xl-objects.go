@@ -75,25 +75,6 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 // GetObject - get an object.
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, error) {
-	findPartOffset := func(parts completedParts) (partIndex int, partOffset int64, err error) {
-		partOffset = startOffset
-		for i, part := range parts {
-			partIndex = i
-			var fileInfo FileInfo
-			fileInfo, err = xl.storage.StatFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
-			if err != nil {
-				return
-			}
-			if partOffset < fileInfo.Size {
-				return
-			}
-			partOffset -= fileInfo.Size
-		}
-		// Offset beyond the size of the object
-		err = errUnexpected
-		return
-	}
-
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
@@ -114,17 +95,17 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 	fileReader, fileWriter := io.Pipe()
-	parts, err := xl.getParts(bucket, object)
+	info, err := xl.getMultipartObjectInfo(bucket, object)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
-	partIndex, offset, err := findPartOffset(parts)
+	partIndex, offset, err := info.GetPartNumberOffset(startOffset)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
 	go func() {
-		for ; partIndex < len(parts); partIndex++ {
-			part := parts[partIndex]
+		for ; partIndex < len(info); partIndex++ {
+			part := info[partIndex]
 			r, err := xl.storage.ReadFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)), offset)
 			if err != nil {
 				fileWriter.CloseWithError(err)
@@ -141,29 +122,19 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 }
 
 // Return the parts of a multipart upload.
-func (xl xlObjects) getParts(bucket, object string) (parts completedParts, err error) {
+func (xl xlObjects) getMultipartObjectInfo(bucket, object string) (info MultipartObjectInfo, err error) {
 	offset := int64(0)
 	r, err := xl.storage.ReadFile(bucket, pathJoin(object, multipartMetaFile), offset)
 	if err != nil {
 		return
 	}
 	decoder := json.NewDecoder(r)
-	err = decoder.Decode(&parts)
+	err = decoder.Decode(&info)
 	return
 }
 
 // GetObjectInfo - get object info.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	getMultpartFileSize := func(parts completedParts) (size int64) {
-		for _, part := range parts {
-			fi, err := xl.storage.StatFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
-			if err != nil {
-				continue
-			}
-			size += fi.Size
-		}
-		return size
-	}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
@@ -174,11 +145,11 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
-		parts, err := xl.getParts(bucket, object)
+		info, err := xl.getMultipartObjectInfo(bucket, object)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		fi.Size = getMultpartFileSize(parts)
+		fi.Size = info.GetSize()
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {
