@@ -374,7 +374,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err != nil {
 		return "", err
 	}
-	partSuffixMD5 := fmt.Sprintf("%s.%d.%s", uploadID, partID, newMD5Hex)
+	partSuffixMD5 := fmt.Sprintf("%s.%.5d.%s", uploadID, partID, newMD5Hex)
 	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
 	err = xl.storage.RenameFile(minioMetaVolume, partSuffixPath, minioMetaVolume, partSuffixMD5Path)
 	if err != nil {
@@ -403,7 +403,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// Figure out the marker for the next subsequent calls, if the
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
-		partNumberMarkerPath := uploadIDPath + "." + strconv.Itoa(partNumberMarker) + "."
+		partNumberMarkerPath := uploadIDPath + "." + fmt.Sprintf("%.5d", partNumberMarker) + "."
 		fileInfos, _, err := xl.storage.ListFiles(minioMetaVolume, partNumberMarkerPath, "", false, 1)
 		if err != nil {
 			return result, toObjectErr(err, minioMetaVolume, partNumberMarkerPath)
@@ -464,7 +464,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
-		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
+		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
 		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, partNumToPartFileName(part.PartNumber)))
 		// We need a way to roll back if of the renames failed.
 		if err != nil {
