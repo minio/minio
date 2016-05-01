@@ -330,8 +330,9 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partID, md5Hex)
-	fileWriter, err := xl.storage.CreateFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
+	partSuffix := fmt.Sprintf("%s.%d", uploadID, partID)
+	partSuffixPath := path.Join(bucket, object, partSuffix)
+	fileWriter, err := xl.storage.CreateFile(minioMetaVolume, partSuffixPath)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -370,6 +371,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 	err = fileWriter.Close()
+	if err != nil {
+		return "", err
+	}
+	partSuffixMD5 := fmt.Sprintf("%s.%d.%s", uploadID, partID, newMD5Hex)
+	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
+	err = xl.storage.RenameFile(minioMetaVolume, partSuffixPath, minioMetaVolume, partSuffixMD5Path)
 	if err != nil {
 		return "", err
 	}
