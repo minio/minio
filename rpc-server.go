@@ -118,6 +118,21 @@ func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericRep
 	return nil
 }
 
+// RenameFileHandler - rename file handler is rpc wrapper to rename file.
+func (s *storageServer) RenameFileHandler(arg *RenameFileArgs, reply *GenericReply) error {
+	err := s.storage.RenameFile(arg.SrcVol, arg.SrcPath, arg.DstVol, arg.DstPath)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"srcVolume": arg.SrcVol,
+			"srcPath":   arg.SrcPath,
+			"dstVolume": arg.DstVol,
+			"dstPath":   arg.DstPath,
+		}).Errorf("RenameFile failed with error %s", err)
+		return err
+	}
+	return nil
+}
+
 // Initialize new storage rpc.
 func newRPCServer(exportPath string) (*storageServer, error) {
 	// Initialize posix storage API.
