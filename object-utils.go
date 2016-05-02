@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	// Minio meta volume.
-	minioMetaVolume = ".minio"
+	// Minio meta bucket.
+	minioMetaBucket = ".minio"
 )
 
 // validBucket regexp.
