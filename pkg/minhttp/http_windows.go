@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/facebookgo/httpdown"
-	"github.com/minio/minio/pkg/probe"
 )
 
 // An app contains one or more servers and their associated configuration.
@@ -43,15 +42,15 @@ type app struct {
 	listeners []net.Listener
 	sds       []httpdown.Server
 	net       *minNet
-	errors    chan *probe.Error
+	errors    chan error
 }
 
 // listen initailize listeners
-func (a *app) listen() *probe.Error {
+func (a *app) listen() error {
 	for _, s := range a.servers {
 		l, err := a.net.Listen("tcp", s.Addr)
 		if err != nil {
-			return err.Trace()
+			return err
 		}
 		if s.TLSConfig != nil {
 			l = tls.NewListener(l, s.TLSConfig)
@@ -81,7 +80,7 @@ func (a *app) wait() {
 		go func(s httpdown.Server) {
 			defer wg.Done()
 			if err := s.Wait(); err != nil {
-				a.errors <- probe.NewError(err)
+				a.errors <- err
 			}
 		}(s)
 	}
@@ -103,7 +102,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 				go func(s httpdown.Server) {
 					defer wg.Done()
 					if err := s.Stop(); err != nil {
-						a.errors <- probe.NewError(err)
+						a.errors <- err
 					}
 				}(s)
 			}
@@ -112,7 +111,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
-				a.errors <- err.Trace()
+				a.errors <- err
 			}
 		}
 	}
@@ -120,7 +119,7 @@ func (a *app) trapSignal(wg *sync.WaitGroup) {
 
 // ListenAndServe will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2/SIGHUP).
-func ListenAndServe(servers ...*http.Server) *probe.Error {
+func ListenAndServe(servers ...*http.Server) error {
 	// get parent process id
 	ppid := os.Getppid()
 
@@ -129,12 +128,12 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
 		net:       &minNet{},
-		errors:    make(chan *probe.Error, 1+(len(servers)*2)),
+		errors:    make(chan error, 1+(len(servers)*2)),
 	}
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
-		return err.Trace()
+		return err
 	}
 
 	// Start serving.
@@ -143,7 +142,7 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := terminateProcess(ppid, 1); err != nil {
-			return probe.NewError(err)
+			return err
 		}
 	}
 
@@ -160,14 +159,14 @@ func ListenAndServe(servers ...*http.Server) *probe.Error {
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return err.Trace()
+		return err
 	case <-waitdone:
 		return nil
 	}
 }
 
 // ListenAndServeLimited is similar to ListenAndServe but ratelimited with connLimit value
-func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error {
+func ListenAndServeLimited(connLimit int, servers ...*http.Server) error {
 	// get parent process id
 	ppid := os.Getppid()
 
@@ -176,12 +175,12 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
 		net:       &minNet{connLimit: connLimit},
-		errors:    make(chan *probe.Error, 1+(len(servers)*2)),
+		errors:    make(chan error, 1+(len(servers)*2)),
 	}
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
-		return err.Trace()
+		return err
 	}
 
 	// Start serving.
@@ -190,7 +189,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 	// Close the parent if we inherited and it wasn't init that started us.
 	if os.Getenv("LISTEN_FDS") != "" && ppid != 1 {
 		if err := terminateProcess(ppid, 1); err != nil {
-			return probe.NewError(err)
+			return err
 		}
 	}
 
@@ -207,7 +206,7 @@ func ListenAndServeLimited(connLimit int, servers ...*http.Server) *probe.Error 
 		if err == nil {
 			panic("unexpected nil error")
 		}
-		return err.Trace()
+		return err
 	case <-waitdone:
 		return nil
 	}
