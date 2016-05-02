@@ -77,7 +77,7 @@ func partNumToPartFileName(partNum int) string {
 func (xl xlObjects) listLeafEntries(prefixPath string) (entries []FileInfo, e error) {
 	var markerPath string
 	for {
-		fileInfos, eof, err := xl.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
+		fileInfos, eof, err := xl.storage.ListFiles(minioMetaBucket, prefixPath, markerPath, false, 1000)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"prefixPath": prefixPath,
@@ -106,8 +106,8 @@ func (xl xlObjects) listLeafEntries(prefixPath string) (entries []FileInfo, e er
 	return entries, nil
 }
 
-// listMetaVolumeFiles - list all files at a given prefix inside minioMetaVolume.
-func (xl xlObjects) listMetaVolumeFiles(prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
+// listMetaBucketFiles - list all files at a given prefix inside minioMetaBucket.
+func (xl xlObjects) listMetaBucketFiles(prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
 	// newMaxKeys tracks the size of entries which are going to be
 	// returned back.
 	var newMaxKeys int
@@ -117,7 +117,7 @@ func (xl xlObjects) listMetaVolumeFiles(prefixPath string, markerPath string, re
 	for {
 		var fileInfos []FileInfo
 		// List files up to maxKeys-newMaxKeys, since we are skipping entries for special files.
-		fileInfos, eof, err = xl.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
+		fileInfos, eof, err = xl.storage.ListFiles(minioMetaBucket, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"prefixPath": prefixPath,
@@ -251,14 +251,14 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		keyMarkerPath = pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
 	}
 	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
-	fileInfos, eof, err := xl.listMetaVolumeFiles(prefixPath, keyMarkerPath, recursive, maxUploads)
+	fileInfos, eof, err := xl.listMetaBucketFiles(prefixPath, keyMarkerPath, recursive, maxUploads)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"prefixPath": prefixPath,
 			"markerPath": keyMarkerPath,
 			"recursive":  recursive,
 			"maxUploads": maxUploads,
-		}).Errorf("listMetaVolumeFiles failed with %s", err)
+		}).Errorf("listMetaBucketFiles failed with %s", err)
 		return ListMultipartsInfo{}, err
 	}
 
@@ -307,9 +307,9 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
 		return "", BucketNotFound{Bucket: bucket}
 	}
 
-	if _, err := xl.storage.StatVol(minioMetaVolume); err != nil {
+	if _, err := xl.storage.StatVol(minioMetaBucket); err != nil {
 		if err == errVolumeNotFound {
-			err = xl.storage.MakeVol(minioMetaVolume)
+			err = xl.storage.MakeVol(minioMetaBucket)
 			if err != nil {
 				return "", toObjectErr(err)
 			}
@@ -323,19 +323,19 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
 		}
 		uploadID := uuid.String()
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		if _, err = xl.storage.StatFile(minioMetaVolume, uploadIDPath); err != nil {
+		if _, err = xl.storage.StatFile(minioMetaBucket, uploadIDPath); err != nil {
 			if err != errFileNotFound {
-				return "", (toObjectErr(err, minioMetaVolume, uploadIDPath))
+				return "", (toObjectErr(err, minioMetaBucket, uploadIDPath))
 			}
 			// uploadIDPath doesn't exist, so create empty file to reserve the name
 			var w io.WriteCloser
-			if w, err = xl.storage.CreateFile(minioMetaVolume, uploadIDPath); err == nil {
+			if w, err = xl.storage.CreateFile(minioMetaBucket, uploadIDPath); err == nil {
 				// Close the writer.
 				if err = w.Close(); err != nil {
 					return "", err
 				}
 			} else {
-				return "", toObjectErr(err, minioMetaVolume, uploadIDPath)
+				return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 			}
 			return uploadID, nil
 		}
@@ -368,7 +368,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	partSuffix := fmt.Sprintf("%s.%d", uploadID, partID)
 	partSuffixPath := path.Join(bucket, object, partSuffix)
-	fileWriter, err := xl.storage.CreateFile(minioMetaVolume, partSuffixPath)
+	fileWriter, err := xl.storage.CreateFile(minioMetaBucket, partSuffixPath)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -412,7 +412,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 	partSuffixMD5 := fmt.Sprintf("%s.%.5d.%s", uploadID, partID, newMD5Hex)
 	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
-	err = xl.storage.RenameFile(minioMetaVolume, partSuffixPath, minioMetaVolume, partSuffixMD5Path)
+	err = xl.storage.RenameFile(minioMetaBucket, partSuffixPath, minioMetaBucket, partSuffixMD5Path)
 	if err != nil {
 		return "", err
 	}
@@ -440,9 +440,9 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
 		partNumberMarkerPath := uploadIDPath + "." + fmt.Sprintf("%.5d", partNumberMarker) + "."
-		fileInfos, _, err := xl.storage.ListFiles(minioMetaVolume, partNumberMarkerPath, "", false, 1)
+		fileInfos, _, err := xl.storage.ListFiles(minioMetaBucket, partNumberMarkerPath, "", false, 1)
 		if err != nil {
-			return result, toObjectErr(err, minioMetaVolume, partNumberMarkerPath)
+			return result, toObjectErr(err, minioMetaBucket, partNumberMarkerPath)
 		}
 		if len(fileInfos) == 0 {
 			return result, (InvalidPart{})
@@ -450,7 +450,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		markerPath = fileInfos[0].Name
 	}
 	uploadIDPrefix := uploadIDPath + "."
-	fileInfos, eof, err := xl.storage.ListFiles(minioMetaVolume, uploadIDPrefix, markerPath, false, maxParts)
+	fileInfos, eof, err := xl.storage.ListFiles(minioMetaBucket, uploadIDPrefix, markerPath, false, maxParts)
 	if err != nil {
 		return result, InvalidPart{}
 	}
@@ -500,7 +500,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var metadata MultipartObjectInfo
 	for _, part := range parts {
 		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
-		fi, err := xl.storage.StatFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
+		fi, err := xl.storage.StatFile(minioMetaBucket, path.Join(bucket, object, partSuffix))
 		if err != nil {
 			return "", err
 		}
@@ -510,7 +510,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
-		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, partNumToPartFileName(part.PartNumber)))
+		err := xl.storage.RenameFile(minioMetaBucket, path.Join(bucket, object, partSuffix), bucket, path.Join(object, partNumToPartFileName(part.PartNumber)))
 		// We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err
@@ -535,7 +535,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	} else {
 		return "", toObjectErr(err, bucket, object)
 	}
-	if err := xl.storage.DeleteFile(minioMetaVolume, path.Join(bucket, object, uploadID)); err != nil {
+	if err := xl.storage.DeleteFile(minioMetaBucket, path.Join(bucket, object, uploadID)); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 	// Save the s3 md5.
@@ -566,7 +566,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	markerPath := ""
 	for {
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		fileInfos, eof, err := xl.storage.ListFiles(minioMetaVolume, uploadIDPath, markerPath, false, 1000)
+		fileInfos, eof, err := xl.storage.ListFiles(minioMetaBucket, uploadIDPath, markerPath, false, 1000)
 		if err != nil {
 			if err == errFileNotFound {
 				return (InvalidUploadID{UploadID: uploadID})
@@ -574,7 +574,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 			return toObjectErr(err)
 		}
 		for _, fileInfo := range fileInfos {
-			xl.storage.DeleteFile(minioMetaVolume, fileInfo.Name)
+			xl.storage.DeleteFile(minioMetaBucket, fileInfo.Name)
 			markerPath = fileInfo.Name
 		}
 		if eof {

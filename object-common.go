@@ -36,9 +36,9 @@ func makeBucket(storage StorageAPI, bucket string) error {
 	// is the only place where it can be made expensive optimizing all
 	// other calls.
 	// Create minio meta volume, if it doesn't exist yet.
-	if err := storage.MakeVol(minioMetaVolume); err != nil {
+	if err := storage.MakeVol(minioMetaBucket); err != nil {
 		if err != errVolumeExists {
-			return toObjectErr(err, minioMetaVolume)
+			return toObjectErr(err, minioMetaBucket)
 		}
 	}
 	return nil
@@ -101,7 +101,7 @@ func deleteBucket(storage StorageAPI, bucket string) error {
 // isUploadIDExists - verify if a given uploadID exists and is valid.
 func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) (bool, error) {
 	uploadIDPath := path.Join(bucket, object, uploadID)
-	st, err := storage.StatFile(minioMetaVolume, uploadIDPath)
+	st, err := storage.StatFile(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		// Upload id does not exist.
 		if err == errFileNotFound {

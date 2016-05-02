@@ -36,7 +36,7 @@ import (
 func (fs fsObjects) listLeafEntries(prefixPath string) (entries []FileInfo, e error) {
 	var markerPath string
 	for {
-		fileInfos, eof, err := fs.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, false, 1000)
+		fileInfos, eof, err := fs.storage.ListFiles(minioMetaBucket, prefixPath, markerPath, false, 1000)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"prefixPath": prefixPath,
@@ -65,8 +65,8 @@ func (fs fsObjects) listLeafEntries(prefixPath string) (entries []FileInfo, e er
 	return entries, nil
 }
 
-// listMetaVolumeFiles - list all files at a given prefix inside MetaVolume.
-func (fs fsObjects) listMetaVolumeFiles(prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
+// listMetaBucketFiles - list all files at a given prefix inside minioMetaBucket.
+func (fs fsObjects) listMetaBucketFiles(prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
 	// newMaxKeys tracks the size of entries which are going to be
 	// returned back.
 	var newMaxKeys int
@@ -76,7 +76,7 @@ func (fs fsObjects) listMetaVolumeFiles(prefixPath string, markerPath string, re
 	for {
 		var fileInfos []FileInfo
 		// List files up to maxKeys-newMaxKeys, since we are skipping entries for special files.
-		fileInfos, eof, err = fs.storage.ListFiles(minioMetaVolume, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
+		fileInfos, eof, err = fs.storage.ListFiles(minioMetaBucket, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"prefixPath": prefixPath,
@@ -210,14 +210,14 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		keyMarkerPath = pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
 	}
 	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
-	fileInfos, eof, err := fs.listMetaVolumeFiles(prefixPath, keyMarkerPath, recursive, maxUploads)
+	fileInfos, eof, err := fs.listMetaBucketFiles(prefixPath, keyMarkerPath, recursive, maxUploads)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"prefixPath": prefixPath,
 			"markerPath": keyMarkerPath,
 			"recursive":  recursive,
 			"maxUploads": maxUploads,
-		}).Errorf("listMetaVolumeFiles failed with %s", err)
+		}).Errorf("listMetaBucketFiles failed with %s", err)
 		return ListMultipartsInfo{}, err
 	}
 
@@ -266,9 +266,9 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string) (string, error) {
 		return "", BucketNotFound{Bucket: bucket}
 	}
 
-	if _, err := fs.storage.StatVol(minioMetaVolume); err != nil {
+	if _, err := fs.storage.StatVol(minioMetaBucket); err != nil {
 		if err == errVolumeNotFound {
-			err = fs.storage.MakeVol(minioMetaVolume)
+			err = fs.storage.MakeVol(minioMetaBucket)
 			if err != nil {
 				return "", toObjectErr(err)
 			}
@@ -281,19 +281,19 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string) (string, error) {
 		}
 		uploadID := uuid.String()
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		if _, err = fs.storage.StatFile(minioMetaVolume, uploadIDPath); err != nil {
+		if _, err = fs.storage.StatFile(minioMetaBucket, uploadIDPath); err != nil {
 			if err != errFileNotFound {
-				return "", (toObjectErr(err, minioMetaVolume, uploadIDPath))
+				return "", (toObjectErr(err, minioMetaBucket, uploadIDPath))
 			}
 			// uploadIDPath doesn't exist, so create empty file to reserve the name
 			var w io.WriteCloser
-			if w, err = fs.storage.CreateFile(minioMetaVolume, uploadIDPath); err == nil {
+			if w, err = fs.storage.CreateFile(minioMetaBucket, uploadIDPath); err == nil {
 				// Close the writer.
 				if err = w.Close(); err != nil {
 					return "", err
 				}
 			} else {
-				return "", toObjectErr(err, minioMetaVolume, uploadIDPath)
+				return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 			}
 			return uploadID, nil
 		}
@@ -326,7 +326,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	partSuffix := fmt.Sprintf("%s.%d", uploadID, partID)
 	partSuffixPath := path.Join(bucket, object, partSuffix)
-	fileWriter, err := fs.storage.CreateFile(minioMetaVolume, partSuffixPath)
+	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, partSuffixPath)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -370,7 +370,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 	partSuffixMD5 := fmt.Sprintf("%s.%d.%s", uploadID, partID, newMD5Hex)
 	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
-	err = fs.storage.RenameFile(minioMetaVolume, partSuffixPath, minioMetaVolume, partSuffixMD5Path)
+	err = fs.storage.RenameFile(minioMetaBucket, partSuffixPath, minioMetaBucket, partSuffixMD5Path)
 	if err != nil {
 		return "", err
 	}
@@ -398,9 +398,9 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
 		partNumberMarkerPath := uploadIDPath + "." + strconv.Itoa(partNumberMarker) + "."
-		fileInfos, _, err := fs.storage.ListFiles(minioMetaVolume, partNumberMarkerPath, "", false, 1)
+		fileInfos, _, err := fs.storage.ListFiles(minioMetaBucket, partNumberMarkerPath, "", false, 1)
 		if err != nil {
-			return result, toObjectErr(err, minioMetaVolume, partNumberMarkerPath)
+			return result, toObjectErr(err, minioMetaBucket, partNumberMarkerPath)
 		}
 		if len(fileInfos) == 0 {
 			return result, (InvalidPart{})
@@ -408,7 +408,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		markerPath = fileInfos[0].Name
 	}
 	uploadIDPrefix := uploadIDPath + "."
-	fileInfos, eof, err := fs.storage.ListFiles(minioMetaVolume, uploadIDPrefix, markerPath, false, maxParts)
+	fileInfos, eof, err := fs.storage.ListFiles(minioMetaBucket, uploadIDPrefix, markerPath, false, maxParts)
 	if err != nil {
 		return result, InvalidPart{}
 	}
@@ -465,7 +465,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
 		var fileReader io.ReadCloser
-		fileReader, err = fs.storage.ReadFile(minioMetaVolume, path.Join(bucket, object, partSuffix), 0)
+		fileReader, err = fs.storage.ReadFile(minioMetaBucket, path.Join(bucket, object, partSuffix), 0)
 		if err != nil {
 			if err == errFileNotFound {
 				return "", (InvalidPart{})
@@ -513,7 +513,7 @@ func (fs fsObjects) removeMultipartUpload(bucket, object, uploadID string) error
 	marker := ""
 	for {
 		uploadIDPath := path.Join(bucket, object, uploadID)
-		fileInfos, eof, err := fs.storage.ListFiles(minioMetaVolume, uploadIDPath, marker, false, 1000)
+		fileInfos, eof, err := fs.storage.ListFiles(minioMetaBucket, uploadIDPath, marker, false, 1000)
 		if err != nil {
 			if err == errFileNotFound {
 				return (InvalidUploadID{UploadID: uploadID})
@@ -521,7 +521,7 @@ func (fs fsObjects) removeMultipartUpload(bucket, object, uploadID string) error
 			return toObjectErr(err)
 		}
 		for _, fileInfo := range fileInfos {
-			fs.storage.DeleteFile(minioMetaVolume, fileInfo.Name)
+			fs.storage.DeleteFile(minioMetaBucket, fileInfo.Name)
 			marker = fileInfo.Name
 		}
 		if eof {
