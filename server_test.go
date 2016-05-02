@@ -350,6 +350,15 @@ func (s *MyAPISuite) TestBucketPolicy(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+
+	// Verify if the policy was indeed deleted.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/policybucket?policy", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (s *MyAPISuite) TestDeleteBucket(c *C) {
