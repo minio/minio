@@ -24,12 +24,52 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
+
+// MultipartPartInfo Info of each part kept in the multipart metadata file after
+// CompleteMultipartUpload() is called.
+type MultipartPartInfo struct {
+	PartNumber int
+	ETag       string
+	Size       int64
+}
+
+// MultipartObjectInfo - contents of the multipart metadata file after
+// CompleteMultipartUpload() is called.
+type MultipartObjectInfo []MultipartPartInfo
+
+// GetSize - Return the size of the object.
+func (m MultipartObjectInfo) GetSize() (size int64) {
+	for _, part := range m {
+		size += part.Size
+	}
+	return
+}
+
+// GetPartNumberOffset - given an offset for the whole object, return the part and offset in that part.
+func (m MultipartObjectInfo) GetPartNumberOffset(offset int64) (partIndex int, partOffset int64, err error) {
+	partOffset = offset
+	for i, part := range m {
+		partIndex = i
+		if partOffset < part.Size {
+			return
+		}
+		partOffset -= part.Size
+	}
+	// Offset beyond the size of the object
+	err = errUnexpected
+	return
+}
+
+func partNumToPartFileName(partNum int) string {
+	return fmt.Sprintf("%.5d%s", partNum, multipartSuffix)
+}
 
 // listLeafEntries - lists all entries if a given prefixPath is a leaf
 // directory, returns error if any - returns empty list if prefixPath
@@ -326,8 +366,9 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, partID, md5Hex)
-	fileWriter, err := xl.storage.CreateFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
+	partSuffix := fmt.Sprintf("%s.%d", uploadID, partID)
+	partSuffixPath := path.Join(bucket, object, partSuffix)
+	fileWriter, err := xl.storage.CreateFile(minioMetaVolume, partSuffixPath)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -369,6 +410,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err != nil {
 		return "", err
 	}
+	partSuffixMD5 := fmt.Sprintf("%s.%.5d.%s", uploadID, partID, newMD5Hex)
+	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
+	err = xl.storage.RenameFile(minioMetaVolume, partSuffixPath, minioMetaVolume, partSuffixMD5Path)
+	if err != nil {
+		return "", err
+	}
 	return newMD5Hex, nil
 }
 
@@ -392,7 +439,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// Figure out the marker for the next subsequent calls, if the
 	// partNumberMarker is already set.
 	if partNumberMarker > 0 {
-		partNumberMarkerPath := uploadIDPath + "." + strconv.Itoa(partNumberMarker) + "."
+		partNumberMarkerPath := uploadIDPath + "." + fmt.Sprintf("%.5d", partNumberMarker) + "."
 		fileInfos, _, err := xl.storage.ListFiles(minioMetaVolume, partNumberMarkerPath, "", false, 1)
 		if err != nil {
 			return result, toObjectErr(err, minioMetaVolume, partNumberMarkerPath)
@@ -449,12 +496,21 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	} else if !status {
 		return "", (InvalidUploadID{UploadID: uploadID})
 	}
-
+	sort.Sort(completedParts(parts))
+	var metadata MultipartObjectInfo
+	for _, part := range parts {
+		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
+		fi, err := xl.storage.StatFile(minioMetaVolume, path.Join(bucket, object, partSuffix))
+		if err != nil {
+			return "", err
+		}
+		metadata = append(metadata, MultipartPartInfo{part.PartNumber, part.ETag, fi.Size})
+	}
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
-		partSuffix := fmt.Sprintf("%s.%d.%s", uploadID, part.PartNumber, part.ETag)
-		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, fmt.Sprint(part.PartNumber)))
+		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
+		err := xl.storage.RenameFile(minioMetaVolume, path.Join(bucket, object, partSuffix), bucket, path.Join(object, partNumToPartFileName(part.PartNumber)))
 		// We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err
@@ -464,7 +520,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	if w, err := xl.storage.CreateFile(bucket, pathJoin(object, multipartMetaFile)); err == nil {
 		var b []byte
-		b, err = json.Marshal(parts)
+		b, err = json.Marshal(metadata)
 		if err != nil {
 			return "", err
 		}
