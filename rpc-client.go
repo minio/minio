@@ -287,6 +287,21 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 }
 
 // RenameFile - Rename file.
-func (n networkFS) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
-	return errUnexpected
+func (n networkFS) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	reply := GenericReply{}
+	if err = n.rpcClient.Call("Storage.RenameFileHandler", RenameFileArgs{
+		SrcVol:  srcVolume,
+		SrcPath: srcPath,
+		DstVol:  dstVolume,
+		DstPath: dstPath,
+	}, &reply); err != nil {
+		log.WithFields(logrus.Fields{
+			"srcVolume": srcVolume,
+			"srcPath":   srcPath,
+			"dstVolume": dstVolume,
+			"dstPath":   dstPath,
+		}).Errorf("Storage.RenameFileHandler failed with %s", err)
+		return toStorageErr(err)
+	}
+	return nil
 }

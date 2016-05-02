@@ -53,3 +53,11 @@ type DeleteFileArgs struct {
 	Vol  string
 	Path string
 }
+
+// RenameFileArgs rename file args.
+type RenameFileArgs struct {
+	SrcVol  string
+	SrcPath string
+	DstVol  string
+	DstPath string
+}
