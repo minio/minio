@@ -296,35 +296,33 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		for _, fileInfo := range fileInfos {
 			// FIXME: use fileInfo.Mode.IsDir() instead after fixing the bug in
 			// XL listing which is not reseting the Mode to 0 for leaf dirs.
-			if strings.HasSuffix(fileInfo.Name, slashSeparator) {
-				if isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
-					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
-					// Set the Mode to a "regular" file.
+			if strings.HasSuffix(fileInfo.Name, slashSeparator) && isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
+				// Set the Mode to a "regular" file.
+				var info MultipartObjectInfo
+				info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
+				if err == nil {
 					fileInfo.Mode = 0
-					var info MultipartObjectInfo
-					info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
-					if err != nil {
-						return ListObjectsInfo{}, toObjectErr(err, bucket)
-					}
+
+					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
 					fileInfo.Size = info.GetSize()
-					allFileInfos = append(allFileInfos, fileInfo)
-					maxKeys--
-					continue
+				} else if err != errFileNotFound {
+					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
 				}
-			}
-			if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
+				allFileInfos = append(allFileInfos, fileInfo)
+				maxKeys--
+				continue
+			} else if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
 				fileInfo.Name = path.Dir(fileInfo.Name)
 				var info MultipartObjectInfo
 				info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
 				if err != nil {
-					return ListObjectsInfo{}, toObjectErr(err, bucket)
+					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
 				}
 				fileInfo.Size = info.GetSize()
 				allFileInfos = append(allFileInfos, fileInfo)
 				maxKeys--
 				continue
-			}
-			if strings.HasSuffix(fileInfo.Name, multipartSuffix) {
+			} else if strings.HasSuffix(fileInfo.Name, multipartSuffix) {
 				continue
 			}
 			allFileInfos = append(allFileInfos, fileInfo)
