@@ -25,8 +25,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"os"
-
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -296,12 +294,19 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			return ListObjectsInfo{}, toObjectErr(err, bucket)
 		}
 		for _, fileInfo := range fileInfos {
-			if fileInfo.Mode.IsDir() {
+			// FIXME: use fileInfo.Mode.IsDir() instead after fixing the bug in
+			// XL listing which is not reseting the Mode to 0 for leaf dirs.
+			if strings.HasSuffix(fileInfo.Name, slashSeparator) {
 				if isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
 					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
 					// Set the Mode to a "regular" file.
-					fileInfo.Mode = fileInfo.Mode | (^os.ModeType)
-					// FIXME: figure out the size of the file
+					fileInfo.Mode = 0
+					var info MultipartObjectInfo
+					info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
+					if err != nil {
+						return ListObjectsInfo{}, toObjectErr(err, bucket)
+					}
+					fileInfo.Size = info.GetSize()
 					allFileInfos = append(allFileInfos, fileInfo)
 					maxKeys--
 					continue
@@ -309,7 +314,12 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			}
 			if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
 				fileInfo.Name = path.Dir(fileInfo.Name)
-				// FIXME: figure size for fileInfo.Size
+				var info MultipartObjectInfo
+				info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
+				if err != nil {
+					return ListObjectsInfo{}, toObjectErr(err, bucket)
+				}
+				fileInfo.Size = info.GetSize()
 				allFileInfos = append(allFileInfos, fileInfo)
 				maxKeys--
 				continue
