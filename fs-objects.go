@@ -17,8 +17,6 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"io"
 	"path/filepath"
 	"strings"
@@ -124,73 +122,9 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
+// PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return "", (BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return "", (ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
-	}
-	// Check whether the bucket exists.
-	if isExist, err := isBucketExist(fs.storage, bucket); err != nil {
-		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
-	}
-
-	fileWriter, err := fs.storage.CreateFile(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
-			}
-			return "", toObjectErr(err)
-		}
-	} else {
-		if _, err = io.Copy(multiWriter, data); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
-			}
-			return "", err
-		}
-	}
-
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// md5Hex representation.
-	var md5Hex string
-	if len(metadata) != 0 {
-		md5Hex = metadata["md5Sum"]
-	}
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			if err = safeCloseAndRemove(fileWriter); err != nil {
-				return "", err
-			}
-			return "", BadDigest{md5Hex, newMD5Hex}
-		}
-	}
-	err = fileWriter.Close()
-	if err != nil {
-		return "", err
-	}
-
-	// Return md5sum, successfully wrote object.
-	return newMD5Hex, nil
+	return putObjectCommon(fs.storage, bucket, object, size, data, metadata)
 }
 
 func (fs fsObjects) DeleteObject(bucket, object string) error {

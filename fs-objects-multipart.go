@@ -17,11 +17,8 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path"
 	"strconv"
 	"strings"
@@ -250,124 +247,19 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	return result, nil
 }
 
+// NewMultipartUpload - initialize a new multipart upload, returns a unique id.
 func (fs fsObjects) NewMultipartUpload(bucket, object string) (string, error) {
-	// Verify if bucket name is valid.
-	if !IsValidBucketName(bucket) {
-		return "", (BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object name is valid.
-	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
-	// Verify whether the bucket exists.
-	if isExist, err := isBucketExist(fs.storage, bucket); err != nil {
-		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
-	}
-
-	if _, err := fs.storage.StatVol(minioMetaBucket); err != nil {
-		if err == errVolumeNotFound {
-			err = fs.storage.MakeVol(minioMetaBucket)
-			if err != nil {
-				return "", toObjectErr(err)
-			}
-		}
-	}
-	for {
-		uuid, err := uuid.New()
-		if err != nil {
-			return "", err
-		}
-		uploadID := uuid.String()
-		uploadIDPath := path.Join(bucket, object, uploadID)
-		if _, err = fs.storage.StatFile(minioMetaBucket, uploadIDPath); err != nil {
-			if err != errFileNotFound {
-				return "", (toObjectErr(err, minioMetaBucket, uploadIDPath))
-			}
-			// uploadIDPath doesn't exist, so create empty file to reserve the name
-			var w io.WriteCloser
-			if w, err = fs.storage.CreateFile(minioMetaBucket, uploadIDPath); err == nil {
-				// Close the writer.
-				if err = w.Close(); err != nil {
-					return "", err
-				}
-			} else {
-				return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
-			}
-			return uploadID, nil
-		}
-		// uploadIDPath already exists.
-		// loop again to try with different uuid generated.
-	}
+	return newMultipartUploadCommon(fs.storage, bucket, object)
 }
 
 // PutObjectPart - writes the multipart upload chunks.
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
-	}
-	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
-	// Verify whether the bucket exists.
-	if isExist, err := isBucketExist(fs.storage, bucket); err != nil {
+	newMD5Hex, err := putObjectPartCommon(fs.storage, bucket, object, uploadID, partID, size, data, md5Hex)
+	if err != nil {
 		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
 	}
-
-	if status, err := isUploadIDExists(fs.storage, bucket, object, uploadID); err != nil {
-		return "", err
-	} else if !status {
-		return "", InvalidUploadID{UploadID: uploadID}
-	}
-
 	partSuffix := fmt.Sprintf("%s.%d", uploadID, partID)
 	partSuffixPath := path.Join(bucket, object, partSuffix)
-	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, partSuffixPath)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			safeCloseAndRemove(fileWriter)
-			return "", (toObjectErr(err))
-		}
-		// Reader shouldn't have more data what mentioned in size argument.
-		// reading one more byte from the reader to validate it.
-		// expected to fail, success validates existence of more data in the reader.
-		if _, err = io.CopyN(ioutil.Discard, data, 1); err == nil {
-			safeCloseAndRemove(fileWriter)
-			return "", (UnExpectedDataSize{Size: int(size)})
-		}
-	} else {
-		if _, err = io.Copy(multiWriter, data); err != nil {
-			safeCloseAndRemove(fileWriter)
-			return "", (toObjectErr(err))
-		}
-	}
-
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			safeCloseAndRemove(fileWriter)
-			return "", (BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-	err = fileWriter.Close()
-	if err != nil {
-		return "", err
-	}
 	partSuffixMD5 := fmt.Sprintf("%s.%d.%s", uploadID, partID, newMD5Hex)
 	partSuffixMD5Path := path.Join(bucket, object, partSuffixMD5)
 	err = fs.storage.RenameFile(minioMetaBucket, partSuffixPath, minioMetaBucket, partSuffixMD5Path)
@@ -495,54 +387,19 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Cleanup all the parts.
-	fs.removeMultipartUpload(bucket, object, uploadID)
+	fs.cleanupUploadedParts(bucket, object, uploadID)
 
 	// Return md5sum.
 	return s3MD5, nil
 }
 
-func (fs fsObjects) removeMultipartUpload(bucket, object, uploadID string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return (BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return (ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-
-	marker := ""
-	for {
-		uploadIDPath := path.Join(bucket, object, uploadID)
-		fileInfos, eof, err := fs.storage.ListFiles(minioMetaBucket, uploadIDPath, marker, false, 1000)
-		if err != nil {
-			if err == errFileNotFound {
-				return (InvalidUploadID{UploadID: uploadID})
-			}
-			return toObjectErr(err)
-		}
-		for _, fileInfo := range fileInfos {
-			fs.storage.DeleteFile(minioMetaBucket, fileInfo.Name)
-			marker = fileInfo.Name
-		}
-		if eof {
-			break
-		}
-	}
-	return nil
+// Wrapper to which removes all the uploaded parts after a successful
+// complete multipart upload.
+func (fs fsObjects) cleanupUploadedParts(bucket, object, uploadID string) error {
+	return abortMultipartUploadCommon(fs.storage, bucket, object, uploadID)
 }
 
+// AbortMultipartUpload - aborts a multipart upload.
 func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return (BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return (ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	if status, err := isUploadIDExists(fs.storage, bucket, object, uploadID); err != nil {
-		return err
-	} else if !status {
-		return (InvalidUploadID{UploadID: uploadID})
-	}
-	return fs.removeMultipartUpload(bucket, object, uploadID)
+	return abortMultipartUploadCommon(fs.storage, bucket, object, uploadID)
 }
