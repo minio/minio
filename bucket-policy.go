@@ -101,6 +101,9 @@ func removeBucketPolicy(bucket string) error {
 		}
 		return err
 	}
+	if err := os.Remove(bucketPolicyFile); err != nil {
+		return err
+	}
 	return nil
 }
 
