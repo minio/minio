@@ -35,7 +35,7 @@ type xlMetaV1 struct {
 		DataBlocks   int   `json:"data"`
 		ParityBlocks int   `json:"parity"`
 		BlockSize    int64 `json:"blockSize"`
-	}
+	} `json:"erasure"`
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
