@@ -306,5 +306,5 @@ func serverMain(c *cli.Context) {
 
 	// Start server.
 	err := minhttp.ListenAndServe(apiServer)
-	errorIf(err.Cause, "Failed to start the minio server.", nil)
+	errorIf(err, "Failed to start the minio server.", nil)
 }
