@@ -697,17 +697,22 @@ func (xl XL) DeleteFile(volume, path string) error {
 	// find online disks and meta data of higherVersion
 	var mdata *xlMetaV1
 	onlineDiskCount := 0
+	errFileNotFoundErr := 0
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
 			onlineDiskCount++
 			if metadata.Stat.Version == higherVersion && mdata == nil {
 				mdata = &metadata
 			}
+		} else if errs[index] == errFileNotFound {
+			errFileNotFoundErr++
 		}
 	}
 
-	// return error if mdata is empty or onlineDiskCount doesn't meet write quorum
-	if mdata == nil || onlineDiskCount < xl.writeQuorum {
+	if errFileNotFoundErr == len(xl.storageDisks) {
+		return errFileNotFound
+	} else if mdata == nil || onlineDiskCount < xl.writeQuorum {
+		// return error if mdata is empty or onlineDiskCount doesn't meet write quorum
 		return errWriteQuorum
 	}
 
@@ -768,7 +773,22 @@ func (xl XL) DeleteFile(volume, path string) error {
 			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
 				continue
 			}
-
+			// Safely close and remove.
+			if err = safeCloseAndRemove(metadataWriter); err != nil {
+				return err
+			}
+			return err
+		}
+		// Safely wrote, now rename to its actual location.
+		if err = metadataWriter.Close(); err != nil {
+			log.WithFields(logrus.Fields{
+				"volume":    volume,
+				"path":      path,
+				"diskIndex": index,
+			}).Errorf("Metadata commit failed with %s", err)
+			if err = safeCloseAndRemove(metadataWriter); err != nil {
+				return err
+			}
 			return err
 		}
 
@@ -810,7 +830,7 @@ func (xl XL) DeleteFile(volume, path string) error {
 			}
 		}
 	}
-
+	// Return success.
 	return nil
 }
 
@@ -829,14 +849,47 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	if !isValidPath(dstPath) {
 		return errInvalidArgument
 	}
-	for _, disk := range xl.storageDisks {
-		if err := disk.RenameFile(srcVolume, srcPath, dstVolume, dstPath); err != nil {
+
+	// Hold read lock at source before rename.
+	nsMutex.RLock(srcVolume, srcPath)
+	defer nsMutex.RUnlock(srcVolume, srcPath)
+
+	// Hold write lock at destination before rename.
+	nsMutex.Lock(dstVolume, dstPath)
+	defer nsMutex.Unlock(dstVolume, dstPath)
+
+	for index, disk := range xl.storageDisks {
+		// Make sure to rename all the files only, not directories.
+		srcErasurePartPath := slashpath.Join(srcPath, fmt.Sprintf("file.%d", index))
+		dstErasurePartPath := slashpath.Join(dstPath, fmt.Sprintf("file.%d", index))
+		err := disk.RenameFile(srcVolume, srcErasurePartPath, dstVolume, dstErasurePartPath)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"srcVolume": srcVolume,
+				"srcPath":   srcErasurePartPath,
+				"dstVolume": dstVolume,
+				"dstPath":   dstErasurePartPath,
+			}).Errorf("RenameFile failed with %s", err)
+			return err
+		}
+		srcXLMetaPath := slashpath.Join(srcPath, xlMetaV1File)
+		dstXLMetaPath := slashpath.Join(dstPath, xlMetaV1File)
+		err = disk.RenameFile(srcVolume, srcXLMetaPath, dstVolume, dstXLMetaPath)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"srcVolume": srcVolume,
+				"srcPath":   srcXLMetaPath,
+				"dstVolume": dstVolume,
+				"dstPath":   dstXLMetaPath,
+			}).Errorf("RenameFile failed with %s", err)
+			return err
+		}
+		err = disk.DeleteFile(srcVolume, srcPath)
+		if err != nil {
 			log.WithFields(logrus.Fields{
 				"srcVolume": srcVolume,
 				"srcPath":   srcPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstPath,
-			}).Errorf("RenameFile failed with %s", err)
+			}).Errorf("DeleteFile failed with %s", err)
 			return err
 		}
 	}

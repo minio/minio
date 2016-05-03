@@ -32,6 +32,10 @@ import (
 const (
 	// Minio meta bucket.
 	minioMetaBucket = ".minio"
+	// Multipart meta prefix.
+	mpartMetaPrefix = "multipart"
+	// Tmp meta prefix.
+	tmpMetaPrefix = "tmp"
 )
 
 // validBucket regexp.
