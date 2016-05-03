@@ -963,7 +963,7 @@ func (s *MyAPISuite) TestPutBucketErrors(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response, "BucketAlreadyExists", "The requested bucket name is not available.", http.StatusConflict)
+	verifyError(c, response, "BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it.", http.StatusConflict)
 
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/putbucket?acl", 0, nil)
 	c.Assert(err, IsNil)
