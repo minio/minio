@@ -104,6 +104,7 @@ const (
 	ErrMissingDateHeader
 	ErrInvalidQuerySignatureAlgo
 	ErrInvalidQueryParams
+	ErrBucketAlreadyOwnedByYou
 	// Add new error codes here.
 
 	// Extended errors.
@@ -408,6 +409,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "AuthorizationQueryParametersError",
 		Description:    "Query-string authentication version 4 requires the X-Amz-Algorithm, X-Amz-Credential, X-Amz-Signature, X-Amz-Date, X-Amz-SignedHeaders, and X-Amz-Expires parameters.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketAlreadyOwnedByYou: {
+		Code:           "BucketAlreadyOwnedByYou",
+		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	// Add your error structure here.
 }

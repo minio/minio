@@ -499,7 +499,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketExists:
-			writeErrorResponse(w, r, ErrBucketAlreadyExists, r.URL.Path)
+			writeErrorResponse(w, r, ErrBucketAlreadyOwnedByYou, r.URL.Path)
 		default:
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		}
