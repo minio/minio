@@ -112,7 +112,7 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 	return onlineDisks, mdata, heal, nil
 }
 
-// Get xl.json metadata as a map slice.
+// Get file.json metadata as a map slice.
 // Returns error slice indicating the failed metadata reads.
 // Read lockNS() should be done by caller.
 func (xl XL) getPartsMetadata(volume, path string) ([]xlMetaV1, []error) {
@@ -130,7 +130,7 @@ func (xl XL) getPartsMetadata(volume, path string) ([]xlMetaV1, []error) {
 
 		metadata, err := xlMetaV1Decode(metadataReader)
 		if err != nil {
-			// Unable to parse xl.json, set error.
+			// Unable to parse file.json, set error.
 			errs[index] = err
 			continue
 		}
@@ -139,8 +139,8 @@ func (xl XL) getPartsMetadata(volume, path string) ([]xlMetaV1, []error) {
 	return metadataArray, errs
 }
 
-// Writes/Updates `xl.json` for given file. updateParts carries
-// index of disks where `xl.json` needs to be updated.
+// Writes/Updates `file.json` for given file. updateParts carries
+// index of disks where `file.json` needs to be updated.
 //
 // Returns collection of errors, indexed in accordance with input
 // updateParts order.
