@@ -79,7 +79,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if !IsValidObjectName(object) {
 		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if _, err := xl.storage.StatFile(bucket, pathJoin(object, multipartMetaFile)); err != nil {
+	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
+		return nil, toObjectErr(err, bucket, object)
+	} else if !ok {
 		if _, err = xl.storage.StatFile(bucket, object); err == nil {
 			var reader io.ReadCloser
 			reader, err = xl.storage.ReadFile(bucket, object, startOffset)
@@ -91,7 +93,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 	fileReader, fileWriter := io.Pipe()
-	info, err := xl.getMultipartObjectInfo(bucket, object)
+	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
@@ -117,10 +119,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	return fileReader, nil
 }
 
-// Return the parts of a multipart upload.
-func (xl xlObjects) getMultipartObjectInfo(bucket, object string) (info MultipartObjectInfo, err error) {
+// Return the partsInfo of a special multipart object.
+func getMultipartObjectInfo(storage StorageAPI, bucket, object string) (info MultipartObjectInfo, err error) {
 	offset := int64(0)
-	r, err := xl.storage.ReadFile(bucket, pathJoin(object, multipartMetaFile), offset)
+	r, err := storage.ReadFile(bucket, pathJoin(object, multipartMetaFile), offset)
 	if err != nil {
 		return
 	}
@@ -141,7 +143,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
-		info, err := xl.getMultipartObjectInfo(bucket, object)
+		info, err := getMultipartObjectInfo(xl.storage, bucket, object)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -170,6 +172,18 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	return putObjectCommon(xl.storage, bucket, object, size, data, metadata)
 }
 
+// isMultipartObject - verifies if an object is special multipart file.
+func isMultipartObject(storage StorageAPI, bucket, object string) (bool, error) {
+	_, err := storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
+	if err != nil {
+		if err == errFileNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (xl xlObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -178,7 +192,28 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if err := xl.storage.DeleteFile(bucket, object); err != nil {
+	// Verify if the object is a multipart object.
+	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
+		return toObjectErr(err, bucket, object)
+	} else if !ok {
+		if err := xl.storage.DeleteFile(bucket, object); err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+	// Get parts info.
+	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	// Range through all files and delete it.
+	for _, part := range info {
+		err = xl.storage.DeleteFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+	err = xl.storage.DeleteFile(bucket, pathJoin(object, multipartMetaFile))
+	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 	return nil
@@ -233,7 +268,7 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			if strings.HasSuffix(fileInfo.Name, slashSeparator) && isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
 				// Set the Mode to a "regular" file.
 				var info MultipartObjectInfo
-				info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
+				info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
 				if err == nil {
 					fileInfo.Mode = 0
 
@@ -248,7 +283,7 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			} else if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
 				fileInfo.Name = path.Dir(fileInfo.Name)
 				var info MultipartObjectInfo
-				info, err = xl.getMultipartObjectInfo(bucket, fileInfo.Name)
+				info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
 				if err != nil {
 					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
 				}
