@@ -73,6 +73,10 @@ func migrateV2ToV3() {
 		SecretAccessKey: cv2.Credentials.SecretAccessKey,
 	}
 	srvConfig.Region = cv2.Credentials.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature V4.
+		srvConfig.Region = "us-east-1"
+	}
 	srvConfig.Logger.Console = consoleLogger{
 		Enable: true,
 		Level:  "fatal",
@@ -124,6 +128,10 @@ func migrateV3ToV4() {
 	srvConfig.Version = globalMinioConfigVersion
 	srvConfig.Credential = cv3.Credential
 	srvConfig.Region = cv3.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
 	srvConfig.Logger.Console = cv3.Logger.Console
 	srvConfig.Logger.File = cv3.Logger.File
 	srvConfig.Logger.Syslog = cv3.Logger.Syslog
