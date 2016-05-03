@@ -1,6 +1,6 @@
-### xl.json
+### file.json
 
-``xl.json`` is a special file captured and written by XL storage API layer
+``file.json`` is a special file captured and written by XL storage API layer
 to interpret, manage and extract erasured data to multiple disks.
 
 ```json
@@ -9,6 +9,7 @@ to interpret, manage and extract erasured data to multiple disks.
     "stat": {
         "size": 24256,
         "modTime": "2016-04-28T00:11:37.843Z",
+        "delete": false,
         "version": 0
     },
     "erasure": {
@@ -30,6 +31,7 @@ to interpret, manage and extract erasured data to multiple disks.
 
   - "size"     // Size of the file.
   - "modTime"  // Modified time of the file.
+  - "deleted"  // Field to track if the file is deleted when disks are down.
   - "version"  // File version tracked when disks are down.
 
 - "erasure" // Erasure metadata for the written file.

@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	// Part metadata file.
-	xlMetaV1File = "xl.json"
+	// XL erasure metadata file.
+	xlMetaV1File = "file.json"
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
 )
@@ -590,7 +590,7 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 			markerPath = fsFilesInfo[len(fsFilesInfo)-1].Name
 		}
 		if count == 0 && recursive && !strings.HasSuffix(markerPath, xlMetaV1File) {
-			// If last entry is not xl.json then loop once more to check if we have reached eof.
+			// If last entry is not file.json then loop once more to check if we have reached eof.
 			fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, 1)
 			if err != nil {
 				log.WithFields(logrus.Fields{
@@ -603,17 +603,17 @@ func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, c
 				return nil, true, err
 			}
 			if !eof {
-				// file.N and xl.json are always in pairs and hence this
-				// entry has to be xl.json. If not better to manually investigate
+				// file.N and file.json are always in pairs and hence this
+				// entry has to be file.json. If not better to manually investigate
 				// and fix it.
 				// For the next ListFiles() call we can safely assume that the
-				// marker is "object/xl.json"
+				// marker is "object/file.json"
 				if !strings.HasSuffix(fsFilesInfo[0].Name, xlMetaV1File) {
 					log.WithFields(logrus.Fields{
 						"volume":          volume,
 						"prefix":          prefix,
 						"fsFileInfo.Name": fsFilesInfo[0].Name,
-					}).Errorf("ListFiles failed with %s, expected %s to be a xl.json file.", err, fsFilesInfo[0].Name)
+					}).Errorf("ListFiles failed with %s, expected %s to be a file.json file.", err, fsFilesInfo[0].Name)
 					return nil, true, errUnexpected
 				}
 			}
