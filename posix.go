@@ -741,7 +741,7 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		log.WithFields(logrus.Fields{
 			"diskPath": s.diskPath,
 			"volume":   srcVolume,
-		}).Debugf("getVolumeDir failed with %s", err)
+		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
 	dstVolumeDir, err := s.getVolumeDir(dstVolume)
@@ -749,12 +749,20 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		log.WithFields(logrus.Fields{
 			"diskPath": s.diskPath,
 			"volume":   dstVolume,
-		}).Debugf("getVolumeDir failed with %s", err)
+		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
 	if err = os.MkdirAll(path.Join(dstVolumeDir, path.Dir(dstPath)), 0755); err != nil {
-		log.Debug("os.MkdirAll failed with %s", err)
+		log.Errorf("os.MkdirAll failed with %s", err)
 		return err
 	}
-	return os.Rename(path.Join(srcVolumeDir, srcPath), path.Join(dstVolumeDir, dstPath))
+	err = os.Rename(path.Join(srcVolumeDir, srcPath), path.Join(dstVolumeDir, dstPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		}
+		log.Errorf("os.Rename failed with %s", err)
+		return err
+	}
+	return nil
 }

@@ -105,13 +105,13 @@ func deleteBucket(storage StorageAPI, bucket string) error {
 func putObjectCommon(storage StorageAPI, bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", (BucketNameInvalid{Bucket: bucket})
+		return "", BucketNameInvalid{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
-		return "", (ObjectNameInvalid{
+		return "", ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		})
+		}
 	}
 	// Check whether the bucket exists.
 	if isExist, err := isBucketExist(storage, bucket); err != nil {
@@ -120,7 +120,8 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 		return "", BucketNotFound{Bucket: bucket}
 	}
 
-	fileWriter, err := storage.CreateFile(bucket, object)
+	tempObj := path.Join(tmpMetaPrefix, bucket, object)
+	fileWriter, err := storage.CreateFile(minioMetaBucket, tempObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -166,24 +167,13 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 	if err != nil {
 		return "", err
 	}
+	err = storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	if err != nil {
+		return "", err
+	}
 
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
-}
-
-// isUploadIDExists - verify if a given uploadID exists and is valid.
-func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) (bool, error) {
-	uploadIDPath := path.Join(bucket, object, uploadID)
-	st, err := storage.StatFile(minioMetaBucket, uploadIDPath)
-	if err != nil {
-		// Upload id does not exist.
-		if err == errFileNotFound {
-			return false, nil
-		}
-		return false, err
-	}
-	// Upload id exists and is a regular file.
-	return st.Mode.IsRegular(), nil
 }
 
 // checks whether bucket exists.
