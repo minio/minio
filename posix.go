@@ -34,6 +34,7 @@ import (
 
 const (
 	fsListLimit = 1000
+	fsMinSpacePercent = 5
 )
 
 // listParams - list object params used for list object map
@@ -98,13 +99,13 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	}
 	fs := fsStorage{
 		diskPath:           diskPath,
-		minFreeDisk:        5, // Minimum 5% disk should be free.
+		minFreeDisk:        fsMinSpacePercent, // Minimum 5% disk should be free.
 		listObjectMap:      make(map[listParams][]*treeWalker),
 		listObjectMapMutex: &sync.Mutex{},
 	}
 	log.WithFields(logrus.Fields{
 		"diskPath":    diskPath,
-		"minFreeDisk": 5,
+		"minFreeDisk": fsMinSpacePercent,
 	}).Debugf("Successfully configured FS storage API.")
 	return fs, nil
 }
