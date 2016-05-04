@@ -87,7 +87,7 @@ func initConfig() error {
 		return err
 	}
 	// Save the loaded config globally.
-	serverConfig = qc.Data().(*serverConfigV4)
+	serverConfig = srvCfg
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
 	return nil
