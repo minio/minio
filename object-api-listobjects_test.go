@@ -535,6 +535,7 @@ func TestListObjects(t *testing.T) {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
 		if err == nil && !testCase.shouldPass {
+			t.Log(result)
 			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.

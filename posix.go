@@ -19,13 +19,10 @@ package main
 import (
 	"io"
 	"os"
-	slashpath "path"
+	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
-
-	"path"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/disk"
@@ -33,24 +30,13 @@ import (
 )
 
 const (
-	fsListLimit       = 1000
 	fsMinSpacePercent = 5
 )
 
-// listParams - list object params used for list object map
-type listParams struct {
-	bucket    string
-	recursive bool
-	marker    string
-	prefix    string
-}
-
 // fsStorage - implements StorageAPI interface.
 type fsStorage struct {
-	diskPath           string
-	minFreeDisk        int64
-	listObjectMap      map[listParams][]*treeWalker
-	listObjectMapMutex *sync.Mutex
+	diskPath    string
+	minFreeDisk int64
 }
 
 // isDirEmpty - returns whether given directory is empty or not.
@@ -98,10 +84,8 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		return nil, syscall.ENOTDIR
 	}
 	fs := fsStorage{
-		diskPath:           diskPath,
-		minFreeDisk:        fsMinSpacePercent, // Minimum 5% disk should be free.
-		listObjectMap:      make(map[listParams][]*treeWalker),
-		listObjectMapMutex: &sync.Mutex{},
+		diskPath:    diskPath,
+		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
 	}
 	log.WithFields(logrus.Fields{
 		"diskPath":    diskPath,
@@ -158,25 +142,23 @@ func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
 
 // gets all the unique directories from diskPath.
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
-	volumeFn := func(dirent fsDirent) bool {
-		// Return all directories.
-		return dirent.IsDir() && isValidVolname(path.Clean(dirent.name))
-	}
-	namesOnly := true // Returned are only names.
-	dirents, err := scandir(dirPath, volumeFn, namesOnly)
+	entries, err := readDir(dirPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
-			"dirPath":   dirPath,
-			"namesOnly": true,
-		}).Debugf("Scandir failed with error %s", err)
+			"dirPath": dirPath,
+		}).Debugf("readDir failed with error %s", err)
 		return nil, err
 	}
 	var volsInfo []VolInfo
-	for _, dirent := range dirents {
-		fi, err := os.Stat(pathJoin(dirPath, dirent.name))
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(filepath.Clean(entry)) {
+			// Skip if entry is neither a directory not a valid volume name.
+			continue
+		}
+		fi, err := os.Stat(pathJoin(dirPath, entry))
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"path": pathJoin(dirPath, dirent.name),
+				"path": pathJoin(dirPath, entry),
 			}).Debugf("Stat failed with error %s", err)
 			return nil, err
 		}
@@ -372,62 +354,9 @@ func (s fsStorage) DeleteVol(volume string) error {
 	return nil
 }
 
-// Save the goroutine reference in the map
-func (s *fsStorage) saveTreeWalk(params listParams, walker *treeWalker) {
-	s.listObjectMapMutex.Lock()
-	defer s.listObjectMapMutex.Unlock()
-
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("saveTreeWalk has been invoked.")
-
-	walkers, _ := s.listObjectMap[params]
-	walkers = append(walkers, walker)
-
-	s.listObjectMap[params] = walkers
-	log.Debugf("Successfully saved in listObjectMap.")
-}
-
-// Lookup the goroutine reference from map
-func (s *fsStorage) lookupTreeWalk(params listParams) *treeWalker {
-	s.listObjectMapMutex.Lock()
-	defer s.listObjectMapMutex.Unlock()
-
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("lookupTreeWalk has been invoked.")
-	if walkChs, ok := s.listObjectMap[params]; ok {
-		for i, walkCh := range walkChs {
-			if !walkCh.timedOut {
-				newWalkChs := walkChs[i+1:]
-				if len(newWalkChs) > 0 {
-					s.listObjectMap[params] = newWalkChs
-				} else {
-					delete(s.listObjectMap, params)
-				}
-				log.WithFields(logrus.Fields{
-					"bucket":    params.bucket,
-					"recursive": params.recursive,
-					"marker":    params.marker,
-					"prefix":    params.prefix,
-				}).Debugf("Found the previous saved listsObjects params.")
-				return walkCh
-			}
-		}
-		// As all channels are timed out, delete the map entry
-		delete(s.listObjectMap, params)
-	}
-	return nil
-}
-
-// List operation.
-func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, count int) ([]FileInfo, bool, error) {
+// ListDir - return all the entries at the given directory path.
+// If an entry is a directory it will be returned with a trailing "/".
+func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
@@ -435,100 +364,21 @@ func (s fsStorage) ListFiles(volume, prefix, marker string, recursive bool, coun
 			"diskPath": s.diskPath,
 			"volume":   volume,
 		}).Debugf("getVolumeDir failed with %s", err)
-		return nil, true, err
+		return nil, err
 	}
-	var fileInfos []FileInfo
-
-	if marker != "" {
-		// Verify if marker has prefix.
-		if marker != "" && !strings.HasPrefix(marker, prefix) {
-			log.WithFields(logrus.Fields{
-				"diskPath": s.diskPath,
-				"marker":   marker,
-				"prefix":   prefix,
-			}).Debugf("Marker doesn't have prefix in common.")
-			return nil, true, errInvalidArgument
-		}
-	}
-
-	// Return empty response for a valid request when count is 0.
-	if count == 0 {
-		return nil, true, nil
-	}
-
-	// Over flowing count - reset to fsListLimit.
-	if count < 0 || count > fsListLimit {
-		count = fsListLimit
-	}
-
-	// Verify if prefix exists.
-	prefixDir := slashpath.Dir(prefix)
-	prefixRootDir := slashpath.Join(volumeDir, prefixDir)
-	if status, err := isDirExist(prefixRootDir); !status {
-		if err == nil {
-			// Prefix does not exist, not an error just respond empty list response.
-			return nil, true, nil
-		} else if err.Error() == syscall.ENOTDIR.Error() {
-			// Prefix exists as a file.
-			return nil, true, nil
-		}
-
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
 		log.WithFields(logrus.Fields{
-			"volumeDir":     volumeDir,
-			"prefixRootDir": prefixRootDir,
-		}).Debugf("isDirExist returned an unhandled error %s", err)
-
-		// Rest errors should be treated as failure.
-		return nil, true, err
-	}
-
-	// Maximum 1000 files returned in a single call.
-	// Further calls will set right marker value to continue reading the rest of the files.
-	// popTreeWalker returns nil if the call to ListFiles is done for the first time.
-	// On further calls to ListFiles to retrive more files within the timeout period,
-	// popTreeWalker returns the channel from which rest of the objects can be retrieved.
-	walker := s.lookupTreeWalk(listParams{volume, recursive, marker, prefix})
-	if walker == nil {
-		walker = startTreeWalk(filepath.ToSlash(s.diskPath), volume, prefix, marker, recursive)
-	}
-	nextMarker := ""
-	log.Debugf("Reading from the tree walk channel has begun.")
-	for i := 0; i < count; {
-		walkResult, ok := <-walker.ch
-		if !ok {
-			// Closed channel.
-			return fileInfos, true, nil
+			"diskPath": s.diskPath,
+			"volume":   volume,
+		}).Debugf("Stat on the volume failed with %s", err)
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
 		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			log.WithFields(logrus.Fields{
-				"diskPath":  s.diskPath,
-				"volume":    volume,
-				"prefix":    prefix,
-				"marker":    marker,
-				"recursive": recursive,
-			}).Debugf("Walk resulted in an error %s", walkResult.err)
-			return nil, true, walkResult.err
-		}
-		fileInfo := walkResult.fileInfo
-		fileInfo.Name = filepath.ToSlash(fileInfo.Name)
-		fileInfos = append(fileInfos, fileInfo)
-		// We have listed everything return.
-		if walkResult.end {
-			return fileInfos, true, nil
-		}
-		nextMarker = fileInfo.Name
-		i++
+		return nil, err
 	}
-	params := listParams{volume, recursive, nextMarker, prefix}
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("Save the tree walk into map for subsequent requests.")
-	s.saveTreeWalk(params, walker)
-	return fileInfos, false, nil
+	return readDir(pathJoin(volumeDir, dirPath))
 }
 
 // ReadFile - read a file at a given offset.

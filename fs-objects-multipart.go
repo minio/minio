@@ -100,8 +100,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Cleanup all the parts.
-	recursive := false
-	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID, recursive); err != nil {
+	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID); err != nil {
 		return "", err
 	}
 

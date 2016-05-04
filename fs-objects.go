@@ -20,15 +20,20 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
 // fsObjects - Implements fs object layer.
 type fsObjects struct {
-	storage StorageAPI
+	storage            StorageAPI
+	listObjectMap      map[listParams][]*treeWalker
+	listObjectMapMutex *sync.Mutex
 }
 
+// FIXME: constructor should return a pointer.
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(exportPath string) (ObjectLayer, error) {
 	var storage StorageAPI
@@ -51,7 +56,11 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 	cleanupAllTmpEntries(storage)
 
 	// Return successfully initialized object layer.
-	return fsObjects{storage}, nil
+	return fsObjects{
+		storage:            storage,
+		listObjectMap:      make(map[listParams][]*treeWalker),
+		listObjectMapMutex: &sync.Mutex{},
+	}, nil
 }
 
 /// Bucket operations
@@ -170,20 +179,63 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 	}
 
+	if maxKeys == 0 {
+		return ListObjectsInfo{}, nil
+	}
+
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	fileInfos, eof, err := fs.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
-	if err != nil {
-		return ListObjectsInfo{}, toObjectErr(err, bucket)
+
+	walker := lookupTreeWalk(fs, listParams{bucket, recursive, marker, prefix})
+	if walker == nil {
+		walker = startTreeWalk(fs, bucket, prefix, marker, recursive)
 	}
-	if maxKeys == 0 {
-		return ListObjectsInfo{}, nil
+	var fileInfos []FileInfo
+	var eof bool
+	var nextMarker string
+	log.Debugf("Reading from the tree walk channel has begun.")
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walker.ch
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			log.WithFields(logrus.Fields{
+				"bucket":    bucket,
+				"prefix":    prefix,
+				"marker":    marker,
+				"recursive": recursive,
+			}).Debugf("Walk resulted in an error %s", walkResult.err)
+			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+		}
+		fileInfo := walkResult.fileInfo
+		nextMarker = fileInfo.Name
+		fileInfos = append(fileInfos, fileInfo)
+		if walkResult.end {
+			eof = true
+			break
+		}
+		i++
+	}
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	log.WithFields(logrus.Fields{
+		"bucket":    params.bucket,
+		"recursive": params.recursive,
+		"marker":    params.marker,
+		"prefix":    params.prefix,
+	}).Debugf("Save the tree walk into map for subsequent requests.")
+	if !eof {
+		saveTreeWalk(fs, params, walker)
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}
+
 	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
 		if delimiter == slashSeparator {

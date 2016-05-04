@@ -23,9 +23,9 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -164,37 +164,24 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 
 // Cleanup all temp entries inside tmpMetaPrefix directory, upon server initialization.
 func cleanupAllTmpEntries(storage StorageAPI) error {
-	recursive := true // Recursively delete all files inside 'tmp' directory.
-	return cleanupUploadedParts(storage, tmpMetaPrefix, "", "", "", recursive)
+	return cleanupUploadedParts(storage, tmpMetaPrefix, "", "", "")
 }
 
 // Wrapper to which removes all the uploaded parts after a successful
 // complete multipart upload.
-func cleanupUploadedParts(storage StorageAPI, prefix, bucket, object, uploadID string, recursive bool) error {
-	markerPath := ""
-	var wg = &sync.WaitGroup{}
-	for {
-		uploadIDPath := path.Join(prefix, bucket, object, uploadID)
-		fileInfos, eof, err := storage.ListFiles(minioMetaBucket, uploadIDPath, markerPath, recursive, 1000)
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
-		// Loop through all files and delete each in go-routine, while
-		// adding each operation to a wait group.
-		for _, fileInfo := range fileInfos {
-			wg.Add(1)
-			go func(fi FileInfo) {
-				defer wg.Done()
-				storage.DeleteFile(minioMetaBucket, fi.Name)
-			}(fileInfo)
-		}
-		if eof {
-			break
-		}
-		markerPath = fileInfos[len(fileInfos)-1].Name
+func cleanupUploadedParts(storage StorageAPI, prefix, bucket, object, uploadID string) error {
+	multipartDir := path.Join(prefix, bucket, object)
+	entries, err := storage.ListDir(minioMetaBucket, multipartDir)
+	if err != nil {
+		return err
 	}
-	// Wait for all the routines.
-	wg.Wait()
+	for _, entry := range entries {
+		if strings.HasPrefix(entry, uploadID) {
+			if err = storage.DeleteFile(minioMetaBucket, path.Join(multipartDir, entry)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -213,40 +200,20 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	} else if !status {
 		return InvalidUploadID{UploadID: uploadID}
 	}
-	recursive := false // Cleanup all the top level files and folders matching uploadID.
-	return cleanupUploadedParts(storage, mpartMetaPrefix, bucket, object, uploadID, recursive)
+	return cleanupUploadedParts(storage, mpartMetaPrefix, bucket, object, uploadID)
 }
 
 // listLeafEntries - lists all entries if a given prefixPath is a leaf
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.
-func listLeafEntries(storage StorageAPI, prefixPath string) (entries []FileInfo, e error) {
-	var markerPath string
-	for {
-		fileInfos, eof, err := storage.ListFiles(minioMetaBucket, prefixPath, markerPath, false, 1000)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"prefixPath": prefixPath,
-				"markerPath": markerPath,
-			}).Errorf("%s", err)
-			return nil, err
-		}
-		for _, fileInfo := range fileInfos {
-			// Set marker for next batch of ListFiles.
-			markerPath = fileInfo.Name
-			if fileInfo.Mode.IsDir() {
-				// If a directory is found, doesn't return anything.
-				return nil, nil
-			}
-			fileName := path.Base(fileInfo.Name)
-			if !strings.Contains(fileName, ".") {
-				// Skip the entry if it is of the pattern bucket/object/uploadID.partNum.md5sum
-				// and retain entries of the pattern bucket/object/uploadID
-				entries = append(entries, fileInfo)
-			}
-		}
-		if eof {
-			break
+func listLeafEntries(storage StorageAPI, prefixPath string) (entries []string, err error) {
+	entries, err = storage.ListDir(minioMetaBucket, prefixPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry, slashSeparator) {
+			return nil, nil
 		}
 	}
 	return entries, nil
@@ -254,91 +221,92 @@ func listLeafEntries(storage StorageAPI, prefixPath string) (entries []FileInfo,
 
 // listMetaBucketMultipartFiles - list all files at a given prefix inside minioMetaBucket.
 func listMetaBucketMultipartFiles(storage StorageAPI, prefixPath string, markerPath string, recursive bool, maxKeys int) (allFileInfos []FileInfo, eof bool, err error) {
-	// newMaxKeys tracks the size of entries which are going to be
-	// returned back.
-	var newMaxKeys int
+	return nil, true, nil
+	// // newMaxKeys tracks the size of entries which are going to be
+	// // returned back.
+	// var newMaxKeys int
 
-	// Following loop gathers and filters out special files inside
-	// minio meta volume.
-	for {
-		var fileInfos []FileInfo
-		// List files up to maxKeys-newMaxKeys, since we are skipping
-		// entries for special files.
-		fileInfos, eof, err = storage.ListFiles(minioMetaBucket, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"prefixPath": prefixPath,
-				"markerPath": markerPath,
-				"recursive":  recursive,
-				"maxKeys":    maxKeys,
-			}).Errorf("%s", err)
-			return nil, true, err
-		}
-		// Loop through and validate individual file.
-		for _, fi := range fileInfos {
-			var entries []FileInfo
-			if fi.Mode.IsDir() {
-				// List all the entries if fi.Name is a leaf directory, if
-				// fi.Name is not a leaf directory then the resulting
-				// entries are empty.
-				entries, err = listLeafEntries(storage, fi.Name)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"prefixPath": fi.Name,
-					}).Errorf("%s", err)
-					return nil, false, err
-				}
-			}
-			// Set markerPath for next batch of listing.
-			markerPath = fi.Name
-			if len(entries) > 0 {
-				// We reach here for non-recursive case and a leaf entry.
-				for _, entry := range entries {
-					allFileInfos = append(allFileInfos, entry)
-					newMaxKeys++
-					// If we have reached the maxKeys, it means we have listed
-					// everything that was requested. Return right here.
-					if newMaxKeys == maxKeys {
-						// Return values:
-						// allFileInfos : "maxKeys" number of entries.
-						// eof : eof returned by fs.storage.ListFiles()
-						// error : nil
-						return
-					}
-				}
-			} else {
-				// We reach here for a non-recursive case non-leaf entry
-				// OR recursive case with fi.Name matching pattern bucket/object/uploadID[.partNum.md5sum]
-				if !fi.Mode.IsDir() { // Do not skip non-recursive case directory entries.
-					// Skip files matching pattern bucket/object/uploadID.partNum.md5sum
-					// and retain files matching pattern bucket/object/uploadID
-					specialFile := path.Base(fi.Name)
-					if strings.Contains(specialFile, ".") {
-						// Contains partnumber and md5sum info, skip this.
-						continue
-					}
-				}
-				allFileInfos = append(allFileInfos, fi)
-				newMaxKeys++
-				// If we have reached the maxKeys, it means we have listed
-				// everything that was requested. Return right here.
-				if newMaxKeys == maxKeys {
-					// Return values:
-					// allFileInfos : "maxKeys" number of entries.
-					// eof : eof returned by fs.storage.ListFiles()
-					// error : nil
-					return
-				}
-			}
-		}
-		// If we have reached eof then we break out.
-		if eof {
-			break
-		}
-	}
+	// // Following loop gathers and filters out special files inside
+	// // minio meta volume.
+	// for {
+	// 	var fileInfos []FileInfo
+	// 	// List files up to maxKeys-newMaxKeys, since we are skipping
+	// 	// entries for special files.
+	// 	fileInfos, eof, err = storage.ListFiles(minioMetaBucket, prefixPath, markerPath, recursive, maxKeys-newMaxKeys)
+	// 	if err != nil {
+	// 		log.WithFields(logrus.Fields{
+	// 			"prefixPath": prefixPath,
+	// 			"markerPath": markerPath,
+	// 			"recursive":  recursive,
+	// 			"maxKeys":    maxKeys,
+	// 		}).Errorf("%s", err)
+	// 		return nil, true, err
+	// 	}
+	// 	// Loop through and validate individual file.
+	// 	for _, fi := range fileInfos {
+	// 		var entries []FileInfo
+	// 		if fi.Mode.IsDir() {
+	// 			// List all the entries if fi.Name is a leaf directory, if
+	// 			// fi.Name is not a leaf directory then the resulting
+	// 			// entries are empty.
+	// 			entries, err = listLeafEntries(storage, fi.Name)
+	// 			if err != nil {
+	// 				log.WithFields(logrus.Fields{
+	// 					"prefixPath": fi.Name,
+	// 				}).Errorf("%s", err)
+	// 				return nil, false, err
+	// 			}
+	// 		}
+	// 		// Set markerPath for next batch of listing.
+	// 		markerPath = fi.Name
+	// 		if len(entries) > 0 {
+	// 			// We reach here for non-recursive case and a leaf entry.
+	// 			for _, entry := range entries {
+	// 				allFileInfos = append(allFileInfos, entry)
+	// 				newMaxKeys++
+	// 				// If we have reached the maxKeys, it means we have listed
+	// 				// everything that was requested. Return right here.
+	// 				if newMaxKeys == maxKeys {
+	// 					// Return values:
+	// 					// allFileInfos : "maxKeys" number of entries.
+	// 					// eof : eof returned by fs.storage.ListFiles()
+	// 					// error : nil
+	// 					return
+	// 				}
+	// 			}
+	// 		} else {
+	// 			// We reach here for a non-recursive case non-leaf entry
+	// 			// OR recursive case with fi.Name matching pattern bucket/object/uploadID[.partNum.md5sum]
+	// 			if !fi.Mode.IsDir() { // Do not skip non-recursive case directory entries.
+	// 				// Skip files matching pattern bucket/object/uploadID.partNum.md5sum
+	// 				// and retain files matching pattern bucket/object/uploadID
+	// 				specialFile := path.Base(fi.Name)
+	// 				if strings.Contains(specialFile, ".") {
+	// 					// Contains partnumber and md5sum info, skip this.
+	// 					continue
+	// 				}
+	// 			}
+	// 			allFileInfos = append(allFileInfos, fi)
+	// 			newMaxKeys++
+	// 			// If we have reached the maxKeys, it means we have listed
+	// 			// everything that was requested. Return right here.
+	// 			if newMaxKeys == maxKeys {
+	// 				// Return values:
+	// 				// allFileInfos : "maxKeys" number of entries.
+	// 				// eof : eof returned by fs.storage.ListFiles()
+	// 				// error : nil
+	// 				return
+	// 			}
+	// 		}
+	// 	}
+	// 	// If we have reached eof then we break out.
+	// 	if eof {
+	// 		break
+	// 	}
+	// }
 
-	// Return entries here.
-	return allFileInfos, eof, nil
+	// // Return entries here.
+	// return allFileInfos, eof, nil
 }
 
 // listMultipartUploadsCommon - lists all multipart uploads, common
@@ -446,61 +414,60 @@ func listMultipartUploadsCommon(storage StorageAPI, bucket, prefix, keyMarker, u
 func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListPartsInfo{}, (BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ListPartsInfo{}, (ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	if status, err := isUploadIDExists(storage, bucket, object, uploadID); err != nil {
 		return ListPartsInfo{}, err
 	} else if !status {
-		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
+		return ListPartsInfo{}, (InvalidUploadID{UploadID: uploadID})
 	}
 	result := ListPartsInfo{}
-	var markerPath string
-	nextPartNumberMarker := 0
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	// Figure out the marker for the next subsequent calls, if the
-	// partNumberMarker is already set.
-	if partNumberMarker > 0 {
-		partNumberMarkerPath := uploadIDPath + "." + fmt.Sprintf("%.5d", partNumberMarker) + "."
-		fileInfos, _, err := storage.ListFiles(minioMetaBucket, partNumberMarkerPath, "", false, 1)
-		if err != nil {
-			return result, toObjectErr(err, minioMetaBucket, partNumberMarkerPath)
-		}
-		if len(fileInfos) == 0 {
-			return result, InvalidPart{}
-		}
-		markerPath = fileInfos[0].Name
-	}
-	uploadIDPrefix := uploadIDPath + "."
-	fileInfos, eof, err := storage.ListFiles(minioMetaBucket, uploadIDPrefix, markerPath, false, maxParts)
+	entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	if err != nil {
-		return result, InvalidPart{}
+		return result, err
 	}
-	for _, fileInfo := range fileInfos {
-		fileName := path.Base(fileInfo.Name)
-		splitResult := strings.Split(fileName, ".")
-		partNum, err := strconv.Atoi(splitResult[1])
-		if err != nil {
-			return result, err
+	sort.Strings(entries)
+	var newEntries []string
+	for _, entry := range entries {
+		if !strings.Contains(entry, ".") {
+			continue
 		}
-		md5sum := splitResult[2]
+		if !strings.HasPrefix(entry, uploadID) {
+			continue
+		}
+		newEntries = append(newEntries, entry)
+	}
+	idx := sort.SearchStrings(newEntries, fmt.Sprintf("%s.%.5d.", uploadID, partNumberMarker+1))
+	newEntries = newEntries[idx:]
+	count := maxParts
+	for _, entry := range newEntries {
+		fi, err := storage.StatFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, entry))
+		splitEntry := strings.Split(entry, ".")
+		partNum, err := strconv.Atoi(splitEntry[1])
+		if err != nil {
+			return ListPartsInfo{}, err
+		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   partNum,
-			LastModified: fileInfo.ModTime,
-			ETag:         md5sum,
-			Size:         fileInfo.Size,
+			LastModified: fi.ModTime,
+			ETag:         splitEntry[2],
+			Size:         fi.Size,
 		})
-		nextPartNumberMarker = partNum
+		count--
+		if count == 0 {
+			break
+		}
+	}
+	if len(newEntries) > len(result.Parts) {
+		result.IsTruncated = true
 	}
 	result.Bucket = bucket
 	result.Object = object
 	result.UploadID = uploadID
-	result.PartNumberMarker = partNumberMarker
-	result.NextPartNumberMarker = nextPartNumberMarker
 	result.MaxParts = maxParts
-	result.IsTruncated = !eof
 	return result, nil
 }
 

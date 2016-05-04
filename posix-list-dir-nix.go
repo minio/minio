@@ -22,9 +22,11 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"sort"
+	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -47,9 +49,8 @@ func clen(n []byte) int {
 
 // parseDirents - inspired from
 // https://golang.org/src/syscall/syscall_<os>.go
-func parseDirents(dirPath string, buf []byte) []fsDirent {
+func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 	bufidx := 0
-	dirents := []fsDirent{}
 	for bufidx < len(buf) {
 		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
 		// On non-Linux operating systems for rec length of zero means
@@ -58,7 +59,7 @@ func parseDirents(dirPath string, buf []byte) []fsDirent {
 			break
 		}
 		bufidx += int(dirent.Reclen)
-		// Skip dirents if they are absent in directory.
+		// Skip if they are absent in directory.
 		if isEmptyDirent(dirent) {
 			continue
 		}
@@ -69,56 +70,56 @@ func parseDirents(dirPath string, buf []byte) []fsDirent {
 			continue
 		}
 
-		var mode os.FileMode
 		switch dirent.Type {
-		case syscall.DT_BLK, syscall.DT_WHT:
-			mode = os.ModeDevice
-		case syscall.DT_CHR:
-			mode = os.ModeDevice | os.ModeCharDevice
 		case syscall.DT_DIR:
-			mode = os.ModeDir
-		case syscall.DT_FIFO:
-			mode = os.ModeNamedPipe
-		case syscall.DT_LNK:
-			mode = os.ModeSymlink
+			entries = append(entries, name+slashSeparator)
 		case syscall.DT_REG:
-			mode = 0
-		case syscall.DT_SOCK:
-			mode = os.ModeSocket
+			entries = append(entries, name)
 		case syscall.DT_UNKNOWN:
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to Stat().
-			if fi, err := os.Stat(path.Join(dirPath, name)); err == nil {
-				mode = fi.Mode()
+			var fi os.FileInfo
+			if fi, err = os.Stat(path.Join(dirPath, name)); err == nil {
+				if fi.IsDir() {
+					entries = append(entries, fi.Name()+slashSeparator)
+				} else if fi.Mode().IsRegular() {
+					entries = append(entries, fi.Name())
+				}
 			} else {
-				// Caller listing would fail, if Stat failed but we
-				// won't crash the server.
-				mode = 0xffffffff
+				// This is unexpected.
+				return
 			}
+		default:
+			// Skip entries which are not file or directory.
+			// FIXME: should we handle symlinks?
+			continue
 		}
-
-		dirents = append(dirents, fsDirent{
-			name: name,
-			mode: mode,
-		})
 	}
-	return dirents
+	return
 }
 
-// scans the directory dirPath, calling filter() on each directory
-// entry.  Entries for which filter() returns true are stored, lexically
-// sorted using sort.Sort(). If filter is NULL, all entries are selected.
-// If namesOnly is true, dirPath is not appended into entry name.
-func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDirent, error) {
+// Return all the entries at the directory dirPath.
+func readDir(dirPath string) (entries []string, err error) {
 	buf := make([]byte, readDirentBufSize)
 	d, err := os.Open(dirPath)
 	if err != nil {
-		return nil, err
+		log.WithFields(logrus.Fields{
+			"dirPath": dirPath,
+		}).Debugf("Open failed with %s", err)
+
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return nil, errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileNotFound
+		}
 	}
 	defer d.Close()
 
 	fd := int(d.Fd())
-	dirents := []fsDirent{}
 	for {
 		nbuf, err := syscall.ReadDirent(fd, buf)
 		if err != nil {
@@ -127,20 +128,11 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 		if nbuf <= 0 {
 			break
 		}
-		for _, dirent := range parseDirents(dirPath, buf[:nbuf]) {
-			if !namesOnly {
-				dirent.name = path.Join(dirPath, dirent.name)
-			}
-			if dirent.IsDir() {
-				dirent.name += "/"
-				dirent.size = 0
-			}
-			if filter == nil || filter(dirent) {
-				dirents = append(dirents, dirent)
-			}
+		var tmpEntries []string
+		if tmpEntries, err = parseDirents(dirPath, buf[:nbuf]); err != nil {
+			return nil, err
 		}
+		entries = append(entries, tmpEntries...)
 	}
-
-	sort.Sort(byDirentName(dirents))
-	return dirents, nil
+	return
 }

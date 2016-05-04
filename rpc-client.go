@@ -247,27 +247,9 @@ func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io
 	return resp.Body, nil
 }
 
-// ListFiles - List all files in a volume.
-func (n networkFS) ListFiles(volume, prefix, marker string, recursive bool, count int) (files []FileInfo, eof bool, err error) {
-	listFilesReply := ListFilesReply{}
-	if err = n.rpcClient.Call("Storage.ListFilesHandler", ListFilesArgs{
-		Vol:       volume,
-		Prefix:    prefix,
-		Marker:    marker,
-		Recursive: recursive,
-		Count:     count,
-	}, &listFilesReply); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume":    volume,
-			"prefix":    prefix,
-			"marker":    marker,
-			"recursive": recursive,
-			"count":     count,
-		}).Debugf("Storage.ListFilesHandlers failed with %s", err)
-		return nil, true, toStorageErr(err)
-	}
-	// Return successfully unmarshalled results.
-	return listFilesReply.Files, listFilesReply.EOF, nil
+func (n networkFS) ListDir(volume, prefix string) ([]string, error) {
+	// FIXME: should be implemented
+	return nil, errUnexpected
 }
 
 // DeleteFile - Delete a file at path.

@@ -21,8 +21,9 @@ import (
 	"io"
 	"os"
 	slashpath "path"
-	"sort"
 	"strings"
+
+	"path"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/klauspost/reedsolomon"
@@ -377,254 +378,35 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	return volInfo, nil
 }
 
-// isLeafDirectory - check if a given path is leaf directory. i.e
-// there are no more directories inside it. Erasure code backend
-// format it means that the parent directory is the actual object name.
-func isLeafDirectory(disk StorageAPI, volume, leafPath string) (isLeaf bool) {
-	var markerPath string
-	var xlListCount = 1000 // Count page.
-	for {
-		fileInfos, eof, err := disk.ListFiles(volume, leafPath, markerPath, false, xlListCount)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":     volume,
-				"leafPath":   leafPath,
-				"markerPath": markerPath,
-				"recursive":  false,
-				"count":      xlListCount,
-			}).Errorf("ListFiles failed with %s", err)
-			break
-		}
-		for _, fileInfo := range fileInfos {
-			if fileInfo.Mode.IsDir() {
-				// Directory found, not a leaf directory, return right here.
-				return false
-			}
-		}
-		if eof {
-			break
-		}
-		// MarkerPath to get the next set of files.
-		markerPath = fileInfos[len(fileInfos)-1].Name
-	}
-	// Exhausted all the entries, no directories found must be leaf
-	// return right here.
-	return true
+// isLeafDirectoryXL - check if a given path is leaf directory. i.e
+// if it contains file xlMetaV1File
+func isLeafDirectoryXL(disk StorageAPI, volume, leafPath string) (isLeaf bool) {
+	_, err := disk.StatFile(volume, path.Join(leafPath, xlMetaV1File))
+	return err == nil
 }
 
-// extractMetadata - extract xl metadata.
-func extractMetadata(disk StorageAPI, volume, path string) (xlMetaV1, error) {
-	xlMetaV1FilePath := slashpath.Join(path, xlMetaV1File)
-	// We are not going to read partial data from metadata file,
-	// read the whole file always.
-	offset := int64(0)
-	metadataReader, err := disk.ReadFile(volume, xlMetaV1FilePath, offset)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   xlMetaV1FilePath,
-			"offset": offset,
-		}).Errorf("ReadFile failed with %s", err)
-		return xlMetaV1{}, err
-	}
-	// Close metadata reader.
-	defer metadataReader.Close()
-
-	metadata, err := xlMetaV1Decode(metadataReader)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   xlMetaV1FilePath,
-			"offset": offset,
-		}).Errorf("xlMetaV1Decode failed with %s", err)
-		return xlMetaV1{}, err
-	}
-	return metadata, nil
-}
-
-// Extract file info from paths.
-func extractFileInfo(disk StorageAPI, volume, path string) (FileInfo, error) {
-	fileInfo := FileInfo{}
-	fileInfo.Volume = volume
-	fileInfo.Name = path
-
-	metadata, err := extractMetadata(disk, volume, path)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("extractMetadata failed with %s", err)
-		return FileInfo{}, err
-	}
-	fileInfo.Size = metadata.Stat.Size
-	fileInfo.ModTime = metadata.Stat.ModTime
-	fileInfo.Mode = os.FileMode(0644) // This is a file already.
-	return fileInfo, nil
-}
-
-// byFileInfoName is a collection satisfying sort.Interface.
-type byFileInfoName []FileInfo
-
-func (d byFileInfoName) Len() int           { return len(d) }
-func (d byFileInfoName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byFileInfoName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
-// ListFiles files at prefix.
-func (xl XL) ListFiles(volume, prefix, marker string, recursive bool, count int) (filesInfo []FileInfo, eof bool, err error) {
+// ListDir - return all the entries at the given directory path.
+// If an entry is a directory it will be returned with a trailing "/".
+func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
 	if !isValidVolname(volume) {
-		return nil, true, errInvalidArgument
+		return nil, errInvalidArgument
 	}
-
-	// TODO: Fix: If readQuorum is met, its assumed that disks are in consistent file list.
-	// exclude disks those are not in consistent file list and check count of remaining disks
-	// are met readQuorum.
-
-	// Treat empty file list specially
-	emptyCount := 0
-	errCount := 0
-	successCount := 0
-
-	var firstFilesInfo []FileInfo
-	var firstEOF bool
-	var firstErr error
+	// FIXME: need someway to figure out which disk has the latest namespace
+	// so that Listing can be done there. One option is always do Listing from
+	// the "local" disk - if it is down user has to list using another XL server.
+	// This way user knows from which disk he is listing from.
 
 	for _, disk := range xl.storageDisks {
-		if filesInfo, eof, err = listFiles(disk, volume, prefix, marker, recursive, count); err == nil {
-			// we need to return first successful result
-			if firstFilesInfo == nil {
-				firstFilesInfo = filesInfo
-				firstEOF = eof
+		if entries, err = disk.ListDir(volume, dirPath); err != nil {
+			continue
+		}
+		for i, entry := range entries {
+			if strings.HasSuffix(entry, slashSeparator) && isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry)) {
+				entries[i] = strings.TrimSuffix(entry, slashSeparator)
 			}
-
-			if len(filesInfo) == 0 {
-				emptyCount++
-			} else {
-				successCount++
-			}
-		} else {
-			if firstErr == nil {
-				firstErr = err
-			}
-
-			errCount++
 		}
 	}
-
-	if errCount >= xl.readQuorum {
-		return nil, false, firstErr
-	} else if successCount >= xl.readQuorum {
-		return firstFilesInfo, firstEOF, nil
-	} else if emptyCount >= xl.readQuorum {
-		return []FileInfo{}, true, nil
-	}
-
-	return nil, false, errReadQuorum
-}
-
-func listFiles(disk StorageAPI, volume, prefix, marker string, recursive bool, count int) (filesInfo []FileInfo, eof bool, err error) {
-	var fsFilesInfo []FileInfo
-	var markerPath = marker
-	if marker != "" {
-		isLeaf := isLeafDirectory(disk, volume, retainSlash(marker))
-		if isLeaf {
-			// For leaf for now we just point to the first block, make it
-			// dynamic in future based on the availability of storage disks.
-			markerPath = slashpath.Join(marker, xlMetaV1File)
-		}
-	}
-
-	// Loop and capture the proper fileInfos, requires extraction and
-	// separation of XL related metadata information.
-	for {
-		fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, count)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"prefix":    prefix,
-				"marker":    markerPath,
-				"recursive": recursive,
-				"count":     count,
-			}).Errorf("ListFiles failed with %s", err)
-			return nil, true, err
-		}
-		for _, fsFileInfo := range fsFilesInfo {
-			// Skip metadata files.
-			if strings.HasSuffix(fsFileInfo.Name, xlMetaV1File) {
-				continue
-			}
-			var fileInfo FileInfo
-			var isLeaf bool
-			if fsFileInfo.Mode.IsDir() {
-				isLeaf = isLeafDirectory(disk, volume, fsFileInfo.Name)
-			}
-			if isLeaf || !fsFileInfo.Mode.IsDir() {
-				// Extract the parent of leaf directory or file to get the
-				// actual name.
-				path := slashpath.Dir(fsFileInfo.Name)
-				fileInfo, err = extractFileInfo(disk, volume, path)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"volume": volume,
-						"path":   path,
-					}).Errorf("extractFileInfo failed with %s", err)
-					// For a leaf directory, if err is FileNotFound then
-					// perhaps has a missing metadata. Ignore it and let
-					// healing finish its job it will become available soon.
-					if err == errFileNotFound {
-						continue
-					}
-					// For any other errors return to the caller.
-					return nil, true, err
-				}
-			} else {
-				fileInfo = fsFileInfo
-			}
-			filesInfo = append(filesInfo, fileInfo)
-			count--
-			if count == 0 {
-				break
-			}
-		}
-		if len(fsFilesInfo) > 0 {
-			// markerPath for the next disk.ListFiles() iteration.
-			markerPath = fsFilesInfo[len(fsFilesInfo)-1].Name
-		}
-		if count == 0 && recursive && !strings.HasSuffix(markerPath, xlMetaV1File) {
-			// If last entry is not file.json then loop once more to check if we have reached eof.
-			fsFilesInfo, eof, err = disk.ListFiles(volume, prefix, markerPath, recursive, 1)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume":    volume,
-					"prefix":    prefix,
-					"marker":    markerPath,
-					"recursive": recursive,
-					"count":     1,
-				}).Errorf("ListFiles failed with %s", err)
-				return nil, true, err
-			}
-			if !eof {
-				// file.N and file.json are always in pairs and hence this
-				// entry has to be file.json. If not better to manually investigate
-				// and fix it.
-				// For the next ListFiles() call we can safely assume that the
-				// marker is "object/file.json"
-				if !strings.HasSuffix(fsFilesInfo[0].Name, xlMetaV1File) {
-					log.WithFields(logrus.Fields{
-						"volume":          volume,
-						"prefix":          prefix,
-						"fsFileInfo.Name": fsFilesInfo[0].Name,
-					}).Errorf("ListFiles failed with %s, expected %s to be a file.json file.", err, fsFilesInfo[0].Name)
-					return nil, true, errUnexpected
-				}
-			}
-		}
-		if count == 0 || eof {
-			break
-		}
-	}
-	// Sort to make sure we sort entries back properly.
-	sort.Sort(byFileInfoName(filesInfo))
-	return filesInfo, eof, nil
+	return
 }
 
 // Object API.

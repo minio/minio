@@ -286,6 +286,8 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 	case BucketNotFound:
 		writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
+	case ObjectNotFound:
+		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 	case ObjectNameInvalid:
 		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
 	default:
