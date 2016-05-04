@@ -86,3 +86,26 @@ func getConfigFile() (string, error) {
 	}
 	return filepath.Join(configPath, globalMinioConfigFile), nil
 }
+
+// isFormatConfigFileExists - returns true if format config file exists.
+func isFormatConfigFileExists() bool {
+	st, err := os.Stat(mustGetFormatConfigFile())
+	return (err == nil && st.Mode().IsRegular())
+}
+
+// mustGetFormatConfigFile must get format config file.
+func mustGetFormatConfigFile() string {
+	configFile, err := getFormatConfigFile()
+	fatalIf(err, "Unable to get format config file.", nil)
+
+	return configFile
+}
+
+// getFormatConfigFile get format config file.
+func getFormatConfigFile() (string, error) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configPath, globalMinioFormatConfigFile), nil
+}
