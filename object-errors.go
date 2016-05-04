@@ -40,7 +40,7 @@ func toObjectErr(err error, params ...string) error {
 		return StorageInsufficientReadResources{}
 	case errWriteQuorum:
 		return StorageInsufficientWriteResources{}
-	case errIsNotRegular:
+	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
 			return ObjectExistsAsPrefix{
 				Bucket: params[0],

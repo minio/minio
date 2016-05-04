@@ -138,14 +138,14 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
 				return "", clErr
 			}
-			return "", toObjectErr(err)
+			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
 		if _, err = io.Copy(multiWriter, data); err != nil {
 			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
 				return "", clErr
 			}
-			return "", err
+			return "", toObjectErr(err, bucket, object)
 		}
 	}
 
@@ -169,7 +169,10 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 	}
 	err = storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		return "", err
+		if derr := storage.DeleteFile(minioMetaBucket, tempObj); derr != nil {
+			return "", derr
+		}
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Return md5sum, successfully wrote object.

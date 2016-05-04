@@ -157,8 +157,8 @@ func checkPostPolicy(formValues map[string]string) APIErrorCode {
 		return ErrSignatureVersionNotSupported
 	}
 	/// Decoding policy
-	policyBytes, e := base64.StdEncoding.DecodeString(formValues["Policy"])
-	if e != nil {
+	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if err != nil {
 		return ErrMalformedPOSTRequest
 	}
 	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
