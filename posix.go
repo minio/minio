@@ -596,12 +596,13 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 		}).Debugf("getVolumeDir failed with %s", err)
 		return nil, err
 	}
-	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return nil, err
 	}
 	filePath := filepath.Join(volumeDir, path)
 	// Verify if the file already exists and is not of regular type.
-	if st, err := os.Stat(filePath); err == nil {
+	var st os.FileInfo
+	if st, err = os.Stat(filePath); err == nil {
 		if st.IsDir() {
 			log.WithFields(logrus.Fields{
 				"diskPath": s.diskPath,
@@ -610,7 +611,15 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 			return nil, errIsNotRegular
 		}
 	}
-	return safe.CreateFileWithPrefix(filePath, "$tmpfile")
+	w, err := safe.CreateFileWithPrefix(filePath, "$tmpfile")
+	if err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileAccessDenied
+		}
+		return nil, err
+	}
+	return w, nil
 }
 
 // StatFile - get file info.
@@ -753,6 +762,10 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		return err
 	}
 	if err = os.MkdirAll(path.Join(dstVolumeDir, path.Dir(dstPath)), 0755); err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileAccessDenied
+		}
 		log.Errorf("os.MkdirAll failed with %s", err)
 		return err
 	}
