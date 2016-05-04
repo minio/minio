@@ -108,8 +108,8 @@ const (
 	// Add new error codes here.
 
 	// Extended errors.
-	ErrInsufficientReadResources
-	ErrInsufficientWriteResources
+	ErrReadQuorum
+	ErrWriteQuorum
 )
 
 // error code to APIError structure, these fields carry respective
@@ -190,15 +190,15 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "We encountered an internal error, please try again.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
-	ErrInsufficientReadResources: {
-		Code:           "InternalError",
-		Description:    "We cannot satisfy sufficient read resources requested at this moment, please try again.",
-		HTTPStatusCode: http.StatusInternalServerError,
+	ErrReadQuorum: {
+		Code:           "ReadQuorum",
+		Description:    "Multiple disk failures, unable to reconstruct data.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
-	ErrInsufficientWriteResources: {
-		Code:           "InternalError",
-		Description:    "We cannot satisfy sufficient write resources requested at this moment, please try again.",
-		HTTPStatusCode: http.StatusInternalServerError,
+	ErrWriteQuorum: {
+		Code:           "WriteQuorum",
+		Description:    "Multiple disks failures, unable to write data.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidAccessKeyID: {
 		Code:           "InvalidAccessKeyID",
@@ -416,6 +416,52 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusConflict,
 	},
 	// Add your error structure here.
+}
+
+// toAPIErrorCode - Converts embedded errors. Convenience
+// function written to handle all cases where we have known types of
+// errors returned by underlying layers.
+func toAPIErrorCode(err error) (apiErr APIErrorCode) {
+	if err == nil {
+		return ErrNone
+	}
+	// Verify if the underlying error is signature mismatch.
+	if err == errSignatureMismatch {
+		return ErrSignatureDoesNotMatch
+	}
+	switch err.(type) {
+	case StorageFull:
+		apiErr = ErrStorageFull
+	case BadDigest:
+		apiErr = ErrBadDigest
+	case IncompleteBody:
+		apiErr = ErrIncompleteBody
+	case ObjectExistsAsPrefix:
+		apiErr = ErrObjectExistsAsPrefix
+	case BucketNameInvalid:
+		apiErr = ErrInvalidBucketName
+	case BucketNotFound:
+		apiErr = ErrNoSuchBucket
+	case BucketNotEmpty:
+		apiErr = ErrBucketNotEmpty
+	case BucketExists:
+		apiErr = ErrBucketAlreadyOwnedByYou
+	case ObjectNotFound:
+		apiErr = ErrNoSuchKey
+	case ObjectNameInvalid:
+		apiErr = ErrNoSuchKey
+	case InvalidUploadID:
+		apiErr = ErrNoSuchUpload
+	case InvalidPart:
+		apiErr = ErrInvalidPart
+	case InsufficientWriteQuorum:
+		apiErr = ErrWriteQuorum
+	case InsufficientReadQuorum:
+		apiErr = ErrReadQuorum
+	default:
+		apiErr = ErrInternalError
+	}
+	return apiErr
 }
 
 // getAPIError provides API Error for input API error code.

@@ -62,12 +62,11 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 	for _, err := range errs {
 		if err == errFileNotFound {
 			notFoundCount++
-			// If we have errors with file not found greater than allowed read
-			// quorum we return err as errFileNotFound.
-			if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
-				return nil, xlMetaV1{}, false, errFileNotFound
-			}
 		}
+	}
+	// If we have errors with file not found equal to the number of disks.
+	if notFoundCount == len(xl.storageDisks) {
+		return nil, xlMetaV1{}, false, errFileNotFound
 	}
 	highestVersion := int64(0)
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))

@@ -65,7 +65,6 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 			return ErrAccessDenied
 		}
 	}
-
 	return ErrNoSuchKey
 }
 
@@ -100,18 +99,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "GetObjectInfo failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		apiErr := toAPIErrorCode(err)
+		if apiErr == ErrNoSuchKey {
+			apiErr = errAllowableObjectNotFound(bucket, r)
 		}
+		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
 
@@ -136,15 +128,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	startOffset := hrange.start
 	readCloser, err := api.ObjectAPI.GetObject(bucket, object, startOffset)
 	if err != nil {
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
-		default:
-			errorIf(err, "GetObject failed.", nil)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		errorIf(err, "GetObject failed.", nil)
+		apiErr := toAPIErrorCode(err)
+		if apiErr == ErrNoSuchKey {
+			apiErr = errAllowableObjectNotFound(bucket, r)
 		}
+		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
 	defer readCloser.Close() // Close after this handler returns.
@@ -294,18 +283,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "GetObjectInfo failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, errAllowableObjectNotFound(bucket, r), r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		apiErr := toAPIErrorCode(err)
+		if apiErr == ErrNoSuchKey {
+			apiErr = errAllowableObjectNotFound(bucket, r)
 		}
+		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
 
@@ -387,18 +369,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err, "GetObjectInfo failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, objectSource)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, objectSource)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, objectSource)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
 		return
 	}
 	// Verify before writing.
@@ -437,14 +408,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	readCloser, err := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
 	if err != nil {
 		errorIf(err, "Reading "+objectSource+" failed.", nil)
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, objectSource)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, objectSource)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, objectSource)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
 		return
 	}
 	// Size of object.
@@ -458,29 +422,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
 		errorIf(err, "PutObject failed.", nil)
-		switch err.(type) {
-		case StorageFull:
-			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BadDigest:
-			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case IncompleteBody:
-			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case ObjectExistsAsPrefix:
-			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
 	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "GetObjectInfo failed.", nil)
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
@@ -675,27 +624,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	if err != nil {
 		errorIf(err, "PutObject failed.", nil)
-		// Verify if the underlying error is signature mismatch.
-		if err == errSignatureMismatch {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		switch err.(type) {
-		case StorageFull:
-			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BadDigest:
-			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case IncompleteBody:
-			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		case ObjectExistsAsPrefix:
-			writeErrorResponse(w, r, ErrObjectExistsAsPrefix, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	if md5Sum != "" {
@@ -734,20 +663,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object)
 	if err != nil {
 		errorIf(err, "NewMultipartUpload failed.", nil)
-		switch err.(type) {
-		case StorageFull:
-			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
@@ -847,22 +763,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		errorIf(err, "PutObjectPart failed.", nil)
 		// Verify if the underlying error is signature mismatch.
-		if err == errSignatureMismatch {
-			writeErrorResponse(w, r, ErrSignatureDoesNotMatch, r.URL.Path)
-			return
-		}
-		switch err.(type) {
-		case StorageFull:
-			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
-		case InvalidUploadID:
-			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		case BadDigest:
-			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case IncompleteBody:
-			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	if partMD5 != "" {
@@ -898,20 +799,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
 		errorIf(err, "AbortMutlipartUpload failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case InvalidUploadID:
-			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	writeSuccessNoContent(w)
@@ -957,22 +845,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "ListObjectParts failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case InvalidUploadID:
-			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		case InvalidPart:
-			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	response := generateListPartsResponse(listPartsInfo)
@@ -1038,24 +911,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		errorIf(err, "CompleteMultipartUpload failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case InvalidUploadID:
-			writeErrorResponse(w, r, ErrNoSuchUpload, r.URL.Path)
-		case InvalidPart:
-			writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
-		case IncompleteBody:
-			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	// Get object location.
@@ -1096,18 +952,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 	if err := api.ObjectAPI.DeleteObject(bucket, object); err != nil {
 		errorIf(err, "DeleteObject failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case ObjectNotFound:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		case ObjectNameInvalid:
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	writeSuccessNoContent(w)
