@@ -592,7 +592,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if md5Sum != "" {
 		w.Header().Set("ETag", "\""+md5Sum+"\"")
 	}
-	writeSuccessResponse(w, nil)
+	encodedSuccessResponse := encodeResponse(PostResponse{
+		Location: getObjectLocation(bucket, object), // TODO Full URL is preferred
+		Bucket: bucket,
+		Key: object,
+		ETag: md5Sum,
+	})
+	setCommonHeaders(w)
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // HeadBucketHandler - HEAD Bucket

@@ -194,6 +194,16 @@ type CompleteMultipartUploadResponse struct {
 	ETag     string
 }
 
+// PostResponse container for completed post upload response
+type PostResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ PostResponse" json:"-"`
+
+	Location string
+	Bucket   string
+	Key      string
+	ETag     string
+}
+
 // DeleteError structure.
 type DeleteError struct {
 	Code    string
@@ -215,6 +225,11 @@ type DeleteObjectsResponse struct {
 // getLocation get URL location.
 func getLocation(r *http.Request) string {
 	return r.URL.Path
+}
+
+// getObjectLocation gets the relative URL for an object
+func getObjectLocation(bucketName string, key string) string {
+	return "/" + bucketName + "/" + key
 }
 
 // takes an array of Bucketmetadata information for serialization
