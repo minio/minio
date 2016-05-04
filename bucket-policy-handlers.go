@@ -77,15 +77,43 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 
 // Verify if given resource matches with policy statement.
 func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
-	for _, presource := range statement.Resources {
-		matched, err := regexp.MatchString(presource, strings.TrimPrefix(resource, "/"))
-		fatalIf(err, "Invalid pattern, please verify the pattern string.", nil)
-		// For any path matches, we return quickly and the let the caller continue.
-		if matched {
+
+	match := func(pattern, subj string) bool {
+		if pattern == "" {
+			return subj == pattern
+		}
+		if pattern == "*" {
 			return true
 		}
+		parts := strings.Split(pattern, "*")
+		if len(parts) == 1 {
+			return subj == pattern
+		}
+		tGlob := strings.HasSuffix(pattern, "*")
+		end := len(parts) - 1
+		if !strings.HasPrefix(subj, parts[0]) {
+			return false
+		}
+		for i := 1; i < end; i++ {
+			if !strings.Contains(subj, parts[i]) {
+				return false
+			}
+			idx := strings.Index(subj, parts[i]) + len(parts[i])
+			subj = subj[idx:]
+		}
+		return tGlob || strings.HasSuffix(subj, parts[end])
 	}
-	return false
+
+	for _, presource := range statement.Resources {
+		// the resource rule for object could contain "*" wild card.
+		// the requested object can be given access based on the already set bucket policy if
+		// the match is successful.
+		// More info: http://docs.aws.amazon.com/AmazonS3/latest/dev/s3-arn-format.html .
+		if matched := match(presource, resource); !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // Verify if given condition matches with policy statement.
