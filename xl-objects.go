@@ -102,8 +102,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 	go func() {
-		for ; partIndex < len(info); partIndex++ {
-			part := info[partIndex]
+		for ; partIndex < len(info.Parts); partIndex++ {
+			part := info.Parts[partIndex]
 			r, err := xl.storage.ReadFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)), offset)
 			if err != nil {
 				fileWriter.CloseWithError(err)
@@ -147,7 +147,9 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		fi.Size = info.GetSize()
+		fi.Size = info.Size
+		fi.ModTime = info.ModTime
+		fi.MD5Sum = info.MD5Sum
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {
@@ -163,7 +165,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		Size:        fi.Size,
 		IsDir:       fi.Mode.IsDir(),
 		ContentType: contentType,
-		MD5Sum:      "", // Read from metadata.
+		MD5Sum:      fi.MD5Sum,
 	}, nil
 }
 
@@ -206,7 +208,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 		return toObjectErr(err, bucket, object)
 	}
 	// Range through all files and delete it.
-	for _, part := range info {
+	for _, part := range info.Parts {
 		err = xl.storage.DeleteFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
 		if err != nil {
 			return toObjectErr(err, bucket, object)
@@ -273,7 +275,9 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 					fileInfo.Mode = 0
 
 					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
-					fileInfo.Size = info.GetSize()
+					fileInfo.Size = info.Size
+					fileInfo.ModTime = info.ModTime
+					fileInfo.MD5Sum = info.MD5Sum
 				} else if err != errFileNotFound {
 					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
 				}
@@ -287,7 +291,9 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 				if err != nil {
 					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
 				}
-				fileInfo.Size = info.GetSize()
+				fileInfo.Size = info.Size
+				fileInfo.ModTime = info.ModTime
+				fileInfo.MD5Sum = info.MD5Sum
 				allFileInfos = append(allFileInfos, fileInfo)
 				maxKeys--
 				continue

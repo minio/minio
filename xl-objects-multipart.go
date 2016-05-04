@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"time"
 )
 
 // MultipartPartInfo Info of each part kept in the multipart metadata file after
@@ -33,20 +34,17 @@ type MultipartPartInfo struct {
 
 // MultipartObjectInfo - contents of the multipart metadata file after
 // CompleteMultipartUpload() is called.
-type MultipartObjectInfo []MultipartPartInfo
-
-// GetSize - Return the size of the object.
-func (m MultipartObjectInfo) GetSize() (size int64) {
-	for _, part := range m {
-		size += part.Size
-	}
-	return
+type MultipartObjectInfo struct {
+	Parts   []MultipartPartInfo
+	ModTime time.Time
+	Size    int64
+	MD5Sum  string
 }
 
 // GetPartNumberOffset - given an offset for the whole object, return the part and offset in that part.
 func (m MultipartObjectInfo) GetPartNumberOffset(offset int64) (partIndex int, partOffset int64, err error) {
 	partOffset = offset
-	for i, part := range m {
+	for i, part := range m.Parts {
 		partIndex = i
 		if partOffset < part.Size {
 			return
@@ -98,7 +96,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	} else if !status {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
-	var metadata MultipartObjectInfo
+	var metadata = MultipartObjectInfo{}
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
@@ -111,16 +109,35 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 			return "", err
 		}
-		metadata = append(metadata, MultipartPartInfo{part.PartNumber, part.ETag, fi.Size})
+		// Update metadata parts.
+		metadata.Parts = append(metadata.Parts, MultipartPartInfo{
+			PartNumber: part.PartNumber,
+			ETag:       part.ETag,
+			Size:       fi.Size,
+		})
+		metadata.Size += fi.Size
+
 		multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
 		err = xl.storage.RenameFile(minioMetaBucket, multipartPartFile, bucket, multipartObjSuffix)
-		// We need a way to roll back if of the renames failed.
+		// TODO: We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err
 		}
+
+		// Save md5sum for future response.
 		md5Sums = append(md5Sums, part.ETag)
 	}
 
+	// Calculate and save s3 compatible md5sum.
+	s3MD5, err := makeS3MD5(md5Sums...)
+	if err != nil {
+		return "", err
+	}
+	metadata.MD5Sum = s3MD5
+	// Save modTime as well as the current time.
+	metadata.ModTime = time.Now().UTC()
+
+	// Create temporary multipart meta file to write and then rename.
 	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, object, multipartMetaFile)
 	w, err := xl.storage.CreateFile(minioMetaBucket, tempMultipartMetaFile)
 	if err != nil {
@@ -136,11 +153,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 	// Close the writer.
 	if err = w.Close(); err != nil {
-		return "", err
-	}
-	// Save the s3 md5.
-	s3MD5, err := makeS3MD5(md5Sums...)
-	if err != nil {
 		return "", err
 	}
 	multipartObjFile := path.Join(object, multipartMetaFile)
