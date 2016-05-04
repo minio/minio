@@ -54,7 +54,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 		return ErrAccessDenied
 	}
 
-	// Construct resource in 'arn:aws:s3:::examplebucket' format.
+	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
 	resource := AWSResourcePrefix + strings.TrimPrefix(reqURL.Path, "/")
 
 	// Get conditions for policy verification.
