@@ -42,6 +42,11 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Cleanup all temporary entries.
+	cleanupAllTmpEntries(storage)
+
+	// Return successfully initialized object layer.
 	return xlObjects{storage}, nil
 }
 
