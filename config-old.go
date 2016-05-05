@@ -24,16 +24,16 @@ func loadConfigV1() (*configV1, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return nil, err
 	}
-	a := &configV1{}
-	a.Version = "1"
-	qc, err := quick.New(a)
+	c := &configV1{}
+	c.Version = "1"
+	qc, err := quick.New(c)
 	if err != nil {
 		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
 		return nil, err
 	}
-	return qc.Data().(*configV1), nil
+	return c, nil
 }
 
 /////////////////// Config V2 ///////////////////
@@ -67,16 +67,16 @@ func loadConfigV2() (*configV2, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return nil, err
 	}
-	a := &configV2{}
-	a.Version = "2"
-	qc, err := quick.New(a)
+	c := &configV2{}
+	c.Version = "2"
+	qc, err := quick.New(c)
 	if err != nil {
 		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
 		return nil, err
 	}
-	return qc.Data().(*configV2), nil
+	return c, nil
 }
 
 /////////////////// Config V3 ///////////////////
@@ -134,14 +134,14 @@ func loadConfigV3() (*configV3, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return nil, err
 	}
-	a := &configV3{}
-	a.Version = "3"
-	qc, err := quick.New(a)
+	c := &configV3{}
+	c.Version = "3"
+	qc, err := quick.New(c)
 	if err != nil {
 		return nil, err
 	}
 	if err := qc.Load(configFile); err != nil {
 		return nil, err
 	}
-	return qc.Data().(*configV3), nil
+	return c, nil
 }
