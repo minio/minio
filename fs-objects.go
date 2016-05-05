@@ -52,8 +52,9 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 		}
 	}
 
-	// Cleanup all temp entries upon start.
-	cleanupAllTmpEntries(storage)
+	// Initialize object layer - like creating minioMetaBucket,
+	// cleaning up tmp files etc.
+	initObjectLayer(storage)
 
 	// Return successfully initialized object layer.
 	return fsObjects{

@@ -24,6 +24,24 @@ import (
 	"sort"
 )
 
+// Common initialization needed for both object layers.
+func initObjectLayer(storage StorageAPI) error {
+	// This happens for the first time, but keep this here since this
+	// is the only place where it can be made expensive optimizing all
+	// other calls. Create minio meta volume, if it doesn't exist yet.
+	if err := storage.MakeVol(minioMetaBucket); err != nil {
+		if err != errVolumeExists {
+			return toObjectErr(err, minioMetaBucket)
+		}
+	}
+	// Cleanup all temp entries upon start.
+	err := cleanupAllTmpEntries(storage)
+	if err != nil {
+		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
+	}
+	return nil
+}
+
 /// Common object layer functions.
 
 // makeBucket - create a bucket, is a common function for both object layers.
@@ -34,15 +52,6 @@ func makeBucket(storage StorageAPI, bucket string) error {
 	}
 	if err := storage.MakeVol(bucket); err != nil {
 		return toObjectErr(err, bucket)
-	}
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls.
-	// Create minio meta volume, if it doesn't exist yet.
-	if err := storage.MakeVol(minioMetaBucket); err != nil {
-		if err != errVolumeExists {
-			return toObjectErr(err, minioMetaBucket)
-		}
 	}
 	return nil
 }

@@ -53,8 +53,9 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	// Cleanup all temporary entries.
-	cleanupAllTmpEntries(storage)
+	// Initialize object layer - like creating minioMetaBucket,
+	// cleaning up tmp files etc.
+	initObjectLayer(storage)
 
 	// Return successfully initialized object layer.
 	return xlObjects{
