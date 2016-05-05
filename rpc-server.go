@@ -83,6 +83,20 @@ func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) erro
 	return nil
 }
 
+// ListDirHandler - list directory handler is rpc wrapper to list dir.
+func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error {
+	entries, err := s.storage.ListDir(arg.Vol, arg.Path)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": arg.Vol,
+			"path":   arg.Path,
+		}).Debugf("ListDir failed with error %s", err)
+		return err
+	}
+	*reply = entries
+	return nil
+}
+
 // DeleteFileHandler - delete file handler is rpc wrapper to delete file.
 func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericReply) error {
 	err := s.storage.DeleteFile(arg.Vol, arg.Path)

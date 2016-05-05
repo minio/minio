@@ -39,6 +39,12 @@ type DeleteFileArgs struct {
 	Path string
 }
 
+// ListDirArgs list dir args.
+type ListDirArgs struct {
+	Vol  string
+	Path string
+}
+
 // RenameFileArgs rename file args.
 type RenameFileArgs struct {
 	SrcVol  string
