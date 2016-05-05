@@ -160,6 +160,12 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if isExist, err := isBucketExist(fs.storage, bucket); err != nil {
+		return ListObjectsInfo{}, err
+	} else if !isExist {
+		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectPrefix(prefix) {
 		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
 	}
@@ -181,6 +187,11 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
 	}
 
 	// Default is recursive, if delimiter is set then list non recursive.
@@ -212,6 +223,10 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 				"marker":    marker,
 				"recursive": recursive,
 			}).Debugf("Walk resulted in an error %s", walkResult.err)
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				return ListObjectsInfo{}, nil
+			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		fileInfo := walkResult.fileInfo
@@ -222,6 +237,9 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			break
 		}
 		i++
+	}
+	if len(fileInfos) == 0 {
+		eof = true
 	}
 	params := listParams{bucket, recursive, nextMarker, prefix}
 	log.WithFields(logrus.Fields{
@@ -235,7 +253,6 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}
-
 	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
 		if delimiter == slashSeparator {

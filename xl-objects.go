@@ -245,6 +245,12 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
+		return ListObjectsInfo{}, err
+	} else if !isExist {
+		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectPrefix(prefix) {
 		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
 	}
@@ -298,6 +304,10 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 				"marker":    marker,
 				"recursive": recursive,
 			}).Debugf("Walk resulted in an error %s", walkResult.err)
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				return ListObjectsInfo{}, nil
+			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		fileInfo := walkResult.fileInfo

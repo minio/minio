@@ -544,11 +544,15 @@ func TestListObjects(t *testing.T) {
 				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Error())
 			}
 		}
-		// Since there are cases for which ListObjects fails, this is necessary.
-		// Test passes as expected, but the output values are verified for correctness here.
+		// Since there are cases for which ListObjects fails, this is
+		// necessary. Test passes as expected, but the output values
+		// are verified for correctness here.
 		if err == nil && testCase.shouldPass {
-			// The length of the expected ListObjectsResult.Objects should match in both expected result from test cases and in the output.
-			// On failure calling t.Fatalf, otherwise it may lead to index out of range error in assertion following this.
+			// The length of the expected ListObjectsResult.Objects
+			// should match in both expected result from test cases
+			// and in the output. On failure calling t.Fatalf,
+			// otherwise it may lead to index out of range error in
+			// assertion following this.
 			if len(testCase.result.Objects) != len(result.Objects) {
 				t.Fatalf("Test %d: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, len(testCase.result.Objects), len(result.Objects))
 			}
