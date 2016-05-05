@@ -42,9 +42,9 @@ func readDir(dirPath string) (entries []string, err error) {
 		for _, fi := range fis {
 			if fi.Mode().IsDir() {
 				// append "/" instead of "\" so that sorting is done as expected.
-				entries = append(entries, name+slashSeparator)
+				entries = append(entries, fi.Name()+slashSeparator)
 			} else if fi.Mode().IsRegular() {
-				entries = append(entries, name)
+				entries = append(entries, fi.Name())
 			}
 		}
 	}

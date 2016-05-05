@@ -62,7 +62,7 @@ func partNumToPartFileName(partNum int) string {
 
 // ListMultipartUploads - list multipart uploads.
 func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return listMultipartUploadsCommon(xl.storage, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	return listMultipartUploadsCommon(xl, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
