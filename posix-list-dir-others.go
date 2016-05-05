@@ -21,22 +21,32 @@ package main
 import (
 	"io"
 	"os"
-	"path"
-	"sort"
+	"strings"
+
+	"github.com/Sirupsen/logrus"
 )
 
-// scans the directory dirPath, calling filter() on each directory
-// entry.  Entries for which filter() returns true are stored, lexically
-// sorted using sort.Sort(). If filter is NULL, all entries are selected.
-// If namesOnly is true, dirPath is not appended into entry name.
-func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDirent, error) {
+// Return all the entries at the directory dirPath.
+func readDir(dirPath string) (entries []string, err error) {
 	d, err := os.Open(dirPath)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"dirPath": dirPath,
+		}).Debugf("Open failed with %s", err)
+
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return nil, errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileNotFound
+		}
 		return nil, err
 	}
 	defer d.Close()
 
-	var dirents []fsDirent
 	for {
 		fis, err := d.Readdir(1000)
 		if err != nil {
@@ -46,25 +56,13 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 			return nil, err
 		}
 		for _, fi := range fis {
-			dirent := fsDirent{
-				name:    fi.Name(),
-				modTime: fi.ModTime(),
-				size:    fi.Size(),
-				mode:    fi.Mode(),
-			}
-			if !namesOnly {
-				dirent.name = path.Join(dirPath, dirent.name)
-			}
-			if dirent.IsDir() {
+			if fi.Mode().IsDir() {
 				// append "/" instead of "\" so that sorting is done as expected.
-				dirent.name += slashSeparator
-			}
-			if filter == nil || filter(dirent) {
-				dirents = append(dirents, dirent)
+				entries = append(entries, fi.Name()+slashSeparator)
+			} else if fi.Mode().IsRegular() {
+				entries = append(entries, fi.Name())
 			}
 		}
 	}
-
-	sort.Sort(byDirentName(dirents))
-	return dirents, nil
+	return
 }

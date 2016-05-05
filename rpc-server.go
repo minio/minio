@@ -69,28 +69,6 @@ func (s *storageServer) DeleteVolHandler(arg *string, reply *GenericReply) error
 
 /// File operations
 
-// ListFilesHandler - list files handler.
-func (s *storageServer) ListFilesHandler(arg *ListFilesArgs, reply *ListFilesReply) error {
-	files, eof, err := s.storage.ListFiles(arg.Vol, arg.Prefix, arg.Marker, arg.Recursive, arg.Count)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume":    arg.Vol,
-			"prefix":    arg.Prefix,
-			"marker":    arg.Marker,
-			"recursive": arg.Recursive,
-			"count":     arg.Count,
-		}).Debugf("ListFiles failed with error %s", err)
-		return err
-	}
-
-	// Fill reply structure.
-	reply.Files = files
-	reply.EOF = eof
-
-	// Return success.
-	return nil
-}
-
 // StatFileHandler - stat file handler is rpc wrapper to stat file.
 func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) error {
 	fileInfo, err := s.storage.StatFile(arg.Vol, arg.Path)
@@ -102,6 +80,20 @@ func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) erro
 		return err
 	}
 	*reply = fileInfo
+	return nil
+}
+
+// ListDirHandler - list directory handler is rpc wrapper to list dir.
+func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error {
+	entries, err := s.storage.ListDir(arg.Vol, arg.Path)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"volume": arg.Vol,
+			"path":   arg.Path,
+		}).Debugf("ListDir failed with error %s", err)
+		return err
+	}
+	*reply = entries
 	return nil
 }
 

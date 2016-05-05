@@ -22,7 +22,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -33,9 +35,17 @@ const (
 
 // xlObjects - Implements fs object layer.
 type xlObjects struct {
-	storage StorageAPI
+	storage            StorageAPI
+	listObjectMap      map[listParams][]*treeWalker
+	listObjectMapMutex *sync.Mutex
 }
 
+func isLeafDirectory(disk StorageAPI, volume, leafPath string) bool {
+	_, err := disk.StatFile(volume, pathJoin(leafPath, multipartMetaFile))
+	return err == nil
+}
+
+// FIXME: constructor should return a pointer.
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	storage, err := newXL(exportPaths...)
@@ -47,7 +57,11 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	cleanupAllTmpEntries(storage)
 
 	// Return successfully initialized object layer.
-	return xlObjects{storage}, nil
+	return xlObjects{
+		storage:            storage,
+		listObjectMap:      make(map[listParams][]*treeWalker),
+		listObjectMapMutex: &sync.Mutex{},
+	}, nil
 }
 
 /// Bucket operations
@@ -226,12 +240,16 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
-// TODO - support non-recursive case, figure out file size for files uploaded using multipart.
-
 func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	// Verify whether the bucket exists.
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
+		return ListObjectsInfo{}, err
+	} else if !isExist {
+		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectPrefix(prefix) {
 		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
@@ -261,64 +279,91 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	var allFileInfos, fileInfos []FileInfo
+
+	walker := lookupTreeWalk(xl, listParams{bucket, recursive, marker, prefix})
+	if walker == nil {
+		walker = startTreeWalk(xl, bucket, prefix, marker, recursive)
+	}
+	var fileInfos []FileInfo
 	var eof bool
 	var err error
-	for {
-		fileInfos, eof, err = xl.storage.ListFiles(bucket, prefix, marker, recursive, maxKeys)
-		if err != nil {
-			return ListObjectsInfo{}, toObjectErr(err, bucket)
+	var nextMarker string
+	log.Debugf("Reading from the tree walk channel has begun.")
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walker.ch
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
 		}
-		for _, fileInfo := range fileInfos {
-			// FIXME: use fileInfo.Mode.IsDir() instead after fixing the bug in
-			// XL listing which is not reseting the Mode to 0 for leaf dirs.
-			if strings.HasSuffix(fileInfo.Name, slashSeparator) && isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
-				// Set the Mode to a "regular" file.
-				var info MultipartObjectInfo
-				info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
-				if err == nil {
-					fileInfo.Mode = 0
-
-					fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
-					fileInfo.Size = info.Size
-					fileInfo.ModTime = info.ModTime
-					fileInfo.MD5Sum = info.MD5Sum
-				} else if err != errFileNotFound {
-					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
-				}
-				allFileInfos = append(allFileInfos, fileInfo)
-				maxKeys--
-				continue
-			} else if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
-				fileInfo.Name = path.Dir(fileInfo.Name)
-				var info MultipartObjectInfo
-				info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
-				if err != nil {
-					return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
-				}
-				fileInfo.Size = info.Size
-				fileInfo.ModTime = info.ModTime
-				fileInfo.MD5Sum = info.MD5Sum
-				allFileInfos = append(allFileInfos, fileInfo)
-				maxKeys--
-				continue
-			} else if strings.HasSuffix(fileInfo.Name, multipartSuffix) {
-				continue
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			log.WithFields(logrus.Fields{
+				"bucket":    bucket,
+				"prefix":    prefix,
+				"marker":    marker,
+				"recursive": recursive,
+			}).Debugf("Walk resulted in an error %s", walkResult.err)
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				return ListObjectsInfo{}, nil
 			}
-			allFileInfos = append(allFileInfos, fileInfo)
-			maxKeys--
+			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		if maxKeys == 0 {
+		fileInfo := walkResult.fileInfo
+		if strings.HasSuffix(fileInfo.Name, slashSeparator) && isLeafDirectory(xl.storage, bucket, fileInfo.Name) {
+			// Code flow reaches here for non-recursive listing.
+
+			var info MultipartObjectInfo
+			info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
+			if err == nil {
+				// Set the Mode to a "regular" file.
+				fileInfo.Mode = 0
+				fileInfo.Name = strings.TrimSuffix(fileInfo.Name, slashSeparator)
+				fileInfo.Size = info.Size
+				fileInfo.MD5Sum = info.MD5Sum
+				fileInfo.ModTime = info.ModTime
+			} else if err != errFileNotFound {
+				return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
+			}
+		} else if strings.HasSuffix(fileInfo.Name, multipartMetaFile) {
+			// Code flow reaches here for recursive listing.
+
+			// for object/00000.minio.multipart, strip the base name
+			// and calculate get the object size.
+			fileInfo.Name = path.Dir(fileInfo.Name)
+			var info MultipartObjectInfo
+			info, err = getMultipartObjectInfo(xl.storage, bucket, fileInfo.Name)
+			if err != nil {
+				return ListObjectsInfo{}, toObjectErr(err, bucket, fileInfo.Name)
+			}
+			fileInfo.Size = info.Size
+		} else if strings.HasSuffix(fileInfo.Name, multipartSuffix) {
+			// Ignore the part files like object/00001.minio.multipart
+			continue
+		}
+		nextMarker = fileInfo.Name
+		fileInfos = append(fileInfos, fileInfo)
+		if walkResult.end {
+			eof = true
 			break
 		}
-		if eof {
-			break
-		}
+		i++
+	}
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	log.WithFields(logrus.Fields{
+		"bucket":    params.bucket,
+		"recursive": params.recursive,
+		"marker":    params.marker,
+		"prefix":    params.prefix,
+	}).Debugf("Save the tree walk into map for subsequent requests.")
+	if !eof {
+		saveTreeWalk(xl, params, walker)
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}
 
-	for _, fileInfo := range allFileInfos {
+	for _, fileInfo := range fileInfos {
 		// With delimiter set we fill in NextMarker and Prefixes.
 		if delimiter == slashSeparator {
 			result.NextMarker = fileInfo.Name

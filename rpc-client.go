@@ -31,7 +31,7 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-type networkFS struct {
+type networkStorage struct {
 	netScheme  string
 	netAddr    string
 	netPath    string
@@ -109,7 +109,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	}
 
 	// Initialize network storage.
-	ndisk := &networkFS{
+	ndisk := &networkStorage{
 		netScheme:  "http", // TODO: fix for ssl rpc support.
 		netAddr:    netAddr,
 		netPath:    netPath,
@@ -122,7 +122,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 }
 
 // MakeVol - make a volume.
-func (n networkFS) MakeVol(volume string) error {
+func (n networkStorage) MakeVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.MakeVolHandler", volume, &reply); err != nil {
 		log.WithFields(logrus.Fields{
@@ -134,7 +134,7 @@ func (n networkFS) MakeVol(volume string) error {
 }
 
 // ListVols - List all volumes.
-func (n networkFS) ListVols() (vols []VolInfo, err error) {
+func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 	ListVols := ListVolsReply{}
 	err = n.rpcClient.Call("Storage.ListVolsHandler", "", &ListVols)
 	if err != nil {
@@ -145,7 +145,7 @@ func (n networkFS) ListVols() (vols []VolInfo, err error) {
 }
 
 // StatVol - get current Stat volume info.
-func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
+func (n networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatVolHandler", volume, &volInfo); err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
@@ -156,7 +156,7 @@ func (n networkFS) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - Delete a volume.
-func (n networkFS) DeleteVol(volume string) error {
+func (n networkStorage) DeleteVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.DeleteVolHandler", volume, &reply); err != nil {
 		log.WithFields(logrus.Fields{
@@ -170,7 +170,7 @@ func (n networkFS) DeleteVol(volume string) error {
 // File operations.
 
 // CreateFile - create file.
-func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
+func (n networkStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
 	writeURL := new(url.URL)
 	writeURL.Scheme = n.netScheme
 	writeURL.Host = n.netAddr
@@ -205,7 +205,7 @@ func (n networkFS) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 }
 
 // StatFile - get latest Stat information for a file at path.
-func (n networkFS) StatFile(volume, path string) (fileInfo FileInfo, err error) {
+func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatFileHandler", StatFileArgs{
 		Vol:  volume,
 		Path: path,
@@ -220,7 +220,7 @@ func (n networkFS) StatFile(volume, path string) (fileInfo FileInfo, err error) 
 }
 
 // ReadFile - reads a file.
-func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io.ReadCloser, err error) {
+func (n networkStorage) ReadFile(volume string, path string, offset int64) (reader io.ReadCloser, err error) {
 	readURL := new(url.URL)
 	readURL.Scheme = n.netScheme
 	readURL.Host = n.netAddr
@@ -247,31 +247,24 @@ func (n networkFS) ReadFile(volume string, path string, offset int64) (reader io
 	return resp.Body, nil
 }
 
-// ListFiles - List all files in a volume.
-func (n networkFS) ListFiles(volume, prefix, marker string, recursive bool, count int) (files []FileInfo, eof bool, err error) {
-	listFilesReply := ListFilesReply{}
-	if err = n.rpcClient.Call("Storage.ListFilesHandler", ListFilesArgs{
-		Vol:       volume,
-		Prefix:    prefix,
-		Marker:    marker,
-		Recursive: recursive,
-		Count:     count,
-	}, &listFilesReply); err != nil {
+// ListDir - list all entries at prefix.
+func (n networkStorage) ListDir(volume, path string) (entries []string, err error) {
+	if err = n.rpcClient.Call("Storage.ListDirHandler", ListDirArgs{
+		Vol:  volume,
+		Path: path,
+	}, &entries); err != nil {
 		log.WithFields(logrus.Fields{
-			"volume":    volume,
-			"prefix":    prefix,
-			"marker":    marker,
-			"recursive": recursive,
-			"count":     count,
-		}).Debugf("Storage.ListFilesHandlers failed with %s", err)
-		return nil, true, toStorageErr(err)
+			"volume": volume,
+			"path":   path,
+		}).Debugf("Storage.ListDirHandlers failed with %s", err)
+		return nil, toStorageErr(err)
 	}
 	// Return successfully unmarshalled results.
-	return listFilesReply.Files, listFilesReply.EOF, nil
+	return entries, nil
 }
 
 // DeleteFile - Delete a file at path.
-func (n networkFS) DeleteFile(volume, path string) (err error) {
+func (n networkStorage) DeleteFile(volume, path string) (err error) {
 	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.DeleteFileHandler", DeleteFileArgs{
 		Vol:  volume,
@@ -287,7 +280,7 @@ func (n networkFS) DeleteFile(volume, path string) (err error) {
 }
 
 // RenameFile - Rename file.
-func (n networkFS) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+func (n networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.RenameFileHandler", RenameFileArgs{
 		SrcVol:  srcVolume,

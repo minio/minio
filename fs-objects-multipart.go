@@ -24,7 +24,7 @@ import (
 
 // ListMultipartUploads - list multipart uploads.
 func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return listMultipartUploadsCommon(fs.storage, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	return listMultipartUploadsCommon(fs, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
@@ -100,8 +100,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Cleanup all the parts.
-	recursive := false
-	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID, recursive); err != nil {
+	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID); err != nil {
 		return "", err
 	}
 

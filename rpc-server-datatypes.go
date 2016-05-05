@@ -27,21 +27,6 @@ type ListVolsReply struct {
 	Vols []VolInfo
 }
 
-// ListFilesArgs list file args.
-type ListFilesArgs struct {
-	Vol       string
-	Prefix    string
-	Marker    string
-	Recursive bool
-	Count     int
-}
-
-// ListFilesReply list file reply.
-type ListFilesReply struct {
-	Files []FileInfo
-	EOF   bool
-}
-
 // StatFileArgs stat file args.
 type StatFileArgs struct {
 	Vol  string
@@ -50,6 +35,12 @@ type StatFileArgs struct {
 
 // DeleteFileArgs delete file args.
 type DeleteFileArgs struct {
+	Vol  string
+	Path string
+}
+
+// ListDirArgs list dir args.
+type ListDirArgs struct {
 	Vol  string
 	Path string
 }
