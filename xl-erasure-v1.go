@@ -858,6 +858,7 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	nsMutex.Lock(dstVolume, dstPath)
 	defer nsMutex.Unlock(dstVolume, dstPath)
 
+	errCount := 0
 	for index, disk := range xl.storageDisks {
 		// Make sure to rename all the files only, not directories.
 		srcErasurePartPath := slashpath.Join(srcPath, fmt.Sprintf("file.%d", index))
@@ -870,6 +871,14 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 				"dstVolume": dstVolume,
 				"dstPath":   dstErasurePartPath,
 			}).Errorf("RenameFile failed with %s", err)
+
+			errCount++
+			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// otherwise return failure.
+			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
+				continue
+			}
+
 			return err
 		}
 		srcXLMetaPath := slashpath.Join(srcPath, xlMetaV1File)
@@ -882,6 +891,14 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 				"dstVolume": dstVolume,
 				"dstPath":   dstXLMetaPath,
 			}).Errorf("RenameFile failed with %s", err)
+
+			errCount++
+			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// otherwise return failure.
+			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
+				continue
+			}
+
 			return err
 		}
 		err = disk.DeleteFile(srcVolume, srcPath)
@@ -890,6 +907,14 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 				"srcVolume": srcVolume,
 				"srcPath":   srcPath,
 			}).Errorf("DeleteFile failed with %s", err)
+
+			errCount++
+			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// otherwise return failure.
+			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
+				continue
+			}
+
 			return err
 		}
 	}
