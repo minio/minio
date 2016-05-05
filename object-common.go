@@ -96,7 +96,7 @@ func deleteBucket(storage StorageAPI, bucket string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 	if err := storage.DeleteVol(bucket); err != nil {
-		return toObjectErr(err)
+		return toObjectErr(err, bucket)
 	}
 	return nil
 }

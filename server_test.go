@@ -379,6 +379,32 @@ func (s *MyAPISuite) TestDeleteBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
+func (s *MyAPISuite) TestDeleteBucketNotEmpty(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucket-notempty", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucket-notempty/myobject", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("DELETE", testAPIFSCacheServer.URL+"/deletebucket-notempty", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusConflict)
+}
+
 func (s *MyAPISuite) TestDeleteObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/deletebucketobject", 0, nil)
 	c.Assert(err, IsNil)
