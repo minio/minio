@@ -116,6 +116,7 @@ func readDir(dirPath string) (entries []string, err error) {
 		if strings.Contains(err.Error(), "not a directory") {
 			return nil, errFileNotFound
 		}
+		return nil, err
 	}
 	defer d.Close()
 

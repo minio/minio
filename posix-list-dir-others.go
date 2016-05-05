@@ -21,12 +21,28 @@ package main
 import (
 	"io"
 	"os"
+	"strings"
+
+	"github.com/Sirupsen/logrus"
 )
 
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	d, err := os.Open(dirPath)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"dirPath": dirPath,
+		}).Debugf("Open failed with %s", err)
+
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return nil, errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileNotFound
+		}
 		return nil, err
 	}
 	defer d.Close()
