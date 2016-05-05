@@ -46,6 +46,11 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 			return nil, err
 		}
 	}
+
+	// Cleanup all temp entries upon start.
+	cleanupAllTmpEntries(storage)
+
+	// Return successfully initialized object layer.
 	return fsObjects{storage}, nil
 }
 
