@@ -132,7 +132,7 @@ func scandir(dirPath string, filter func(fsDirent) bool, namesOnly bool) ([]fsDi
 				dirent.name = path.Join(dirPath, dirent.name)
 			}
 			if dirent.IsDir() {
-				dirent.name += string(os.PathSeparator)
+				dirent.name += "/"
 				dirent.size = 0
 			}
 			if filter == nil || filter(dirent) {

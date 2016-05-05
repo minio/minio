@@ -594,9 +594,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	encodedSuccessResponse := encodeResponse(PostResponse{
 		Location: getObjectLocation(bucket, object), // TODO Full URL is preferred
-		Bucket: bucket,
-		Key: object,
-		ETag: md5Sum,
+		Bucket:   bucket,
+		Key:      object,
+		ETag:     md5Sum,
 	})
 	setCommonHeaders(w)
 	writeSuccessResponse(w, encodedSuccessResponse)

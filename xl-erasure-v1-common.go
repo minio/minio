@@ -19,7 +19,6 @@ package main
 import (
 	"errors"
 	slashpath "path"
-	"path/filepath"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -145,8 +144,8 @@ func (xl XL) getPartsMetadata(volume, path string) ([]xlMetaV1, []error) {
 // Returns collection of errors, indexed in accordance with input
 // updateParts order.
 // Write lockNS() should be done by caller.
-func (xl XL) setPartsMetadata(volume, path string, metadata xlMetaV1, updateParts []bool) []error {
-	xlMetaV1FilePath := filepath.Join(path, xlMetaV1File)
+func (xl XL) updatePartsMetadata(volume, path string, metadata xlMetaV1, updateParts []bool) []error {
+	xlMetaV1FilePath := pathJoin(path, xlMetaV1File)
 	errs := make([]error, len(xl.storageDisks))
 
 	for index := range updateParts {

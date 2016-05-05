@@ -108,10 +108,9 @@ func treeWalk(bucketDir, prefixDir, entryPrefixMatch, marker string, recursive b
 			fileInfo.Mode = dirent.mode
 		}
 		if fileInfo.Mode.IsDir() {
-			// Add os.PathSeparator suffix again for directories as
-			// filepath.Join would have removed it.
+			// Add "/" suffix again for directories as
 			fileInfo.Size = 0
-			fileInfo.Name += string(os.PathSeparator)
+			fileInfo.Name += "/"
 		}
 		return fileInfo, nil
 	}

@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	fsListLimit = 1000
+	fsListLimit       = 1000
 	fsMinSpacePercent = 5
 )
 
@@ -160,7 +160,7 @@ func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	volumeFn := func(dirent fsDirent) bool {
 		// Return all directories.
-		return dirent.IsDir() && isValidVolname(filepath.Clean(dirent.name))
+		return dirent.IsDir() && isValidVolname(path.Clean(dirent.name))
 	}
 	namesOnly := true // Returned are only names.
 	dirents, err := scandir(dirPath, volumeFn, namesOnly)
@@ -173,10 +173,10 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, dirent := range dirents {
-		fi, err := os.Stat(filepath.Join(dirPath, dirent.name))
+		fi, err := os.Stat(pathJoin(dirPath, dirent.name))
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"path": filepath.Join(dirPath, dirent.name),
+				"path": pathJoin(dirPath, dirent.name),
 			}).Debugf("Stat failed with error %s", err)
 			return nil, err
 		}
@@ -198,7 +198,7 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 	if !isValidVolname(volume) {
 		return "", errInvalidArgument
 	}
-	volumeDir := filepath.Join(s.diskPath, volume)
+	volumeDir := pathJoin(s.diskPath, volume)
 	_, err := os.Stat(volumeDir)
 	if err == nil {
 		return volumeDir, nil
@@ -210,12 +210,10 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 			return volumeDir, errVolumeNotFound
 		}
 		for _, vol := range volsInfo {
-			// Verify if lowercase version of
-			// the volume
-			// is equal to the incoming volume, then use the proper
-			// name.
+			// Verify if lowercase version of the volume is equal to
+			// the incoming volume, then use the proper  name.
 			if strings.ToLower(vol.Name) == volume {
-				volumeDir = filepath.Join(s.diskPath, vol.Name)
+				volumeDir = pathJoin(s.diskPath, vol.Name)
 				return volumeDir, nil
 			}
 		}
@@ -544,7 +542,7 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 		return nil, err
 	}
 
-	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
+	filePath := pathJoin(volumeDir, path)
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -600,7 +598,7 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return nil, err
 	}
-	filePath := filepath.Join(volumeDir, path)
+	filePath := pathJoin(volumeDir, path)
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
 	if st, err = os.Stat(filePath); err == nil {
@@ -634,7 +632,7 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, err
 	}
 
-	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
+	filePath := pathJoin(volumeDir, path)
 	st, err := os.Stat(filePath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -712,10 +710,10 @@ func deleteFile(basePath, deletePath string) error {
 		return err
 	}
 	// Recursively go down the next path and delete again.
-	if err := deleteFile(basePath, filepath.Dir(deletePath)); err != nil {
+	if err := deleteFile(basePath, path.Dir(deletePath)); err != nil {
 		log.WithFields(logrus.Fields{
 			"basePath":  basePath,
-			"deleteDir": filepath.Dir(deletePath),
+			"deleteDir": path.Dir(deletePath),
 		}).Debugf("deleteFile failed with %s", err)
 		return err
 	}
@@ -735,10 +733,7 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 
 	// Following code is needed so that we retain "/" suffix if any in
 	// path argument.
-	filePath := filepath.Join(volumeDir, filepath.FromSlash(path))
-	if strings.HasSuffix(filepath.FromSlash(path), string(os.PathSeparator)) {
-		filePath = filePath + string(os.PathSeparator)
-	}
+	filePath := pathJoin(volumeDir, path)
 
 	// Delete file and delete parent directory as well if its empty.
 	return deleteFile(volumeDir, filePath)
