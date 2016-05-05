@@ -206,8 +206,8 @@ func (xl XL) healFile(volume string, path string) error {
 		writer.Close()
 	}
 
-	// Update the quorum metadata after selfheal.
-	errs := xl.setPartsMetadata(volume, path, metadata, needsHeal)
+	// Update the quorum metadata after heal.
+	errs := xl.updatePartsMetadata(volume, path, metadata, needsHeal)
 	for index, healNeeded := range needsHeal {
 		if healNeeded && errs[index] != nil {
 			return errs[index]
