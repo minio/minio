@@ -22,6 +22,9 @@ import (
 	"io"
 	"path"
 	"sort"
+	"strings"
+
+	"github.com/Sirupsen/logrus"
 )
 
 // Common initialization needed for both object layers.
@@ -189,6 +192,130 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
+}
+
+func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	var disk StorageAPI
+	switch l := layer.(type) {
+	case xlObjects:
+		disk = l.storage
+	case fsObjects:
+		disk = l.storage
+	}
+
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+
+	// Verify whether the bucket exists.
+	if isExist, err := isBucketExist(disk, bucket); err != nil {
+		return ListObjectsInfo{}, err
+	} else if !isExist {
+		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+	}
+
+	if !IsValidObjectPrefix(prefix) {
+		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+	}
+	// Verify if delimiter is anything other than '/', which we do not support.
+	if delimiter != "" && delimiter != slashSeparator {
+		return ListObjectsInfo{}, UnsupportedDelimiter{
+			Delimiter: delimiter,
+		}
+	}
+	// Verify if marker has prefix.
+	if marker != "" {
+		if !strings.HasPrefix(marker, prefix) {
+			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
+				Marker: marker,
+				Prefix: prefix,
+			}
+		}
+	}
+
+	if maxKeys == 0 {
+		return ListObjectsInfo{}, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	walker := lookupTreeWalk(layer, listParams{bucket, recursive, marker, prefix})
+	if walker == nil {
+		walker = startTreeWalk(layer, bucket, prefix, marker, recursive)
+	}
+	var fileInfos []FileInfo
+	var eof bool
+	var nextMarker string
+	log.Debugf("Reading from the tree walk channel has begun.")
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walker.ch
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			log.WithFields(logrus.Fields{
+				"bucket":    bucket,
+				"prefix":    prefix,
+				"marker":    marker,
+				"recursive": recursive,
+			}).Debugf("Walk resulted in an error %s", walkResult.err)
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				return ListObjectsInfo{}, nil
+			}
+			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+		}
+		fileInfo := walkResult.fileInfo
+		nextMarker = fileInfo.Name
+		fileInfos = append(fileInfos, fileInfo)
+		if walkResult.end {
+			eof = true
+			break
+		}
+		i++
+	}
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	log.WithFields(logrus.Fields{
+		"bucket":    params.bucket,
+		"recursive": params.recursive,
+		"marker":    params.marker,
+		"prefix":    params.prefix,
+	}).Debugf("Save the tree walk into map for subsequent requests.")
+	if !eof {
+		saveTreeWalk(layer, params, walker)
+	}
+
+	result := ListObjectsInfo{IsTruncated: !eof}
+	for _, fileInfo := range fileInfos {
+		// With delimiter set we fill in NextMarker and Prefixes.
+		if delimiter == slashSeparator {
+			result.NextMarker = fileInfo.Name
+			if fileInfo.Mode.IsDir() {
+				result.Prefixes = append(result.Prefixes, fileInfo.Name)
+				continue
+			}
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Name:    fileInfo.Name,
+			ModTime: fileInfo.ModTime,
+			Size:    fileInfo.Size,
+			IsDir:   false,
+		})
+	}
+	return result, nil
 }
 
 // checks whether bucket exists.
