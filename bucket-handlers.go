@@ -171,14 +171,6 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 	if keyMarker != "" {
-		// Unescape keyMarker string
-		keyMarkerUnescaped, err := url.QueryUnescape(keyMarker)
-		if err != nil {
-			// Return 'NoSuchKey' to indicate invalid marker key.
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-			return
-		}
-		keyMarker = keyMarkerUnescaped
 		// Marker not common with prefix is not implemented.
 		if !strings.HasPrefix(keyMarker, prefix) {
 			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
@@ -242,14 +234,6 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 	}
 	// If marker is set unescape.
 	if marker != "" {
-		// Try to unescape marker.
-		markerUnescaped, err := url.QueryUnescape(marker)
-		if err != nil {
-			// Return 'NoSuchKey' to indicate invalid marker key.
-			writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-			return
-		}
-		marker = markerUnescaped
 		// Marker not common with prefix is not implemented.
 		if !strings.HasPrefix(marker, prefix) {
 			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
