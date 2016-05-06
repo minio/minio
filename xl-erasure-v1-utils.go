@@ -16,6 +16,16 @@
 
 package main
 
+// getDataBlocks - fetches the data block only part of the input encoded blocks.
+func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) []byte {
+	var data []byte
+	for _, block := range enBlocks[:dataBlocks] {
+		data = append(data, block...)
+	}
+	data = data[:curBlockSize]
+	return data
+}
+
 // checkBlockSize return the size of a single block.
 // The first non-zero size is returned,
 // or 0 if all blocks are size 0.
