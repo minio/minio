@@ -226,9 +226,10 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	} else if !ok {
-		if err := xl.storage.DeleteFile(bucket, object); err != nil {
+		if err = xl.storage.DeleteFile(bucket, object); err != nil {
 			return toObjectErr(err, bucket, object)
 		}
+		return nil
 	}
 	// Get parts info.
 	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
