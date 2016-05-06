@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	slashpath "path"
 	"strings"
@@ -464,118 +463,14 @@ func (xl XL) DeleteFile(volume, path string) error {
 		return errInvalidArgument
 	}
 
-	// Lock right before reading from disk.
-	nsMutex.RLock(volume, path)
-	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	nsMutex.RUnlock(volume, path)
-
-	var err error
-
-	// List all the file versions on existing files.
-	versions := listFileVersions(partsMetadata, errs)
-	// Get highest file version.
-	higherVersion := highestInt(versions)
-
-	// find online disks and meta data of higherVersion
-	var mdata *xlMetaV1
-	onlineDiskCount := 0
-	errFileNotFoundErr := 0
-	for index, metadata := range partsMetadata {
-		if errs[index] == nil {
-			onlineDiskCount++
-			if metadata.Stat.Version == higherVersion && mdata == nil {
-				mdata = &metadata
-			}
-		} else if errs[index] == errFileNotFound {
-			errFileNotFoundErr++
-		}
-	}
-
-	if errFileNotFoundErr == len(xl.storageDisks) {
-		return errFileNotFound
-	} else if mdata == nil || onlineDiskCount < xl.writeQuorum {
-		// return error if mdata is empty or onlineDiskCount doesn't meet write quorum
-		return errWriteQuorum
-	}
-
-	// Increment to have next higher version.
-	higherVersion++
-
-	xlMetaV1FilePath := slashpath.Join(path, xlMetaV1File)
-	deleteMetaData := (onlineDiskCount == len(xl.storageDisks))
-
-	// Set higher version to indicate file operation
-	mdata.Stat.Version = higherVersion
-	mdata.Stat.Deleted = true
-
 	nsMutex.Lock(volume, path)
 	defer nsMutex.Unlock(volume, path)
 
 	errCount := 0
 	// Update meta data file and remove part file
 	for index, disk := range xl.storageDisks {
-		// no need to operate on failed disks
-		if errs[index] != nil {
-			errCount++
-			continue
-		}
-
-		// update meta data about delete operation
-		var metadataWriter io.WriteCloser
-		metadataWriter, err = disk.CreateFile(volume, xlMetaV1FilePath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("CreateFile failed with %s", err)
-
-			errCount++
-
-			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			return err
-		}
-
-		err = mdata.Write(metadataWriter)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"path":      path,
-				"diskIndex": index,
-			}).Errorf("Writing metadata failed with %s", err)
-
-			errCount++
-
-			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-			// Safely close and remove.
-			if err = safeCloseAndRemove(metadataWriter); err != nil {
-				return err
-			}
-			return err
-		}
-		// Safely wrote, now rename to its actual location.
-		if err = metadataWriter.Close(); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"path":      path,
-				"diskIndex": index,
-			}).Errorf("Metadata commit failed with %s", err)
-			if err = safeCloseAndRemove(metadataWriter); err != nil {
-				return err
-			}
-			return err
-		}
-
 		erasureFilePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
-		err = disk.DeleteFile(volume, erasureFilePart)
+		err := disk.DeleteFile(volume, erasureFilePart)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
@@ -584,7 +479,26 @@ func (xl XL) DeleteFile(volume, path string) error {
 
 			errCount++
 
-			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// We can safely allow DeleteFile errors up to len(xl.storageDisks) - xl.writeQuorum
+			// otherwise return failure.
+			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
+				continue
+			}
+
+			return err
+		}
+
+		xlMetaV1FilePath := slashpath.Join(path, "file.json")
+		err = disk.DeleteFile(volume, xlMetaV1FilePath)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"volume": volume,
+				"path":   path,
+			}).Errorf("DeleteFile failed with %s", err)
+
+			errCount++
+
+			// We can safely allow DeleteFile errors up to len(xl.storageDisks) - xl.writeQuorum
 			// otherwise return failure.
 			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
 				continue
@@ -594,24 +508,6 @@ func (xl XL) DeleteFile(volume, path string) error {
 		}
 	}
 
-	// Remove meta data file only if deleteMetaData is true.
-	if deleteMetaData {
-		for index, disk := range xl.storageDisks {
-			// no need to operate on failed disks
-			if errs[index] != nil {
-				continue
-			}
-
-			err = disk.DeleteFile(volume, xlMetaV1FilePath)
-			if err != nil {
-				// No need to return the error as we updated the meta data file previously
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("DeleteFile failed with %s", err)
-			}
-		}
-	}
 	// Return success.
 	return nil
 }
