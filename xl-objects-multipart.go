@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -40,6 +41,16 @@ type MultipartObjectInfo struct {
 	Size    int64
 	MD5Sum  string
 }
+
+type byMultipartFiles []string
+
+func (files byMultipartFiles) Len() int { return len(files) }
+func (files byMultipartFiles) Less(i, j int) bool {
+	first := strings.TrimSuffix(files[i], multipartSuffix)
+	second := strings.TrimSuffix(files[j], multipartSuffix)
+	return first < second
+}
+func (files byMultipartFiles) Swap(i, j int) { files[i], files[j] = files[j], files[i] }
 
 // GetPartNumberOffset - given an offset for the whole object, return the part and offset in that part.
 func (m MultipartObjectInfo) GetPartNumberOffset(offset int64) (partIndex int, partOffset int64, err error) {

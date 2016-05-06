@@ -51,10 +51,20 @@ type treeWalker struct {
 }
 
 // treeWalk walks FS directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int) bool {
+func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int) bool {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
+
+	var isXL bool
+	var disk StorageAPI
+	switch l := layer.(type) {
+	case xlObjects:
+		isXL = true
+		disk = l.storage
+	case fsObjects:
+		disk = l.storage
+	}
 
 	// Convert entry to FileInfo
 	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
@@ -63,6 +73,25 @@ func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker strin
 			fileInfo.Name = path.Join(prefixDir, entry)
 			fileInfo.Name += slashSeparator
 			fileInfo.Mode = os.ModeDir
+			return
+		}
+		if isXL && strings.HasSuffix(entry, multipartSuffix) {
+			// If the entry was detected as a multipart file we use
+			// getMultipartObjectInfo() to fill the FileInfo structure.
+			entry = strings.Trim(entry, multipartSuffix)
+			var info MultipartObjectInfo
+			info, err = getMultipartObjectInfo(disk, bucket, path.Join(prefixDir, entry))
+			if err != nil {
+				return
+			}
+			// Set the Mode to a "regular" file.
+			fileInfo.Mode = 0
+			// Trim the suffix that was temporarily added to indicate that this
+			// is a multipart file.
+			fileInfo.Name = path.Join(prefixDir, entry)
+			fileInfo.Size = info.Size
+			fileInfo.MD5Sum = info.MD5Sum
+			fileInfo.ModTime = info.ModTime
 			return
 		}
 		if fileInfo, err = disk.StatFile(bucket, path.Join(prefixDir, entry)); err != nil {
@@ -88,6 +117,7 @@ func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker strin
 		send(treeWalkResult{err: err})
 		return false
 	}
+
 	if entryPrefixMatch != "" {
 		for i, entry := range entries {
 			if !strings.HasPrefix(entry, entryPrefixMatch) {
@@ -98,7 +128,14 @@ func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker strin
 			}
 		}
 	}
-	sort.StringSlice(entries).Sort()
+	// For XL multipart files strip the trailing "/" and append ".minio.multipart" to the entry so that
+	// entryToFileInfo() can call StatFile for regular files or getMultipartObjectInfo() for multipart files.
+	for i, entry := range entries {
+		if isXL && strings.HasSuffix(entry, slashSeparator) && isLeafDirectory(disk, bucket, path.Join(prefixDir, entry)) {
+			entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
+		}
+	}
+	sort.Sort(byMultipartFiles(entries))
 	// Skip the empty strings
 	for len(entries) > 0 && entries[0] == "" {
 		entries = entries[1:]
@@ -109,7 +146,7 @@ func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker strin
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
-	idx := sort.StringSlice(entries).Search(markerDir)
+	idx := sort.Search(len(entries), func(i int) bool { return strings.TrimSuffix(entries[i], multipartSuffix) >= markerDir })
 	entries = entries[idx:]
 	*count += len(entries)
 	for i, entry := range entries {
@@ -140,7 +177,7 @@ func treeWalk(disk StorageAPI, bucket, prefixDir, entryPrefixMatch, marker strin
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !treeWalk(disk, bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
+			if !treeWalk(layer, bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
 				return false
 			}
 			continue
@@ -170,13 +207,6 @@ func startTreeWalk(layer ObjectLayer, bucket, prefix, marker string, recursive b
 	// if prefix is "one/two/th" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
-	var disk StorageAPI
-	switch l := layer.(type) {
-	case xlObjects:
-		disk = l.storage
-	case fsObjects:
-		disk = l.storage
-	}
 
 	ch := make(chan treeWalkResult, maxObjectList)
 	walkNotify := treeWalker{ch: ch}
@@ -204,7 +234,7 @@ func startTreeWalk(layer ObjectLayer, bucket, prefix, marker string, recursive b
 				return false
 			}
 		}
-		treeWalk(disk, bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
+		treeWalk(layer, bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
 	}()
 	return &walkNotify
 }
