@@ -41,9 +41,9 @@ func toObjectErr(err error, params ...string) error {
 	case errDiskFull:
 		return StorageFull{}
 	case errReadQuorum:
-		return StorageInsufficientReadResources{}
+		return InsufficientReadQuorum{}
 	case errWriteQuorum:
-		return StorageInsufficientWriteResources{}
+		return InsufficientWriteQuorum{}
 	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
 			return ObjectExistsAsPrefix{
@@ -71,18 +71,18 @@ func (e StorageFull) Error() string {
 	return "Storage reached its minimum free disk threshold."
 }
 
-// StorageInsufficientReadResources storage cannot satisfy quorum for read operation.
-type StorageInsufficientReadResources struct{}
+// InsufficientReadQuorum storage cannot satisfy quorum for read operation.
+type InsufficientReadQuorum struct{}
 
-func (e StorageInsufficientReadResources) Error() string {
+func (e InsufficientReadQuorum) Error() string {
 	return "Storage resources are insufficient for the read operation."
 }
 
-// StorageInsufficientWriteResources storage cannot satisfy quorum for write operation.
-type StorageInsufficientWriteResources struct{}
+// InsufficientWriteQuorum storage cannot satisfy quorum for write operation.
+type InsufficientWriteQuorum struct{}
 
-func (e StorageInsufficientWriteResources) Error() string {
-	return "Stroage resources are insufficient for the write operation."
+func (e InsufficientWriteQuorum) Error() string {
+	return "Storage resources are insufficient for the write operation."
 }
 
 // GenericError - generic object layer error.

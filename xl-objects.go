@@ -163,13 +163,17 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
-		info, err := getMultipartObjectInfo(xl.storage, bucket, object)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		if err == errFileNotFound {
+			var info MultipartObjectInfo
+			info, err = getMultipartObjectInfo(xl.storage, bucket, object)
+			if err != nil {
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+			fi.Size = info.Size
+			fi.ModTime = info.ModTime
+			fi.MD5Sum = info.MD5Sum
 		}
-		fi.Size = info.Size
-		fi.ModTime = info.ModTime
-		fi.MD5Sum = info.MD5Sum
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	contentType := "application/octet-stream"
 	if objectExt := filepath.Ext(object); objectExt != "" {

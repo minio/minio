@@ -118,14 +118,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 
 	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "GetBucketInfo failed.", nil)
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
@@ -196,12 +189,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		errorIf(err, "ListMultipartUploads failed.", nil)
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	// generate response
@@ -281,16 +269,7 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	errorIf(err, "ListObjects failed.", nil)
-	switch err.(type) {
-	case BucketNameInvalid:
-		writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-	case BucketNotFound:
-		writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-	case ObjectNameInvalid:
-		writeErrorResponse(w, r, ErrNoSuchKey, r.URL.Path)
-	default:
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-	}
+	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 }
 
 // ListBucketsHandler - GET Service
@@ -344,13 +323,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	errorIf(err, "ListBuckets failed.", nil)
-	switch err.(type) {
-	case StorageInsufficientReadResources:
-		writeErrorResponse(w, r, ErrInsufficientReadResources, r.URL.Path)
-	default:
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-	}
-
+	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 }
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
@@ -419,38 +392,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			})
 		} else {
 			errorIf(err, "DeleteObject failed.", nil)
-			switch err.(type) {
-			case BucketNameInvalid:
-				deleteErrors = append(deleteErrors, DeleteError{
-					Code:    errorCodeResponse[ErrInvalidBucketName].Code,
-					Message: errorCodeResponse[ErrInvalidBucketName].Description,
-					Key:     object.ObjectName,
-				})
-			case BucketNotFound:
-				deleteErrors = append(deleteErrors, DeleteError{
-					Code:    errorCodeResponse[ErrNoSuchBucket].Code,
-					Message: errorCodeResponse[ErrNoSuchBucket].Description,
-					Key:     object.ObjectName,
-				})
-			case ObjectNotFound:
-				deleteErrors = append(deleteErrors, DeleteError{
-					Code:    errorCodeResponse[ErrNoSuchKey].Code,
-					Message: errorCodeResponse[ErrNoSuchKey].Description,
-					Key:     object.ObjectName,
-				})
-			case ObjectNameInvalid:
-				deleteErrors = append(deleteErrors, DeleteError{
-					Code:    errorCodeResponse[ErrNoSuchKey].Code,
-					Message: errorCodeResponse[ErrNoSuchKey].Description,
-					Key:     object.ObjectName,
-				})
-			default:
-				deleteErrors = append(deleteErrors, DeleteError{
-					Code:    errorCodeResponse[ErrInternalError].Code,
-					Message: errorCodeResponse[ErrInternalError].Description,
-					Key:     object.ObjectName,
-				})
-			}
+			deleteErrors = append(deleteErrors, DeleteError{
+				Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
+				Message: errorCodeResponse[toAPIErrorCode(err)].Description,
+				Key:     object.ObjectName,
+			})
 		}
 	}
 	// Generate response
@@ -466,7 +412,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -495,14 +440,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	err := api.ObjectAPI.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err, "MakeBucket failed.", nil)
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BucketExists:
-			writeErrorResponse(w, r, ErrBucketAlreadyOwnedByYou, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	// Make sure to add Location information here only for bucket
@@ -573,20 +511,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
 		errorIf(err, "PutObject failed.", nil)
-		switch err.(type) {
-		case StorageFull:
-			writeErrorResponse(w, r, ErrStorageFull, r.URL.Path)
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case BadDigest:
-			writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-		case IncompleteBody:
-			writeErrorResponse(w, r, ErrIncompleteBody, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	if md5Sum != "" {
@@ -632,16 +557,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "GetBucketInfo failed.", nil)
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		case StorageInsufficientReadResources:
-			writeErrorResponse(w, r, ErrInsufficientReadResources, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 	writeSuccessResponse(w, nil)
@@ -666,14 +582,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
 		errorIf(err, "DeleteBucket failed.", nil)
-		switch err.(type) {
-		case BucketNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucket, r.URL.Path)
-		case BucketNotEmpty:
-			writeErrorResponse(w, r, ErrBucketNotEmpty, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 

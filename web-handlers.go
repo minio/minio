@@ -411,10 +411,10 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 		apiErrCode = ErrNoSuchKey
 	case ObjectNameInvalid:
 		apiErrCode = ErrNoSuchKey
-	case StorageInsufficientWriteResources:
-		apiErrCode = ErrInsufficientWriteResources
-	case StorageInsufficientReadResources:
-		apiErrCode = ErrInsufficientReadResources
+	case InsufficientWriteQuorum:
+		apiErrCode = ErrWriteQuorum
+	case InsufficientReadQuorum:
+		apiErrCode = ErrReadQuorum
 	default:
 		apiErrCode = ErrInternalError
 	}
