@@ -26,7 +26,7 @@ import (
 	"testing"
 )
 
-// Wrapper for calling ListObjects tests for both XL muliple disks and single node setup.
+// Wrapper for calling ListObjects tests for both XL multiple disks and single node setup.
 func TestListObjects(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjects)
 }

@@ -51,7 +51,7 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 		return objLayer, erasureDisks, nil
 	}
 
-	// getSingleNodeObjectLayer - Instantiates single node object layer and retuns it.
+	// getSingleNodeObjectLayer - Instantiates single node object layer and returns it.
 	getSingleNodeObjectLayer := func() (ObjectLayer, string, error) {
 		// Make a temporary directory to use as the obj.
 		fsDir, err := ioutil.TempDir("", "minio-")
