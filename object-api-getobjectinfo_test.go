@@ -27,28 +27,21 @@ import (
 	"testing"
 )
 
-// Testing GetObjectInfo().
+// Wrapper for calling GetObjectInfo tests for both XL muliple disks and single node setup.
 func TestGetObjectInfo(t *testing.T) {
-	directory, err := ioutil.TempDir("", "minio-get-objinfo-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(directory)
+	ExecObjectLayerTest(t, testGetObjectInfo)
+}
 
-	// Create the obj.
-	obj, err := newFSObjects(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+// Testing GetObjectInfo().
+func testGetObjectInfo(obj ObjectLayer, instanceType string, t *testing.T) {
 	// This bucket is used for testing getObjectInfo operations.
-	err = obj.MakeBucket("test-getobjectinfo")
+	err := obj.MakeBucket("test-getobjectinfo")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	_, err = obj.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", int64(len("asiapics")), bytes.NewBufferString("asiapics"), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	resultCases := []ObjectInfo{
 		// ObjectInfo -1.
@@ -88,31 +81,31 @@ func TestGetObjectInfo(t *testing.T) {
 	for i, testCase := range testCases {
 		result, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
 		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
+			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
 		if err == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
+			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.err.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if err != nil && !testCase.shouldPass {
 			if testCase.err.Error() != err.Error() {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.err.Error(), err.Error())
 			}
 		}
 
 		// Test passes as expected, but the output values are verified for correctness here.
 		if err == nil && testCase.shouldPass {
 			if testCase.result.Bucket != result.Bucket {
-				t.Fatalf("Test %d: Expected Bucket name to be '%s', but found '%s' instead", i+1, testCase.result.Bucket, result.Bucket)
+				t.Fatalf("Test %d: %s: Expected Bucket name to be '%s', but found '%s' instead", i+1, instanceType, testCase.result.Bucket, result.Bucket)
 			}
 			if testCase.result.Name != result.Name {
-				t.Errorf("Test %d: Expected Object name to be %s, but instead found it to be %s", i+1, testCase.result.Name, result.Name)
+				t.Errorf("Test %d: %s: Expected Object name to be %s, but instead found it to be %s", i+1, instanceType, testCase.result.Name, result.Name)
 			}
 			if testCase.result.ContentType != result.ContentType {
-				t.Errorf("Test %d: Expected Content Type of the object to be %v, but instead found it to be %v", i+1, testCase.result.ContentType, result.ContentType)
+				t.Errorf("Test %d: %s: Expected Content Type of the object to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.ContentType, result.ContentType)
 			}
 			if testCase.result.IsDir != result.IsDir {
-				t.Errorf("Test %d: Expected IsDir flag of the object to be %v, but instead found it to be %v", i+1, testCase.result.IsDir, result.IsDir)
+				t.Errorf("Test %d: %s: Expected IsDir flag of the object to be %v, but instead found it to be %v", i+1, instanceType,testCase.result.IsDir, result.IsDir)
 			}
 		}
 	}
