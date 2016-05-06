@@ -78,7 +78,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 		if isXL && strings.HasSuffix(entry, multipartSuffix) {
 			// If the entry was detected as a multipart file we use
 			// getMultipartObjectInfo() to fill the FileInfo structure.
-			entry = strings.Trim(entry, multipartSuffix)
+			entry = strings.TrimSuffix(entry, multipartSuffix)
 			var info MultipartObjectInfo
 			info, err = getMultipartObjectInfo(disk, bucket, path.Join(prefixDir, entry))
 			if err != nil {
