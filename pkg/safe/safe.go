@@ -70,9 +70,8 @@ func (f *File) Close() error {
 // error if any.
 func (f *File) CloseAndRemove() error {
 	// close the embedded fd
-	if err := f.File.Close(); err != nil {
-		return err
-	}
+	f.File.Close()
+
 	// Remove the temp file.
 	if err := os.Remove(f.Name()); err != nil {
 		return err

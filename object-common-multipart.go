@@ -72,10 +72,16 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 			}
 			// Close the writer.
 			if err = w.Close(); err != nil {
+				if clErr := safeCloseAndRemove(w); clErr != nil {
+					return "", toObjectErr(clErr, minioMetaBucket, tempUploadIDPath)
+				}
 				return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 			}
 			err = storage.RenameFile(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
 			if err != nil {
+				if derr := storage.DeleteFile(minioMetaBucket, tempUploadIDPath); derr != nil {
+					return "", toObjectErr(derr, minioMetaBucket, tempUploadIDPath)
+				}
 				return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 			}
 			return uploadID, nil
@@ -124,19 +130,25 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	// Instantiate checksum hashers and create a multiwriter.
 	if size > 0 {
 		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
 			return "", toObjectErr(err, bucket, object)
 		}
 		// Reader shouldn't have more data what mentioned in size argument.
 		// reading one more byte from the reader to validate it.
 		// expected to fail, success validates existence of more data in the reader.
 		if _, err = io.CopyN(ioutil.Discard, data, 1); err == nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
 			return "", UnExpectedDataSize{Size: int(size)}
 		}
 	} else {
 		if _, err = io.Copy(multiWriter, data); err != nil {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
 			return "", toObjectErr(err, bucket, object)
 		}
 	}
@@ -144,12 +156,17 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			safeCloseAndRemove(fileWriter)
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
 	err = fileWriter.Close()
 	if err != nil {
+		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+			return "", toObjectErr(clErr, bucket, object)
+		}
 		return "", err
 	}
 
@@ -157,7 +174,10 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	partSuffixMD5Path := path.Join(mpartMetaPrefix, bucket, object, partSuffixMD5)
 	err = storage.RenameFile(minioMetaBucket, partSuffixPath, minioMetaBucket, partSuffixMD5Path)
 	if err != nil {
-		return "", err
+		if derr := storage.DeleteFile(minioMetaBucket, partSuffixPath); derr != nil {
+			return "", toObjectErr(derr, minioMetaBucket, partSuffixPath)
+		}
+		return "", toObjectErr(err, minioMetaBucket, partSuffixMD5Path)
 	}
 	return newMD5Hex, nil
 }

@@ -72,6 +72,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		var fileReader io.ReadCloser
 		fileReader, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, 0)
 		if err != nil {
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", clErr
+			}
 			if err == errFileNotFound {
 				return "", InvalidPart{}
 			}
@@ -79,10 +82,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		_, err = io.Copy(fileWriter, fileReader)
 		if err != nil {
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", clErr
+			}
 			return "", err
 		}
 		err = fileReader.Close()
 		if err != nil {
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", clErr
+			}
 			return "", err
 		}
 		md5Sums = append(md5Sums, part.ETag)
@@ -90,7 +99,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	err = fileWriter.Close()
 	if err != nil {
+		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+			return "", clErr
+		}
 		return "", err
+	}
+
+	// Rename the file back to original location, if not delete the
+	// temporary object.
+	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	if err != nil {
+		if derr := fs.storage.DeleteFile(minioMetaBucket, tempObj); derr != nil {
+			return "", toObjectErr(derr, minioMetaBucket, tempObj)
+		}
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Save the s3 md5.
@@ -99,14 +121,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
-	// Cleanup all the parts.
+	// Cleanup all the parts if everything else has been safely committed.
 	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID); err != nil {
 		return "", err
-	}
-
-	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Return md5sum.

@@ -174,6 +174,9 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 	}
 	err = fileWriter.Close()
 	if err != nil {
+		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+			return "", clErr
+		}
 		return "", err
 	}
 	err = storage.RenameFile(minioMetaBucket, tempObj, bucket, object)

@@ -119,7 +119,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 		multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
 		err = xl.storage.RenameFile(minioMetaBucket, multipartPartFile, bucket, multipartObjSuffix)
-		// TODO: We need a way to roll back if of the renames failed.
 		if err != nil {
 			return "", err
 		}
@@ -153,14 +152,35 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 	// Close the writer.
 	if err = w.Close(); err != nil {
+		if err = safeCloseAndRemove(w); err != nil {
+			return "", err
+		}
 		return "", err
 	}
 	multipartObjFile := path.Join(object, multipartMetaFile)
 	err = xl.storage.RenameFile(minioMetaBucket, tempMultipartMetaFile, bucket, multipartObjFile)
 	if err != nil {
+		if derr := xl.storage.DeleteFile(minioMetaBucket, tempMultipartMetaFile); derr != nil {
+			return "", toObjectErr(err, minioMetaBucket, tempMultipartMetaFile)
+		}
 		return "", toObjectErr(err, bucket, multipartObjFile)
 	}
 
+	// Attempt a rename of the upload id to temporary location, if
+	// successful then delete it.
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	if err = xl.storage.RenameFile(minioMetaBucket, uploadIDPath, minioMetaBucket, tempUploadIDPath); err == nil {
+		if err = xl.storage.DeleteFile(minioMetaBucket, tempUploadIDPath); err != nil {
+			return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+		}
+		return s3MD5, nil
+	}
+	// Rename if failed attempt to delete the original file.
+	err = xl.storage.DeleteFile(minioMetaBucket, uploadIDPath)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	}
 	// Return md5sum.
 	return s3MD5, nil
 }
