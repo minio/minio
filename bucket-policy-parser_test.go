@@ -453,31 +453,42 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		return statements
 	}
 
+	// constructing policy statement with lexically close characters.
+	// should not result in ErrMalformedPolicy
+	setResourceLexical := func(statements []policyStatement) []policyStatement {
+		statements[0].Resources = []string{"arn:aws:s3:::minio-bucket/op*", "arn:aws:s3:::minio-bucket/oo*"}
+		return statements
+	}
+
 	// List of BucketPolicy used for tests.
 	bucketAccessPolicies := []BucketPolicy{
-		// BucketPolicy - 0.
+		// BucketPolicy - 1.
 		// Contains valid read only policy statement.
 		{Version: "1.0", Statements: setReadOnlyStatement("minio-bucket", "")},
-		// BucketPolicy - 1.
+		// BucketPolicy - 2.
 		// Contains valid read-write only policy statement.
 		{Version: "1.0", Statements: setReadWriteStatement("minio-bucket", "Asia/")},
-		// BucketPolicy - 2.
+		// BucketPolicy - 3.
 		// Contains valid write only policy statement.
 		{Version: "1.0", Statements: setWriteOnlyStatement("minio-bucket", "Asia/India/")},
-		// BucketPolicy - 3.
+		// BucketPolicy - 4.
 		// Contains invalidPrefixActions.
 		// Since resourcePrefix is not to the bucket-name, it return ErrMalformedPolicy.
 		{Version: "1.0", Statements: setReadOnlyStatement("minio-bucket-fail", "Asia/India/")},
-		// BucketPolicy - 4.
+		// BucketPolicy - 5.
 		// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
 		// but bucket part of the resource is not equal to the bucket name.
 		// this results in return of ErrMalformedPolicy.
 		{Version: "1.0", Statements: setValidPrefixActions(setWriteOnlyStatement("minio-bucket-fail", "Asia/India/"))},
-		// BucketPolicy - 5.
-		// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
+		// BucketPolicy - 6.
 		// contructing policy statement with recursive resources.
 		// should result in ErrMalformedPolicy
 		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "")))},
+		// BucketPolciy - 7.
+		// constructing policy statment with non recursive but
+		// lexically close resources.
+		// should result in ErrNone.
+		{Version: "1.0", Statements: setResourceLexical(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "oo")))},
 	}
 
 	testCases := []struct {
@@ -505,6 +516,11 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		// contructing policy statement with recursive resources.
 		// should result in ErrMalformedPolicy.
 		{bucketAccessPolicies[5], ErrMalformedPolicy, false},
+		// Test case - 7.
+		// constructing policy statement with lexically close
+		// characters.
+		// should result in ErrNone.
+		{bucketAccessPolicies[6], ErrNone, true},
 	}
 	for i, testCase := range testCases {
 		apiErrCode := checkBucketPolicyResources("minio-bucket", testCase.inputPolicy)
