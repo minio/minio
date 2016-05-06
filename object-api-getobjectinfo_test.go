@@ -27,7 +27,7 @@ import (
 	"testing"
 )
 
-// Wrapper for calling GetObjectInfo tests for both XL muliple disks and single node setup.
+// Wrapper for calling GetObjectInfo tests for both XL multiple disks and single node setup.
 func TestGetObjectInfo(t *testing.T) {
 	ExecObjectLayerTest(t, testGetObjectInfo)
 }
@@ -105,7 +105,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t *testing.T) {
 				t.Errorf("Test %d: %s: Expected Content Type of the object to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.ContentType, result.ContentType)
 			}
 			if testCase.result.IsDir != result.IsDir {
-				t.Errorf("Test %d: %s: Expected IsDir flag of the object to be %v, but instead found it to be %v", i+1, instanceType,testCase.result.IsDir, result.IsDir)
+				t.Errorf("Test %d: %s: Expected IsDir flag of the object to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsDir, result.IsDir)
 			}
 		}
 	}

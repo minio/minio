@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-// Wrapper for calling NewMultipartUpload tests for both XL muliple disks and single node setup.
+// Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
 func TestObjectNewMultipartUpload(t *testing.T) {
 	ExecObjectLayerTest(t, testObjectNewMultipartUpload)
 }
@@ -66,7 +66,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t *testi
 	}
 }
 
-// Wrapper for calling isUploadIDExists tests for both XL muliple disks and single node setup.
+// Wrapper for calling isUploadIDExists tests for both XL multiple disks and single node setup.
 func TestObjectAPIIsUploadIDExists(t *testing.T) {
 	ExecObjectLayerTest(t, testObjectAPIIsUploadIDExists)
 }
@@ -96,7 +96,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t *test
 	}
 }
 
-// Wrapper for calling PutObjectPart tests for both XL muliple disks and single node setup.
+// Wrapper for calling PutObjectPart tests for both XL multiple disks and single node setup.
 func TestObjectAPIPutObjectPart(t *testing.T) {
 	ExecObjectLayerTest(t, testObjectAPIPutObjectPart)
 }

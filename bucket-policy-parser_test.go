@@ -485,7 +485,7 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		// should result in ErrMalformedPolicy
 		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "")))},
 		// BucketPolciy - 7.
-		// constructing policy statment with non recursive but
+		// constructing policy statement with non recursive but
 		// lexically close resources.
 		// should result in ErrNone.
 		{Version: "1.0", Statements: setResourceLexical(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "oo")))},
