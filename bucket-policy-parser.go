@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"path"
 	"sort"
 	"strings"
 )
@@ -200,6 +200,14 @@ var invalidPrefixActions = map[string]struct{}{
 	// Add actions which do not honor prefixes.
 }
 
+// resourcePrefix - provides the prefix removing any wildcards.
+func resourcePrefix(resource string) string {
+	if strings.HasSuffix(resource, "*") {
+		resource = strings.TrimSuffix(resource, "*")
+	}
+	return path.Clean(resource)
+}
+
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
 // First valation of Resources done for given set of Actions.
 // Later its validated for recursive Resources.
@@ -232,7 +240,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErr
 
 	var resources []string
 	for resource := range resourceMap {
-		resources = append(resources, resource)
+		resources = append(resources, resourcePrefix(resource))
 	}
 
 	// Sort strings as shorter first.
@@ -241,12 +249,12 @@ func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErr
 	for len(resources) > 1 {
 		var resource string
 		resource, resources = resources[0], resources[1:]
-		resourceRegex := regexp.MustCompile(resource)
 		// Loop through all resources, if one of them matches with
 		// previous shorter one, it means we have detected
 		// nesting. Reject such rules.
 		for _, otherResource := range resources {
-			if resourceRegex.MatchString(otherResource) {
+			// Common prefix reject such rules.
+			if strings.HasPrefix(otherResource, resource) {
 				return ErrMalformedPolicy
 			}
 		}
