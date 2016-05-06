@@ -159,6 +159,12 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	// Check whether the bucket exists.
+	if isExist, err := isBucketExist(xl.storage, bucket); err != nil {
+		return ObjectInfo{}, err
+	} else if !isExist {
+		return ObjectInfo{}, BucketNotFound{Bucket: bucket}
+	}
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
 		if err != errFileNotFound {

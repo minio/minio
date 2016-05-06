@@ -26,70 +26,64 @@ import (
 	"testing"
 )
 
+// Wrapper for calling ListObjects tests for both XL muliple disks and single node setup.
 func TestListObjects(t *testing.T) {
-	// Make a temporary directory to use as the obj.
-	directory, err := ioutil.TempDir("", "minio-list-object-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(directory)
+	ExecObjectLayerTest(t, testListObjects)
+}
 
-	// Create the obj.
-	obj, err := newFSObjects(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+// Unit test for ListObjects in general.
+func testListObjects(obj ObjectLayer, instanceType string, t *testing.T) {
 
 	// This bucket is used for testing ListObject operations.
-	err = obj.MakeBucket("test-bucket-list-object")
+	err := obj.MakeBucket("test-bucket-list-object")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Will not store any objects in this bucket,
 	// Its to test ListObjects on an empty bucket.
 	err = obj.MakeBucket("empty-bucket")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	tmpfile, err := ioutil.TempFile("", "simple-file.txt")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia-maps", int64(len("asia-maps")), bytes.NewBufferString("asia-maps"), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/India-summer-photos-1", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/Karnataka/Bangalore/Koramangala/pics", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	for i := 0; i < 2; i++ {
 		key := "newPrefix" + strconv.Itoa(i)
 		_, err = obj.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
 	_, err = obj.PutObject("test-bucket-list-object", "newzen/zen/recurse/again/again/again/pics", int64(len("recurse")), bytes.NewBufferString("recurse"), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	for i := 0; i < 3; i++ {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
 
@@ -532,16 +526,15 @@ func TestListObjects(t *testing.T) {
 	for i, testCase := range testCases {
 		result, err := obj.ListObjects(testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, testCase.maxKeys)
 		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
+			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
 		if err == nil && !testCase.shouldPass {
-			t.Log(result)
-			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
+			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.err.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if err != nil && !testCase.shouldPass {
 			if !strings.Contains(err.Error(), testCase.err.Error()) {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, testCase.err.Error(), err.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.err.Error(), err.Error())
 			}
 		}
 		// Since there are cases for which ListObjects fails, this is
@@ -554,15 +547,15 @@ func TestListObjects(t *testing.T) {
 			// otherwise it may lead to index out of range error in
 			// assertion following this.
 			if len(testCase.result.Objects) != len(result.Objects) {
-				t.Fatalf("Test %d: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, len(testCase.result.Objects), len(result.Objects))
+				t.Fatalf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
 			}
 			for j := 0; j < len(testCase.result.Objects); j++ {
 				if testCase.result.Objects[j].Name != result.Objects[j].Name {
-					t.Errorf("Test %d: Expected object name to be \"%s\", but found \"%s\" instead", i+1, testCase.result.Objects[j].Name, result.Objects[j].Name)
+					t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 				}
 			}
 			if testCase.result.IsTruncated != result.IsTruncated {
-				t.Errorf("Test %d: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, testCase.result.IsTruncated, result.IsTruncated)
+				t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
 			}
 
 		}
