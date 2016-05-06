@@ -32,7 +32,6 @@ type fsObjects struct {
 	listObjectMapMutex *sync.Mutex
 }
 
-// FIXME: constructor should return a pointer.
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(exportPath string) (ObjectLayer, error) {
 	var storage StorageAPI
