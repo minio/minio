@@ -136,6 +136,9 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 			return "", err
 		}
+		if !isMinAllowedPartSize(fi.Size) {
+			return "", PartTooSmall{}
+		}
 		// Update metadata parts.
 		metadata.Parts = append(metadata.Parts, MultipartPartInfo{
 			PartNumber: part.PartNumber,
