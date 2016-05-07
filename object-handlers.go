@@ -393,16 +393,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var md5Bytes []byte
-	if objInfo.MD5Sum != "" {
-		md5Bytes, err = hex.DecodeString(objInfo.MD5Sum)
-		if err != nil {
-			errorIf(err, "Decoding md5 failed.", nil)
-			writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
-			return
-		}
-	}
-
 	startOffset := int64(0) // Read the whole file.
 	// Get the object.
 	readCloser, err := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
@@ -414,12 +404,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Size of object.
 	size := objInfo.Size
 
-	// Save metadata.
-	metadata := make(map[string]string)
-	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
-
 	// Create the object.
-	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
+	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, nil)
 	if err != nil {
 		errorIf(err, "PutObject failed.", nil)
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
