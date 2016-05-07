@@ -99,12 +99,11 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 	return apiServer
 }
 
-// Print listen ips.
-func printListenIPs(httpServerConf *http.Server) {
+// getListenIPs - gets all the ips to listen on.
+func getListenIPs(httpServerConf *http.Server) (hosts []string, port string) {
 	host, port, err := net.SplitHostPort(httpServerConf.Addr)
 	fatalIf(err, "Unable to split host port.", nil)
 
-	var hosts []string
 	switch {
 	case host != "":
 		hosts = append(hosts, host)
@@ -120,8 +119,13 @@ func printListenIPs(httpServerConf *http.Server) {
 			}
 		}
 	}
+	return hosts, port
+}
+
+// Print listen ips.
+func printListenIPs(tls bool, hosts []string, port string) {
 	for _, host := range hosts {
-		if httpServerConf.TLSConfig != nil {
+		if tls {
 			console.Printf("    https://%s:%s\n", host, port)
 		} else {
 			console.Printf("    http://%s:%s\n", host, port)
@@ -285,23 +289,33 @@ func serverMain(c *cli.Context) {
 	// Print credentials and region.
 	console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
 
+	hosts, port := getListenIPs(apiServer) // get listen ips and port.
+	tls := apiServer.TLSConfig != nil      // 'true' if TLS is enabled.
+
 	console.Println("\nMinio Object Storage:")
 	// Print api listen ips.
-	printListenIPs(apiServer)
+	printListenIPs(tls, hosts, port)
 
 	console.Println("\nMinio Browser:")
 	// Print browser listen ips.
-	printListenIPs(apiServer)
+	printListenIPs(tls, hosts, port)
 
 	console.Println("\nTo configure Minio Client:")
-	// Download 'mc' links.
+
+	// Figure out right endpoint for 'mc'.
+	endpoint := fmt.Sprintf("http://%s:%s", hosts[0], port)
+	if tls {
+		endpoint = fmt.Sprintf("https://%s:%s", hosts[0], port)
+	}
+
+	// Download 'mc' info.
 	if runtime.GOOS == "windows" {
-		console.Println("    Download 'mc' from https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc.exe")
-		console.Println("    $ mc.exe config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
+		console.Printf("    Download 'mc' from https://dl.minio.io/client/mc/release/%s-%s/mc.exe\n", runtime.GOOS, runtime.GOARCH)
+		console.Printf("    $ mc.exe config host add myminio %s %s %s\n", endpoint, cred.AccessKeyID, cred.SecretAccessKey)
 	} else {
-		console.Println("    $ wget https://dl.minio.io/client/mc/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/mc")
-		console.Println("    $ chmod 755 mc")
-		console.Println("    $ ./mc config host add myminio http://localhost:9000 " + cred.AccessKeyID + " " + cred.SecretAccessKey)
+		console.Printf("    $ wget https://dl.minio.io/client/mc/release/%s-%s/mc\n", runtime.GOOS, runtime.GOARCH)
+		console.Printf("    $ chmod 755 mc\n")
+		console.Printf("    $ ./mc config host add myminio %s %s %s\n", endpoint, cred.AccessKeyID, cred.SecretAccessKey)
 	}
 
 	// Start server.
