@@ -758,7 +758,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			// Close the writer.
 			writer.Close()
 		}()
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, hex.EncodeToString(md5Bytes))
+		md5SumHex := hex.EncodeToString(md5Bytes)
+		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, md5SumHex)
 	}
 	if err != nil {
 		errorIf(err, "PutObjectPart failed.", nil)

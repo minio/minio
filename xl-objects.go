@@ -40,11 +40,6 @@ type xlObjects struct {
 	listObjectMapMutex *sync.Mutex
 }
 
-func isLeafDirectory(disk StorageAPI, volume, leafPath string) bool {
-	_, err := disk.StatFile(volume, pathJoin(leafPath, multipartMetaFile))
-	return err == nil
-}
-
 // isValidFormat - validates input arguments with backend 'format.json'
 func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
 	// Load saved XL format.json and validate.
@@ -70,7 +65,6 @@ func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
 	return true
 }
 
-// FIXME: constructor should return a pointer.
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	storage, err := newXL(exportPaths...)
@@ -289,9 +283,19 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 		return toObjectErr(err, bucket, object)
 	}
 	// Range through all files and delete it.
+	var wg = &sync.WaitGroup{}
+	var errChs = make([]chan error, len(info.Parts))
 	for _, part := range info.Parts {
-		err = xl.storage.DeleteFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
-		if err != nil {
+		wg.Add(1)
+		go func(part MultipartPartInfo) {
+			defer wg.Done()
+			err = xl.storage.DeleteFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
+			errChs[part.PartNumber-1] <- err
+		}(part)
+	}
+	wg.Wait()
+	for _, errCh := range errChs {
+		if err = <-errCh; err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}
@@ -302,6 +306,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
+// ListObjects - list all objects at prefix, delimited by '/'.
 func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return listObjectsCommon(xl, bucket, prefix, marker, delimiter, maxKeys)
 }

@@ -131,8 +131,13 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 	// For XL multipart files strip the trailing "/" and append ".minio.multipart" to the entry so that
 	// entryToFileInfo() can call StatFile for regular files or getMultipartObjectInfo() for multipart files.
 	for i, entry := range entries {
-		if isXL && strings.HasSuffix(entry, slashSeparator) && isLeafDirectory(disk, bucket, path.Join(prefixDir, entry)) {
-			entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
+		if isXL && strings.HasSuffix(entry, slashSeparator) {
+			if ok, err := isMultipartObject(disk, bucket, path.Join(prefixDir, entry)); err != nil {
+				send(treeWalkResult{err: err})
+				return false
+			} else if ok {
+				entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
+			}
 		}
 	}
 	sort.Sort(byMultipartFiles(entries))
@@ -146,7 +151,9 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
-	idx := sort.Search(len(entries), func(i int) bool { return strings.TrimSuffix(entries[i], multipartSuffix) >= markerDir })
+	idx := sort.Search(len(entries), func(i int) bool {
+		return strings.TrimSuffix(entries[i], multipartSuffix) >= markerDir
+	})
 	entries = entries[idx:]
 	*count += len(entries)
 	for i, entry := range entries {

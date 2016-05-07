@@ -58,7 +58,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	tempObj := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempObj := path.Join(tmpMetaPrefix, bucket, object, uploadID, incompleteFile)
 	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, tempObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
@@ -67,8 +67,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
-		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
-		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, partSuffix)
+		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
+		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 		var fileReader io.ReadCloser
 		fileReader, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, 0)
 		if err != nil {

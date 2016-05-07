@@ -111,8 +111,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var md5Sums []string
 	for _, part := range parts {
 		// Construct part suffix.
-		partSuffix := fmt.Sprintf("%s.%.5d.%s", uploadID, part.PartNumber, part.ETag)
-		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, partSuffix)
+		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
+		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 		fi, err := xl.storage.StatFile(minioMetaBucket, multipartPartFile)
 		if err != nil {
 			if err == errFileNotFound {
@@ -179,8 +179,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Attempt a rename of the upload id to temporary location, if
 	// successful then delete it.
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, incompleteFile)
 	if err = xl.storage.RenameFile(minioMetaBucket, uploadIDPath, minioMetaBucket, tempUploadIDPath); err == nil {
 		if err = xl.storage.DeleteFile(minioMetaBucket, tempUploadIDPath); err != nil {
 			return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
@@ -192,6 +192,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
+
+	uploadsJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	err = xl.storage.DeleteFile(minioMetaBucket, uploadsJSONPath)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadsJSONPath)
+	}
+
 	// Return md5sum.
 	return s3MD5, nil
 }
