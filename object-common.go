@@ -119,17 +119,15 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
 	}
+	// Check whether the bucket exists.
+	if !isBucketExist(storage, bucket) {
+		return "", BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		}
-	}
-	// Check whether the bucket exists.
-	if isExist, err := isBucketExist(storage, bucket); err != nil {
-		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
 	}
 
 	tempObj := path.Join(tmpMetaPrefix, bucket, object)
@@ -195,12 +193,12 @@ func putObjectCommon(storage StorageAPI, bucket string, object string, size int6
 }
 
 func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	var disk StorageAPI
+	var storage StorageAPI
 	switch l := layer.(type) {
 	case xlObjects:
-		disk = l.storage
+		storage = l.storage
 	case fsObjects:
-		disk = l.storage
+		storage = l.storage
 	}
 
 	// Verify if bucket is valid.
@@ -209,9 +207,7 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 	}
 
 	// Verify whether the bucket exists.
-	if isExist, err := isBucketExist(disk, bucket); err != nil {
-		return ListObjectsInfo{}, err
-	} else if !isExist {
+	if !isBucketExist(storage, bucket) {
 		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
 	}
 
@@ -319,13 +315,15 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 }
 
 // checks whether bucket exists.
-func isBucketExist(storage StorageAPI, bucketName string) (bool, error) {
+func isBucketExist(storage StorageAPI, bucketName string) bool {
 	// Check whether bucket exists.
-	if _, e := storage.StatVol(bucketName); e != nil {
-		if e == errVolumeNotFound {
-			return false, nil
+	_, err := storage.StatVol(bucketName)
+	if err != nil {
+		if err == errVolumeNotFound {
+			return false
 		}
-		return false, e
+		log.Errorf("StatVol failed with %s", err)
+		return false
 	}
-	return true, nil
+	return true
 }
