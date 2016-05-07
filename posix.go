@@ -52,18 +52,6 @@ func isDirEmpty(dirname string) (status bool, err error) {
 	return status, err
 }
 
-// isDirExist - returns whether given directory exists or not.
-func isDirExist(dirname string) (bool, error) {
-	fi, e := os.Stat(dirname)
-	if e != nil {
-		if os.IsNotExist(e) {
-			return false, nil
-		}
-		return false, e
-	}
-	return fi.IsDir(), nil
-}
-
 // Initialize a new storage disk.
 func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {

@@ -18,17 +18,11 @@ package main
 
 import "errors"
 
-// errFileSize - returned for missing file size.
-var errFileSize = errors.New("Missing 'file.size' in metadata")
-
 // errMaxDisks - returned for reached maximum of disks.
 var errMaxDisks = errors.New("Total number of disks specified is higher than supported maximum of '16'")
 
 // errNumDisks - returned for odd numebr of disks.
 var errNumDisks = errors.New("Invalid number of disks provided, should be always multiples of '2'")
-
-// errModTime - returned for missing file modtime.
-var errModTime = errors.New("Missing 'file.modTime' in metadata")
 
 // errUnexpected - returned for any unexpected error.
 var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
