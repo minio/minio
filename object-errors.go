@@ -58,6 +58,13 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errFileNameTooLong:
+		if len(params) >= 2 {
+			return ObjectNameInvalid{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		return IncompleteBody{}
 	}

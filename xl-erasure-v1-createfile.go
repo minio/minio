@@ -105,6 +105,14 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 				"volume": volume,
 				"path":   path,
 			}).Errorf("CreateFile failed with %s", err)
+
+			// treat errFileNameTooLong specially
+			if err == errFileNameTooLong {
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
+				reader.CloseWithError(err)
+				return
+			}
+
 			createFileError++
 
 			// We can safely allow CreateFile errors up to len(xl.storageDisks) - xl.writeQuorum

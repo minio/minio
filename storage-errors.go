@@ -27,6 +27,9 @@ var errDiskNotFound = errors.New("disk not found")
 // errFileNotFound - cannot find the file.
 var errFileNotFound = errors.New("file not found")
 
+// errFileNameTooLong - given file name is too long than supported length.
+var errFileNameTooLong = errors.New("file name too long")
+
 // errVolumeExists - cannot create same volume again.
 var errVolumeExists = errors.New("volume already exists")
 
