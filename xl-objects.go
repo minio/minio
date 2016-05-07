@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ import (
 const (
 	multipartSuffix   = ".minio.multipart"
 	multipartMetaFile = "00000" + multipartSuffix
+	formatConfigFile  = "format.json"
 )
 
 // xlObjects - Implements fs object layer.
@@ -43,17 +45,67 @@ func isLeafDirectory(disk StorageAPI, volume, leafPath string) bool {
 	return err == nil
 }
 
+// isValidFormat - validates input arguments with backend 'format.json'
+func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
+	// Load saved XL format.json and validate.
+	xl, err := loadFormatXL(storage)
+	if err != nil {
+		log.Errorf("loadFormatXL failed with %s", err)
+		return false
+	}
+	if xl.Version != "1" {
+		log.Errorf("Unsupported XL backend format found [%s]", xl.Version)
+		return false
+	}
+	if len(exportPaths) != len(xl.Disks) {
+		log.Errorf("Number of disks %d passed at the command-line did not match the backend format %d", len(exportPaths), len(xl.Disks))
+		return false
+	}
+	for index, disk := range xl.Disks {
+		if exportPaths[index] != disk {
+			log.Errorf("Invalid order of disks detected %s. Required order is %s.", exportPaths, xl.Disks)
+			return false
+		}
+	}
+	return true
+}
+
 // FIXME: constructor should return a pointer.
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	storage, err := newXL(exportPaths...)
 	if err != nil {
+		log.Errorf("newXL failed with %s", err)
 		return nil, err
 	}
 
 	// Initialize object layer - like creating minioMetaBucket,
 	// cleaning up tmp files etc.
 	initObjectLayer(storage)
+
+	err = checkFormat(storage)
+	if err != nil {
+		if err == errFileNotFound {
+			// Save new XL format.
+			errSave := saveFormatXL(storage, &xlFormat{
+				Version: "1",
+				Disks:   exportPaths,
+			})
+			if errSave != nil {
+				log.Errorf("saveFormatXL failed with %s", errSave)
+				return nil, errSave
+			}
+		} else {
+			log.Errorf("Unable to check backend format %s", err)
+			return nil, err
+		}
+	}
+
+	// Validate if format exists and input arguments are validated
+	// with backend format.
+	if !isValidFormat(storage, exportPaths...) {
+		return nil, fmt.Errorf("Command-line arguments %s is not valid.", exportPaths)
+	}
 
 	// Return successfully initialized object layer.
 	return xlObjects{

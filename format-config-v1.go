@@ -16,7 +16,10 @@
 
 package main
 
-import "github.com/minio/minio/pkg/quick"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type fsFormat struct {
 	Version string `json:"version"`
@@ -28,84 +31,72 @@ type xlFormat struct {
 }
 
 type formatConfigV1 struct {
-	// must have "Version" to "quick" to work
-	Version string   `json:"version"`
-	Format  string   `json:"format"`
-	FS      fsFormat `json:"fs,omitempty"`
-	XL      xlFormat `json:"xl,omitempty"`
+	Version string    `json:"version"`
+	Format  string    `json:"format"`
+	FS      *fsFormat `json:"fs,omitempty"`
+	XL      *xlFormat `json:"xl,omitempty"`
 }
 
-func (f formatConfigV1) Save() error {
-	configFile, err := getFormatConfigFile()
-	if err != nil {
-		return err
-	}
+// FIXME: currently we don't check single exportPath which uses FS layer.
 
-	// initialize quick.
-	qc, err := quick.New(&f)
+// loadFormatXL - load XL format.json.
+func loadFormatXL(storage StorageAPI) (xl *xlFormat, err error) {
+	offset := int64(0)
+	r, err := storage.ReadFile(minioMetaBucket, formatConfigFile, offset)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// Save config file.
-	return qc.Save(configFile)
+	decoder := json.NewDecoder(r)
+	formatXL := formatConfigV1{}
+	err = decoder.Decode(&formatXL)
+	if err != nil {
+		return nil, err
+	}
+	if err = r.Close(); err != nil {
+		return nil, err
+	}
+	if formatXL.Version != "1" {
+		return nil, fmt.Errorf("Unsupported version of backend format [%s] found.", formatXL.Version)
+	}
+	if formatXL.Format != "xl" {
+		return nil, fmt.Errorf("Unsupported backend format [%s] found.", formatXL.Format)
+	}
+	return formatXL.XL, nil
 }
 
-func (f *formatConfigV1) Load() error {
-	configFile, err := getFormatConfigFile()
+// checkFormat - validates if format.json file exists.
+func checkFormat(storage StorageAPI) error {
+	_, err := storage.StatFile(minioMetaBucket, formatConfigFile)
 	if err != nil {
 		return err
 	}
-
-	f.Version = globalMinioConfigVersion
-	qc, err := quick.New(f)
-	if err != nil {
-		return err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-// saveFormatFS - save FS format configuration
-func saveFormatFS(fs fsFormat) error {
-	config := formatConfigV1{Version: globalMinioConfigVersion, Format: "fs", FS: fs}
-	return config.Save()
-}
-
 // saveFormatXL - save XL format configuration
-func saveFormatXL(xl xlFormat) error {
-	config := formatConfigV1{Version: globalMinioConfigVersion, Format: "xl", XL: xl}
-	return config.Save()
-}
-
-// getSavedFormatConfig - get saved format configuration
-func getSavedFormatConfig() (formatConfigV1, error) {
-	config := formatConfigV1{Version: globalMinioConfigVersion}
-
-	if err := config.Load(); err != nil {
-		return config, err
-	}
-
-	return config, nil
-}
-
-// getFormatFS - get saved FS format configuration
-func getFormatFS() (fsFormat, error) {
-	config, err := getSavedFormatConfig()
+func saveFormatXL(storage StorageAPI, xl *xlFormat) error {
+	w, err := storage.CreateFile(minioMetaBucket, formatConfigFile)
 	if err != nil {
-		return fsFormat{}, err
+		return err
 	}
-	return config.FS, nil
-}
-
-// getFormatXL - get saved XL format configuration
-func getFormatXL() (xlFormat, error) {
-	config, err := getSavedFormatConfig()
+	formatXL := formatConfigV1{
+		Version: "1",
+		Format:  "xl",
+		XL:      xl,
+	}
+	encoder := json.NewEncoder(w)
+	err = encoder.Encode(&formatXL)
 	if err != nil {
-		return xlFormat{}, err
+		if clErr := safeCloseAndRemove(w); clErr != nil {
+			return clErr
+		}
+		return err
 	}
-	return config.XL, nil
+	if err = w.Close(); err != nil {
+		if clErr := safeCloseAndRemove(w); clErr != nil {
+			return clErr
+		}
+		return err
+	}
+	return nil
 }

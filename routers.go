@@ -17,9 +17,7 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
-	"reflect"
 
 	router "github.com/gorilla/mux"
 )
@@ -38,26 +36,6 @@ func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	// FIXME: currently we don't check single exportPath which uses FS layer.
-	if len(srvCmdConfig.exportPaths) > 1 {
-		if isFormatConfigFileExists() {
-			format, err := getFormatXL()
-			if err != nil {
-				fatalIf(err, "Failed to read format.json", nil)
-			}
-
-			if !reflect.DeepEqual(format.Disks, srvCmdConfig.exportPaths) {
-				err = fmt.Errorf("Number of export paths from command-line did not match the backend configuration. Backend is configured with [%s] exports.", format.Disks)
-				fatalIf(err, "", nil)
-			}
-		} else {
-			// First run: save disk configuration
-			if err := saveFormatXL(xlFormat{Version: "1", Disks: srvCmdConfig.exportPaths}); err != nil {
-				fatalIf(err, "Unable to save 'format.json'", nil)
-			}
-		}
-	}
-
 	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths...)
 	fatalIf(err, "Initializing object layer failed.", nil)
 
