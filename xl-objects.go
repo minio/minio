@@ -284,19 +284,24 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	}
 	// Range through all files and delete it.
 	var wg = &sync.WaitGroup{}
-	var errChs = make([]chan error, len(info.Parts))
-	for _, part := range info.Parts {
+	var errs = make([]error, len(info.Parts))
+	for index, part := range info.Parts {
 		wg.Add(1)
-		go func(part MultipartPartInfo) {
+		// Start deleting parts in routine.
+		go func(index int, part MultipartPartInfo) {
 			defer wg.Done()
-			err = xl.storage.DeleteFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)))
-			errChs[part.PartNumber-1] <- err
-		}(part)
+			partFileName := partNumToPartFileName(part.PartNumber)
+			errs[index] = xl.storage.DeleteFile(bucket, pathJoin(object, partFileName))
+		}(index, part)
 	}
+	// Wait for all the deletes to finish.
 	wg.Wait()
-	for _, errCh := range errChs {
-		if err = <-errCh; err != nil {
-			return toObjectErr(err, bucket, object)
+	// Loop through and validate if any errors, return back the first
+	// error occurred.
+	for index, err := range errs {
+		if err != nil {
+			partFileName := partNumToPartFileName(info.Parts[index].PartNumber)
+			return toObjectErr(err, bucket, pathJoin(object, partFileName))
 		}
 	}
 	err = xl.storage.DeleteFile(bucket, pathJoin(object, multipartMetaFile))
