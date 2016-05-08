@@ -38,11 +38,40 @@ func initObjectLayer(storage StorageAPI) error {
 		}
 	}
 	// Cleanup all temp entries upon start.
-	err := cleanupAllTmpEntries(storage)
+	err := cleanupDir(storage, minioMetaBucket, tmpMetaPrefix)
 	if err != nil {
 		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
 	}
 	return nil
+}
+
+// Cleanup a directory recursively.
+func cleanupDir(storage StorageAPI, volume, dirPath string) error {
+	var delFunc func(string) error
+	// Function to delete entries recursively.
+	delFunc = func(entryPath string) error {
+		if !strings.HasSuffix(entryPath, slashSeparator) {
+			// No trailing "/" means that this is a file which can be deleted.
+			return storage.DeleteFile(volume, entryPath)
+		}
+		// If it's a directory, list and call delFunc() for each entry.
+		entries, err := storage.ListDir(volume, entryPath)
+		if err != nil {
+			if err == errFileNotFound {
+				// if dirPath prefix never existed.
+				return nil
+			}
+			return err
+		}
+		for _, entry := range entries {
+			err = delFunc(pathJoin(entryPath, entry))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return delFunc(retainSlash(dirPath))
 }
 
 /// Common object layer functions.

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -103,9 +104,13 @@ func retainSlash(s string) string {
 	return strings.TrimSuffix(s, slashSeparator) + slashSeparator
 }
 
-// pathJoin - path join.
+// pathJoin - like path.Join() but retains trailing "/" of the last element
 func pathJoin(s1 string, s2 string) string {
-	return retainSlash(s1) + s2
+	trailingSlash := ""
+	if strings.HasSuffix(s2, slashSeparator) {
+		trailingSlash = "/"
+	}
+	return path.Join(s1, s2) + trailingSlash
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
