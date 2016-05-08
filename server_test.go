@@ -1244,11 +1244,14 @@ func (s *MyAPISuite) TestObjectMultipart(c *C) {
 	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
 	uploadID := newResponse.UploadID
 
+	// Create a byte array of 5MB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+
 	hasher := md5.New()
-	hasher.Write([]byte("hello world"))
+	hasher.Write(data)
 	md5Sum := hasher.Sum(nil)
 
-	buffer1 := bytes.NewReader([]byte("hello world"))
+	buffer1 := bytes.NewReader(data)
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
@@ -1258,7 +1261,14 @@ func (s *MyAPISuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
-	buffer2 := bytes.NewReader([]byte("hello world"))
+	// Byte array one 1 byte.
+	data = []byte("0")
+
+	hasher = md5.New()
+	hasher.Write(data)
+	md5Sum = hasher.Sum(nil)
+
+	buffer2 := bytes.NewReader(data)
 	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)

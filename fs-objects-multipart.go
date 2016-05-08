@@ -73,10 +73,22 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Loop through all parts, validate them and then commit to disk.
-	for _, part := range parts {
+	for i, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
 		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+		var fi FileInfo
+		fi, err = fs.storage.StatFile(minioMetaBucket, multipartPartFile)
+		if err != nil {
+			if err == errFileNotFound {
+				return "", InvalidPart{}
+			}
+			return "", err
+		}
+		// All parts except the last part has to be atleast 5MB.
+		if (i < len(parts)-1) && !isMinAllowedPartSize(fi.Size) {
+			return "", PartTooSmall{}
+		}
 		var fileReader io.ReadCloser
 		fileReader, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, 0)
 		if err != nil {
