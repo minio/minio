@@ -46,7 +46,7 @@ func toObjectErr(err error, params ...string) error {
 		return InsufficientWriteQuorum{}
 	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
-			return ObjectExistsAsPrefix{
+			return ObjectExistsAsDirectory{
 				Bucket: params[0],
 				Object: params[1],
 			}
@@ -112,11 +112,11 @@ func (e ObjectNotFound) Error() string {
 	return "Object not found: " + e.Bucket + "#" + e.Object
 }
 
-// ObjectExistsAsPrefix object already exists with a requested prefix.
-type ObjectExistsAsPrefix GenericError
+// ObjectExistsAsDirectory object already exists as a directory.
+type ObjectExistsAsDirectory GenericError
 
-func (e ObjectExistsAsPrefix) Error() string {
-	return "Object exists on : " + e.Bucket + " as prefix " + e.Object
+func (e ObjectExistsAsDirectory) Error() string {
+	return "Object exists on : " + e.Bucket + " as directory " + e.Object
 }
 
 // BucketExists bucket exists.

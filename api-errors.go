@@ -83,8 +83,6 @@ const (
 	ErrMalformedPOSTRequest
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
-	ErrStorageFull
-	ErrObjectExistsAsPrefix
 	ErrAllAccessDisabled
 	ErrMalformedPolicy
 	ErrMissingFields
@@ -99,7 +97,6 @@ const (
 	ErrMalformedDate
 	ErrMalformedExpires
 	ErrAuthHeaderEmpty
-	ErrDateHeaderMissing
 	ErrExpiredPresignRequest
 	ErrMissingDateHeader
 	ErrInvalidQuerySignatureAlgo
@@ -107,9 +104,11 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	// Add new error codes here.
 
-	// Extended errors.
+	// Minio extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
+	ErrStorageFull
+	ErrObjectExistsAsDirectory
 )
 
 // error code to APIError structure, these fields carry respective
@@ -189,16 +188,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "InternalError",
 		Description:    "We encountered an internal error, please try again.",
 		HTTPStatusCode: http.StatusInternalServerError,
-	},
-	ErrReadQuorum: {
-		Code:           "ReadQuorum",
-		Description:    "Multiple disk failures, unable to reconstruct data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrWriteQuorum: {
-		Code:           "WriteQuorum",
-		Description:    "Multiple disks failures, unable to write data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidAccessKeyID: {
 		Code:           "InvalidAccessKeyID",
@@ -310,16 +299,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The bucket you tried to delete is not empty.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrStorageFull: {
-		Code:           "StorageFull",
-		Description:    "Storage backend has reached its minimum free disk threshold. Please delete few objects to proceed.",
-		HTTPStatusCode: http.StatusInternalServerError,
-	},
-	ErrObjectExistsAsPrefix: {
-		Code:           "ObjectExistsAsPrefix",
-		Description:    "An object already exists as your prefix, choose a different prefix to proceed.",
-		HTTPStatusCode: http.StatusConflict,
-	},
 	ErrAllAccessDisabled: {
 		Code:           "AllAccessDisabled",
 		Description:    "All access to this bucket has been disabled.",
@@ -415,6 +394,27 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	/// Minio extensions.
+	ErrStorageFull: {
+		Code:           "XMinioStorageFull",
+		Description:    "Storage backend has reached its minimum free disk threshold. Please delete few objects to proceed.",
+		HTTPStatusCode: http.StatusInternalServerError,
+	},
+	ErrObjectExistsAsDirectory: {
+		Code:           "XMinioObjectExistsAsDirectory",
+		Description:    "Object name already exists as a directory.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrReadQuorum: {
+		Code:           "XMinioReadQuorum",
+		Description:    "Multiple disk failures, unable to reconstruct data.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrWriteQuorum: {
+		Code:           "XMinioWriteQuorum",
+		Description:    "Multiple disks failures, unable to write data.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 	// Add your error structure here.
 }
 
@@ -436,8 +436,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrBadDigest
 	case IncompleteBody:
 		apiErr = ErrIncompleteBody
-	case ObjectExistsAsPrefix:
-		apiErr = ErrObjectExistsAsPrefix
+	case ObjectExistsAsDirectory:
+		apiErr = ErrObjectExistsAsDirectory
 	case BucketNameInvalid:
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:
