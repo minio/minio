@@ -490,8 +490,7 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 	return result, nil
 }
 
-// ListObjectParts - list object parts, common function across both
-// object layers.
+// ListObjectParts - list object parts, common function across both object layers.
 func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -520,15 +519,17 @@ func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, 
 	count := maxParts
 	for _, entry := range newEntries {
 		fi, err := storage.StatFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID, entry))
-		splitEntry := strings.Split(entry, ".")
-		partNum, err := strconv.Atoi(splitEntry[0])
+		splitEntry := strings.SplitN(entry, ".", 2)
+		partStr := splitEntry[0]
+		etagStr := splitEntry[1]
+		partNum, err := strconv.Atoi(partStr)
 		if err != nil {
 			return ListPartsInfo{}, err
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   partNum,
 			LastModified: fi.ModTime,
-			ETag:         splitEntry[1],
+			ETag:         etagStr,
 			Size:         fi.Size,
 		})
 		count--
@@ -536,8 +537,13 @@ func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, 
 			break
 		}
 	}
+	// If listed entries are more than maxParts, we set IsTruncated as true.
 	if len(newEntries) > len(result.Parts) {
 		result.IsTruncated = true
+		// Make sure to fill next part number marker if IsTruncated is
+		// true for subsequent listing.
+		nextPartNumberMarker := result.Parts[len(result.Parts)-1].PartNumber
+		result.NextPartNumberMarker = nextPartNumberMarker
 	}
 	result.Bucket = bucket
 	result.Object = object

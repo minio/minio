@@ -139,7 +139,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Calculate and save s3 compatible md5sum.
-	s3MD5, err := makeS3MD5(md5Sums...)
+	s3MD5, err := completeMultipartMD5(md5Sums...)
 	if err != nil {
 		return "", err
 	}
