@@ -76,16 +76,14 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if !isBucketExist(storage, bucket) {
+		return "", BucketNotFound{Bucket: bucket}
+	}
+
 	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
-
-	// Verify whether the bucket exists.
-	if isExist, err := isBucketExist(storage, bucket); err != nil {
-		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
 	}
 
 	// Loops through until successfully generates a new unique upload id.
@@ -138,20 +136,14 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if !isBucketExist(storage, bucket) {
+		return "", BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-
-	// Verify whether the bucket exists.
-	if isExist, err := isBucketExist(storage, bucket); err != nil {
-		return "", err
-	} else if !isExist {
-		return "", BucketNotFound{Bucket: bucket}
-	}
-
-	if status, err := isUploadIDExists(storage, bucket, object, uploadID); err != nil {
-		return "", err
-	} else if !status {
+	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
@@ -251,12 +243,14 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if !isBucketExist(storage, bucket) {
+		return BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if status, err := isUploadIDExists(storage, bucket, object, uploadID); err != nil {
-		return err
-	} else if !status {
+	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}
 	}
 	return cleanupUploadedParts(storage, mpartMetaPrefix, bucket, object, uploadID)
@@ -393,10 +387,21 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 // listMultipartUploadsCommon - lists all multipart uploads, common
 // function for both object layers.
 func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+	var storage StorageAPI
+	switch l := layer.(type) {
+	case xlObjects:
+		storage = l.storage
+	case fsObjects:
+		storage = l.storage
+	}
+
 	result := ListMultipartsInfo{}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListMultipartsInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	if !isBucketExist(storage, bucket) {
+		return ListMultipartsInfo{}, BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectPrefix(prefix) {
 		return ListMultipartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
@@ -495,15 +500,17 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, (BucketNameInvalid{Bucket: bucket})
+		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	// Verify whether the bucket exists.
+	if !isBucketExist(storage, bucket) {
+		return ListPartsInfo{}, BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, (ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if status, err := isUploadIDExists(storage, bucket, object, uploadID); err != nil {
-		return ListPartsInfo{}, err
-	} else if !status {
-		return ListPartsInfo{}, (InvalidUploadID{UploadID: uploadID})
+	if !isUploadIDExists(storage, bucket, object, uploadID) {
+		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
 	}
 	result := ListPartsInfo{}
 	entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
@@ -547,16 +554,16 @@ func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, 
 }
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
-func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) (bool, error) {
+func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) bool {
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
 	st, err := storage.StatFile(minioMetaBucket, uploadIDPath)
 	if err != nil {
-		// Upload id does not exist.
 		if err == errFileNotFound {
-			return false, nil
+			return false
 		}
-		return false, err
+		log.Errorf("StatFile failed wtih %s", err)
+		return false
 	}
-	// Upload id exists and is a regular file.
-	return st.Mode.IsRegular(), nil
+	log.Debugf("FileInfo: %v", st)
+	return st.Mode.IsRegular()
 }

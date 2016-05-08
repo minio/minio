@@ -149,7 +149,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing
 		{"a", "obj", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: a")},
 		// Test case - 5.
 		// Case with invalid object names.
-		{"abc", "", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: abc#")},
+		{bucket, "", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket#")},
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
 		{"abc", "def", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},

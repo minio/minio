@@ -96,15 +96,17 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify whether the bucket exists.
+	if !isBucketExist(xl.storage, bucket) {
+		return "", BucketNotFound{Bucket: bucket}
+	}
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		}
 	}
-	if status, err := isUploadIDExists(xl.storage, bucket, object, uploadID); err != nil {
-		return "", err
-	} else if !status {
+	if !isUploadIDExists(xl.storage, bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 	var metadata = MultipartObjectInfo{}

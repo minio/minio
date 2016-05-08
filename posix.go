@@ -40,22 +40,32 @@ type fsStorage struct {
 }
 
 // isDirEmpty - returns whether given directory is empty or not.
-func isDirEmpty(dirname string) (status bool, err error) {
+func isDirEmpty(dirname string) bool {
 	f, err := os.Open(dirname)
-	if err == nil {
-		defer f.Close()
-		if _, err = f.Readdirnames(1); err == io.EOF {
-			status = true
-			err = nil
-		}
+	if err != nil {
+		log.Errorf("Unable to access directory %s, failed with %s", dirname, err)
+		return false
 	}
-	return status, err
+	defer f.Close()
+	// List one entry.
+	_, err = f.Readdirnames(1)
+	if err != nil {
+		if err == io.EOF {
+			// Returns true if we have reached EOF, directory is
+			// indeed empty.
+			return true
+		}
+		log.Errorf("Unable to list directory %s, failed with %s", dirname, err)
+		return false
+	}
+	// Directory is not empty.
+	return false
 }
 
 // Initialize a new storage disk.
 func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
-		log.Debug("Disk cannot be empty")
+		log.Error("Disk cannot be empty")
 		return nil, errInvalidArgument
 	}
 	st, err := os.Stat(diskPath)
@@ -82,8 +92,7 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	return fs, nil
 }
 
-// checkDiskFree verifies if disk path has sufficient minium free disk
-// space.
+// checkDiskFree verifies if disk path has sufficient minium free disk space.
 func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	di, err := disk.GetInfo(diskPath)
 	if err != nil {
@@ -527,18 +536,9 @@ func deleteFile(basePath, deletePath string) error {
 		}
 		return err
 	}
-	if pathSt.IsDir() {
+	if pathSt.IsDir() && !isDirEmpty(deletePath) {
 		// Verify if directory is empty.
-		empty, err := isDirEmpty(deletePath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"deletePath": deletePath,
-			}).Debugf("isDirEmpty failed with %s", err)
-			return err
-		}
-		if !empty {
-			return nil
-		}
+		return nil
 	}
 	// Attempt to remove path.
 	if err := os.Remove(deletePath); err != nil {
