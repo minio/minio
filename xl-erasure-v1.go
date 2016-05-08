@@ -404,6 +404,8 @@ func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
 				entries[i] = strings.TrimSuffix(entry, slashSeparator)
 			}
 		}
+		// We have list from one of the disks hence break the loop.
+		break
 	}
 	return
 }
