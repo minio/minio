@@ -22,6 +22,7 @@ import (
 	"io"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -109,13 +110,26 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if !isUploadIDExists(xl.storage, bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
+
+	// Calculate s3 compatible md5sum for complete multipart.
+	s3MD5, err := completeMultipartMD5(parts...)
+	if err != nil {
+		return "", err
+	}
+
 	var metadata = MultipartObjectInfo{}
-	var md5Sums []string
+	var errs = make([]error, len(parts))
+
+	// Waitgroup to wait for go-routines.
+	var wg = &sync.WaitGroup{}
+
+	// Loop through all parts, validate them and then commit to disk.
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
 		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-		fi, err := xl.storage.StatFile(minioMetaBucket, multipartPartFile)
+		var fi FileInfo
+		fi, err = xl.storage.StatFile(minioMetaBucket, multipartPartFile)
 		if err != nil {
 			if err == errFileNotFound {
 				return "", InvalidPart{}
@@ -129,22 +143,48 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			Size:       fi.Size,
 		})
 		metadata.Size += fi.Size
+	}
 
-		multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
-		err = xl.storage.RenameFile(minioMetaBucket, multipartPartFile, bucket, multipartObjSuffix)
+	// Loop through and atomically rename the parts to their actual location.
+	for index, part := range parts {
+		wg.Add(1)
+		go func(index int, part completePart) {
+			defer wg.Done()
+			partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
+			multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+			tmpMultipartObjSuffix := path.Join(tmpMetaPrefix, bucket, object, partNumToPartFileName(part.PartNumber))
+			rErr := xl.storage.RenameFile(minioMetaBucket, multipartPartFile, minioMetaBucket, tmpMultipartObjSuffix)
+			if rErr != nil {
+				errs[index] = rErr
+				log.Errorf("Unable to rename file %s to %s, failed with %s", multipartPartFile, tmpMultipartObjSuffix, rErr)
+				return
+			}
+			multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
+			rErr = xl.storage.RenameFile(minioMetaBucket, tmpMultipartObjSuffix, bucket, multipartObjSuffix)
+			if rErr != nil {
+				if dErr := xl.storage.DeleteFile(minioMetaBucket, tmpMultipartObjSuffix); dErr != nil {
+					errs[index] = dErr
+					log.Errorf("Unable to delete file %s, failed with %s", tmpMultipartObjSuffix, dErr)
+					return
+				}
+				log.Debugf("Delete file succeeded on %s", tmpMultipartObjSuffix)
+				errs[index] = rErr
+				log.Errorf("Unable to rename file %s to %s, failed with %s", tmpMultipartObjSuffix, multipartObjSuffix, rErr)
+			}
+		}(index, part)
+	}
+
+	// Wait for all the renames to finish.
+	wg.Wait()
+
+	// Loop through errs list and return first error.
+	for _, err := range errs {
 		if err != nil {
-			return "", err
+			return "", toObjectErr(err, bucket, object)
 		}
-
-		// Save md5sum for future response.
-		md5Sums = append(md5Sums, part.ETag)
 	}
 
-	// Calculate and save s3 compatible md5sum.
-	s3MD5, err := completeMultipartMD5(md5Sums...)
-	if err != nil {
-		return "", err
-	}
+	// Save successfully calculated md5sum.
 	metadata.MD5Sum = s3MD5
 	// Save modTime as well as the current time.
 	metadata.ModTime = time.Now().UTC()

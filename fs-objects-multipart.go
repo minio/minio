@@ -60,13 +60,19 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
+	// Calculate s3 compatible md5sum for complete multipart.
+	s3MD5, err := completeMultipartMD5(parts...)
+	if err != nil {
+		return "", err
+	}
+
 	tempObj := path.Join(tmpMetaPrefix, bucket, object, uploadID, incompleteFile)
 	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, tempObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	var md5Sums []string
+	// Loop through all parts, validate them and then commit to disk.
 	for _, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
@@ -96,7 +102,6 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 			return "", err
 		}
-		md5Sums = append(md5Sums, part.ETag)
 	}
 
 	err = fileWriter.Close()
@@ -115,12 +120,6 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			return "", toObjectErr(derr, minioMetaBucket, tempObj)
 		}
 		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Save the s3 md5.
-	s3MD5, err := completeMultipartMD5(md5Sums...)
-	if err != nil {
-		return "", err
 	}
 
 	// Cleanup all the parts if everything else has been safely committed.

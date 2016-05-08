@@ -109,10 +109,10 @@ func pathJoin(s1 string, s2 string) string {
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
-func completeMultipartMD5(md5Strs ...string) (string, error) {
+func completeMultipartMD5(parts ...completePart) (string, error) {
 	var finalMD5Bytes []byte
-	for _, md5Str := range md5Strs {
-		md5Bytes, err := hex.DecodeString(md5Str)
+	for _, part := range parts {
+		md5Bytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
 			return "", err
 		}
@@ -120,7 +120,7 @@ func completeMultipartMD5(md5Strs ...string) (string, error) {
 	}
 	md5Hasher := md5.New()
 	md5Hasher.Write(finalMD5Bytes)
-	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(md5Strs))
+	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(parts))
 	return s3MD5, nil
 }
 
