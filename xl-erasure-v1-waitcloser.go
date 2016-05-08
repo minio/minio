@@ -43,6 +43,16 @@ func (b *waitCloser) Close() error {
 	return err
 }
 
+// CloseWithError closes the writer; subsequent read to the read
+// half of the pipe will return the error err.
+func (b *waitCloser) CloseWithError(err error) error {
+	w, ok := b.writer.(*io.PipeWriter)
+	if ok {
+		return w.CloseWithError(err)
+	}
+	return err
+}
+
 // release the Close, causing it to unblock. Only call this
 // once. Calling it multiple times results in a panic.
 func (b *waitCloser) release() {

@@ -144,9 +144,9 @@ func safeCloseAndRemove(writer io.WriteCloser) error {
 	if ok {
 		return safeWriter.CloseAndRemove()
 	}
-	pipeWriter, ok := writer.(*io.PipeWriter)
+	wCloser, ok := writer.(*waitCloser)
 	if ok {
-		return pipeWriter.CloseWithError(errors.New("Close and error out."))
+		return wCloser.CloseWithError(errors.New("Close and error out."))
 	}
 	return nil
 }
