@@ -458,6 +458,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrWriteQuorum
 	case InsufficientReadQuorum:
 		apiErr = ErrReadQuorum
+	case PartTooSmall:
+		apiErr = ErrEntityTooSmall
 	default:
 		apiErr = ErrInternalError
 	}

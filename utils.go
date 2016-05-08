@@ -38,11 +38,18 @@ func checkValidMD5(md5 string) ([]byte, error) {
 const (
 	// maximum object size per PUT request is 5GiB
 	maxObjectSize = 1024 * 1024 * 1024 * 5
+	// minimum Part size for multipart upload is 5MB
+	minPartSize = 1024 * 1024 * 5
 )
 
 // isMaxObjectSize - verify if max object size
 func isMaxObjectSize(size int64) bool {
 	return size > maxObjectSize
+}
+
+// Check if part size is more than or equal to minimum allowed size.
+func isMinAllowedPartSize(size int64) bool {
+	return size >= minPartSize
 }
 
 func contains(stringList []string, element string) bool {

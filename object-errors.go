@@ -233,3 +233,19 @@ type InvalidPart struct{}
 func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found"
 }
+
+// InvalidPartOrder parts are not ordered as Requested
+type InvalidPartOrder struct {
+	UploadID string
+}
+
+func (e InvalidPartOrder) Error() string {
+	return "Invalid part order sent for " + e.UploadID
+}
+
+// PartTooSmall - error if part size is less than 5MB.
+type PartTooSmall struct{}
+
+func (e PartTooSmall) Error() string {
+	return "Part size should be atleast 5MB"
+}

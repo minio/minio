@@ -63,22 +63,23 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectLayer) {
 	c.Assert(err, check.IsNil)
 	uploadID, err := obj.NewMultipartUpload("bucket", "key")
 	c.Assert(err, check.IsNil)
-
+	// Create a byte array of 5MB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
 	completedParts := completeMultipartUpload{}
 	for i := 1; i <= 10; i++ {
 		hasher := md5.New()
-		hasher.Write([]byte("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."))
+		hasher.Write(data)
 		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
 
 		var calculatedMD5sum string
-		calculatedMD5sum, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), expectedMD5Sumhex)
+		calculatedMD5sum, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(data)), bytes.NewBuffer(data), expectedMD5Sumhex)
 		c.Assert(err, check.IsNil)
 		c.Assert(calculatedMD5sum, check.Equals, expectedMD5Sumhex)
 		completedParts.Parts = append(completedParts.Parts, completePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
 	md5Sum, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	c.Assert(err, check.IsNil)
-	c.Assert(md5Sum, check.Equals, "7dd76eded6f7c3580a78463a7cf539bd-10")
+	c.Assert(md5Sum, check.Equals, "7d364cb728ce42a74a96d22949beefb2-10")
 }
 
 // Tests validate abortion of Multipart operation.
