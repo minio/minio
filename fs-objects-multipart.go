@@ -123,7 +123,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Cleanup all the parts if everything else has been safely committed.
-	if err = cleanupUploadedParts(fs.storage, mpartMetaPrefix, bucket, object, uploadID); err != nil {
+	if err = cleanupUploadedParts(fs.storage, bucket, object, uploadID); err != nil {
 		return "", err
 	}
 

@@ -215,25 +215,10 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	return newMD5Hex, nil
 }
 
-// Cleanup all temp entries inside tmpMetaPrefix directory, upon server initialization.
-func cleanupAllTmpEntries(storage StorageAPI) error {
-	return cleanupUploadedParts(storage, tmpMetaPrefix, "", "", "")
-}
-
 // Wrapper to which removes all the uploaded parts after a successful
 // complete multipart upload.
-func cleanupUploadedParts(storage StorageAPI, prefix, bucket, object, uploadID string) error {
-	multipartDir := path.Join(prefix, bucket, object, uploadID)
-	entries, err := storage.ListDir(minioMetaBucket, multipartDir)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if err = storage.DeleteFile(minioMetaBucket, path.Join(multipartDir, entry)); err != nil {
-			return err
-		}
-	}
-	return nil
+func cleanupUploadedParts(storage StorageAPI, bucket, object, uploadID string) error {
+	return cleanupDir(storage, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
 }
 
 // abortMultipartUploadCommon - aborts a multipart upload, common
@@ -253,7 +238,7 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}
 	}
-	return cleanupUploadedParts(storage, mpartMetaPrefix, bucket, object, uploadID)
+	return cleanupUploadedParts(storage, bucket, object, uploadID)
 }
 
 // isIncompleteMultipart - is object incomplete multipart.
