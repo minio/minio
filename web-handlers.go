@@ -405,8 +405,8 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 		apiErrCode = ErrBadDigest
 	case IncompleteBody:
 		apiErrCode = ErrIncompleteBody
-	case ObjectExistsAsPrefix:
-		apiErrCode = ErrObjectExistsAsPrefix
+	case ObjectExistsAsDirectory:
+		apiErrCode = ErrObjectExistsAsDirectory
 	case ObjectNotFound:
 		apiErrCode = ErrNoSuchKey
 	case ObjectNameInvalid:
