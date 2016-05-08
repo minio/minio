@@ -118,7 +118,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Save the s3 md5.
-	s3MD5, err := makeS3MD5(md5Sums...)
+	s3MD5, err := completeMultipartMD5(md5Sums...)
 	if err != nil {
 		return "", err
 	}
