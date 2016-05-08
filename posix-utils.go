@@ -57,16 +57,6 @@ func isValidPath(path string) bool {
 	return true
 }
 
-// isValidPrefix verifies where the prefix is a valid path.
-func isValidPrefix(prefix string) bool {
-	// Prefix can be empty.
-	if prefix == "" || prefix == "/" {
-		return true
-	}
-	// Verify if prefix is a valid path.
-	return isValidPath(prefix)
-}
-
 // List of reserved words for files, includes old and new ones.
 var reservedKeywords = []string{
 	"$multiparts",

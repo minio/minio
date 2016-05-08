@@ -62,9 +62,3 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	encodingType = values.Get("encoding-type")
 	return
 }
-
-// Get upload id.
-func getUploadID(values url.Values) (uploadID string) {
-	uploadID, _, _, _ = getObjectResources(values)
-	return
-}

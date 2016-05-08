@@ -31,15 +31,6 @@ func getBucketsConfigPath() (string, error) {
 	return filepath.Join(configPath, "buckets"), nil
 }
 
-// createBucketsConfigPath - create buckets directory.
-func createBucketsConfigPath() error {
-	bucketsConfigPath, err := getBucketsConfigPath()
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(bucketsConfigPath, 0700)
-}
-
 // getBucketConfigPath - get bucket config path.
 func getBucketConfigPath(bucket string) (string, error) {
 	bucketsConfigPath, err := getBucketsConfigPath()

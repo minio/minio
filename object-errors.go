@@ -233,12 +233,3 @@ type InvalidPart struct{}
 func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found"
 }
-
-// InvalidPartOrder parts are not ordered as Requested
-type InvalidPartOrder struct {
-	UploadID string
-}
-
-func (e InvalidPartOrder) Error() string {
-	return "Invalid part order sent for " + e.UploadID
-}
