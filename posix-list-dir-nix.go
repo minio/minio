@@ -69,6 +69,10 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 		if name == "." || name == ".." {
 			continue
 		}
+		// Skip special files.
+		if hasReservedPrefix(name) || hasReservedSuffix(name) {
+			continue
+		}
 
 		switch dirent.Type {
 		case syscall.DT_DIR:

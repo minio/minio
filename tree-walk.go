@@ -123,9 +123,6 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			if !strings.HasPrefix(entry, entryPrefixMatch) {
 				entries[i] = ""
 			}
-			if hasReservedPrefix(entry) || hasReservedSuffix(entry) {
-				entries[i] = ""
-			}
 		}
 	}
 	// For XL multipart files strip the trailing "/" and append ".minio.multipart" to the entry so that
