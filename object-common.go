@@ -71,7 +71,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		}
 		return nil
 	}
-	return delFunc(retainSlash(dirPath))
+	return delFunc(retainSlash(pathJoin(dirPath)))
 }
 
 /// Common object layer functions.

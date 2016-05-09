@@ -105,12 +105,14 @@ func retainSlash(s string) string {
 }
 
 // pathJoin - like path.Join() but retains trailing "/" of the last element
-func pathJoin(s1 string, s2 string) string {
+func pathJoin(elem ...string) string {
 	trailingSlash := ""
-	if strings.HasSuffix(s2, slashSeparator) {
-		trailingSlash = "/"
+	if len(elem) > 0 {
+		if strings.HasSuffix(elem[len(elem)-1], slashSeparator) {
+			trailingSlash = "/"
+		}
 	}
-	return path.Join(s1, s2) + trailingSlash
+	return path.Join(elem...) + trailingSlash
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.

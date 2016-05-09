@@ -458,11 +458,11 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 		if fi.Mode.IsDir() {
 			// All directory entries are common prefixes.
 			uploadID = "" // Upload ids are empty for CommonPrefixes.
-			objectName = strings.TrimPrefix(fi.Name, retainSlash(path.Join(mpartMetaPrefix, bucket)))
+			objectName = strings.TrimPrefix(fi.Name, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
 			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
 		} else {
 			uploadID = path.Base(fi.Name)
-			objectName = strings.TrimPrefix(path.Dir(fi.Name), retainSlash(path.Join(mpartMetaPrefix, bucket)))
+			objectName = strings.TrimPrefix(path.Dir(fi.Name), retainSlash(pathJoin(mpartMetaPrefix, bucket)))
 			result.Uploads = append(result.Uploads, uploadMetadata{
 				Object:    objectName,
 				UploadID:  uploadID,
