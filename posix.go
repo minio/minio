@@ -19,8 +19,7 @@ package main
 import (
 	"io"
 	"os"
-	"path"
-	"path/filepath"
+	slashpath "path"
 	"strings"
 	"syscall"
 
@@ -148,7 +147,7 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(filepath.Clean(entry)) {
+		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
@@ -479,7 +478,7 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, err
 	}
 
-	filePath := pathJoin(volumeDir, path)
+	filePath := slashpath.Join(volumeDir, path)
 	st, err := os.Stat(filePath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -548,10 +547,10 @@ func deleteFile(basePath, deletePath string) error {
 		return err
 	}
 	// Recursively go down the next path and delete again.
-	if err := deleteFile(basePath, path.Dir(deletePath)); err != nil {
+	if err := deleteFile(basePath, slashpath.Dir(deletePath)); err != nil {
 		log.WithFields(logrus.Fields{
 			"basePath":  basePath,
-			"deleteDir": path.Dir(deletePath),
+			"deleteDir": slashpath.Dir(deletePath),
 		}).Debugf("deleteFile failed with %s", err)
 		return err
 	}
@@ -595,7 +594,7 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
-	if err = os.MkdirAll(path.Join(dstVolumeDir, path.Dir(dstPath)), 0755); err != nil {
+	if err = os.MkdirAll(slashpath.Join(dstVolumeDir, slashpath.Dir(dstPath)), 0755); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
@@ -603,7 +602,7 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		log.Errorf("os.MkdirAll failed with %s", err)
 		return err
 	}
-	err = os.Rename(path.Join(srcVolumeDir, srcPath), path.Join(dstVolumeDir, dstPath))
+	err = os.Rename(slashpath.Join(srcVolumeDir, srcPath), slashpath.Join(dstVolumeDir, dstPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
