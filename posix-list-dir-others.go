@@ -56,6 +56,10 @@ func readDir(dirPath string) (entries []string, err error) {
 			return nil, err
 		}
 		for _, fi := range fis {
+			// Skip special files.
+			if hasReservedPrefix(fi.Name()) || hasReservedSuffix(fi.Name()) {
+				continue
+			}
 			if fi.Mode().IsDir() {
 				// append "/" instead of "\" so that sorting is done as expected.
 				entries = append(entries, fi.Name()+slashSeparator)
