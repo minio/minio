@@ -124,7 +124,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var wg = &sync.WaitGroup{}
 
 	// Loop through all parts, validate them and then commit to disk.
-	for _, part := range parts {
+	for i, part := range parts {
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
 		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
@@ -136,7 +136,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 			return "", err
 		}
-		if !isMinAllowedPartSize(fi.Size) {
+		// All parts except the last part has to be atleast 5MB.
+		if (i < len(parts)-1) && !isMinAllowedPartSize(fi.Size) {
 			return "", PartTooSmall{}
 		}
 		// Update metadata parts.

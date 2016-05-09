@@ -1279,6 +1279,13 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
+	// Create a byte array of 1 byte.
+	data = []byte("0")
+
+	hasher = md5.New()
+	hasher.Write(data)
+	md5Sum = hasher.Sum(nil)
+
 	buffer2 := bytes.NewReader(data)
 	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
