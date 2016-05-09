@@ -22,8 +22,6 @@ import (
 	slashpath "path"
 	"strings"
 
-	"path"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/klauspost/reedsolomon"
 )
@@ -377,16 +375,9 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	return volInfo, nil
 }
 
-// isLeafDirectoryXL - check if a given path is leaf directory. i.e
-// if it contains file xlMetaV1File
-func isLeafDirectoryXL(disk StorageAPI, volume, leafPath string) (isLeaf bool) {
-	_, err := disk.StatFile(volume, path.Join(leafPath, xlMetaV1File))
-	return err == nil
-}
-
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
+func (xl XL) ListDir(volume, dirPath string, withFileSuffix string) (entries []string, err error) {
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
 	}
@@ -394,14 +385,14 @@ func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
 	// so that Listing can be done there. One option is always do Listing from
 	// the "local" disk - if it is down user has to list using another XL server.
 	// This way user knows from which disk he is listing from.
-
 	for _, disk := range xl.storageDisks {
-		if entries, err = disk.ListDir(volume, dirPath); err != nil {
+		if entries, err = disk.ListDir(volume, dirPath, xlMetaV1File); err != nil {
+			log.Errorf("Unable to access %s:%s, failed with %s", volume, dirPath, err)
 			continue
 		}
 		for i, entry := range entries {
-			if strings.HasSuffix(entry, slashSeparator) && isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			if strings.HasSuffix(entry, xlMetaV1File) {
+				entries[i] = slashpath.Dir(entry)
 			}
 		}
 		// We have list from one of the disks hence break the loop.

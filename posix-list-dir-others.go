@@ -27,7 +27,7 @@ import (
 )
 
 // Return all the entries at the directory dirPath.
-func readDir(dirPath string) (entries []string, err error) {
+func readDir(dirPath string, withFileSuffix string) (entries []string, err error) {
 	d, err := os.Open(dirPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -64,7 +64,9 @@ func readDir(dirPath string) (entries []string, err error) {
 				// append "/" instead of "\" so that sorting is done as expected.
 				entries = append(entries, fi.Name()+slashSeparator)
 			} else if fi.Mode().IsRegular() {
-				entries = append(entries, fi.Name())
+				if strings.HasSuffix(fi.Name(), withFileSuffix) {
+					entries = append(entries, fi.Name())
+				}
 			}
 		}
 	}

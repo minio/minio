@@ -257,13 +257,7 @@ func isIncompleteMultipart(storage StorageAPI, objectPath string) (bool, error) 
 // directory, returns error if any - returns empty list if prefixPath
 // is not a leaf directory.
 func listLeafEntries(storage StorageAPI, prefixPath string) (entries []string, err error) {
-	var ok bool
-	if ok, err = isIncompleteMultipart(storage, prefixPath); err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, nil
-	}
-	entries, err = storage.ListDir(minioMetaBucket, prefixPath)
+	entries, err = storage.ListDir(minioMetaBucket, prefixPath, uploadsJSONFile)
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +491,7 @@ func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, 
 		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
 	}
 	result := ListPartsInfo{}
-	entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
+	entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), "")
 	if err != nil {
 		return result, err
 	}

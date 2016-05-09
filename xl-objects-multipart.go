@@ -221,7 +221,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var entries []string
-	if entries, err = xl.storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err == nil {
+	if entries, err = xl.storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object), ""); err == nil {
 		if len(entries) > 1 {
 			return s3MD5, nil
 		}

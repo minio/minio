@@ -85,11 +85,12 @@ func (s *storageServer) StatFileHandler(arg *StatFileArgs, reply *FileInfo) erro
 
 // ListDirHandler - list directory handler is rpc wrapper to list dir.
 func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error {
-	entries, err := s.storage.ListDir(arg.Vol, arg.Path)
+	entries, err := s.storage.ListDir(arg.Vol, arg.Path, arg.WithFileSuffix)
 	if err != nil {
 		log.WithFields(logrus.Fields{
-			"volume": arg.Vol,
-			"path":   arg.Path,
+			"volume":         arg.Vol,
+			"path":           arg.Path,
+			"withFileSuffix": arg.WithFileSuffix,
 		}).Debugf("ListDir failed with error %s", err)
 		return err
 	}

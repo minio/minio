@@ -138,7 +138,7 @@ func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
 
 // gets all the unique directories from diskPath.
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
-	entries, err := readDir(dirPath)
+	entries, err := readDir(dirPath, "")
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"dirPath": dirPath,
@@ -352,7 +352,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
+func (s fsStorage) ListDir(volume, dirPath string, withFileSuffix string) ([]string, error) {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
@@ -374,7 +374,8 @@ func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 		}
 		return nil, err
 	}
-	return readDir(pathJoin(volumeDir, dirPath))
+	dirPath = pathJoin(volumeDir, dirPath)
+	return readDir(dirPath, withFileSuffix)
 }
 
 // ReadFile - read a file at a given offset.
