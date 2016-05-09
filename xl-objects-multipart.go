@@ -149,45 +149,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		metadata.Size += fi.Size
 	}
 
-	// Loop through and atomically rename the parts to their actual location.
-	for index, part := range parts {
-		wg.Add(1)
-		go func(index int, part completePart) {
-			defer wg.Done()
-			partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
-			multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-			tmpMultipartObjSuffix := path.Join(tmpMetaPrefix, bucket, object, partNumToPartFileName(part.PartNumber))
-			rErr := xl.storage.RenameFile(minioMetaBucket, multipartPartFile, minioMetaBucket, tmpMultipartObjSuffix)
-			if rErr != nil {
-				errs[index] = rErr
-				log.Errorf("Unable to rename file %s to %s, failed with %s", multipartPartFile, tmpMultipartObjSuffix, rErr)
-				return
-			}
-			multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
-			rErr = xl.storage.RenameFile(minioMetaBucket, tmpMultipartObjSuffix, bucket, multipartObjSuffix)
-			if rErr != nil {
-				if dErr := xl.storage.DeleteFile(minioMetaBucket, tmpMultipartObjSuffix); dErr != nil {
-					errs[index] = dErr
-					log.Errorf("Unable to delete file %s, failed with %s", tmpMultipartObjSuffix, dErr)
-					return
-				}
-				log.Debugf("Delete file succeeded on %s", tmpMultipartObjSuffix)
-				errs[index] = rErr
-				log.Errorf("Unable to rename file %s to %s, failed with %s", tmpMultipartObjSuffix, multipartObjSuffix, rErr)
-			}
-		}(index, part)
-	}
-
-	// Wait for all the renames to finish.
-	wg.Wait()
-
-	// Loop through errs list and return first error.
-	for _, err := range errs {
-		if err != nil {
-			return "", toObjectErr(err, bucket, object)
-		}
-	}
-
 	// Save successfully calculated md5sum.
 	metadata.MD5Sum = s3MD5
 	// Save modTime as well as the current time.
@@ -214,6 +175,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		return "", err
 	}
+
+	// Attempt a Rename of multipart meta file to final namespace.
 	multipartObjFile := path.Join(object, multipartMetaFile)
 	err = xl.storage.RenameFile(minioMetaBucket, tempMultipartMetaFile, bucket, multipartObjFile)
 	if err != nil {
@@ -223,22 +186,46 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, multipartObjFile)
 	}
 
-	// Attempt a rename of the upload id to temporary location, if
-	// successful then delete it.
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, incompleteFile)
-	if err = xl.storage.RenameFile(minioMetaBucket, uploadIDPath, minioMetaBucket, tempUploadIDPath); err == nil {
-		if err = xl.storage.DeleteFile(minioMetaBucket, tempUploadIDPath); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
-		}
-		return s3MD5, nil
+	// Loop through and atomically rename the parts to their actual location.
+	for index, part := range parts {
+		wg.Add(1)
+		go func(index int, part completePart) {
+			defer wg.Done()
+			partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
+			multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+			multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
+			errs[index] = xl.storage.RenameFile(minioMetaBucket, multipartPartFile, bucket, multipartObjSuffix)
+			if errs[index] != nil {
+				log.Errorf("Unable to rename file %s to %s, failed with %s", multipartPartFile, multipartObjSuffix, errs[index])
+			}
+		}(index, part)
 	}
-	// Rename if failed attempt to delete the original file.
+
+	// Wait for all the renames to finish.
+	wg.Wait()
+
+	// Loop through errs list and return first error.
+	for _, err := range errs {
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+	}
+
+	// Delete the incomplete file place holder.
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
 	err = xl.storage.DeleteFile(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 
+	// Validate if there are other incomplete upload-id's present for
+	// the object, if yes do not attempt to delete 'uploads.json'.
+	var entries []string
+	if entries, err = xl.storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err == nil {
+		if len(entries) > 1 {
+			return s3MD5, nil
+		}
+	}
 	uploadsJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	err = xl.storage.DeleteFile(minioMetaBucket, uploadsJSONPath)
 	if err != nil {
