@@ -108,6 +108,11 @@
 			"revisionTime": "2014-04-12T15:01:45-07:00"
 		},
 		{
+			"path": "github.com/pkg/profile",
+			"revision": "19396ecfda37c1c9ddaa52019adca59d582e4832",
+			"revisionTime": "2016-03-15T12:21:13+11:00"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
 			"revisionTime": "2015-08-29T22:34:20-07:00"
