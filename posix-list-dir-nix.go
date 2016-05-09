@@ -70,7 +70,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			continue
 		}
 		// Skip special files.
-		if hasReservedPrefix(name) || hasReservedSuffix(name) {
+		if hasPosixReservedPrefix(name) {
 			continue
 		}
 

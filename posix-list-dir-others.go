@@ -57,7 +57,7 @@ func readDir(dirPath string) (entries []string, err error) {
 		}
 		for _, fi := range fis {
 			// Skip special files.
-			if hasReservedPrefix(fi.Name()) || hasReservedSuffix(fi.Name()) {
+			if hasPosixReservedPrefix(fi.Name()) {
 				continue
 			}
 			if fi.Mode().IsDir() {
