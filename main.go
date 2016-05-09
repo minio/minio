@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
 	"github.com/olekukonko/ts"
+	"github.com/pkg/profile"
 )
 
 var (
@@ -176,7 +178,23 @@ func checkMainSyntax(c *cli.Context) {
 	}
 }
 
+// mustGetProfilePath must get location that the profile will be written to.
+func mustGetProfilePath() string {
+	return filepath.Join(mustGetConfigPath(), globalMinioProfilePath)
+}
+
 func main() {
+	// Enable profiling supported modes are [cpu, mem, block].
+	// ``MINIO_PROFILER`` supported options are [cpu, mem, block].
+	switch os.Getenv("MINIO_PROFILER") {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+	case "mem":
+		defer profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+	case "block":
+		defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+	}
+
 	probe.Init() // Set project's root source path.
 	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 	probe.SetAppInfo("Commit-ID", minioShortCommitID)

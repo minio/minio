@@ -26,14 +26,6 @@ var commandsTree = newTrie()
 
 // Collection of minio flags currently supported.
 var globalFlags = []cli.Flag{
-	cli.BoolFlag{
-		Name:  "quiet, q",
-		Usage: "Suppress chatty console output.",
-	},
-	cli.BoolFlag{
-		Name:  "debug",
-		Usage: "Enable debugging output.",
-	},
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: mustGetConfigPath(),

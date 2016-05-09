@@ -35,6 +35,8 @@ const (
 	globalMinioCertFile      = "public.crt"
 	globalMinioKeyFile       = "private.key"
 	globalMinioConfigFile    = "config.json"
+	globalMinioProfilePath   = "profile"
+	// Add new global values here.
 )
 
 var (
