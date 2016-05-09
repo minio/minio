@@ -21,6 +21,9 @@ import "errors"
 // errDiskFull - cannot create volume or files when disk is full.
 var errDiskFull = errors.New("disk path full")
 
+// errDiskNotFount - cannot find the underlying configured disk anymore.
+var errDiskNotFound = errors.New("disk not found")
+
 // errFileNotFound - cannot find the file.
 var errFileNotFound = errors.New("file not found")
 
