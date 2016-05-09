@@ -58,28 +58,14 @@ func isValidPath(path string) bool {
 }
 
 // List of reserved words for files, includes old and new ones.
-var reservedKeywords = []string{
-	"$multiparts",
-	"$tmpobject",
+var posixReservedPrefix = []string{
 	"$tmpfile",
 	// Add new reserved words if any used in future.
 }
 
-// hasReservedPrefix - returns true if name has a reserved keyword suffixed.
-func hasReservedSuffix(name string) (isReserved bool) {
-	for _, reservedKey := range reservedKeywords {
-		if strings.HasSuffix(name, reservedKey) {
-			isReserved = true
-			break
-		}
-		isReserved = false
-	}
-	return isReserved
-}
-
-// hasReservedPrefix - has reserved prefix.
-func hasReservedPrefix(name string) (isReserved bool) {
-	for _, reservedKey := range reservedKeywords {
+// hasPosixReservedPrefix - has reserved prefix.
+func hasPosixReservedPrefix(name string) (isReserved bool) {
+	for _, reservedKey := range posixReservedPrefix {
 		if strings.HasPrefix(name, reservedKey) {
 			isReserved = true
 			break
