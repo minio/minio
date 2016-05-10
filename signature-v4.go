@@ -26,6 +26,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
 	"net/url"
@@ -33,8 +34,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/minio/minio/pkg/crypto/sha256"
 )
 
 // AWS Signature Version '4' constants.
