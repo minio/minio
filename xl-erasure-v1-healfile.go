@@ -86,6 +86,7 @@ func (xl XL) healFile(volume string, path string) error {
 		erasurePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		writers[index], err = xl.storageDisks[index].CreateFile(volume, erasurePart)
 		if err != nil {
+			needsHeal[index] = false
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 				"path":   path,
