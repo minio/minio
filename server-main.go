@@ -77,8 +77,21 @@ type serverCmdConfig struct {
 	exportPaths []string
 }
 
-// configureServer configure a new server instance
-func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
+// configureHTTPServer configure a new HTTP server instance.
+func configureHTTPServer(srvCmdConfig serverCmdConfig) *http.Server {
+	// Minio server config
+	apiServer := &http.Server{
+		Addr:           srvCmdConfig.serverAddr,
+		Handler:        configureServerHandler(srvCmdConfig),
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	// Returns configured HTTP server.
+	return apiServer
+}
+
+// configureHTTPSServer configure a new HTTPS server instance.
+func configureHTTPSServer(srvCmdConfig serverCmdConfig) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
 		Addr:           srvCmdConfig.serverAddr,
@@ -95,7 +108,7 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 		fatalIf(err, "Unable to load certificates.", nil)
 	}
 
-	// Returns configured HTTP server.
+	// Returns configured HTTPS server.
 	return apiServer
 }
 
@@ -170,15 +183,6 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
-// Extract port number from address address should be of the form host:port.
-func getPort(address string) int {
-	_, portStr, err := net.SplitHostPort(address)
-	fatalIf(err, "Unable to split host port.", nil)
-	portInt, err := strconv.Atoi(portStr)
-	fatalIf(err, "Invalid port number.", nil)
-	return portInt
-}
-
 // Make sure that none of the other processes are listening on the
 // specified port on any of the interfaces.
 //
@@ -235,21 +239,50 @@ func checkPortAvailability(port int) {
 			if err != nil {
 				if isAddrInUse(err) {
 					// Fail if port is already in use.
-					fatalIf(err, fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+					errMsg := fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port)
+					fatalIf(err, errMsg, nil)
 				} else {
 					// Ignore other errors.
 					continue
 				}
 			}
 			if err = l.Close(); err != nil {
-				fatalIf(err, fmt.Sprintf("Unable to close listener on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+				errMsg := fmt.Sprintf("Unable to close listener on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port)
+				fatalIf(err, errMsg, nil)
+			}
+			// If SSL is enabled validate additional ports.
+			if isSSL() {
+				// For port inet HTTP port, use default inet HTTPS port.
+				if port == 80 {
+					port = 443
+				} else {
+					// For all other ports just verify the next
+					// available one.
+					port++
+				}
+				tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
+				l, err := net.ListenTCP(network, &tcpAddr)
+				if err != nil {
+					if isAddrInUse(err) {
+						// Fail if port is already in use.
+						errMsg := fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port)
+						fatalIf(err, errMsg, nil)
+					} else {
+						// Ignore other errors.
+						continue
+					}
+				}
+				if err = l.Close(); err != nil {
+					errMsg := fmt.Sprintf("Unable to close listener on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port)
+					fatalIf(err, errMsg, nil)
+				}
 			}
 		}
 	}
 }
 
 func serverMain(c *cli.Context) {
-	// check 'server' cli arguments.
+	// Check 'server' cli arguments.
 	checkServerSyntax(c)
 
 	// Initialize server config.
@@ -258,28 +291,34 @@ func serverMain(c *cli.Context) {
 	// Server address.
 	serverAddress := c.String("address")
 
-	host, port, _ := net.SplitHostPort(serverAddress)
+	_, port, _ := net.SplitHostPort(serverAddress)
 	// If port empty, default to port '80'
 	if port == "" {
 		port = "80"
-		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
-			port = "443"
-		}
 	}
 
-	// Check if requested port is available.
-	checkPortAvailability(getPort(net.JoinHostPort(host, port)))
+	portInt, err := strconv.Atoi(port)
+	fatalIf(err, "Invalid port number.", nil)
+
+	// Check if requested port is available, if not fail.
+	checkPortAvailability(portInt)
 
 	// Save all command line args as export paths.
 	exportPaths := c.Args()
 
-	// Configure server.
-	apiServer := configureServer(serverCmdConfig{
+	// Configure HTTP server.
+	apiHTTPServer := configureHTTPServer(serverCmdConfig{
 		serverAddr:  serverAddress,
 		exportPaths: exportPaths,
 	})
-
+	var apiHTTPSServer *http.Server
+	// Configure HTTPS server.
+	if isSSL() {
+		apiHTTPSServer = configureHTTPSServer(serverCmdConfig{
+			serverAddr:  serverAddress,
+			exportPaths: exportPaths,
+		})
+	}
 	// Credential.
 	cred := serverConfig.GetCredential()
 
@@ -289,23 +328,32 @@ func serverMain(c *cli.Context) {
 	// Print credentials and region.
 	console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
 
-	hosts, port := getListenIPs(apiServer) // get listen ips and port.
-	tls := apiServer.TLSConfig != nil      // 'true' if TLS is enabled.
+	// Get http listen ips and port.
+	httpHosts, httpPort := getListenIPs(apiHTTPServer)
 
 	console.Println("\nMinio Object Storage:")
-	// Print api listen ips.
-	printListenIPs(tls, hosts, port)
+	// Print HTTP listen ips.
+	printListenIPs(false, httpHosts, httpPort)
+	var httpsHosts []string
+	var httpsPort string
+	if isSSL() {
+		httpsHosts, httpsPort = getListenIPs(apiHTTPSServer)
+		printListenIPs(true, httpsHosts, httpsPort)
+	}
 
 	console.Println("\nMinio Browser:")
-	// Print browser listen ips.
-	printListenIPs(tls, hosts, port)
+	// Print HTTP listen ips.
+	printListenIPs(false, httpHosts, httpPort)
+	if isSSL() {
+		httpsHosts, httpsPort = getListenIPs(apiHTTPSServer)
+		printListenIPs(true, httpsHosts, httpsPort)
+	}
 
 	console.Println("\nTo configure Minio Client:")
-
 	// Figure out right endpoint for 'mc'.
-	endpoint := fmt.Sprintf("http://%s:%s", hosts[0], port)
-	if tls {
-		endpoint = fmt.Sprintf("https://%s:%s", hosts[0], port)
+	endpoint := fmt.Sprintf("http://%s:%s", httpHosts[0], httpPort)
+	if isSSL() {
+		endpoint = fmt.Sprintf("https://%s:%s", httpsHosts[0], httpsPort)
 	}
 
 	// Download 'mc' info.
@@ -319,6 +367,10 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	err := minhttp.ListenAndServe(apiServer)
+	if apiHTTPSServer != nil {
+		err = minhttp.ListenAndServe(apiHTTPServer, apiHTTPSServer)
+	} else {
+		err = minhttp.ListenAndServe(apiHTTPServer)
+	}
 	errorIf(err, "Failed to start the minio server.", nil)
 }
