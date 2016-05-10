@@ -85,7 +85,7 @@ func (s *MyAPIXLSuite) SetUpSuite(c *C) {
 	// Save config.
 	c.Assert(serverConfig.Save(), IsNil)
 
-	apiServer := configureServer(serverCmdConfig{
+	apiServer := configureHTTPServer(serverCmdConfig{
 		serverAddr:  addr,
 		exportPaths: erasureDisks,
 	})
