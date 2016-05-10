@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	slashpath "path"
+	"sync"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -117,23 +118,29 @@ func (xl XL) getPartsMetadata(volume, path string) ([]xlMetaV1, []error) {
 	errs := make([]error, len(xl.storageDisks))
 	metadataArray := make([]xlMetaV1, len(xl.storageDisks))
 	xlMetaV1FilePath := slashpath.Join(path, xlMetaV1File)
+	var wg = &sync.WaitGroup{}
 	for index, disk := range xl.storageDisks {
-		offset := int64(0)
-		metadataReader, err := disk.ReadFile(volume, xlMetaV1FilePath, offset)
-		if err != nil {
-			errs[index] = err
-			continue
-		}
-		defer metadataReader.Close()
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			offset := int64(0)
+			metadataReader, err := disk.ReadFile(volume, xlMetaV1FilePath, offset)
+			if err != nil {
+				errs[index] = err
+				return
+			}
+			defer metadataReader.Close()
 
-		metadata, err := xlMetaV1Decode(metadataReader)
-		if err != nil {
-			// Unable to parse file.json, set error.
-			errs[index] = err
-			continue
-		}
-		metadataArray[index] = metadata
+			metadata, err := xlMetaV1Decode(metadataReader)
+			if err != nil {
+				// Unable to parse file.json, set error.
+				errs[index] = err
+				return
+			}
+			metadataArray[index] = metadata
+		}(index, disk)
 	}
+	wg.Wait()
 	return metadataArray, errs
 }
 
