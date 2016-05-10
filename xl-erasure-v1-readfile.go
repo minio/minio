@@ -179,6 +179,7 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 				startOffset = startOffset - int64(len(dataBlocks))
 				// Start offset is greater than or equal to zero, skip the dataBlocks.
 				if startOffset >= 0 {
+					totalLeft = totalLeft - metadata.Erasure.BlockSize
 					continue
 				}
 				// Now get back the remaining offset if startOffset is negative.
