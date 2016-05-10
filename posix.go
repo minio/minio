@@ -185,7 +185,8 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 		var volsInfo []VolInfo
 		volsInfo, err = getAllUniqueVols(s.diskPath)
 		if err != nil {
-			return volumeDir, errVolumeNotFound
+			// For any errors, treat it as disk not found.
+			return volumeDir, errDiskNotFound
 		}
 		for _, vol := range volsInfo {
 			// Verify if lowercase version of the volume is equal to
