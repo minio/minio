@@ -19,13 +19,12 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"io/ioutil"
 	"net/http"
 	"strings"
-
-	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 )
 
 // Verify if request has JWT.
@@ -97,7 +96,7 @@ func getRequestAuthType(r *http.Request) authType {
 
 // sum256 calculate sha256 sum for an input byte array
 func sum256(data []byte) []byte {
-	hash := fastSha256.New()
+	hash := sha256.New()
 	hash.Write(data)
 	return hash.Sum(nil)
 }

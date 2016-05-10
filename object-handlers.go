@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
@@ -28,8 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	fastSha256 "github.com/minio/minio/pkg/crypto/sha256"
 
 	mux "github.com/gorilla/mux"
 )
@@ -574,7 +573,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 		// Start writing in a routine.
 		go func() {
-			shaWriter := fastSha256.New()
+			shaWriter := sha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
 			if _, cerr := io.CopyN(multiWriter, r.Body, size); cerr != nil {
 				errorIf(cerr, "Unable to read HTTP body.", nil)
@@ -719,7 +718,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 		// Start writing in a routine.
 		go func() {
-			shaWriter := fastSha256.New()
+			shaWriter := sha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
 			if _, err = io.CopyN(multiWriter, r.Body, size); err != nil {
 				errorIf(err, "Unable to read HTTP body.", nil)
