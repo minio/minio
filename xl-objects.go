@@ -176,6 +176,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 				fileWriter.CloseWithError(err)
 				return
 			}
+			// Reset offset to 0 as it would be non-0 only for the first loop if startOffset is non-0.
+			offset = 0
 			if _, err := io.Copy(fileWriter, r); err != nil {
 				fileWriter.CloseWithError(err)
 				return
