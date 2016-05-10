@@ -13,3 +13,5 @@ build
 vendor/**/*.js
 vendor/**/*.json
 release
+.DS_Store
+*.syso
