@@ -248,7 +248,7 @@ func (n networkStorage) ReadFile(volume string, path string, offset int64) (read
 }
 
 // ListDir - list all entries at prefix.
-func (n networkStorage) ListDir(volume, path string) (entries []string, err error) {
+func (n networkStorage) ListDir(volume, path string, withFileSuffix string) (entries []string, err error) {
 	if err = n.rpcClient.Call("Storage.ListDirHandler", ListDirArgs{
 		Vol:  volume,
 		Path: path,

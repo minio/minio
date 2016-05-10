@@ -27,7 +27,7 @@ type StorageAPI interface {
 	DeleteVol(volume string) (err error)
 
 	// File operations.
-	ListDir(volume, dirPath string) ([]string, error)
+	ListDir(volume, dirPath, withFileSuffix string) ([]string, error)
 	ReadFile(volume string, path string, offset int64) (readCloser io.ReadCloser, err error)
 	CreateFile(volume string, path string) (writeCloser io.WriteCloser, err error)
 	StatFile(volume string, path string) (file FileInfo, err error)

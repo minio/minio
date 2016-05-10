@@ -41,8 +41,9 @@ type DeleteFileArgs struct {
 
 // ListDirArgs list dir args.
 type ListDirArgs struct {
-	Vol  string
-	Path string
+	Vol            string
+	Path           string
+	WithFileSuffix string
 }
 
 // RenameFileArgs rename file args.

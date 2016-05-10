@@ -49,7 +49,7 @@ func clen(n []byte) int {
 
 // parseDirents - inspired from
 // https://golang.org/src/syscall/syscall_<os>.go
-func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
+func parseDirents(dirPath string, buf []byte, filter func(string) bool) (entries []string, err error) {
 	bufidx := 0
 	for bufidx < len(buf) {
 		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
@@ -76,22 +76,31 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 
 		switch dirent.Type {
 		case syscall.DT_DIR:
-			entries = append(entries, name+slashSeparator)
+			if filter(path.Join(dirPath, name)) {
+				entries = append(entries, name)
+			} else {
+				entries = append(entries, name+slashSeparator)
+			}
 		case syscall.DT_REG:
 			entries = append(entries, name)
 		case syscall.DT_UNKNOWN:
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to Stat().
 			var fi os.FileInfo
-			if fi, err = os.Stat(path.Join(dirPath, name)); err == nil {
-				if fi.IsDir() {
-					entries = append(entries, fi.Name()+slashSeparator)
-				} else if fi.Mode().IsRegular() {
-					entries = append(entries, fi.Name())
-				}
-			} else {
+			fi, err = os.Stat(path.Join(dirPath, name))
+			if err != nil {
+				log.Errorf("Unable to access path %s, failed with %s", path.Join(dirPath, name), err)
 				// This is unexpected.
 				return
+			}
+			if fi.Mode().IsDir() {
+				if filter(path.Join(dirPath, name)) {
+					entries = append(entries, fi.Name())
+				} else {
+					entries = append(entries, fi.Name()+slashSeparator)
+				}
+			} else if fi.Mode().IsRegular() {
+				entries = append(entries, fi.Name())
 			}
 		default:
 			// Skip entries which are not file or directory.
@@ -103,7 +112,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 }
 
 // Return all the entries at the directory dirPath.
-func readDir(dirPath string) (entries []string, err error) {
+func readDir(dirPath string, withFileSuffix string) (entries []string, err error) {
 	buf := make([]byte, readDirentBufSize)
 	d, err := os.Open(dirPath)
 	if err != nil {
@@ -134,7 +143,15 @@ func readDir(dirPath string) (entries []string, err error) {
 			break
 		}
 		var tmpEntries []string
-		if tmpEntries, err = parseDirents(dirPath, buf[:nbuf]); err != nil {
+		if tmpEntries, err = parseDirents(dirPath, buf[:nbuf], func(entry string) bool {
+			st, sErr := os.Stat(path.Join(entry, withFileSuffix))
+			if sErr != nil {
+				log.Errorf("Stat failed with %s, %s, %s", sErr, entry, withFileSuffix)
+				return false
+			}
+			return st.Mode().IsRegular()
+		}); err != nil {
+			log.Errorf("parseDirents failed with %s", err)
 			return nil, err
 		}
 		entries = append(entries, tmpEntries...)

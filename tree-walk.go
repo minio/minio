@@ -112,7 +112,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, err := disk.ListDir(bucket, prefixDir)
+	entries, err := disk.ListDir(bucket, prefixDir, "")
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
