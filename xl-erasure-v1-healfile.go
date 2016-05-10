@@ -117,6 +117,10 @@ func (xl XL) healFile(volume string, path string) error {
 				// Skip reading if the part needs healing.
 				continue
 			}
+			if reader == nil {
+				// If ReadFile() had returned error, do not read from this disk.
+				continue
+			}
 			_, err = io.ReadFull(reader, enBlocks[index])
 			if err != nil && err != io.ErrUnexpectedEOF {
 				enBlocks[index] = nil
