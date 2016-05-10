@@ -191,11 +191,14 @@ func getMultipartObjectInfo(storage StorageAPI, bucket, object string) (info Mul
 	offset := int64(0)
 	r, err := storage.ReadFile(bucket, pathJoin(object, multipartMetaFile), offset)
 	if err != nil {
-		return
+		return MultipartObjectInfo{}, err
 	}
 	decoder := json.NewDecoder(r)
 	err = decoder.Decode(&info)
-	return
+	if err != nil {
+		return MultipartObjectInfo{}, err
+	}
+	return info, nil
 }
 
 // GetObjectInfo - get object info.
