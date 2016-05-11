@@ -603,7 +603,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Save metadata.
 		metadata := make(map[string]string)
 		// Make sure we hex encode here.
-		metadata["md5"] = hex.EncodeToString(md5Bytes)
+		metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 		// Create object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
