@@ -311,6 +311,10 @@ func (xl XL) listAllVolumeInfo(volume string) ([]VolInfo, bool, error) {
 
 // healVolume - heals any missing volumes.
 func (xl XL) healVolume(volume string) error {
+	// Acquire a read lock.
+	nsMutex.RLock(volume, "")
+	defer nsMutex.RUnlock(volume, "")
+
 	// Lists volume info for all online disks.
 	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
 	if err != nil {
@@ -345,7 +349,9 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	if !isValidVolname(volume) {
 		return VolInfo{}, errInvalidArgument
 	}
+	nsMutex.RLock(volume, "")
 	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
+	nsMutex.RUnlock(volume, "")
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"volume": volume,
@@ -355,10 +361,10 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 
 	if heal {
 		go func() {
-			if err = xl.healVolume(volume); err != nil {
+			if herr := xl.healVolume(volume); herr != nil {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
-				}).Errorf("healVolume failed with %s", err)
+				}).Errorf("healVolume failed with %s", herr)
 				return
 			}
 		}()
@@ -436,11 +442,11 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	if heal {
 		// Heal in background safely, since we already have read quorum disks.
 		go func() {
-			if err = xl.healFile(volume, path); err != nil {
+			if hErr := xl.healFile(volume, path); hErr != nil {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Errorf("healFile failed with %s", err)
+				}).Errorf("healFile failed with %s", hErr)
 				return
 			}
 		}()
