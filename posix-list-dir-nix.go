@@ -83,15 +83,20 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to Stat().
 			var fi os.FileInfo
-			if fi, err = os.Stat(path.Join(dirPath, name)); err == nil {
-				if fi.IsDir() {
-					entries = append(entries, fi.Name()+slashSeparator)
-				} else if fi.Mode().IsRegular() {
-					entries = append(entries, fi.Name())
+			fi, err = os.Stat(path.Join(dirPath, name))
+			if err != nil {
+				// If file does not exist, we continue and skip it.
+				// Could happen if it was deleted in the middle while
+				// this list was being performed.
+				if os.IsNotExist(err) {
+					continue
 				}
-			} else {
-				// This is unexpected.
-				return
+				return nil, err
+			}
+			if fi.IsDir() {
+				entries = append(entries, fi.Name()+slashSeparator)
+			} else if fi.Mode().IsRegular() {
+				entries = append(entries, fi.Name())
 			}
 		default:
 			// Skip entries which are not file or directory.

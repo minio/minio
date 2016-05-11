@@ -143,7 +143,7 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 		log.WithFields(logrus.Fields{
 			"dirPath": dirPath,
 		}).Debugf("readDir failed with error %s", err)
-		return nil, err
+		return nil, errDiskNotFound
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
@@ -151,11 +151,16 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
-		fi, err := os.Stat(pathJoin(dirPath, entry))
+		var fi os.FileInfo
+		fi, err = os.Stat(pathJoin(dirPath, entry))
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"path": pathJoin(dirPath, entry),
 			}).Debugf("Stat failed with error %s", err)
+			// If the file does not exist, skip the entry.
+			if os.IsNotExist(err) {
+				continue
+			}
 			return nil, err
 		}
 		volsInfo = append(volsInfo, VolInfo{
@@ -186,7 +191,7 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 		volsInfo, err = getAllUniqueVols(s.diskPath)
 		if err != nil {
 			// For any errors, treat it as disk not found.
-			return volumeDir, errDiskNotFound
+			return volumeDir, err
 		}
 		for _, vol := range volsInfo {
 			// Verify if lowercase version of the volume is equal to
