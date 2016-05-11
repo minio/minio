@@ -17,7 +17,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/minhttp"
 )
 
 var serverCmd = cli.Command{
@@ -84,15 +82,6 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 		Addr:           srvCmdConfig.serverAddr,
 		Handler:        configureServerHandler(srvCmdConfig),
 		MaxHeaderBytes: 1 << 20,
-	}
-
-	// Configure TLS if certs are available.
-	if isSSL() {
-		var err error
-		apiServer.TLSConfig = &tls.Config{}
-		apiServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		apiServer.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(mustGetCertFile(), mustGetKeyFile())
-		fatalIf(err, "Unable to load certificates.", nil)
 	}
 
 	// Returns configured HTTP server.
@@ -319,6 +308,13 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Start server.
-	err := minhttp.ListenAndServe(apiServer)
+	var err error
+	// Configure TLS if certs are available.
+	if isSSL() {
+		err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
+	} else {
+		// Fallback to http.
+		err = apiServer.ListenAndServe()
+	}
 	errorIf(err, "Failed to start the minio server.", nil)
 }
