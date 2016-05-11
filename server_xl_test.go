@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -676,6 +677,25 @@ func (s *MyAPIXLSuite) TestPutObject(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
+
+func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
+	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer := bytes.NewReader([]byte("hello world"))
+	longObjName := fmt.Sprintf("%0256d", 1)
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (s *MyAPIXLSuite) TestListBuckets(c *C) {

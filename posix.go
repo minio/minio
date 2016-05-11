@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	slashpath "path"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -36,6 +37,31 @@ const (
 type fsStorage struct {
 	diskPath    string
 	minFreeDisk int64
+}
+
+// checkPathLength - returns error if given path name length more than 255
+func checkPathLength(pathName string) error {
+	// For MS Windows, the maximum path length is 255
+	if runtime.GOOS == "windows" {
+		if len(pathName) > 255 {
+			return errFileNameTooLong
+		}
+
+		return nil
+	}
+
+	// For non-windows system, check each path segment length is > 255
+	for len(pathName) > 0 && pathName != "." && pathName != "/" {
+		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
+
+		if len(file) > 255 {
+			return errFileNameTooLong
+		}
+
+		pathName = dir
+	}
+
+	return nil
 }
 
 // isDirEmpty - returns whether given directory is empty or not.
@@ -67,6 +93,9 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		log.Error("Disk cannot be empty")
 		return nil, errInvalidArgument
 	}
+	if err := checkPathLength(diskPath); err != nil {
+		return nil, err
+	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -93,6 +122,9 @@ func newPosix(diskPath string) (StorageAPI, error) {
 
 // checkDiskFree verifies if disk path has sufficient minium free disk space.
 func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
+	if err = checkPathLength(diskPath); err != nil {
+		return err
+	}
 	di, err := disk.GetInfo(diskPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -138,6 +170,9 @@ func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
 
 // gets all the unique directories from diskPath.
 func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
+	if err := checkPathLength(dirPath); err != nil {
+		return nil, err
+	}
 	entries, err := readDir(dirPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -180,6 +215,9 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 func (s fsStorage) getVolumeDir(volume string) (string, error) {
 	if !isValidVolname(volume) {
 		return "", errInvalidArgument
+	}
+	if err := checkPathLength(volume); err != nil {
+		return "", err
 	}
 	volumeDir := pathJoin(s.diskPath, volume)
 	_, err := os.Stat(volumeDir)
@@ -395,6 +433,9 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 	}
 
 	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -451,6 +492,9 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 		return nil, err
 	}
 	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return nil, err
+	}
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
 	if st, err = os.Stat(filePath); err == nil {
@@ -485,6 +529,9 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 
 	filePath := slashpath.Join(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return FileInfo{}, err
+	}
 	st, err := os.Stat(filePath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -577,6 +624,9 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 	// Following code is needed so that we retain "/" suffix if any in
 	// path argument.
 	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
 
 	// Delete file and delete parent directory as well if its empty.
 	return deleteFile(volumeDir, filePath)
