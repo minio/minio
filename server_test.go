@@ -117,8 +117,10 @@ func (s *MyAPISuite) newRequest(method, urlStr string, contentLength int64, body
 			return nil, e
 		}
 		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
-		md5base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
-		req.Header.Set("Content-Md5", md5base64)
+		if req.Header.Get("Content-Md5") != "" {
+			md5base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
+			req.Header.Set("Content-Md5", md5base64)
+		}
 	}
 	req.Header.Set("x-amz-content-sha256", hashedPayload)
 
@@ -1217,6 +1219,43 @@ func (s *MyAPISuite) TestObjectMultipartList(c *C) {
 	response4, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000.", http.StatusBadRequest)
+}
+
+// Tests if valid md5 was set while uploading and server replies back
+// with BadDigest.
+func (s *MyAPISuite) TestObjectValidMD5(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/object-valid-md5", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	// Create a byte array of 5MB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+
+	hasher := md5.New()
+	hasher.Write(data)
+	md5Sum := hasher.Sum(nil)
+
+	buffer1 := bytes.NewReader(data)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/object-valid-md5/object", int64(buffer1.Len()), buffer1)
+	c.Assert(err, IsNil)
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer1 = bytes.NewReader(data)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/object-valid-md5/object1", int64(buffer1.Len()), buffer1)
+	c.Assert(err, IsNil)
+	request.Header.Set("Content-Md5", "WvLTlMrX9NpYDQlEIFlnDw==")
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "BadDigest", "The Content-Md5 you specified did not match what we received.", http.StatusBadRequest)
 }
 
 func (s *MyAPISuite) TestObjectMultipart(c *C) {
