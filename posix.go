@@ -93,25 +93,25 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		log.Error("Disk cannot be empty")
 		return nil, errInvalidArgument
 	}
-	if err := checkPathLength(diskPath); err != nil {
-		return nil, err
+	fs := fsStorage{
+		diskPath:    diskPath,
+		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
 	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"diskPath": diskPath,
 		}).Debugf("Stat failed, with error %s.", err)
-		return nil, err
+		if os.IsNotExist(err) {
+			return fs, errDiskNotFound
+		}
+		return fs, err
 	}
 	if !st.IsDir() {
 		log.WithFields(logrus.Fields{
 			"diskPath": diskPath,
 		}).Debugf("Disk %s.", syscall.ENOTDIR)
-		return nil, syscall.ENOTDIR
-	}
-	fs := fsStorage{
-		diskPath:    diskPath,
-		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
+		return fs, syscall.ENOTDIR
 	}
 	log.WithFields(logrus.Fields{
 		"diskPath":    diskPath,

@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -91,6 +92,14 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 			}
 		} else {
 			log.Errorf("Unable to check backend format %s", err)
+			if err == errReadQuorum {
+				errMsg := fmt.Sprintf("Not all disks %s on command line are available to meet the read quroum.", exportPaths)
+				return nil, errors.New(errMsg)
+			}
+			if err == errDiskNotFound {
+				errMsg := fmt.Sprintf("All disks %s on command line are not available.", exportPaths)
+				return nil, errors.New(errMsg)
+			}
 			return nil, err
 		}
 	}

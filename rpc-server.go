@@ -129,7 +129,7 @@ func (s *storageServer) RenameFileHandler(arg *RenameFileArgs, reply *GenericRep
 func newRPCServer(exportPath string) (*storageServer, error) {
 	// Initialize posix storage API.
 	storage, err := newPosix(exportPath)
-	if err != nil {
+	if err != nil && err != errDiskNotFound {
 		return nil, err
 	}
 	return &storageServer{
