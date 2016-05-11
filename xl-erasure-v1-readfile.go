@@ -51,11 +51,11 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 		// Heal in background safely, since we already have read
 		// quorum disks. Let the reads continue.
 		go func() {
-			if err = xl.healFile(volume, path); err != nil {
+			if hErr := xl.healFile(volume, path); hErr != nil {
 				log.WithFields(logrus.Fields{
 					"volume": volume,
 					"path":   path,
-				}).Errorf("healFile failed with %s", err)
+				}).Errorf("healFile failed with %s", hErr)
 				return
 			}
 		}()
