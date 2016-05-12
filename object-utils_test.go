@@ -90,6 +90,8 @@ func TestIsValidObjectName(t *testing.T) {
 		// cases for which test should fail.
 		// passing invalid object names.
 		{"", false},
+		{"a/b/c/", false},
+		{"/a/b/c", false},
 		{string([]byte{0xff, 0xfe, 0xfd}), false},
 	}
 

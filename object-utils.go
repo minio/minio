@@ -73,27 +73,35 @@ func IsValidBucketName(bucket string) bool {
 // - Caret ("^")
 // - Grave accent / back tick ("`")
 // - Vertical bar / pipe ("|")
+//
+// Minio does not support object names with trailing "/".
 func IsValidObjectName(object string) bool {
-	if len(object) > 1024 || len(object) == 0 {
+	if len(object) == 0 {
+		return false
+	}
+	if strings.HasSuffix(object, slashSeparator) {
+		return false
+	}
+	if strings.HasPrefix(object, slashSeparator) {
+		return false
+	}
+	return IsValidObjectPrefix(object)
+}
+
+// IsValidObjectPrefix verifies whether the prefix is a valid object name.
+// Its valid to have a empty prefix.
+func IsValidObjectPrefix(object string) bool {
+	if len(object) > 1024 {
 		return false
 	}
 	if !utf8.ValidString(object) {
 		return false
 	}
 	// Reject unsupported characters in object name.
-	return !strings.ContainsAny(object, "`^*|\\\"")
-}
-
-// IsValidObjectPrefix verifies whether the prefix is a valid object name.
-// Its valid to have a empty prefix.
-func IsValidObjectPrefix(object string) bool {
-	// Prefix can be empty or "/".
-	if object == "" || object == "/" {
-		return true
+	if strings.ContainsAny(object, "`^*|\\\"") {
+		return false
 	}
-	// Verify if prefix is a valid object name.
-	return IsValidObjectName(object)
-
+	return true
 }
 
 // Slash separator.
