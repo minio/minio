@@ -243,8 +243,8 @@ func (xl XL) DeleteVol(volume string) error {
 			log.WithFields(logrus.Fields{
 				"volume": volume,
 			}).Errorf("DeleteVol failed with %s", err)
-			// We ignore error if errVolumeNotFound.
-			if err == errVolumeNotFound {
+			// We ignore error if errVolumeNotFound or errDiskNotFound
+			if err == errVolumeNotFound || err == errDiskNotFound {
 				volumeNotFoundErrCnt++
 				continue
 			}

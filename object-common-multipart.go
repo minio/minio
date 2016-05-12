@@ -312,8 +312,8 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 				"marker":    markerPath,
 				"recursive": recursive,
 			}).Debugf("Walk resulted in an error %s", walkResult.err)
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
+			// 'File not found' or 'Disk not found' is a valid case.
+			if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
 				return nil, true, nil
 			}
 			return nil, false, toObjectErr(walkResult.err, minioMetaBucket, prefixPath)
