@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	slashpath "path"
 	"strings"
@@ -479,24 +480,32 @@ func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
 	}
-	// FIXME: need someway to figure out which disk has the latest namespace
-	// so that Listing can be done there. One option is always do Listing from
-	// the "local" disk - if it is down user has to list using another XL server.
-	// This way user knows from which disk he is listing from.
 
-	for _, disk := range xl.storageDisks {
-		if entries, err = disk.ListDir(volume, dirPath); err != nil {
-			continue
-		}
-		for i, entry := range entries {
-			if strings.HasSuffix(entry, slashSeparator) && isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+	// Count for list errors encountered.
+	var listErrCount = 0
+
+	// Loop through and return the first success entry based on the
+	// selected random disk.
+	for listErrCount < len(xl.storageDisks) {
+		// Choose a random disk on each attempt, do not hit the same disk all the time.
+		randIndex := rand.Intn(len(xl.storageDisks) - 1)
+		disk := xl.storageDisks[randIndex] // Pick a random disk.
+		// Initiate a list operation, if successful filter and return quickly.
+		if entries, err = disk.ListDir(volume, dirPath); err == nil {
+			for i, entry := range entries {
+				isLeaf := isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry))
+				isDir := strings.HasSuffix(entry, slashSeparator)
+				if isDir && isLeaf {
+					entries[i] = strings.TrimSuffix(entry, slashSeparator)
+				}
 			}
+			// We got the entries successfully return.
+			return entries, nil
 		}
-		// We have list from one of the disks hence break the loop.
-		break
+		listErrCount++ // Update list error count.
 	}
-	return
+	// Return error at the end.
+	return nil, err
 }
 
 // Object API.
