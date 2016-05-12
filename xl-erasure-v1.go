@@ -34,6 +34,8 @@ const (
 	xlMetaV1File = "file.json"
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
+	// Minimum erasure blocks.
+	minErasureBlocks = 8
 )
 
 // XL layer structure.
@@ -51,10 +53,13 @@ func newXL(disks ...string) (StorageAPI, error) {
 	// Initialize XL.
 	xl := &XL{}
 
-	// Verify disks.
+	// Verify total number of disks.
 	totalDisks := len(disks)
 	if totalDisks > maxErasureBlocks {
 		return nil, errMaxDisks
+	}
+	if totalDisks < minErasureBlocks {
+		return nil, errMinDisks
 	}
 
 	// isEven function to verify if a given number if even.
@@ -62,7 +67,8 @@ func newXL(disks ...string) (StorageAPI, error) {
 		return number%2 == 0
 	}
 
-	// TODO: verify if this makes sense in future.
+	// Verify if we have even number of disks.
+	// only combination of 8, 10, 12, 14, 16 are supported.
 	if !isEven(totalDisks) {
 		return nil, errNumDisks
 	}
@@ -85,8 +91,13 @@ func newXL(disks ...string) (StorageAPI, error) {
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		var err error
+		// Intentionally ignore disk not found errors while
+		// initializing POSIX, so that we have successfully
+		// initialized posix Storage.
+		// Subsequent calls to XL/Erasure will manage any errors
+		// related to disks.
 		storageDisks[index], err = newPosix(disk)
-		if err != nil {
+		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
 	}
@@ -153,6 +164,9 @@ func (xl XL) MakeVol(volume string) error {
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
 		wg.Add(1)
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {

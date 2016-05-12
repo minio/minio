@@ -56,16 +56,22 @@ func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64)
 func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata xlMetaV1, heal bool, err error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	notFoundCount := 0
-	// FIXME: take care of the situation when a disk has failed and been removed
-	// by looking at the error returned from the fs layer. fs-layer will have
-	// to return an error indicating that the disk is not available and should be
-	// different from ErrNotExist.
+	diskNotFoundCount := 0
 	for _, err := range errs {
 		if err == errFileNotFound {
 			notFoundCount++
-			// If we have errors with file not found equal to the number of disks.
+			// If we have errors with file not found greater than
+			// writeQuroum, return as errFileNotFound.
 			if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
 				return nil, xlMetaV1{}, false, errFileNotFound
+			}
+		}
+		if err == errDiskNotFound {
+			diskNotFoundCount++
+			// If we have errors with disk not found equal to the
+			// number of disks, return as errDiskNotFound.
+			if diskNotFoundCount == len(xl.storageDisks) {
+				return nil, xlMetaV1{}, false, errDiskNotFound
 			}
 		}
 	}

@@ -19,10 +19,13 @@ package main
 import "errors"
 
 // errMaxDisks - returned for reached maximum of disks.
-var errMaxDisks = errors.New("Total number of disks specified is higher than supported maximum of '16'")
+var errMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
 
-// errNumDisks - returned for odd numebr of disks.
-var errNumDisks = errors.New("Invalid number of disks provided, should be always multiples of '2'")
+// errMinDisks - returned for minimum number of disks.
+var errMinDisks = errors.New("Number of disks are smaller than supported minimum count '8'")
+
+// errNumDisks - returned for odd number of disks.
+var errNumDisks = errors.New("Number of disks should be multiples of '2'")
 
 // errUnexpected - returned for any unexpected error.
 var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
