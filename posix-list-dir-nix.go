@@ -35,36 +35,45 @@ const (
 	// buffer size whereas we want 25 times larger to save lots of
 	// entries to avoid multiple syscall.ReadDirent() call.
 	readDirentBufSize = 4096 * 25
+
+	// direntSize - size of syscall.Dirent structure
+	direntSize = int(unsafe.Sizeof(syscall.Dirent{}))
 )
 
 // actual length of the byte array from the c - world.
-func clen(n []byte) int {
-	for i := 0; i < len(n); i++ {
+func clen(n []byte, l int) int {
+	for i := 0; i < l; i++ {
 		if n[i] == 0 {
 			return i
 		}
 	}
-	return len(n)
+	return l
 }
 
 // parseDirents - inspired from
 // https://golang.org/src/syscall/syscall_<os>.go
 func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 	bufidx := 0
-	for bufidx < len(buf) {
+
+	for len(buf) >= direntSize && bufidx < len(buf) {
 		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
 		// On non-Linux operating systems for rec length of zero means
 		// we have reached EOF break out.
 		if runtime.GOOS != "linux" && dirent.Reclen == 0 {
 			break
 		}
-		bufidx += int(dirent.Reclen)
+		reclen := int(dirent.Reclen)
+		if reclen > len(buf)-bufidx {
+			// dirent.Reclen is beyond the boundary
+			break
+		}
+		bufidx += reclen
 		// Skip if they are absent in directory.
 		if isEmptyDirent(dirent) {
 			continue
 		}
 		bytes := (*[10000]byte)(unsafe.Pointer(&dirent.Name[0]))
-		var name = string(bytes[0:clen(bytes[:])])
+		name := string(bytes[0:clen(bytes[:], reclen)])
 		// Reserved names skip them.
 		if name == "." || name == ".." {
 			continue
@@ -135,7 +144,7 @@ func readDir(dirPath string) (entries []string, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if nbuf <= 0 {
+		if nbuf < direntSize {
 			break
 		}
 		var tmpEntries []string
