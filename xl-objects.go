@@ -109,8 +109,7 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 		}
 	}
 
-	// Validate if format exists and input arguments are validated
-	// with backend format.
+	// Validate if format exists and input arguments are validated with backend format.
 	if !isValidFormat(storage, exportPaths...) {
 		return nil, fmt.Errorf("Command-line arguments %s is not valid.", exportPaths)
 	}
