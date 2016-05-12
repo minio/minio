@@ -139,16 +139,41 @@ $ aws configure set default.s3.signature_version s3v4
 To list your buckets.
 ```
 $ aws --endpoint-url http://localhost:9000 s3 ls
-2016-01-07 16:38:23 testbucket
+2016-03-27 02:06:30 deebucket
+2016-03-28 21:53:49 guestbucket
+2016-03-29 13:34:34 mbtest
+2016-03-26 22:01:36 mybucket
+2016-03-26 15:37:02 testbucket
 ```
 
 To list contents inside bucket.
 ```
-$ aws --endpoint-url http://localhost:9000 s3 ls s3://testbucket
-                           PRE test/
-2015-12-17 08:46:41   12232928 vim
-2016-01-07 16:38:23   32232928 emacs
-2015-12-09 08:05:24     138504 s3cmd
+$ aws --endpoint-url http://localhost:9000 s3 ls s3://mybucket
+2016-03-30 00:26:53      69297 argparse-1.2.1.tar.gz
+2016-03-30 00:35:37      67250 simplejson-3.3.0.tar.gz
+```
+
+To make a bucket.
+```
+$ aws --endpoint-url http://localhost:9000 s3 mb s3://mybucket
+make_bucket: s3://mybucket/
+```
+
+To add an object to a bucket.
+```
+$ aws --endpoint-url http://localhost:9000 s3 cp simplejson-3.3.0.tar.gz s3://mybucket
+upload: ./simplejson-3.3.0.tar.gz to s3://mybucket/simplejson-3.3.0.tar.gz
+```
+
+Delete an object from a bucket.
+```
+$ aws --endpoint-url http://localhost:9000 s3 rm s3://mybucket/argparse-1.2.1.tar.gzdelete: s3://mybucket/argparse-1.2.1.tar.gz
+```
+
+Remove a bucket.
+```
+$ aws --endpoint-url http://localhost:9000 s3 rb s3://mybucket
+remove_bucket: s3://mybucket/
 ```
 
 #### How to use AWS SDK with Minio?
@@ -172,34 +197,34 @@ signature_v2 = False
 bucket_location = us-east-1
 ```
 
-To make a bucket
+To make a bucket.
 ```
 $ s3cmd mb s3://mybucket
 Bucket 's3://mybucket/' created
 ```
 
-To copy an object to bucket
+To copy an object to bucket.
 ```
-$ s3cmd put newfile.txt s3://testbucket
+$ s3cmd put newfile s3://testbucket
 upload: 'newfile' -> 's3://testbucket/newfile'  
 ```
 
-To copy an object to local system
+To copy an object to local system.
 ```
 $ s3cmd get s3://testbucket/newfile
 download: 's3://testbucket/newfile' -> './newfile'
 ```
 
-To sync local file/directory to a bucket 
+To sync local file/directory to a bucket.
 ```
 $ s3cmd sync newdemo s3://testbucket
 upload: 'newdemo/newdemofile.txt' -> 's3://testbucket/newdemo/newdemofile.txt'
 ```
 
-To sync bucket or object with local filesystem
+To sync bucket or object with local filesystem.
 ```
 $ s3cmd sync  s3://otherbucket otherlocalbucket
-download: 's3://otherbucket/cat.jpg' -> 'otherlocalbucket/cat.jpg' 
+download: 's3://otherbucket/cat.jpg' -> 'otherlocalbucket/cat.jpg'
 ```
 
 To list buckets.
@@ -215,13 +240,13 @@ $ s3cmd ls s3://testbucket/
 2015-12-09 16:05    138504   s3://testbucket/newfile
 ```
 
-Delete an object from bucket
+Delete an object from bucket.
 ```
 $ s3cmd del s3://testbucket/newfile
 delete: 's3://testbucket/newfile'
 ```
 
-Delete a bucket
+Delete a bucket.
 ```
 $ s3cmd rb s3://testbucket
 Bucket 's3://testbucket/' removed
