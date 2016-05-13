@@ -417,7 +417,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 
 	_, err = obj.GetObject("bucket", "dir1/", 0)
 	switch err := err.(type) {
-	case ObjectNotFound:
+	case ObjectNameInvalid:
 		c.Assert(err.Bucket, check.Equals, "bucket")
 		c.Assert(err.Object, check.Equals, "dir1/")
 	default:
