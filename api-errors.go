@@ -38,6 +38,12 @@ type APIErrorResponse struct {
 	Resource   string
 	RequestID  string `xml:"RequestId"`
 	HostID     string `xml:"HostId"`
+	ETag       string
+	// MinSizeAllowed, ProposedSize and PartNumber are used
+	// when multipart upload fails
+	MinSizeAllowed string
+	ProposedSize   string
+	PartNumber     int
 }
 
 // APIErrorCode type of error status.
