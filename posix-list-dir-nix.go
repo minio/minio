@@ -89,6 +89,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 				// Could happen if it was deleted in the middle while
 				// this list was being performed.
 				if os.IsNotExist(err) {
+					err = nil
 					continue
 				}
 				return nil, err
@@ -104,7 +105,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			continue
 		}
 	}
-	return
+	return entries, nil
 }
 
 // Return all the entries at the directory dirPath.
