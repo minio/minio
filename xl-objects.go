@@ -93,12 +93,14 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 		} else {
 			log.Errorf("Unable to check backend format %s", err)
 			if err == errReadQuorum {
-				errMsg := fmt.Sprintf("Not all disks %s on command line are available to meet the read quroum.", exportPaths)
-				return nil, errors.New(errMsg)
-			}
-			if err == errDiskNotFound {
-				errMsg := fmt.Sprintf("All disks %s on command line are not available.", exportPaths)
-				return nil, errors.New(errMsg)
+				errMsg := fmt.Sprintf("Not all disks %s are available, did not meet read quroum.", exportPaths)
+				err = errors.New(errMsg)
+			} else if err == errDiskNotFound {
+				errMsg := fmt.Sprintf("Disks %s not found.", exportPaths)
+				err = errors.New(errMsg)
+			} else if err == errVolumeAccessDenied {
+				errMsg := fmt.Sprintf("Disks %s access permission denied.", exportPaths)
+				err = errors.New(errMsg)
 			}
 			return nil, err
 		}

@@ -48,6 +48,43 @@ func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64)
 	return versions
 }
 
+// errsToStorageErr - convert collection of errors into a single
+// error based on total errors and read quorum.
+func (xl XL) errsToStorageErr(errs []error) error {
+	notFoundCount := 0
+	diskNotFoundCount := 0
+	diskAccessDeniedCount := 0
+	for _, err := range errs {
+		if err == errFileNotFound {
+			notFoundCount++
+		} else if err == errDiskNotFound {
+			diskNotFoundCount++
+		} else if err == errVolumeAccessDenied {
+			diskAccessDeniedCount++
+		}
+	}
+	// If we have errors with 'file not found' greater than
+	// readQuroum, return as errFileNotFound.
+	if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
+		return errFileNotFound
+	}
+	// If we have errors with disk not found equal to the
+	// number of disks, return as errDiskNotFound.
+	if diskNotFoundCount == len(xl.storageDisks) {
+		return errDiskNotFound
+	} else if diskNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+		// If we have errors with 'disk not found' greater than
+		// readQuroum, return as errFileNotFound.
+		return errFileNotFound
+	}
+	// If we have errors with disk not found equal to the
+	// number of disks, return as errDiskNotFound.
+	if diskAccessDeniedCount == len(xl.storageDisks) {
+		return errVolumeAccessDenied
+	}
+	return nil
+}
+
 // Returns slice of online disks needed.
 // - slice returing readable disks.
 // - xlMetaV1
@@ -55,27 +92,9 @@ func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64)
 // - error if any.
 func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata xlMetaV1, heal bool, err error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	notFoundCount := 0
-	diskNotFoundCount := 0
-	for _, err := range errs {
-		if err == errFileNotFound || err == errDiskNotFound {
-			notFoundCount++
-			// If we have errors with 'file not found' or 'disk not found' greater than
-			// writeQuroum, return as errFileNotFound.
-			if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
-				return nil, xlMetaV1{}, false, errFileNotFound
-			}
-		}
-		if err == errDiskNotFound {
-			diskNotFoundCount++
-			// If we have errors with disk not found equal to the
-			// number of disks, return as errDiskNotFound.
-			if diskNotFoundCount == len(xl.storageDisks) {
-				return nil, xlMetaV1{}, false, errDiskNotFound
-			}
-		}
+	if err = xl.errsToStorageErr(errs); err != nil {
+		return nil, xlMetaV1{}, false, err
 	}
-
 	highestVersion := int64(0)
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
 	// List all the file versions from partsMetadata list.
