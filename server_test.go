@@ -376,7 +376,7 @@ func (s *MyAPISuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
-	// Delete non existant object should return http.StatusNoContent.
+	// Delete non existent object should return http.StatusNoContent.
 	request, err = s.newRequest("DELETE", testAPIFSCacheServer.URL+"/deletebucketobject/myobject1", 0, nil)
 	c.Assert(err, IsNil)
 	client = http.Client{}
@@ -385,8 +385,8 @@ func (s *MyAPISuite) TestDeleteObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPISuite) TestNonExistantBucket(c *C) {
-	request, err := s.newRequest("HEAD", testAPIFSCacheServer.URL+"/nonexistantbucket", 0, nil)
+func (s *MyAPISuite) TestNonExistentBucket(c *C) {
+	request, err := s.newRequest("HEAD", testAPIFSCacheServer.URL+"/nonexistentbucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -686,9 +686,9 @@ func (s *MyAPISuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *MyAPISuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+func (s *MyAPISuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/innonexistantbucket/object", int64(buffer1.Len()), buffer1)
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/innonexistentbucket/object", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}

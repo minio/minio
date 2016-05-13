@@ -393,8 +393,8 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIXLSuite) TestNonExistantBucket(c *C) {
-	request, err := s.newRequest("HEAD", testAPIXLServer.URL+"/nonexistantbucket", 0, nil)
+func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
+	request, err := s.newRequest("HEAD", testAPIXLServer.URL+"/nonexistentbucket", 0, nil)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -713,9 +713,9 @@ func (s *MyAPIXLSuite) TestListBuckets(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistantBucket(c *C) {
+func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/innonexistantbucket/object", int64(buffer1.Len()), buffer1)
+	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/innonexistentbucket/object", int64(buffer1.Len()), buffer1)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
