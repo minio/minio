@@ -628,54 +628,18 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	defer nsMutex.Unlock(dstVolume, dstPath)
 
 	errCount := 0
-	for index, disk := range xl.storageDisks {
-		// Make sure to rename all the files only, not directories.
-		srcErasurePartPath := slashpath.Join(srcPath, fmt.Sprintf("file.%d", index))
-		dstErasurePartPath := slashpath.Join(dstPath, fmt.Sprintf("file.%d", index))
-		err := disk.RenameFile(srcVolume, srcErasurePartPath, dstVolume, dstErasurePartPath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"srcVolume": srcVolume,
-				"srcPath":   srcErasurePartPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstErasurePartPath,
-			}).Errorf("RenameFile failed with %s", err)
-
-			errCount++
-			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			return err
-		}
-		srcXLMetaPath := slashpath.Join(srcPath, xlMetaV1File)
-		dstXLMetaPath := slashpath.Join(dstPath, xlMetaV1File)
-		err = disk.RenameFile(srcVolume, srcXLMetaPath, dstVolume, dstXLMetaPath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"srcVolume": srcVolume,
-				"srcPath":   srcXLMetaPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstXLMetaPath,
-			}).Errorf("RenameFile failed with %s", err)
-
-			errCount++
-			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			return err
-		}
-		err = disk.DeleteFile(srcVolume, srcPath)
+	for _, disk := range xl.storageDisks {
+		// Append "/" as srcPath and dstPath are either leaf-dirs or non-leaf-dris.
+		// If srcPath is an object instead of prefix we just rename the leaf-dir and
+		// not rename the part and metadata files separately.
+		err := disk.RenameFile(srcVolume, retainSlash(srcPath), dstVolume, retainSlash(dstPath))
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"srcVolume": srcVolume,
 				"srcPath":   srcPath,
-			}).Errorf("DeleteFile failed with %s", err)
+				"dstVolume": dstVolume,
+				"dstPath":   dstPath,
+			}).Errorf("RenameFile failed with %s", err)
 
 			errCount++
 			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum

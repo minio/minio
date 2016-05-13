@@ -17,10 +17,13 @@
 package main
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -223,29 +226,19 @@ func getMultipartObjectInfo(storage StorageAPI, bucket, object string) (info Mul
 	return info, nil
 }
 
-// GetObjectInfo - get object info.
-func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
-	}
-	// Check whether the bucket exists.
-	if !isBucketExist(xl.storage, bucket) {
-		return ObjectInfo{}, BucketNotFound{Bucket: bucket}
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
+// Return ObjectInfo.
+func (xl xlObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
+	// First see if the object was a simple-PUT upload.
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
 		if err != errFileNotFound {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			return ObjectInfo{}, err
 		}
 		var info MultipartObjectInfo
+		// Check if the object was multipart upload.
 		info, err = getMultipartObjectInfo(xl.storage, bucket, object)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			return ObjectInfo{}, err
 		}
 		fi.Size = info.Size
 		fi.ModTime = info.ModTime
@@ -269,9 +262,118 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
+// GetObjectInfo - get object info.
+func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	// Check whether the bucket exists.
+	if !isBucketExist(xl.storage, bucket) {
+		return ObjectInfo{}, BucketNotFound{Bucket: bucket}
+	}
+	// Verify if object is valid.
+	if !IsValidObjectName(object) {
+		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
+	}
+	info, err := xl.getObjectInfo(bucket, object)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	return info, nil
+}
+
 // PutObject - create an object.
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
-	return putObjectCommon(xl.storage, bucket, object, size, data, metadata)
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return "", BucketNameInvalid{Bucket: bucket}
+	}
+	// Check whether the bucket exists.
+	if !isBucketExist(xl.storage, bucket) {
+		return "", BucketNotFound{Bucket: bucket}
+	}
+	if !IsValidObjectName(object) {
+		return "", ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		}
+	}
+
+	tempObj := path.Join(tmpMetaPrefix, bucket, object)
+	fileWriter, err := xl.storage.CreateFile(minioMetaBucket, tempObj)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	// Initialize md5 writer.
+	md5Writer := md5.New()
+
+	// Instantiate a new multi writer.
+	multiWriter := io.MultiWriter(md5Writer, fileWriter)
+
+	// Instantiate checksum hashers and create a multiwriter.
+	if size > 0 {
+		if _, err = io.CopyN(multiWriter, data, size); err != nil {
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
+			return "", toObjectErr(err, bucket, object)
+		}
+	} else {
+		if _, err = io.Copy(multiWriter, data); err != nil {
+			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
+			return "", toObjectErr(err, bucket, object)
+		}
+	}
+
+	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	// md5Hex representation.
+	var md5Hex string
+	if len(metadata) != 0 {
+		md5Hex = metadata["md5Sum"]
+	}
+	if md5Hex != "" {
+		if newMD5Hex != md5Hex {
+			if err = safeCloseAndRemove(fileWriter); err != nil {
+				return "", toObjectErr(err, bucket, object)
+			}
+			return "", BadDigest{md5Hex, newMD5Hex}
+		}
+	}
+	err = fileWriter.Close()
+	if err != nil {
+		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+			return "", toObjectErr(clErr, bucket, object)
+		}
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	// check if an object is present as one of the parent dir.
+	if err = xl.parentDirIsObject(bucket, path.Dir(object)); err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	// Delete if an object already exists.
+	// FIXME: rename it to tmp file and delete only after
+	// the newly uploaded file is renamed from tmp location to
+	// the original location.
+	err = xl.deleteObject(bucket, object)
+	if err != nil && err != errFileNotFound {
+		return "", toObjectErr(err, bucket, object)
+	}
+	err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	if err != nil {
+		if derr := xl.storage.DeleteFile(minioMetaBucket, tempObj); derr != nil {
+			return "", toObjectErr(derr, bucket, object)
+		}
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	// Return md5sum, successfully wrote object.
+	return newMD5Hex, nil
 }
 
 // isMultipartObject - verifies if an object is special multipart file.
@@ -286,30 +388,21 @@ func isMultipartObject(storage StorageAPI, bucket, object string) (bool, error) 
 	return true, nil
 }
 
-func (xl xlObjects) DeleteObject(bucket, object string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	if !isBucketExist(xl.storage, bucket) {
-		return BucketNotFound{Bucket: bucket}
-	}
-	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
+// Deletes and object.
+func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Verify if the object is a multipart object.
 	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
-		return toObjectErr(err, bucket, object)
+		return err
 	} else if !ok {
 		if err = xl.storage.DeleteFile(bucket, object); err != nil {
-			return toObjectErr(err, bucket, object)
+			return err
 		}
 		return nil
 	}
 	// Get parts info.
 	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return err
 	}
 	// Range through all files and delete it.
 	var wg = &sync.WaitGroup{}
@@ -325,16 +418,35 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	}
 	// Wait for all the deletes to finish.
 	wg.Wait()
-	// Loop through and validate if any errors, return back the first
-	// error occurred.
-	for index, err := range errs {
+	// Loop through and validate if any errors, if we are unable to remove any part return
+	// "unexpected" error as returning any other error might be misleading. For ex.
+	// if DeleteFile() had returned errFileNotFound and we return it, then client would see
+	// ObjectNotFound which is misleading.
+	for _, err := range errs {
 		if err != nil {
-			partFileName := partNumToPartFileName(info.Parts[index].PartNumber)
-			return toObjectErr(err, bucket, pathJoin(object, partFileName))
+			return errUnexpected
 		}
 	}
 	err = xl.storage.DeleteFile(bucket, pathJoin(object, multipartMetaFile))
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteObject - delete the object.
+func (xl xlObjects) DeleteObject(bucket, object string) error {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	if !isBucketExist(xl.storage, bucket) {
+		return BucketNotFound{Bucket: bucket}
+	}
+	if !IsValidObjectName(object) {
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
+	}
+	if err := xl.deleteObject(bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 	return nil
