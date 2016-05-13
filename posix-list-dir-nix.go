@@ -79,7 +79,9 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			entries = append(entries, name+slashSeparator)
 		case syscall.DT_REG:
 			entries = append(entries, name)
-		case syscall.DT_UNKNOWN:
+		case syscall.DT_LNK, syscall.DT_UNKNOWN:
+			// If its symbolic link, follow the link using os.Stat()
+
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to Stat().
 			var fi os.FileInfo
@@ -101,7 +103,6 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			}
 		default:
 			// Skip entries which are not file or directory.
-			// FIXME: should we handle symlinks?
 			continue
 		}
 	}
