@@ -62,24 +62,18 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
 	nsMutex.RUnlock(volume, path)
 
-	// Count errors other than fileNotFound, bigger than the allowed
-	// readQuorum, if yes throw an error.
-	metadataReadErrCount := 0
-	for _, err := range errs {
-		if err != nil && err != errFileNotFound {
-			metadataReadErrCount++
-			if metadataReadErrCount > xl.readQuorum {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("%s", err)
-				reader.CloseWithError(err)
-				return
-			}
-		}
+	// Convert errs into meaningful err to be sent upwards if possible
+	// based on total number of errors and read quorum.
+	err := xl.errsToStorageErr(errs)
+	if err != nil && err != errFileNotFound {
+		log.WithFields(logrus.Fields{
+			"volume": volume,
+			"path":   path,
+		}).Errorf("%s", err)
+		reader.CloseWithError(err)
+		return
 	}
 
-	var err error
 	// List all the file versions on existing files.
 	versions := listFileVersions(partsMetadata, errs)
 	// Get highest file version.
