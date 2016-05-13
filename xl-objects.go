@@ -189,10 +189,19 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 			}
 			// Reset offset to 0 as it would be non-0 only for the first loop if startOffset is non-0.
 			offset = 0
-			if _, err := io.Copy(fileWriter, r); err != nil {
+			if _, err = io.Copy(fileWriter, r); err != nil {
+				switch reader := r.(type) {
+				case *io.PipeReader:
+					reader.CloseWithError(err)
+				case io.ReadCloser:
+					reader.Close()
+				}
 				fileWriter.CloseWithError(err)
 				return
 			}
+			// Close the readerCloser that reads multiparts of an object from the xl storage layer.
+			// Not closing leaks underlying file descriptors.
+			r.Close()
 		}
 		fileWriter.Close()
 	}()
