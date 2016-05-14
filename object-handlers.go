@@ -936,10 +936,9 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	if err := api.ObjectAPI.DeleteObject(bucket, object); err != nil {
-		errorIf(err, "DeleteObject failed.", nil)
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
-		return
-	}
+	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+	/// Ignore delete object errors, since we are suppposed to reply
+	/// only 204.
+	api.ObjectAPI.DeleteObject(bucket, object)
 	writeSuccessNoContent(w)
 }
