@@ -18,6 +18,12 @@ package main
 
 import "errors"
 
+// errCorruptedFormat - corrupted backend format.
+var errCorruptedFormat = errors.New("corrupted backend format")
+
+// errUnformattedDisk - unformatted disk found.
+var errUnformattedDisk = errors.New("unformatted disk found")
+
 // errDiskFull - cannot create volume or files when disk is full.
 var errDiskFull = errors.New("disk path full")
 

@@ -59,7 +59,7 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 			c.Check(err, IsNil)
 			erasureDisks = append(erasureDisks, path)
 		}
-		objAPI, err := newXLObjects(erasureDisks...)
+		objAPI, err := newXLObjects(erasureDisks)
 		c.Check(err, IsNil)
 		return objAPI
 	}

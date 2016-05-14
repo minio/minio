@@ -44,68 +44,109 @@ type xlObjects struct {
 	listObjectMapMutex *sync.Mutex
 }
 
-// isValidFormat - validates input arguments with backend 'format.json'
-func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
-	// Load saved XL format.json and validate.
-	xl, err := loadFormatXL(storage)
-	if err != nil {
-		errorIf(err, "Unable to load format file 'format.json'.")
-		return false
+// errMaxDisks - returned for reached maximum of disks.
+var errMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
+
+// errMinDisks - returned for minimum number of disks.
+var errMinDisks = errors.New("Number of disks are smaller than supported minimum count '8'")
+
+// errNumDisks - returned for odd number of disks.
+var errNumDisks = errors.New("Number of disks should be multiples of '2'")
+
+const (
+	// Maximum erasure blocks.
+	maxErasureBlocks = 16
+	// Minimum erasure blocks.
+	minErasureBlocks = 8
+)
+
+func checkSufficientDisks(disks []string) error {
+	// Verify total number of disks.
+	totalDisks := len(disks)
+	if totalDisks > maxErasureBlocks {
+		return errMaxDisks
 	}
-	if xl.Version != "1" {
-		return false
+	if totalDisks < minErasureBlocks {
+		return errMinDisks
 	}
-	if len(exportPaths) != len(xl.Disks) {
-		return false
+
+	// isEven function to verify if a given number if even.
+	isEven := func(number int) bool {
+		return number%2 == 0
 	}
-	for index, disk := range xl.Disks {
-		if exportPaths[index] != disk {
-			return false
+
+	// Verify if we have even number of disks.
+	// only combination of 8, 10, 12, 14, 16 are supported.
+	if !isEven(totalDisks) {
+		return errNumDisks
+	}
+
+	return nil
+}
+
+// Depending on the disk type network or local, initialize storage layer.
+func newStorageLayer(disk string) (storage StorageAPI, err error) {
+	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
+		// Initialize filesystem storage API.
+		return newPosix(disk)
+	}
+	// Initialize rpc client storage API.
+	return newRPCClient(disk)
+}
+
+// Initialize all storage disks to bootstrap.
+func bootstrapDisks(disks []string) ([]StorageAPI, error) {
+	storageDisks := make([]StorageAPI, len(disks))
+	for index, disk := range disks {
+		var err error
+		// Intentionally ignore disk not found errors while
+		// initializing POSIX, so that we have successfully
+		// initialized posix Storage. Subsequent calls to XL/Erasure
+		// will manage any errors related to disks.
+		storageDisks[index], err = newStorageLayer(disk)
+		if err != nil && err != errDiskNotFound {
+			return nil, err
 		}
 	}
-	return true
+	return storageDisks, nil
 }
 
 // newXLObjects - initialize new xl object layer.
-func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
-	storage, err := newXL(exportPaths...)
+func newXLObjects(disks []string) (ObjectLayer, error) {
+	if err := checkSufficientDisks(disks); err != nil {
+		return nil, err
+	}
+
+	storageDisks, err := bootstrapDisks(disks)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize object layer - like creating minioMetaBucket,
-	// cleaning up tmp files etc.
-	initObjectLayer(storage)
+	// Initialize object layer - like creating minioMetaBucket, cleaning up tmp files etc.
+	initObjectLayer(storageDisks...)
 
-	err = checkFormat(storage)
+	// Load saved XL format.json and validate.
+	newDisks, err := loadFormatXL(storageDisks)
 	if err != nil {
-		if err == errFileNotFound {
+		switch err {
+		case errUnformattedDisk:
 			// Save new XL format.
-			errSave := saveFormatXL(storage, &xlFormat{
-				Version: "1",
-				Disks:   exportPaths,
-			})
+			errSave := initFormatXL(storageDisks)
 			if errSave != nil {
 				return nil, errSave
 			}
-		} else {
-			if err == errReadQuorum {
-				errMsg := fmt.Sprintf("Disks %s are offline. Unable to establish quorum.", exportPaths)
-				err = errors.New(errMsg)
-			} else if err == errDiskNotFound {
-				errMsg := fmt.Sprintf("Disks %s not found.", exportPaths)
-				err = errors.New(errMsg)
-			} else if err == errVolumeAccessDenied {
-				errMsg := fmt.Sprintf("Disks %s access permission denied.", exportPaths)
-				err = errors.New(errMsg)
-			}
-			return nil, err
+			newDisks = storageDisks
+		default:
+			// errCorruptedDisk - error.
+			return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 		}
 	}
 
-	// Validate if format exists and input arguments are validated with backend format.
-	if !isValidFormat(storage, exportPaths...) {
-		return nil, fmt.Errorf("Command-line arguments %s is not valid.", exportPaths)
+	// FIXME: healFormatXL(newDisks)
+
+	storage, err := newXL(newDisks)
+	if err != nil {
+		return nil, err
 	}
 
 	// Return successfully initialized object layer.
