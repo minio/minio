@@ -7,3 +7,4 @@ EXPOSE 9000
 COPY start.sh /start.sh
 ENV ALLOW_CONTAINER_ROOT=1
 ENTRYPOINT ["/start.sh"]
+CMD ["/export"]
