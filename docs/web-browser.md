@@ -19,19 +19,22 @@ minio server <testdir>
 
 JSON RPC namespace is `Web`.
 
-#### Auth Operations
+#### Server operations.
+
+* ServerInfo - fetches current server information, includes memory statistics, minio binary
+  version, golang runtime version and more.
+
+#### Auth operations
 
 * Login - waits for 'username, password' and on success replies a new Json Web Token (JWT).
-* ResetToken - resets token, requires password and token.
-* Logout - currently a dummy operation.
+* SetAuth - change access credentials with new 'username, password'.
+* GetAuth - fetch the current auth from the server.
 
-#### Bucket/Object Operations.
+#### Bucket/Object operations.
 
 * ListBuckets - lists buckets, requires a valid token.
 * ListObjects - lists objects, requires a valid token.
 * MakeBucket - make a new bucket, requires a valid token.
-* GetObjectURL - generates a URL for download access, requires a valid token.
-  (generated URL is valid for 1hr)
-* PutObjectURL - generates a URL for upload access, requies a valid token.
-  (generated URL is valid for 1hr)
-
+* RemoveObject - removes an object from a bucket, requires a valid token.
+* Upload - uploads a new object from the browser, requires a valid token.
+* Download - downloads an object from a bucket, requires a valid token.
