@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
+	"sync"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -95,6 +96,7 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			// Calculate the current encoded block size.
 			curEncBlockSize := getEncodedBlockLen(curBlockSize, metadata.Erasure.DataBlocks)
 			enBlocks := make([][]byte, len(xl.storageDisks))
+			var wg = &sync.WaitGroup{}
 			// Loop through all readers and read.
 			for index, reader := range readers {
 				// Initialize shard slice and fill the data from each parts.
@@ -102,11 +104,19 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 				if reader == nil {
 					continue
 				}
-				_, err = io.ReadFull(reader, enBlocks[index])
-				if err != nil && err != io.ErrUnexpectedEOF {
-					readers[index] = nil
-				}
+				// Parallelize reading.
+				wg.Add(1)
+				go func(index int, reader io.Reader) {
+					defer wg.Done()
+					// Read the necessary blocks.
+					_, rErr := io.ReadFull(reader, enBlocks[index])
+					if rErr != nil && rErr != io.ErrUnexpectedEOF {
+						readers[index] = nil
+					}
+				}(index, reader)
 			}
+			// Wait for the read routines to finish.
+			wg.Wait()
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
