@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	slashpath "path"
 	"strings"
@@ -479,24 +480,32 @@ func (xl XL) ListDir(volume, dirPath string) (entries []string, err error) {
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
 	}
-	// FIXME: need someway to figure out which disk has the latest namespace
-	// so that Listing can be done there. One option is always do Listing from
-	// the "local" disk - if it is down user has to list using another XL server.
-	// This way user knows from which disk he is listing from.
 
-	for _, disk := range xl.storageDisks {
-		if entries, err = disk.ListDir(volume, dirPath); err != nil {
-			continue
-		}
-		for i, entry := range entries {
-			if strings.HasSuffix(entry, slashSeparator) && isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+	// Count for list errors encountered.
+	var listErrCount = 0
+
+	// Loop through and return the first success entry based on the
+	// selected random disk.
+	for listErrCount < len(xl.storageDisks) {
+		// Choose a random disk on each attempt, do not hit the same disk all the time.
+		randIndex := rand.Intn(len(xl.storageDisks) - 1)
+		disk := xl.storageDisks[randIndex] // Pick a random disk.
+		// Initiate a list operation, if successful filter and return quickly.
+		if entries, err = disk.ListDir(volume, dirPath); err == nil {
+			for i, entry := range entries {
+				isLeaf := isLeafDirectoryXL(disk, volume, path.Join(dirPath, entry))
+				isDir := strings.HasSuffix(entry, slashSeparator)
+				if isDir && isLeaf {
+					entries[i] = strings.TrimSuffix(entry, slashSeparator)
+				}
 			}
+			// We got the entries successfully return.
+			return entries, nil
 		}
-		// We have list from one of the disks hence break the loop.
-		break
+		listErrCount++ // Update list error count.
 	}
-	return
+	// Return error at the end.
+	return nil, err
 }
 
 // Object API.
@@ -628,54 +637,18 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	defer nsMutex.Unlock(dstVolume, dstPath)
 
 	errCount := 0
-	for index, disk := range xl.storageDisks {
-		// Make sure to rename all the files only, not directories.
-		srcErasurePartPath := slashpath.Join(srcPath, fmt.Sprintf("file.%d", index))
-		dstErasurePartPath := slashpath.Join(dstPath, fmt.Sprintf("file.%d", index))
-		err := disk.RenameFile(srcVolume, srcErasurePartPath, dstVolume, dstErasurePartPath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"srcVolume": srcVolume,
-				"srcPath":   srcErasurePartPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstErasurePartPath,
-			}).Errorf("RenameFile failed with %s", err)
-
-			errCount++
-			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			return err
-		}
-		srcXLMetaPath := slashpath.Join(srcPath, xlMetaV1File)
-		dstXLMetaPath := slashpath.Join(dstPath, xlMetaV1File)
-		err = disk.RenameFile(srcVolume, srcXLMetaPath, dstVolume, dstXLMetaPath)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"srcVolume": srcVolume,
-				"srcPath":   srcXLMetaPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstXLMetaPath,
-			}).Errorf("RenameFile failed with %s", err)
-
-			errCount++
-			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			return err
-		}
-		err = disk.DeleteFile(srcVolume, srcPath)
+	for _, disk := range xl.storageDisks {
+		// Append "/" as srcPath and dstPath are either leaf-dirs or non-leaf-dris.
+		// If srcPath is an object instead of prefix we just rename the leaf-dir and
+		// not rename the part and metadata files separately.
+		err := disk.RenameFile(srcVolume, retainSlash(srcPath), dstVolume, retainSlash(dstPath))
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"srcVolume": srcVolume,
 				"srcPath":   srcPath,
-			}).Errorf("DeleteFile failed with %s", err)
+				"dstVolume": dstVolume,
+				"dstPath":   dstPath,
+			}).Errorf("RenameFile failed with %s", err)
 
 			errCount++
 			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum

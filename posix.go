@@ -650,7 +650,30 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
-	if err = os.MkdirAll(slashpath.Join(dstVolumeDir, slashpath.Dir(dstPath)), 0755); err != nil {
+	srcIsDir := strings.HasSuffix(srcPath, slashSeparator)
+	dstIsDir := strings.HasSuffix(dstPath, slashSeparator)
+	// for XL src and dst are always directories.
+	// for FS src and dst are always files.
+	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
+		// Either src and dst have to be directories or files, else return error.
+		log.Errorf("source and destination are not of same file type. source=%s, destination=%s", srcPath, dstPath)
+		return errFileAccessDenied
+	}
+	if srcIsDir {
+		// If source is a directory we expect the destination to be non-existent always.
+		_, err = os.Stat(slashpath.Join(dstVolumeDir, dstPath))
+		if err == nil {
+			log.Errorf("Source is a directory and destination exists. source=%s, destination=%s", srcPath, dstPath)
+			return errFileAccessDenied
+		}
+		if !os.IsNotExist(err) {
+			// Return error for any error other than ENOENT.
+			log.Errorf("Stat failed with %s", err)
+			return err
+		}
+		// Destination does not exist, hence proceed with the rename.
+	}
+	if err = os.MkdirAll(slashpath.Dir(slashpath.Join(dstVolumeDir, dstPath)), 0755); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied

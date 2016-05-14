@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -199,24 +200,34 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 				return
 			}
 
+			var wg = &sync.WaitGroup{}
+			var wErrs = make([]error, len(writers))
 			// Loop through and write encoded data to quorum disks.
 			for index, writer := range writers {
 				if writer == nil {
 					continue
 				}
-				encodedData := dataBlocks[index]
-				_, err = writers[index].Write(encodedData)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"volume":    volume,
-						"path":      path,
-						"diskIndex": index,
-					}).Errorf("Writing encoded blocks failed with %s", err)
-					// Remove all temp writers upon error.
-					xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
-					reader.CloseWithError(err)
-					return
+				wg.Add(1)
+				go func(index int, writer io.Writer) {
+					defer wg.Done()
+					encodedData := dataBlocks[index]
+					_, wErr := writers[index].Write(encodedData)
+					wErrs[index] = wErr
+				}(index, writer)
+			}
+			wg.Wait()
+			for _, wErr := range wErrs {
+				if wErr == nil {
+					continue
 				}
+				log.WithFields(logrus.Fields{
+					"volume": volume,
+					"path":   path,
+				}).Errorf("Writing encoded blocks failed with %s", wErr)
+				// Remove all temp writers upon error.
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
+				reader.CloseWithError(wErr)
+				return
 			}
 
 			// Update total written.

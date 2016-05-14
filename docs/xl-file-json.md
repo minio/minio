@@ -1,7 +1,7 @@
 ### file.json
 
 ``file.json`` is a special file captured and written by XL storage API layer
-to interpret, manage and extract erasured data to multiple disks.
+to interpret, manage and extract erasured data from multiple disks.
 
 ```json
 {

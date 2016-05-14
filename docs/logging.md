@@ -4,7 +4,6 @@
 - `log.Errorf`
 - `log.Warnf`
 - `log.Infof`
-- `log.Debugf`
 
 Logging is enabled across the codebase. There are three types of logging supported.
 
@@ -12,19 +11,20 @@ Logging is enabled across the codebase. There are three types of logging support
 - file
 - syslog
 
+Sample logger section from `~/.minio/config.json`
 ```
 		"console": {
 			"enable": true,
-			"level": "debug"
+			"level": "error"
 		},
 		"file": {
 			"enable": false,
 			"fileName": "",
-			"level": "error"
+			"level": "trace"
 		},
 		"syslog": {
 			"enable": false,
 			"address": "",
-			"level": "debug"
+			"level": "info"
 		}
 ```

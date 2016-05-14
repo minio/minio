@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 
 	router "github.com/gorilla/mux"
@@ -31,7 +32,11 @@ func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
 		return newFSObjects(exportPath)
 	}
 	// Initialize XL object layer.
-	return newXLObjects(exportPaths...)
+	objAPI, err := newXLObjects(exportPaths...)
+	if err == errWriteQuorum {
+		return objAPI, errors.New("Disks are different with last minio server run.")
+	}
+	return objAPI, err
 }
 
 // configureServer handler returns final handler for the http server.

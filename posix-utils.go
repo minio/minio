@@ -17,19 +17,15 @@
 package main
 
 import (
-	"regexp"
 	"runtime"
 	"strings"
 	"unicode/utf8"
 )
 
-// validVolname regexp.
-var validVolname = regexp.MustCompile(`^.{3,63}$`)
-
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
-	if !validVolname.MatchString(volname) {
+	if len(volname) < 3 || len(volname) > 63 {
 		return false
 	}
 	switch runtime.GOOS {

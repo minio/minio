@@ -92,6 +92,29 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	return listObjectPartsCommon(xl.storage, bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
+// This function does the following check, suppose
+// object is "a/b/c/d", stat makes sure that objects ""a/b/c""
+// "a/b" and "a" do not exist.
+func (xl xlObjects) parentDirIsObject(bucket, parent string) error {
+	var stat func(string) error
+	stat = func(p string) error {
+		if p == "." {
+			return nil
+		}
+		_, err := xl.getObjectInfo(bucket, p)
+		if err == nil {
+			// If there is already a file at prefix "p" return error.
+			return errFileAccessDenied
+		}
+		if err == errFileNotFound {
+			// Check if there is a file as one of the parent paths.
+			return stat(path.Dir(p))
+		}
+		return err
+	}
+	return stat(parent)
+}
+
 func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -149,13 +172,18 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		metadata.Size += fi.Size
 	}
 
+	// check if an object is present as one of the parent dir.
+	if err = xl.parentDirIsObject(bucket, path.Dir(object)); err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
 	// Save successfully calculated md5sum.
 	metadata.MD5Sum = s3MD5
 	// Save modTime as well as the current time.
 	metadata.ModTime = time.Now().UTC()
 
 	// Create temporary multipart meta file to write and then rename.
-	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, object, multipartMetaFile)
+	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, object, uploadID, multipartMetaFile)
 	w, err := xl.storage.CreateFile(minioMetaBucket, tempMultipartMetaFile)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
@@ -164,21 +192,21 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	err = encoder.Encode(&metadata)
 	if err != nil {
 		if err = safeCloseAndRemove(w); err != nil {
-			return "", err
+			return "", toObjectErr(err, bucket, object)
 		}
-		return "", err
+		return "", toObjectErr(err, bucket, object)
 	}
 	// Close the writer.
 	if err = w.Close(); err != nil {
 		if err = safeCloseAndRemove(w); err != nil {
-			return "", err
+			return "", toObjectErr(err, bucket, object)
 		}
-		return "", err
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Attempt a Rename of multipart meta file to final namespace.
-	multipartObjFile := path.Join(object, multipartMetaFile)
-	err = xl.storage.RenameFile(minioMetaBucket, tempMultipartMetaFile, bucket, multipartObjFile)
+	multipartObjFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, multipartMetaFile)
+	err = xl.storage.RenameFile(minioMetaBucket, tempMultipartMetaFile, minioMetaBucket, multipartObjFile)
 	if err != nil {
 		if derr := xl.storage.DeleteFile(minioMetaBucket, tempMultipartMetaFile); derr != nil {
 			return "", toObjectErr(err, minioMetaBucket, tempMultipartMetaFile)
@@ -192,11 +220,11 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		go func(index int, part completePart) {
 			defer wg.Done()
 			partSuffix := fmt.Sprintf("%.5d.%s", part.PartNumber, part.ETag)
-			multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-			multipartObjSuffix := path.Join(object, partNumToPartFileName(part.PartNumber))
-			errs[index] = xl.storage.RenameFile(minioMetaBucket, multipartPartFile, bucket, multipartObjSuffix)
+			src := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+			dst := path.Join(mpartMetaPrefix, bucket, object, uploadID, partNumToPartFileName(part.PartNumber))
+			errs[index] = xl.storage.RenameFile(minioMetaBucket, src, minioMetaBucket, dst)
 			if errs[index] != nil {
-				log.Errorf("Unable to rename file %s to %s, failed with %s", multipartPartFile, multipartObjSuffix, errs[index])
+				log.Errorf("Unable to rename file %s to %s, failed with %s", src, dst, errs[index])
 			}
 		}(index, part)
 	}
@@ -218,6 +246,18 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 
+	// Delete if an object already exists.
+	// FIXME: rename it to tmp file and delete only after
+	// the newly uploaded file is renamed from tmp location to
+	// the original location.
+	err = xl.deleteObject(bucket, object)
+	if err != nil && err != errFileNotFound {
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	if err = xl.storage.RenameFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), bucket, object); err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var entries []string
@@ -226,6 +266,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			return s3MD5, nil
 		}
 	}
+
 	uploadsJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	err = xl.storage.DeleteFile(minioMetaBucket, uploadsJSONPath)
 	if err != nil {
