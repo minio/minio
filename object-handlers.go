@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	mux "github.com/gorilla/mux"
@@ -570,14 +571,20 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	case authTypePresigned, authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
-
+		var wg = &sync.WaitGroup{}
 		// Start writing in a routine.
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			shaWriter := sha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, cerr := io.CopyN(multiWriter, r.Body, size); cerr != nil {
-				errorIf(cerr, "Unable to read HTTP body.", nil)
-				writer.CloseWithError(err)
+			if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
+				// Pipe closed.
+				if wErr == io.ErrClosedPipe {
+					return
+				}
+				errorIf(wErr, "Unable to read HTTP body.", nil)
+				writer.CloseWithError(wErr)
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
@@ -588,15 +595,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			} else if isRequestPresignedSignatureV4(r) {
 				s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
 			}
+			var sErr error
 			if s3Error != ErrNone {
 				if s3Error == ErrSignatureDoesNotMatch {
-					writer.CloseWithError(errSignatureMismatch)
-					return
+					sErr = errSignatureMismatch
+				} else {
+					sErr = fmt.Errorf("%v", getAPIError(s3Error))
 				}
-				writer.CloseWithError(fmt.Errorf("%v", getAPIError(s3Error)))
+				writer.CloseWithError(sErr)
 				return
 			}
-			// Close the writer.
 			writer.Close()
 		}()
 
@@ -606,6 +614,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 		// Create object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+		// Close the pipe.
+		reader.Close()
+		// Wait for all the routines to finish.
+		wg.Wait()
 	}
 	if err != nil {
 		errorIf(err, "PutObject failed.", nil)
@@ -710,22 +722,29 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 		// No need to verify signature, anonymous request access is
 		// already allowed.
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hex.EncodeToString(md5Bytes))
+		hexMD5 := hex.EncodeToString(md5Bytes)
+		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hexMD5)
 	case authTypePresigned, authTypeSigned:
-		validateRegion := true // Validate region.
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
-
+		var wg = &sync.WaitGroup{}
 		// Start writing in a routine.
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			shaWriter := sha256.New()
 			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, err = io.CopyN(multiWriter, r.Body, size); err != nil {
-				errorIf(err, "Unable to read HTTP body.", nil)
-				writer.CloseWithError(err)
+			if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
+				// Pipe closed, just ignore it.
+				if wErr == io.ErrClosedPipe {
+					return
+				}
+				errorIf(wErr, "Unable to read HTTP body.", nil)
+				writer.CloseWithError(wErr)
 				return
 			}
 			shaPayload := shaWriter.Sum(nil)
+			validateRegion := true // Validate region.
 			var s3Error APIErrorCode
 			if isRequestSignatureV4(r) {
 				s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
@@ -734,10 +753,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 			if s3Error != ErrNone {
 				if s3Error == ErrSignatureDoesNotMatch {
-					writer.CloseWithError(errSignatureMismatch)
-					return
+					err = errSignatureMismatch
+				} else {
+					err = fmt.Errorf("%v", getAPIError(s3Error))
 				}
-				writer.CloseWithError(fmt.Errorf("%v", getAPIError(s3Error)))
+				writer.CloseWithError(err)
 				return
 			}
 			// Close the writer.
@@ -745,6 +765,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}()
 		md5SumHex := hex.EncodeToString(md5Bytes)
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, md5SumHex)
+		// Close the pipe.
+		reader.Close()
+		// Wait for all the routines to finish.
+		wg.Wait()
 	}
 	if err != nil {
 		errorIf(err, "PutObjectPart failed.", nil)
