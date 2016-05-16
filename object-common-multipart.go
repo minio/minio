@@ -39,7 +39,8 @@ const (
 func createUploadsJSON(storage StorageAPI, bucket, object, uploadID string) error {
 	// Place holder uploads.json
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
-	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, uploadsJSONFile)
+	uploadsJSONSuffix := fmt.Sprintf("%s.%s", uploadID, uploadsJSONFile)
+	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadsJSONSuffix)
 	w, err := storage.CreateFile(minioMetaBucket, uploadsPath)
 	if err != nil {
 		return err
@@ -98,7 +99,8 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 			return "", err
 		}
 		uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
-		tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, incompleteFile)
+		incompleteSuffix := fmt.Sprintf("%s.%s", uploadID, incompleteFile)
+		tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, incompleteSuffix)
 		if _, err = storage.StatFile(minioMetaBucket, uploadIDPath); err != nil {
 			if err != errFileNotFound {
 				return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
