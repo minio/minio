@@ -20,8 +20,6 @@ import (
 	"errors"
 	slashpath "path"
 	"sync"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // Get the highest integer from a given integer slice.
@@ -125,12 +123,6 @@ func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mda
 		// Verify if online disks count are lesser than readQuorum
 		// threshold, return an error if yes.
 		if onlineDiskCount < xl.readQuorum {
-			log.WithFields(logrus.Fields{
-				"volume":          volume,
-				"path":            path,
-				"onlineDiskCount": onlineDiskCount,
-				"readQuorumCount": xl.readQuorum,
-			}).Errorf("%s", errReadQuorum)
 			return nil, xlMetaV1{}, false, errReadQuorum
 		}
 	}

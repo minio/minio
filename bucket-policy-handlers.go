@@ -67,7 +67,7 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	for _, policyAction := range statement.Actions {
 		// Policy action can be a regex, validate the action with matching string.
 		matched, err := regexp.MatchString(policyAction, action)
-		fatalIf(err, "Invalid pattern, please verify the pattern string.", nil)
+		fatalIf(err, "Invalid action \"%s\" in bucket policy.", action)
 		if matched {
 			return true
 		}
@@ -190,7 +190,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// bucket policies are limited to 20KB in size, using a limit reader.
 	bucketPolicyBuf, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
-		errorIf(err, "Reading policy failed.", nil)
+		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
@@ -198,7 +198,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Parse bucket policy.
 	bucketPolicy, err := parseBucketPolicy(bucketPolicyBuf)
 	if err != nil {
-		errorIf(err, "Unable to parse bucket policy.", nil)
+		errorIf(err, "Unable to parse bucket policy.")
 		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
 		return
 	}
@@ -211,7 +211,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	// Save bucket policy.
 	if err := writeBucketPolicy(bucket, bucketPolicyBuf); err != nil {
-		errorIf(err, "SaveBucketPolicy failed.", nil)
+		errorIf(err, "Unable to write bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -245,7 +245,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Delete bucket access policy.
 	if err := removeBucketPolicy(bucket); err != nil {
-		errorIf(err, "DeleteBucketPolicy failed.", nil)
+		errorIf(err, "Unable to remove bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -282,7 +282,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Read bucket access policy.
 	p, err := readBucketPolicy(bucket)
 	if err != nil {
-		errorIf(err, "GetBucketPolicy failed.", nil)
+		errorIf(err, "Unable to read bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)

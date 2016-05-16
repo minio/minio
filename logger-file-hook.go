@@ -40,13 +40,13 @@ func enableFileLogger() {
 	}
 
 	file, err := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	fatalIf(err, "Unable to open log file.", nil)
+	fatalIf(err, "Unable to open log file.")
 
 	// Add a local file hook.
 	log.Hooks.Add(&localFile{file})
 
 	lvl, err := logrus.ParseLevel(flogger.Level)
-	fatalIf(err, "Unknown log level detected, please fix your console logger configuration.", nil)
+	fatalIf(err, "Unknown log level found in the config file.")
 
 	// Set default JSON formatter.
 	log.Formatter = new(logrus.JSONFormatter)
@@ -64,14 +64,11 @@ func (l *localFile) Fire(entry *logrus.Entry) error {
 	return nil
 }
 
-// Levels -
+// Levels - indicate log levels supported.
 func (l *localFile) Levels() []logrus.Level {
 	return []logrus.Level{
 		logrus.PanicLevel,
 		logrus.FatalLevel,
 		logrus.ErrorLevel,
-		logrus.WarnLevel,
-		logrus.InfoLevel,
-		logrus.DebugLevel,
 	}
 }

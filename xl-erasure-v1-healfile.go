@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"io"
 	slashpath "path"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // healHeal - heals the file at path.
@@ -39,10 +37,6 @@ func (xl XL) healFile(volume string, path string) error {
 	// List all online disks to verify if we need to heal.
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("List online disks failed with %s", err)
 		return err
 	}
 	if !heal {
@@ -87,10 +81,6 @@ func (xl XL) healFile(volume string, path string) error {
 		writers[index], err = xl.storageDisks[index].CreateFile(volume, erasurePart)
 		if err != nil {
 			needsHeal[index] = false
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("CreateFile failed with error %s", err)
 			safeCloseAndRemove(writers[index])
 			continue
 		}
@@ -129,20 +119,12 @@ func (xl XL) healFile(volume string, path string) error {
 
 		// Check blocks if they are all zero in length.
 		if checkBlockSize(enBlocks) == 0 {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("%s", errDataCorrupt)
 			return errDataCorrupt
 		}
 
 		// Verify the blocks.
 		ok, err := xl.ReedSolomon.Verify(enBlocks)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("ReedSolomon verify failed with %s", err)
 			closeAndRemoveWriters(writers...)
 			return err
 		}
@@ -157,30 +139,18 @@ func (xl XL) healFile(volume string, path string) error {
 			}
 			err = xl.ReedSolomon.Reconstruct(enBlocks)
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("ReedSolomon reconstruct failed with %s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
 			// Verify reconstructed blocks again.
 			ok, err = xl.ReedSolomon.Verify(enBlocks)
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("ReedSolomon verify failed with %s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
 			if !ok {
 				// Blocks cannot be reconstructed, corrupted data.
 				err = errors.New("Verification failed after reconstruction, data likely corrupted.")
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("%s", err)
 				closeAndRemoveWriters(writers...)
 				return err
 			}
@@ -191,10 +161,6 @@ func (xl XL) healFile(volume string, path string) error {
 			}
 			_, err := writers[index].Write(enBlocks[index])
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("Write failed with %s", err)
 				safeCloseAndRemove(writers[index])
 				continue
 			}

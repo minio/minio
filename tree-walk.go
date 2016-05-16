@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // listParams - list object params used for list object map
@@ -258,18 +256,10 @@ func saveTreeWalk(layer ObjectLayer, params listParams, walker *treeWalker) {
 	listObjectMapMutex.Lock()
 	defer listObjectMapMutex.Unlock()
 
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("saveTreeWalk has been invoked.")
-
 	walkers, _ := listObjectMap[params]
 	walkers = append(walkers, walker)
 
 	listObjectMap[params] = walkers
-	log.Debugf("Successfully saved in listObjectMap.")
 }
 
 // Lookup the goroutine reference from map
@@ -287,12 +277,6 @@ func lookupTreeWalk(layer ObjectLayer, params listParams) *treeWalker {
 	listObjectMapMutex.Lock()
 	defer listObjectMapMutex.Unlock()
 
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("lookupTreeWalk has been invoked.")
 	if walkChs, ok := listObjectMap[params]; ok {
 		for i, walkCh := range walkChs {
 			if !walkCh.timedOut {
@@ -302,12 +286,6 @@ func lookupTreeWalk(layer ObjectLayer, params listParams) *treeWalker {
 				} else {
 					delete(listObjectMap, params)
 				}
-				log.WithFields(logrus.Fields{
-					"bucket":    params.bucket,
-					"recursive": params.recursive,
-					"marker":    params.marker,
-					"prefix":    params.prefix,
-				}).Debugf("Found the previous saved listsObjects params.")
 				return walkCh
 			}
 		}

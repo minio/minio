@@ -111,12 +111,10 @@ func sumMD5(data []byte) []byte {
 // Verify if request has valid AWS Signature Version '4'.
 func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	if r == nil {
-		errorIf(errInvalidArgument, "HTTP request cannot be empty.", nil)
 		return ErrInternalError
 	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		errorIf(err, "Unable to read HTTP body.", nil)
 		return ErrInternalError
 	}
 	// Verify Content-Md5, if payload is set.

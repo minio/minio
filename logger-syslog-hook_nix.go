@@ -41,11 +41,11 @@ type syslogHook struct {
 // enableSyslogLogger - enable logger at raddr.
 func enableSyslogLogger(raddr string) {
 	syslogHook, err := newSyslog("udp", raddr, syslog.LOG_ERR, "MINIO")
-	fatalIf(err, "Unable to instantiate syslog.", nil)
+	fatalIf(err, "Unable to initialize syslog logger.")
 
 	log.Hooks.Add(syslogHook)               // Add syslog hook.
 	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
-	log.Level = logrus.InfoLevel            // Minimum log level.
+	log.Level = logrus.ErrorLevel           // Minimum log level.
 }
 
 // newSyslog - Creates a hook to be added to an instance of logger.
@@ -67,12 +67,6 @@ func (hook *syslogHook) Fire(entry *logrus.Entry) error {
 		return hook.writer.Crit(line)
 	case logrus.ErrorLevel:
 		return hook.writer.Err(line)
-	case logrus.WarnLevel:
-		return hook.writer.Warning(line)
-	case logrus.InfoLevel:
-		return hook.writer.Info(line)
-	case logrus.DebugLevel:
-		return hook.writer.Debug(line)
 	default:
 		return nil
 	}
@@ -84,8 +78,5 @@ func (hook *syslogHook) Levels() []logrus.Level {
 		logrus.PanicLevel,
 		logrus.FatalLevel,
 		logrus.ErrorLevel,
-		logrus.WarnLevel,
-		logrus.InfoLevel,
-		logrus.DebugLevel,
 	}
 }

@@ -17,9 +17,8 @@
 package main
 
 import (
+	"errors"
 	"sync"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // nsParam - carries name space resource.
@@ -91,10 +90,7 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 			nsLk.Unlock()
 		}
 		if nsLk.ref == 0 {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Error("ref count in NS lock can not be 0.")
+			errorIf(errors.New("Namespace reference count cannot be 0."), "Invalid reference count detected.")
 		}
 		if nsLk.ref != 0 {
 			nsLk.ref--

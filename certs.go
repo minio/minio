@@ -45,7 +45,7 @@ func getCertsPath() (string, error) {
 // mustGetCertsPath must get certs path.
 func mustGetCertsPath() string {
 	certsPath, err := getCertsPath()
-	fatalIf(err, "Unable to retrieve certs path.", nil)
+	fatalIf(err, "Failed to get certificate path.")
 	return certsPath
 }
 

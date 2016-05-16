@@ -22,8 +22,6 @@ import (
 	"io"
 	slashpath "path"
 	"sync"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // ReadFile - read file
@@ -41,10 +39,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	nsMutex.RUnlock(volume, path)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("Get readable disks failed with %s", err)
 		return nil, err
 	}
 
@@ -52,13 +46,8 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 		// Heal in background safely, since we already have read
 		// quorum disks. Let the reads continue.
 		go func() {
-			if hErr := xl.healFile(volume, path); hErr != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("healFile failed with %s", hErr)
-				return
-			}
+			hErr := xl.healFile(volume, path)
+			errorIf(hErr, "Unable to heal file "+volume+"/"+path+".")
 		}()
 	}
 
@@ -120,10 +109,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("%s", errDataCorrupt)
 				pipeWriter.CloseWithError(errDataCorrupt)
 				return
 			}
@@ -132,10 +117,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			var ok bool
 			ok, err = xl.ReedSolomon.Verify(enBlocks)
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("ReedSolomon verify failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}
@@ -150,30 +131,18 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 				}
 				err = xl.ReedSolomon.Reconstruct(enBlocks)
 				if err != nil {
-					log.WithFields(logrus.Fields{
-						"volume": volume,
-						"path":   path,
-					}).Errorf("ReedSolomon reconstruct failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
 				// Verify reconstructed blocks again.
 				ok, err = xl.ReedSolomon.Verify(enBlocks)
 				if err != nil {
-					log.WithFields(logrus.Fields{
-						"volume": volume,
-						"path":   path,
-					}).Errorf("ReedSolomon verify failed with %s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
 				if !ok {
 					// Blocks cannot be reconstructed, corrupted data.
 					err = errors.New("Verification failed after reconstruction, data likely corrupted.")
-					log.WithFields(logrus.Fields{
-						"volume": volume,
-						"path":   path,
-					}).Errorf("%s", err)
 					pipeWriter.CloseWithError(err)
 					return
 				}
@@ -199,10 +168,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			// Write safely the necessary blocks.
 			_, err = pipeWriter.Write(dataBlocks[int(startOffset):])
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("ReedSolomon joining decoded blocks failed with %s", err)
 				pipeWriter.CloseWithError(err)
 				return
 			}

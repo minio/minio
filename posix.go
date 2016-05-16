@@ -24,7 +24,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/safe"
 )
@@ -68,7 +67,7 @@ func checkPathLength(pathName string) error {
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open(dirname)
 	if err != nil {
-		log.Errorf("Unable to access directory %s, failed with %s", dirname, err)
+		errorIf(err, "Unable to access directory.")
 		return false
 	}
 	defer f.Close()
@@ -76,11 +75,10 @@ func isDirEmpty(dirname string) bool {
 	_, err = f.Readdirnames(1)
 	if err != nil {
 		if err == io.EOF {
-			// Returns true if we have reached EOF, directory is
-			// indeed empty.
+			// Returns true if we have reached EOF, directory is indeed empty.
 			return true
 		}
-		log.Errorf("Unable to list directory %s, failed with %s", dirname, err)
+		errorIf(err, "Unable to list directory.")
 		return false
 	}
 	// Directory is not empty.
@@ -90,7 +88,6 @@ func isDirEmpty(dirname string) bool {
 // Initialize a new storage disk.
 func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
-		log.Error("Disk cannot be empty")
 		return nil, errInvalidArgument
 	}
 	fs := fsStorage{
@@ -99,24 +96,14 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	}
 	st, err := os.Stat(diskPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": diskPath,
-		}).Debugf("Stat failed, with error %s.", err)
 		if os.IsNotExist(err) {
 			return fs, errDiskNotFound
 		}
 		return fs, err
 	}
 	if !st.IsDir() {
-		log.WithFields(logrus.Fields{
-			"diskPath": diskPath,
-		}).Debugf("Disk %s.", syscall.ENOTDIR)
 		return fs, syscall.ENOTDIR
 	}
-	log.WithFields(logrus.Fields{
-		"diskPath":    diskPath,
-		"minFreeDisk": fsMinSpacePercent,
-	}).Debugf("Successfully configured FS storage API.")
 	return fs, nil
 }
 
@@ -127,9 +114,6 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	}
 	di, err := disk.GetInfo(diskPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": diskPath,
-		}).Debugf("Failed to get disk info, %s", err)
 		return err
 	}
 
@@ -137,10 +121,6 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	// space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
 	if int64(availableDiskSpace) <= minFreeDisk {
-		log.WithFields(logrus.Fields{
-			"availableDiskSpace": int64(availableDiskSpace),
-			"minFreeDiskSpace":   minFreeDisk,
-		}).Debugf("Disk free space has reached its limit.")
 		return errDiskFull
 	}
 
@@ -175,9 +155,6 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 	}
 	entries, err := readDir(dirPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"dirPath": dirPath,
-		}).Debugf("readDir failed with error %s", err)
 		return nil, errDiskNotFound
 	}
 	var volsInfo []VolInfo
@@ -189,9 +166,6 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 		var fi os.FileInfo
 		fi, err = os.Stat(pathJoin(dirPath, entry))
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"path": pathJoin(dirPath, entry),
-			}).Debugf("Stat failed with error %s", err)
 			// If the file does not exist, skip the entry.
 			if os.IsNotExist(err) {
 				continue
@@ -241,14 +215,8 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 		}
 		return volumeDir, errVolumeNotFound
 	} else if os.IsPermission(err) {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-		}).Debugf("Stat failed with error %s", err)
 		return volumeDir, errVolumeAccessDenied
 	}
-	log.WithFields(logrus.Fields{
-		"diskPath": s.diskPath,
-	}).Debugf("Stat failed with error %s", err)
 	return volumeDir, err
 }
 
@@ -271,11 +239,6 @@ func (s fsStorage) MakeVol(volume string) (err error) {
 		return os.Mkdir(volumeDir, 0700)
 	}
 
-	log.WithFields(logrus.Fields{
-		"diskPath": s.diskPath,
-		"volume":   volume,
-	}).Debugf("MakeVol failed with %s", err)
-
 	// For all other errors return here.
 	return err
 }
@@ -286,16 +249,10 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 	var diskInfo disk.Info
 	diskInfo, err = disk.GetInfo(s.diskPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-		}).Debugf("Failed to get disk info, %s", err)
 		return nil, err
 	}
 	volsInfo, err = getAllUniqueVols(s.diskPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-		}).Debugf("getAllUniqueVols failed with %s", err)
 		return nil, err
 	}
 	for i, vol := range volsInfo {
@@ -320,20 +277,12 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return VolInfo{}, err
 	}
 	// Stat a volume entry.
 	var st os.FileInfo
 	st, err = os.Stat(volumeDir)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("Stat on the volume failed with %s", err)
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
 		}
@@ -343,10 +292,6 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	var diskInfo disk.Info
 	diskInfo, err = disk.GetInfo(s.diskPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("Failed to get disk info, %s", err)
 		return VolInfo{}, err
 	}
 	// As os.Stat() doesn't carry other than ModTime(), use ModTime()
@@ -366,18 +311,10 @@ func (s fsStorage) DeleteVol(volume string) error {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return err
 	}
 	err = os.Remove(volumeDir)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("Volume remove failed with %s", err)
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		} else if strings.Contains(err.Error(), "directory is not empty") {
@@ -400,19 +337,11 @@ func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return nil, err
 	}
 	// Stat a volume entry.
 	_, err = os.Stat(volumeDir)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("Stat on the volume failed with %s", err)
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
 		}
@@ -425,10 +354,6 @@ func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 func (s fsStorage) ReadFile(volume string, path string, offset int64) (readCloser io.ReadCloser, err error) {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return nil, err
 	}
 
@@ -443,36 +368,19 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
 		}
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-		}).Debugf("Opening a file failed with %s", err)
 		return nil, err
 	}
 	st, err := file.Stat()
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-		}).Debugf("Stat failed with %s", err)
 		return nil, err
 	}
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-		}).Debugf("Unexpected type %s", errIsNotRegular)
 		return nil, errFileNotFound
 	}
 	// Seek to requested offset.
 	_, err = file.Seek(offset, os.SEEK_SET)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-			"offset":   offset,
-		}).Debugf("Seek failed with %s", err)
 		return nil, err
 	}
 	return file, nil
@@ -482,10 +390,6 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return nil, err
 	}
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
@@ -499,10 +403,6 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 	var st os.FileInfo
 	if st, err = os.Stat(filePath); err == nil {
 		if st.IsDir() {
-			log.WithFields(logrus.Fields{
-				"diskPath": s.diskPath,
-				"filePath": filePath,
-			}).Debugf("Unexpected type %s", errIsNotRegular)
 			return nil, errIsNotRegular
 		}
 	}
@@ -521,10 +421,6 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return FileInfo{}, err
 	}
 
@@ -534,11 +430,6 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 	st, err := os.Stat(filePath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-		}).Debugf("Stat failed with %s", err)
-
 		// File is really not found.
 		if os.IsNotExist(err) {
 			return FileInfo{}, errFileNotFound
@@ -555,10 +446,6 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"filePath": filePath,
-		}).Debugf("File is %s.", errIsNotRegular)
 		return FileInfo{}, errFileNotFound
 	}
 	return FileInfo{
@@ -578,9 +465,6 @@ func deleteFile(basePath, deletePath string) error {
 	// Verify if the path exists.
 	pathSt, err := os.Stat(deletePath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"deletePath": deletePath,
-		}).Debugf("Stat failed with %s", err)
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		} else if os.IsPermission(err) {
@@ -594,17 +478,10 @@ func deleteFile(basePath, deletePath string) error {
 	}
 	// Attempt to remove path.
 	if err := os.Remove(deletePath); err != nil {
-		log.WithFields(logrus.Fields{
-			"deletePath": deletePath,
-		}).Debugf("Remove failed with %s", err)
 		return err
 	}
 	// Recursively go down the next path and delete again.
 	if err := deleteFile(basePath, slashpath.Dir(deletePath)); err != nil {
-		log.WithFields(logrus.Fields{
-			"basePath":  basePath,
-			"deleteDir": slashpath.Dir(deletePath),
-		}).Debugf("deleteFile failed with %s", err)
 		return err
 	}
 	return nil
@@ -614,10 +491,6 @@ func deleteFile(basePath, deletePath string) error {
 func (s fsStorage) DeleteFile(volume, path string) error {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   volume,
-		}).Debugf("getVolumeDir failed with %s", err)
 		return err
 	}
 
@@ -636,39 +509,25 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	srcVolumeDir, err := s.getVolumeDir(srcVolume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   srcVolume,
-		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
 	dstVolumeDir, err := s.getVolumeDir(dstVolume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"diskPath": s.diskPath,
-			"volume":   dstVolume,
-		}).Errorf("getVolumeDir failed with %s", err)
 		return err
 	}
 	srcIsDir := strings.HasSuffix(srcPath, slashSeparator)
 	dstIsDir := strings.HasSuffix(dstPath, slashSeparator)
-	// for XL src and dst are always directories.
-	// for FS src and dst are always files.
+	// Either src and dst have to be directories or files, else return error.
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
-		// Either src and dst have to be directories or files, else return error.
-		log.Errorf("source and destination are not of same file type. source=%s, destination=%s", srcPath, dstPath)
 		return errFileAccessDenied
 	}
 	if srcIsDir {
 		// If source is a directory we expect the destination to be non-existent always.
 		_, err = os.Stat(slashpath.Join(dstVolumeDir, dstPath))
 		if err == nil {
-			log.Errorf("Source is a directory and destination exists. source=%s, destination=%s", srcPath, dstPath)
 			return errFileAccessDenied
 		}
 		if !os.IsNotExist(err) {
-			// Return error for any error other than ENOENT.
-			log.Errorf("Stat failed with %s", err)
 			return err
 		}
 		// Destination does not exist, hence proceed with the rename.
@@ -678,7 +537,6 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
 		}
-		log.Errorf("os.MkdirAll failed with %s", err)
 		return err
 	}
 	err = os.Rename(slashpath.Join(srcVolumeDir, srcPath), slashpath.Join(dstVolumeDir, dstPath))
@@ -686,7 +544,6 @@ func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) err
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		}
-		log.Errorf("os.Rename failed with %s", err)
 		return err
 	}
 	return nil

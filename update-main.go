@@ -89,7 +89,7 @@ func (u updateMessage) String() string {
 		return updateMessage("You are already running the most recent version of ‘minio’.")
 	}
 	msg, err := colorizeUpdateMessage(u.Download)
-	fatalIf(err, "Unable to colorize experimental update notification string ‘"+msg+"’.", nil)
+	fatalIf(err, "Unable to colorize update notice ‘"+msg+"’.")
 	return msg
 }
 
@@ -97,7 +97,7 @@ func (u updateMessage) String() string {
 func (u updateMessage) JSON() string {
 	u.Status = "success"
 	updateMessageJSONBytes, err := json.Marshal(u)
-	fatalIf((err), "Unable to marshal into JSON.", nil)
+	fatalIf((err), "Unable to marshal into JSON.")
 
 	return string(updateMessageJSONBytes)
 }
@@ -166,12 +166,12 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf((err), "Unable to read from update URL ‘"+newUpdateURL+"’.", nil)
+	fatalIf((err), "Unable to read from update URL ‘"+newUpdateURL+"’.")
 
 	// Error out if 'update' command is issued for development based builds.
 	if minioVersion == "DEVELOPMENT.GOGET" && !noError {
 		fatalIf((errors.New("")),
-			"Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio", nil)
+			"Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio")
 	}
 
 	// Parse current minio version into RFC3339.
@@ -179,12 +179,12 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf((err), "Unable to parse version string as time.", nil)
+	fatalIf((err), "Unable to parse version string as time.")
 
 	// Verify if current minio version is zero.
 	if current.IsZero() && !noError {
 		fatalIf((errors.New("")),
-			"Updates not supported for custom builds. Version field is empty. Please download official releases from https://minio.io/#minio", nil)
+			"Updates mechanism is not supported for custom builds. Please download official releases from https://minio.io/#minio")
 	}
 
 	// Verify if we have a valid http response i.e http.StatusOK.
@@ -194,7 +194,7 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 			if noError {
 				return updateMsg
 			}
-			fatalIf((errors.New("")), "Update server responsed with "+data.Status, nil)
+			fatalIf((errors.New("")), "Failed to retrieve update notice. "+data.Status)
 		}
 	}
 
@@ -203,19 +203,19 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf((err), "Fetching updates failed. Please try again.", nil)
+	fatalIf((err), "Failed to retrieve update notice. Please try again later.")
 
 	// Parse the date if its valid.
 	latest, err := parseReleaseData(string(updateBody))
 	if err != nil && noError {
 		return updateMsg
 	}
-	fatalIf(err, "Please report this issue at https://github.com/minio/minio/issues.", nil)
+	errMsg := "Failed to retrieve update notice. Please try again later. Please report this issue at https://github.com/minio/minio/issues"
+	fatalIf(err, errMsg)
 
 	// Verify if the date is not zero.
 	if latest.IsZero() && !noError {
-		fatalIf((errors.New("")),
-			"Unable to validate any update available at this time. Please open an issue at https://github.com/minio/minio/issues", nil)
+		fatalIf((errors.New("")), errMsg)
 	}
 
 	// Is the update latest?.

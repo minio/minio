@@ -19,8 +19,6 @@ package main
 import (
 	"sort"
 	"strings"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // Common initialization needed for both object layers.
@@ -198,7 +196,6 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 	var fileInfos []FileInfo
 	var eof bool
 	var nextMarker string
-	log.Debugf("Reading from the tree walk channel has begun.")
 	for i := 0; i < maxKeys; {
 		walkResult, ok := <-walker.ch
 		if !ok {
@@ -208,12 +205,6 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			log.WithFields(logrus.Fields{
-				"bucket":    bucket,
-				"prefix":    prefix,
-				"marker":    marker,
-				"recursive": recursive,
-			}).Debugf("Walk resulted in an error %s", walkResult.err)
 			// File not found is a valid case.
 			if walkResult.err == errFileNotFound {
 				return ListObjectsInfo{}, nil
@@ -230,12 +221,6 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 		i++
 	}
 	params := listParams{bucket, recursive, nextMarker, prefix}
-	log.WithFields(logrus.Fields{
-		"bucket":    params.bucket,
-		"recursive": params.recursive,
-		"marker":    params.marker,
-		"prefix":    params.prefix,
-	}).Debugf("Save the tree walk into map for subsequent requests.")
 	if !eof {
 		saveTreeWalk(layer, params, walker)
 	}
@@ -268,7 +253,7 @@ func isBucketExist(storage StorageAPI, bucketName string) bool {
 		if err == errVolumeNotFound {
 			return false
 		}
-		log.Errorf("StatVol failed with %s", err)
+		errorIf(err, "Stat failed on bucket "+bucketName+".")
 		return false
 	}
 	return true

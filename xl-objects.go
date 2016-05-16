@@ -49,20 +49,17 @@ func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
 	// Load saved XL format.json and validate.
 	xl, err := loadFormatXL(storage)
 	if err != nil {
-		log.Errorf("loadFormatXL failed with %s", err)
+		errorIf(err, "Unable to load format file 'format.json'.")
 		return false
 	}
 	if xl.Version != "1" {
-		log.Errorf("Unsupported XL backend format found [%s]", xl.Version)
 		return false
 	}
 	if len(exportPaths) != len(xl.Disks) {
-		log.Errorf("Number of disks %d passed at the command-line did not match the backend format %d", len(exportPaths), len(xl.Disks))
 		return false
 	}
 	for index, disk := range xl.Disks {
 		if exportPaths[index] != disk {
-			log.Errorf("Invalid order of disks detected %s. Required order is %s.", exportPaths, xl.Disks)
 			return false
 		}
 	}
@@ -73,7 +70,6 @@ func isValidFormat(storage StorageAPI, exportPaths ...string) bool {
 func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 	storage, err := newXL(exportPaths...)
 	if err != nil {
-		log.Errorf("newXL failed with %s", err)
 		return nil, err
 	}
 
@@ -90,13 +86,11 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 				Disks:   exportPaths,
 			})
 			if errSave != nil {
-				log.Errorf("saveFormatXL failed with %s", errSave)
 				return nil, errSave
 			}
 		} else {
-			log.Errorf("Unable to check backend format %s", err)
 			if err == errReadQuorum {
-				errMsg := fmt.Sprintf("Not all disks %s are available, did not meet read quroum.", exportPaths)
+				errMsg := fmt.Sprintf("Disks %s are offline. Unable to establish quorum.", exportPaths)
 				err = errors.New(errMsg)
 			} else if err == errDiskNotFound {
 				errMsg := fmt.Sprintf("Disks %s not found.", exportPaths)

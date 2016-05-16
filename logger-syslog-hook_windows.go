@@ -26,5 +26,5 @@ type syslogLogger struct {
 
 // enableSyslogLogger - unsupported on windows.
 func enableSyslogLogger(raddr string) {
-	fatalIf(errSyslogNotSupported, "Unable to enable syslog.", nil)
+	fatalIf(errSyslogNotSupported, "Unable to enable syslog.")
 }
