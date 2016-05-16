@@ -36,10 +36,11 @@ func enableConsoleLogger() {
 		log.Out = ioutil.Discard
 		return
 	}
+
 	// log.Out and log.Formatter use the default versions.
 	// Only set specific log level.
 	lvl, err := logrus.ParseLevel(clogger.Level)
-	fatalIf(err, "Unknown log level detected, please fix your console logger configuration.", nil)
+	fatalIf(err, "Unknown log level found in the config file.")
 
 	log.Level = lvl
 }

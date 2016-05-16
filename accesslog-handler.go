@@ -58,9 +58,9 @@ type LogMessage struct {
 
 func (h *accessLogHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	message, err := getLogMessage(w, req)
-	fatalIf(err, "Unable to extract http message.", nil)
+	fatalIf(err, "Unable to parse HTTP request and response fields.")
 	_, err = h.accessLogFile.Write(message)
-	fatalIf(err, "Writing to log file failed.", nil)
+	fatalIf(err, "Unable to log HTTP access.")
 
 	h.Handler.ServeHTTP(w, req)
 }
@@ -112,7 +112,7 @@ func getLogMessage(w http.ResponseWriter, req *http.Request) ([]byte, error) {
 // setAccessLogHandler logs requests
 func setAccessLogHandler(h http.Handler) http.Handler {
 	file, err := os.OpenFile("access.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	fatalIf(err, "Unable to open access log.", nil)
+	fatalIf(err, "Failed top open access log.")
 
 	return &accessLogHandler{Handler: h, accessLogFile: file}
 }

@@ -31,6 +31,10 @@ var globalFlags = []cli.Flag{
 		Value: mustGetConfigPath(),
 		Usage: "Path to configuration folder.",
 	},
+	cli.BoolFlag{
+		Name:  "quiet",
+		Usage: "Suppress chatty output.",
+	},
 }
 
 // registerCommand registers a cli command.

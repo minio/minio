@@ -18,8 +18,10 @@ package main
 
 import (
 	"reflect"
+	"runtime/debug"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio/pkg/probe"
 )
 
 type fields map[string]interface{}
@@ -41,38 +43,37 @@ type logger struct {
 }
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
-func errorIf(err error, msg string, fields logrus.Fields) {
+func errorIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	if fields == nil {
-		fields = make(logrus.Fields)
+	sysInfo := probe.GetSysInfo()
+	fields := logrus.Fields{
+		"cause":   err.Error(),
+		"type":    reflect.TypeOf(err),
+		"sysInfo": sysInfo,
 	}
-	fields["Error"] = struct {
-		Cause string `json:"cause,omitempty"`
-		Type  string `json:"type,omitempty"`
-	}{
-		err.Error(),
-		reflect.TypeOf(err).String(),
+	if globalTrace {
+		stack := debug.Stack()
+		fields["stack"] = string(stack)
 	}
-	log.WithFields(fields).Error(msg)
+	log.WithFields(fields).Errorf(msg, data...)
 }
 
 // fatalIf wrapper function which takes error and prints jsonic error messages.
-func fatalIf(err error, msg string, fields logrus.Fields) {
+func fatalIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	if fields == nil {
-		fields = make(logrus.Fields)
+	sysInfo := probe.GetSysInfo()
+	fields := logrus.Fields{
+		"cause":   err.Error(),
+		"type":    reflect.TypeOf(err),
+		"sysInfo": sysInfo,
 	}
-
-	fields["Error"] = struct {
-		Cause string `json:"cause,omitempty"`
-		Type  string `json:"type,omitempty"`
-	}{
-		err.Error(),
-		reflect.TypeOf(err).String(),
+	if globalTrace {
+		stack := debug.Stack()
+		fields["stack"] = string(stack)
 	}
-	log.WithFields(fields).Fatal(msg)
+	log.WithFields(fields).Fatalf(msg, data...)
 }

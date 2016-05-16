@@ -1,11 +1,9 @@
 ### Logging.
 
-- `log.Fatalf`
-- `log.Errorf`
-- `log.Warnf`
-- `log.Infof`
+- `fatalIf` - wrapper function which takes error and prints jsonic error messages.
+- `errorIf` - similar to fatalIf but doesn't exit on err != nil.
 
-Logging is enabled across the codebase. There are three types of logging supported.
+Supported logging targets.
 
 - console
 - file
@@ -20,11 +18,11 @@ Sample logger section from `~/.minio/config.json`
 		"file": {
 			"enable": false,
 			"fileName": "",
-			"level": "trace"
+			"level": "error"
 		},
 		"syslog": {
 			"enable": false,
 			"address": "",
-			"level": "info"
+			"level": "error"
 		}
 ```

@@ -26,7 +26,6 @@ import (
 	"path"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -141,9 +140,6 @@ func (xl XL) MakeVol(volume string) error {
 		if err != nil && err != errVolumeNotFound {
 			errCount++
 			if errCount > xl.readQuorum {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-				}).Errorf("%s", err)
 				return err
 			}
 		}
@@ -182,9 +178,6 @@ func (xl XL) MakeVol(volume string) error {
 	// Loop through all the concocted errors.
 	for _, err := range dErrs {
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-			}).Errorf("MakeVol failed with %s", err)
 			// if volume already exists, count them.
 			if err == errVolumeExists {
 				volumeExistsErrCnt++
@@ -241,9 +234,6 @@ func (xl XL) DeleteVol(volume string) error {
 	// Loop through concocted errors and return anything unusual.
 	for _, err := range dErrs {
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-			}).Errorf("DeleteVol failed with %s", err)
 			// We ignore error if errVolumeNotFound or errDiskNotFound
 			if err == errVolumeNotFound || err == errDiskNotFound {
 				volumeNotFoundErrCnt++
@@ -388,11 +378,6 @@ func (xl XL) listAllVolumeInfo(volume string) ([]VolInfo, bool, error) {
 		// Verify if online disks count are lesser than readQuorum
 		// threshold, return an error if yes.
 		if onlineDiskCount < xl.readQuorum {
-			log.WithFields(logrus.Fields{
-				"volume":          volume,
-				"onlineDiskCount": onlineDiskCount,
-				"readQuorumCount": xl.readQuorum,
-			}).Errorf("%s", errReadQuorum)
 			return nil, false, errReadQuorum
 		}
 	}
@@ -410,9 +395,6 @@ func (xl XL) healVolume(volume string) error {
 	// Lists volume info for all online disks.
 	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-		}).Errorf("List online disks failed with %s", err)
 		return err
 	}
 	if !heal {
@@ -425,11 +407,6 @@ func (xl XL) healVolume(volume string) error {
 		}
 		// Volinfo name would be an empty string, create it.
 		if err = xl.storageDisks[index].MakeVol(volume); err != nil {
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-				}).Errorf("MakeVol failed with error %s", err)
-			}
 			continue
 		}
 	}
@@ -447,20 +424,13 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
 	nsMutex.RUnlock(volume, "")
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-		}).Errorf("listOnlineVolsInfo failed with %s", err)
 		return VolInfo{}, err
 	}
 
 	if heal {
 		go func() {
-			if hErr := xl.healVolume(volume); hErr != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-				}).Errorf("healVolume failed with %s", hErr)
-				return
-			}
+			hErr := xl.healVolume(volume)
+			errorIf(hErr, "Unable to heal volume "+volume+".")
 		}()
 	}
 
@@ -534,23 +504,14 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	_, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	nsMutex.RUnlock(volume, path)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("listOnlineDisks failed with %s", err)
 		return FileInfo{}, err
 	}
 
 	if heal {
 		// Heal in background safely, since we already have read quorum disks.
 		go func() {
-			if hErr := xl.healFile(volume, path); hErr != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("healFile failed with %s", hErr)
-				return
-			}
+			hErr := xl.healFile(volume, path)
+			errorIf(hErr, "Unable to heal file "+volume+"/"+path+".")
 		}()
 	}
 
@@ -582,11 +543,6 @@ func (xl XL) DeleteFile(volume, path string) error {
 		erasureFilePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
 		err := disk.DeleteFile(volume, erasureFilePart)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("DeleteFile failed with %s", err)
-
 			errCount++
 
 			// We can safely allow DeleteFile errors up to len(xl.storageDisks) - xl.writeQuorum
@@ -601,11 +557,6 @@ func (xl XL) DeleteFile(volume, path string) error {
 		xlMetaV1FilePath := slashpath.Join(path, "file.json")
 		err = disk.DeleteFile(volume, xlMetaV1FilePath)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("DeleteFile failed with %s", err)
-
 			errCount++
 
 			// We can safely allow DeleteFile errors up to len(xl.storageDisks) - xl.writeQuorum
@@ -653,13 +604,6 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 		// not rename the part and metadata files separately.
 		err := disk.RenameFile(srcVolume, retainSlash(srcPath), dstVolume, retainSlash(dstPath))
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"srcVolume": srcVolume,
-				"srcPath":   srcPath,
-				"dstVolume": dstVolume,
-				"dstPath":   dstPath,
-			}).Errorf("RenameFile failed with %s", err)
-
 			errCount++
 			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 			// otherwise return failure.

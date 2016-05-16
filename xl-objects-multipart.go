@@ -223,9 +223,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			src := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 			dst := path.Join(mpartMetaPrefix, bucket, object, uploadID, partNumToPartFileName(part.PartNumber))
 			errs[index] = xl.storage.RenameFile(minioMetaBucket, src, minioMetaBucket, dst)
-			if errs[index] != nil {
-				log.Errorf("Unable to rename file %s to %s, failed with %s", src, dst, errs[index])
-			}
+			errorIf(errs[index], "Unable to rename file %s to %s.", src, dst)
 		}(index, part)
 	}
 
@@ -240,10 +238,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Delete the incomplete file place holder.
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
-	err = xl.storage.DeleteFile(minioMetaBucket, uploadIDPath)
+	uploadIDIncompletePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
+	err = xl.storage.DeleteFile(minioMetaBucket, uploadIDIncompletePath)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+		return "", toObjectErr(err, minioMetaBucket, uploadIDIncompletePath)
 	}
 
 	// Delete if an object already exists.
@@ -255,7 +253,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	if err = xl.storage.RenameFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), bucket, object); err != nil {
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	if err = xl.storage.RenameFile(minioMetaBucket, uploadIDPath, bucket, object); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 	// Validate if there are other incomplete upload-id's present for

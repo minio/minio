@@ -98,7 +98,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Fetch object stat info.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "GetObjectInfo failed.", nil)
+		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -128,7 +128,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	startOffset := hrange.start
 	readCloser, err := api.ObjectAPI.GetObject(bucket, object, startOffset)
 	if err != nil {
-		errorIf(err, "GetObject failed.", nil)
+		errorIf(err, "Unable to read object.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -146,13 +146,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if hrange.length > 0 {
 		if _, err := io.CopyN(w, readCloser, hrange.length); err != nil {
-			errorIf(err, "Writing to client failed", nil)
+			errorIf(err, "Writing to client failed.")
 			// Do not send error response here, since client could have died.
 			return
 		}
 	} else {
 		if _, err := io.Copy(w, readCloser); err != nil {
-			errorIf(err, "Writing to client failed", nil)
+			errorIf(err, "Writing to client failed.")
 			// Do not send error response here, since client could have died.
 			return
 		}
@@ -282,7 +282,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "GetObjectInfo failed.", nil)
+		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -368,7 +368,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
-		errorIf(err, "GetObjectInfo failed.", nil)
+		errorIf(err, "Unable to fetch object info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
 		return
 	}
@@ -397,7 +397,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Get the object.
 	readCloser, err := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
 	if err != nil {
-		errorIf(err, "Reading "+objectSource+" failed.", nil)
+		errorIf(err, "Unable to read an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
 		return
 	}
@@ -407,14 +407,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Create the object.
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, nil)
 	if err != nil {
-		errorIf(err, "PutObject failed.", nil)
+		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
 	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "GetObjectInfo failed.", nil)
+		errorIf(err, "Unable to fetch object info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -538,7 +538,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err, "Decoding md5 failed.", nil)
+		errorIf(err, "Unable to validate content-md5 format.")
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -583,7 +583,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				if wErr == io.ErrClosedPipe {
 					return
 				}
-				errorIf(wErr, "Unable to read HTTP body.", nil)
+				errorIf(wErr, "Unable to read from HTTP body.")
 				writer.CloseWithError(wErr)
 				return
 			}
@@ -620,7 +620,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		wg.Wait()
 	}
 	if err != nil {
-		errorIf(err, "PutObject failed.", nil)
+		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -659,7 +659,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object)
 	if err != nil {
-		errorIf(err, "NewMultipartUpload failed.", nil)
+		errorIf(err, "Unable to initiate new multipart upload id.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -681,7 +681,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err, "Decoding md5 failed.", nil)
 		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
 		return
 	}
@@ -739,7 +738,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 				if wErr == io.ErrClosedPipe {
 					return
 				}
-				errorIf(wErr, "Unable to read HTTP body.", nil)
+				errorIf(wErr, "Unable to read from HTTP request body.")
 				writer.CloseWithError(wErr)
 				return
 			}
@@ -771,7 +770,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		wg.Wait()
 	}
 	if err != nil {
-		errorIf(err, "PutObjectPart failed.", nil)
+		errorIf(err, "Unable to create object part.")
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
@@ -808,7 +807,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
-		errorIf(err, "AbortMutlipartUpload failed.", nil)
+		errorIf(err, "Unable to abort multipart upload.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -854,7 +853,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		errorIf(err, "ListObjectParts failed.", nil)
+		errorIf(err, "Unable to list uploaded parts.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -896,13 +895,13 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 	completeMultipartBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		errorIf(err, "CompleteMultipartUpload failed.", nil)
+		errorIf(err, "Unable to complete multipart upload.")
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 	complMultipartUpload := &completeMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
-		errorIf(err, "XML Unmarshal failed", nil)
+		errorIf(err, "Unable to parse complete multipart upload XML.")
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
@@ -920,7 +919,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Complete multipart upload.
 	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
-		errorIf(err, "CompleteMultipartUpload failed.", nil)
+		errorIf(err, "Unable to complete multipart upload.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}

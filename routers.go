@@ -42,11 +42,11 @@ func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths...)
-	fatalIf(err, "Initializing object layer failed.", nil)
+	fatalIf(err, "Unable to intialize object layer.")
 
 	// Initialize storage rpc server.
 	storageRPC, err := newRPCServer(srvCmdConfig.exportPaths[0]) // FIXME: should only have one path.
-	fatalIf(err, "Initializing storage rpc server failed.", nil)
+	fatalIf(err, "Unable to initialize storage RPC server.")
 
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{

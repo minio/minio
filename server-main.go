@@ -91,14 +91,14 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 // getListenIPs - gets all the ips to listen on.
 func getListenIPs(httpServerConf *http.Server) (hosts []string, port string) {
 	host, port, err := net.SplitHostPort(httpServerConf.Addr)
-	fatalIf(err, "Unable to split host port.", nil)
+	fatalIf(err, "Unable to parse host port.")
 
 	switch {
 	case host != "":
 		hosts = append(hosts, host)
 	default:
 		addrs, err := net.InterfaceAddrs()
-		fatalIf(err, "Unable to get interface address.", nil)
+		fatalIf(err, "Unable to determine network interface address.")
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
 				host := strings.Split(addr.String(), "/")[0]
@@ -126,7 +126,7 @@ func printListenIPs(tls bool, hosts []string, port string) {
 func initServerConfig(c *cli.Context) {
 	// Save new config.
 	err := serverConfig.Save()
-	fatalIf(err, "Unable to save config.", nil)
+	fatalIf(err, "Unable to save config.")
 
 	// Fetch access keys from environment variables if any and update the config.
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -135,10 +135,10 @@ func initServerConfig(c *cli.Context) {
 	// Validate if both keys are specified and they are valid save them.
 	if accessKey != "" && secretKey != "" {
 		if !isValidAccessKey.MatchString(accessKey) {
-			fatalIf(errInvalidArgument, "Access key does not have required length", nil)
+			fatalIf(errInvalidArgument, "Invalid access key.")
 		}
 		if !isValidSecretKey.MatchString(secretKey) {
-			fatalIf(errInvalidArgument, "Secret key does not have required length", nil)
+			fatalIf(errInvalidArgument, "Invalid secret key.")
 		}
 		serverConfig.SetCredential(credential{
 			AccessKeyID:     accessKey,
@@ -162,9 +162,9 @@ func checkServerSyntax(c *cli.Context) {
 // Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
 	_, portStr, err := net.SplitHostPort(address)
-	fatalIf(err, "Unable to split host port.", nil)
+	fatalIf(err, "Unable to parse host port.")
 	portInt, err := strconv.Atoi(portStr)
-	fatalIf(err, "Invalid port number.", nil)
+	fatalIf(err, "Invalid port number.")
 	return portInt
 }
 
@@ -201,17 +201,17 @@ func checkPortAvailability(port int) {
 	}
 	ifcs, err := net.Interfaces()
 	if err != nil {
-		fatalIf(err, "Unable to list interfaces.", nil)
+		fatalIf(err, "Unable to list interfaces.")
 	}
 	for _, ifc := range ifcs {
 		addrs, err := ifc.Addrs()
 		if err != nil {
-			fatalIf(err, fmt.Sprintf("Unable to list addresses on interface %s.", ifc.Name), nil)
+			fatalIf(err, "Unable to list addresses on interface %s.", ifc.Name)
 		}
 		for _, addr := range addrs {
 			ipnet, ok := addr.(*net.IPNet)
 			if !ok {
-				errorIf(errors.New(""), "Interface type assertion to (*net.IPNet) failed.", nil)
+				errorIf(errors.New(""), "Failed to assert type on (*net.IPNet) interface.")
 				continue
 			}
 			ip := ipnet.IP
@@ -224,14 +224,14 @@ func checkPortAvailability(port int) {
 			if err != nil {
 				if isAddrInUse(err) {
 					// Fail if port is already in use.
-					fatalIf(err, fmt.Sprintf("Unable to listen on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+					fatalIf(err, "Unable to listen on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
 				} else {
 					// Ignore other errors.
 					continue
 				}
 			}
 			if err = l.Close(); err != nil {
-				fatalIf(err, fmt.Sprintf("Unable to close listener on IP %s, port %.d", tcpAddr.IP, tcpAddr.Port), nil)
+				fatalIf(err, "Unable to close listener on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
 			}
 		}
 	}
@@ -316,5 +316,5 @@ func serverMain(c *cli.Context) {
 		// Fallback to http.
 		err = apiServer.ListenAndServe()
 	}
-	errorIf(err, "Failed to start the minio server.", nil)
+	errorIf(err, "Failed to start minio server.")
 }

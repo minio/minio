@@ -25,8 +25,6 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
-
-	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -114,10 +112,6 @@ func readDir(dirPath string) (entries []string, err error) {
 	buf := make([]byte, readDirentBufSize)
 	d, err := os.Open(dirPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"dirPath": dirPath,
-		}).Debugf("Open failed with %s", err)
-
 		// File is really not found.
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound

@@ -22,8 +22,6 @@ import (
 	slashpath "path"
 	"sync"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 // Erasure block size.
@@ -35,10 +33,7 @@ func (xl XL) cleanupCreateFileOps(volume, path string, writers ...io.WriteCloser
 	closeAndRemoveWriters(writers...)
 	for _, disk := range xl.storageDisks {
 		if err := disk.DeleteFile(volume, path); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("DeleteFile failed with %s", err)
+			errorIf(err, "Unable to delete file.")
 		}
 	}
 }
@@ -47,7 +42,7 @@ func (xl XL) cleanupCreateFileOps(volume, path string, writers ...io.WriteCloser
 func closeAndRemoveWriters(writers ...io.WriteCloser) {
 	for _, writer := range writers {
 		if err := safeCloseAndRemove(writer); err != nil {
-			log.Errorf("Closing writer failed with %s", err)
+			errorIf(err, "Failed to close writer.")
 		}
 	}
 }
@@ -67,10 +62,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	// based on total number of errors and read quorum.
 	err := xl.errsToStorageErr(errs)
 	if err != nil && err != errFileNotFound {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Errorf("%s", err)
 		reader.CloseWithError(err)
 		return
 	}
@@ -96,12 +87,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		var writer io.WriteCloser
 		writer, err = disk.CreateFile(volume, erasurePart)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("CreateFile failed with %s", err)
-
-			// treat errFileNameTooLong specially
+			// Treat errFileNameTooLong specially
 			if err == errFileNameTooLong {
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
@@ -122,14 +108,10 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 			return
 		}
 
-		// create meta data file
+		// Create meta data file.
 		var metadataWriter io.WriteCloser
 		metadataWriter, err = disk.CreateFile(volume, xlMetaV1FilePath)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Errorf("CreateFile failed with %s", err)
 			createFileError++
 
 			// We can safely allow CreateFile errors up to
@@ -158,10 +140,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		if err != nil {
 			// Any unexpected errors, close the pipe reader with error.
 			if err != io.ErrUnexpectedEOF && err != io.EOF {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("io.ReadFull failed with %s", err)
 				// Remove all temp writers.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
@@ -177,10 +155,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 			var dataBlocks [][]byte
 			dataBlocks, err = xl.ReedSolomon.Split(dataBuffer[0:n])
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("Splitting data buffer into erasure data blocks failed with %s", err)
 				// Remove all temp writers.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
@@ -190,10 +164,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 			// Encode parity blocks using data blocks.
 			err = xl.ReedSolomon.Encode(dataBlocks)
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("Encoding erasure data blocks failed with %s", err)
 				// Remove all temp writers upon error.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
@@ -220,10 +190,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 				if wErr == nil {
 					continue
 				}
-				log.WithFields(logrus.Fields{
-					"volume": volume,
-					"path":   path,
-				}).Errorf("Writing encoded blocks failed with %s", wErr)
 				// Remove all temp writers upon error.
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(wErr)
@@ -255,7 +221,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	// Case: when storageDisks is 16 and write quorumDisks is 13,
 	//       meta data write failure up to 2 can be considered.
 	//       currently we fail for any meta data writes
-	for index, metadataWriter := range metadataWriters {
+	for _, metadataWriter := range metadataWriters {
 		if metadataWriter == nil {
 			continue
 		}
@@ -263,11 +229,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		// Write metadata.
 		err = metadata.Write(metadataWriter)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"path":      path,
-				"diskIndex": index,
-			}).Errorf("Writing metadata failed with %s", err)
 			// Remove temporary files.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
@@ -286,11 +247,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		}
 		// Safely wrote, now rename to its actual location.
 		if err = writer.Close(); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"path":      path,
-				"diskIndex": index,
-			}).Errorf("Safely committing part failed with %s", err)
 			// Remove all temp writers upon error.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)
@@ -302,11 +258,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		}
 		// Safely wrote, now rename to its actual location.
 		if err = metadataWriters[index].Close(); err != nil {
-			log.WithFields(logrus.Fields{
-				"volume":    volume,
-				"path":      path,
-				"diskIndex": index,
-			}).Errorf("Safely committing metadata failed with %s", err)
 			// Remove all temp writers upon error.
 			xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 			reader.CloseWithError(err)

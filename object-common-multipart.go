@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -306,12 +305,6 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			log.WithFields(logrus.Fields{
-				"bucket":    minioMetaBucket,
-				"prefix":    prefixPath,
-				"marker":    markerPath,
-				"recursive": recursive,
-			}).Debugf("Walk resulted in an error %s", walkResult.err)
 			// File not found or Disk not found is a valid case.
 			if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
 				return nil, true, nil
@@ -326,9 +319,6 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 			// entries are empty.
 			entries, err = listLeafEntries(storage, fi.Name)
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"prefixPath": fi.Name,
-				}).Errorf("%s", err)
 				return nil, false, err
 			}
 		}
@@ -442,12 +432,6 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
 	fileInfos, eof, err := listMetaBucketMultipartFiles(layer, multipartPrefixPath, multipartMarkerPath, recursive, maxUploads)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"prefixPath": multipartPrefixPath,
-			"markerPath": multipartMarkerPath,
-			"recursive":  recursive,
-			"maxUploads": maxUploads,
-		}).Errorf("listMetaBucketMultipartFiles failed with %s", err)
 		return ListMultipartsInfo{}, err
 	}
 
@@ -552,9 +536,8 @@ func isUploadIDExists(storage StorageAPI, bucket, object, uploadID string) bool 
 		if err == errFileNotFound {
 			return false
 		}
-		log.Errorf("StatFile failed wtih %s", err)
+		errorIf(err, "Stat failed on "+minioMetaBucket+"/"+uploadIDPath+".")
 		return false
 	}
-	log.Debugf("FileInfo: %v", st)
 	return st.Mode.IsRegular()
 }

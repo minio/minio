@@ -50,7 +50,7 @@ var isValidAccessKey = regexp.MustCompile(`^[a-zA-Z0-9\\-\\.\\_\\~]{5,20}$`)
 // mustGenAccessKeys - must generate access credentials.
 func mustGenAccessKeys() (creds credential) {
 	creds, err := genAccessKeys()
-	fatalIf(err, "Unable to generate access keys.", nil)
+	fatalIf(err, "Unable to generate access keys.")
 	return creds
 }
 

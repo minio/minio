@@ -40,18 +40,18 @@ func purgeV1() {
 	if err != nil && os.IsNotExist(err) {
 		return
 	}
-	fatalIf(err, "Unable to load config version ‘1’.", nil)
+	fatalIf(err, "Unable to load config version ‘1’.")
 
 	if cv1.Version == "1" {
-		console.Println("Unsupported config version ‘1’ found, removed successfully.")
+		console.Println("Removed unsupported config version ‘1’.")
 		/// Purge old fsUsers.json file
 		configPath, err := getConfigPath()
-		fatalIf(err, "Unable to retrieve config path.", nil)
+		fatalIf(err, "Unable to retrieve config path.")
 
 		configFile := filepath.Join(configPath, "fsUsers.json")
 		os.RemoveAll(configFile)
 	}
-	fatalIf(errors.New(""), "Unexpected version found ‘"+cv1.Version+"’, cannot migrate.", nil)
+	fatalIf(errors.New(""), "Failed to migrate unrecognized config version ‘"+cv1.Version+"’.")
 }
 
 // Version '2' to '3' config migration adds new fields and re-orders
@@ -61,7 +61,7 @@ func migrateV2ToV3() {
 	if err != nil && os.IsNotExist(err) {
 		return
 	}
-	fatalIf(err, "Unable to load config version ‘2’.", nil)
+	fatalIf(err, "Unable to load config version ‘2’.")
 	if cv2.Version != "2" {
 		return
 	}
@@ -98,14 +98,14 @@ func migrateV2ToV3() {
 	srvConfig.Logger.Syslog = slogger
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize config.", nil)
+	fatalIf(err, "Unable to initialize config.")
 
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.", nil)
+	fatalIf(err, "Unable to get config file.")
 
 	// Migrate the config.
 	err = qc.Save(configFile)
-	fatalIf(err, "Migrating from version ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed.", nil)
+	fatalIf(err, "Failed to migrate config from ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
 
 	console.Println("Migration from version ‘" + cv2.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
@@ -118,7 +118,7 @@ func migrateV3ToV4() {
 	if err != nil && os.IsNotExist(err) {
 		return
 	}
-	fatalIf(err, "Unable to load config version ‘3’.", nil)
+	fatalIf(err, "Unable to load config version ‘3’.")
 	if cv3.Version != "3" {
 		return
 	}
@@ -137,12 +137,12 @@ func migrateV3ToV4() {
 	srvConfig.Logger.Syslog = cv3.Logger.Syslog
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize the quick config.", nil)
+	fatalIf(err, "Unable to initialize the quick config.")
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.", nil)
+	fatalIf(err, "Unable to get config file.")
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Migrating from version ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed.", nil)
+	fatalIf(err, "Failed to migrate config from ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
 
 	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }

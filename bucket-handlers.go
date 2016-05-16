@@ -36,7 +36,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	// Read saved bucket policy.
 	policy, err := readBucketPolicy(bucket)
 	if err != nil {
-		errorIf(err, "GetBucketPolicy failed.", nil)
+		errorIf(err, "Unable read bucket policy.")
 		switch err.(type) {
 		case BucketNotFound:
 			return ErrNoSuchBucket
@@ -50,7 +50,7 @@ func enforceBucketPolicy(action string, bucket string, reqURL *url.URL) (s3Error
 	// Parse the saved policy.
 	bucketPolicy, err := parseBucketPolicy(policy)
 	if err != nil {
-		errorIf(err, "Parse policy failed.", nil)
+		errorIf(err, "Unable to parse bucket policy.")
 		return ErrAccessDenied
 	}
 
@@ -117,7 +117,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	}
 
 	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
-		errorIf(err, "GetBucketInfo failed.", nil)
+		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -180,7 +180,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 
 	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
-		errorIf(err, "ListMultipartUploads failed.", nil)
+		errorIf(err, "Unable to list multipart uploads.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -252,7 +252,7 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
-	errorIf(err, "ListObjects failed.", nil)
+	errorIf(err, "Unable to list objects.")
 	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 }
 
@@ -306,7 +306,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		writeSuccessResponse(w, encodedSuccessResponse)
 		return
 	}
-	errorIf(err, "ListBuckets failed.", nil)
+	errorIf(err, "Unable to list buckets.")
 	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 }
 
@@ -352,7 +352,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Read incoming body XML bytes.
 	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
-		errorIf(err, "DeleteMultipleObjects failed.", nil)
+		errorIf(err, "Unable to read HTTP body.")
 		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
@@ -360,7 +360,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Unmarshal list of keys to be deleted.
 	deleteObjects := &DeleteObjectsRequest{}
 	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
-		errorIf(err, "DeleteMultipartObjects xml decoding failed.", nil)
+		errorIf(err, "Unable to unmarshal delete objects request XML.")
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
@@ -375,7 +375,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				ObjectName: object.ObjectName,
 			})
 		} else {
-			errorIf(err, "DeleteObject failed.", nil)
+			errorIf(err, "Unable to delete object.")
 			deleteErrors = append(deleteErrors, DeleteError{
 				Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
 				Message: errorCodeResponse[toAPIErrorCode(err)].Description,
@@ -423,7 +423,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// Make bucket.
 	err := api.ObjectAPI.MakeBucket(bucket)
 	if err != nil {
-		errorIf(err, "MakeBucket failed.", nil)
+		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -467,14 +467,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
 	if err != nil {
-		errorIf(err, "Unable to initialize multipart reader.", nil)
+		errorIf(err, "Unable to initialize multipart reader.")
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
 
 	fileBody, formValues, err := extractHTTPFormValues(reader)
 	if err != nil {
-		errorIf(err, "Unable to parse form values.", nil)
+		errorIf(err, "Unable to parse form values.")
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return
 	}
@@ -494,7 +494,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, nil)
 	if err != nil {
-		errorIf(err, "PutObject failed.", nil)
+		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -540,7 +540,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
-		errorIf(err, "GetBucketInfo failed.", nil)
+		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -565,7 +565,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
-		errorIf(err, "DeleteBucket failed.", nil)
+		errorIf(err, "Unable to delete a bucket.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}

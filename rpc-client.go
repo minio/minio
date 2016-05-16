@@ -27,8 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 type networkStorage struct {
@@ -80,9 +78,6 @@ func toStorageErr(err error) error {
 func newRPCClient(networkPath string) (StorageAPI, error) {
 	// Input validation.
 	if networkPath == "" || strings.LastIndex(networkPath, ":") == -1 {
-		log.WithFields(logrus.Fields{
-			"networkPath": networkPath,
-		}).Debugf("Network path is malformed, should be of form <ip>:<port>:<export_dir>")
 		return nil, errInvalidArgument
 	}
 
@@ -92,10 +87,6 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	// Dial minio rpc storage http path.
 	rpcClient, err := rpc.DialHTTPPath("tcp", netAddr, storageRPCPath)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"netAddr":        netAddr,
-			"storageRPCPath": storageRPCPath,
-		}).Debugf("RPC HTTP dial failed with %s", err)
 		return nil, err
 	}
 
@@ -125,9 +116,6 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 func (n networkStorage) MakeVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.MakeVolHandler", volume, &reply); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-		}).Debugf("Storage.MakeVolHandler returned an error %s", err)
 		return toStorageErr(err)
 	}
 	return nil
@@ -138,7 +126,6 @@ func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 	ListVols := ListVolsReply{}
 	err = n.rpcClient.Call("Storage.ListVolsHandler", "", &ListVols)
 	if err != nil {
-		log.Debugf("Storage.ListVolsHandler returned an error %s", err)
 		return nil, err
 	}
 	return ListVols.Vols, nil
@@ -147,9 +134,6 @@ func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 // StatVol - get current Stat volume info.
 func (n networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatVolHandler", volume, &volInfo); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-		}).Debugf("Storage.StatVolHandler returned an error %s", err)
 		return VolInfo{}, toStorageErr(err)
 	}
 	return volInfo, nil
@@ -159,9 +143,6 @@ func (n networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 func (n networkStorage) DeleteVol(volume string) error {
 	reply := GenericReply{}
 	if err := n.rpcClient.Call("Storage.DeleteVolHandler", volume, &reply); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-		}).Debugf("Storage.DeleteVolHandler returned an error %s", err)
 		return toStorageErr(err)
 	}
 	return nil
@@ -181,10 +162,6 @@ func (n networkStorage) CreateFile(volume, path string) (writeCloser io.WriteClo
 	go func() {
 		resp, err := n.httpClient.Post(writeURL.String(), contentType, readCloser)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"volume": volume,
-				"path":   path,
-			}).Debugf("CreateFile HTTP POST failed to upload data with error %s", err)
 			readCloser.CloseWithError(err)
 			return
 		}
@@ -210,10 +187,6 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 		Vol:  volume,
 		Path: path,
 	}, &fileInfo); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Debugf("Storage.StatFileHandler failed with %s", err)
 		return FileInfo{}, toStorageErr(err)
 	}
 	return fileInfo, nil
@@ -230,10 +203,6 @@ func (n networkStorage) ReadFile(volume string, path string, offset int64) (read
 	readURL.RawQuery = readQuery.Encode()
 	resp, err := n.httpClient.Get(readURL.String())
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Debugf("ReadFile http Get failed with error %s", err)
 		return nil, err
 	}
 	if resp != nil {
@@ -253,10 +222,6 @@ func (n networkStorage) ListDir(volume, path string) (entries []string, err erro
 		Vol:  volume,
 		Path: path,
 	}, &entries); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Debugf("Storage.ListDirHandlers failed with %s", err)
 		return nil, toStorageErr(err)
 	}
 	// Return successfully unmarshalled results.
@@ -270,10 +235,6 @@ func (n networkStorage) DeleteFile(volume, path string) (err error) {
 		Vol:  volume,
 		Path: path,
 	}, &reply); err != nil {
-		log.WithFields(logrus.Fields{
-			"volume": volume,
-			"path":   path,
-		}).Debugf("Storage.DeleteFileHandler failed with %s", err)
 		return toStorageErr(err)
 	}
 	return nil
@@ -288,12 +249,6 @@ func (n networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string
 		DstVol:  dstVolume,
 		DstPath: dstPath,
 	}, &reply); err != nil {
-		log.WithFields(logrus.Fields{
-			"srcVolume": srcVolume,
-			"srcPath":   srcPath,
-			"dstVolume": dstVolume,
-			"dstPath":   dstPath,
-		}).Errorf("Storage.RenameFileHandler failed with %s", err)
 		return toStorageErr(err)
 	}
 	return nil

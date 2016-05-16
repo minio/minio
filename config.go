@@ -47,7 +47,7 @@ func getConfigPath() (string, error) {
 // mustGetConfigPath must get server config path.
 func mustGetConfigPath() string {
 	configPath, err := getConfigPath()
-	fatalIf(err, "Unable to get config path.", nil)
+	fatalIf(err, "Unable to get config path.")
 	return configPath
 }
 
@@ -73,7 +73,7 @@ func isConfigFileExists() bool {
 // mustGetConfigFile must get server config file.
 func mustGetConfigFile() string {
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.", nil)
+	fatalIf(err, "Unable to get config file.")
 
 	return configFile
 }

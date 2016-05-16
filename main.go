@@ -20,15 +20,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
-	"strconv"
 
-	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/probe"
-	"github.com/olekukonko/ts"
 	"github.com/pkg/profile"
 )
 
@@ -60,10 +56,7 @@ FLAGS:
   {{end}}{{end}}
 VERSION:
   ` + minioVersion +
-	`{{ "\n"}}{{range $key, $value := ExtraInfo}}
-{{$key}}:
-  {{$value}}
-{{end}}`
+	`{{ "\n"}}`
 
 // init - check the environment before main starts
 func init() {
@@ -90,32 +83,6 @@ func enableLoggers() {
 	enableFileLogger()
 
 	// Add your logger here.
-}
-
-// Tries to get os/arch/platform specific information
-// Returns a map of current os/arch/platform/memstats
-func getSystemData() map[string]string {
-	host, err := os.Hostname()
-	if err != nil {
-		host = ""
-	}
-	memstats := &runtime.MemStats{}
-	runtime.ReadMemStats(memstats)
-	mem := fmt.Sprintf("Used: %s | Allocated: %s | Used-Heap: %s | Allocated-Heap: %s",
-		humanize.Bytes(memstats.Alloc),
-		humanize.Bytes(memstats.TotalAlloc),
-		humanize.Bytes(memstats.HeapAlloc),
-		humanize.Bytes(memstats.HeapSys))
-	platform := fmt.Sprintf("Host: %s | OS: %s | Arch: %s",
-		host,
-		runtime.GOOS,
-		runtime.GOARCH)
-	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
-	return map[string]string{
-		"PLATFORM": platform,
-		"RUNTIME":  goruntime,
-		"MEM":      mem,
-	}
 }
 
 func findClosestCommands(command string) []string {
@@ -195,15 +162,16 @@ func main() {
 		defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
 	}
 
+	// Set global trace flag.
+	trace := os.Getenv("MINIO_TRACE")
+	globalTrace = trace == "1"
+
 	probe.Init() // Set project's root source path.
 	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 	probe.SetAppInfo("Commit-ID", minioShortCommitID)
 
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
-		// Set global flags.
-		setGlobalsFromContext(c)
-
 		// Sets new config folder.
 		setGlobalConfigPath(c.GlobalString("config-dir"))
 
@@ -215,13 +183,16 @@ func main() {
 
 		// Initialize config.
 		err := initConfig()
-		fatalIf(err, "Unable to initialize minio config.", nil)
+		fatalIf(err, "Unable to initialize minio config.")
 
 		// Enable all loggers by now.
 		enableLoggers()
 
 		// Initialize name space lock.
 		initNSLock()
+
+		// Set global quiet flag.
+		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
@@ -235,16 +206,6 @@ func main() {
 
 		// Return here.
 		return nil
-	}
-	app.ExtraInfo = func() map[string]string {
-		if _, e := ts.GetSize(); e != nil {
-			globalQuiet = true
-		}
-		// Enable if debug is enabled.
-		if globalDebug {
-			return getSystemData()
-		}
-		return make(map[string]string)
 	}
 	// Run the app - exit on error.
 	app.RunAndExitOnError()
