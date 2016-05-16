@@ -183,7 +183,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	metadata.ModTime = time.Now().UTC()
 
 	// Create temporary multipart meta file to write and then rename.
-	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, object, uploadID, multipartMetaFile)
+	multipartMetaSuffix := fmt.Sprintf("%s.%s", uploadID, multipartMetaFile)
+	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, object, multipartMetaSuffix)
 	w, err := xl.storage.CreateFile(minioMetaBucket, tempMultipartMetaFile)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
