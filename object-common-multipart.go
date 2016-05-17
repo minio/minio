@@ -423,8 +423,12 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 	result.MaxUploads = maxUploads
 
 	// Not using path.Join() as it strips off the trailing '/'.
-	// Also bucket should always be followed by '/' even if prefix is empty.
 	multipartPrefixPath := pathJoin(mpartMetaPrefix, pathJoin(bucket, prefix))
+	if prefix == "" {
+		// Should have a trailing "/" if prefix is ""
+		// For ex. multipartPrefixPath should be "multipart/bucket/" if prefix is ""
+		multipartPrefixPath += slashSeparator
+	}
 	multipartMarkerPath := ""
 	if keyMarker != "" {
 		keyMarkerPath := pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
