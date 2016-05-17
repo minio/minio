@@ -194,30 +194,7 @@ func (s fsStorage) getVolumeDir(volume string) (string, error) {
 		return "", err
 	}
 	volumeDir := pathJoin(s.diskPath, volume)
-	_, err := os.Stat(volumeDir)
-	if err == nil {
-		return volumeDir, nil
-	}
-	if os.IsNotExist(err) {
-		var volsInfo []VolInfo
-		volsInfo, err = getAllUniqueVols(s.diskPath)
-		if err != nil {
-			// For any errors, treat it as disk not found.
-			return volumeDir, err
-		}
-		for _, vol := range volsInfo {
-			// Verify if lowercase version of the volume is equal to
-			// the incoming volume, then use the proper  name.
-			if strings.ToLower(vol.Name) == volume {
-				volumeDir = pathJoin(s.diskPath, vol.Name)
-				return volumeDir, nil
-			}
-		}
-		return volumeDir, errVolumeNotFound
-	} else if os.IsPermission(err) {
-		return volumeDir, errVolumeAccessDenied
-	}
-	return volumeDir, err
+	return volumeDir, nil
 }
 
 // Make a volume entry.
@@ -228,19 +205,16 @@ func (s fsStorage) MakeVol(volume string) (err error) {
 	}
 
 	volumeDir, err := s.getVolumeDir(volume)
-	if err == nil {
-		// Volume already exists, return error.
+	if err != nil {
+		return err
+	}
+	// Make a volume entry.
+	err = os.Mkdir(volumeDir, 0700)
+	if err != nil && os.IsExist(err) {
 		return errVolumeExists
 	}
-
-	// If volume not found create it.
-	if err == errVolumeNotFound {
-		// Make a volume entry.
-		return os.Mkdir(volumeDir, 0700)
-	}
-
-	// For all other errors return here.
-	return err
+	// Success
+	return nil
 }
 
 // ListVols - list volumes.
@@ -321,8 +295,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 			// On windows the string is slightly different, handle it here.
 			return errVolumeNotEmpty
 		} else if strings.Contains(err.Error(), "directory not empty") {
-			// Hopefully for all other
-			// operating systems, this is
+			// Hopefully for all other operating systems, this is
 			// assumed to be consistent.
 			return errVolumeNotEmpty
 		}
@@ -354,6 +327,14 @@ func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 func (s fsStorage) ReadFile(volume string, path string, offset int64) (readCloser io.ReadCloser, err error) {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
+		return nil, err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		}
 		return nil, err
 	}
 
@@ -392,6 +373,14 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 	if err != nil {
 		return nil, err
 	}
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		}
+		return nil, err
+	}
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return nil, err
 	}
@@ -421,6 +410,14 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
+		return FileInfo{}, err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return FileInfo{}, errVolumeNotFound
+		}
 		return FileInfo{}, err
 	}
 
@@ -491,6 +488,14 @@ func deleteFile(basePath, deletePath string) error {
 func (s fsStorage) DeleteFile(volume, path string) error {
 	volumeDir, err := s.getVolumeDir(volume)
 	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
 		return err
 	}
 
