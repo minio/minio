@@ -151,17 +151,6 @@ func mustGetProfilePath() string {
 }
 
 func main() {
-	// Enable profiling supported modes are [cpu, mem, block].
-	// ``MINIO_PROFILER`` supported options are [cpu, mem, block].
-	switch os.Getenv("MINIO_PROFILER") {
-	case "cpu":
-		defer profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-	case "mem":
-		defer profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-	case "block":
-		defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-	}
-
 	// Set global trace flag.
 	trace := os.Getenv("MINIO_TRACE")
 	globalTrace = trace == "1"
@@ -202,6 +191,17 @@ func main() {
 			if updateMsg.Update {
 				console.Println(updateMsg)
 			}
+		}
+
+		// Enable profiling supported modes are [cpu, mem, block].
+		// ``MINIO_PROFILER`` supported options are [cpu, mem, block].
+		switch os.Getenv("MINIO_PROFILER") {
+		case "cpu":
+			defer profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+		case "mem":
+			defer profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+		case "block":
+			defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
 		}
 
 		// Return here.
