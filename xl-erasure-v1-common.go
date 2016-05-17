@@ -46,25 +46,32 @@ func listFileVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64)
 	return versions
 }
 
-// errsToStorageErr - convert collection of errors into a single
+// reduceError - convert collection of errors into a single
 // error based on total errors and read quorum.
-func (xl XL) errsToStorageErr(errs []error) error {
-	notFoundCount := 0
+func (xl XL) reduceError(errs []error) error {
+	fileNotFoundCount := 0
 	diskNotFoundCount := 0
+	volumeNotFoundCount := 0
 	diskAccessDeniedCount := 0
 	for _, err := range errs {
 		if err == errFileNotFound {
-			notFoundCount++
+			fileNotFoundCount++
 		} else if err == errDiskNotFound {
 			diskNotFoundCount++
 		} else if err == errVolumeAccessDenied {
 			diskAccessDeniedCount++
+		} else if err == errVolumeNotFound {
+			volumeNotFoundCount++
 		}
 	}
 	// If we have errors with 'file not found' greater than
-	// readQuroum, return as errFileNotFound.
-	if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
+	// readQuorum, return as errFileNotFound.
+	// else if we have errors with 'volume not found' greater than
+	// readQuorum, return as errVolumeNotFound.
+	if fileNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
 		return errFileNotFound
+	} else if volumeNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+		return errVolumeNotFound
 	}
 	// If we have errors with disk not found equal to the
 	// number of disks, return as errDiskNotFound.
@@ -72,7 +79,7 @@ func (xl XL) errsToStorageErr(errs []error) error {
 		return errDiskNotFound
 	} else if diskNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
 		// If we have errors with 'disk not found' greater than
-		// readQuroum, return as errFileNotFound.
+		// readQuorum, return as errFileNotFound.
 		return errFileNotFound
 	}
 	// If we have errors with disk not found equal to the
@@ -90,7 +97,7 @@ func (xl XL) errsToStorageErr(errs []error) error {
 // - error if any.
 func (xl XL) listOnlineDisks(volume, path string) (onlineDisks []StorageAPI, mdata xlMetaV1, heal bool, err error) {
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	if err = xl.errsToStorageErr(errs); err != nil {
+	if err = xl.reduceError(errs); err != nil {
 		return nil, xlMetaV1{}, false, err
 	}
 	highestVersion := int64(0)

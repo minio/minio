@@ -128,28 +128,8 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
-func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
-	// Use map to record duplicates as we find them.
-	result := []VolInfo{}
-
-	m := make(map[string]VolInfo)
-	for _, v := range volsInfo {
-		if _, found := m[v.Name]; !found {
-			m[v.Name] = v
-		}
-	}
-
-	result = make([]VolInfo, 0, len(m))
-	for _, v := range m {
-		result = append(result, v)
-	}
-
-	// Return the new slice.
-	return result
-}
-
-// gets all the unique directories from diskPath.
-func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
+// List all the volumes from diskPath.
+func listVols(dirPath string) ([]VolInfo, error) {
 	if err := checkPathLength(dirPath); err != nil {
 		return nil, err
 	}
@@ -179,14 +159,14 @@ func getAllUniqueVols(dirPath string) ([]VolInfo, error) {
 			Created: fi.ModTime(),
 		})
 	}
-	return removeDuplicateVols(volsInfo), nil
+	return volsInfo, nil
 }
 
-// getVolumeDir - will convert incoming volume names to
+// getVolDir - will convert incoming volume names to
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found
 // an error is generated.
-func (s fsStorage) getVolumeDir(volume string) (string, error) {
+func (s fsStorage) getVolDir(volume string) (string, error) {
 	if !isValidVolname(volume) {
 		return "", errInvalidArgument
 	}
@@ -204,7 +184,7 @@ func (s fsStorage) MakeVol(volume string) (err error) {
 		return err
 	}
 
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
@@ -225,7 +205,7 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 	if err != nil {
 		return nil, err
 	}
-	volsInfo, err = getAllUniqueVols(s.diskPath)
+	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +229,7 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 // StatVol - get volume info.
 func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return VolInfo{}, err
 	}
@@ -283,7 +263,7 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 // DeleteVol - delete a volume.
 func (s fsStorage) DeleteVol(volume string) error {
 	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
@@ -308,7 +288,7 @@ func (s fsStorage) DeleteVol(volume string) error {
 // If an entry is a directory it will be returned with a trailing "/".
 func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +305,7 @@ func (s fsStorage) ListDir(volume, dirPath string) ([]string, error) {
 
 // ReadFile - read a file at a given offset.
 func (s fsStorage) ReadFile(volume string, path string, offset int64) (readCloser io.ReadCloser, err error) {
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +349,7 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 
 // CreateFile - create a file at path.
 func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +388,7 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 
 // StatFile - get file info.
 func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -486,7 +466,7 @@ func deleteFile(basePath, deletePath string) error {
 
 // DeleteFile - delete a file at path.
 func (s fsStorage) DeleteFile(volume, path string) error {
-	volumeDir, err := s.getVolumeDir(volume)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
@@ -512,14 +492,29 @@ func (s fsStorage) DeleteFile(volume, path string) error {
 
 // RenameFile - rename file.
 func (s fsStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
-	srcVolumeDir, err := s.getVolumeDir(srcVolume)
+	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
 	}
-	dstVolumeDir, err := s.getVolumeDir(dstVolume)
+	dstVolumeDir, err := s.getVolDir(dstVolume)
 	if err != nil {
 		return err
 	}
+	// Stat a volume entry.
+	_, err = os.Stat(srcVolumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
+		return err
+	}
+	_, err = os.Stat(dstVolumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
+	}
+
 	srcIsDir := strings.HasSuffix(srcPath, slashSeparator)
 	dstIsDir := strings.HasSuffix(dstPath, slashSeparator)
 	// Either src and dst have to be directories or files, else return error.

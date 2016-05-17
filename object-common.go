@@ -144,17 +144,14 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 	case fsObjects:
 		storage = l.storage
 	}
-
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-
-	// Verify whether the bucket exists.
+	// Verify if bucket exists.
 	if !isBucketExist(storage, bucket) {
 		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
 	}
-
 	if !IsValidObjectPrefix(prefix) {
 		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
 	}
@@ -174,6 +171,7 @@ func listObjectsCommon(layer ObjectLayer, bucket, prefix, marker, delimiter stri
 		}
 	}
 
+	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
 		return ListObjectsInfo{}, nil
 	}
