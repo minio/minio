@@ -127,24 +127,6 @@ func (xl XL) MakeVol(volume string) error {
 		return errInvalidArgument
 	}
 
-	// Hold read lock.
-	nsMutex.RLock(volume, "")
-	// Verify if the volume already exists.
-	_, errs := xl.getAllVolumeInfo(volume)
-	nsMutex.RUnlock(volume, "")
-
-	// Count errors other than errVolumeNotFound, bigger than the allowed
-	// readQuorum, if yes throw an error.
-	errCount := 0
-	for _, err := range errs {
-		if err != nil && err != errVolumeNotFound {
-			errCount++
-			if errCount > xl.readQuorum {
-				return err
-			}
-		}
-	}
-
 	// Hold a write lock before creating a volume.
 	nsMutex.Lock(volume, "")
 	defer nsMutex.Unlock(volume, "")
@@ -161,13 +143,13 @@ func (xl XL) MakeVol(volume string) error {
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
-		if disk == nil {
-			continue
-		}
 		wg.Add(1)
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
+			if disk == nil {
+				return
+			}
 			dErrs[index] = disk.MakeVol(volume)
 		}(index, disk)
 	}
@@ -177,27 +159,25 @@ func (xl XL) MakeVol(volume string) error {
 
 	// Loop through all the concocted errors.
 	for _, err := range dErrs {
-		if err != nil {
-			// if volume already exists, count them.
-			if err == errVolumeExists {
-				volumeExistsErrCnt++
-				// Return err if all disks report volume exists.
-				if volumeExistsErrCnt == len(xl.storageDisks) {
-					return errVolumeExists
-				}
-				continue
-			}
-
-			// Update error counter separately.
-			createVolErr++
-			if createVolErr <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
-			}
-
-			// Return errWriteQuorum if errors were more than
-			// allowed write quorum.
-			return errWriteQuorum
+		if err == nil {
+			continue
 		}
+		// if volume already exists, count them.
+		if err == errVolumeExists {
+			volumeExistsErrCnt++
+			continue
+		}
+
+		// Update error counter separately.
+		createVolErr++
+	}
+	// Return err if all disks report volume exists.
+	if volumeExistsErrCnt == len(xl.storageDisks) {
+		return errVolumeExists
+	} else if createVolErr > len(xl.storageDisks)-xl.writeQuorum {
+		// Return errWriteQuorum if errors were more than
+		// allowed write quorum.
+		return errWriteQuorum
 	}
 	return nil
 }
