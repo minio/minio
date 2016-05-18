@@ -120,11 +120,15 @@ func newXLObjects(exportPaths ...string) (ObjectLayer, error) {
 
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucket(bucket string) error {
+	nsMutex.Lock(bucket, "")
+	defer nsMutex.Unlock(bucket, "")
 	return makeBucket(xl.storage, bucket)
 }
 
 // GetBucketInfo - get bucket info.
 func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+	nsMutex.RLock(bucket, "")
+	defer nsMutex.RUnlock(bucket, "")
 	return getBucketInfo(xl.storage, bucket)
 }
 
@@ -135,6 +139,8 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 
 // DeleteBucket - delete a bucket.
 func (xl xlObjects) DeleteBucket(bucket string) error {
+	nsMutex.Lock(bucket, "")
+	nsMutex.Unlock(bucket, "")
 	return deleteBucket(xl.storage, bucket)
 }
 
@@ -150,6 +156,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if !IsValidObjectName(object) {
 		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	nsMutex.RLock(bucket, object)
+	defer nsMutex.RUnlock(bucket, object)
 	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	} else if !ok {
@@ -172,7 +180,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
+
+	// Hold a read lock once more which can be released after the following go-routine ends.
+	// We hold RLock once more because the current function would return before the go routine below
+	// executes and hence releasing the read lock (because of defer'ed nsMutex.RUnlock() call).
+	nsMutex.RLock(bucket, object)
 	go func() {
+		defer nsMutex.RUnlock(bucket, object)
 		for ; partIndex < len(info.Parts); partIndex++ {
 			part := info.Parts[partIndex]
 			r, err := xl.storage.ReadFile(bucket, pathJoin(object, partNumToPartFileName(part.PartNumber)), offset)
@@ -262,6 +276,8 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	nsMutex.RLock(bucket, object)
+	defer nsMutex.RUnlock(bucket, object)
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -285,6 +301,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			Object: object,
 		}
 	}
+	nsMutex.Lock(bucket, object)
+	defer nsMutex.Unlock(bucket, object)
 
 	tempObj := path.Join(tmpMetaPrefix, bucket, object)
 	fileWriter, err := xl.storage.CreateFile(minioMetaBucket, tempObj)
@@ -429,6 +447,8 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	nsMutex.Lock(bucket, object)
+	defer nsMutex.Unlock(bucket, object)
 	if err := xl.deleteObject(bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	}

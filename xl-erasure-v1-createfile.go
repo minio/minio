@@ -53,10 +53,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 	// Release the block writer upon function return.
 	defer wcloser.release()
 
-	// Lock right before reading from disk.
-	nsMutex.RLock(volume, path)
 	partsMetadata, errs := xl.getPartsMetadata(volume, path)
-	nsMutex.RUnlock(volume, path)
 
 	// Convert errs into meaningful err to be sent upwards if possible
 	// based on total number of errors and read quorum.
@@ -239,10 +236,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 			return
 		}
 	}
-
-	// Lock right before commit to disk.
-	nsMutex.Lock(volume, path)
-	defer nsMutex.Unlock(volume, path)
 
 	// Close all writers and metadata writers in routines.
 	for index, writer := range writers {

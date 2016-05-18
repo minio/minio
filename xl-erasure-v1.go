@@ -127,10 +127,6 @@ func (xl XL) MakeVol(volume string) error {
 		return errInvalidArgument
 	}
 
-	// Hold a write lock before creating a volume.
-	nsMutex.Lock(volume, "")
-	defer nsMutex.Unlock(volume, "")
-
 	// Err counters.
 	createVolErr := 0       // Count generic create vol errs.
 	volumeExistsErrCnt := 0 // Count all errVolumeExists errs.
@@ -187,10 +183,6 @@ func (xl XL) DeleteVol(volume string) error {
 	if !isValidVolname(volume) {
 		return errInvalidArgument
 	}
-
-	// Hold a write lock for Delete volume.
-	nsMutex.Lock(volume, "")
-	defer nsMutex.Unlock(volume, "")
 
 	// Collect if all disks report volume not found.
 	var volumeNotFoundErrCnt int
@@ -369,10 +361,6 @@ func (xl XL) listAllVolInfo(volume string) ([]VolInfo, bool, error) {
 
 // healVolume - heals any missing volumes.
 func (xl XL) healVolume(volume string) error {
-	// Acquire a read lock.
-	nsMutex.RLock(volume, "")
-	defer nsMutex.RUnlock(volume, "")
-
 	// Lists volume info for all online disks.
 	volsInfo, heal, err := xl.listAllVolInfo(volume)
 	if err != nil {
@@ -420,10 +408,7 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 		return VolInfo{}, errInvalidArgument
 	}
 
-	// Acquire a read lock before reading.
-	nsMutex.RLock(volume, "")
 	volsInfo, heal, err := xl.listAllVolInfo(volume)
-	nsMutex.RUnlock(volume, "")
 	if err != nil {
 		return VolInfo{}, err
 	}
@@ -500,10 +485,7 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 		return FileInfo{}, errInvalidArgument
 	}
 
-	// Acquire read lock.
-	nsMutex.RLock(volume, path)
 	_, metadata, heal, err := xl.listOnlineDisks(volume, path)
-	nsMutex.RUnlock(volume, path)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -534,9 +516,6 @@ func (xl XL) DeleteFile(volume, path string) error {
 	if !isValidPath(path) {
 		return errInvalidArgument
 	}
-
-	nsMutex.Lock(volume, path)
-	defer nsMutex.Unlock(volume, path)
 
 	errCount := 0
 	// Update meta data file and remove part file
@@ -589,14 +568,6 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 	if !isValidPath(dstPath) {
 		return errInvalidArgument
 	}
-
-	// Hold read lock at source before rename.
-	nsMutex.RLock(srcVolume, srcPath)
-	defer nsMutex.RUnlock(srcVolume, srcPath)
-
-	// Hold write lock at destination before rename.
-	nsMutex.Lock(dstVolume, dstPath)
-	defer nsMutex.Unlock(dstVolume, dstPath)
 
 	errCount := 0
 	for _, disk := range xl.storageDisks {

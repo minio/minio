@@ -34,10 +34,7 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 		return nil, errInvalidArgument
 	}
 
-	// Acquire a read lock.
-	nsMutex.RLock(volume, path)
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
-	nsMutex.RUnlock(volume, path)
 	if err != nil {
 		return nil, err
 	}
@@ -51,8 +48,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 		}()
 	}
 
-	// Acquire read lock again.
-	nsMutex.RLock(volume, path)
 	readers := make([]io.ReadCloser, len(xl.storageDisks))
 	for index, disk := range onlineDisks {
 		if disk == nil {
@@ -67,7 +62,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			readers[index] = reader
 		}
 	}
-	nsMutex.RUnlock(volume, path)
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()

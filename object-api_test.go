@@ -29,6 +29,10 @@ var _ = Suite(&MySuite{})
 
 func (s *MySuite) TestFSAPISuite(c *C) {
 	var storageList []string
+
+	// Initialize name space lock.
+	initNSLock()
+
 	create := func() ObjectLayer {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		c.Check(err, IsNil)

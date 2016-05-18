@@ -84,7 +84,9 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-
+	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	// Loops through until successfully generates a new unique upload id.
 	for {
 		uuid, err := uuid.New()
@@ -146,6 +148,13 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
+	// Hold read lock on the uploadID so that no one aborts it.
+	nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+
+	// Hold write lock on the part so that there is no parallel upload on the part.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
 	partSuffix := fmt.Sprintf("%s.%.5d", uploadID, partID)
 	partSuffixPath := path.Join(tmpMetaPrefix, bucket, object, partSuffix)
@@ -245,6 +254,10 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}
 	}
+
+	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	if err := cleanupUploadedParts(storage, bucket, object, uploadID); err != nil {
 		return err
@@ -509,6 +522,9 @@ func listObjectPartsCommon(storage StorageAPI, bucket, object, uploadID string, 
 	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
 	}
+	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	result := ListPartsInfo{}
 	entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
 	if err != nil {
