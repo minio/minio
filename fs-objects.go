@@ -94,9 +94,6 @@ func (fs fsObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
 	}
-	if !isBucketExist(fs.storage, bucket) {
-		return nil, BucketNotFound{Bucket: bucket}
-	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
 		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
@@ -113,9 +110,6 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, (BucketNameInvalid{Bucket: bucket})
-	}
-	if !isBucketExist(fs.storage, bucket) {
-		return ObjectInfo{}, BucketNotFound{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
@@ -148,10 +142,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
-	}
-	// Check whether the bucket exists.
-	if !isBucketExist(fs.storage, bucket) {
-		return "", BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{
@@ -218,9 +208,6 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
-	}
-	if !isBucketExist(fs.storage, bucket) {
-		return BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}

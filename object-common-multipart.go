@@ -80,7 +80,6 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 	if !isBucketExist(storage, bucket) {
 		return "", BucketNotFound{Bucket: bucket}
 	}
-
 	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
@@ -229,7 +228,6 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-	// Verify whether the bucket exists.
 	if !isBucketExist(storage, bucket) {
 		return BucketNotFound{Bucket: bucket}
 	}
@@ -371,7 +369,6 @@ func listMultipartUploadsCommon(layer ObjectLayer, bucket, prefix, keyMarker, up
 	case fsObjects:
 		storage = l.storage
 	}
-
 	result := ListMultipartsInfo{}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {

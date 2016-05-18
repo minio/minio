@@ -290,9 +290,9 @@ func (xl XL) ListVols() (volsInfo []VolInfo, err error) {
 	return volsInfo, nil
 }
 
-// getAllVolumeInfo - get bucket volume info from all disks.
+// getAllVolInfo - list bucket volume info from all disks.
 // Returns error slice indicating the failed volume stat operations.
-func (xl XL) getAllVolumeInfo(volume string) (volsInfo []VolInfo, errs []error) {
+func (xl XL) getAllVolInfo(volume string) (volsInfo []VolInfo, errs []error) {
 	// Create errs and volInfo slices of storageDisks size.
 	errs = make([]error, len(xl.storageDisks))
 	volsInfo = make([]VolInfo, len(xl.storageDisks))
@@ -320,13 +320,14 @@ func (xl XL) getAllVolumeInfo(volume string) (volsInfo []VolInfo, errs []error) 
 	return volsInfo, errs
 }
 
-// listAllVolumeInfo - list all stat volume info from all disks.
+// listAllVolInfo - list all stat volume info from all disks.
 // Returns
 // - stat volume info for all online disks.
 // - boolean to indicate if healing is necessary.
 // - error if any.
-func (xl XL) listAllVolumeInfo(volume string) ([]VolInfo, bool, error) {
-	volsInfo, errs := xl.getAllVolumeInfo(volume)
+func (xl XL) listAllVolInfo(volume string) ([]VolInfo, bool, error) {
+	volsInfo, errs := xl.getAllVolInfo(volume)
+	volsInfo = removeDuplicateVols(volsInfo)
 	notFoundCount := 0
 	for _, err := range errs {
 		if err == errVolumeNotFound {
@@ -373,7 +374,7 @@ func (xl XL) healVolume(volume string) error {
 	defer nsMutex.RUnlock(volume, "")
 
 	// Lists volume info for all online disks.
-	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
+	volsInfo, heal, err := xl.listAllVolInfo(volume)
 	if err != nil {
 		return err
 	}
@@ -393,6 +394,26 @@ func (xl XL) healVolume(volume string) error {
 	return nil
 }
 
+// Removes any duplicate vols.
+func removeDuplicateVols(volsInfo []VolInfo) []VolInfo {
+	// Use map to record duplicates as we find them.
+	result := []VolInfo{}
+
+	m := make(map[string]VolInfo)
+	for _, v := range volsInfo {
+		if _, found := m[v.Name]; !found {
+			m[v.Name] = v
+		}
+	}
+
+	result = make([]VolInfo, 0, len(m))
+	for _, v := range m {
+		result = append(result, v)
+	}
+	// Return the new slice.
+	return result
+}
+
 // StatVol - get volume stat info.
 func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 	if !isValidVolname(volume) {
@@ -401,7 +422,7 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 
 	// Acquire a read lock before reading.
 	nsMutex.RLock(volume, "")
-	volsInfo, heal, err := xl.listAllVolumeInfo(volume)
+	volsInfo, heal, err := xl.listAllVolInfo(volume)
 	nsMutex.RUnlock(volume, "")
 	if err != nil {
 		return VolInfo{}, err
@@ -421,7 +442,7 @@ func (xl XL) StatVol(volume string) (volInfo VolInfo, err error) {
 		total += volInfo.Total
 	}
 	// Filter volsInfo and update the volInfo.
-	volInfo = removeDuplicateVols(volsInfo)[0]
+	volInfo = volsInfo[0]
 	volInfo.Free = free
 	volInfo.Total = total
 	return volInfo, nil
@@ -590,7 +611,6 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
 				continue
 			}
-
 			return err
 		}
 	}

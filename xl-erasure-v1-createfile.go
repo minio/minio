@@ -60,7 +60,7 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 
 	// Convert errs into meaningful err to be sent upwards if possible
 	// based on total number of errors and read quorum.
-	err := xl.errsToStorageErr(errs)
+	err := xl.reduceError(errs)
 	if err != nil && err != errFileNotFound {
 		reader.CloseWithError(err)
 		return
@@ -89,6 +89,10 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 		if err != nil {
 			// Treat errFileNameTooLong specially
 			if err == errFileNameTooLong {
+				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
+				reader.CloseWithError(err)
+				return
+			} else if err == errVolumeNotFound {
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return

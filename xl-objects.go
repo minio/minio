@@ -146,9 +146,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
 	}
-	if !isBucketExist(xl.storage, bucket) {
-		return nil, BucketNotFound{Bucket: bucket}
-	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
 		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
@@ -261,10 +258,6 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-	// Check whether the bucket exists.
-	if !isBucketExist(xl.storage, bucket) {
-		return ObjectInfo{}, BucketNotFound{Bucket: bucket}
-	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
@@ -282,7 +275,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
 	}
-	// Check whether the bucket exists.
+	// Verify bucket exists.
 	if !isBucketExist(xl.storage, bucket) {
 		return "", BucketNotFound{Bucket: bucket}
 	}
@@ -432,9 +425,6 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
-	}
-	if !isBucketExist(xl.storage, bucket) {
-		return BucketNotFound{Bucket: bucket}
 	}
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
