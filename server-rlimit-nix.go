@@ -29,9 +29,10 @@ func setMaxOpenFiles() error {
 	if err != nil {
 		return err
 	}
-	// Safe limit to be set on all platforms.
-	rLimit.Max = 4000
-	rLimit.Cur = 4000
+	// Set the current limit to Max, it is usually around 4096.
+	// TO increate this limit further user has to manually edit
+	// `/etc/security/limits.conf`
+	rLimit.Cur = rLimit.Max
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
 		return err
