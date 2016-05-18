@@ -205,6 +205,14 @@ func putObjectPartCommon(storage StorageAPI, bucket string, object string, uploa
 
 	partSuffixMD5 := fmt.Sprintf("%.5d.%s", partID, newMD5Hex)
 	partSuffixMD5Path := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffixMD5)
+	if _, err = storage.StatFile(minioMetaBucket, partSuffixMD5Path); err == nil {
+		// Part already uploaded as md5sum matches with the previous part.
+		// Just delete the temporary file.
+		if err = storage.DeleteFile(minioMetaBucket, partSuffixPath); err != nil {
+			return "", toObjectErr(err, minioMetaBucket, partSuffixPath)
+		}
+		return newMD5Hex, nil
+	}
 	err = storage.RenameFile(minioMetaBucket, partSuffixPath, minioMetaBucket, partSuffixMD5Path)
 	if err != nil {
 		if derr := storage.DeleteFile(minioMetaBucket, partSuffixPath); derr != nil {
