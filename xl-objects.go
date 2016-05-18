@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -358,6 +359,40 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return newMD5Hex, nil
+	}
+
+	tempMetaJSONFile := path.Join(tmpMetaPrefix, bucket, object, "meta.json")
+	fileWriter, err = xl.storage.CreateFile(minioMetaBucket, tempMetaJSONFile)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	if _, err = io.Copy(fileWriter, bytes.NewReader(metadataBytes)); err != nil {
+		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+			return "", toObjectErr(clErr, bucket, object)
+		}
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	if err = fileWriter.Close(); err != nil {
+		if err = safeCloseAndRemove(fileWriter); err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	metaJSONFile := path.Join(object, "meta.json")
+	err = xl.storage.RenameFile(minioMetaBucket, tempMetaJSONFile, bucket, metaJSONFile)
+	if err != nil {
+		if derr := xl.storage.DeleteFile(minioMetaBucket, tempMetaJSONFile); derr != nil {
+			return "", toObjectErr(derr, bucket, object)
+		}
+		return "", toObjectErr(err, bucket, object)
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -380,6 +415,10 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
 		return err
 	} else if !ok {
+		metaJSONFile := path.Join(object, "meta.json")
+		if err = xl.storage.DeleteFile(bucket, metaJSONFile); err != nil {
+			return err
+		}
 		if err = xl.storage.DeleteFile(bucket, object); err != nil {
 			return err
 		}
