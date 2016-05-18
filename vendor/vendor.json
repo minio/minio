@@ -109,8 +109,8 @@
 		},
 		{
 			"path": "github.com/pkg/profile",
-			"revision": "19396ecfda37c1c9ddaa52019adca59d582e4832",
-			"revisionTime": "2016-03-15T12:21:13+11:00"
+			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
+			"revisionTime": "2016-05-18T16:56:57+10:00"
 		},
 		{
 			"path": "github.com/rs/cors",

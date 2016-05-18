@@ -104,7 +104,8 @@ func (p *profile) Stop() {
 
 // Start starts a new profiling session.
 // The caller should call the Stop method on the value returned
-// to cleanly stop profiling.
+// to cleanly stop profiling. Start can only be called once
+// per program execution.
 func Start(options ...func(*profile)) interface {
 	Stop()
 } {
@@ -190,10 +191,6 @@ func Start(options ...func(*profile)) interface {
 			os.Exit(0)
 		}()
 	}
-
-	prof.closers = append(prof.closers, func() {
-		atomic.SwapUint32(&started, 0)
-	})
 
 	return &prof
 }
