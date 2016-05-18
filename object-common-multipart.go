@@ -237,7 +237,25 @@ func abortMultipartUploadCommon(storage StorageAPI, bucket, object, uploadID str
 	if !isUploadIDExists(storage, bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}
 	}
-	return cleanupUploadedParts(storage, bucket, object, uploadID)
+
+	if err := cleanupUploadedParts(storage, bucket, object, uploadID); err != nil {
+		return err
+	}
+
+	// Validate if there are other incomplete upload-id's present for
+	// the object, if yes do not attempt to delete 'uploads.json'.
+	if entries, err := storage.ListDir(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err == nil {
+		if len(entries) > 1 {
+			return nil
+		}
+	}
+
+	uploadsJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	if err := storage.DeleteFile(minioMetaBucket, uploadsJSONPath); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // isIncompleteMultipart - is object incomplete multipart.
