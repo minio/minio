@@ -373,6 +373,12 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 				}
 				fileInfo.Name = path.Join(fi.Name, entry)
 				fileInfos = append(fileInfos, fileInfo)
+				newMaxKeys++
+				// If we have reached the maxKeys, it means we have listed
+				// everything that was requested. Return right here.
+				if newMaxKeys == maxKeys {
+					return
+				}
 			}
 		} else {
 			// We reach here for a non-recursive case non-leaf entry
@@ -385,18 +391,24 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 				fi.Name = path.Dir(fi.Name)
 			}
 			fileInfos = append(fileInfos, fi)
-		}
-		newMaxKeys++
-		// If we have reached the maxKeys, it means we have listed
-		// everything that was requested. Return right here.
-		if newMaxKeys == maxKeys {
-			return
+			newMaxKeys++
+			// If we have reached the maxKeys, it means we have listed
+			// everything that was requested. Return right here.
+			if newMaxKeys == maxKeys {
+				return
+			}
 		}
 	}
 
 	// Return entries here.
 	return fileInfos, eof, nil
 }
+
+// FIXME: Currently the code sorts based on keyName/upload-id which is
+// in correct based on the S3 specs. According to s3 specs we are
+// supposed to only lexically sort keyNames and then for keyNames with
+// multiple upload ids should be sorted based on the initiated time.
+// Currently this case is not handled.
 
 // listMultipartUploadsCommon - lists all multipart uploads, common
 // function for both object layers.
