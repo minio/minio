@@ -30,10 +30,6 @@ func (xl XL) healFile(volume string, path string) error {
 	var readers = make([]io.Reader, totalBlocks)
 	var writers = make([]io.WriteCloser, totalBlocks)
 
-	// Acquire a read lock.
-	nsMutex.RLock(volume, path)
-	defer nsMutex.RUnlock(volume, path)
-
 	// List all online disks to verify if we need to heal.
 	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
 	if err != nil {

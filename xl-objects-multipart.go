@@ -133,6 +133,11 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if !isUploadIDExists(xl.storage, bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
+	// Hold lock so that
+	// 1) no one aborts this multipart upload
+	// 2) no one does a parallel complete-multipart-upload on this multipart upload
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
@@ -245,6 +250,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaBucket, uploadIDIncompletePath)
 	}
 
+	// Hold write lock on the destination before rename
+	nsMutex.Lock(bucket, object)
+	defer nsMutex.Unlock(bucket, object)
+
 	// Delete if an object already exists.
 	// FIXME: rename it to tmp file and delete only after
 	// the newly uploaded file is renamed from tmp location to
@@ -258,6 +267,12 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err = xl.storage.RenameFile(minioMetaBucket, uploadIDPath, bucket, object); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
+	// Hold the lock so that two parallel complete-multipart-uploads do no
+	// leave a stale uploads.json behind.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var entries []string
