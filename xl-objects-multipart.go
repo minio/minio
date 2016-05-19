@@ -37,11 +37,12 @@ type MultipartPartInfo struct {
 // MultipartObjectInfo - contents of the multipart metadata file after
 // CompleteMultipartUpload() is called.
 type MultipartObjectInfo struct {
-	Parts       []MultipartPartInfo
-	ModTime     time.Time
-	Size        int64
-	MD5Sum      string
-	ContentType string
+	Parts           []MultipartPartInfo
+	ModTime         time.Time
+	Size            int64
+	MD5Sum          string
+	ContentType     string
+	ContentEncoding string
 	// Add more fields here.
 }
 
@@ -212,6 +213,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Save successfully calculated md5sum.
 	metadata.MD5Sum = s3MD5
 	metadata.ContentType = objMeta["content-type"]
+	metadata.ContentEncoding = objMeta["content-encoding"]
 
 	// Save modTime as well as the current time.
 	metadata.ModTime = time.Now().UTC()

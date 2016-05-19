@@ -404,8 +404,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Size of object.
 	size := objInfo.Size
 
+	// Save metadata.
+	metadata := make(map[string]string)
+	// Save other metadata if available.
+	metadata["content-type"] = objInfo.ContentType
+	metadata["content-encoding"] = objInfo.ContentEncoding
+	// Do not set `md5sum` as CopyObject will not keep the
+	// same md5sum as the source.
+
 	// Create the object.
-	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, nil)
+	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)

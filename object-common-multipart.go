@@ -85,6 +85,10 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string, 
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	// No metadata is set, allocate a new one.
+	if meta == nil {
+		meta = make(map[string]string)
+	}
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))

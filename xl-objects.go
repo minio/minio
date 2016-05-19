@@ -250,6 +250,7 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		objInfo.ModTime = info.ModTime
 		objInfo.MD5Sum = info.MD5Sum
 		objInfo.ContentType = info.ContentType
+		objInfo.ContentEncoding = info.ContentEncoding
 	} else {
 		metadata := make(map[string]string)
 		offset := int64(0) // To read entire content
@@ -276,6 +277,7 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		objInfo.ModTime = fi.ModTime
 		objInfo.MD5Sum = metadata["md5Sum"]
 		objInfo.ContentType = contentType
+		objInfo.ContentEncoding = metadata["content-encoding"]
 	}
 	return objInfo, nil
 }
@@ -315,6 +317,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			Object: object,
 		}
 	}
+	// No metadata is set, allocate a new one.
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
@@ -348,11 +354,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// md5Hex representation.
-	var md5Hex string
-	if len(metadata) != 0 {
-		md5Hex = metadata["md5Sum"]
+	// Update the md5sum if not set with the newly calculated one.
+	if len(metadata["md5Sum"]) == 0 {
+		metadata["md5Sum"] = newMD5Hex
 	}
+
+	// md5Hex representation.
+	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			if err = safeCloseAndRemove(fileWriter); err != nil {
@@ -361,6 +369,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
+
 	err = fileWriter.Close()
 	if err != nil {
 		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
@@ -369,7 +378,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// check if an object is present as one of the parent dir.
+	// Check if an object is present as one of the parent dir.
 	if err = xl.parentDirIsObject(bucket, path.Dir(object)); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}

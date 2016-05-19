@@ -624,6 +624,7 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 
 }
 
+// Tests copy object.
 func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-object-copy", 0, nil)
 	c.Assert(err, IsNil)
@@ -635,6 +636,7 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-copy/object", int64(buffer1.Len()), buffer1)
+	request.Header.Set("Content-Type", "application/json")
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -657,8 +659,8 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	object, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
-
 	c.Assert(string(object), Equals, "hello world")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 }
 
 func (s *MyAPIXLSuite) TestPutObject(c *C) {
