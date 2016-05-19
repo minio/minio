@@ -37,10 +37,12 @@ type MultipartPartInfo struct {
 // MultipartObjectInfo - contents of the multipart metadata file after
 // CompleteMultipartUpload() is called.
 type MultipartObjectInfo struct {
-	Parts   []MultipartPartInfo
-	ModTime time.Time
-	Size    int64
-	MD5Sum  string
+	Parts       []MultipartPartInfo
+	ModTime     time.Time
+	Size        int64
+	MD5Sum      string
+	ContentType string
+	// Add more fields here.
 }
 
 type byMultipartFiles []string
@@ -68,6 +70,25 @@ func (m MultipartObjectInfo) GetPartNumberOffset(offset int64) (partIndex int, p
 	return
 }
 
+// getMultipartObjectMeta - incomplete meta file and extract meta
+// information if any.
+func getMultipartObjectMeta(storage StorageAPI, metaFile string) (meta map[string]string, err error) {
+	meta = make(map[string]string)
+	offset := int64(0)
+	objMetaReader, err := storage.ReadFile(minioMetaBucket, metaFile, offset)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(objMetaReader)
+	err = decoder.Decode(&meta)
+	if err != nil {
+		return nil, err
+	}
+	// Close the metadata reader.
+	objMetaReader.Close()
+	return meta, nil
+}
+
 func partNumToPartFileName(partNum int) string {
 	return fmt.Sprintf("%.5d%s", partNum, multipartSuffix)
 }
@@ -78,8 +99,8 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
-func (xl xlObjects) NewMultipartUpload(bucket, object string) (string, error) {
-	return newMultipartUploadCommon(xl.storage, bucket, object)
+func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
+	return newMultipartUploadCommon(xl.storage, bucket, object, meta)
 }
 
 // PutObjectPart - writes the multipart upload chunks.
@@ -148,6 +169,12 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var metadata = MultipartObjectInfo{}
 	var errs = make([]error, len(parts))
 
+	uploadIDIncompletePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
+	objMeta, err := getMultipartObjectMeta(xl.storage, uploadIDIncompletePath)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDIncompletePath)
+	}
+
 	// Waitgroup to wait for go-routines.
 	var wg = &sync.WaitGroup{}
 
@@ -184,6 +211,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save successfully calculated md5sum.
 	metadata.MD5Sum = s3MD5
+	metadata.ContentType = objMeta["content-type"]
+
 	// Save modTime as well as the current time.
 	metadata.ModTime = time.Now().UTC()
 
@@ -244,7 +273,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Delete the incomplete file place holder.
-	uploadIDIncompletePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, incompleteFile)
 	err = xl.storage.DeleteFile(minioMetaBucket, uploadIDIncompletePath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDIncompletePath)

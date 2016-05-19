@@ -61,7 +61,7 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
-	uploadID, err := obj.NewMultipartUpload("bucket", "key")
+	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
 	c.Assert(err, check.IsNil)
 	// Create a byte array of 5MB.
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
@@ -87,7 +87,7 @@ func testMultipartObjectAbort(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
-	uploadID, err := obj.NewMultipartUpload("bucket", "key")
+	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
 	c.Assert(err, check.IsNil)
 
 	parts := make(map[int]string)

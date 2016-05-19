@@ -35,7 +35,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t *testi
 
 	errMsg := "Bucket not found: minio-bucket"
 	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
-	uploadID, err := obj.NewMultipartUpload(bucket, object)
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existant bucket.", instanceType)
 	}
@@ -50,7 +50,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t *testi
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	uploadID, err = obj.NewMultipartUpload(bucket, object)
+	uploadID, err = obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -83,7 +83,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t *test
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	_, err = obj.NewMultipartUpload(bucket, object)
+	_, err = obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -114,7 +114,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(bucket, object)
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
