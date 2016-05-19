@@ -150,6 +150,19 @@ func mustGetProfilePath() string {
 	return filepath.Join(mustGetConfigPath(), globalMinioProfilePath)
 }
 
+func setupProfilingFromEnv(profiler *interface {
+	Stop()
+}) {
+	switch os.Getenv("MINIO_PROFILER") {
+	case "cpu":
+		*profiler = profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath()))
+	case "mem":
+		*profiler = profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath()))
+	case "block":
+		*profiler = profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath()))
+	}
+}
+
 func main() {
 	// Set global trace flag.
 	trace := os.Getenv("MINIO_TRACE")
@@ -159,6 +172,9 @@ func main() {
 	probe.SetAppInfo("Release-Tag", minioReleaseTag)
 	probe.SetAppInfo("Commit-ID", minioShortCommitID)
 
+	var profiler interface {
+		Stop()
+	}
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		// Sets new config folder.
@@ -195,18 +211,20 @@ func main() {
 
 		// Enable profiling supported modes are [cpu, mem, block].
 		// ``MINIO_PROFILER`` supported options are [cpu, mem, block].
-		switch os.Getenv("MINIO_PROFILER") {
-		case "cpu":
-			defer profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-		case "mem":
-			defer profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-		case "block":
-			defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
-		}
+		setupProfilingFromEnv(&profiler)
 
 		// Return here.
 		return nil
 	}
+
+	// Stop profiling on exit.
+	// N B If any inner function calls os.Exit() the defer(s) stacked wouldn't be called
+	defer func() {
+		if profiler != nil {
+			profiler.Stop()
+		}
+	}()
+
 	// Run the app - exit on error.
 	app.RunAndExitOnError()
 }
