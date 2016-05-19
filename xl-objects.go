@@ -231,7 +231,9 @@ func getMultipartObjectInfo(storage StorageAPI, bucket, object string) (info Mul
 }
 
 // Return ObjectInfo.
-func (xl xlObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
+func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	objInfo.Bucket = bucket
+	objInfo.Name = object
 	// First see if the object was a simple-PUT upload.
 	fi, err := xl.storage.StatFile(bucket, object)
 	if err != nil {
@@ -244,26 +246,38 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		if err != nil {
 			return ObjectInfo{}, err
 		}
-		fi.Size = info.Size
-		fi.ModTime = info.ModTime
-		fi.MD5Sum = info.MD5Sum
-	}
-	contentType := "application/octet-stream"
-	if objectExt := filepath.Ext(object); objectExt != "" {
-		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-		if ok {
-			contentType = content.ContentType
+		objInfo.Size = info.Size
+		objInfo.ModTime = info.ModTime
+		objInfo.MD5Sum = info.MD5Sum
+		objInfo.ContentType = info.ContentType
+	} else {
+		metadata := make(map[string]string)
+		offset := int64(0) // To read entire content
+		r, err := xl.storage.ReadFile(bucket, pathJoin(object, "meta.json"), offset)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
+		decoder := json.NewDecoder(r)
+		if err = decoder.Decode(&metadata); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		contentType := metadata["content-type"]
+		if len(contentType) == 0 {
+			contentType = "application/octet-stream"
+			if objectExt := filepath.Ext(object); objectExt != "" {
+				content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+				if ok {
+					contentType = content.ContentType
+				}
+			}
+		}
+		objInfo.Size = fi.Size
+		objInfo.IsDir = fi.Mode.IsDir()
+		objInfo.ModTime = fi.ModTime
+		objInfo.MD5Sum = metadata["md5Sum"]
+		objInfo.ContentType = contentType
 	}
-	return ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ModTime:     fi.ModTime,
-		Size:        fi.Size,
-		IsDir:       fi.Mode.IsDir(),
-		ContentType: contentType,
-		MD5Sum:      fi.MD5Sum,
-	}, nil
+	return objInfo, nil
 }
 
 // GetObjectInfo - get object info.
