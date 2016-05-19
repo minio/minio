@@ -198,6 +198,7 @@ func setCorsHandler(h http.Handler) http.Handler {
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT"},
 		AllowedHeaders: []string{"*"},
+		ExposedHeaders: []string{"ETag"},
 	})
 	return c.Handler(h)
 }
