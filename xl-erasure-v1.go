@@ -264,6 +264,9 @@ func (xl XL) ListVols() (volsInfo []VolInfo, err error) {
 	var total, free int64
 	// Loop through success vols and get aggregated usage values.
 	for _, vlsInfo := range successVols {
+		if len(vlsInfo) == 0 {
+			continue
+		}
 		free += vlsInfo[0].Free
 		total += vlsInfo[0].Total
 	}
