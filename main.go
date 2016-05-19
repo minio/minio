@@ -150,6 +150,19 @@ func mustGetProfilePath() string {
 	return filepath.Join(mustGetConfigPath(), globalMinioProfilePath)
 }
 
+func setupProfilingFromEnv(profiler *interface {
+	Stop()
+}) {
+	switch os.Getenv("MINIO_PROFILER") {
+	case "cpu":
+		*profiler = profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath()))
+	case "mem":
+		*profiler = profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath()))
+	case "block":
+		*profiler = profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath()))
+	}
+}
+
 func main() {
 	// Set global trace flag.
 	trace := os.Getenv("MINIO_TRACE")
@@ -198,14 +211,7 @@ func main() {
 
 		// Enable profiling supported modes are [cpu, mem, block].
 		// ``MINIO_PROFILER`` supported options are [cpu, mem, block].
-		switch os.Getenv("MINIO_PROFILER") {
-		case "cpu":
-			profiler = profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath()))
-		case "mem":
-			profiler = profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath()))
-		case "block":
-			profiler = profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath()))
-		}
+		setupProfilingFromEnv(&profiler)
 
 		// Return here.
 		return nil
