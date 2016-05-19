@@ -823,6 +823,7 @@ func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
 	c.Assert(strings.Contains(string(byteResults), "XML"), Equals, false)
 }
 
+// Tests if content type persists.
 func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists", 0, nil)
 	c.Assert(err, IsNil)
@@ -834,7 +835,7 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists/one", int64(buffer1.Len()), buffer1)
-	delete(request.Header, "Content-Type")
+	request.Header.Set("Content-Type", "application/zip")
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -847,7 +848,7 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
 	request, err = s.newRequest("GET", testAPIXLServer.URL+"/contenttype-persists/one", 0, nil)
 	c.Assert(err, IsNil)
@@ -856,7 +857,7 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
 	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists/two", int64(buffer2.Len()), buffer2)
@@ -873,14 +874,14 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 
 	request, err = s.newRequest("GET", testAPIXLServer.URL+"/contenttype-persists/two", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 }
 
 func (s *MyAPIXLSuite) TestPartialContent(c *C) {
