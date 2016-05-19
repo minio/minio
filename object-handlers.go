@@ -554,6 +554,22 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Save metadata.
+	metadata := make(map[string]string)
+	// Make sure we hex encode md5sum here.
+	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
+	// Save other metadata if available.
+	metadata["content-type"] = r.Header.Get("Content-Type")
+	metadata["content-encoding"] = r.Header.Get("Content-Encoding")
+	for key := range r.Header {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "x-amz-meta-") {
+			metadata[cKey] = r.Header.Get(cKey)
+		} else if strings.HasPrefix(key, "x-minio-meta-") {
+			metadata[cKey] = r.Header.Get(cKey)
+		}
+	}
+
 	var md5Sum string
 	switch getRequestAuthType(r) {
 	default:
@@ -567,7 +583,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, nil)
+		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
 	case authTypePresigned, authTypeSigned:
 		// Initialize a pipe for data pipe line.
 		reader, writer := io.Pipe()
@@ -608,10 +624,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writer.Close()
 		}()
 
-		// Save metadata.
-		metadata := make(map[string]string)
-		// Make sure we hex encode here.
-		metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 		// Create object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 		// Close the pipe.
@@ -657,7 +669,21 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object)
+	// Save metadata.
+	metadata := make(map[string]string)
+	// Save other metadata if available.
+	metadata["content-type"] = r.Header.Get("Content-Type")
+	metadata["content-encoding"] = r.Header.Get("Content-Encoding")
+	for key := range r.Header {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "x-amz-meta-") {
+			metadata[cKey] = r.Header.Get(cKey)
+		} else if strings.HasPrefix(key, "x-minio-meta-") {
+			metadata[cKey] = r.Header.Get(cKey)
+		}
+	}
+
+	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
 		errorIf(err, "Unable to initiate new multipart upload id.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)

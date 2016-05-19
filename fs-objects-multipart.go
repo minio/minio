@@ -28,8 +28,9 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
-func (fs fsObjects) NewMultipartUpload(bucket, object string) (string, error) {
-	return newMultipartUploadCommon(fs.storage, bucket, object)
+func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
+	meta = make(map[string]string) // Reset the meta value, we are not going to save headers for fs.
+	return newMultipartUploadCommon(fs.storage, bucket, object, meta)
 }
 
 // PutObjectPart - writes the multipart upload chunks.

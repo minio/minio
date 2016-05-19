@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -377,26 +376,22 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		return newMD5Hex, nil
-	}
-
 	tempMetaJSONFile := path.Join(tmpMetaPrefix, bucket, object, "meta.json")
-	fileWriter, err = xl.storage.CreateFile(minioMetaBucket, tempMetaJSONFile)
+	metaWriter, err := xl.storage.CreateFile(minioMetaBucket, tempMetaJSONFile)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	if _, err = io.Copy(fileWriter, bytes.NewReader(metadataBytes)); err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
+	encoder := json.NewEncoder(metaWriter)
+	err = encoder.Encode(&metadata)
+	if err != nil {
+		if clErr := safeCloseAndRemove(metaWriter); clErr != nil {
 			return "", toObjectErr(clErr, bucket, object)
 		}
 		return "", toObjectErr(err, bucket, object)
 	}
-
-	if err = fileWriter.Close(); err != nil {
-		if err = safeCloseAndRemove(fileWriter); err != nil {
+	if err = metaWriter.Close(); err != nil {
+		if err = safeCloseAndRemove(metaWriter); err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
 		return "", toObjectErr(err, bucket, object)

@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -71,7 +72,7 @@ func createUploadsJSON(storage StorageAPI, bucket, object, uploadID string) erro
 
 // newMultipartUploadCommon - initialize a new multipart, is a common
 // function for both object layers.
-func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) (uploadID string, err error) {
+func newMultipartUploadCommon(storage StorageAPI, bucket string, object string, meta map[string]string) (uploadID string, err error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -111,6 +112,17 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 			if w, err = storage.CreateFile(minioMetaBucket, tempUploadIDPath); err != nil {
 				return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 			}
+
+			// Encode the uploaded metadata into incomplete file.
+			encoder := json.NewEncoder(w)
+			err = encoder.Encode(&meta)
+			if err != nil {
+				if clErr := safeCloseAndRemove(w); clErr != nil {
+					return "", toObjectErr(clErr, minioMetaBucket, tempUploadIDPath)
+				}
+				return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+			}
+
 			// Close the writer.
 			if err = w.Close(); err != nil {
 				if clErr := safeCloseAndRemove(w); clErr != nil {
@@ -118,6 +130,8 @@ func newMultipartUploadCommon(storage StorageAPI, bucket string, object string) 
 				}
 				return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 			}
+
+			// Rename the file to the actual location from temporary path.
 			err = storage.RenameFile(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
 			if err != nil {
 				if derr := storage.DeleteFile(minioMetaBucket, tempUploadIDPath); derr != nil {
