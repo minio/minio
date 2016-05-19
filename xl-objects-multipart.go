@@ -70,8 +70,7 @@ func (m MultipartObjectInfo) GetPartNumberOffset(offset int64) (partIndex int, p
 	return
 }
 
-// getMultipartObjectMeta - incomplete meta file and extract meta
-// information if any.
+// getMultipartObjectMeta - incomplete meta file and extract meta information if any.
 func getMultipartObjectMeta(storage StorageAPI, metaFile string) (meta map[string]string, err error) {
 	meta = make(map[string]string)
 	offset := int64(0)
@@ -79,13 +78,14 @@ func getMultipartObjectMeta(storage StorageAPI, metaFile string) (meta map[strin
 	if err != nil {
 		return nil, err
 	}
+	// Close the metadata reader.
+	defer objMetaReader.Close()
+
 	decoder := json.NewDecoder(objMetaReader)
 	err = decoder.Decode(&meta)
 	if err != nil {
 		return nil, err
 	}
-	// Close the metadata reader.
-	objMetaReader.Close()
 	return meta, nil
 }
 
