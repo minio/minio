@@ -248,20 +248,13 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		fi.ModTime = info.ModTime
 		fi.MD5Sum = info.MD5Sum
 	}
-	contentType := "application/octet-stream"
-	if objectExt := filepath.Ext(object); objectExt != "" {
-		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-		if ok {
-			contentType = content.ContentType
-		}
-	}
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
 		ModTime:     fi.ModTime,
 		Size:        fi.Size,
 		IsDir:       fi.Mode.IsDir(),
-		ContentType: contentType,
+		ContentType: "application/octet-stream",
 		MD5Sum:      fi.MD5Sum,
 	}, nil
 }
@@ -282,6 +275,35 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	metadata := make(map[string]string)
+	offset := int64(0) // To read entire content
+	r, err := xl.storage.ReadFile(bucket, pathJoin(object, "meta.json"), offset)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	decoder := json.NewDecoder(r)
+	if err = decoder.Decode(&metadata); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	contentType := metadata["contentType"]
+	if len(contentType) == 0 {
+		contentType = "application/octet-stream"
+		if objectExt := filepath.Ext(object); objectExt != "" {
+			content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+			if ok {
+				contentType = content.ContentType
+			}
+		}
+	}
+	info.ContentType = contentType
+
+	MD5Sum := metadata["md5Sum"]
+	if len(MD5Sum) != 0 {
+		info.MD5Sum = MD5Sum
+	}
+
 	return info, nil
 }
 
