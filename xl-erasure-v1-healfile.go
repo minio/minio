@@ -55,19 +55,6 @@ func (xl XL) healFile(volume string, path string) error {
 		}
 	}
 
-	// Check if there is atleast one part that needs to be healed.
-	atleastOneHeal := false
-	for _, healNeeded := range needsHeal {
-		if healNeeded {
-			atleastOneHeal = true
-			break
-		}
-	}
-	if !atleastOneHeal {
-		// Return if healing not needed anywhere.
-		return nil
-	}
-
 	// create writers for parts where healing is needed.
 	for index, healNeeded := range needsHeal {
 		if !healNeeded {
@@ -81,6 +68,20 @@ func (xl XL) healFile(volume string, path string) error {
 			continue
 		}
 	}
+
+	// Check if there is atleast one part that needs to be healed.
+	atleastOneHeal := false
+	for _, healNeeded := range needsHeal {
+		if healNeeded {
+			atleastOneHeal = true
+			break
+		}
+	}
+	if !atleastOneHeal {
+		// Return if healing not needed anywhere.
+		return nil
+	}
+
 	var totalLeft = metadata.Stat.Size
 	for totalLeft > 0 {
 		// Figure out the right blockSize.

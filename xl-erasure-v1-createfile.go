@@ -89,10 +89,6 @@ func (xl XL) writeErasure(volume, path string, reader *io.PipeReader, wcloser *w
 				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
 				reader.CloseWithError(err)
 				return
-			} else if err == errVolumeNotFound {
-				xl.cleanupCreateFileOps(volume, path, append(writers, metadataWriters...)...)
-				reader.CloseWithError(err)
-				return
 			}
 
 			createFileError++
