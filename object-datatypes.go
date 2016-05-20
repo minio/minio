@@ -28,13 +28,14 @@ type BucketInfo struct {
 
 // ObjectInfo - object info.
 type ObjectInfo struct {
-	Bucket      string
-	Name        string
-	ModTime     time.Time
-	ContentType string
-	MD5Sum      string
-	Size        int64
-	IsDir       bool
+	Bucket          string
+	Name            string
+	ModTime         time.Time
+	Size            int64
+	IsDir           bool
+	MD5Sum          string
+	ContentType     string
+	ContentEncoding string
 }
 
 // ListPartsInfo - various types of object resources.
