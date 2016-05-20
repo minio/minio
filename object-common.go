@@ -22,19 +22,21 @@ import (
 )
 
 // Common initialization needed for both object layers.
-func initObjectLayer(storage StorageAPI) error {
+func initObjectLayer(storageDisks ...StorageAPI) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
-	if err := storage.MakeVol(minioMetaBucket); err != nil {
-		if err != errVolumeExists {
-			return toObjectErr(err, minioMetaBucket)
+	for _, storage := range storageDisks {
+		if err := storage.MakeVol(minioMetaBucket); err != nil {
+			if err != errVolumeExists && err != errDiskNotFound {
+				return toObjectErr(err, minioMetaBucket)
+			}
 		}
-	}
-	// Cleanup all temp entries upon start.
-	err := cleanupDir(storage, minioMetaBucket, tmpMetaPrefix)
-	if err != nil {
-		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
+		// Cleanup all temp entries upon start.
+		err := cleanupDir(storage, minioMetaBucket, tmpMetaPrefix)
+		if err != nil {
+			return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
+		}
 	}
 	return nil
 }

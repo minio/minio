@@ -114,6 +114,9 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	}
 	di, err := disk.GetInfo(diskPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return errDiskNotFound
+		}
 		return err
 	}
 
@@ -203,6 +206,9 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 	var diskInfo disk.Info
 	diskInfo, err = disk.GetInfo(s.diskPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errDiskNotFound
+		}
 		return nil, err
 	}
 	volsInfo, err = listVols(s.diskPath)
@@ -242,6 +248,9 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	var diskInfo disk.Info
 	diskInfo, err = disk.GetInfo(s.diskPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return VolInfo{}, errDiskNotFound
+		}
 		return VolInfo{}, err
 	}
 	// As os.Stat() doesn't carry other than ModTime(), use ModTime()

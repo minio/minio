@@ -25,14 +25,14 @@ import (
 
 // newObjectLayer - initialize any object layer depending on the
 // number of export paths.
-func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
+func newObjectLayer(exportPaths []string) (ObjectLayer, error) {
 	if len(exportPaths) == 1 {
 		exportPath := exportPaths[0]
 		// Initialize FS object layer.
 		return newFSObjects(exportPath)
 	}
 	// Initialize XL object layer.
-	objAPI, err := newXLObjects(exportPaths...)
+	objAPI, err := newXLObjects(exportPaths)
 	if err == errWriteQuorum {
 		return objAPI, errors.New("Disks are different with last minio server run.")
 	}
@@ -41,7 +41,7 @@ func newObjectLayer(exportPaths ...string) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths...)
+	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths)
 	fatalIf(err, "Unable to intialize object layer.")
 
 	// Initialize storage rpc server.

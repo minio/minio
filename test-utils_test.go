@@ -44,7 +44,7 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 			}
 			erasureDisks = append(erasureDisks, path)
 		}
-		objLayer, err := newXLObjects(erasureDisks...)
+		objLayer, err := newXLObjects(erasureDisks)
 		if err != nil {
 			return nil, nil, err
 		}

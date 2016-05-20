@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -32,10 +33,6 @@ import (
 const (
 	// XL erasure metadata file.
 	xlMetaV1File = "file.json"
-	// Maximum erasure blocks.
-	maxErasureBlocks = 16
-	// Minimum erasure blocks.
-	minErasureBlocks = 8
 )
 
 // XL layer structure.
@@ -48,33 +45,16 @@ type XL struct {
 	writeQuorum  int
 }
 
+// errUnexpected - returned for any unexpected error.
+var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
+
 // newXL instantiate a new XL.
-func newXL(disks ...string) (StorageAPI, error) {
+func newXL(disks []StorageAPI) (StorageAPI, error) {
 	// Initialize XL.
 	xl := &XL{}
 
-	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
-		return nil, errMaxDisks
-	}
-	if totalDisks < minErasureBlocks {
-		return nil, errMinDisks
-	}
-
-	// isEven function to verify if a given number if even.
-	isEven := func(number int) bool {
-		return number%2 == 0
-	}
-
-	// Verify if we have even number of disks.
-	// only combination of 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
-		return nil, errNumDisks
-	}
-
 	// Calculate data and parity blocks.
-	dataBlocks, parityBlocks := totalDisks/2, totalDisks/2
+	dataBlocks, parityBlocks := len(disks)/2, len(disks)/2
 
 	// Initialize reed solomon encoding.
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
@@ -87,23 +67,8 @@ func newXL(disks ...string) (StorageAPI, error) {
 	xl.ParityBlocks = parityBlocks
 	xl.ReedSolomon = rs
 
-	// Initialize all storage disks.
-	storageDisks := make([]StorageAPI, len(disks))
-	for index, disk := range disks {
-		var err error
-		// Intentionally ignore disk not found errors while
-		// initializing POSIX, so that we have successfully
-		// initialized posix Storage.
-		// Subsequent calls to XL/Erasure will manage any errors
-		// related to disks.
-		storageDisks[index], err = newPosix(disk)
-		if err != nil && err != errDiskNotFound {
-			return nil, err
-		}
-	}
-
 	// Save all the initialized storage disks.
-	xl.storageDisks = storageDisks
+	xl.storageDisks = disks
 
 	// Figure out read and write quorum based on number of storage disks.
 	// Read quorum should be always N/2 + 1 (due to Vandermonde matrix
