@@ -342,6 +342,10 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 		storage = l.storage
 	}
 
+	if recursive && markerPath != "" {
+		markerPath = pathJoin(markerPath, incompleteFile)
+	}
+
 	walker := lookupTreeWalk(layer, listParams{minioMetaBucket, recursive, markerPath, prefixPath})
 	if walker == nil {
 		walker = startTreeWalk(layer, minioMetaBucket, prefixPath, markerPath, recursive)
