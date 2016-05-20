@@ -1,0 +1,4 @@
+{
+    "numFilesToCheck": 10,
+    "requiredOrgs": ["minio"]
+}
