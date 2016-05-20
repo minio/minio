@@ -316,5 +316,5 @@ func serverMain(c *cli.Context) {
 		// Fallback to http.
 		err = apiServer.ListenAndServe()
 	}
-	errorIf(err, "Failed to start minio server.")
+	fatalIf(err, "Failed to start minio server.")
 }
