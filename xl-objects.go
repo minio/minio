@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const (
@@ -341,6 +342,111 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return info, nil
 }
 
+// renameMultipartToTmp - rename multipart files into tmp directory.
+func (xl xlObjects) renameMultipartToTmp(bucket, object string) (string, error) {
+	// Get parts info.
+	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
+	if err != nil {
+		return "", err
+	}
+
+	tempObjID, _ := uuid.New()
+	// Range through all files and rename them.
+	var wg = &sync.WaitGroup{}
+	var errs = make([]error, len(info.Parts))
+	for index, part := range info.Parts {
+		wg.Add(1)
+		// Start deleting parts in routine.
+		go func(index int, part MultipartPartInfo) {
+			defer wg.Done()
+			partFileName := partNumToPartFileName(part.PartNumber)
+			tempObj := path.Join(tmpMetaPrefix, bucket, pathJoin(tempObjID.String()+"."+object, partFileName))
+			if err = xl.storage.RenameFile(bucket, pathJoin(object, partFileName), minioMetaBucket, tempObj); err != nil {
+				// Ignore if object doesn't exist.
+				if err != errFileNotFound {
+					errs[index] = err
+				}
+			}
+		}(index, part)
+	}
+	// Wait for all the deletes to finish.
+	wg.Wait()
+	// Loop through and validate if any errors, if we are unable to remove any part return
+	// "unexpected" error as returning any other error might be misleading. For ex.
+	// if DeleteFile() had returned errFileNotFound and we return it, then client would see
+	// ObjectNotFound which is misleading.
+	for _, err := range errs {
+		if err != nil {
+			return "", errUnexpected
+		}
+	}
+
+	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, pathJoin(tempObjID.String()+"."+object, multipartMetaFile))
+	if err = xl.storage.RenameFile(bucket, pathJoin(object, multipartMetaFile), minioMetaBucket, tempMultipartMetaFile); err != nil {
+		// Ignore if file doesn't exist.
+		if err != errFileNotFound {
+			return "", err
+		}
+	}
+
+	return tempObjID.String(), nil
+}
+
+// renameTmpToMultipart - rename multipart files in tmp to actual location.
+func (xl xlObjects) renameTmpToMultipart(tempObjID, bucket, object string) error {
+	// Get parts info.
+	tempObj := path.Join(tmpMetaPrefix, bucket, pathJoin(tempObjID+"."+object))
+	info, err := getMultipartObjectInfo(xl.storage, minioMetaBucket, tempObj)
+	if err != nil {
+		// Ignore if object doesn't exist.
+		if err != errFileNotFound {
+			return err
+		}
+
+		return nil
+	}
+
+	// Range through all files and rename them.
+	var wg = &sync.WaitGroup{}
+	var errs = make([]error, len(info.Parts))
+	for index, part := range info.Parts {
+		wg.Add(1)
+		// Start deleting parts in routine.
+		go func(index int, part MultipartPartInfo) {
+			defer wg.Done()
+			partFileName := partNumToPartFileName(part.PartNumber)
+			tempObj := path.Join(tmpMetaPrefix, bucket, pathJoin(tempObjID+"."+object, partFileName))
+			if err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, pathJoin(object, partFileName)); err != nil {
+				// Ignore if object doesn't exist.
+				if err != errFileNotFound {
+					errs[index] = err
+				}
+			}
+		}(index, part)
+	}
+	// Wait for all the deletes to finish.
+	wg.Wait()
+	// Loop through and validate if any errors, if we are unable to remove any part return
+	// "unexpected" error as returning any other error might be misleading. For ex.
+	// if DeleteFile() had returned errFileNotFound and we return it, then client would see
+	// ObjectNotFound which is misleading.
+	for _, err := range errs {
+		if err != nil {
+			return errUnexpected
+		}
+	}
+
+	tempMultipartMetaFile := path.Join(tmpMetaPrefix, bucket, pathJoin(tempObjID+"."+object, multipartMetaFile))
+	if err = xl.storage.RenameFile(minioMetaBucket, tempMultipartMetaFile, bucket, pathJoin(object, multipartMetaFile)); err != nil {
+		// Ignore if file doesn't exist.
+		if err != errFileNotFound {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // PutObject - create an object.
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
@@ -364,8 +470,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
-	tempObj := path.Join(tmpMetaPrefix, bucket, object)
-	fileWriter, err := xl.storage.CreateFile(minioMetaBucket, tempObj)
+	tempNewObj := path.Join(tmpMetaPrefix, bucket, object)
+	fileWriter, err := xl.storage.CreateFile(minioMetaBucket, tempNewObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -423,63 +529,131 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Delete if an object already exists.
-	// FIXME: rename it to tmp file and delete only after
-	// the newly uploaded file is renamed from tmp location to
-	// the original location.
-	// Verify if the object is a multipart object.
-	if isMultipartObject(xl.storage, bucket, object) {
-		err = xl.deleteMultipartObject(bucket, object)
-		if err != nil {
+	var tempMetaJSONFile string
+	var metaJSONFile string
+	var tempObj string
+	// Rename meta data and object.  We will restore back if actual put object fails.
+	multipartFound := isMultipartObject(xl.storage, bucket, object)
+	var multipartTempID string
+	if multipartFound {
+		if multipartTempID, err = xl.renameMultipartToTmp(bucket, object); err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		err = xl.deleteObject(bucket, object)
+		metaJSONFile = path.Join(object, "meta.json")
+		metaJSONFileID, _ := uuid.New()
+		tempMetaJSONFile = path.Join(tmpMetaPrefix, bucket, metaJSONFileID.String()+"."+object, "meta.json")
+		if err = xl.storage.RenameFile(bucket, metaJSONFile, minioMetaBucket, tempMetaJSONFile); err != nil {
+			// Ignore if meta.json file doesn't exist.
+			if err != errFileNotFound {
+				return "", toObjectErr(err, bucket, object)
+			}
+		}
+
+		tempObjID, _ := uuid.New()
+		tempObj = path.Join(tmpMetaPrefix, bucket, tempObjID.String()+"."+object)
+		err = xl.storage.RenameFile(bucket, object, minioMetaBucket, tempObj)
+		if err != nil {
+			// Ignore if object doesn't exist.
+			if err != errFileNotFound {
+				return "", toObjectErr(err, bucket, object)
+			}
+		}
+	}
+
+	md5HashString, retErr := func() (string, error) {
+		err = xl.storage.RenameFile(minioMetaBucket, tempNewObj, bucket, object)
+		if err != nil {
+			if dErr := xl.storage.DeleteFile(minioMetaBucket, tempNewObj); dErr != nil {
+				return "", toObjectErr(dErr, bucket, object)
+			}
+			return "", toObjectErr(err, bucket, object)
+		}
+
+		tempNewMetaJSONFile := path.Join(tmpMetaPrefix, bucket, object, "meta.json")
+		var metaWriter io.WriteCloser
+		metaWriter, err = xl.storage.CreateFile(minioMetaBucket, tempNewMetaJSONFile)
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
-	}
 
-	err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
-	if err != nil {
-		if dErr := xl.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-			return "", toObjectErr(dErr, bucket, object)
-		}
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	tempMetaJSONFile := path.Join(tmpMetaPrefix, bucket, object, "meta.json")
-	metaWriter, err := xl.storage.CreateFile(minioMetaBucket, tempMetaJSONFile)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	encoder := json.NewEncoder(metaWriter)
-	err = encoder.Encode(&metadata)
-	if err != nil {
-		if clErr := safeCloseAndRemove(metaWriter); clErr != nil {
-			return "", toObjectErr(clErr, bucket, object)
-		}
-		return "", toObjectErr(err, bucket, object)
-	}
-	if err = metaWriter.Close(); err != nil {
-		if err = safeCloseAndRemove(metaWriter); err != nil {
+		encoder := json.NewEncoder(metaWriter)
+		err = encoder.Encode(&metadata)
+		if err != nil {
+			if clErr := safeCloseAndRemove(metaWriter); clErr != nil {
+				return "", toObjectErr(clErr, bucket, object)
+			}
 			return "", toObjectErr(err, bucket, object)
 		}
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	metaJSONFile := path.Join(object, "meta.json")
-	err = xl.storage.RenameFile(minioMetaBucket, tempMetaJSONFile, bucket, metaJSONFile)
-	if err != nil {
-		if derr := xl.storage.DeleteFile(minioMetaBucket, tempMetaJSONFile); derr != nil {
-			return "", toObjectErr(derr, bucket, object)
+		if err = metaWriter.Close(); err != nil {
+			if err = safeCloseAndRemove(metaWriter); err != nil {
+				return "", toObjectErr(err, bucket, object)
+			}
+			return "", toObjectErr(err, bucket, object)
 		}
-		return "", toObjectErr(err, bucket, object)
+
+		newMetaJSONFile := path.Join(object, "meta.json")
+		err = xl.storage.RenameFile(minioMetaBucket, tempNewMetaJSONFile, bucket, newMetaJSONFile)
+		if err != nil {
+			if derr := xl.storage.DeleteFile(minioMetaBucket, tempNewMetaJSONFile); derr != nil {
+				return "", toObjectErr(derr, bucket, object)
+			}
+			return "", toObjectErr(err, bucket, object)
+		}
+
+		// Return md5sum, successfully wrote object.
+		return newMD5Hex, nil
+	}()
+
+	// Actual rename is successful.  We need to delete previously renamed object.
+	if retErr == nil {
+		if multipartFound {
+			err = xl.deleteMultipartObject(minioMetaBucket, path.Join(tmpMetaPrefix, bucket, pathJoin(multipartTempID+"."+object)))
+			// Ignore file doesn't exist.
+			if err != errFileNotFound {
+				errorIf(err, "Unable to remove renamed multipart object")
+			}
+		} else {
+			if err = xl.storage.DeleteFile(minioMetaBucket, tempMetaJSONFile); err != nil {
+				// Ignore if meta.json file doesn't exist.
+				if err != errFileNotFound {
+					errorIf(err, "Unable to remove renamed object")
+				}
+			}
+
+			if err = xl.storage.DeleteFile(minioMetaBucket, tempObj); err != nil {
+				// Ignore if object doesn't exist.
+				if err != errFileNotFound {
+					errorIf(err, "Unable to remove renamed object")
+				}
+			}
+		}
+
+		return md5HashString, nil
 	}
 
-	// Return md5sum, successfully wrote object.
-	return newMD5Hex, nil
+	// Actual rename is failed. Restore previously renamed object.
+	if multipartFound {
+		if err = xl.renameTmpToMultipart(multipartTempID, bucket, object); err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+	} else {
+		if err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, object); err != nil {
+			// Ignore if object doesn't exist.
+			if err != errFileNotFound {
+				return "", toObjectErr(err, bucket, object)
+			}
+		}
+
+		if err = xl.storage.RenameFile(minioMetaBucket, tempMetaJSONFile, bucket, metaJSONFile); err != nil {
+			// Ignore if meta.json file doesn't exist.
+			if err != errFileNotFound {
+				return "", toObjectErr(err, bucket, object)
+			}
+		}
+	}
+
+	return "", retErr
 }
 
 // isMultipartObject - verifies if an object is special multipart file.
