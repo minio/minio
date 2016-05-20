@@ -357,6 +357,7 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 
 	// Following loop gathers and filters out special files inside
 	// minio meta volume.
+outerLoop:
 	for {
 		walkResult, ok := <-walker.ch
 		if !ok {
@@ -397,9 +398,9 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 				fileInfos = append(fileInfos, fileInfo)
 				newMaxKeys++
 				// If we have reached the maxKeys, it means we have listed
-				// everything that was requested. Return right here.
+				// everything that was requested.
 				if newMaxKeys == maxKeys {
-					return
+					break outerLoop
 				}
 			}
 		} else {
@@ -415,13 +416,20 @@ func listMetaBucketMultipartFiles(layer ObjectLayer, prefixPath string, markerPa
 			fileInfos = append(fileInfos, fi)
 			newMaxKeys++
 			// If we have reached the maxKeys, it means we have listed
-			// everything that was requested. Return right here.
+			// everything that was requested.
 			if newMaxKeys == maxKeys {
-				return
+				break
 			}
 		}
 	}
 
+	if !eof && len(fileInfos) != 0 {
+		// EOF has not reached, hence save the walker channel to the map so that the walker go routine
+		// can continue from where it left off for the next list request.
+		lastFileInfo := fileInfos[len(fileInfos)-1]
+		markerPath = lastFileInfo.Name
+		saveTreeWalk(layer, listParams{minioMetaBucket, recursive, markerPath, prefixPath}, walker)
+	}
 	// Return entries here.
 	return fileInfos, eof, nil
 }
