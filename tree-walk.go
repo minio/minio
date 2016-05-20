@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path"
 	"sort"
@@ -66,21 +67,23 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 
 	// Convert entry to FileInfo
 	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
-		if strings.HasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			fileInfo.Name = path.Join(prefixDir, entry)
-			fileInfo.Name += slashSeparator
-			fileInfo.Mode = os.ModeDir
-			return
-		}
-		if isXL && strings.HasSuffix(entry, multipartSuffix) {
+		if isXL && isMultipartObject(disk, bucket, path.Join(prefixDir, entry)) {
 			// If the entry was detected as a multipart file we use
 			// getMultipartObjectInfo() to fill the FileInfo structure.
-			entry = strings.TrimSuffix(entry, multipartSuffix)
 			var info MultipartObjectInfo
 			info, err = getMultipartObjectInfo(disk, bucket, path.Join(prefixDir, entry))
 			if err != nil {
-				return
+				switch err.(type) {
+				case *json.SyntaxError:
+					break
+				default:
+					return FileInfo{}, err
+				}
+				// Object name needs to be full path.
+				fileInfo.Name = path.Join(prefixDir, entry)
+				fileInfo.Name += slashSeparator
+				fileInfo.Mode = os.ModeDir
+				return fileInfo, nil
 			}
 			// Set the Mode to a "regular" file.
 			fileInfo.Mode = 0
@@ -90,10 +93,17 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			fileInfo.Size = info.Size
 			fileInfo.MD5Sum = info.MD5Sum
 			fileInfo.ModTime = info.ModTime
-			return
+			return fileInfo, nil
 		}
 		if fileInfo, err = disk.StatFile(bucket, path.Join(prefixDir, entry)); err != nil {
-			return
+			if err == errFileNotFound && strings.HasSuffix(entry, slashSeparator) {
+				// Object name needs to be full path.
+				fileInfo.Name = path.Join(prefixDir, entry)
+				fileInfo.Name += slashSeparator
+				fileInfo.Mode = os.ModeDir
+				return fileInfo, nil
+			}
+			return FileInfo{}, err
 		}
 		// Object name needs to be full path.
 		fileInfo.Name = path.Join(prefixDir, entry)
@@ -110,6 +120,8 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			markerBase = markerSplit[1]
 		}
 	}
+
+	// Looks like multipart files.
 	entries, err := disk.ListDir(bucket, prefixDir)
 	if err != nil {
 		send(treeWalkResult{err: err})
@@ -123,16 +135,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			}
 		}
 	}
-	// For XL multipart files strip the trailing "/" and append ".minio.multipart" to the entry so that
-	// entryToFileInfo() can call StatFile for regular files or getMultipartObjectInfo() for multipart files.
-	for i, entry := range entries {
-		if isXL && strings.HasSuffix(entry, slashSeparator) {
-			if isMultipartObject(disk, bucket, path.Join(prefixDir, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
-			}
-		}
-	}
-	sort.Sort(byMultipartFiles(entries))
+
 	// Skip the empty strings
 	for len(entries) > 0 && entries[0] == "" {
 		entries = entries[1:]
@@ -140,11 +143,13 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 	if len(entries) == 0 {
 		return true
 	}
+	sort.Strings(entries)
+
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
 	idx := sort.Search(len(entries), func(i int) bool {
-		return strings.TrimSuffix(entries[i], multipartSuffix) >= markerDir
+		return entries[i] >= markerDir
 	})
 	entries = entries[idx:]
 	*count += len(entries)

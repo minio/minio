@@ -270,37 +270,19 @@ func getMultipartObjectInfo(storage StorageAPI, bucket, object string) (info Mul
 	return info, nil
 }
 
-// Return ObjectInfo.
-func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	objInfo.Bucket = bucket
-	objInfo.Name = object
-	// First see if the object was a simple-PUT upload.
-	fi, err := xl.storage.StatFile(bucket, object)
-	if err != nil {
-		if err != errFileNotFound {
-			return ObjectInfo{}, err
-		}
-		var info MultipartObjectInfo
-		// Check if the object was multipart upload.
-		info, err = getMultipartObjectInfo(xl.storage, bucket, object)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		objInfo.Size = info.Size
-		objInfo.ModTime = info.ModTime
-		objInfo.MD5Sum = info.MD5Sum
-		objInfo.ContentType = info.ContentType
-		objInfo.ContentEncoding = info.ContentEncoding
-	} else {
+func getRegularObjectInfo(storage StorageAPI, bucket, object string) (objInfo ObjectInfo, err error) {
+	fi, err := storage.StatFile(bucket, object)
+	if err == nil {
 		metadata := make(map[string]string)
 		offset := int64(0) // To read entire content
-		r, err := xl.storage.ReadFile(bucket, pathJoin(object, "meta.json"), offset)
+		var r io.ReadCloser
+		r, err = storage.ReadFile(bucket, pathJoin(object, "meta.json"), offset)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			return ObjectInfo{}, err
 		}
 		decoder := json.NewDecoder(r)
 		if err = decoder.Decode(&metadata); err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			return ObjectInfo{}, err
 		}
 		contentType := metadata["content-type"]
 		if len(contentType) == 0 {
@@ -312,12 +294,49 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 				}
 			}
 		}
+		objInfo.Bucket = bucket
+		objInfo.Name = object
 		objInfo.Size = fi.Size
 		objInfo.IsDir = fi.Mode.IsDir()
 		objInfo.ModTime = fi.ModTime
 		objInfo.MD5Sum = metadata["md5Sum"]
 		objInfo.ContentType = contentType
 		objInfo.ContentEncoding = metadata["content-encoding"]
+		return objInfo, nil
+	}
+	return ObjectInfo{}, err
+}
+
+// Return ObjectInfo.
+func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	// First see if the object was a simple-PUT upload.
+	objInfo, err = getRegularObjectInfo(xl.storage, bucket, object)
+	if err != nil {
+		if err != errFileNotFound {
+			return ObjectInfo{}, err
+		}
+		// Check if the object was multipart upload.
+		info, mErr := getMultipartObjectInfo(xl.storage, bucket, object)
+		if mErr != nil {
+			switch mErr.(type) {
+			case *json.SyntaxError:
+				// In case of json syntax error either the file is
+				// corrupted or we have attempted to read an invalid
+				// file as multipart. We can return back the error we
+				// received while reading the actual object itself at
+				// this point in time.
+				return ObjectInfo{}, err
+			default:
+				return ObjectInfo{}, mErr
+			}
+		}
+		objInfo.Bucket = bucket
+		objInfo.Name = object
+		objInfo.Size = info.Size
+		objInfo.ModTime = info.ModTime
+		objInfo.MD5Sum = info.MD5Sum
+		objInfo.ContentType = info.ContentType
+		objInfo.ContentEncoding = info.ContentEncoding
 	}
 	return objInfo, nil
 }
