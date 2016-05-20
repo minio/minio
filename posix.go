@@ -210,12 +210,8 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 		return nil, err
 	}
 	for i, vol := range volsInfo {
-		// Volname on case sensitive fs backends can come in as
-		// capitalized, but object layer cannot consume it
-		// directly. Convert it as we see fit.
-		volName := strings.ToLower(vol.Name)
 		volInfo := VolInfo{
-			Name:    volName,
+			Name:    vol.Name,
 			Created: vol.Created,
 			Total:   diskInfo.Total,
 			Free:    diskInfo.Free,
