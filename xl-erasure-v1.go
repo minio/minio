@@ -511,15 +511,8 @@ func (xl XL) StatFile(volume, path string) (FileInfo, error) {
 	}, nil
 }
 
-// DeleteFile - delete a file
-func (xl XL) DeleteFile(volume, path string) error {
-	if !isValidVolname(volume) {
-		return errInvalidArgument
-	}
-	if !isValidPath(path) {
-		return errInvalidArgument
-	}
-
+// deleteXLFiles - delete all XL backend files.
+func (xl XL) deleteXLFiles(volume, path string) error {
 	errCount := 0
 	// Update meta data file and remove part file
 	for index, disk := range xl.storageDisks {
@@ -551,9 +544,21 @@ func (xl XL) DeleteFile(volume, path string) error {
 			return err
 		}
 	}
-
 	// Return success.
 	return nil
+}
+
+// DeleteFile - delete a file
+func (xl XL) DeleteFile(volume, path string) error {
+	if !isValidVolname(volume) {
+		return errInvalidArgument
+	}
+	if !isValidPath(path) {
+		return errInvalidArgument
+	}
+
+	// Delete all XL files.
+	return xl.deleteXLFiles(volume, path)
 }
 
 // RenameFile - rename file.
@@ -572,21 +577,49 @@ func (xl XL) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
 		return errInvalidArgument
 	}
 
-	errCount := 0
-	for _, disk := range xl.storageDisks {
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+
+	// Initialize list of errors.
+	var errs = make([]error, len(xl.storageDisks))
+
+	// Rename file on all underlying storage disks.
+	for index, disk := range xl.storageDisks {
 		// Append "/" as srcPath and dstPath are either leaf-dirs or non-leaf-dris.
 		// If srcPath is an object instead of prefix we just rename the leaf-dir and
 		// not rename the part and metadata files separately.
-		err := disk.RenameFile(srcVolume, retainSlash(srcPath), dstVolume, retainSlash(dstPath))
-		if err != nil {
-			errCount++
-			// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-			// otherwise return failure.
-			if errCount <= len(xl.storageDisks)-xl.writeQuorum {
-				continue
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			err := disk.RenameFile(srcVolume, retainSlash(srcPath), dstVolume, retainSlash(dstPath))
+			if err != nil {
+				errs[index] = err
 			}
-			return err
+			errs[index] = nil
+		}(index, disk)
+	}
+
+	// Wait for all RenameFile to finish.
+	wg.Wait()
+
+	// Gather err count.
+	var errCount = 0
+	for _, err := range errs {
+		if err == nil {
+			continue
 		}
+		errCount++
+	}
+	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
+	// otherwise return failure. Cleanup successful renames.
+	if errCount > len(xl.storageDisks)-xl.writeQuorum {
+		// Special condition if readQuorum exists, then return success.
+		if errCount <= len(xl.storageDisks)-xl.readQuorum {
+			return nil
+		}
+		// Ignore errors here, delete all successfully written files.
+		xl.deleteXLFiles(dstVolume, dstPath)
+		return errWriteQuorum
 	}
 	return nil
 }
