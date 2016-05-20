@@ -127,10 +127,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 	// entryToFileInfo() can call StatFile for regular files or getMultipartObjectInfo() for multipart files.
 	for i, entry := range entries {
 		if isXL && strings.HasSuffix(entry, slashSeparator) {
-			if ok, err := isMultipartObject(disk, bucket, path.Join(prefixDir, entry)); err != nil {
-				send(treeWalkResult{err: err})
-				return false
-			} else if ok {
+			if isMultipartObject(disk, bucket, path.Join(prefixDir, entry)) {
 				entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
 			}
 		}

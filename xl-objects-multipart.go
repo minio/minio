@@ -288,8 +288,16 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// FIXME: rename it to tmp file and delete only after
 	// the newly uploaded file is renamed from tmp location to
 	// the original location.
+	// Verify if the object is a multipart object.
+	if isMultipartObject(xl.storage, bucket, object) {
+		err = xl.deleteMultipartObject(bucket, object)
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+		return s3MD5, nil
+	}
 	err = xl.deleteObject(bucket, object)
-	if err != nil && err != errFileNotFound {
+	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 

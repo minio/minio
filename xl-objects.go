@@ -158,10 +158,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	}
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
-	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
-		return nil, toObjectErr(err, bucket, object)
-	} else if !ok {
-		if _, err = xl.storage.StatFile(bucket, object); err == nil {
+	if !isMultipartObject(xl.storage, bucket, object) {
+		_, err := xl.storage.StatFile(bucket, object)
+		if err == nil {
 			var reader io.ReadCloser
 			reader, err = xl.storage.ReadFile(bucket, object, startOffset)
 			if err != nil {
@@ -387,14 +386,23 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// FIXME: rename it to tmp file and delete only after
 	// the newly uploaded file is renamed from tmp location to
 	// the original location.
+	// Verify if the object is a multipart object.
+	if isMultipartObject(xl.storage, bucket, object) {
+		err = xl.deleteMultipartObject(bucket, object)
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+		return newMD5Hex, nil
+	}
 	err = xl.deleteObject(bucket, object)
-	if err != nil && err != errFileNotFound {
+	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
 	err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		if derr := xl.storage.DeleteFile(minioMetaBucket, tempObj); derr != nil {
-			return "", toObjectErr(derr, bucket, object)
+		if dErr := xl.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
+			return "", toObjectErr(dErr, bucket, object)
 		}
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -434,32 +442,20 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 }
 
 // isMultipartObject - verifies if an object is special multipart file.
-func isMultipartObject(storage StorageAPI, bucket, object string) (bool, error) {
+func isMultipartObject(storage StorageAPI, bucket, object string) bool {
 	_, err := storage.StatFile(bucket, pathJoin(object, multipartMetaFile))
 	if err != nil {
 		if err == errFileNotFound {
-			return false, nil
+			return false
 		}
-		return false, err
+		errorIf(err, "Failed to stat file "+bucket+pathJoin(object, multipartMetaFile))
+		return false
 	}
-	return true, nil
+	return true
 }
 
-// Deletes and object.
-func (xl xlObjects) deleteObject(bucket, object string) error {
-	// Verify if the object is a multipart object.
-	if ok, err := isMultipartObject(xl.storage, bucket, object); err != nil {
-		return err
-	} else if !ok {
-		metaJSONFile := path.Join(object, "meta.json")
-		if err = xl.storage.DeleteFile(bucket, metaJSONFile); err != nil {
-			return err
-		}
-		if err = xl.storage.DeleteFile(bucket, object); err != nil {
-			return err
-		}
-		return nil
-	}
+// deleteMultipartObject - deletes only multipart object.
+func (xl xlObjects) deleteMultipartObject(bucket, object string) error {
 	// Get parts info.
 	info, err := getMultipartObjectInfo(xl.storage, bucket, object)
 	if err != nil {
@@ -495,6 +491,23 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	return nil
 }
 
+// deleteObject - deletes a regular object.
+func (xl xlObjects) deleteObject(bucket, object string) error {
+	metaJSONFile := path.Join(object, "meta.json")
+	// Ignore if meta.json file doesn't exist.
+	if err := xl.storage.DeleteFile(bucket, metaJSONFile); err != nil {
+		if err != errFileNotFound {
+			return err
+		}
+	}
+	if err := xl.storage.DeleteFile(bucket, object); err != nil {
+		if err != errFileNotFound {
+			return err
+		}
+	}
+	return nil
+}
+
 // DeleteObject - delete the object.
 func (xl xlObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
@@ -506,7 +519,16 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	}
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
-	if err := xl.deleteObject(bucket, object); err != nil {
+	// Verify if the object is a multipart object.
+	if isMultipartObject(xl.storage, bucket, object) {
+		err := xl.deleteMultipartObject(bucket, object)
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+		return nil
+	}
+	err := xl.deleteObject(bucket, object)
+	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 	return nil
