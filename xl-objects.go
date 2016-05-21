@@ -433,11 +433,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
-		return newMD5Hex, nil
-	}
-	err = xl.deleteObject(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+	} else {
+		err = xl.deleteObject(bucket, object)
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
 	}
 
 	err = xl.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
