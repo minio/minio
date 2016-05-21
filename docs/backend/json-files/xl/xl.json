@@ -1,0 +1,30 @@
+{
+    "version": "1",
+    "format": "xl",
+    "minio": {
+        "release": "DEVELOPMENT.GOGET"
+    },
+    "erasure": {
+        "blockSize": 4194304,
+        "parity": 5,
+        "data": 5,
+        "order": 0,
+    },
+    "stat": {
+        "version": 0,
+        "modTime": "2016-05-21T00:00:23.12277264Z",
+        "size": 486
+    },
+    "meta": {
+        "md5Sum":""
+        "content-type": "",
+        "content-encoding": "",
+    },
+    "parts": [
+        {
+            "name": "object1",
+            "size": 29,
+            "eTag": "",
+        },
+    ]
+}

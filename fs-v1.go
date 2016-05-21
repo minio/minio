@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -30,7 +31,7 @@ import (
 // fsObjects - Implements fs object layer.
 type fsObjects struct {
 	storage            StorageAPI
-	listObjectMap      map[listParams][]*treeWalker
+	listObjectMap      map[listParams][]*treeWalkerFS
 	listObjectMapMutex *sync.Mutex
 }
 
@@ -59,7 +60,7 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 	// Return successfully initialized object layer.
 	return fsObjects{
 		storage:            storage,
-		listObjectMap:      make(map[listParams][]*treeWalker),
+		listObjectMap:      make(map[listParams][]*treeWalkerFS),
 		listObjectMapMutex: &sync.Mutex{},
 	}, nil
 }
@@ -68,22 +69,68 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 
 // MakeBucket - make a bucket.
 func (fs fsObjects) MakeBucket(bucket string) error {
-	return makeBucket(fs.storage, bucket)
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	if err := fs.storage.MakeVol(bucket); err != nil {
+		return toObjectErr(err, bucket)
+	}
+	return nil
 }
 
 // GetBucketInfo - get bucket info.
 func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
-	return getBucketInfo(fs.storage, bucket)
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	vi, err := fs.storage.StatVol(bucket)
+	if err != nil {
+		return BucketInfo{}, toObjectErr(err, bucket)
+	}
+	return BucketInfo{
+		Name:    bucket,
+		Created: vi.Created,
+		Total:   vi.Total,
+		Free:    vi.Free,
+	}, nil
 }
 
 // ListBuckets - list buckets.
 func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
-	return listBuckets(fs.storage)
+	var bucketInfos []BucketInfo
+	vols, err := fs.storage.ListVols()
+	if err != nil {
+		return nil, toObjectErr(err)
+	}
+	for _, vol := range vols {
+		// StorageAPI can send volume names which are incompatible
+		// with buckets, handle it and skip them.
+		if !IsValidBucketName(vol.Name) {
+			continue
+		}
+		bucketInfos = append(bucketInfos, BucketInfo{
+			Name:    vol.Name,
+			Created: vol.Created,
+			Total:   vol.Total,
+			Free:    vol.Free,
+		})
+	}
+	sort.Sort(byBucketName(bucketInfos))
+	return bucketInfos, nil
 }
 
 // DeleteBucket - delete a bucket.
 func (fs fsObjects) DeleteBucket(bucket string) error {
-	return deleteBucket(fs.storage, bucket)
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	if err := fs.storage.DeleteVol(bucket); err != nil {
+		return toObjectErr(err, bucket)
+	}
+	return nil
 }
 
 /// Object Operations
@@ -218,7 +265,121 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
+// Checks whether bucket exists.
+func isBucketExist(storage StorageAPI, bucketName string) bool {
+	// Check whether bucket exists.
+	_, err := storage.StatVol(bucketName)
+	if err != nil {
+		if err == errVolumeNotFound {
+			return false
+		}
+		errorIf(err, "Stat failed on bucket "+bucketName+".")
+		return false
+	}
+	return true
+}
+
+func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+	}
+	// Verify if bucket exists.
+	if !isBucketExist(fs.storage, bucket) {
+		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+	}
+	if !IsValidObjectPrefix(prefix) {
+		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+	}
+	// Verify if delimiter is anything other than '/', which we do not support.
+	if delimiter != "" && delimiter != slashSeparator {
+		return ListObjectsInfo{}, UnsupportedDelimiter{
+			Delimiter: delimiter,
+		}
+	}
+	// Verify if marker has prefix.
+	if marker != "" {
+		if !strings.HasPrefix(marker, prefix) {
+			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
+				Marker: marker,
+				Prefix: prefix,
+			}
+		}
+	}
+
+	// With max keys of zero we have reached eof, return right here.
+	if maxKeys == 0 {
+		return ListObjectsInfo{}, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix})
+	if walker == nil {
+		walker = fs.startTreeWalk(bucket, prefix, marker, recursive)
+	}
+	var fileInfos []FileInfo
+	var eof bool
+	var nextMarker string
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walker.ch
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				return ListObjectsInfo{}, nil
+			}
+			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+		}
+		fileInfo := walkResult.fileInfo
+		nextMarker = fileInfo.Name
+		fileInfos = append(fileInfos, fileInfo)
+		if walkResult.end {
+			eof = true
+			break
+		}
+		i++
+	}
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	if !eof {
+		fs.saveTreeWalk(params, walker)
+	}
+
+	result := ListObjectsInfo{IsTruncated: !eof}
+	for _, fileInfo := range fileInfos {
+		// With delimiter set we fill in NextMarker and Prefixes.
+		if delimiter == slashSeparator {
+			result.NextMarker = fileInfo.Name
+			if fileInfo.Mode.IsDir() {
+				result.Prefixes = append(result.Prefixes, fileInfo.Name)
+				continue
+			}
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Name:    fileInfo.Name,
+			ModTime: fileInfo.ModTime,
+			Size:    fileInfo.Size,
+			IsDir:   false,
+		})
+	}
+	return result, nil
+}
+
 // ListObjects - list all objects.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return listObjectsCommon(fs, bucket, prefix, marker, delimiter, maxKeys)
+	return fs.listObjectsFS(bucket, prefix, marker, delimiter, maxKeys)
 }

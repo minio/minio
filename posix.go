@@ -425,7 +425,6 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 		// Return all errors here.
 		return FileInfo{}, err
 	}
-
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		return FileInfo{}, errFileNotFound

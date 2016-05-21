@@ -1,0 +1,10 @@
+{
+    "version": "1",
+    "format": "fs",
+    "uploadIds": [
+        {
+            "uploadID": "id",
+            "startTime": "time",
+        }
+    ]
+}
