@@ -17,11 +17,10 @@
 package main
 
 import (
-	"os"
+	"math/rand"
 	"path"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -35,9 +34,9 @@ type listParams struct {
 
 // Tree walk result carries results of tree walking.
 type treeWalkResult struct {
-	fileInfo FileInfo
-	err      error
-	end      bool
+	objInfo ObjectInfo
+	err     error
+	end     bool
 }
 
 // Tree walk notify carries a channel which notifies tree walk
@@ -48,56 +47,68 @@ type treeWalker struct {
 	timedOut bool
 }
 
-// treeWalk walks FS directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int) bool {
+// listDir - listDir.
+func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
+	// Count for list errors encountered.
+	var listErrCount = 0
+
+	// Loop through and return the first success entry based on the
+	// selected random disk.
+	for listErrCount < len(xl.storageDisks) {
+		// Choose a random disk on each attempt, do not hit the same disk all the time.
+		randIndex := rand.Intn(len(xl.storageDisks) - 1)
+		disk := xl.storageDisks[randIndex] // Pick a random disk.
+		if entries, err = disk.ListDir(bucket, prefixDir); err == nil {
+			// Skip the entries which do not match the filter.
+			for i, entry := range entries {
+				if filter(entry) {
+					entries[i] = ""
+					continue
+				}
+				if strings.HasSuffix(entry, slashSeparator) && xl.isObject(bucket, path.Join(prefixDir, entry)) {
+					entries[i] = strings.TrimSuffix(entry, slashSeparator)
+				}
+			}
+			sort.Strings(entries)
+			// Skip the empty strings
+			for len(entries) > 0 && entries[0] == "" {
+				entries = entries[1:]
+			}
+			return entries, nil
+		}
+		listErrCount++ // Update list error count.
+	}
+
+	// Return error at the end.
+	return nil, err
+}
+
+// getRandomDisk - gives a random disk at any point in time from the
+// available disk pool.
+func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
+	randIndex := rand.Intn(len(xl.storageDisks) - 1)
+	disk = xl.storageDisks[randIndex] // Pick a random disk.
+	return disk
+}
+
+// treeWalkXL walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
+func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int) bool {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
 
-	var isXL bool
-	var disk StorageAPI
-	switch l := layer.(type) {
-	case xlObjects:
-		isXL = true
-		disk = l.storage
-	case fsObjects:
-		disk = l.storage
-	}
-
 	// Convert entry to FileInfo
-	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
+	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
 		if strings.HasSuffix(entry, slashSeparator) {
 			// Object name needs to be full path.
-			fileInfo.Name = path.Join(prefixDir, entry)
-			fileInfo.Name += slashSeparator
-			fileInfo.Mode = os.ModeDir
-			return
+			objInfo.Bucket = bucket
+			objInfo.Name = path.Join(prefixDir, entry)
+			objInfo.Name += slashSeparator
+			objInfo.IsDir = true
+			return objInfo, nil
 		}
-		if isXL && strings.HasSuffix(entry, multipartSuffix) {
-			// If the entry was detected as a multipart file we use
-			// getMultipartObjectInfo() to fill the FileInfo structure.
-			entry = strings.TrimSuffix(entry, multipartSuffix)
-			var info MultipartObjectInfo
-			info, err = getMultipartObjectInfo(disk, bucket, path.Join(prefixDir, entry))
-			if err != nil {
-				return
-			}
-			// Set the Mode to a "regular" file.
-			fileInfo.Mode = 0
-			// Trim the suffix that was temporarily added to indicate that this
-			// is a multipart file.
-			fileInfo.Name = path.Join(prefixDir, entry)
-			fileInfo.Size = info.Size
-			fileInfo.MD5Sum = info.MD5Sum
-			fileInfo.ModTime = info.ModTime
-			return
-		}
-		if fileInfo, err = disk.StatFile(bucket, path.Join(prefixDir, entry)); err != nil {
-			return
-		}
-		// Object name needs to be full path.
-		fileInfo.Name = path.Join(prefixDir, entry)
-		return
+		// Set the Mode to a "regular" file.
+		return xl.getObjectInfo(bucket, path.Join(prefixDir, entry))
 	}
 
 	var markerBase, markerDir string
@@ -110,41 +121,22 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, err := disk.ListDir(bucket, prefixDir)
+	entries, err := xl.listDir(bucket, prefixDir, func(entry string) bool {
+		return !strings.HasPrefix(entry, entryPrefixMatch)
+	})
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
 	}
-
-	if entryPrefixMatch != "" {
-		for i, entry := range entries {
-			if !strings.HasPrefix(entry, entryPrefixMatch) {
-				entries[i] = ""
-			}
-		}
-	}
-	// For XL multipart files strip the trailing "/" and append ".minio.multipart" to the entry so that
-	// entryToFileInfo() can call StatFile for regular files or getMultipartObjectInfo() for multipart files.
-	for i, entry := range entries {
-		if isXL && strings.HasSuffix(entry, slashSeparator) {
-			if isMultipartObject(disk, bucket, path.Join(prefixDir, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator) + multipartSuffix
-			}
-		}
-	}
-	sort.Sort(byMultipartFiles(entries))
-	// Skip the empty strings
-	for len(entries) > 0 && entries[0] == "" {
-		entries = entries[1:]
-	}
 	if len(entries) == 0 {
 		return true
 	}
+
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
 	idx := sort.Search(len(entries), func(i int) bool {
-		return strings.TrimSuffix(entries[i], multipartSuffix) >= markerDir
+		return entries[i] >= markerDir
 	})
 	entries = entries[idx:]
 	*count += len(entries)
@@ -158,7 +150,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			if recursive && !strings.HasSuffix(entry, slashSeparator) {
 				// We should not skip for recursive listing and if markerDir is a directory
 				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
-				// should not be skipped, instead it will need to be treeWalk()'ed into.
+				// should not be skipped, instead it will need to be treeWalkXL()'ed into.
 
 				// Skip if it is a file though as it would be listed in previous listing.
 				*count--
@@ -176,19 +168,19 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !treeWalk(layer, bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
+			if !xl.treeWalkXL(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
 				return false
 			}
 			continue
 		}
 		*count--
-		fileInfo, err := entryToFileInfo(entry)
+		objInfo, err := entryToObjectInfo(entry)
 		if err != nil {
 			// The file got deleted in the interim between ListDir() and StatFile()
 			// Ignore error and continue.
 			continue
 		}
-		if !send(treeWalkResult{fileInfo: fileInfo}) {
+		if !send(treeWalkResult{objInfo: objInfo}) {
 			return false
 		}
 	}
@@ -196,7 +188,7 @@ func treeWalk(layer ObjectLayer, bucket, prefixDir, entryPrefixMatch, marker str
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(layer ObjectLayer, bucket, prefix, marker string, recursive bool) *treeWalker {
+func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive bool) *treeWalker {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -233,61 +225,41 @@ func startTreeWalk(layer ObjectLayer, bucket, prefix, marker string, recursive b
 				return false
 			}
 		}
-		treeWalk(layer, bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
+		xl.treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
 	}()
 	return &walkNotify
 }
 
 // Save the goroutine reference in the map
-func saveTreeWalk(layer ObjectLayer, params listParams, walker *treeWalker) {
-	var listObjectMap map[listParams][]*treeWalker
-	var listObjectMapMutex *sync.Mutex
-	switch l := layer.(type) {
-	case xlObjects:
-		listObjectMap = l.listObjectMap
-		listObjectMapMutex = l.listObjectMapMutex
-	case fsObjects:
-		listObjectMap = l.listObjectMap
-		listObjectMapMutex = l.listObjectMapMutex
-	}
-	listObjectMapMutex.Lock()
-	defer listObjectMapMutex.Unlock()
+func (xl xlObjects) saveTreeWalkXL(params listParams, walker *treeWalker) {
+	xl.listObjectMapMutex.Lock()
+	defer xl.listObjectMapMutex.Unlock()
 
-	walkers, _ := listObjectMap[params]
+	walkers, _ := xl.listObjectMap[params]
 	walkers = append(walkers, walker)
 
-	listObjectMap[params] = walkers
+	xl.listObjectMap[params] = walkers
 }
 
 // Lookup the goroutine reference from map
-func lookupTreeWalk(layer ObjectLayer, params listParams) *treeWalker {
-	var listObjectMap map[listParams][]*treeWalker
-	var listObjectMapMutex *sync.Mutex
-	switch l := layer.(type) {
-	case xlObjects:
-		listObjectMap = l.listObjectMap
-		listObjectMapMutex = l.listObjectMapMutex
-	case fsObjects:
-		listObjectMap = l.listObjectMap
-		listObjectMapMutex = l.listObjectMapMutex
-	}
-	listObjectMapMutex.Lock()
-	defer listObjectMapMutex.Unlock()
+func (xl xlObjects) lookupTreeWalkXL(params listParams) *treeWalker {
+	xl.listObjectMapMutex.Lock()
+	defer xl.listObjectMapMutex.Unlock()
 
-	if walkChs, ok := listObjectMap[params]; ok {
+	if walkChs, ok := xl.listObjectMap[params]; ok {
 		for i, walkCh := range walkChs {
 			if !walkCh.timedOut {
 				newWalkChs := walkChs[i+1:]
 				if len(newWalkChs) > 0 {
-					listObjectMap[params] = newWalkChs
+					xl.listObjectMap[params] = newWalkChs
 				} else {
-					delete(listObjectMap, params)
+					delete(xl.listObjectMap, params)
 				}
 				return walkCh
 			}
 		}
 		// As all channels are timed out, delete the map entry
-		delete(listObjectMap, params)
+		delete(xl.listObjectMap, params)
 	}
 	return nil
 }
