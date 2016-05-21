@@ -27,8 +27,6 @@ import (
 	"gopkg.in/check.v1"
 )
 
-// TODO - enable all the commented tests.
-
 // APITestSuite - collection of API tests.
 func APITestSuite(c *check.C, create func() ObjectLayer) {
 	testMakeBucket(c, create)

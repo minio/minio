@@ -1,0 +1,44 @@
+{
+    "parts": [
+        {
+            "size": 5242880,
+            "etag": "3565c6e741e69a007a5ac7db893a62b5",
+            "name": "object1"
+        },
+        {
+            "size": 5242880,
+            "etag": "d416712335c280ab1e39498552937764",
+            "name": "object2"
+        },
+        {
+            "size": 4338324,
+            "etag": "8a98c5c54d81c6c95ed9bdcaeb941aaf",
+            "name": "object3"
+        }
+    ],
+    "meta": {
+        "md5Sum": "97586a5290d4f5a41328062d6a7da593-3",
+        "content-type": "application\/octet-stream",
+        "content-encoding": ""
+    },
+    "minio": {
+        "release": "DEVELOPMENT.GOGET"
+    },
+    "erasure": {
+        "index": 2,
+        "distribution": [ 1, 3, 4, 2, 5, 8, 7, 6, 9 ],
+        "blockSize": 4194304,
+        "parity": 5,
+        "data": 5
+    },
+    "checksum": {
+        "enable": false,
+    },
+    "stat": {
+        "version": 0,
+        "modTime": "2016-05-24T00:09:40.122390255Z",
+        "size": 14824084
+    },
+    "format": "xl",
+    "version": "1"
+}
