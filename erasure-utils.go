@@ -17,12 +17,19 @@
 package main
 
 // getDataBlocks - fetches the data block only part of the input encoded blocks.
-func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) []byte {
+func getDataBlocks(enBlocks [][]byte, dataBlocks int) []byte {
 	var data []byte
 	for _, block := range enBlocks[:dataBlocks] {
-		data = append(data, block...)
+		var newBlock []byte
+		// FIXME: Find a better way to skip the padding zeros.
+		for _, b := range block {
+			if b == 0 {
+				continue
+			}
+			newBlock = append(newBlock, b)
+		}
+		data = append(data, newBlock...)
 	}
-	data = data[:curBlockSize]
 	return data
 }
 
