@@ -240,7 +240,8 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 			}
 			return err
 		}
-		u, err := uuid.New()
+		var u *uuid.UUID
+		u, err = uuid.New()
 		if err != nil {
 			saveFormatErrCnt++
 			// Check for write quorum.
