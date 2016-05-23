@@ -195,14 +195,16 @@ func main() {
 		return nil
 	}
 
+	// Set ``MINIO_PROFILE_DIR`` to the directory where profiling information should be persisted
+	profileDir := os.Getenv("MINIO_PROFILE_DIR")
 	// Enable profiler if ``MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
 	switch os.Getenv("MINIO_PROFILER") {
 	case "cpu":
-		defer profile.Start(profile.CPUProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+		defer profile.Start(profile.CPUProfile, profile.ProfilePath(profileDir)).Stop()
 	case "mem":
-		defer profile.Start(profile.MemProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+		defer profile.Start(profile.MemProfile, profile.ProfilePath(profileDir)).Stop()
 	case "block":
-		defer profile.Start(profile.BlockProfile, profile.ProfilePath(mustGetProfilePath())).Stop()
+		defer profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir)).Stop()
 	}
 
 	// Run the app - exit on error.
