@@ -37,6 +37,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 
+	totalObjectSize := xlMeta.Stat.Size // Total object size.
+
 	// Hold a read lock once more which can be released after the following go-routine ends.
 	// We hold RLock once more because the current function would return before the go routine below
 	// executes and hence releasing the read lock (because of defer'ed nsMutex.RUnlock() call).
@@ -45,7 +47,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		defer nsMutex.RUnlock(bucket, object)
 		for ; partIndex < len(xlMeta.Parts); partIndex++ {
 			part := xlMeta.Parts[partIndex]
-			r, err := xl.erasureDisk.ReadFile(bucket, pathJoin(object, part.Name), offset)
+			r, err := xl.erasureDisk.ReadFile(bucket, pathJoin(object, part.Name), offset, totalObjectSize)
 			if err != nil {
 				fileWriter.CloseWithError(err)
 				return
