@@ -741,6 +741,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// check partID with maximum part ID for multipart objects
+	if isMaxPartID(partID) {
+		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
+		return
+	}
+
 	var partMD5 string
 	switch getRequestAuthType(r) {
 	default:
