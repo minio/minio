@@ -30,12 +30,6 @@ func (e erasure) cleanupCreateFileOps(volume, path string, writers []io.WriteClo
 			errorIf(err, "Failed to close writer.")
 		}
 	}
-	// Remove any temporary written data.
-	for _, disk := range e.storageDisks {
-		if err := disk.DeleteFile(volume, path); err != nil {
-			errorIf(err, "Unable to delete file.")
-		}
-	}
 }
 
 // WriteErasure reads predefined blocks, encodes them and writes to
