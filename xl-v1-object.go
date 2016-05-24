@@ -280,8 +280,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	xlMeta := xlMetaV1{}
-	xlMeta.Version = "1"
-	xlMeta.Format = "xl"
 	xlMeta.Meta = metadata
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime
