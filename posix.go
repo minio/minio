@@ -333,6 +333,8 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 			return nil, errFileNotFound
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
+		} else if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileNotFound
 		}
 		return nil, err
 	}
@@ -425,7 +427,6 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 		// Return all errors here.
 		return FileInfo{}, err
 	}
-
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		return FileInfo{}, errFileNotFound

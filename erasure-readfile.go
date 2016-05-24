@@ -18,14 +18,12 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	slashpath "path"
 	"sync"
 )
 
-// ReadFile - read file
-func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, error) {
+// ReadFile - decoded erasure coded file.
+func (e erasure) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, error) {
 	// Input validation.
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
@@ -34,52 +32,34 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 		return nil, errInvalidArgument
 	}
 
-	onlineDisks, metadata, heal, err := xl.listOnlineDisks(volume, path)
-	if err != nil {
-		return nil, err
+	var wg = &sync.WaitGroup{}
+
+	readers := make([]io.ReadCloser, len(e.storageDisks))
+	for index, disk := range e.storageDisks {
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// If disk.ReadFile returns error and we don't have read
+			// quorum it will be taken care as ReedSolomon.Reconstruct()
+			// will fail later.
+			offset := int64(0)
+			if reader, err := disk.ReadFile(volume, path, offset); err == nil {
+				readers[index] = reader
+			}
+		}(index, disk)
 	}
 
-	if heal {
-		// Heal in background safely, since we already have read
-		// quorum disks. Let the reads continue.
-		go func() {
-			hErr := xl.healFile(volume, path)
-			errorIf(hErr, "Unable to heal file "+volume+"/"+path+".")
-		}()
-	}
-
-	readers := make([]io.ReadCloser, len(xl.storageDisks))
-	for index, disk := range onlineDisks {
-		if disk == nil {
-			continue
-		}
-		erasurePart := slashpath.Join(path, fmt.Sprintf("file.%d", index))
-		// If disk.ReadFile returns error and we don't have read quorum it will be taken care as
-		// ReedSolomon.Reconstruct() will fail later.
-		var reader io.ReadCloser
-		offset := int64(0)
-		if reader, err = disk.ReadFile(volume, erasurePart, offset); err == nil {
-			readers[index] = reader
-		}
-	}
+	wg.Wait()
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
+
 	go func() {
-		var totalLeft = metadata.Stat.Size
-		// Read until the totalLeft.
-		for totalLeft > 0 {
-			// Figure out the right blockSize as it was encoded before.
-			var curBlockSize int64
-			if metadata.Erasure.BlockSize < totalLeft {
-				curBlockSize = metadata.Erasure.BlockSize
-			} else {
-				curBlockSize = totalLeft
-			}
+		// Read until EOF.
+		for {
 			// Calculate the current encoded block size.
-			curEncBlockSize := getEncodedBlockLen(curBlockSize, metadata.Erasure.DataBlocks)
-			enBlocks := make([][]byte, len(xl.storageDisks))
-			var wg = &sync.WaitGroup{}
+			curEncBlockSize := getEncodedBlockLen(erasureBlockSize, e.DataBlocks)
+			enBlocks := make([][]byte, len(e.storageDisks))
 			// Loop through all readers and read.
 			for index, reader := range readers {
 				// Initialize shard slice and fill the data from each parts.
@@ -87,19 +67,28 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 				if reader == nil {
 					continue
 				}
-				// Parallelize reading.
-				wg.Add(1)
-				go func(index int, reader io.Reader) {
-					defer wg.Done()
-					// Read the necessary blocks.
-					_, rErr := io.ReadFull(reader, enBlocks[index])
-					if rErr != nil && rErr != io.ErrUnexpectedEOF {
-						readers[index] = nil
+				// Read the necessary blocks.
+				n, rErr := io.ReadFull(reader, enBlocks[index])
+				if rErr == io.EOF {
+					// Close the pipe.
+					pipeWriter.Close()
+
+					// Cleanly close all the underlying data readers.
+					for _, reader := range readers {
+						if reader == nil {
+							continue
+						}
+						reader.Close()
 					}
-				}(index, reader)
+					return
+				}
+				if rErr != nil && rErr != io.ErrUnexpectedEOF {
+					readers[index].Close()
+					readers[index] = nil
+					continue
+				}
+				enBlocks[index] = enBlocks[index][:n]
 			}
-			// Wait for the read routines to finish.
-			wg.Wait()
 
 			// Check blocks if they are all zero in length.
 			if checkBlockSize(enBlocks) == 0 {
@@ -108,8 +97,7 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			}
 
 			// Verify the blocks.
-			var ok bool
-			ok, err = xl.ReedSolomon.Verify(enBlocks)
+			ok, err := e.ReedSolomon.Verify(enBlocks)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				return
@@ -123,13 +111,13 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 						enBlocks[index] = nil
 					}
 				}
-				err = xl.ReedSolomon.Reconstruct(enBlocks)
+				err = e.ReedSolomon.Reconstruct(enBlocks)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					return
 				}
 				// Verify reconstructed blocks again.
-				ok, err = xl.ReedSolomon.Verify(enBlocks)
+				ok, err = e.ReedSolomon.Verify(enBlocks)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					return
@@ -143,16 +131,14 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 			}
 
 			// Get all the data blocks.
-			dataBlocks := getDataBlocks(enBlocks, metadata.Erasure.DataBlocks, int(curBlockSize))
+			dataBlocks := getDataBlocks(enBlocks, e.DataBlocks)
 
 			// Verify if the offset is right for the block, if not move to
 			// the next block.
-
 			if startOffset > 0 {
 				startOffset = startOffset - int64(len(dataBlocks))
 				// Start offset is greater than or equal to zero, skip the dataBlocks.
 				if startOffset >= 0 {
-					totalLeft = totalLeft - metadata.Erasure.BlockSize
 					continue
 				}
 				// Now get back the remaining offset if startOffset is negative.
@@ -168,20 +154,6 @@ func (xl XL) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, er
 
 			// Reset offset to '0' to read rest of the blocks.
 			startOffset = int64(0)
-
-			// Save what's left after reading erasureBlockSize.
-			totalLeft = totalLeft - metadata.Erasure.BlockSize
-		}
-
-		// Cleanly end the pipe after a successful decoding.
-		pipeWriter.Close()
-
-		// Cleanly close all the underlying data readers.
-		for _, reader := range readers {
-			if reader == nil {
-				continue
-			}
-			reader.Close()
 		}
 	}()
 
