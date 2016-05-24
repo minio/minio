@@ -45,7 +45,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		defer nsMutex.RUnlock(bucket, object)
 		for ; partIndex < len(xlMeta.Parts); partIndex++ {
 			part := xlMeta.Parts[partIndex]
-			r, err := xl.erasureDisk.ReadFile(bucket, pathJoin(object, part.Name), offset)
+			r, err := xl.erasureDisk.ReadFile(bucket, pathJoin(object, part.Name), offset, part.Size)
 			if err != nil {
 				fileWriter.CloseWithError(err)
 				return

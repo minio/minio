@@ -23,7 +23,7 @@ import (
 )
 
 // ReadFile - decoded erasure coded file.
-func (e erasure) ReadFile(volume, path string, startOffset int64) (io.ReadCloser, error) {
+func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int64) (io.ReadCloser, error) {
 	// Input validation.
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
@@ -32,6 +32,7 @@ func (e erasure) ReadFile(volume, path string, startOffset int64) (io.ReadCloser
 		return nil, errInvalidArgument
 	}
 
+	remaining := totalSize
 	var wg = &sync.WaitGroup{}
 
 	readers := make([]io.ReadCloser, len(e.storageDisks))
@@ -129,7 +130,12 @@ func (e erasure) ReadFile(volume, path string, startOffset int64) (io.ReadCloser
 					return
 				}
 			}
-
+			endOffset := int64(len(enBlocks[0]) * e.DataBlocks)
+			if remaining < endOffset {
+				// We need skip the trailing 0 padding.
+				endOffset = remaining
+			}
+			remaining = remaining - endOffset
 			// Get all the data blocks.
 			dataBlocks := getDataBlocks(enBlocks, e.DataBlocks)
 
@@ -146,7 +152,7 @@ func (e erasure) ReadFile(volume, path string, startOffset int64) (io.ReadCloser
 			}
 
 			// Write safely the necessary blocks.
-			_, err = pipeWriter.Write(dataBlocks[int(startOffset):])
+			_, err = pipeWriter.Write(dataBlocks[int(startOffset):int(endOffset)])
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				return
