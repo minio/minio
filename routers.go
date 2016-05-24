@@ -27,9 +27,10 @@ import (
 // number of export paths.
 func newObjectLayer(exportPaths []string) (ObjectLayer, error) {
 	if len(exportPaths) == 1 {
-		exportPath := exportPaths[0]
+		//exportPath := exportPaths[0]
 		// Initialize FS object layer.
-		return newFSObjects(exportPath)
+		// return newFSObjects(exportPath)
+		return nil, errors.New("Not implemented")
 	}
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(exportPaths)
