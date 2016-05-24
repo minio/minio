@@ -125,7 +125,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
-	partSuffix := fmt.Sprintf("object%d", partID)
+	partSuffix := fmt.Sprintf("object.%.5d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
 	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tmpPartPath)
 	if err != nil {
@@ -318,7 +318,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
 		// Construct part suffix.
-		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
+		partSuffix := fmt.Sprintf("object.%.5d", part.PartNumber)
 		if xlMeta.SearchObjectPart(partSuffix, part.ETag) == -1 {
 			return "", InvalidPart{}
 		}
