@@ -77,7 +77,7 @@ func (m *xlMetaV1) ReadFrom(reader io.Reader) (n int64, err error) {
 
 // WriteTo - write to implements io.WriterTo interface for marshalling xlMetaV1.
 func (m xlMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
-	metadataBytes, err := json.Marshal(m)
+	metadataBytes, err := json.Marshal(&m)
 	if err != nil {
 		return 0, err
 	}
@@ -231,6 +231,8 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	var mErrs = make([]error, len(xl.storageDisks))
 
 	// Initialize metadata map, save all erasure related metadata.
+	xlMeta.Version = "1"
+	xlMeta.Format = "xl"
 	xlMeta.Minio.Release = minioReleaseTag
 	xlMeta.Erasure.DataBlocks = xl.dataBlocks
 	xlMeta.Erasure.ParityBlocks = xl.parityBlocks

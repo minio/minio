@@ -23,8 +23,12 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/minio/minio/pkg/mimedb"
 )
 
 // ListMultipartUploads - list multipart uploads.
@@ -54,11 +58,16 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 	}
 
 	xlMeta := xlMetaV1{}
-	xlMeta.Format = "xl"
-	xlMeta.Version = "1"
 	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
-		meta["content-type"] = "application/octet-stream"
+		contentType := "application/octet-stream"
+		if objectExt := filepath.Ext(object); objectExt != "" {
+			content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
+			if ok {
+				contentType = content.ContentType
+			}
+		}
+		meta["content-type"] = contentType
 	}
 	xlMeta.Meta = meta
 
