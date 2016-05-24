@@ -82,7 +82,7 @@ func (u *uploadsV1) ReadFrom(reader io.Reader) (n int64, err error) {
 
 // WriteTo - write to implements io.WriterTo interface for marshalling uploads.
 func (u uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
-	metadataBytes, err := json.Marshal(u)
+	metadataBytes, err := json.Marshal(&u)
 	if err != nil {
 		return 0, err
 	}
@@ -206,15 +206,8 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 				errs[index] = wErr
 				return
 			}
-
-			_, wErr = disk.StatFile(minioMetaBucket, uploadsPath)
+			wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
 			if wErr != nil {
-				if wErr == errFileNotFound {
-					wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
-					if wErr == nil {
-						return
-					}
-				}
 				if dErr := disk.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
 					errs[index] = dErr
 					return
@@ -222,6 +215,7 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 				errs[index] = wErr
 				return
 			}
+			errs[index] = nil
 		}(index, disk)
 	}
 
