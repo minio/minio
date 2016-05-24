@@ -17,11 +17,14 @@
 package main
 
 import (
+	"os"
 	"reflect"
+	"runtime"
 	"runtime/debug"
+	"strconv"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/minio/pkg/probe"
+	"github.com/dustin/go-humanize"
 )
 
 type fields map[string]interface{}
@@ -42,12 +45,33 @@ type logger struct {
 	// Add new loggers here.
 }
 
+// getSysInfo returns useful system statistics.
+func getSysInfo() map[string]string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	memstats := &runtime.MemStats{}
+	runtime.ReadMemStats(memstats)
+	return map[string]string{
+		"host.name":      host,
+		"host.os":        runtime.GOOS,
+		"host.arch":      runtime.GOARCH,
+		"host.lang":      runtime.Version(),
+		"host.cpus":      strconv.Itoa(runtime.NumCPU()),
+		"mem.used":       humanize.Bytes(memstats.Alloc),
+		"mem.total":      humanize.Bytes(memstats.Sys),
+		"mem.heap.used":  humanize.Bytes(memstats.HeapAlloc),
+		"mem.heap.total": humanize.Bytes(memstats.HeapSys),
+	}
+}
+
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
 func errorIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	sysInfo := probe.GetSysInfo()
+	sysInfo := getSysInfo()
 	fields := logrus.Fields{
 		"cause":   err.Error(),
 		"type":    reflect.TypeOf(err),
@@ -65,7 +89,7 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	sysInfo := probe.GetSysInfo()
+	sysInfo := getSysInfo()
 	fields := logrus.Fields{
 		"cause":   err.Error(),
 		"type":    reflect.TypeOf(err),
