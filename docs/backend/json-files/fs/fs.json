@@ -6,7 +6,8 @@
     },
     "parts": [
         {
-            "name": "object00001",
+            "number": 1,
+            "name": "object1",
             "size": 29,
             "eTag": "",
         },
