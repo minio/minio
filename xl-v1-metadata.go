@@ -208,28 +208,45 @@ func (xl xlObjects) isObject(bucket, prefix string) bool {
 	return true
 }
 
+// statPart - stat a part file.
+func (xl xlObjects) statPart(bucket, objectPart string) (fileInfo FileInfo, err error) {
+	// Count for errors encountered.
+	var xlJSONErrCount = 0
+
+	// Return the first success entry based on the selected random disk.
+	for xlJSONErrCount < len(xl.storageDisks) {
+		// Choose a random disk on each attempt, do not hit the same disk all the time.
+		disk := xl.getRandomDisk() // Pick a random disk.
+		fileInfo, err = disk.StatFile(bucket, objectPart)
+		if err == nil {
+			return fileInfo, nil
+		}
+		xlJSONErrCount++ // Update error count.
+	}
+	return FileInfo{}, err
+}
+
 // readXLMetadata - read xl metadata.
-func readXLMetadata(disk StorageAPI, bucket, object string) (xlMeta xlMetaV1, err error) {
-	r, err := disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0))
-	if err != nil {
-		return xlMetaV1{}, err
-	}
-	defer r.Close()
-	_, err = xlMeta.ReadFrom(r)
-	if err != nil {
-		return xlMetaV1{}, err
-	}
-	return xlMeta, nil
-}
+func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
+	// Count for errors encountered.
+	var xlJSONErrCount = 0
 
-// deleteXLJson - delete `xl.json` on all disks.
-func (xl xlObjects) deleteXLMetadata(bucket, object string) error {
-	return xl.deleteObject(bucket, path.Join(object, xlMetaJSONFile))
-}
-
-// renameXLJson - rename `xl.json` on all disks.
-func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string) error {
-	return xl.renameObject(srcBucket, path.Join(srcPrefix, xlMetaJSONFile), dstBucket, path.Join(dstPrefix, xlMetaJSONFile))
+	// Return the first success entry based on the selected random disk.
+	for xlJSONErrCount < len(xl.storageDisks) {
+		var r io.ReadCloser
+		// Choose a random disk on each attempt, do not hit the same disk all the time.
+		disk := xl.getRandomDisk() // Pick a random disk.
+		r, err = disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0))
+		if err == nil {
+			defer r.Close()
+			_, err = xlMeta.ReadFrom(r)
+			if err == nil {
+				return xlMeta, nil
+			}
+		}
+		xlJSONErrCount++ // Update error count.
+	}
+	return xlMetaV1{}, err
 }
 
 // getDiskDistribution - get disk distribution.
