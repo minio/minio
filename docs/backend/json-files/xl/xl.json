@@ -1,19 +1,22 @@
 {
     "parts": [
         {
+            "number": 1,
             "size": 5242880,
             "etag": "3565c6e741e69a007a5ac7db893a62b5",
-            "name": "object00001"
+            "name": "object1"
         },
         {
+            "number": 2,
             "size": 5242880,
             "etag": "d416712335c280ab1e39498552937764",
-            "name": "object00002"
+            "name": "object2"
         },
         {
+            "number": 3,
             "size": 4338324,
             "etag": "8a98c5c54d81c6c95ed9bdcaeb941aaf",
-            "name": "object00003"
+            "name": "object3"
         }
     ],
     "meta": {
@@ -33,12 +36,12 @@
         "data": 5,
         "checksum": [
             {
-                "name": "object.00001",
+                "name": "object1",
                 "algorithm": "sha512",
                 "hash": "d9910e1492446389cfae6fe979db0245f96ca97ca2c7a25cab45805882004479320d866a47ea1f7be6a62625dd4de6caf7816009ef9d62779346d01a221b335c",
             },
             {
-                "name": "object.00002",
+                "name": "object2",
                 "algorithm": "sha512",
                 "hash": "d9910e1492446389cfae6fe979db0245f96ca97ca2c7a25cab45805882004479320d866a47ea1f7be6a62625dd4de6caf7816009ef9d62779346d01a221b335c",
             },

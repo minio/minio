@@ -32,7 +32,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
-	partIndex, offset, err := xlMeta.getPartNumberOffset(startOffset)
+	partIndex, offset, err := xlMeta.getPartIndexOffset(startOffset)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
@@ -190,7 +190,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
-	tempErasureObj := path.Join(tmpMetaPrefix, bucket, object, "object00001")
+	tempErasureObj := path.Join(tmpMetaPrefix, bucket, object, "object1")
 	tempObj := path.Join(tmpMetaPrefix, bucket, object)
 	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tempErasureObj)
 	if err != nil {
@@ -282,7 +282,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Meta = metadata
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime
-	xlMeta.AddObjectPart("object00001", newMD5Hex, xlMeta.Stat.Size)
+	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
 	if err = xl.writeXLMetadata(bucket, object, xlMeta); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}

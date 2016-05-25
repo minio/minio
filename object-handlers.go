@@ -887,10 +887,6 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	if maxParts == 0 {
-		maxParts = maxPartsList
-	}
-
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "Unable to list uploaded parts.")

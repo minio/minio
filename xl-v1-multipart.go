@@ -125,7 +125,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
-	partSuffix := fmt.Sprintf("object.%.5d", partID)
+	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
 	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tmpPartPath)
 	if err != nil {
@@ -188,7 +188,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
-	xlMeta.AddObjectPart(partSuffix, newMD5Hex, size)
+	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
@@ -236,19 +236,39 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
+
+	// Populate the result stub.
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	result.MaxParts = maxParts
+
+	// For empty number of parts or maxParts as zero, return right here.
+	if len(xlMeta.Parts) == 0 || maxParts == 0 {
+		return result, nil
+	}
+
+	// Limit output to maxPartsList.
+	if maxParts > maxPartsList {
+		maxParts = maxPartsList
+	}
+
 	// Only parts with higher part numbers will be listed.
-	parts := xlMeta.Parts[partNumberMarker:]
+	partIdx := xlMeta.SearchObjectPart(partNumberMarker)
+	parts := xlMeta.Parts
+	if partIdx != -1 {
+		parts = xlMeta.Parts[partIdx+1:]
+	}
 	count := maxParts
-	for i, part := range parts {
+	for _, part := range parts {
 		var fi FileInfo
 		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 		fi, err = disk.StatFile(minioMetaBucket, partNamePath)
 		if err != nil {
 			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
 		}
-		partNum := i + partNumberMarker + 1
 		result.Parts = append(result.Parts, partInfo{
-			PartNumber:   partNum,
+			PartNumber:   part.Number,
 			ETag:         part.ETag,
 			LastModified: fi.ModTime,
 			Size:         fi.Size,
@@ -266,10 +286,6 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 		nextPartNumberMarker := result.Parts[len(result.Parts)-1].PartNumber
 		result.NextPartNumberMarker = nextPartNumberMarker
 	}
-	result.Bucket = bucket
-	result.Object = object
-	result.UploadID = uploadID
-	result.MaxParts = maxParts
 	return result, nil
 }
 
@@ -309,24 +325,45 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
+
+	// Read the current `xl.json`.
 	xlMeta, err := readXLMetadata(xl.getRandomDisk(), minioMetaBucket, uploadIDPath)
 	if err != nil {
-		return "", err
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 
 	var objectSize int64
+
+	// Save current xl meta for validation.
+	var currentXLMeta = xlMeta
+
+	// Allocate parts similar to incoming slice.
+	xlMeta.Parts = make([]objectPartInfo, len(parts))
+
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
-		// Construct part suffix.
-		partSuffix := fmt.Sprintf("object.%.5d", part.PartNumber)
-		if xlMeta.SearchObjectPart(partSuffix, part.ETag) == -1 {
+		partIdx := currentXLMeta.SearchObjectPart(part.PartNumber)
+		if partIdx == -1 {
 			return "", InvalidPart{}
 		}
+		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
+			return "", BadDigest{}
+		}
 		// All parts except the last part has to be atleast 5MB.
-		if (i < len(parts)-1) && !isMinAllowedPartSize(xlMeta.Parts[i].Size) {
+		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
 			return "", PartTooSmall{}
 		}
-		objectSize += xlMeta.Parts[i].Size
+
+		// Save for total object size.
+		objectSize += currentXLMeta.Parts[partIdx].Size
+
+		// Add incoming parts.
+		xlMeta.Parts[i] = objectPartInfo{
+			Number: part.PartNumber,
+			ETag:   part.ETag,
+			Size:   currentXLMeta.Parts[partIdx].Size,
+			Name:   fmt.Sprintf("object%d", part.PartNumber),
+		}
 	}
 
 	// Check if an object is present as one of the parent dir.
