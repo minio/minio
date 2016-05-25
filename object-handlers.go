@@ -941,6 +941,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}
+	if len(complMultipartUpload.Parts) == 0 {
+		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		return
+	}
 	if !sort.IsSorted(completedParts(complMultipartUpload.Parts)) {
 		writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
 		return
