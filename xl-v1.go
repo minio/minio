@@ -33,7 +33,6 @@ const (
 // xlObjects - Implements fs object layer.
 type xlObjects struct {
 	storageDisks       []StorageAPI
-	erasureDisk        *erasure
 	dataBlocks         int
 	parityBlocks       int
 	readQuorum         int
@@ -143,17 +142,11 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 
 	// FIXME: healFormatXL(newDisks)
 
-	newErasureDisk, err := newErasure(newPosixDisks)
-	if err != nil {
-		return nil, err
-	}
-
 	// Calculate data and parity blocks.
 	dataBlocks, parityBlocks := len(newPosixDisks)/2, len(newPosixDisks)/2
 
 	xl := xlObjects{
 		storageDisks:       newPosixDisks,
-		erasureDisk:        newErasureDisk,
 		dataBlocks:         dataBlocks,
 		parityBlocks:       parityBlocks,
 		listObjectMap:      make(map[listParams][]*treeWalker),

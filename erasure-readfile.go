@@ -33,24 +33,34 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 	}
 
 	var rwg = &sync.WaitGroup{}
+	var errs = make([]error, len(e.storageDisks))
 
 	readers := make([]io.ReadCloser, len(e.storageDisks))
 	for index, disk := range e.storageDisks {
+		if disk == nil {
+			continue
+		}
 		rwg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer rwg.Done()
-			// If disk.ReadFile returns error and we don't have read
-			// quorum it will be taken care as ReedSolomon.Reconstruct()
-			// will fail later.
 			offset := int64(0)
 			if reader, err := disk.ReadFile(volume, path, offset); err == nil {
 				readers[index] = reader
+			} else {
+				errs[index] = err
 			}
 		}(index, disk)
 	}
 
 	// Wait for all readers.
 	rwg.Wait()
+
+	// For any errors in reader, we should just error out.
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
