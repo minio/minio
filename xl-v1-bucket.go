@@ -45,7 +45,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	// Loop through all the concocted errors.
+	// Look for specific errors and count them to be verified later.
 	for _, err := range dErrs {
 		if err == nil {
 			continue
@@ -201,7 +201,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		}()
 	}
 
-	// Loop through all statVols, calculate the actual usage values.
+	// From all bucketsInfo, calculate the actual usage values.
 	var total, free int64
 	var bucketInfo BucketInfo
 	for _, bucketInfo = range bucketsInfo {
@@ -211,6 +211,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		free += bucketInfo.Free
 		total += bucketInfo.Total
 	}
+
 	// Update the aggregated values.
 	bucketInfo.Free = free
 	bucketInfo.Total = total
@@ -241,10 +242,10 @@ func (xl xlObjects) listBuckets() ([]BucketInfo, error) {
 		}(index, disk)
 	}
 
-	// For all the list volumes running in parallel to finish.
+	// Wait for all the list volumes running in parallel to finish.
 	wg.Wait()
 
-	// Loop through success vols and get aggregated usage values.
+	// From success vols map calculate aggregated usage values.
 	var volsInfo []VolInfo
 	var total, free int64
 	for _, volsInfo = range successVols {
@@ -296,6 +297,7 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 	if err != nil {
 		return nil, toObjectErr(err)
 	}
+	// Sort by bucket name before returning.
 	sort.Sort(byBucketName(bucketInfos))
 	return bucketInfos, nil
 }
@@ -334,7 +336,8 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Wait for all the delete vols to finish.
 	wg.Wait()
 
-	// Loop through concocted errors and return anything unusual.
+	// Count the errors for known errors, return quickly if we found
+	// an unknown error.
 	for _, err := range dErrs {
 		if err != nil {
 			// We ignore error if errVolumeNotFound or errDiskNotFound
@@ -346,7 +349,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		}
 	}
 
-	// Return err if all disks report volume not found.
+	// Return errVolumeNotFound if all disks report volume not found.
 	if volumeNotFoundErrCnt == len(xl.storageDisks) {
 		return toObjectErr(errVolumeNotFound, bucket)
 	}

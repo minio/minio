@@ -27,7 +27,11 @@ import (
 )
 
 // Erasure block size.
-const erasureBlockSize = 4 * 1024 * 1024 // 4MiB.
+const (
+	erasureBlockSize          = 4 * 1024 * 1024 // 4MiB.
+	erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
+	erasureAlgorithmISAL      = "isa-l/reedsolomon/cauchy"
+)
 
 // objectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
@@ -47,15 +51,18 @@ type xlMetaV1 struct {
 		Version int64     `json:"version"`
 	} `json:"stat"`
 	Erasure struct {
-		DataBlocks   int   `json:"data"`
-		ParityBlocks int   `json:"parity"`
-		BlockSize    int64 `json:"blockSize"`
-		Index        int   `json:"index"`
-		Distribution []int `json:"distribution"`
+		Algorithm    string `json:"algorithm"`
+		DataBlocks   int    `json:"data"`
+		ParityBlocks int    `json:"parity"`
+		BlockSize    int64  `json:"blockSize"`
+		Index        int    `json:"index"`
+		Distribution []int  `json:"distribution"`
+		Checksum     []struct {
+			Name      string `json:"name"`
+			Algorithm string `json:"algorithm"`
+			Hash      string `json:"hash"`
+		} `json:"checksum"`
 	} `json:"erasure"`
-	Checksum struct {
-		Enable bool `json:"enable"`
-	} `json:"checksum"`
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
@@ -234,6 +241,7 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	xlMeta.Version = "1"
 	xlMeta.Format = "xl"
 	xlMeta.Minio.Release = minioReleaseTag
+	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
 	xlMeta.Erasure.DataBlocks = xl.dataBlocks
 	xlMeta.Erasure.ParityBlocks = xl.parityBlocks
 	xlMeta.Erasure.BlockSize = erasureBlockSize
@@ -278,7 +286,7 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	wg.Wait()
 
 	// FIXME: check for quorum.
-	// Loop through concocted errors and return the first one.
+	// Return the first error.
 	for _, err := range mErrs {
 		if err == nil {
 			continue
