@@ -147,6 +147,9 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 				return
 			}
 
+			// Reset dataBlocks to relenquish memory.
+			dataBlocks = nil
+
 			// Reset offset to '0' to read rest of the blocks.
 			startOffset = int64(0)
 
