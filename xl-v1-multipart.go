@@ -86,14 +86,15 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	if err = xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath); err != nil {
-		if dErr := xl.deleteXLMetadata(minioMetaBucket, tempUploadIDPath); dErr != nil {
+	rErr := xl.renameObject(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
+	if rErr == nil {
+		if dErr := xl.deleteObject(minioMetaBucket, tempUploadIDPath); dErr != nil {
 			return "", toObjectErr(dErr, minioMetaBucket, tempUploadIDPath)
 		}
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+		// Return success.
+		return uploadID, nil
 	}
-	// Return success.
-	return uploadID, nil
+	return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
@@ -129,7 +130,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
 	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tmpPartPath)
 	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 	}
 
 	// Initialize md5 writer.
@@ -184,7 +185,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	xlMeta, err := readXLMetadata(xl.getRandomDisk(), minioMetaBucket, uploadIDPath)
+	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -230,9 +231,8 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	result := ListPartsInfo{}
 
-	disk := xl.getRandomDisk() // Pick a random disk and read `xl.json` from there.
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	xlMeta, err := readXLMetadata(disk, minioMetaBucket, uploadIDPath)
+	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -261,9 +261,9 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	}
 	count := maxParts
 	for _, part := range parts {
-		var fi FileInfo
 		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
-		fi, err = disk.StatFile(minioMetaBucket, partNamePath)
+		var fi FileInfo
+		fi, err = xl.statPart(minioMetaBucket, partNamePath)
 		if err != nil {
 			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
 		}
@@ -327,7 +327,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
 
 	// Read the current `xl.json`.
-	xlMeta, err := readXLMetadata(xl.getRandomDisk(), minioMetaBucket, uploadIDPath)
+	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}

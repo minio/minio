@@ -16,25 +16,58 @@
 
 package main
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
 // Common initialization needed for both object layers.
 func initObjectLayer(storageDisks ...StorageAPI) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
-	for _, storage := range storageDisks {
-		if err := storage.MakeVol(minioMetaBucket); err != nil {
-			if err != errVolumeExists && err != errDiskNotFound {
-				return toObjectErr(err, minioMetaBucket)
+	var wg = &sync.WaitGroup{}
+
+	// Initialize errs to collect errors inside go-routine.
+	var errs = make([]error, len(storageDisks))
+
+	// Initialize all disks in parallel.
+	for index, disk := range storageDisks {
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			// Indicate this wait group is done.
+			defer wg.Done()
+
+			// Attempt to create `.minio`.
+			err := disk.MakeVol(minioMetaBucket)
+			if err != nil {
+				if err != errVolumeExists && err != errDiskNotFound {
+					errs[index] = err
+					return
+				}
 			}
-		}
-		// Cleanup all temp entries upon start.
-		err := cleanupDir(storage, minioMetaBucket, tmpMetaPrefix)
-		if err != nil {
-			return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
-		}
+			// Cleanup all temp entries upon start.
+			err = cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
+			if err != nil {
+				errs[index] = err
+				return
+			}
+			errs[index] = nil
+		}(index, disk)
 	}
+
+	// Wait for all cleanup to finish.
+	wg.Wait()
+
+	// Return upon first error.
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
+	}
+
+	// Return success here.
 	return nil
 }
 
