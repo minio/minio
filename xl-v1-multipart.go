@@ -88,9 +88,6 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 	}
 	rErr := xl.renameObject(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
 	if rErr == nil {
-		if dErr := xl.deleteObject(minioMetaBucket, tempUploadIDPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempUploadIDPath)
-		}
 		// Return success.
 		return uploadID, nil
 	}
@@ -194,9 +191,6 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
-		if dErr := xl.deleteObject(minioMetaBucket, tmpPartPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tmpPartPath)
-		}
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
 	if err = xl.writeXLMetadata(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), xlMeta); err != nil {
