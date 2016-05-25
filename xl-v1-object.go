@@ -25,13 +25,19 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if !IsValidObjectName(object) {
 		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+
+	// Lock the object before reading.
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
 	fileReader, fileWriter := io.Pipe()
-	xlMeta, err := readXLMetadata(xl.getRandomDisk(), bucket, object)
+
+	// Read metadata associated with the object.
+	xlMeta, err := xl.readXLMetadata(bucket, object)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
+
+	// Get part index offset.
 	partIndex, offset, err := xlMeta.getPartIndexOffset(startOffset)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
@@ -90,33 +96,24 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return info, nil
 }
 
+// getObjectInfo - get object info.
 func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	// Count for errors encountered.
-	var xlJSONErrCount = 0
-
-	// Return the first success entry based on the selected random disk.
-	for xlJSONErrCount < len(xl.storageDisks) {
-		// Choose a random disk on each attempt, do not hit the same disk all the time.
-		disk := xl.getRandomDisk() // Pick a random disk.
-		var xlMeta xlMetaV1
-		xlMeta, err = readXLMetadata(disk, bucket, object)
-		if err == nil {
-			objInfo = ObjectInfo{}
-			objInfo.IsDir = false
-			objInfo.Bucket = bucket
-			objInfo.Name = object
-			objInfo.Size = xlMeta.Stat.Size
-			objInfo.ModTime = xlMeta.Stat.ModTime
-			objInfo.MD5Sum = xlMeta.Meta["md5Sum"]
-			objInfo.ContentType = xlMeta.Meta["content-type"]
-			objInfo.ContentEncoding = xlMeta.Meta["content-encoding"]
-			return objInfo, nil
-		}
-		xlJSONErrCount++ // Update error count.
+	var xlMeta xlMetaV1
+	xlMeta, err = xl.readXLMetadata(bucket, object)
+	if err != nil {
+		// Return error.
+		return ObjectInfo{}, err
 	}
-
-	// Return error at the end.
-	return ObjectInfo{}, err
+	objInfo = ObjectInfo{}
+	objInfo.IsDir = false
+	objInfo.Bucket = bucket
+	objInfo.Name = object
+	objInfo.Size = xlMeta.Stat.Size
+	objInfo.ModTime = xlMeta.Stat.ModTime
+	objInfo.MD5Sum = xlMeta.Meta["md5Sum"]
+	objInfo.ContentType = xlMeta.Meta["content-type"]
+	objInfo.ContentEncoding = xlMeta.Meta["content-encoding"]
+	return objInfo, nil
 }
 
 // renameObject - renaming all source objects to destination object across all disks.
