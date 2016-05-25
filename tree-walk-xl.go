@@ -52,8 +52,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 	// Count for list errors encountered.
 	var listErrCount = 0
 
-	// Loop through and return the first success entry based on the
-	// selected random disk.
+	// Return the first success entry based on the selected random disk.
 	for listErrCount < len(xl.storageDisks) {
 		// Choose a random disk on each attempt, do not hit the same disk all the time.
 		randIndex := rand.Intn(len(xl.storageDisks) - 1)
@@ -84,7 +83,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 }
 
 // getRandomDisk - gives a random disk at any point in time from the
-// available disk pool.
+// available pool of disks.
 func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
 	randIndex := rand.Intn(len(xl.storageDisks) - 1)
 	disk = xl.storageDisks[randIndex] // Pick a random disk.

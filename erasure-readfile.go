@@ -136,8 +136,7 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 					totalLeft = totalLeft - erasureBlockSize
 					continue
 				}
-				// Now get back the remaining offset if startOffset is
-				// negative.
+				// Now get back the remaining offset if startOffset is negative.
 				startOffset = startOffset + int64(len(dataBlocks))
 			}
 

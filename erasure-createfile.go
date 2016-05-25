@@ -145,6 +145,7 @@ func (e erasure) writeErasure(volume, path string, reader *io.PipeReader, wclose
 
 // CreateFile - create a file.
 func (e erasure) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
+	// Input validation.
 	if !isValidVolname(volume) {
 		return nil, errInvalidArgument
 	}
