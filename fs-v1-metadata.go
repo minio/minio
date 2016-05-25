@@ -8,6 +8,10 @@ import (
 	"sort"
 )
 
+const (
+	fsMetaJSONFile = "fs.json"
+)
+
 // A fsMetaV1 represents a metadata header mapping keys to sets of values.
 type fsMetaV1 struct {
 	Version string `json:"version"`
@@ -15,9 +19,6 @@ type fsMetaV1 struct {
 	Minio   struct {
 		Release string `json:"release"`
 	} `json:"minio"`
-	Checksum struct {
-		Enable bool `json:"enable"`
-	} `json:"checksum"`
 	Parts []objectPartInfo `json:"parts,omitempty"`
 }
 
@@ -44,9 +45,9 @@ func (m fsMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
 }
 
 // SearchObjectPart - search object part name and etag.
-func (m fsMetaV1) SearchObjectPart(name string, etag string) int {
+func (m fsMetaV1) SearchObjectPart(number int) int {
 	for i, part := range m.Parts {
-		if name == part.Name && etag == part.ETag {
+		if number == part.Number {
 			return i
 		}
 	}
@@ -54,18 +55,15 @@ func (m fsMetaV1) SearchObjectPart(name string, etag string) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *fsMetaV1) AddObjectPart(name string, etag string, size int64) {
+func (m *fsMetaV1) AddObjectPart(number int, name string, etag string, size int64) {
 	m.Parts = append(m.Parts, objectPartInfo{
-		Name: name,
-		ETag: etag,
-		Size: size,
+		Number: number,
+		Name:   name,
+		ETag:   etag,
+		Size:   size,
 	})
-	sort.Sort(byPartName(m.Parts))
+	sort.Sort(byPartNumber(m.Parts))
 }
-
-const (
-	fsMetaJSONFile = "fs.json"
-)
 
 // readFSMetadata - read `fs.json`.
 func (fs fsObjects) readFSMetadata(bucket, object string) (fsMeta fsMetaV1, err error) {

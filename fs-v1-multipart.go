@@ -407,7 +407,7 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
-	fsMeta.AddObjectPart(partSuffix, newMD5Hex, size)
+	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = fs.storage.RenameFile(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
@@ -454,18 +454,21 @@ func (fs fsObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 	// Only parts with higher part numbers will be listed.
-	parts := fsMeta.Parts[partNumberMarker:]
+	partIdx := fsMeta.SearchObjectPart(partNumberMarker)
+	parts := fsMeta.Parts
+	if partIdx != -1 {
+		parts = fsMeta.Parts[partIdx+1:]
+	}
 	count := maxParts
-	for i, part := range parts {
+	for _, part := range parts {
 		var fi FileInfo
 		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 		fi, err = fs.storage.StatFile(minioMetaBucket, partNamePath)
 		if err != nil {
 			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
 		}
-		partNum := i + partNumberMarker + 1
 		result.Parts = append(result.Parts, partInfo{
-			PartNumber:   partNum,
+			PartNumber:   part.Number,
 			ETag:         part.ETag,
 			LastModified: fi.ModTime,
 			Size:         fi.Size,

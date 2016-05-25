@@ -36,9 +36,10 @@ const (
 // objectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
 type objectPartInfo struct {
-	Name string `json:"name"`
-	ETag string `json:"etag"`
-	Size int64  `json:"size"`
+	Number int    `json:"number"`
+	Name   string `json:"name"`
+	ETag   string `json:"etag"`
+	Size   int64  `json:"size"`
 }
 
 // A xlMetaV1 represents a metadata header mapping keys to sets of values.
@@ -93,17 +94,17 @@ func (m xlMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
 }
 
 // byPartName is a collection satisfying sort.Interface.
-type byPartName []objectPartInfo
+type byPartNumber []objectPartInfo
 
-func (t byPartName) Len() int           { return len(t) }
-func (t byPartName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byPartName) Less(i, j int) bool { return t[i].Name < t[j].Name }
+func (t byPartNumber) Len() int           { return len(t) }
+func (t byPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t byPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // SearchObjectPart - searches for part name and etag, returns the
 // index if found.
-func (m xlMetaV1) SearchObjectPart(name string, etag string) int {
+func (m xlMetaV1) SearchObjectPart(number int) int {
 	for i, part := range m.Parts {
-		if name == part.Name && etag == part.ETag {
+		if number == part.Number {
 			return i
 		}
 	}
@@ -111,25 +112,33 @@ func (m xlMetaV1) SearchObjectPart(name string, etag string) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(name string, etag string, size int64) {
-	m.Parts = append(m.Parts, objectPartInfo{
-		Name: name,
-		ETag: etag,
-		Size: size,
-	})
-	sort.Sort(byPartName(m.Parts))
+func (m *xlMetaV1) AddObjectPart(number int, name string, etag string, size int64) {
+	partInfo := objectPartInfo{
+		Number: number,
+		Name:   name,
+		ETag:   etag,
+		Size:   size,
+	}
+	for i, part := range m.Parts {
+		if number == part.Number {
+			m.Parts[i] = partInfo
+			return
+		}
+	}
+	m.Parts = append(m.Parts, partInfo)
+	sort.Sort(byPartNumber(m.Parts))
 }
 
-// getPartNumberOffset - given an offset for the whole object, return the part and offset in that part.
-func (m xlMetaV1) getPartNumberOffset(offset int64) (partNumber int, partOffset int64, err error) {
+// getPartIndexOffset - given an offset for the whole object, return the part and offset in that part.
+func (m xlMetaV1) getPartIndexOffset(offset int64) (partIndex int, partOffset int64, err error) {
 	partOffset = offset
 	for i, part := range m.Parts {
-		partNumber = i
+		partIndex = i
 		if part.Size == 0 {
-			return partNumber, partOffset, nil
+			return partIndex, partOffset, nil
 		}
 		if partOffset < part.Size {
-			return partNumber, partOffset, nil
+			return partIndex, partOffset, nil
 		}
 		partOffset -= part.Size
 	}
