@@ -34,7 +34,7 @@ type erasure struct {
 var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
 
 // newErasure instantiate a new erasure.
-func newErasure(disks []StorageAPI) (*erasure, error) {
+func newErasure(disks []StorageAPI) *erasure {
 	// Initialize E.
 	e := &erasure{}
 
@@ -43,9 +43,7 @@ func newErasure(disks []StorageAPI) (*erasure, error) {
 
 	// Initialize reed solomon encoding.
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
-	if err != nil {
-		return nil, err
-	}
+	fatalIf(err, "Unable to initialize reedsolomon package.")
 
 	// Save the reedsolomon.
 	e.DataBlocks = dataBlocks
@@ -56,5 +54,5 @@ func newErasure(disks []StorageAPI) (*erasure, error) {
 	e.storageDisks = disks
 
 	// Return successfully initialized.
-	return e, nil
+	return e
 }

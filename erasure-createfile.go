@@ -40,15 +40,34 @@ func (e erasure) writeErasure(volume, path string, reader *io.PipeReader, wclose
 
 	writers := make([]io.WriteCloser, len(e.storageDisks))
 
+	var wwg = &sync.WaitGroup{}
+	var errs = make([]error, len(e.storageDisks))
+
 	// Initialize all writers.
 	for index, disk := range e.storageDisks {
-		writer, err := disk.CreateFile(volume, path)
-		if err != nil {
-			e.cleanupCreateFileOps(volume, path, writers)
-			reader.CloseWithError(err)
-			return
+		if disk == nil {
+			continue
 		}
-		writers[index] = writer
+		wwg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wwg.Done()
+			writer, err := disk.CreateFile(volume, path)
+			if err != nil {
+				errs[index] = err
+				return
+			}
+			writers[index] = writer
+		}(index, disk)
+	}
+
+	wwg.Wait() // Wait for all the create file to finish in parallel.
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		e.cleanupCreateFileOps(volume, path, writers)
+		reader.CloseWithError(err)
+		return
 	}
 
 	// Allocate 4MiB block size buffer for reading.

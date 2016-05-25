@@ -29,7 +29,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	// Lock the object before reading.
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
-	fileReader, fileWriter := io.Pipe()
 
 	// Read metadata associated with the object.
 	xlMeta, err := xl.readXLMetadata(bucket, object)
@@ -37,11 +36,20 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		return nil, toObjectErr(err, bucket, object)
 	}
 
+	// List all online disks.
+	onlineDisks, _, err := xl.listOnlineDisks(bucket, object)
+	if err != nil {
+		return nil, toObjectErr(err, bucket, object)
+	}
+	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+
 	// Get part index offset.
 	partIndex, offset, err := xlMeta.getPartIndexOffset(startOffset)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
+
+	fileReader, fileWriter := io.Pipe()
 
 	// Hold a read lock once more which can be released after the following go-routine ends.
 	// We hold RLock once more because the current function would return before the go routine below
@@ -51,9 +59,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 		defer nsMutex.RUnlock(bucket, object)
 		for ; partIndex < len(xlMeta.Parts); partIndex++ {
 			part := xlMeta.Parts[partIndex]
-			r, err := xl.erasureDisk.ReadFile(bucket, pathJoin(object, part.Name), offset, part.Size)
+			r, err := erasure.ReadFile(bucket, pathJoin(object, part.Name), offset, part.Size)
 			if err != nil {
-				fileWriter.CloseWithError(err)
+				fileWriter.CloseWithError(toObjectErr(err, bucket, object))
 				return
 			}
 			// Reset offset to 0 as it would be non-0 only for the first loop if startOffset is non-0.
@@ -65,7 +73,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 				case io.ReadCloser:
 					reader.Close()
 				}
-				fileWriter.CloseWithError(err)
+				fileWriter.CloseWithError(toObjectErr(err, bucket, object))
 				return
 			}
 			// Close the readerCloser that reads multiparts of an object from the xl storage layer.
@@ -189,7 +197,17 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	tempErasureObj := path.Join(tmpMetaPrefix, bucket, object, "object1")
 	tempObj := path.Join(tmpMetaPrefix, bucket, object)
-	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tempErasureObj)
+
+	onlineDisks, higherVersion, err := xl.listOnlineDisks(bucket, object)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+	if diskCount(onlineDisks) < len(xl.storageDisks) {
+		// Increment version only if we have online disks less than configured storage disks.
+		higherVersion++
+	}
+	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+	fileWriter, err := erasure.CreateFile(minioMetaBucket, tempErasureObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -276,6 +294,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Meta = metadata
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime
+	xlMeta.Stat.Version = higherVersion
 	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
 	if err = xl.writeXLMetadata(bucket, object, xlMeta); err != nil {
 		return "", toObjectErr(err, bucket, object)

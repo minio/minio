@@ -69,6 +69,8 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 		}
 		meta["content-type"] = contentType
 	}
+	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.Version = 1
 	xlMeta.Meta = meta
 
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
@@ -123,9 +125,19 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
+	// List all online disks.
+	onlineDisks, higherVersion, err := xl.listOnlineDisks(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+	if diskCount(onlineDisks) < len(xl.storageDisks) {
+		higherVersion++
+	}
+	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
-	fileWriter, err := xl.erasureDisk.CreateFile(minioMetaBucket, tmpPartPath)
+	fileWriter, err := erasure.CreateFile(minioMetaBucket, tmpPartPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 	}
@@ -186,6 +198,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
+	xlMeta.Stat.Version = higherVersion
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
