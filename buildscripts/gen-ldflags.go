@@ -28,10 +28,11 @@ import (
 
 func genLDFlags(version string) string {
 	var ldflagsStr string
-	ldflagsStr = "-X main.minioVersion=" + version + " "
-	ldflagsStr = ldflagsStr + "-X main.minioReleaseTag=" + releaseTag(version) + " "
-	ldflagsStr = ldflagsStr + "-X main.minioCommitID=" + commitID() + " "
-	ldflagsStr = ldflagsStr + "-X main.minioShortCommitID=" + commitID()[:12]
+	ldflagsStr = "-X main.minioVersion=" + version
+	ldflagsStr += " -X main.minioReleaseTag=" + releaseTag(version)
+	ldflagsStr += " -X main.minioCommitID=" + commitID()
+	ldflagsStr += " -X main.minioShortCommitID=" + commitID()[:12]
+	ldflagsStr += " -X main.minioGOPATH=" + os.Getenv("GOPATH")
 	return ldflagsStr
 }
 
