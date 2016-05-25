@@ -269,9 +269,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	err = xl.renameObject(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		if dErr := xl.deleteObject(minioMetaBucket, tempObj); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempObj)
-		}
 		return "", toObjectErr(err, bucket, object)
 	}
 
@@ -300,7 +297,12 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			dErrs[index] = cleanupDir(disk, bucket, object)
+			err := cleanupDir(disk, bucket, object)
+			if err != nil {
+				dErrs[index] = err
+				return
+			}
+			dErrs[index] = nil
 		}(index, disk)
 	}
 
