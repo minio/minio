@@ -18,7 +18,6 @@ package main
 
 import (
 	"math/rand"
-	"path"
 	"sort"
 	"strings"
 	"time"
@@ -34,9 +33,9 @@ type listParams struct {
 
 // Tree walk result carries results of tree walking.
 type treeWalkResult struct {
-	objInfo ObjectInfo
-	err     error
-	end     bool
+	entry string
+	err   error
+	end   bool
 }
 
 // Tree walk notify carries a channel which notifies tree walk
@@ -48,7 +47,7 @@ type treeWalker struct {
 }
 
 // listDir - listDir.
-func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
+func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool, isLeaf func(string, string) bool) (entries []string, err error) {
 	// Count for list errors encountered.
 	var listErrCount = 0
 
@@ -62,7 +61,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 					entries[i] = ""
 					continue
 				}
-				if strings.HasSuffix(entry, slashSeparator) && xl.isObject(bucket, path.Join(prefixDir, entry)) {
+				if strings.HasSuffix(entry, slashSeparator) && isLeaf(bucket, pathJoin(prefixDir, entry)) {
 					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
 			}
@@ -90,24 +89,10 @@ func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
 }
 
 // treeWalkXL walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int) bool {
+func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int, isLeaf func(string, string) bool) bool {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
-
-	// Convert entry to FileInfo
-	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
-		if strings.HasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = path.Join(prefixDir, entry)
-			objInfo.Name += slashSeparator
-			objInfo.IsDir = true
-			return objInfo, nil
-		}
-		// Set the Mode to a "regular" file.
-		return xl.getObjectInfo(bucket, path.Join(prefixDir, entry))
-	}
 
 	var markerBase, markerDir string
 	if marker != "" {
@@ -121,7 +106,7 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 	}
 	entries, err := xl.listDir(bucket, prefixDir, func(entry string) bool {
 		return !strings.HasPrefix(entry, entryPrefixMatch)
-	})
+	}, isLeaf)
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
@@ -166,19 +151,13 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !xl.treeWalkXL(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
+			if !xl.treeWalkXL(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
 				return false
 			}
 			continue
 		}
 		*count--
-		objInfo, err := entryToObjectInfo(entry)
-		if err != nil {
-			// The file got deleted in the interim between ListDir() and StatFile()
-			// Ignore error and continue.
-			continue
-		}
-		if !send(treeWalkResult{objInfo: objInfo}) {
+		if !send(treeWalkResult{entry: pathJoin(prefixDir, entry)}) {
 			return false
 		}
 	}
@@ -186,7 +165,7 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive bool) *treeWalker {
+func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalker {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -223,7 +202,7 @@ func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive boo
 				return false
 			}
 		}
-		xl.treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
+		xl.treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
 	}()
 	return &walkNotify
 }

@@ -11,7 +11,7 @@ func (xl xlObjects) listObjectsXL(bucket, prefix, marker, delimiter string, maxK
 
 	walker := xl.lookupTreeWalkXL(listParams{bucket, recursive, marker, prefix})
 	if walker == nil {
-		walker = xl.startTreeWalkXL(bucket, prefix, marker, recursive)
+		walker = xl.startTreeWalkXL(bucket, prefix, marker, recursive, xl.isObject)
 	}
 	var objInfos []ObjectInfo
 	var eof bool
@@ -31,7 +31,22 @@ func (xl xlObjects) listObjectsXL(bucket, prefix, marker, delimiter string, maxK
 			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		objInfo := walkResult.objInfo
+		entry := walkResult.entry
+		var objInfo ObjectInfo
+		if strings.HasSuffix(entry, slashSeparator) {
+			// Object name needs to be full path.
+			objInfo.Bucket = bucket
+			objInfo.Name = entry
+			objInfo.IsDir = true
+		} else {
+			// Set the Mode to a "regular" file.
+			var err error
+			objInfo, err = xl.getObjectInfo(bucket, entry)
+			if err != nil {
+				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+			}
+		}
+
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
 		if walkResult.end {

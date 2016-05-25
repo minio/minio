@@ -48,7 +48,7 @@ type byInitiatedTime []uploadInfo
 func (t byInitiatedTime) Len() int      { return len(t) }
 func (t byInitiatedTime) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
 func (t byInitiatedTime) Less(i, j int) bool {
-	return t[i].Initiated.After(t[j].Initiated)
+	return t[i].Initiated.Before(t[j].Initiated)
 }
 
 // AddUploadID - adds a new upload id in order of its initiated time.
@@ -257,6 +257,49 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 	return nil
 }
 
+// Returns if the prefix is a multipart upload.
+func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
+	// Create errs and volInfo slices of storageDisks size.
+	var errs = make([]error, len(xl.storageDisks))
+
+	// Allocate a new waitgroup.
+	var wg = &sync.WaitGroup{}
+	for index, disk := range xl.storageDisks {
+		wg.Add(1)
+		// Stat file on all the disks in a routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			_, err := disk.StatFile(bucket, path.Join(prefix, uploadsJSONFile))
+			if err != nil {
+				errs[index] = err
+				return
+			}
+			errs[index] = nil
+		}(index, disk)
+	}
+
+	// Wait for all the Stat operations to finish.
+	wg.Wait()
+
+	var errFileNotFoundCount int
+	for _, err := range errs {
+		if err != nil {
+			if err == errFileNotFound {
+				errFileNotFoundCount++
+				// If we have errors with file not found greater than allowed read
+				// quorum we return err as errFileNotFound.
+				if errFileNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+					return false
+				}
+				continue
+			}
+			errorIf(err, "Unable to access file "+path.Join(bucket, prefix))
+			return false
+		}
+	}
+	return true
+}
+
 // listUploadsInfo - list all uploads info.
 func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
 	disk := xl.getRandomDisk() // Choose a random disk on each attempt.
@@ -272,94 +315,36 @@ func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, er
 	return uploads, nil
 }
 
-// listMetaBucketMultipart - list all objects at a given prefix inside minioMetaBucket.
-func (xl xlObjects) listMetaBucketMultipart(prefixPath string, markerPath string, recursive bool, maxKeys int) (objInfos []ObjectInfo, eof bool, err error) {
-	walker := xl.lookupTreeWalkXL(listParams{minioMetaBucket, recursive, markerPath, prefixPath})
-	if walker == nil {
-		walker = xl.startTreeWalkXL(minioMetaBucket, prefixPath, markerPath, recursive)
+func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int) ([]uploadMetadata, bool, error) {
+	var uploads []uploadMetadata
+	uploadsJSONContent, err := getUploadIDs(bucketName, objectName, xl.getRandomDisk())
+	if err != nil {
+		return nil, false, err
 	}
-
-	// newMaxKeys tracks the size of entries which are going to be
-	// returned back.
-	var newMaxKeys int
-
-	// Following loop gathers and filters out special files inside minio meta volume.
-	for {
-		walkResult, ok := <-walker.ch
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			// File not found or Disk not found is a valid case.
-			if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
-				return nil, true, nil
-			}
-			return nil, false, toObjectErr(walkResult.err, minioMetaBucket, prefixPath)
-		}
-		objInfo := walkResult.objInfo
-		var uploads []uploadInfo
-		if objInfo.IsDir {
-			// List all the entries if fi.Name is a leaf directory, if
-			// fi.Name is not a leaf directory then the resulting
-			// entries are empty.
-			uploads, err = xl.listUploadsInfo(objInfo.Name)
-			if err != nil {
-				return nil, false, err
-			}
-		}
-		if len(uploads) > 0 {
-			for _, upload := range uploads {
-				objInfos = append(objInfos, ObjectInfo{
-					Name:    path.Join(objInfo.Name, upload.UploadID),
-					ModTime: upload.Initiated,
-				})
-				newMaxKeys++
-				// If we have reached the maxKeys, it means we have listed
-				// everything that was requested.
-				if newMaxKeys == maxKeys {
-					break
-				}
-			}
-		} else {
-			// We reach here for a non-recursive case non-leaf entry
-			// OR recursive case with fi.Name.
-			if !objInfo.IsDir { // Do not skip non-recursive case directory entries.
-				// Validate if 'fi.Name' is incomplete multipart.
-				if !strings.HasSuffix(objInfo.Name, xlMetaJSONFile) {
-					continue
-				}
-				objInfo.Name = path.Dir(objInfo.Name)
-			}
-			objInfos = append(objInfos, objInfo)
-			newMaxKeys++
-			// If we have reached the maxKeys, it means we have listed
-			// everything that was requested.
-			if newMaxKeys == maxKeys {
+	index := 0
+	if uploadIDMarker != "" {
+		for ; index < len(uploadsJSONContent.Uploads); index++ {
+			if uploadsJSONContent.Uploads[index].UploadID == uploadIDMarker {
+				// Skip the uploadID as it would already be listed in previous listing.
+				index++
 				break
 			}
 		}
 	}
-
-	if !eof && len(objInfos) != 0 {
-		// EOF has not reached, hence save the walker channel to the map so that the walker go routine
-		// can continue from where it left off for the next list request.
-		lastObjInfo := objInfos[len(objInfos)-1]
-		markerPath = lastObjInfo.Name
-		xl.saveTreeWalkXL(listParams{minioMetaBucket, recursive, markerPath, prefixPath}, walker)
+	for index < len(uploadsJSONContent.Uploads) {
+		uploads = append(uploads, uploadMetadata{
+			Object:    objectName,
+			UploadID:  uploadsJSONContent.Uploads[index].UploadID,
+			Initiated: uploadsJSONContent.Uploads[index].Initiated,
+		})
+		count--
+		index++
+		if count == 0 {
+			break
+		}
 	}
-
-	// Return entries here.
-	return objInfos, eof, nil
+	return uploads, index == len(uploadsJSONContent.Uploads), nil
 }
-
-// FIXME: Currently the code sorts based on keyName/upload-id which is
-// not correct based on the S3 specs. According to s3 specs we are
-// supposed to only lexically sort keyNames and then for keyNames with
-// multiple upload ids should be sorted based on the initiated time.
-// Currently this case is not handled.
 
 // listMultipartUploadsCommon - lists all multipart uploads, common
 // function for both object layers.
@@ -413,9 +398,12 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 
 	result.IsTruncated = true
 	result.MaxUploads = maxUploads
+	result.KeyMarker = keyMarker
+	result.Prefix = prefix
+	result.Delimiter = delimiter
 
 	// Not using path.Join() as it strips off the trailing '/'.
-	multipartPrefixPath := pathJoin(mpartMetaPrefix, pathJoin(bucket, prefix))
+	multipartPrefixPath := pathJoin(mpartMetaPrefix, bucket, prefix)
 	if prefix == "" {
 		// Should have a trailing "/" if prefix is ""
 		// For ex. multipartPrefixPath should be "multipart/bucket/" if prefix is ""
@@ -423,33 +411,81 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 	}
 	multipartMarkerPath := ""
 	if keyMarker != "" {
-		keyMarkerPath := pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
-		multipartMarkerPath = pathJoin(mpartMetaPrefix, keyMarkerPath)
+		multipartMarkerPath = pathJoin(mpartMetaPrefix, bucket, keyMarker)
 	}
-
-	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
-	objInfos, eof, err := xl.listMetaBucketMultipart(multipartPrefixPath, multipartMarkerPath, recursive, maxUploads)
-	if err != nil {
-		return ListMultipartsInfo{}, err
+	var uploads []uploadMetadata
+	var err error
+	var eof bool
+	if uploadIDMarker != "" {
+		uploads, _, err = xl.listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads)
+		if err != nil {
+			return ListMultipartsInfo{}, err
+		}
+		maxUploads = maxUploads - len(uploads)
 	}
-
-	// Loop through all the received files fill in the multiparts result.
-	for _, objInfo := range objInfos {
+	if maxUploads > 0 {
+		walker := xl.lookupTreeWalkXL(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		if walker == nil {
+			walker = xl.startTreeWalkXL(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, xl.isMultipartUpload)
+		}
+		for maxUploads > 0 {
+			walkResult, ok := <-walker.ch
+			if !ok {
+				// Closed channel.
+				eof = true
+				break
+			}
+			// For any walk error return right away.
+			if walkResult.err != nil {
+				// File not found or Disk not found is a valid case.
+				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
+					eof = true
+					break
+				}
+				return ListMultipartsInfo{}, err
+			}
+			entry := strings.TrimPrefix(walkResult.entry, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
+			if strings.HasSuffix(walkResult.entry, slashSeparator) {
+				uploads = append(uploads, uploadMetadata{
+					Object: entry,
+				})
+				maxUploads--
+				if maxUploads == 0 {
+					if walkResult.end {
+						eof = true
+						break
+					}
+				}
+				continue
+			}
+			var tmpUploads []uploadMetadata
+			var end bool
+			uploadIDMarker = ""
+			tmpUploads, end, err = xl.listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads)
+			if err != nil {
+				return ListMultipartsInfo{}, err
+			}
+			uploads = append(uploads, tmpUploads...)
+			maxUploads -= len(tmpUploads)
+			if walkResult.end && end {
+				eof = true
+				break
+			}
+		}
+	}
+	// Loop through all the received uploads fill in the multiparts result.
+	for _, upload := range uploads {
 		var objectName string
 		var uploadID string
-		if objInfo.IsDir {
+		if strings.HasSuffix(upload.Object, slashSeparator) {
 			// All directory entries are common prefixes.
 			uploadID = "" // Upload ids are empty for CommonPrefixes.
-			objectName = strings.TrimPrefix(objInfo.Name, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
+			objectName = upload.Object
 			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
 		} else {
-			uploadID = path.Base(objInfo.Name)
-			objectName = strings.TrimPrefix(path.Dir(objInfo.Name), retainSlash(pathJoin(mpartMetaPrefix, bucket)))
-			result.Uploads = append(result.Uploads, uploadMetadata{
-				Object:    objectName,
-				UploadID:  uploadID,
-				Initiated: objInfo.ModTime,
-			})
+			uploadID = upload.UploadID
+			objectName = upload.Object
+			result.Uploads = append(result.Uploads, upload)
 		}
 		result.NextKeyMarker = objectName
 		result.NextUploadIDMarker = uploadID
