@@ -463,6 +463,9 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
 		}
 		if len(uploadIDs.Uploads) > 0 {
+			if err = updateUploadJSON(bucket, object, uploadIDs, xl.storageDisks...); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
