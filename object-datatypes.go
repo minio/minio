@@ -18,12 +18,16 @@ package main
 
 import "time"
 
+// StorageInfo - represents total capacity of underlying storage.
+type StorageInfo struct {
+	Total int64 // Total disk space.
+	Free  int64 // Free total available disk space.
+}
+
 // BucketInfo - bucket name and create date
 type BucketInfo struct {
 	Name    string
 	Created time.Time
-	Total   int64
-	Free    int64
 }
 
 // ObjectInfo - object info.
