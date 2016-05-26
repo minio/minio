@@ -85,6 +85,7 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err.Error())
 	}
+	// FIXME: enable FS tests after fixing it.
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, singleNodeTestStr, t)
 
