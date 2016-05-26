@@ -47,8 +47,15 @@ type treeWalker struct {
 	timedOut bool
 }
 
-// listDir - listDir.
-func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
+// byObjectName is a collection satisfying sort.Interface.
+type byObjectName []ObjectInfo
+
+func (d byObjectName) Len() int           { return len(d) }
+func (d byObjectName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d byObjectName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
+// listObjectInfos - list objects.
+func (xl xlObjects) listObjectInfos(bucket, prefixDir string, filter func(entry string) bool) (objsInfo []ObjectInfo, err error) {
 	// Count for list errors encountered.
 	var listErrCount = 0
 
@@ -57,23 +64,33 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 		// Choose a random disk on each attempt, do not hit the same disk all the time.
 		randIndex := rand.Intn(len(xl.storageDisks) - 1)
 		disk := xl.storageDisks[randIndex] // Pick a random disk.
+		var entries []string
 		if entries, err = disk.ListDir(bucket, prefixDir); err == nil {
 			// Skip the entries which do not match the filter.
-			for i, entry := range entries {
-				if filter(entry) {
-					entries[i] = ""
-					continue
-				}
-				if strings.HasSuffix(entry, slashSeparator) && xl.isObject(bucket, path.Join(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			for len(entries) > 0 {
+				var entry string
+				entry, entries = entries[0], entries[1:]
+				if !filter(entry) {
+					if strings.HasSuffix(entry, slashSeparator) {
+						var objInfo ObjectInfo
+						objInfo, err = xl.getObjectInfo(bucket, path.Join(prefixDir, entry))
+						if err != nil {
+							if err == errFileNotFound {
+								// Object name needs to be full path.
+								objInfo.Bucket = bucket
+								objInfo.Name = entry
+								objInfo.IsDir = true
+								objsInfo = append(objsInfo, objInfo)
+							}
+							continue
+						}
+						objInfo.Name = strings.TrimSuffix(entry, slashSeparator)
+						objsInfo = append(objsInfo, objInfo)
+					}
 				}
 			}
-			sort.Strings(entries)
-			// Skip the empty strings
-			for len(entries) > 0 && entries[0] == "" {
-				entries = entries[1:]
-			}
-			return entries, nil
+			sort.Sort(byObjectName(objsInfo))
+			return objsInfo, nil
 		}
 		listErrCount++ // Update list error count.
 	}
@@ -96,20 +113,6 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
 
-	// Convert entry to FileInfo
-	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
-		if strings.HasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = path.Join(prefixDir, entry)
-			objInfo.Name += slashSeparator
-			objInfo.IsDir = true
-			return objInfo, nil
-		}
-		// Set the Mode to a "regular" file.
-		return xl.getObjectInfo(bucket, path.Join(prefixDir, entry))
-	}
-
 	var markerBase, markerDir string
 	if marker != "" {
 		// Ex: if marker="four/five.txt", markerDir="four/" markerBase="five.txt"
@@ -120,33 +123,33 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, err := xl.listDir(bucket, prefixDir, func(entry string) bool {
+	objsInfo, err := xl.listObjectInfos(bucket, prefixDir, func(entry string) bool {
 		return !strings.HasPrefix(entry, entryPrefixMatch)
 	})
 	if err != nil {
 		send(treeWalkResult{err: err})
 		return false
 	}
-	if len(entries) == 0 {
+	if len(objsInfo) == 0 {
 		return true
 	}
 
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
-	idx := sort.Search(len(entries), func(i int) bool {
-		return entries[i] >= markerDir
+	idx := sort.Search(len(objsInfo), func(i int) bool {
+		return objsInfo[i].Name >= markerDir
 	})
-	entries = entries[idx:]
-	*count += len(entries)
-	for i, entry := range entries {
-		if i == 0 && markerDir == entry {
+	objsInfo = objsInfo[idx:]
+	*count += len(objsInfo)
+	for i, objInfo := range objsInfo {
+		if i == 0 && markerDir == objInfo.Name {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
 				*count--
 				continue
 			}
-			if recursive && !strings.HasSuffix(entry, slashSeparator) {
+			if recursive && !strings.HasSuffix(objInfo.Name, slashSeparator) {
 				// We should not skip for recursive listing and if markerDir is a directory
 				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
 				// should not be skipped, instead it will need to be treeWalkXL()'ed into.
@@ -157,28 +160,22 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 			}
 		}
 
-		if recursive && strings.HasSuffix(entry, slashSeparator) {
-			// If the entry is a directory, we will need recurse into it.
+		if recursive && strings.HasSuffix(objInfo.Name, slashSeparator) {
+			// If the entry is a directory, we will need to recurse into it.
 			markerArg := ""
-			if entry == markerDir {
-				// We need to pass "five.txt" as marker only if we are
-				// recursing into "four/"
+			if objInfo.Name == markerDir {
+				// We need to pass "five.txt" as marker only if we are recursing into "four/"
 				markerArg = markerBase
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !xl.treeWalkXL(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
+			if !xl.treeWalkXL(bucket, path.Join(prefixDir, objInfo.Name), prefixMatch, markerArg, recursive, send, count) {
 				return false
 			}
 			continue
 		}
 		*count--
-		objInfo, err := entryToObjectInfo(entry)
-		if err != nil {
-			// The file got deleted in the interim between ListDir() and StatFile()
-			// Ignore error and continue.
-			continue
-		}
+		objInfo.Name = pathJoin(prefixDir, objInfo.Name)
 		if !send(treeWalkResult{objInfo: objInfo}) {
 			return false
 		}
