@@ -92,22 +92,16 @@ func (fs fsObjects) newMultipartUploadCommon(bucket string, object string, meta 
 	return uploadID, nil
 }
 
-func isMultipartObject(storage StorageAPI, bucket, prefix string) bool {
-	_, err := storage.StatFile(bucket, path.Join(prefix, fsMetaJSONFile))
-	if err != nil {
-		if err == errFileNotFound {
-			return false
-		}
-		errorIf(err, "Unable to access "+path.Join(prefix, fsMetaJSONFile))
-		return false
-	}
-	return true
+// Returns if the prefix is a multipart upload.
+func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
+	_, err := fs.storage.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
+	return err == nil
 }
 
 // listUploadsInfo - list all uploads info.
 func (fs fsObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
 	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-	uploadIDs, err := getUploadIDs(splitPrefixes[1], splitPrefixes[2], fs.storage)
+	uploadIDs, err := readUploadsJSON(splitPrefixes[1], splitPrefixes[2], fs.storage)
 	if err != nil {
 		if err == errFileNotFound {
 			return []uploadInfo{}, nil
@@ -117,96 +111,6 @@ func (fs fsObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, er
 	uploads = uploadIDs.Uploads
 	return uploads, nil
 }
-
-// listMetaBucketMultipart - list all objects at a given prefix inside minioMetaBucket.
-func (fs fsObjects) listMetaBucketMultipart(prefixPath string, markerPath string, recursive bool, maxKeys int) (fileInfos []FileInfo, eof bool, err error) {
-	walker := fs.lookupTreeWalk(listParams{minioMetaBucket, recursive, markerPath, prefixPath})
-	if walker == nil {
-		walker = fs.startTreeWalk(minioMetaBucket, prefixPath, markerPath, recursive)
-	}
-
-	// newMaxKeys tracks the size of entries which are going to be
-	// returned back.
-	var newMaxKeys int
-
-	// Following loop gathers and filters out special files inside
-	// minio meta volume.
-	for {
-		walkResult, ok := <-walker.ch
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			// File not found or Disk not found is a valid case.
-			if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
-				return nil, true, nil
-			}
-			return nil, false, toObjectErr(walkResult.err, minioMetaBucket, prefixPath)
-		}
-		fileInfo := walkResult.fileInfo
-		var uploads []uploadInfo
-		if fileInfo.Mode.IsDir() {
-			// List all the entries if fi.Name is a leaf directory, if
-			// fi.Name is not a leaf directory then the resulting
-			// entries are empty.
-			uploads, err = fs.listUploadsInfo(fileInfo.Name)
-			if err != nil {
-				return nil, false, err
-			}
-		}
-		if len(uploads) > 0 {
-			for _, upload := range uploads {
-				fileInfos = append(fileInfos, FileInfo{
-					Name:    path.Join(fileInfo.Name, upload.UploadID),
-					ModTime: upload.Initiated,
-				})
-				newMaxKeys++
-				// If we have reached the maxKeys, it means we have listed
-				// everything that was requested.
-				if newMaxKeys == maxKeys {
-					break
-				}
-			}
-		} else {
-			// We reach here for a non-recursive case non-leaf entry
-			// OR recursive case with fi.Name.
-			if !fileInfo.Mode.IsDir() { // Do not skip non-recursive case directory entries.
-				// Validate if 'fi.Name' is incomplete multipart.
-				if !strings.HasSuffix(fileInfo.Name, fsMetaJSONFile) {
-					continue
-				}
-				fileInfo.Name = path.Dir(fileInfo.Name)
-			}
-			fileInfos = append(fileInfos, fileInfo)
-			newMaxKeys++
-			// If we have reached the maxKeys, it means we have listed
-			// everything that was requested.
-			if newMaxKeys == maxKeys {
-				break
-			}
-		}
-	}
-
-	if !eof && len(fileInfos) != 0 {
-		// EOF has not reached, hence save the walker channel to the map so that the walker go routine
-		// can continue from where it left off for the next list request.
-		lastFileInfo := fileInfos[len(fileInfos)-1]
-		markerPath = lastFileInfo.Name
-		fs.saveTreeWalk(listParams{minioMetaBucket, recursive, markerPath, prefixPath}, walker)
-	}
-
-	// Return entries here.
-	return fileInfos, eof, nil
-}
-
-// FIXME: Currently the code sorts based on keyName/upload-id which is
-// not correct based on the S3 specs. According to s3 specs we are
-// supposed to only lexically sort keyNames and then for keyNames with
-// multiple upload ids should be sorted based on the initiated time.
-// Currently this case is not handled.
 
 // listMultipartUploadsCommon - lists all multipart uploads, common function for both object layers.
 func (fs fsObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
@@ -259,9 +163,12 @@ func (fs fsObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 
 	result.IsTruncated = true
 	result.MaxUploads = maxUploads
+	result.KeyMarker = keyMarker
+	result.Prefix = prefix
+	result.Delimiter = delimiter
 
 	// Not using path.Join() as it strips off the trailing '/'.
-	multipartPrefixPath := pathJoin(mpartMetaPrefix, pathJoin(bucket, prefix))
+	multipartPrefixPath := pathJoin(mpartMetaPrefix, bucket, prefix)
 	if prefix == "" {
 		// Should have a trailing "/" if prefix is ""
 		// For ex. multipartPrefixPath should be "multipart/bucket/" if prefix is ""
@@ -269,33 +176,83 @@ func (fs fsObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 	}
 	multipartMarkerPath := ""
 	if keyMarker != "" {
-		keyMarkerPath := pathJoin(pathJoin(bucket, keyMarker), uploadIDMarker)
-		multipartMarkerPath = pathJoin(mpartMetaPrefix, keyMarkerPath)
+		multipartMarkerPath = pathJoin(mpartMetaPrefix, bucket, keyMarker)
 	}
-
-	// List all the multipart files at prefixPath, starting with marker keyMarkerPath.
-	fileInfos, eof, err := fs.listMetaBucketMultipart(multipartPrefixPath, multipartMarkerPath, recursive, maxUploads)
-	if err != nil {
-		return ListMultipartsInfo{}, err
+	var uploads []uploadMetadata
+	var err error
+	var eof bool
+	if uploadIDMarker != "" {
+		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
+		if err != nil {
+			return ListMultipartsInfo{}, err
+		}
+		maxUploads = maxUploads - len(uploads)
 	}
-
-	// Loop through all the received files fill in the multiparts result.
-	for _, fileInfo := range fileInfos {
+	if maxUploads > 0 {
+		walker := fs.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		if walker == nil {
+			walker = fs.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, func(bucket, object string) bool {
+				return fs.isMultipartUpload(bucket, object)
+			})
+		}
+		for maxUploads > 0 {
+			walkResult, ok := <-walker.ch
+			if !ok {
+				// Closed channel.
+				eof = true
+				break
+			}
+			// For any walk error return right away.
+			if walkResult.err != nil {
+				// File not found or Disk not found is a valid case.
+				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
+					eof = true
+					break
+				}
+				return ListMultipartsInfo{}, err
+			}
+			entry := strings.TrimPrefix(walkResult.entry, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
+			if strings.HasSuffix(walkResult.entry, slashSeparator) {
+				uploads = append(uploads, uploadMetadata{
+					Object: entry,
+				})
+				maxUploads--
+				if maxUploads == 0 {
+					if walkResult.end {
+						eof = true
+						break
+					}
+				}
+				continue
+			}
+			var tmpUploads []uploadMetadata
+			var end bool
+			uploadIDMarker = ""
+			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
+			if err != nil {
+				return ListMultipartsInfo{}, err
+			}
+			uploads = append(uploads, tmpUploads...)
+			maxUploads -= len(tmpUploads)
+			if walkResult.end && end {
+				eof = true
+				break
+			}
+		}
+	}
+	// Loop through all the received uploads fill in the multiparts result.
+	for _, upload := range uploads {
 		var objectName string
 		var uploadID string
-		if fileInfo.Mode.IsDir() {
+		if strings.HasSuffix(upload.Object, slashSeparator) {
 			// All directory entries are common prefixes.
 			uploadID = "" // Upload ids are empty for CommonPrefixes.
-			objectName = strings.TrimPrefix(fileInfo.Name, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
+			objectName = upload.Object
 			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
 		} else {
-			uploadID = path.Base(fileInfo.Name)
-			objectName = strings.TrimPrefix(path.Dir(fileInfo.Name), retainSlash(pathJoin(mpartMetaPrefix, bucket)))
-			result.Uploads = append(result.Uploads, uploadMetadata{
-				Object:    objectName,
-				UploadID:  uploadID,
-				Initiated: fileInfo.ModTime,
-			})
+			uploadID = upload.UploadID
+			objectName = upload.Object
+			result.Uploads = append(result.Uploads, upload)
 		}
 		result.NextKeyMarker = objectName
 		result.NextUploadIDMarker = uploadID
@@ -639,13 +596,17 @@ func (fs fsObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadIDs, err := getUploadIDs(bucket, object, fs.storage)
+	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if err == nil {
-		uploadIDIdx := uploadIDs.Index(uploadID)
+		uploadIDIdx := uploadsJSON.Index(uploadID)
 		if uploadIDIdx != -1 {
-			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
+			uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
 		}
-		if len(uploadIDs.Uploads) > 0 {
+		if len(uploadsJSON.Uploads) > 0 {
+			err = updateUploadsJSON(bucket, object, uploadsJSON, fs.storage)
+			if err != nil {
+				return toObjectErr(err, bucket, object)
+			}
 			return nil
 		}
 	}
