@@ -57,7 +57,7 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 		meta = make(map[string]string)
 	}
 
-	xlMeta := xlMetaV1{}
+	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
 	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
 		contentType := "application/octet-stream"
@@ -125,11 +125,18 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	}
+
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+	// Increment version only if we have online disks less than configured storage disks.
 	if diskCount(onlineDisks) < len(xl.storageDisks) {
 		higherVersion++
 	}
@@ -193,21 +200,18 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 		return "", err
 	}
 
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
-	}
-	xlMeta.Stat.Version = higherVersion
-	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
-
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
-	if err = xl.writeXLMetadata(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), xlMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
+
+	// Once part is successfully committed, proceed with updating XL metadata.
+	xlMeta.Stat.Version = higherVersion
+	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
+
+	if err = xl.writeXLMetadata(minioMetaBucket, uploadIDPath, xlMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 	return newMD5Hex, nil
 }
@@ -261,7 +265,7 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	}
 
 	// Only parts with higher part numbers will be listed.
-	partIdx := xlMeta.SearchObjectPart(partNumberMarker)
+	partIdx := xlMeta.ObjectPartIndex(partNumberMarker)
 	parts := xlMeta.Parts
 	if partIdx != -1 {
 		parts = xlMeta.Parts[partIdx+1:]
@@ -349,7 +353,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
-		partIdx := currentXLMeta.SearchObjectPart(part.PartNumber)
+		partIdx := currentXLMeta.ObjectPartIndex(part.PartNumber)
 		if partIdx == -1 {
 			return "", InvalidPart{}
 		}
@@ -414,7 +418,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadIDs, err := getUploadIDs(bucket, object, xl.storageDisks...)
 	if err == nil {
-		uploadIDIdx := uploadIDs.SearchUploadID(uploadID)
+		uploadIDIdx := uploadIDs.Index(uploadID)
 		if uploadIDIdx != -1 {
 			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
 		}
@@ -435,8 +439,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	return s3MD5, nil
 }
 
-// abortMultipartUploadCommon - aborts a multipart upload, common
-// function used by both object layers.
+// abortMultipartUploadCommon - aborts a multipart upload, common function used by both object layers.
 func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -465,7 +468,7 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadIDs, err := getUploadIDs(bucket, object, xl.storageDisks...)
 	if err == nil {
-		uploadIDIdx := uploadIDs.SearchUploadID(uploadID)
+		uploadIDIdx := uploadIDs.Index(uploadID)
 		if uploadIDIdx != -1 {
 			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
 		}

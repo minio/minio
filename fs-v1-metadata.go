@@ -44,28 +44,42 @@ func (m fsMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
 	return int64(p), err
 }
 
-// SearchObjectPart - search object part name and etag.
-func (m fsMetaV1) SearchObjectPart(number int) int {
+// ObjectPartIndex - returns the index of matching object part number.
+func (m fsMetaV1) ObjectPartIndex(partNumber int) (partIndex int) {
 	for i, part := range m.Parts {
-		if number == part.Number {
-			return i
+		if partNumber == part.Number {
+			partIndex = i
+			return partIndex
 		}
 	}
 	return -1
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *fsMetaV1) AddObjectPart(number int, name string, etag string, size int64) {
-	m.Parts = append(m.Parts, objectPartInfo{
-		Number: number,
-		Name:   name,
-		ETag:   etag,
-		Size:   size,
-	})
+func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag string, partSize int64) {
+	partInfo := objectPartInfo{
+		Number: partNumber,
+		Name:   partName,
+		ETag:   partETag,
+		Size:   partSize,
+	}
+
+	// Update part info if it already exists.
+	for i, part := range m.Parts {
+		if partNumber == part.Number {
+			m.Parts[i] = partInfo
+			return
+		}
+	}
+
+	// Proceed to include new part info.
+	m.Parts = append(m.Parts, partInfo)
+
+	// Parts in fsMeta should be in sorted order by part number.
 	sort.Sort(byPartNumber(m.Parts))
 }
 
-// readFSMetadata - read `fs.json`.
+// readFSMetadata - returns the object metadata `fs.json` content.
 func (fs fsObjects) readFSMetadata(bucket, object string) (fsMeta fsMetaV1, err error) {
 	r, err := fs.storage.ReadFile(bucket, path.Join(object, fsMetaJSONFile), int64(0))
 	if err != nil {
@@ -79,10 +93,17 @@ func (fs fsObjects) readFSMetadata(bucket, object string) (fsMeta fsMetaV1, err 
 	return fsMeta, nil
 }
 
-// writeFSMetadata - write `fs.json`.
-func (fs fsObjects) writeFSMetadata(bucket, prefix string, fsMeta fsMetaV1) error {
-	// Initialize metadata map, save all erasure related metadata.
+// newFSMetaV1 - initializes new fsMetaV1.
+func newFSMetaV1() (fsMeta fsMetaV1) {
+	fsMeta = fsMetaV1{}
+	fsMeta.Version = "1"
+	fsMeta.Format = "fs"
 	fsMeta.Minio.Release = minioReleaseTag
+	return fsMeta
+}
+
+// writeFSMetadata - writes `fs.json` metadata.
+func (fs fsObjects) writeFSMetadata(bucket, prefix string, fsMeta fsMetaV1) error {
 	w, err := fs.storage.CreateFile(bucket, path.Join(prefix, fsMetaJSONFile))
 	if err != nil {
 		return err

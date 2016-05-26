@@ -60,7 +60,8 @@ func (u *uploadsV1) AddUploadID(uploadID string, initiated time.Time) {
 	sort.Sort(byInitiatedTime(u.Uploads))
 }
 
-func (u uploadsV1) SearchUploadID(uploadID string) int {
+// Index - returns the index of matching the upload id.
+func (u uploadsV1) Index(uploadID string) int {
 	for i, u := range u.Uploads {
 		if u.UploadID == uploadID {
 			return i
@@ -90,7 +91,7 @@ func (u uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
 	return int64(m), err
 }
 
-// getUploadIDs - get saved upload id's.
+// getUploadIDs - get all the saved upload id's.
 func getUploadIDs(bucket, object string, storageDisks ...StorageAPI) (uploadIDs uploadsV1, err error) {
 	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	var errs = make([]error, len(storageDisks))
@@ -258,7 +259,7 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 
 // listUploadsInfo - list all uploads info.
 func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
-	disk := xl.getRandomDisk()
+	disk := xl.getRandomDisk() // Choose a random disk on each attempt.
 	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
 	uploadIDs, err := getUploadIDs(splitPrefixes[1], splitPrefixes[2], disk)
 	if err != nil {
