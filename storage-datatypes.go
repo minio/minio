@@ -25,9 +25,6 @@ import (
 type VolInfo struct {
 	Name    string
 	Created time.Time
-	Total   int64
-	Free    int64
-	FSType  string
 }
 
 // FileInfo - file stat information.

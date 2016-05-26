@@ -25,29 +25,31 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
 // fsObjects - Implements fs object layer.
 type fsObjects struct {
 	storage            StorageAPI
+	physicalDisk       string
 	listObjectMap      map[listParams][]*treeWalkerFS
 	listObjectMapMutex *sync.Mutex
 }
 
 // newFSObjects - initialize new fs object layer.
-func newFSObjects(exportPath string) (ObjectLayer, error) {
+func newFSObjects(disk string) (ObjectLayer, error) {
 	var storage StorageAPI
 	var err error
-	if !strings.ContainsRune(exportPath, ':') || filepath.VolumeName(exportPath) != "" {
+	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
 		// Initialize filesystem storage API.
-		storage, err = newPosix(exportPath)
+		storage, err = newPosix(disk)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Initialize rpc client storage API.
-		storage, err = newRPCClient(exportPath)
+		storage, err = newRPCClient(disk)
 		if err != nil {
 			return nil, err
 		}
@@ -60,9 +62,20 @@ func newFSObjects(exportPath string) (ObjectLayer, error) {
 	// Return successfully initialized object layer.
 	return fsObjects{
 		storage:            storage,
+		physicalDisk:       disk,
 		listObjectMap:      make(map[listParams][]*treeWalkerFS),
 		listObjectMapMutex: &sync.Mutex{},
 	}, nil
+}
+
+// StorageInfo - returns underlying storage statistics.
+func (fs fsObjects) StorageInfo() StorageInfo {
+	info, err := disk.GetInfo(fs.physicalDisk)
+	fatalIf(err, "Unable to get disk info "+fs.physicalDisk)
+	return StorageInfo{
+		Total: info.Total,
+		Free:  info.Free,
+	}
 }
 
 /// Bucket operations
@@ -92,8 +105,6 @@ func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	return BucketInfo{
 		Name:    bucket,
 		Created: vi.Created,
-		Total:   vi.Total,
-		Free:    vi.Free,
 	}, nil
 }
 
@@ -113,8 +124,6 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name:    vol.Name,
 			Created: vol.Created,
-			Total:   vol.Total,
-			Free:    vol.Free,
 		})
 	}
 	sort.Sort(byBucketName(bucketInfos))

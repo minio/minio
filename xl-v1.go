@@ -20,8 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 const (
@@ -33,6 +36,7 @@ const (
 // xlObjects - Implements fs object layer.
 type xlObjects struct {
 	storageDisks       []StorageAPI
+	physicalDisks      []string
 	dataBlocks         int
 	parityBlocks       int
 	readQuorum         int
@@ -147,6 +151,7 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 
 	xl := xlObjects{
 		storageDisks:       newPosixDisks,
+		physicalDisks:      disks,
 		dataBlocks:         dataBlocks,
 		parityBlocks:       parityBlocks,
 		listObjectMap:      make(map[listParams][]*treeWalker),
@@ -167,4 +172,37 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return xl, nil
+}
+
+// byDiskTotal is a collection satisfying sort.Interface.
+type byDiskTotal []disk.Info
+
+func (d byDiskTotal) Len() int      { return len(d) }
+func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
+func (d byDiskTotal) Less(i, j int) bool {
+	return d[i].Total < d[j].Total
+}
+
+// StorageInfo - returns underlying storage statistics.
+func (xl xlObjects) StorageInfo() StorageInfo {
+	var disksInfo []disk.Info
+	for _, diskPath := range xl.physicalDisks {
+		info, err := disk.GetInfo(diskPath)
+		if err != nil {
+			errorIf(err, "Unable to fetch disk info for "+diskPath)
+			continue
+		}
+		disksInfo = append(disksInfo, info)
+	}
+
+	// Sort so that the first element is the smallest.
+	sort.Sort(byDiskTotal(disksInfo))
+
+	// Return calculated storage info, choose the lowest Total and
+	// Free as the total aggregated values. Total capacity is always
+	// the multiple of smallest disk among the disk list.
+	return StorageInfo{
+		Total: disksInfo[0].Total * int64(len(xl.storageDisks)),
+		Free:  disksInfo[0].Free * int64(len(xl.storageDisks)),
+	}
 }

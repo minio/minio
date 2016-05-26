@@ -20,6 +20,9 @@ import "io"
 
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
+	// Storage operations.
+	StorageInfo() StorageInfo
+
 	// Bucket operations.
 	MakeBucket(bucket string) error
 	GetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
