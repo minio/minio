@@ -63,9 +63,8 @@ func (fs fsObjects) newMultipartUploadCommon(bucket string, object string, meta 
 		meta = make(map[string]string)
 	}
 
-	fsMeta := fsMetaV1{}
-	fsMeta.Format = "fs"
-	fsMeta.Version = "1"
+	// Initialize `fs.json` values.
+	fsMeta := newFSMetaV1()
 
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
@@ -454,7 +453,7 @@ func (fs fsObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 	// Only parts with higher part numbers will be listed.
-	partIdx := fsMeta.SearchObjectPart(partNumberMarker)
+	partIdx := fsMeta.ObjectPartIndex(partNumberMarker)
 	parts := fsMeta.Parts
 	if partIdx != -1 {
 		parts = fsMeta.Parts[partIdx+1:]
@@ -642,7 +641,7 @@ func (fs fsObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadIDs, err := getUploadIDs(bucket, object, fs.storage)
 	if err == nil {
-		uploadIDIdx := uploadIDs.SearchUploadID(uploadID)
+		uploadIDIdx := uploadIDs.Index(uploadID)
 		if uploadIDIdx != -1 {
 			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
 		}

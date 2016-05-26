@@ -16,11 +16,7 @@
 
 package main
 
-import (
-	"errors"
-
-	"github.com/klauspost/reedsolomon"
-)
+import "github.com/klauspost/reedsolomon"
 
 // erasure storage layer.
 type erasure struct {
@@ -29,9 +25,6 @@ type erasure struct {
 	ParityBlocks int
 	storageDisks []StorageAPI
 }
-
-// errUnexpected - returned for any unexpected error.
-var errUnexpected = errors.New("Unexpected error - please report at https://github.com/minio/minio/issues")
 
 // newErasure instantiate a new erasure.
 func newErasure(disks []StorageAPI) *erasure {

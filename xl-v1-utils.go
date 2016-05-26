@@ -73,8 +73,8 @@ func (xl xlObjects) statPart(bucket, objectPart string) (fileInfo FileInfo, err 
 
 	// Return the first success entry based on the selected random disk.
 	for xlJSONErrCount < len(xl.storageDisks) {
-		// Choose a random disk on each attempt, do not hit the same disk all the time.
-		disk := xl.getRandomDisk() // Pick a random disk.
+		// Choose a random disk on each attempt.
+		disk := xl.getRandomDisk()
 		fileInfo, err = disk.StatFile(bucket, objectPart)
 		if err == nil {
 			return fileInfo, nil

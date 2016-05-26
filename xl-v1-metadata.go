@@ -100,63 +100,73 @@ func (t byPartNumber) Len() int           { return len(t) }
 func (t byPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t byPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
-// SearchObjectPart - searches for part name and etag, returns the
-// index if found.
-func (m xlMetaV1) SearchObjectPart(number int) int {
+// ObjectPartIndex - returns the index of matching object part number.
+func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
 	for i, part := range m.Parts {
-		if number == part.Number {
-			return i
+		if partNumber == part.Number {
+			index = i
+			return index
 		}
 	}
 	return -1
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(number int, name string, etag string, size int64) {
+func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag string, partSize int64) {
 	partInfo := objectPartInfo{
-		Number: number,
-		Name:   name,
-		ETag:   etag,
-		Size:   size,
+		Number: partNumber,
+		Name:   partName,
+		ETag:   partETag,
+		Size:   partSize,
 	}
+
+	// Update part info if it already exists.
 	for i, part := range m.Parts {
-		if number == part.Number {
+		if partNumber == part.Number {
 			m.Parts[i] = partInfo
 			return
 		}
 	}
+
+	// Proceed to include new part info.
 	m.Parts = append(m.Parts, partInfo)
+
+	// Parts in xlMeta should be in sorted order by part number.
 	sort.Sort(byPartNumber(m.Parts))
 }
 
-// getPartIndexOffset - given an offset for the whole object, return the part and offset in that part.
-func (m xlMetaV1) getPartIndexOffset(offset int64) (partIndex int, partOffset int64, err error) {
+// objectToPartOffset - translate offset of an object to offset of its individual part.
+func (m xlMetaV1) objectToPartOffset(offset int64) (partIndex int, partOffset int64, err error) {
 	partOffset = offset
+	// Seek until object offset maps to a particular part offset.
 	for i, part := range m.Parts {
 		partIndex = i
+		// Last part can be of '0' bytes, treat it specially and
+		// return right here.
 		if part.Size == 0 {
 			return partIndex, partOffset, nil
 		}
+		// Offset is smaller than size we have reached the proper part offset.
 		if partOffset < part.Size {
 			return partIndex, partOffset, nil
 		}
+		// Continue to towards the next part.
 		partOffset -= part.Size
 	}
-	// Offset beyond the size of the object
-	err = errUnexpected
-	return 0, 0, err
+	// Offset beyond the size of the object return InvalidRange.
+	return 0, 0, InvalidRange{}
 }
 
-// readXLMetadata - read xl metadata.
+// readXLMetadata - returns the object metadata `xl.json` content from
+// one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
 	// Count for errors encountered.
 	var xlJSONErrCount = 0
 
-	// Return the first success entry based on the selected random disk.
+	// Return the first successful lookup from a random list of disks.
 	for xlJSONErrCount < len(xl.storageDisks) {
 		var r io.ReadCloser
-		// Choose a random disk on each attempt, do not hit the same disk all the time.
-		disk := xl.getRandomDisk() // Pick a random disk.
+		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
 		r, err = disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0))
 		if err == nil {
 			defer r.Close()
@@ -170,23 +180,29 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	return xlMetaV1{}, err
 }
 
-// writeXLJson - write `xl.json` on all disks in order.
-func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
-	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(xl.storageDisks))
-
-	// Initialize metadata map, save all erasure related metadata.
+// newXLMetaV1 - initializes new xlMetaV1.
+func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
+	xlMeta = xlMetaV1{}
 	xlMeta.Version = "1"
 	xlMeta.Format = "xl"
 	xlMeta.Minio.Release = minioReleaseTag
 	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
-	xlMeta.Erasure.DataBlocks = xl.dataBlocks
-	xlMeta.Erasure.ParityBlocks = xl.parityBlocks
+	xlMeta.Erasure.DataBlocks = dataBlocks
+	xlMeta.Erasure.ParityBlocks = parityBlocks
 	xlMeta.Erasure.BlockSize = erasureBlockSize
-	xlMeta.Erasure.Distribution = xl.getDiskDistribution()
+	xlMeta.Erasure.Distribution = randErasureDistribution(dataBlocks + parityBlocks)
+	return xlMeta
+}
 
+// writeXLMetadata - write `xl.json` on all disks in order.
+func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
+	var wg = &sync.WaitGroup{}
+	var mErrs = make([]error, len(xl.storageDisks))
+
+	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
 		wg.Add(1)
+		// Write `xl.json` in a routine.
 		go func(index int, disk StorageAPI, metadata xlMetaV1) {
 			defer wg.Done()
 
@@ -197,8 +213,10 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 				return
 			}
 
-			// Save the order.
+			// Save the disk order index.
 			metadata.Erasure.Index = index + 1
+
+			// Marshal metadata to the writer.
 			_, mErr = metadata.WriteTo(metaWriter)
 			if mErr != nil {
 				if mErr = safeCloseAndRemove(metaWriter); mErr != nil {
@@ -208,6 +226,7 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 				mErrs[index] = mErr
 				return
 			}
+			// Verify if close fails with an error.
 			if mErr = metaWriter.Close(); mErr != nil {
 				if mErr = safeCloseAndRemove(metaWriter); mErr != nil {
 					mErrs[index] = mErr
@@ -223,7 +242,6 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	// Wait for all the routines.
 	wg.Wait()
 
-	// FIXME: check for quorum.
 	// Return the first error.
 	for _, err := range mErrs {
 		if err == nil {
@@ -234,11 +252,18 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	return nil
 }
 
-// getDiskDistribution - get disk distribution.
-func (xl xlObjects) getDiskDistribution() []int {
-	var distribution = make([]int, len(xl.storageDisks))
-	for index := range xl.storageDisks {
-		distribution[index] = index + 1
+// randErasureDistribution - uses Knuth Fisher-Yates shuffle algorithm.
+func randErasureDistribution(numBlocks int) []int {
+	distribution := make([]int, numBlocks)
+	for i := 0; i < numBlocks; i++ {
+		distribution[i] = i + 1
 	}
+	/*
+		for i := 0; i < numBlocks; i++ {
+			// Choose index uniformly in [i, numBlocks-1]
+			r := i + rand.Intn(numBlocks-i)
+			distribution[r], distribution[i] = distribution[i], distribution[r]
+		}
+	*/
 	return distribution
 }
