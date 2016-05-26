@@ -202,15 +202,6 @@ func (s fsStorage) MakeVol(volume string) (err error) {
 
 // ListVols - list volumes.
 func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
-	// Get disk info to be populated for VolInfo.
-	var diskInfo disk.Info
-	diskInfo, err = disk.GetInfo(s.diskPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errDiskNotFound
-		}
-		return nil, err
-	}
 	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
 		return nil, err
@@ -219,9 +210,6 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 		volInfo := VolInfo{
 			Name:    vol.Name,
 			Created: vol.Created,
-			Total:   diskInfo.Total,
-			Free:    diskInfo.Free,
-			FSType:  diskInfo.FSType,
 		}
 		volsInfo[i] = volInfo
 	}
@@ -244,24 +232,12 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 		}
 		return VolInfo{}, err
 	}
-	// Get disk info, to be returned back along with volume info.
-	var diskInfo disk.Info
-	diskInfo, err = disk.GetInfo(s.diskPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return VolInfo{}, errDiskNotFound
-		}
-		return VolInfo{}, err
-	}
 	// As os.Stat() doesn't carry other than ModTime(), use ModTime()
 	// as CreatedTime.
 	createdTime := st.ModTime()
 	return VolInfo{
 		Name:    volume,
 		Created: createdTime,
-		Free:    diskInfo.Free,
-		Total:   diskInfo.Total,
-		FSType:  diskInfo.FSType,
 	}, nil
 }
 
