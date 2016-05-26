@@ -416,14 +416,14 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadIDs, err := getUploadIDs(bucket, object, xl.storageDisks...)
+	uploadsJSON, err := readUploadsJSON(bucket, object, xl.storageDisks...)
 	if err == nil {
-		uploadIDIdx := uploadIDs.Index(uploadID)
+		uploadIDIdx := uploadsJSON.Index(uploadID)
 		if uploadIDIdx != -1 {
-			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
+			uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
 		}
-		if len(uploadIDs.Uploads) > 0 {
-			if err = updateUploadJSON(bucket, object, uploadIDs, xl.storageDisks...); err != nil {
+		if len(uploadsJSON.Uploads) > 0 {
+			if err = updateUploadsJSON(bucket, object, uploadsJSON, xl.storageDisks...); err != nil {
 				return "", err
 			}
 			return s3MD5, nil
@@ -461,20 +461,21 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 
 	// Cleanup all uploaded parts.
 	if err := cleanupUploadedParts(bucket, object, uploadID, xl.storageDisks...); err != nil {
-		return err
+		return toObjectErr(err, bucket, object)
 	}
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadIDs, err := getUploadIDs(bucket, object, xl.storageDisks...)
+	uploadsJSON, err := readUploadsJSON(bucket, object, xl.storageDisks...)
 	if err == nil {
-		uploadIDIdx := uploadIDs.Index(uploadID)
+		uploadIDIdx := uploadsJSON.Index(uploadID)
 		if uploadIDIdx != -1 {
-			uploadIDs.Uploads = append(uploadIDs.Uploads[:uploadIDIdx], uploadIDs.Uploads[uploadIDIdx+1:]...)
+			uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
 		}
-		if len(uploadIDs.Uploads) > 0 {
-			if err = updateUploadJSON(bucket, object, uploadIDs, xl.storageDisks...); err != nil {
-				return err
+		if len(uploadsJSON.Uploads) > 0 {
+			err = updateUploadsJSON(bucket, object, uploadsJSON, xl.storageDisks...)
+			if err != nil {
+				return toObjectErr(err, bucket, object)
 			}
 			return nil
 		}

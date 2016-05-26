@@ -91,15 +91,17 @@ func (u uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
 	return int64(m), err
 }
 
-// getUploadIDs - get all the saved upload id's.
-func getUploadIDs(bucket, object string, storageDisks ...StorageAPI) (uploadIDs uploadsV1, err error) {
+// readUploadsJSON - get all the saved uploads JSON.
+func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadIDs uploadsV1, err error) {
 	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	var errs = make([]error, len(storageDisks))
 	var uploads = make([]uploadsV1, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 
+	// Read `uploads.json` from all disks.
 	for index, disk := range storageDisks {
 		wg.Add(1)
+		// Read `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			r, rErr := disk.ReadFile(minioMetaBucket, uploadJSONPath, int64(0))
@@ -116,8 +118,11 @@ func getUploadIDs(bucket, object string, storageDisks ...StorageAPI) (uploadIDs 
 			errs[index] = nil
 		}(index, disk)
 	}
+
+	// Wait for all the routines.
 	wg.Wait()
 
+	// Return for first error.
 	for _, err = range errs {
 		if err != nil {
 			return uploadsV1{}, err
@@ -128,13 +133,16 @@ func getUploadIDs(bucket, object string, storageDisks ...StorageAPI) (uploadIDs 
 	return uploads[0], nil
 }
 
-func updateUploadJSON(bucket, object string, uploadIDs uploadsV1, storageDisks ...StorageAPI) error {
+// uploadUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
+func updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1, storageDisks ...StorageAPI) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 
+	// Update `uploads.json` for all the disks.
 	for index, disk := range storageDisks {
 		wg.Add(1)
+		// Update `uploads.json` in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			w, wErr := disk.CreateFile(minioMetaBucket, uploadsPath)
@@ -142,7 +150,7 @@ func updateUploadJSON(bucket, object string, uploadIDs uploadsV1, storageDisks .
 				errs[index] = wErr
 				return
 			}
-			_, wErr = uploadIDs.WriteTo(w)
+			_, wErr = uploadsJSON.WriteTo(w)
 			if wErr != nil {
 				errs[index] = wErr
 				return
@@ -158,8 +166,10 @@ func updateUploadJSON(bucket, object string, uploadIDs uploadsV1, storageDisks .
 		}(index, disk)
 	}
 
+	// Wait for all the routines to finish updating `uploads.json`
 	wg.Wait()
 
+	// Return for first error.
 	for _, err := range errs {
 		if err != nil {
 			return err
@@ -169,24 +179,44 @@ func updateUploadJSON(bucket, object string, uploadIDs uploadsV1, storageDisks .
 	return nil
 }
 
+// newUploadsV1 - initialize new uploads v1.
+func newUploadsV1(format string) uploadsV1 {
+	uploadIDs := uploadsV1{}
+	uploadIDs.Version = "1"
+	uploadIDs.Format = format
+	return uploadIDs
+}
+
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
-func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, storageDisks ...StorageAPI) error {
+func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, storageDisks ...StorageAPI) (err error) {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadsJSONFile)
 
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 
-	uploadIDs, err := getUploadIDs(bucket, object, storageDisks...)
-	if err != nil && err != errFileNotFound {
-		return err
+	var uploadsJSON uploadsV1
+	uploadsJSON, err = readUploadsJSON(bucket, object, storageDisks...)
+	if err != nil {
+		// For any other errors.
+		if err != errFileNotFound {
+			return err
+		}
+		if len(storageDisks) == 1 {
+			// Set uploads format to `fs` for single disk.
+			uploadsJSON = newUploadsV1("fs")
+		} else {
+			// Set uploads format to `xl` otherwise.
+			uploadsJSON = newUploadsV1("xl")
+		}
 	}
-	uploadIDs.Version = "1"
-	uploadIDs.Format = "xl"
-	uploadIDs.AddUploadID(uploadID, initiated)
+	// Add a new upload id.
+	uploadsJSON.AddUploadID(uploadID, initiated)
 
+	// Update `uploads.json` on all disks.
 	for index, disk := range storageDisks {
 		wg.Add(1)
+		// Update `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			w, wErr := disk.CreateFile(minioMetaBucket, tmpUploadsPath)
@@ -194,7 +224,7 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 				errs[index] = wErr
 				return
 			}
-			_, wErr = uploadIDs.WriteTo(w)
+			_, wErr = uploadsJSON.WriteTo(w)
 			if wErr != nil {
 				errs[index] = wErr
 				return
@@ -220,8 +250,10 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 		}(index, disk)
 	}
 
+	// Wait for all the writes to finish.
 	wg.Wait()
 
+	// Return for first error encountered.
 	for _, err = range errs {
 		if err != nil {
 			return err
@@ -235,11 +267,17 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...StorageAPI) error {
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
+
+	// Construct uploadIDPath.
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+
+	// Cleanup uploadID for all disks.
 	for index, disk := range storageDisks {
 		wg.Add(1)
+		// Cleanup each uploadID in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			err := cleanupDir(disk, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
+			err := cleanupDir(disk, minioMetaBucket, uploadIDPath)
 			if err != nil {
 				errs[index] = err
 				return
@@ -247,14 +285,51 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 			errs[index] = nil
 		}(index, disk)
 	}
+
+	// Wait for all the cleanups to finish.
 	wg.Wait()
 
+	// Return first error.
 	for _, err := range errs {
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// listMultipartUploadIDs - list all the upload ids from a marker up to 'count'.
+func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]uploadMetadata, bool, error) {
+	var uploads []uploadMetadata
+	// Read `uploads.json`.
+	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)
+	if err != nil {
+		return nil, false, err
+	}
+	index := 0
+	if uploadIDMarker != "" {
+		for ; index < len(uploadsJSON.Uploads); index++ {
+			if uploadsJSON.Uploads[index].UploadID == uploadIDMarker {
+				// Skip the uploadID as it would already be listed in previous listing.
+				index++
+				break
+			}
+		}
+	}
+	for index < len(uploadsJSON.Uploads) {
+		uploads = append(uploads, uploadMetadata{
+			Object:    objectName,
+			UploadID:  uploadsJSON.Uploads[index].UploadID,
+			Initiated: uploadsJSON.Uploads[index].Initiated,
+		})
+		count--
+		index++
+		if count == 0 {
+			break
+		}
+	}
+	end := (index == len(uploadsJSON.Uploads))
+	return uploads, end, nil
 }
 
 // Returns if the prefix is a multipart upload.
@@ -265,49 +340,18 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 }
 
 // listUploadsInfo - list all uploads info.
-func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
+func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo, err error) {
 	disk := xl.getRandomDisk() // Choose a random disk on each attempt.
 	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-	uploadIDs, err := getUploadIDs(splitPrefixes[1], splitPrefixes[2], disk)
+	uploadsJSON, err := readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
 	if err != nil {
 		if err == errFileNotFound {
 			return []uploadInfo{}, nil
 		}
 		return nil, err
 	}
-	uploads = uploadIDs.Uploads
-	return uploads, nil
-}
-
-func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int) ([]uploadMetadata, bool, error) {
-	var uploads []uploadMetadata
-	uploadsJSONContent, err := getUploadIDs(bucketName, objectName, xl.getRandomDisk())
-	if err != nil {
-		return nil, false, err
-	}
-	index := 0
-	if uploadIDMarker != "" {
-		for ; index < len(uploadsJSONContent.Uploads); index++ {
-			if uploadsJSONContent.Uploads[index].UploadID == uploadIDMarker {
-				// Skip the uploadID as it would already be listed in previous listing.
-				index++
-				break
-			}
-		}
-	}
-	for index < len(uploadsJSONContent.Uploads) {
-		uploads = append(uploads, uploadMetadata{
-			Object:    objectName,
-			UploadID:  uploadsJSONContent.Uploads[index].UploadID,
-			Initiated: uploadsJSONContent.Uploads[index].Initiated,
-		})
-		count--
-		index++
-		if count == 0 {
-			break
-		}
-	}
-	return uploads, index == len(uploadsJSONContent.Uploads), nil
+	uploadsInfo = uploadsJSON.Uploads
+	return uploadsInfo, nil
 }
 
 // listMultipartUploadsCommon - lists all multipart uploads, common
@@ -381,7 +425,7 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		uploads, _, err = xl.listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads)
+		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, xl.getRandomDisk())
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -422,15 +466,15 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 				}
 				continue
 			}
-			var tmpUploads []uploadMetadata
+			var newUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
-			tmpUploads, end, err = xl.listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads)
+			newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, xl.getRandomDisk())
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
-			uploads = append(uploads, tmpUploads...)
-			maxUploads -= len(tmpUploads)
+			uploads = append(uploads, newUploads...)
+			maxUploads -= len(newUploads)
 			if walkResult.end && end {
 				eof = true
 				break
