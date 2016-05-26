@@ -352,18 +352,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 			},
 		},
 		// listMultipartResults - 2.
-		// Used to check that the result produces only one output for the 4 parts uploaded in cases 1-4 of createPartCases above.
+		// Used to check that the result produces if keyMarker is set to the only available object.
 		// `KeyMarker` is set.
 		// ListMultipartUploads doesn't list the parts.
 		{
 			MaxUploads: 100,
-			KeyMarker:  "kin",
-			Uploads: []uploadMetadata{
-				{
-					Object:   objectNames[0],
-					UploadID: uploadIDs[0],
-				},
-			},
+			KeyMarker:  "minio-object-1.txt",
 		},
 		// listMultipartResults - 3.
 		// `KeyMarker` is set, no uploadMetadata expected.
@@ -432,11 +426,17 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// listMultipartResults - 9.
 		// `KeyMarker` is set. It contains part of the objectname as KeyPrefix.
 		// `KeyMarker` is set equal to the object name in the result.
-		// Expecting the result to skip the `KeyMarker` entry.
+		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
 			KeyMarker:   "minio-object",
 			IsTruncated: false,
+			Uploads: []uploadMetadata{
+				{
+					Object:   objectNames[0],
+					UploadID: uploadIDs[0],
+				},
+			},
 		},
 		// listMultipartResults - 10.
 		// Prefix is set. It is set equal to the object name.
@@ -444,7 +444,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
-			Prefix:      "minio-object",
+			Prefix:      "minio-object-1.txt",
 			IsTruncated: false,
 			Uploads: []uploadMetadata{
 				{
@@ -495,7 +495,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// listMultipartResults - 14.
 		// `Prefix` is set. It doesn't contain object name as its preifx.
 		// MaxUploads is set more than number of meta data entries in the result.
-		// Expecting no `Uploads` metadata.
+		// Expecting the result to contain 0 uploads and isTruncated to false.
 		{
 			MaxUploads:  2,
 			Prefix:      "Asia",
@@ -545,6 +545,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Will be used to list on bucketNames[1].
 		{
 			MaxUploads:     100,
+			KeyMarker:      "minio-object-1.txt",
 			UploadIDMarker: uploadIDs[1],
 			IsTruncated:    false,
 			Uploads: []uploadMetadata{
@@ -566,6 +567,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Will be used to list on bucketNames[1].
 		{
 			MaxUploads:     100,
+			KeyMarker:      "minio-object-1.txt",
 			UploadIDMarker: uploadIDs[2],
 			IsTruncated:    false,
 			Uploads: []uploadMetadata{
@@ -611,10 +613,6 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
-				},
-				{
-					Object:   objectNames[0],
-					UploadID: uploadIDs[2],
 				},
 			},
 		},
@@ -687,9 +685,10 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Will be used to list on bucketNames[1].
 		{
 			MaxUploads:     10,
+			KeyMarker:      "minio-object-1.txt",
 			IsTruncated:    false,
-			Prefix:         "minio",
-			UploadIDMarker: uploadIDs[0],
+			Prefix:         "min",
+			UploadIDMarker: uploadIDs[1],
 			Uploads: []uploadMetadata{
 				{
 					Object:   objectNames[0],
@@ -972,7 +971,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Test case with multiple parts for a single uploadID (Test number 13).
 		{bucketNames[0], "", "", "", "", 100, listMultipartResults[0], nil, true},
 		// Test with a KeyMarker (Test number 14-17).
-		{bucketNames[0], "", "kin", "", "", 100, listMultipartResults[1], nil, true},
+		{bucketNames[0], "", "minio-object-1.txt", "", "", 100, listMultipartResults[1], nil, true},
 		{bucketNames[0], "", "orange", "", "", 100, listMultipartResults[2], nil, true},
 		{bucketNames[0], "", "orange", "", "", 1, listMultipartResults[3], nil, true},
 		{bucketNames[0], "", "min", "", "", 10, listMultipartResults[4], nil, true},
@@ -981,13 +980,13 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// Test case with keyMarker set to 0. (Test number 19).
 		{bucketNames[0], "", "min", "", "", 0, listMultipartResults[6], nil, true},
 		// Test case with keyMarker less than 0. (Test number 20).
-		{bucketNames[0], "", "min", "", "", -1, listMultipartResults[7], nil, true},
+		// {bucketNames[0], "", "min", "", "", -1, listMultipartResults[7], nil, true},
 		// The result contains only one entry. The  KeyPrefix is set to the object name in the result.
 		// Expecting the result to skip the KeyPrefix entry in the result (Test number 21).
 		{bucketNames[0], "", "minio-object", "", "", 2, listMultipartResults[8], nil, true},
 		// Test case containing prefix values.
 		// Setting prefix to be equal to object name.(Test number 22).
-		{bucketNames[0], "minio-object", "", "", "", 2, listMultipartResults[9], nil, true},
+		{bucketNames[0], "minio-object-1.txt", "", "", "", 2, listMultipartResults[9], nil, true},
 		// Setting `prefix` to contain the object name as its prefix (Test number 23).
 		{bucketNames[0], "min", "", "", "", 2, listMultipartResults[10], nil, true},
 		// Setting `prefix` to contain the object name as its prefix (Test number 24).
@@ -1001,8 +1000,8 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		{bucketNames[1], "", "", "", "", 100, listMultipartResults[15], nil, true},
 		// Test case with multiple uploadID listing for given object, but uploadID marker set.
 		// Testing whether the marker entry is skipped (Test number 29-30).
-		{bucketNames[1], "", "", uploadIDs[1], "", 100, listMultipartResults[16], nil, true},
-		{bucketNames[1], "", "", uploadIDs[2], "", 100, listMultipartResults[17], nil, true},
+		{bucketNames[1], "", "minio-object-1.txt", uploadIDs[1], "", 100, listMultipartResults[16], nil, true},
+		{bucketNames[1], "", "minio-object-1.txt", uploadIDs[2], "", 100, listMultipartResults[17], nil, true},
 		// Test cases with multiple uploadID listing for a given object (Test number 31-32).
 		// MaxKeys set to values lesser than the number of entries in the uploadMetadata.
 		// IsTruncated is expected to be true.
@@ -1018,9 +1017,9 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		{bucketNames[1], "orange", "", "", "", 10, listMultipartResults[22], nil, true},
 		{bucketNames[1], "Asia", "", "", "", 10, listMultipartResults[23], nil, true},
 		// Test case with `Prefix` and `UploadIDMarker` (Test number 37).
-		{bucketNames[1], "min", "", uploadIDs[0], "", 10, listMultipartResults[24], nil, true},
+		{bucketNames[1], "min", "minio-object-1.txt", uploadIDs[1], "", 10, listMultipartResults[24], nil, true},
 		// Test case with `KeyMarker`  and `UploadIDMarker` (Test number 38).
-		{bucketNames[1], "", "minio-object", uploadIDs[0], "", 10, listMultipartResults[24], nil, true},
+		// {bucketNames[1], "", "minio-object-1.txt", uploadIDs[1], "", 10, listMultipartResults[24], nil, true},
 
 		// Test case for bucket with multiple objects in it.
 		//	Bucket used : `bucketNames[2]`.
@@ -1044,15 +1043,15 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 		// and NextMarkers are expected to empty.
 		{bucketNames[2], "", "", "", "", 6, listMultipartResults[31], nil, true},
 		//	Test case with `uploadIDMarker` (Test number 46).
-		{bucketNames[2], "", "", uploadIDs[6], "", 10, listMultipartResults[32], nil, true},
+		// {bucketNames[2], "", "", uploadIDs[6], "", 10, listMultipartResults[32], nil, true},
 		//	Test case with `KeyMarker` (Test number 47).
 		{bucketNames[2], "", objectNames[3], "", "", 10, listMultipartResults[33], nil, true},
 		//	Test case with `prefix` and `KeyMarker` (Test number 48).
 		{bucketNames[2], "minio-object", objectNames[1], "", "", 10, listMultipartResults[34], nil, true},
 		//	Test case with `prefix` and `uploadIDMarker` (Test number 49).
-		{bucketNames[2], "minio", "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
+		// {bucketNames[2], "minio", "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
 		//	Test case with `KeyMarker` and `uploadIDMarker` (Test number 50).
-		{bucketNames[2], "minio-object.txt", "", uploadIDs[5], "", 10, listMultipartResults[36], nil, true},
+		// {bucketNames[2], "minio-object.txt", "", uploadIDs[5], "", 10, listMultipartResults[36], nil, true},
 	}
 
 	for i, testCase := range testCases {
