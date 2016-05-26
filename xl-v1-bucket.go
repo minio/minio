@@ -64,234 +64,102 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	if volumeExistsErrCnt == len(xl.storageDisks) {
 		return toObjectErr(errVolumeExists, bucket)
 	} else if createVolErr > len(xl.storageDisks)-xl.writeQuorum {
-		// Return errWriteQuorum if errors were more than
-		// allowed write quorum.
+		// Return errWriteQuorum if errors were more than allowed write quorum.
 		return toObjectErr(errWriteQuorum, bucket)
 	}
 	return nil
 }
 
-// getAllBucketInfo - list bucket info from all disks.
-// Returns error slice indicating the failed volume stat operations.
-func (xl xlObjects) getAllBucketInfo(bucketName string) ([]BucketInfo, []error) {
-	// Create errs and volInfo slices of storageDisks size.
-	var errs = make([]error, len(xl.storageDisks))
-	var volsInfo = make([]VolInfo, len(xl.storageDisks))
+// getBucketInfo - returns the BucketInfo from one of the disks picked
+// at random.
+func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
+	// Count for errors encountered.
+	var bucketErrCount = 0
 
-	// Allocate a new waitgroup.
-	var wg = &sync.WaitGroup{}
-	for index, disk := range xl.storageDisks {
-		wg.Add(1)
-		// Stat volume on all the disks in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			volInfo, err := disk.StatVol(bucketName)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			volsInfo[index] = volInfo
-			errs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the Stat operations to finish.
-	wg.Wait()
-
-	// Return the concocted values.
-	var bucketsInfo = make([]BucketInfo, len(xl.storageDisks))
-	for _, volInfo := range volsInfo {
-		if IsValidBucketName(volInfo.Name) {
-			bucketsInfo = append(bucketsInfo, BucketInfo{
+	// Return the first successful lookup from a random list of disks.
+	for bucketErrCount < len(xl.storageDisks) {
+		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
+		var volInfo VolInfo
+		volInfo, err = disk.StatVol(bucketName)
+		if err == nil {
+			bucketInfo = BucketInfo{
 				Name:    volInfo.Name,
 				Created: volInfo.Created,
-			})
-		}
-	}
-	return bucketsInfo, errs
-}
-
-// listAllBucketInfo - list all stat volume info from all disks.
-// Returns
-// - stat volume info for all online disks.
-// - boolean to indicate if healing is necessary.
-// - error if any.
-func (xl xlObjects) listAllBucketInfo(bucketName string) ([]BucketInfo, bool, error) {
-	bucketsInfo, errs := xl.getAllBucketInfo(bucketName)
-	notFoundCount := 0
-	for _, err := range errs {
-		if err == errVolumeNotFound {
-			notFoundCount++
-			// If we have errors with file not found greater than allowed read
-			// quorum we return err as errFileNotFound.
-			if notFoundCount > len(xl.storageDisks)-xl.readQuorum {
-				return nil, false, errVolumeNotFound
 			}
+			return bucketInfo, nil
 		}
+		bucketErrCount++ // Update error count.
 	}
-
-	// Calculate online disk count.
-	onlineDiskCount := 0
-	for index := range errs {
-		if errs[index] == nil {
-			onlineDiskCount++
-		}
-	}
-
-	var heal bool
-	// If online disks count is lesser than configured disks, most
-	// probably we need to heal the file, additionally verify if the
-	// count is lesser than readQuorum, if not we throw an error.
-	if onlineDiskCount < len(xl.storageDisks) {
-		// Online disks lesser than total storage disks, needs to be
-		// healed. unless we do not have readQuorum.
-		heal = true
-		// Verify if online disks count are lesser than readQuorum
-		// threshold, return an error if yes.
-		if onlineDiskCount < xl.readQuorum {
-			return nil, false, errReadQuorum
-		}
-	}
-
-	// Return success.
-	return bucketsInfo, heal, nil
+	return BucketInfo{}, err
 }
 
 // Checks whether bucket exists.
-func (xl xlObjects) isBucketExist(bucketName string) bool {
+func (xl xlObjects) isBucketExist(bucket string) bool {
+	nsMutex.RLock(bucket, "")
+	defer nsMutex.RUnlock(bucket, "")
+
 	// Check whether bucket exists.
-	_, _, err := xl.listAllBucketInfo(bucketName)
+	_, err := xl.getBucketInfo(bucket)
 	if err != nil {
 		if err == errVolumeNotFound {
 			return false
 		}
-		errorIf(err, "Stat failed on bucket "+bucketName+".")
+		errorIf(err, "Stat failed on bucket "+bucket+".")
 		return false
 	}
 	return true
 }
 
-// GetBucketInfo - get bucket info.
+// GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-
 	nsMutex.RLock(bucket, "")
 	defer nsMutex.RUnlock(bucket, "")
-
-	// List and figured out if we need healing.
-	bucketsInfo, heal, err := xl.listAllBucketInfo(bucket)
+	bucketInfo, err := xl.getBucketInfo(bucket)
 	if err != nil {
 		return BucketInfo{}, toObjectErr(err, bucket)
 	}
+	return bucketInfo, nil
+}
 
-	// Heal for missing entries.
-	if heal {
-		go func() {
-			// Create bucket if missing on disks.
-			for index, bktInfo := range bucketsInfo {
-				if bktInfo.Name != "" {
+// listBuckets - returns list of all buckets from a disk picked at random.
+func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
+	// Count for errors encountered.
+	var listBucketsErrCount = 0
+
+	// Return the first successful lookup from a random list of disks.
+	for listBucketsErrCount < len(xl.storageDisks) {
+		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
+		var volsInfo []VolInfo
+		volsInfo, err = disk.ListVols()
+		if err == nil {
+			// NOTE: The assumption here is that volumes across all disks in
+			// readQuorum have consistent view i.e they all have same number
+			// of buckets. This is essentially not verified since healing
+			// should take care of this.
+			var bucketsInfo []BucketInfo
+			for _, volInfo := range volsInfo {
+				// StorageAPI can send volume names which are incompatible
+				// with buckets, handle it and skip them.
+				if !IsValidBucketName(volInfo.Name) {
 					continue
 				}
-				// Bucketinfo name would be an empty string, create it.
-				xl.storageDisks[index].MakeVol(bucket)
+				bucketsInfo = append(bucketsInfo, BucketInfo{
+					Name:    volInfo.Name,
+					Created: volInfo.Created,
+				})
 			}
-		}()
-	}
-
-	// From all bucketsInfo, calculate the actual usage values.
-	var total, free int64
-	var bucketInfo BucketInfo
-	for _, bucketInfo = range bucketsInfo {
-		if bucketInfo.Name == "" {
-			continue
+			return bucketsInfo, nil
 		}
-		free += bucketInfo.Free
-		total += bucketInfo.Total
+		listBucketsErrCount++ // Update error count.
 	}
-
-	// Update the aggregated values.
-	bucketInfo.Free = free
-	bucketInfo.Total = total
-
-	return BucketInfo{
-		Name:    bucket,
-		Created: bucketInfo.Created,
-		Total:   bucketInfo.Total,
-		Free:    bucketInfo.Free,
-	}, nil
+	return nil, err
 }
 
-func (xl xlObjects) listBuckets() ([]BucketInfo, error) {
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
-
-	// Success vols map carries successful results of ListVols from each disks.
-	var successVols = make([][]VolInfo, len(xl.storageDisks))
-	for index, disk := range xl.storageDisks {
-		wg.Add(1) // Add each go-routine to wait for.
-		go func(index int, disk StorageAPI) {
-			// Indicate wait group as finished.
-			defer wg.Done()
-
-			// Initiate listing.
-			volsInfo, _ := disk.ListVols()
-			successVols[index] = volsInfo
-		}(index, disk)
-	}
-
-	// Wait for all the list volumes running in parallel to finish.
-	wg.Wait()
-
-	// From success vols map calculate aggregated usage values.
-	var volsInfo []VolInfo
-	var total, free int64
-	for _, volsInfo = range successVols {
-		var volInfo VolInfo
-		for _, volInfo = range volsInfo {
-			if volInfo.Name == "" {
-				continue
-			}
-			if !IsValidBucketName(volInfo.Name) {
-				continue
-			}
-			break
-		}
-		free += volInfo.Free
-		total += volInfo.Total
-	}
-
-	// Save the updated usage values back into the vols.
-	for index, volInfo := range volsInfo {
-		volInfo.Free = free
-		volInfo.Total = total
-		volsInfo[index] = volInfo
-	}
-
-	// NOTE: The assumption here is that volumes across all disks in
-	// readQuorum have consistent view i.e they all have same number
-	// of buckets. This is essentially not verified since healing
-	// should take care of this.
-	var bucketsInfo []BucketInfo
-	for _, volInfo := range volsInfo {
-		// StorageAPI can send volume names which are incompatible
-		// with buckets, handle it and skip them.
-		if !IsValidBucketName(volInfo.Name) {
-			continue
-		}
-		bucketsInfo = append(bucketsInfo, BucketInfo{
-			Name:    volInfo.Name,
-			Created: volInfo.Created,
-			Total:   volInfo.Total,
-			Free:    volInfo.Free,
-		})
-	}
-	return bucketsInfo, nil
-}
-
-// ListBuckets - list buckets.
+// ListBuckets - lists all the buckets, sorted by its name.
 func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 	bucketInfos, err := xl.listBuckets()
 	if err != nil {
@@ -302,7 +170,7 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 	return bucketInfos, nil
 }
 
-// DeleteBucket - delete a bucket.
+// DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {

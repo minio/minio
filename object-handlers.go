@@ -136,7 +136,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	defer readCloser.Close() // Close after this handler returns.
+	defer readCloser.Close()
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, hrange)
