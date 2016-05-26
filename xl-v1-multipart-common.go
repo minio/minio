@@ -259,45 +259,9 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 
 // Returns if the prefix is a multipart upload.
 func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
-	// Create errs and volInfo slices of storageDisks size.
-	var errs = make([]error, len(xl.storageDisks))
-
-	// Allocate a new waitgroup.
-	var wg = &sync.WaitGroup{}
-	for index, disk := range xl.storageDisks {
-		wg.Add(1)
-		// Stat file on all the disks in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_, err := disk.StatFile(bucket, path.Join(prefix, uploadsJSONFile))
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			errs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the Stat operations to finish.
-	wg.Wait()
-
-	var errFileNotFoundCount int
-	for _, err := range errs {
-		if err != nil {
-			if err == errFileNotFound {
-				errFileNotFoundCount++
-				// If we have errors with file not found greater than allowed read
-				// quorum we return err as errFileNotFound.
-				if errFileNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
-					return false
-				}
-				continue
-			}
-			errorIf(err, "Unable to access file "+path.Join(bucket, prefix))
-			return false
-		}
-	}
-	return true
+	disk := xl.getRandomDisk() // Choose a random disk.
+	_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
+	return err == nil
 }
 
 // listUploadsInfo - list all uploads info.
