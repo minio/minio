@@ -257,31 +257,9 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 	return nil
 }
 
-// Returns if the prefix is a multipart upload.
-func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
-	disk := xl.getRandomDisk() // Choose a random disk.
-	_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
-	return err == nil
-}
-
-// listUploadsInfo - list all uploads info.
-func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
-	disk := xl.getRandomDisk() // Choose a random disk on each attempt.
-	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-	uploadIDs, err := getUploadIDs(splitPrefixes[1], splitPrefixes[2], disk)
-	if err != nil {
-		if err == errFileNotFound {
-			return []uploadInfo{}, nil
-		}
-		return nil, err
-	}
-	uploads = uploadIDs.Uploads
-	return uploads, nil
-}
-
-func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int) ([]uploadMetadata, bool, error) {
+func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]uploadMetadata, bool, error) {
 	var uploads []uploadMetadata
-	uploadsJSONContent, err := getUploadIDs(bucketName, objectName, xl.getRandomDisk())
+	uploadsJSONContent, err := getUploadIDs(bucketName, objectName, disk)
 	if err != nil {
 		return nil, false, err
 	}
@@ -308,6 +286,28 @@ func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 		}
 	}
 	return uploads, index == len(uploadsJSONContent.Uploads), nil
+}
+
+// Returns if the prefix is a multipart upload.
+func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
+	disk := xl.getRandomDisk() // Choose a random disk.
+	_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
+	return err == nil
+}
+
+// listUploadsInfo - list all uploads info.
+func (xl xlObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
+	disk := xl.getRandomDisk() // Choose a random disk on each attempt.
+	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
+	uploadIDs, err := getUploadIDs(splitPrefixes[1], splitPrefixes[2], disk)
+	if err != nil {
+		if err == errFileNotFound {
+			return []uploadInfo{}, nil
+		}
+		return nil, err
+	}
+	uploads = uploadIDs.Uploads
+	return uploads, nil
 }
 
 // listMultipartUploadsCommon - lists all multipart uploads, common
@@ -381,7 +381,7 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		uploads, _, err = xl.listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads)
+		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, xl.getRandomDisk())
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -425,7 +425,7 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 			var tmpUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
-			tmpUploads, end, err = xl.listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads)
+			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, xl.getRandomDisk())
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}

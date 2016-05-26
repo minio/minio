@@ -17,7 +17,6 @@
 package main
 
 import (
-	"os"
 	"path"
 	"sort"
 	"strings"
@@ -34,33 +33,16 @@ type treeWalkerFS struct {
 
 // Tree walk result carries results of tree walking.
 type treeWalkResultFS struct {
-	fileInfo FileInfo
-	err      error
-	end      bool
+	entry string
+	err   error
+	end   bool
 }
 
 // treeWalk walks FS directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResultFS) bool, count *int) bool {
+func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResultFS) bool, count *int, isLeaf func(string, string) bool) bool {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
-
-	// Convert entry to FileInfo
-	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
-		if strings.HasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			fileInfo.Name = path.Join(prefixDir, entry)
-			fileInfo.Name += slashSeparator
-			fileInfo.Mode = os.ModeDir
-			return
-		}
-		if fileInfo, err = fs.storage.StatFile(bucket, path.Join(prefixDir, entry)); err != nil {
-			return
-		}
-		// Object name needs to be full path.
-		fileInfo.Name = path.Join(prefixDir, entry)
-		return
-	}
 
 	var markerBase, markerDir string
 	if marker != "" {
@@ -78,11 +60,15 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		return false
 	}
 
-	if entryPrefixMatch != "" {
-		for i, entry := range entries {
+	for i, entry := range entries {
+		if entryPrefixMatch != "" {
 			if !strings.HasPrefix(entry, entryPrefixMatch) {
 				entries[i] = ""
+				continue
 			}
+		}
+		if isLeaf(bucket, pathJoin(prefixDir, entry)) {
+			entries[i] = strings.TrimSuffix(entry, slashSeparator)
 		}
 	}
 	sort.Strings(entries)
@@ -129,19 +115,13 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !fs.treeWalk(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count) {
+			if !fs.treeWalk(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
 				return false
 			}
 			continue
 		}
 		*count--
-		fileInfo, err := entryToFileInfo(entry)
-		if err != nil {
-			// The file got deleted in the interim between ListDir() and StatFile()
-			// Ignore error and continue.
-			continue
-		}
-		if !send(treeWalkResultFS{fileInfo: fileInfo}) {
+		if !send(treeWalkResultFS{entry: pathJoin(prefixDir, entry)}) {
 			return false
 		}
 	}
@@ -149,7 +129,7 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool) *treeWalkerFS {
+func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalkerFS {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -186,7 +166,7 @@ func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool)
 				return false
 			}
 		}
-		fs.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count)
+		fs.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
 	}()
 	return &walkNotify
 }

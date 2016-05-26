@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -280,6 +281,22 @@ func isBucketExist(storage StorageAPI, bucketName string) bool {
 }
 
 func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	// Convert entry to FileInfo
+	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
+		if strings.HasSuffix(entry, slashSeparator) {
+			// Object name needs to be full path.
+			fileInfo.Name = entry
+			fileInfo.Mode = os.ModeDir
+			return
+		}
+		if fileInfo, err = fs.storage.StatFile(bucket, entry); err != nil {
+			return
+		}
+		// Object name needs to be full path.
+		fileInfo.Name = entry
+		return
+	}
+
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
@@ -325,7 +342,9 @@ func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxK
 
 	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix})
 	if walker == nil {
-		walker = fs.startTreeWalk(bucket, prefix, marker, recursive)
+		walker = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
+			return !strings.HasSuffix(object, slashSeparator)
+		})
 	}
 	var fileInfos []FileInfo
 	var eof bool
@@ -345,7 +364,10 @@ func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxK
 			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		fileInfo := walkResult.fileInfo
+		fileInfo, err := entryToFileInfo(walkResult.entry)
+		if err != nil {
+			return ListObjectsInfo{}, nil
+		}
 		nextMarker = fileInfo.Name
 		fileInfos = append(fileInfos, fileInfo)
 		if walkResult.end {
