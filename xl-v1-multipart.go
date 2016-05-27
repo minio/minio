@@ -114,23 +114,19 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	// Hold write lock on the uploadID so that no one aborts it.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
-	// Hold read lock on the uploadID so that no one aborts it.
-	nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	// Hold write lock on the part so that there is no parallel upload on the part.
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
-	}
-
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	if err != nil {
@@ -140,6 +136,11 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	// Increment version only if we have online disks less than configured storage disks.
 	if diskCount(onlineDisks) < len(xl.storageDisks) {
 		higherVersion++
+	}
+
+	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 
 	// Initialize a new erasure with online disks and new distribution.
