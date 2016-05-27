@@ -82,7 +82,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 // getRandomDisk - gives a random disk at any point in time from the
 // available pool of disks.
 func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
 	randIndex := rand.Intn(len(xl.storageDisks) - 1)
 	disk = xl.storageDisks[randIndex] // Pick a random disk.
 	return disk
