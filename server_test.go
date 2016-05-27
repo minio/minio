@@ -444,7 +444,7 @@ func (s *MyAPISuite) TestBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
-func (s *MyAPISuite) TestObject(c *C) {
+func (s *MyAPISuite) TestObjectGet(c *C) {
 	buffer := bytes.NewReader([]byte("hello world"))
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/testobject", 0, nil)
 	c.Assert(err, IsNil)
