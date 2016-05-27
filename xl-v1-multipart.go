@@ -136,11 +136,14 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
 	// Increment version only if we have online disks less than configured storage disks.
 	if diskCount(onlineDisks) < len(xl.storageDisks) {
 		higherVersion++
 	}
-	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+
+	// Initialize a new erasure with online disks and new distribution.
+	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
 
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)

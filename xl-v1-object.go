@@ -41,16 +41,20 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
+
 	// List all online disks.
 	onlineDisks, _, err := xl.listOnlineDisks(bucket, object)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
+
 	// For zero byte files, return a null reader.
 	if xlMeta.Stat.Size == 0 {
 		return nullReadCloser{}, nil
 	}
-	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+
+	// Initialize a new erasure with online disks, with previous block distribution.
+	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Get part index offset.
 	partIndex, partOffset, err := xlMeta.objectToPartOffset(startOffset)
@@ -208,16 +212,22 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	tempErasureObj := path.Join(tmpMetaPrefix, bucket, object, "object1")
 	tempObj := path.Join(tmpMetaPrefix, bucket, object)
 
+	// Initialize xl meta.
+	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
+
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
 	// Increment version only if we have online disks less than configured storage disks.
 	if diskCount(onlineDisks) < len(xl.storageDisks) {
 		higherVersion++
 	}
-	erasure := newErasure(onlineDisks) // Initialize a new erasure with online disks
+
+	// Initialize a new erasure with online disks and new distribution.
+	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
 	fileWriter, err := erasure.CreateFile(minioMetaBucket, tempErasureObj)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
@@ -301,7 +311,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
+	// Fill all the necessary metadata.
 	xlMeta.Meta = metadata
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime

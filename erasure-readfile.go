@@ -82,13 +82,14 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 			enBlocks := make([][]byte, len(e.storageDisks))
 			// Read all the readers.
 			for index, reader := range readers {
+				blockIndex := e.distribution[index] - 1
 				// Initialize shard slice and fill the data from each parts.
-				enBlocks[index] = make([]byte, curEncBlockSize)
+				enBlocks[blockIndex] = make([]byte, curEncBlockSize)
 				if reader == nil {
 					continue
 				}
 				// Read the necessary blocks.
-				_, rErr := io.ReadFull(reader, enBlocks[index])
+				_, rErr := io.ReadFull(reader, enBlocks[blockIndex])
 				if rErr != nil && rErr != io.ErrUnexpectedEOF {
 					readers[index].Close()
 					readers[index] = nil
