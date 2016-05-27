@@ -358,7 +358,7 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 			return nil, errIsNotRegular
 		}
 	}
-	w, err := safe.CreateFileWithPrefix(filePath, "$tmpfile")
+	w, err := safe.CreateFile(filePath)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {

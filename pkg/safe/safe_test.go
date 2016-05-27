@@ -34,13 +34,14 @@ type MySuite struct {
 var _ = Suite(&MySuite{})
 
 func (s *MySuite) SetUpSuite(c *C) {
-	root, err := ioutil.TempDir(os.TempDir(), "safe-")
+	root, err := ioutil.TempDir(os.TempDir(), "safe_test.go.")
 	c.Assert(err, IsNil)
 	s.root = root
 }
 
 func (s *MySuite) TearDownSuite(c *C) {
-	os.RemoveAll(s.root)
+	err := os.Remove(s.root)
+	c.Assert(err, IsNil)
 }
 
 func (s *MySuite) TestSafe(c *C) {
@@ -52,15 +53,17 @@ func (s *MySuite) TestSafe(c *C) {
 	c.Assert(err, IsNil)
 	_, err = os.Stat(filepath.Join(s.root, "testfile"))
 	c.Assert(err, IsNil)
+	err = os.Remove(filepath.Join(s.root, "testfile"))
+	c.Assert(err, IsNil)
 }
 
-func (s *MySuite) TestSafeRemove(c *C) {
+func (s *MySuite) TestSafeAbort(c *C) {
 	f, err := CreateFile(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, IsNil)
 	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, Not(IsNil))
-	err = f.CloseAndRemove()
+	err = f.Abort()
 	c.Assert(err, IsNil)
-	err = f.Close()
+	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
 	c.Assert(err, Not(IsNil))
 }

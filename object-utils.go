@@ -167,7 +167,7 @@ func safeCloseAndRemove(writer io.WriteCloser) error {
 	// If writer is a safe file, Attempt to close and remove.
 	safeWriter, ok := writer.(*safe.File)
 	if ok {
-		return safeWriter.CloseAndRemove()
+		return safeWriter.Abort()
 	}
 	wCloser, ok := writer.(*waitCloser)
 	if ok {
