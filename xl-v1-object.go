@@ -180,7 +180,19 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 		if errCount <= len(xl.storageDisks)-xl.readQuorum {
 			return nil
 		}
-		xl.deleteObject(srcBucket, srcObject)
+		// Rename back the object on disks where RenameFile succeeded
+		for index, disk := range xl.storageDisks {
+			// Rename back the object in parallel to reduce overall disk latency
+			wg.Add(1)
+			go func(index int, disk StorageAPI) {
+				defer wg.Done()
+				if errs[index] != nil {
+					return
+				}
+				_ = disk.RenameFile(dstBucket, retainSlash(dstObject), srcBucket, retainSlash(srcObject))
+			}(index, disk)
+		}
+		wg.Wait()
 		return errWriteQuorum
 	}
 	return nil
