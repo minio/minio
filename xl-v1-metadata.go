@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math/rand"
 	"path"
 	"sort"
 	"sync"
@@ -254,16 +255,15 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 
 // randErasureDistribution - uses Knuth Fisher-Yates shuffle algorithm.
 func randErasureDistribution(numBlocks int) []int {
+	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
 	distribution := make([]int, numBlocks)
 	for i := 0; i < numBlocks; i++ {
 		distribution[i] = i + 1
 	}
-	/*
-		for i := 0; i < numBlocks; i++ {
-			// Choose index uniformly in [i, numBlocks-1]
-			r := i + rand.Intn(numBlocks-i)
-			distribution[r], distribution[i] = distribution[i], distribution[r]
-		}
-	*/
+	for i := 0; i < numBlocks; i++ {
+		// Choose index uniformly in [i, numBlocks-1]
+		r := i + rand.Intn(numBlocks-i)
+		distribution[r], distribution[i] = distribution[i], distribution[r]
+	}
 	return distribution
 }

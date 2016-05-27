@@ -32,8 +32,7 @@ func (e erasure) cleanupCreateFileOps(volume, path string, writers []io.WriteClo
 	}
 }
 
-// WriteErasure reads predefined blocks, encodes them and writes to
-// configured storage disks.
+// WriteErasure reads predefined blocks, encodes them and writes to configured storage disks.
 func (e erasure) writeErasure(volume, path string, reader *io.PipeReader, wcloser *waitCloser) {
 	// Release the block writer upon function return.
 	defer wcloser.release()
@@ -119,7 +118,8 @@ func (e erasure) writeErasure(volume, path string, reader *io.PipeReader, wclose
 				// Write encoded data in routine.
 				go func(index int, writer io.Writer) {
 					defer wg.Done()
-					encodedData := dataBlocks[index]
+					// Pick the block from the distribution.
+					encodedData := dataBlocks[e.distribution[index]-1]
 					_, wErr := writers[index].Write(encodedData)
 					if wErr != nil {
 						wErrs[index] = wErr

@@ -24,10 +24,11 @@ type erasure struct {
 	DataBlocks   int
 	ParityBlocks int
 	storageDisks []StorageAPI
+	distribution []int
 }
 
 // newErasure instantiate a new erasure.
-func newErasure(disks []StorageAPI) *erasure {
+func newErasure(disks []StorageAPI, distribution []int) *erasure {
 	// Initialize E.
 	e := &erasure{}
 
@@ -45,6 +46,9 @@ func newErasure(disks []StorageAPI) *erasure {
 
 	// Save all the initialized storage disks.
 	e.storageDisks = disks
+
+	// Save the distribution.
+	e.distribution = distribution
 
 	// Return successfully initialized.
 	return e
