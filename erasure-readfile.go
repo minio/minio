@@ -44,11 +44,12 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 		go func(index int, disk StorageAPI) {
 			defer rwg.Done()
 			offset := int64(0)
-			if reader, err := disk.ReadFile(volume, path, offset); err == nil {
+			reader, err := disk.ReadFile(volume, path, offset)
+			if err == nil {
 				readers[index] = reader
-			} else {
-				errs[index] = err
+				return
 			}
+			errs[index] = err
 		}(index, disk)
 	}
 
@@ -69,61 +70,73 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 		var totalLeft = totalSize
 		// Read until EOF.
 		for totalLeft > 0 {
-			// Figure out the right blockSize as it was encoded
-			// before.
+			// Figure out the right blockSize as it was encoded before.
 			var curBlockSize int64
 			if erasureBlockSize < totalLeft {
 				curBlockSize = erasureBlockSize
 			} else {
 				curBlockSize = totalLeft
 			}
+
 			// Calculate the current encoded block size.
 			curEncBlockSize := getEncodedBlockLen(curBlockSize, e.DataBlocks)
+
+			// Allocate encoded blocks up to storage disks.
 			enBlocks := make([][]byte, len(e.storageDisks))
+
+			// Counter to keep success data blocks.
+			var successDataBlocksCount = 0
+			var noReconstruct bool // Set for no reconstruction.
+
 			// Read all the readers.
 			for index, reader := range readers {
 				blockIndex := e.distribution[index] - 1
 				// Initialize shard slice and fill the data from each parts.
 				enBlocks[blockIndex] = make([]byte, curEncBlockSize)
 				if reader == nil {
+					enBlocks[blockIndex] = nil
 					continue
 				}
+
+				// Close the reader when routine returns.
+				defer reader.Close()
+
 				// Read the necessary blocks.
 				_, rErr := io.ReadFull(reader, enBlocks[blockIndex])
 				if rErr != nil && rErr != io.ErrUnexpectedEOF {
-					readers[index].Close()
-					readers[index] = nil
+					enBlocks[blockIndex] = nil
+				}
+
+				// Verify if we have successfully all the data blocks.
+				if blockIndex < e.DataBlocks {
+					successDataBlocksCount++
+					// Set when we have all the data blocks and no
+					// reconstruction is needed, so that we can avoid
+					// erasure reconstruction.
+					noReconstruct = successDataBlocksCount == e.DataBlocks
+					if noReconstruct {
+						// Break out we have read all the data blocks.
+						break
+					}
 				}
 			}
 
-			// Check blocks if they are all zero in length.
+			// Check blocks if they are all zero in length, we have
+			// corruption return error.
 			if checkBlockSize(enBlocks) == 0 {
 				pipeWriter.CloseWithError(errDataCorrupt)
 				return
 			}
 
-			// Verify the blocks.
-			ok, err := e.ReedSolomon.Verify(enBlocks)
-			if err != nil {
-				pipeWriter.CloseWithError(err)
-				return
-			}
-
-			// Verification failed, blocks require reconstruction.
-			if !ok {
-				for index, reader := range readers {
-					if reader == nil {
-						// Reconstruct expects missing blocks to be nil.
-						enBlocks[index] = nil
-					}
-				}
-				err = e.ReedSolomon.Reconstruct(enBlocks)
+			// Verify if reconstruction is needed, proceed with reconstruction.
+			if !noReconstruct {
+				err := e.ReedSolomon.Reconstruct(enBlocks)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					return
 				}
-				// Verify reconstructed blocks again.
-				ok, err = e.ReedSolomon.Verify(enBlocks)
+				// Verify reconstructed blocks (parity).
+				ok, err := e.ReedSolomon.Verify(enBlocks)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					return
@@ -136,7 +149,7 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 				}
 			}
 
-			// Get all the data blocks.
+			// Get data blocks from encoded blocks.
 			dataBlocks := getDataBlocks(enBlocks, e.DataBlocks, int(curBlockSize))
 
 			// Verify if the offset is right for the block, if not move to the next block.
@@ -151,8 +164,8 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 				startOffset = startOffset + int64(len(dataBlocks))
 			}
 
-			// Write safely the necessary blocks.
-			_, err = pipeWriter.Write(dataBlocks[int(startOffset):])
+			// Write safely the necessary blocks to the pipe.
+			_, err := pipeWriter.Write(dataBlocks[int(startOffset):])
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				return
@@ -170,14 +183,6 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, totalSize int6
 
 		// Cleanly end the pipe after a successful decoding.
 		pipeWriter.Close()
-
-		// Cleanly close all the underlying data readers.
-		for _, reader := range readers {
-			if reader == nil {
-				continue
-			}
-			reader.Close()
-		}
 	}()
 
 	// Return the pipe for the top level caller to start reading.
