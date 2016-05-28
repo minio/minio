@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -146,20 +147,37 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 /// Object Operations
 
 // GetObject - get an object.
-func (fs fsObjects) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, error) {
+func (fs fsObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return nil, BucketNameInvalid{Bucket: bucket}
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	fileReader, err := fs.storage.ReadFile(bucket, object, startOffset)
-	if err != nil {
-		return nil, toObjectErr(err, bucket, object)
+	var totalLeft = length
+	for totalLeft > 0 {
+		// Figure out the right blockSize as it was encoded before.
+		var curBlockSize int64
+		if blockSize < totalLeft {
+			curBlockSize = blockSize
+		} else {
+			curBlockSize = totalLeft
+		}
+		buf := make([]byte, curBlockSize)
+		n, err := fs.storage.ReadFile(bucket, object, startOffset, buf)
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+		_, err = writer.Write(buf[:n])
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+		totalLeft -= n
+		startOffset += n
 	}
-	return fileReader, nil
+	return nil
 }
 
 // GetObjectInfo - get object info.
@@ -194,6 +212,10 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
+const (
+	blockSize = 4 * 1024 * 1024 // 4MiB.
+)
+
 // PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
@@ -207,31 +229,38 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	fileWriter, err := fs.storage.CreateFile(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
+	// Temporary object.
+	tempObj := path.Join(tmpMetaPrefix, bucket, object)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
-			}
+	if size == 0 {
+		// For size 0 we write a 0byte file.
+		_, err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
+		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		if _, err = io.Copy(multiWriter, data); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
+		// Allocate buffer.
+		buf := make([]byte, blockSize)
+		for {
+			n, rErr := data.Read(buf)
+			if rErr == io.EOF {
+				break
 			}
-			return "", toObjectErr(err, bucket, object)
+			if rErr != nil {
+				return "", toObjectErr(rErr, bucket, object)
+			}
+			// Update md5 writer.
+			md5Writer.Write(buf[:n])
+			m, wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
+			if wErr != nil {
+				return "", toObjectErr(wErr, bucket, object)
+			}
+			if m != int64(len(buf[:n])) {
+				return "", toObjectErr(errUnexpected, bucket, object)
+			}
 		}
 	}
 
@@ -243,18 +272,13 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			if err = safeCloseAndRemove(fileWriter); err != nil {
-				return "", err
-			}
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
-	err = fileWriter.Close()
+
+	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-			return "", clErr
-		}
-		return "", err
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Return md5sum, successfully wrote object.

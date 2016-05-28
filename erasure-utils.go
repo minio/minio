@@ -39,7 +39,7 @@ func checkBlockSize(blocks [][]byte) int {
 
 // calculate the blockSize based on input length and total number of
 // data blocks.
-func getEncodedBlockLen(inputLen int64, dataBlocks int) (curBlockSize int64) {
-	curBlockSize = (inputLen + int64(dataBlocks) - 1) / int64(dataBlocks)
-	return curBlockSize
+func getEncodedBlockLen(inputLen int64, dataBlocks int) (curEncBlockSize int64) {
+	curEncBlockSize = (inputLen + int64(dataBlocks) - 1) / int64(dataBlocks)
+	return curEncBlockSize
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"path"
 	"sync"
 )
@@ -41,19 +42,20 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			offset := int64(0)
-			metadataReader, err := disk.ReadFile(bucket, xlMetaPath, offset)
+			var buffer = make([]byte, blockSize)
+			n, err := disk.ReadFile(bucket, xlMetaPath, offset, buffer)
 			if err != nil {
 				errs[index] = err
 				return
 			}
-			defer metadataReader.Close()
-
-			_, err = metadataArray[index].ReadFrom(metadataReader)
+			err = json.Unmarshal(buffer[:n], &metadataArray[index])
 			if err != nil {
 				// Unable to parse xl.json, set error.
 				errs[index] = err
 				return
 			}
+			buffer = nil
+			errs[index] = nil
 		}(index, disk)
 	}
 

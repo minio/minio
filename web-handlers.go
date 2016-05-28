@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
@@ -383,12 +382,14 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(object)))
 
-	objReader, err := web.ObjectAPI.GetObject(bucket, object, 0)
+	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	if _, err := io.Copy(w, objReader); err != nil {
+	offset := int64(0)
+	err = web.ObjectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
+	if err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}

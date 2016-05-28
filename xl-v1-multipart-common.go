@@ -17,9 +17,7 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"path"
 	"sort"
 	"strings"
@@ -70,27 +68,6 @@ func (u uploadsV1) Index(uploadID string) int {
 	return -1
 }
 
-// ReadFrom - read from implements io.ReaderFrom interface for unmarshalling uploads.
-func (u *uploadsV1) ReadFrom(reader io.Reader) (n int64, err error) {
-	var buffer bytes.Buffer
-	n, err = buffer.ReadFrom(reader)
-	if err != nil {
-		return 0, err
-	}
-	err = json.Unmarshal(buffer.Bytes(), &u)
-	return n, err
-}
-
-// WriteTo - write to implements io.WriterTo interface for marshalling uploads.
-func (u uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
-	metadataBytes, err := json.Marshal(&u)
-	if err != nil {
-		return 0, err
-	}
-	m, err := writer.Write(metadataBytes)
-	return int64(m), err
-}
-
 // readUploadsJSON - get all the saved uploads JSON.
 func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadIDs uploadsV1, err error) {
 	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
@@ -104,17 +81,18 @@ func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadI
 		// Read `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			r, rErr := disk.ReadFile(minioMetaBucket, uploadJSONPath, int64(0))
+			var buffer = make([]byte, blockSize)
+			n, rErr := disk.ReadFile(minioMetaBucket, uploadJSONPath, int64(0), buffer)
 			if rErr != nil {
 				errs[index] = rErr
 				return
 			}
-			defer r.Close()
-			_, rErr = uploads[index].ReadFrom(r)
+			rErr = json.Unmarshal(buffer[:n], &uploads[index])
 			if rErr != nil {
 				errs[index] = rErr
 				return
 			}
+			buffer = nil
 			errs[index] = nil
 		}(index, disk)
 	}
@@ -136,6 +114,7 @@ func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadI
 // uploadUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
 func updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1, storageDisks ...StorageAPI) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadsJSONFile)
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 
@@ -145,21 +124,21 @@ func updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1, storageDisk
 		// Update `uploads.json` in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			w, wErr := disk.CreateFile(minioMetaBucket, uploadsPath)
+			uploadsBytes, wErr := json.Marshal(uploadsJSON)
 			if wErr != nil {
 				errs[index] = wErr
 				return
 			}
-			_, wErr = uploadsJSON.WriteTo(w)
+			n, wErr := disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes)
 			if wErr != nil {
 				errs[index] = wErr
 				return
 			}
-			if wErr = w.Close(); wErr != nil {
-				if clErr := safeCloseAndRemove(w); clErr != nil {
-					errs[index] = clErr
-					return
-				}
+			if n != int64(len(uploadsBytes)) {
+				errs[index] = errUnexpected
+				return
+			}
+			if wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
 				errs[index] = wErr
 				return
 			}
@@ -219,22 +198,18 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 		// Update `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			w, wErr := disk.CreateFile(minioMetaBucket, tmpUploadsPath)
+			uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
 			if wErr != nil {
 				errs[index] = wErr
 				return
 			}
-			_, wErr = uploadsJSON.WriteTo(w)
+			n, wErr := disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes)
 			if wErr != nil {
 				errs[index] = wErr
 				return
 			}
-			if wErr = w.Close(); wErr != nil {
-				if clErr := safeCloseAndRemove(w); clErr != nil {
-					errs[index] = clErr
-					return
-				}
-				errs[index] = wErr
+			if n != int64(len(uploadsJSONBytes)) {
+				errs[index] = errUnexpected
 				return
 			}
 			wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)

@@ -18,6 +18,9 @@ package main
 
 import "errors"
 
+// errUnexpected - unexpected error, requires manual intervention.
+var errUnexpected = errors.New("Unexpected error, please report this issue at https://github.com/minio/minio/issues")
+
 // errCorruptedFormat - corrupted backend format.
 var errCorruptedFormat = errors.New("corrupted backend format")
 

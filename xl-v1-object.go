@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"io"
@@ -13,23 +14,17 @@ import (
 	"github.com/minio/minio/pkg/mimedb"
 )
 
-// nullReadCloser - returns 0 bytes and io.EOF upon first read attempt.
-type nullReadCloser struct{}
-
-func (n nullReadCloser) Read([]byte) (int, error) { return 0, io.EOF }
-func (n nullReadCloser) Close() error             { return nil }
-
 /// Object Operations
 
 // GetObject - get an object.
-func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.ReadCloser, error) {
+func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return nil, BucketNameInvalid{Bucket: bucket}
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return nil, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
 	// Lock the object before reading.
@@ -39,18 +34,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	// Read metadata associated with the object.
 	xlMeta, err := xl.readXLMetadata(bucket, object)
 	if err != nil {
-		return nil, toObjectErr(err, bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
 	onlineDisks, _, err := xl.listOnlineDisks(bucket, object)
 	if err != nil {
-		return nil, toObjectErr(err, bucket, object)
-	}
-
-	// For zero byte files, return a null reader.
-	if xlMeta.Stat.Size == 0 {
-		return nullReadCloser{}, nil
+		return toObjectErr(err, bucket, object)
 	}
 
 	// Initialize a new erasure with online disks, with previous block distribution.
@@ -59,44 +49,36 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64) (io.Read
 	// Get part index offset.
 	partIndex, partOffset, err := xlMeta.objectToPartOffset(startOffset)
 	if err != nil {
-		return nil, toObjectErr(err, bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
-
-	fileReader, fileWriter := io.Pipe()
-
-	// Hold a read lock once more which can be released after the following go-routine ends.
-	// We hold RLock once more because the current function would return before the go routine below
-	// executes and hence releasing the read lock (because of defer'ed nsMutex.RUnlock() call).
-	nsMutex.RLock(bucket, object)
-	go func() {
-		defer nsMutex.RUnlock(bucket, object)
-		for ; partIndex < len(xlMeta.Parts); partIndex++ {
-			part := xlMeta.Parts[partIndex]
-			r, err := erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, part.Size)
+	totalLeft := length
+	for ; partIndex < len(xlMeta.Parts); partIndex++ {
+		part := xlMeta.Parts[partIndex]
+		totalPartSize := part.Size
+		for totalPartSize > 0 {
+			var buffer io.Reader
+			buffer, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, part.Size)
 			if err != nil {
-				fileWriter.CloseWithError(toObjectErr(err, bucket, object))
-				return
+				return err
 			}
-			// Reset part offset to 0 to read rest of the parts from
-			// the beginning.
-			partOffset = 0
-			if _, err = io.Copy(fileWriter, r); err != nil {
-				switch reader := r.(type) {
-				case *io.PipeReader:
-					reader.CloseWithError(err)
-				case io.ReadCloser:
-					reader.Close()
+			if int64(buffer.(*bytes.Buffer).Len()) > totalLeft {
+				if _, err := io.CopyN(writer, buffer, totalLeft); err != nil {
+					return err
 				}
-				fileWriter.CloseWithError(toObjectErr(err, bucket, object))
-				return
+				return nil
 			}
-			// Close the readerCloser that reads multiparts of an object.
-			// Not closing leaks underlying file descriptors.
-			r.Close()
+			n, err := io.Copy(writer, buffer)
+			if err != nil {
+				return err
+			}
+			totalLeft -= n
+			totalPartSize -= n
+			partOffset += n
 		}
-		fileWriter.Close()
-	}()
-	return fileReader, nil
+		// Reset part offset to 0 to read rest of the parts from the beginning.
+		partOffset = 0
+	}
+	return nil
 }
 
 // GetObjectInfo - get object info.
@@ -240,31 +222,29 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Initialize a new erasure with online disks and new distribution.
 	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
-	fileWriter, err := erasure.CreateFile(minioMetaBucket, tempErasureObj)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
+	buf := make([]byte, blockSize)
+	for {
+		var n int
+		n, err = io.ReadFull(data, buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil && err != io.ErrUnexpectedEOF {
 			return "", toObjectErr(err, bucket, object)
 		}
-	} else {
-		if _, err = io.Copy(multiWriter, data); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
-			return "", toObjectErr(err, bucket, object)
+		// Update md5 writer.
+		md5Writer.Write(buf[:n])
+		var m int64
+		m, err = erasure.AppendFile(minioMetaBucket, tempErasureObj, buf[:n])
+		if err != nil {
+			return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
+		}
+		if m != int64(len(buf[:n])) {
+			return "", toObjectErr(errUnexpected, bucket, object)
 		}
 	}
 
@@ -292,19 +272,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			if err = safeCloseAndRemove(fileWriter); err != nil {
-				return "", toObjectErr(err, bucket, object)
-			}
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
-	}
-
-	err = fileWriter.Close()
-	if err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-			return "", toObjectErr(clErr, bucket, object)
-		}
-		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Check if an object is present as one of the parent dir.
@@ -329,10 +298,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Stat.ModTime = modTime
 	xlMeta.Stat.Version = higherVersion
 	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
-	if err = xl.writeXLMetadata(bucket, object, xlMeta); err != nil {
+	if err = xl.writeXLMetadata(minioMetaBucket, path.Join(tmpMetaPrefix, bucket, object), xlMeta); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
-
+	rErr := xl.renameXLMetadata(minioMetaBucket, path.Join(tmpMetaPrefix, bucket, object), bucket, object)
+	if rErr != nil {
+		return "", toObjectErr(rErr, bucket, object)
+	}
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
