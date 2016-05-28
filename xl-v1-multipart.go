@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -121,10 +120,6 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
-
-	// Hold write lock on the part so that there is no parallel upload on the part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	// List all online disks.
@@ -324,15 +319,15 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			Object: object,
 		}
 	}
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
-	}
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this multipart upload
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
+	if !xl.isUploadIDExists(bucket, object, uploadID) {
+		return "", InvalidUploadID{UploadID: uploadID}
+	}
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
 	if err != nil {
