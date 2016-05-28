@@ -79,13 +79,10 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
-		// With delimiter set we fill in NextMarker and Prefixes.
-		if delimiter == slashSeparator {
-			result.NextMarker = objInfo.Name
-			if objInfo.IsDir {
-				result.Prefixes = append(result.Prefixes, objInfo.Name)
-				continue
-			}
+		result.NextMarker = objInfo.Name
+		if objInfo.IsDir {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+			continue
 		}
 		result.Objects = append(result.Objects, ObjectInfo{
 			Name:    objInfo.Name,
