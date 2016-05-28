@@ -281,7 +281,7 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 			PartNumber:   part.Number,
 			ETag:         part.ETag,
 			LastModified: fi.ModTime,
-			Size:         fi.Size,
+			Size:         part.Size,
 		})
 		count--
 		if count == 0 {
