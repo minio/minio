@@ -178,7 +178,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	}
 
 	nsMutex.Lock(bucket, "")
-	nsMutex.Unlock(bucket, "")
+	defer nsMutex.Unlock(bucket, "")
 
 	// Collect if all disks report volume not found.
 	var volumeNotFoundErrCnt int
