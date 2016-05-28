@@ -229,8 +229,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
+	uniqueID := getUUID()
+
 	// Temporary object.
-	tempObj := path.Join(tmpMetaPrefix, bucket, object)
+	tempObj := path.Join(tmpMetaPrefix, uniqueID)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()

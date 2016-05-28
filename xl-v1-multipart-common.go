@@ -114,7 +114,8 @@ func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadI
 // uploadUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
 func updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1, storageDisks ...StorageAPI) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
-	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadsJSONFile)
+	uniqueID := getUUID()
+	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 
@@ -169,7 +170,8 @@ func newUploadsV1(format string) uploadsV1 {
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
 func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, storageDisks ...StorageAPI) (err error) {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
-	tmpUploadsPath := path.Join(tmpMetaPrefix, bucket, object, uploadsJSONFile)
+	uniqueID := getUUID()
+	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
 
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}

@@ -140,8 +140,8 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	// Count for errors encountered.
 	var xlJSONErrCount = 0
 
-	// Allocate 4MB buffer.
-	var buffer = make([]byte, blockSize)
+	// Allocate 4MiB buffer.
+	buffer := make([]byte, blockSize)
 
 	// Return the first successful lookup from a random list of disks.
 	for xlJSONErrCount < len(xl.storageDisks) {
@@ -173,6 +173,7 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	return xlMeta
 }
 
+// renameXLMetadata - renames `xl.json` from source prefix to destination prefix.
 func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(xl.storageDisks))
@@ -185,9 +186,16 @@ func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix 
 		// Rename `xl.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
+			// Renames `xl.json` from source prefix to destination prefix.
 			rErr := disk.RenameFile(srcBucket, srcJSONFile, dstBucket, dstJSONFile)
 			if rErr != nil {
 				mErrs[index] = rErr
+				return
+			}
+			// Delete any dangling directories.
+			dErr := disk.DeleteFile(srcBucket, srcPrefix)
+			if dErr != nil {
+				mErrs[index] = dErr
 				return
 			}
 			mErrs[index] = nil
