@@ -511,3 +511,20 @@ func (xl xlObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	return xl.isObject(minioMetaBucket, uploadIDPath)
 }
+
+// Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
+func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) {
+	curpartPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partName)
+	wg := sync.WaitGroup{}
+	for i, disk := range xl.storageDisks {
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
+			// requests. xl.json is the authoritative source of truth on which parts constitute
+			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
+			_ = disk.DeleteFile(minioMetaBucket, curpartPath)
+		}(i, disk)
+	}
+	wg.Wait()
+}
