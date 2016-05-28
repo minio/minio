@@ -17,12 +17,69 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/url"
 	"strconv"
 )
 
+// ContinuationToken - used to construct continuation token.
+type ContinuationToken struct {
+	Prefix    string `json:"prefix"`
+	Marker    string `json:"marker"`
+	Delimiter string `json:"delimiter"`
+}
+
 // Parse bucket url queries
-func getBucketResources(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType string) {
+func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType string) {
+	prefix = values.Get("prefix")
+	marker = values.Get("marker")
+	delimiter = values.Get("delimiter")
+	if values.Get("max-keys") != "" {
+		maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
+	} else {
+		maxkeys = maxObjectList
+	}
+	encodingType = values.Get("encoding-type")
+	return
+}
+
+func getListObjectsV2Args(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType string) {
+	prefix = values.Get("prefix")
+	marker = values.Get("start-after")
+	delimiter = values.Get("delimiter")
+	if values.Get("max-keys") != "" {
+		maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
+	} else {
+		maxkeys = maxObjectList
+	}
+	encodingType = values.Get("encoding-type")
+	if values.Get("continuation-token") == "" {
+		return
+	}
+	continuationTokenStr := values.Get("continuation-token")
+	continuationTokenBytes, err := base64.StdEncoding.DecodeString(continuationTokenStr)
+	if err != nil {
+		return
+	}
+	continuationToken := ContinuationToken{}
+	err = json.Unmarshal(continuationTokenBytes, &continuationToken)
+	if err != nil {
+		return
+	}
+	if prefix == "" {
+		prefix = continuationToken.Prefix
+	}
+	delimiter = continuationToken.Delimiter
+	marker = continuationToken.Marker
+	return
+}
+
+// Parse bucket url queries
+func getBucketResources(values url.Values) (listType int, prefix, marker, delimiter string, maxkeys int, encodingType string) {
+	if values.Get("list-type") != "" {
+		listType, _ = strconv.Atoi(values.Get("list-type"))
+	}
 	prefix = values.Get("prefix")
 	marker = values.Get("marker")
 	delimiter = values.Get("delimiter")
