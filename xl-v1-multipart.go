@@ -233,12 +233,14 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
-	}
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+
+	if !xl.isUploadIDExists(bucket, object, uploadID) {
+		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
+	}
+
 	result := ListPartsInfo{}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -404,6 +406,19 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// Remove parts that weren't present in CompleteMultipartUpload request
+	for _, curpart := range currentXLMeta.Parts {
+		if xlMeta.ObjectPartIndex(curpart.Number) == -1 {
+			// Delete the missing part files. e.g,
+			// Request 1: NewMultipart
+			// Request 2: PutObjectPart 1
+			// Request 3: PutObjectPart 2
+			// Request 4: CompleteMultipartUpload --part 2
+			// N.B. 1st part is not present. This part should be removed from the storage.
+			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
+		}
+	}
+
 	if err = xl.renameObject(minioMetaBucket, uploadIDPath, bucket, object); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -450,13 +465,14 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return InvalidUploadID{UploadID: uploadID}
-	}
 
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+
+	if !xl.isUploadIDExists(bucket, object, uploadID) {
+		return InvalidUploadID{UploadID: uploadID}
+	}
 
 	// Cleanup all uploaded parts.
 	if err := cleanupUploadedParts(bucket, object, uploadID, xl.storageDisks...); err != nil {
