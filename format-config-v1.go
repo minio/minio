@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -116,8 +115,10 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 
 // loadFormat - load format from disk.
 func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
+	buffer := make([]byte, blockSize)
 	offset := int64(0)
-	r, err := disk.ReadFile(minioMetaBucket, formatConfigFile, offset)
+	var n int64
+	n, err = disk.ReadFile(minioMetaBucket, formatConfigFile, offset, buffer)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
 		// same. 'volume not found' usually means its a fresh disk.
@@ -136,13 +137,9 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 		}
 		return nil, err
 	}
-	decoder := json.NewDecoder(r)
 	format = &formatConfigV1{}
-	err = decoder.Decode(&format)
+	err = json.Unmarshal(buffer[:n], format)
 	if err != nil {
-		return nil, err
-	}
-	if err = r.Close(); err != nil {
 		return nil, err
 	}
 	return format, nil
@@ -215,7 +212,6 @@ func checkFormatXL(formatConfigs []*formatConfigV1) error {
 func initFormatXL(storageDisks []StorageAPI) (err error) {
 	var (
 		jbod             = make([]string, len(storageDisks))
-		formatWriters    = make([]io.WriteCloser, len(storageDisks))
 		formats          = make([]*formatConfigV1, len(storageDisks))
 		saveFormatErrCnt = 0
 	)
@@ -230,16 +226,6 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 				return errWriteQuorum
 			}
 		}
-		var w io.WriteCloser
-		w, err = disk.CreateFile(minioMetaBucket, formatConfigFile)
-		if err != nil {
-			saveFormatErrCnt++
-			// Check for write quorum.
-			if saveFormatErrCnt <= len(storageDisks)-(len(storageDisks)/2+3) {
-				continue
-			}
-			return err
-		}
 		var u *uuid.UUID
 		u, err = uuid.New()
 		if err != nil {
@@ -250,7 +236,6 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 			}
 			return err
 		}
-		formatWriters[index] = w
 		formats[index] = &formatConfigV1{
 			Version: "1",
 			Format:  "xl",
@@ -261,23 +246,18 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 		}
 		jbod[index] = formats[index].XL.Disk
 	}
-	for index, w := range formatWriters {
-		if formats[index] == nil {
-			continue
-		}
+	for index, disk := range storageDisks {
 		formats[index].XL.JBOD = jbod
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(&formats[index])
+		formatBytes, err := json.Marshal(formats[index])
 		if err != nil {
 			return err
 		}
-	}
-	for _, w := range formatWriters {
-		if w == nil {
-			continue
-		}
-		if err = w.Close(); err != nil {
+		n, err := disk.AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
+		if err != nil {
 			return err
+		}
+		if n != int64(len(formatBytes)) {
+			return errUnexpected
 		}
 	}
 	return nil

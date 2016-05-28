@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path"
 	"path/filepath"
 	"strings"
@@ -143,62 +142,37 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
-	fileWriter, err := erasure.CreateFile(minioMetaBucket, tmpPartPath)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
-	}
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
+	buf := make([]byte, blockSize)
+	for {
+		var n int
+		n, err = io.ReadFull(data, buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil && err != io.ErrUnexpectedEOF {
 			return "", toObjectErr(err, bucket, object)
 		}
-		// Reader shouldn't have more data what mentioned in size argument.
-		// reading one more byte from the reader to validate it.
-		// expected to fail, success validates existence of more data in the reader.
-		if _, err = io.CopyN(ioutil.Discard, data, 1); err == nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
-			return "", UnExpectedDataSize{Size: int(size)}
+		// Update md5 writer.
+		md5Writer.Write(buf[:n])
+		var m int64
+		m, err = erasure.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
+		if err != nil {
+			return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 		}
-	} else {
-		var n int64
-		if n, err = io.Copy(multiWriter, data); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
-			return "", toObjectErr(err, bucket, object)
+		if m != int64(len(buf[:n])) {
+			return "", toObjectErr(errUnexpected, bucket, object)
 		}
-		size = n
 	}
-
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
-	err = fileWriter.Close()
-	if err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-			return "", toObjectErr(clErr, bucket, object)
-		}
-		return "", err
-	}
-
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
@@ -209,9 +183,17 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	xlMeta.Stat.Version = higherVersion
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
-	if err = xl.writeXLMetadata(minioMetaBucket, uploadIDPath, xlMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
+	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
+	if rErr != nil {
+		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
+	}
+
+	// Return success.
 	return newMD5Hex, nil
 }
 
@@ -389,8 +371,14 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["md5Sum"] = s3MD5
-	if err = xl.writeXLMetadata(minioMetaBucket, uploadIDPath, xlMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	}
+	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
+	if rErr != nil {
+		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
 
 	// Hold write lock on the destination before rename

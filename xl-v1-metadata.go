@@ -17,9 +17,7 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"math/rand"
 	"path"
 	"sort"
@@ -70,28 +68,6 @@ type xlMetaV1 struct {
 	} `json:"minio"`
 	Meta  map[string]string `json:"meta"`
 	Parts []objectPartInfo  `json:"parts,omitempty"`
-}
-
-// ReadFrom - read from implements io.ReaderFrom interface for
-// unmarshalling xlMetaV1.
-func (m *xlMetaV1) ReadFrom(reader io.Reader) (n int64, err error) {
-	var buffer bytes.Buffer
-	n, err = buffer.ReadFrom(reader)
-	if err != nil {
-		return 0, err
-	}
-	err = json.Unmarshal(buffer.Bytes(), m)
-	return n, err
-}
-
-// WriteTo - write to implements io.WriterTo interface for marshalling xlMetaV1.
-func (m xlMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
-	metadataBytes, err := json.Marshal(&m)
-	if err != nil {
-		return 0, err
-	}
-	p, err := writer.Write(metadataBytes)
-	return int64(p), err
 }
 
 // byPartName is a collection satisfying sort.Interface.
@@ -164,14 +140,16 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	// Count for errors encountered.
 	var xlJSONErrCount = 0
 
+	// Allocate 4MB buffer.
+	var buffer = make([]byte, blockSize)
+
 	// Return the first successful lookup from a random list of disks.
 	for xlJSONErrCount < len(xl.storageDisks) {
-		var r io.ReadCloser
 		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
-		r, err = disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0))
+		var n int64
+		n, err = disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0), buffer)
 		if err == nil {
-			defer r.Close()
-			_, err = xlMeta.ReadFrom(r)
+			err = json.Unmarshal(buffer[:n], &xlMeta)
 			if err == nil {
 				return xlMeta, nil
 			}
@@ -195,11 +173,45 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	return xlMeta
 }
 
+func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string) error {
+	var wg = &sync.WaitGroup{}
+	var mErrs = make([]error, len(xl.storageDisks))
+
+	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
+	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
+	// Rename `xl.json` to all disks in parallel.
+	for index, disk := range xl.storageDisks {
+		wg.Add(1)
+		// Rename `xl.json` in a routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			rErr := disk.RenameFile(srcBucket, srcJSONFile, dstBucket, dstJSONFile)
+			if rErr != nil {
+				mErrs[index] = rErr
+				return
+			}
+			mErrs[index] = nil
+		}(index, disk)
+	}
+	// Wait for all the routines.
+	wg.Wait()
+
+	// Return the first error.
+	for _, err := range mErrs {
+		if err == nil {
+			continue
+		}
+		return err
+	}
+	return nil
+}
+
 // writeXLMetadata - write `xl.json` on all disks in order.
 func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(xl.storageDisks))
 
+	jsonFile := path.Join(prefix, xlMetaJSONFile)
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
 		wg.Add(1)
@@ -207,33 +219,21 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 		go func(index int, disk StorageAPI, metadata xlMetaV1) {
 			defer wg.Done()
 
-			metaJSONFile := path.Join(prefix, xlMetaJSONFile)
-			metaWriter, mErr := disk.CreateFile(bucket, metaJSONFile)
-			if mErr != nil {
-				mErrs[index] = mErr
-				return
-			}
-
 			// Save the disk order index.
 			metadata.Erasure.Index = index + 1
 
-			// Marshal metadata to the writer.
-			_, mErr = metadata.WriteTo(metaWriter)
+			metadataBytes, err := json.Marshal(&metadata)
+			if err != nil {
+				mErrs[index] = err
+				return
+			}
+			n, mErr := disk.AppendFile(bucket, jsonFile, metadataBytes)
 			if mErr != nil {
-				if mErr = safeCloseAndRemove(metaWriter); mErr != nil {
-					mErrs[index] = mErr
-					return
-				}
 				mErrs[index] = mErr
 				return
 			}
-			// Verify if close fails with an error.
-			if mErr = metaWriter.Close(); mErr != nil {
-				if mErr = safeCloseAndRemove(metaWriter); mErr != nil {
-					mErrs[index] = mErr
-					return
-				}
-				mErrs[index] = mErr
+			if n != int64(len(metadataBytes)) {
+				mErrs[index] = errUnexpected
 				return
 			}
 			mErrs[index] = nil

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"io"
-	"net/http"
 	"net/rpc"
-	"strconv"
 
 	router "github.com/gorilla/mux"
 )
@@ -78,6 +75,26 @@ func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error 
 	return nil
 }
 
+// ReadFileHandler - read file handler is rpc wrapper to read file.
+func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *int64) error {
+	n, err := s.storage.ReadFile(arg.Vol, arg.Path, arg.Offset, arg.Buffer)
+	if err != nil {
+		return err
+	}
+	reply = &n
+	return nil
+}
+
+// AppendFileHandler - append file handler is rpc wrapper to append file.
+func (s *storageServer) AppendFileHandler(arg *AppendFileArgs, reply *int64) error {
+	n, err := s.storage.AppendFile(arg.Vol, arg.Path, arg.Buffer)
+	if err != nil {
+		return err
+	}
+	reply = &n
+	return nil
+}
+
 // DeleteFileHandler - delete file handler is rpc wrapper to delete file.
 func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericReply) error {
 	err := s.storage.DeleteFile(arg.Vol, arg.Path)
@@ -115,60 +132,4 @@ func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
 	storageRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	// Add minio storage routes.
 	storageRouter.Path("/storage").Handler(storageRPCServer)
-	// StreamUpload - stream upload handler.
-	storageRouter.Methods("POST").Path("/storage/upload/{volume}/{path:.+}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		vars := router.Vars(r)
-		volume := vars["volume"]
-		path := vars["path"]
-		writeCloser, err := stServer.storage.CreateFile(volume, path)
-		if err != nil {
-			httpErr := http.StatusInternalServerError
-			if err == errVolumeNotFound {
-				httpErr = http.StatusNotFound
-			} else if err == errIsNotRegular {
-				httpErr = http.StatusConflict
-			}
-			http.Error(w, err.Error(), httpErr)
-			return
-		}
-		reader := r.Body
-		if _, err = io.Copy(writeCloser, reader); err != nil {
-			safeCloseAndRemove(writeCloser)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeCloser.Close()
-		reader.Close()
-	})
-	// StreamDownloadHandler - stream download handler.
-	storageRouter.Methods("GET").Path("/storage/download/{volume}/{path:.+}").Queries("offset", "{offset:.*}").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		vars := router.Vars(r)
-		volume := vars["volume"]
-		path := vars["path"]
-		offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		readCloser, err := stServer.storage.ReadFile(volume, path, offset)
-		if err != nil {
-			httpErr := http.StatusBadRequest
-			if err == errVolumeNotFound {
-				httpErr = http.StatusNotFound
-			} else if err == errFileNotFound {
-				httpErr = http.StatusNotFound
-			}
-			http.Error(w, err.Error(), httpErr)
-			return
-		}
-
-		// Copy reader to writer.
-		io.Copy(w, readCloser)
-
-		// Flush out any remaining buffers to client.
-		w.(http.Flusher).Flush()
-
-		// Close the reader.
-		readCloser.Close()
-	})
 }

@@ -17,14 +17,8 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/rpc"
-	"net/url"
-	urlpath "path"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -151,34 +145,15 @@ func (n networkStorage) DeleteVol(volume string) error {
 // File operations.
 
 // CreateFile - create file.
-func (n networkStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, err error) {
-	writeURL := new(url.URL)
-	writeURL.Scheme = n.netScheme
-	writeURL.Host = n.netAddr
-	writeURL.Path = fmt.Sprintf("%s/upload/%s", storageRPCPath, urlpath.Join(volume, path))
-
-	contentType := "application/octet-stream"
-	readCloser, writeCloser := io.Pipe()
-	go func() {
-		resp, err := n.httpClient.Post(writeURL.String(), contentType, readCloser)
-		if err != nil {
-			readCloser.CloseWithError(err)
-			return
-		}
-		if resp != nil {
-			if resp.StatusCode != http.StatusOK {
-				if resp.StatusCode == http.StatusNotFound {
-					readCloser.CloseWithError(errFileNotFound)
-					return
-				}
-				readCloser.CloseWithError(errors.New("Invalid response."))
-				return
-			}
-			// Close the reader.
-			readCloser.Close()
-		}
-	}()
-	return writeCloser, nil
+func (n networkStorage) AppendFile(volume, path string, buffer []byte) (m int64, err error) {
+	if err = n.rpcClient.Call("Storage.AppendFileHandler", AppendFileArgs{
+		Vol:    volume,
+		Path:   path,
+		Buffer: buffer,
+	}, &m); err != nil {
+		return 0, toStorageErr(err)
+	}
+	return m, nil
 }
 
 // StatFile - get latest Stat information for a file at path.
@@ -193,27 +168,16 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 }
 
 // ReadFile - reads a file.
-func (n networkStorage) ReadFile(volume string, path string, offset int64) (reader io.ReadCloser, err error) {
-	readURL := new(url.URL)
-	readURL.Scheme = n.netScheme
-	readURL.Host = n.netAddr
-	readURL.Path = fmt.Sprintf("%s/download/%s", storageRPCPath, urlpath.Join(volume, path))
-	readQuery := make(url.Values)
-	readQuery.Set("offset", strconv.FormatInt(offset, 10))
-	readURL.RawQuery = readQuery.Encode()
-	resp, err := n.httpClient.Get(readURL.String())
-	if err != nil {
-		return nil, err
+func (n networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
+	if err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{
+		Vol:    volume,
+		Path:   path,
+		Offset: offset,
+		Buffer: buffer,
+	}, &m); err != nil {
+		return 0, toStorageErr(err)
 	}
-	if resp != nil {
-		if resp.StatusCode != http.StatusOK {
-			if resp.StatusCode == http.StatusNotFound {
-				return nil, errFileNotFound
-			}
-			return nil, errors.New("Invalid response")
-		}
-	}
-	return resp.Body, nil
+	return m, nil
 }
 
 // ListDir - list all entries at prefix.

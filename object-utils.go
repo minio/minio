@@ -19,15 +19,12 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
 	"path"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/safe"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -160,18 +157,3 @@ type byBucketName []BucketInfo
 func (d byBucketName) Len() int           { return len(d) }
 func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
-// safeCloseAndRemove - safely closes and removes underlying temporary
-// file writer if possible.
-func safeCloseAndRemove(writer io.WriteCloser) error {
-	// If writer is a safe file, Attempt to close and remove.
-	safeWriter, ok := writer.(*safe.File)
-	if ok {
-		return safeWriter.Abort()
-	}
-	wCloser, ok := writer.(*waitCloser)
-	if ok {
-		return wCloser.CloseWithError(errors.New("Close and error out."))
-	}
-	return nil
-}

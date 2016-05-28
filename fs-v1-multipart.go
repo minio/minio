@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path"
 	"strconv"
 	"strings"
@@ -302,60 +301,35 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
-	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, tmpPartPath)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Instantiate a new multi writer.
-	multiWriter := io.MultiWriter(md5Writer, fileWriter)
-
-	// Instantiate checksum hashers and create a multiwriter.
-	if size > 0 {
-		if _, err = io.CopyN(multiWriter, data, size); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
+	var buf = make([]byte, blockSize)
+	for {
+		n, err := io.ReadFull(data, buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil && err != io.ErrUnexpectedEOF {
 			return "", toObjectErr(err, bucket, object)
 		}
-		// Reader shouldn't have more data what mentioned in size argument.
-		// reading one more byte from the reader to validate it.
-		// expected to fail, success validates existence of more data in the reader.
-		if _, err = io.CopyN(ioutil.Discard, data, 1); err == nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
-			return "", UnExpectedDataSize{Size: int(size)}
-		}
-	} else {
-		var n int64
-		if n, err = io.Copy(multiWriter, data); err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
+		// Update md5 writer.
+		md5Writer.Write(buf[:n])
+		m, err := fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
+		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
-		size = n
+		if m != int64(len(buf[:n])) {
+			return "", toObjectErr(errUnexpected, bucket, object)
+		}
 	}
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", toObjectErr(clErr, bucket, object)
-			}
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
-	}
-	err = fileWriter.Close()
-	if err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-			return "", toObjectErr(clErr, bucket, object)
-		}
-		return "", err
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -373,8 +347,17 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 		}
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
-	if err = fs.writeFSMetadata(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID), fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadID))
+	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	if err = fs.writeFSMetadata(minioMetaBucket, tempUploadIDPath, fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	}
+	err = fs.storage.RenameFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile), minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
+	if err != nil {
+		if dErr := fs.storage.DeleteFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile)); dErr != nil {
+			return "", toObjectErr(dErr, minioMetaBucket, tempUploadIDPath)
+		}
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 	return newMD5Hex, nil
 }
@@ -493,10 +476,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	tempObj := path.Join(tmpMetaPrefix, bucket, object, uploadID, "object1")
-	fileWriter, err := fs.storage.CreateFile(minioMetaBucket, tempObj)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
+	var buffer = make([]byte, blockSize)
 
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
@@ -509,45 +489,30 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			if err == errFileNotFound {
 				return "", InvalidPart{}
 			}
-			return "", err
+			return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
 		}
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(fi.Size) {
 			return "", PartTooSmall{}
 		}
-		var fileReader io.ReadCloser
-		fileReader, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, 0)
-		if err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
+		offset := int64(0)
+		totalLeft := fi.Size
+		for totalLeft > 0 {
+			var n int64
+			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buffer)
+			if err != nil {
+				if err == errFileNotFound {
+					return "", InvalidPart{}
+				}
+				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
 			}
-			if err == errFileNotFound {
-				return "", InvalidPart{}
+			n, err = fs.storage.AppendFile(minioMetaBucket, tempObj, buffer[:n])
+			if err != nil {
+				return "", toObjectErr(err, minioMetaBucket, tempObj)
 			}
-			return "", err
+			offset += n
+			totalLeft -= n
 		}
-		_, err = io.Copy(fileWriter, fileReader)
-		if err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
-			}
-			return "", err
-		}
-		err = fileReader.Close()
-		if err != nil {
-			if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-				return "", clErr
-			}
-			return "", err
-		}
-	}
-
-	err = fileWriter.Close()
-	if err != nil {
-		if clErr := safeCloseAndRemove(fileWriter); clErr != nil {
-			return "", clErr
-		}
-		return "", err
 	}
 
 	// Rename the file back to original location, if not delete the temporary object.
