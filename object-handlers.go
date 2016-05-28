@@ -136,7 +136,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	defer readCloser.Close() // Close after this handler returns.
+	defer readCloser.Close()
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, hrange)
@@ -887,10 +887,6 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	if maxParts == 0 {
-		maxParts = maxPartsList
-	}
-
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "Unable to list uploaded parts.")
@@ -942,6 +938,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	complMultipartUpload := &completeMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
 		errorIf(err, "Unable to parse complete multipart upload XML.")
+		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		return
+	}
+	if len(complMultipartUpload.Parts) == 0 {
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}

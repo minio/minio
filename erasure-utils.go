@@ -17,8 +17,7 @@
 package main
 
 // getDataBlocks - fetches the data block only part of the input encoded blocks.
-func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) []byte {
-	var data []byte
+func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []byte) {
 	for _, block := range enBlocks[:dataBlocks] {
 		data = append(data, block...)
 	}

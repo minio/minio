@@ -413,6 +413,12 @@ func testListObjects(obj ObjectLayer, instanceType string, t *testing.T) {
 				{Name: "obj2"},
 			},
 		},
+		// ListObjectsResult-30.
+		// Prefix and Delimiter is set to '/', (testCase 62).
+		{
+			IsTruncated: false,
+			Objects:     []ObjectInfo{},
+		},
 	}
 
 	testCases := []struct {
@@ -521,6 +527,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t *testing.T) {
 		// Test with marker set as hierarhical value and with delimiter. (60-61)
 		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "/", 10, resultCases[28], nil, true},
 		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "/", 10, resultCases[29], nil, true},
+		// Test with prefix and delimiter set to '/'. (62)
+		{"test-bucket-list-object", "/", "", "/", 10, resultCases[30], nil, true},
 	}
 
 	for i, testCase := range testCases {

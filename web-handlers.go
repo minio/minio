@@ -98,6 +98,22 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	return nil
 }
 
+// StorageInfoRep - contains storage usage statistics.
+type StorageInfoRep struct {
+	StorageInfo StorageInfo `json:"storageInfo"`
+	UIVersion   string      `json:"uiVersion"`
+}
+
+// StorageInfo - web call to gather storage usage statistics.
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply *StorageInfoRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	reply.UIVersion = miniobrowser.UIVersion
+	reply.StorageInfo = web.ObjectAPI.StorageInfo()
+	return nil
+}
+
 // MakeBucketArgs - make bucket args.
 type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
@@ -127,10 +143,6 @@ type WebBucketInfo struct {
 	Name string `json:"name"`
 	// Date the bucket was created.
 	CreationDate time.Time `json:"creationDate"`
-	// Total storage space where the bucket resides.
-	Total int64 `json:"total"`
-	// Free storage space where the bucket resides.
-	Free int64 `json:"free"`
 }
 
 // ListBuckets - list buckets api.
@@ -148,8 +160,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			reply.Buckets = append(reply.Buckets, WebBucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.Created,
-				Total:        bucket.Total,
-				Free:         bucket.Free,
 			})
 		}
 	}

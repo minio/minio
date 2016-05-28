@@ -202,15 +202,6 @@ func (s fsStorage) MakeVol(volume string) (err error) {
 
 // ListVols - list volumes.
 func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
-	// Get disk info to be populated for VolInfo.
-	var diskInfo disk.Info
-	diskInfo, err = disk.GetInfo(s.diskPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errDiskNotFound
-		}
-		return nil, err
-	}
 	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
 		return nil, err
@@ -219,9 +210,6 @@ func (s fsStorage) ListVols() (volsInfo []VolInfo, err error) {
 		volInfo := VolInfo{
 			Name:    vol.Name,
 			Created: vol.Created,
-			Total:   diskInfo.Total,
-			Free:    diskInfo.Free,
-			FSType:  diskInfo.FSType,
 		}
 		volsInfo[i] = volInfo
 	}
@@ -244,24 +232,12 @@ func (s fsStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 		}
 		return VolInfo{}, err
 	}
-	// Get disk info, to be returned back along with volume info.
-	var diskInfo disk.Info
-	diskInfo, err = disk.GetInfo(s.diskPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return VolInfo{}, errDiskNotFound
-		}
-		return VolInfo{}, err
-	}
 	// As os.Stat() doesn't carry other than ModTime(), use ModTime()
 	// as CreatedTime.
 	createdTime := st.ModTime()
 	return VolInfo{
 		Name:    volume,
 		Created: createdTime,
-		Free:    diskInfo.Free,
-		Total:   diskInfo.Total,
-		FSType:  diskInfo.FSType,
 	}, nil
 }
 
@@ -333,6 +309,8 @@ func (s fsStorage) ReadFile(volume string, path string, offset int64) (readClose
 			return nil, errFileNotFound
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
+		} else if strings.Contains(err.Error(), "not a directory") {
+			return nil, errFileNotFound
 		}
 		return nil, err
 	}
@@ -380,7 +358,7 @@ func (s fsStorage) CreateFile(volume, path string) (writeCloser io.WriteCloser, 
 			return nil, errIsNotRegular
 		}
 	}
-	w, err := safe.CreateFileWithPrefix(filePath, "$tmpfile")
+	w, err := safe.CreateFile(filePath)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
@@ -425,7 +403,6 @@ func (s fsStorage) StatFile(volume, path string) (file FileInfo, err error) {
 		// Return all errors here.
 		return FileInfo{}, err
 	}
-
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		return FileInfo{}, errFileNotFound
