@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/pkg/mimedb"
@@ -409,28 +408,15 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Remove parts that weren't present in CompleteMultipartUpload request
 	for _, curpart := range currentXLMeta.Parts {
-		if xlMeta.ObjectPartIndex(curpart.Number) != -1 {
-			continue
+		if xlMeta.ObjectPartIndex(curpart.Number) == -1 {
+			// Delete the missing part files. e.g,
+			// Request 1: NewMultipart
+			// Request 2: PutObjectPart 1
+			// Request 3: PutObjectPart 2
+			// Request 4: CompleteMultipartUpload --part 2
+			// N.B. 1st part is not present. This part should be removed from the storage.
+			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
 		}
-		// Delete the missing part files. e.g,
-		// Request 1: NewMultipart
-		// Request 2: PutObjectPart 1
-		// Request 3: PutObjectPart 2
-		// Request 4: CompleteMultipartUpload --part 2
-		// N.B. 1st part is not present. This part should be removed from the storage.
-		curpartPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, curpart.Name)
-		wg := sync.WaitGroup{}
-		for i, disk := range xl.storageDisks {
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
-				// requests. xl.json is the authoritative source of truth on which parts constitute
-				// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-				_ = disk.DeleteFile(minioMetaBucket, curpartPath)
-			}(i, disk)
-		}
-		wg.Wait()
 	}
 
 	if err = xl.renameObject(minioMetaBucket, uploadIDPath, bucket, object); err != nil {
