@@ -82,7 +82,7 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 		return "", err
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
@@ -141,7 +141,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
 
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
+	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -173,6 +173,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
+
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
@@ -184,7 +185,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
@@ -372,7 +373,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["md5Sum"] = s3MD5
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
@@ -380,16 +381,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
-
 	// Hold write lock on the destination before rename
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
-	// Delete if an object already exists.
-	// FIXME: rename it to tmp file and delete only after
-	// the newly uploaded file is renamed from tmp location to
-	// the original location. Verify if the object is a multipart object.
-	err = xl.deleteObject(bucket, object)
+	// Rename if an object already exists to temporary location.
+	uniqueID := getUUID()
+	err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -407,9 +405,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 	}
 
+	// Rename the multipart object to final location.
 	if err = xl.renameObject(minioMetaBucket, uploadIDPath, bucket, object); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
+	// Delete the previously successfully renamed object.
+	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
 
 	// Hold the lock so that two parallel complete-multipart-uploads do no
 	// leave a stale uploads.json behind.

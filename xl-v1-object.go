@@ -54,27 +54,22 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	totalLeft := length
 	for ; partIndex < len(xlMeta.Parts); partIndex++ {
 		part := xlMeta.Parts[partIndex]
-		totalPartSize := part.Size
-		for totalPartSize > 0 {
-			var buffer io.Reader
-			buffer, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, part.Size)
-			if err != nil {
-				return err
-			}
-			if int64(buffer.(*bytes.Buffer).Len()) > totalLeft {
-				if _, err := io.CopyN(writer, buffer, totalLeft); err != nil {
-					return err
-				}
-				return nil
-			}
-			n, err := io.Copy(writer, buffer)
-			if err != nil {
-				return err
-			}
-			totalLeft -= n
-			totalPartSize -= n
-			partOffset += n
+		var buffer io.Reader
+		buffer, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, part.Size)
+		if err != nil {
+			return err
 		}
+		if int64(buffer.(*bytes.Buffer).Len()) > totalLeft {
+			if _, err := io.CopyN(writer, buffer, totalLeft); err != nil {
+				return err
+			}
+			return nil
+		}
+		n, err := io.Copy(writer, buffer)
+		if err != nil {
+			return err
+		}
+		totalLeft -= n
 		// Reset part offset to 0 to read rest of the parts from the beginning.
 		partOffset = 0
 	}
@@ -203,8 +198,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
-	tempErasureObj := path.Join(tmpMetaPrefix, bucket, object, "object1")
-	tempObj := path.Join(tmpMetaPrefix, bucket, object)
+	uniqueID := getUUID()
+	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "object1")
+	tempObj := path.Join(tmpMetaPrefix, uniqueID)
 
 	// Initialize xl meta.
 	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
@@ -281,13 +277,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(errFileAccessDenied, bucket, object)
 	}
 
-	// Delete if an object already exists.
-	err = xl.deleteObject(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	err = xl.renameObject(minioMetaBucket, tempObj, bucket, object)
+	// Rename if an object already exists to temporary location.
+	newUniqueID := getUUID()
+	err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -298,13 +290,21 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Stat.ModTime = modTime
 	xlMeta.Stat.Version = higherVersion
 	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
-	if err = xl.writeXLMetadata(minioMetaBucket, path.Join(tmpMetaPrefix, bucket, object), xlMeta); err != nil {
+
+	// Write `xl.json` metadata.
+	if err = xl.writeXLMetadata(minioMetaBucket, tempObj, xlMeta); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
-	rErr := xl.renameXLMetadata(minioMetaBucket, path.Join(tmpMetaPrefix, bucket, object), bucket, object)
-	if rErr != nil {
-		return "", toObjectErr(rErr, bucket, object)
+
+	// Rename the successfully written tempoary object to final location.
+	err = xl.renameObject(minioMetaBucket, tempObj, bucket, object)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
 	}
+
+	// Delete the temporary object.
+	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }

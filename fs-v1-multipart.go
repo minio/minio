@@ -76,7 +76,7 @@ func (fs fsObjects) newMultipartUploadCommon(bucket string, object string, meta 
 		return "", err
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	if err = fs.writeFSMetadata(minioMetaBucket, tempUploadIDPath, fsMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
@@ -300,7 +300,7 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, bucket, object, uploadID, partSuffix)
+	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -348,7 +348,7 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, bucket, object, uploadID)
+	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	if err = fs.writeFSMetadata(minioMetaBucket, tempUploadIDPath, fsMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
@@ -475,7 +475,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
-	tempObj := path.Join(tmpMetaPrefix, bucket, object, uploadID, "object1")
+	tempObj := path.Join(tmpMetaPrefix, uploadID, "object1")
 	var buffer = make([]byte, blockSize)
 
 	// Loop through all parts, validate them and then commit to disk.
