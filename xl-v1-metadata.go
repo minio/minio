@@ -25,9 +25,8 @@ import (
 	"time"
 )
 
-// Erasure block size.
 const (
-	erasureBlockSize          = 4 * 1024 * 1024 // 4MiB.
+	// Erasure related constants.
 	erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 	erasureAlgorithmISAL      = "isa-l/reedsolomon/cauchy"
 )
@@ -140,8 +139,8 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	// Count for errors encountered.
 	var xlJSONErrCount = 0
 
-	// Allocate 4MiB buffer.
-	buffer := make([]byte, blockSize)
+	// Allocate 10MiB buffer.
+	buffer := make([]byte, blockSizeV1)
 
 	// Return the first successful lookup from a random list of disks.
 	for xlJSONErrCount < len(xl.storageDisks) {
@@ -168,7 +167,7 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
 	xlMeta.Erasure.DataBlocks = dataBlocks
 	xlMeta.Erasure.ParityBlocks = parityBlocks
-	xlMeta.Erasure.BlockSize = erasureBlockSize
+	xlMeta.Erasure.BlockSize = blockSizeV1
 	xlMeta.Erasure.Distribution = randErasureDistribution(dataBlocks + parityBlocks)
 	return xlMeta
 }

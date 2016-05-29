@@ -115,7 +115,7 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 
 // loadFormat - load format from disk.
 func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
-	buffer := make([]byte, blockSize)
+	buffer := make([]byte, blockSizeV1)
 	offset := int64(0)
 	var n int64
 	n, err = disk.ReadFile(minioMetaBucket, formatConfigFile, offset, buffer)

@@ -21,6 +21,11 @@ import (
 	"sync"
 )
 
+const (
+	// Block size used for all internal operations version 1.
+	blockSizeV1 = 10 * 1024 * 1024 // 10MiB.
+)
+
 // Common initialization needed for both object layers.
 func initObjectLayer(storageDisks ...StorageAPI) error {
 	// This happens for the first time, but keep this here since this

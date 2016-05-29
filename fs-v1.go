@@ -160,8 +160,8 @@ func (fs fsObjects) GetObject(bucket, object string, startOffset int64, length i
 	for totalLeft > 0 {
 		// Figure out the right blockSize as it was encoded before.
 		var curBlockSize int64
-		if blockSize < totalLeft {
-			curBlockSize = blockSize
+		if blockSizeV1 < totalLeft {
+			curBlockSize = blockSizeV1
 		} else {
 			curBlockSize = totalLeft
 		}
@@ -212,10 +212,6 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
-const (
-	blockSize = 4 * 1024 * 1024 // 4MiB.
-)
-
 // PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
@@ -245,7 +241,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	} else {
 		// Allocate buffer.
-		buf := make([]byte, blockSize)
+		buf := make([]byte, blockSizeV1)
 		for {
 			n, rErr := data.Read(buf)
 			if rErr == io.EOF {

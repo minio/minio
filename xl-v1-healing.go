@@ -42,7 +42,7 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			offset := int64(0)
-			var buffer = make([]byte, blockSize)
+			var buffer = make([]byte, blockSizeV1)
 			n, err := disk.ReadFile(bucket, xlMetaPath, offset, buffer)
 			if err != nil {
 				errs[index] = err

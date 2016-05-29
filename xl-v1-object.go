@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"io"
@@ -51,27 +50,42 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
-	totalLeft := length
 	for ; partIndex < len(xlMeta.Parts); partIndex++ {
 		part := xlMeta.Parts[partIndex]
-		var buffer io.Reader
-		buffer, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, part.Size)
-		if err != nil {
-			return err
-		}
-		if int64(buffer.(*bytes.Buffer).Len()) > totalLeft {
-			if _, err := io.CopyN(writer, buffer, totalLeft); err != nil {
+		totalLeft := part.Size
+		beginOffset := int64(0)
+		for totalLeft > 0 {
+			var curBlockSize int64
+			if xlMeta.Erasure.BlockSize < totalLeft {
+				curBlockSize = xlMeta.Erasure.BlockSize
+			} else {
+				curBlockSize = totalLeft
+			}
+			var buffer = make([]byte, curBlockSize)
+			var n int64
+			n, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, beginOffset, buffer)
+			if err != nil {
 				return err
 			}
-			return nil
+			if length > int64(len(buffer)) {
+				var m int
+				m, err = writer.Write(buffer)
+				if err != nil {
+					return err
+				}
+				length -= int64(m)
+			} else {
+				_, err = writer.Write(buffer[:length])
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			totalLeft -= partOffset + n
+			beginOffset += n
+			// Reset part offset to 0 to read rest of the parts from the beginning.
+			partOffset = 0
 		}
-		n, err := io.Copy(writer, buffer)
-		if err != nil {
-			return err
-		}
-		totalLeft -= n
-		// Reset part offset to 0 to read rest of the parts from the beginning.
-		partOffset = 0
 	}
 	return nil
 }
@@ -222,7 +236,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	buf := make([]byte, blockSize)
+	// Allocated blockSized buffer for reading.
+	buf := make([]byte, blockSizeV1)
 	for {
 		var n int
 		n, err = io.ReadFull(data, buf)

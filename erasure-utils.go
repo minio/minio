@@ -16,13 +16,31 @@
 
 package main
 
+import "github.com/klauspost/reedsolomon"
+
 // getDataBlocks - fetches the data block only part of the input encoded blocks.
-func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []byte) {
-	for _, block := range enBlocks[:dataBlocks] {
-		data = append(data, block...)
+func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []byte, err error) {
+	if len(enBlocks) < dataBlocks {
+		return nil, reedsolomon.ErrTooFewShards
 	}
-	data = data[:curBlockSize]
-	return data
+	size := 0
+	blocks := enBlocks[:dataBlocks]
+	for _, block := range blocks {
+		size += len(block)
+	}
+	if size < curBlockSize {
+		return nil, reedsolomon.ErrShortData
+	}
+	write := curBlockSize
+	for _, block := range blocks {
+		if write < len(block) {
+			data = append(data, block[:write]...)
+			return data, nil
+		}
+		data = append(data, block...)
+		write -= len(block)
+	}
+	return data, nil
 }
 
 // checkBlockSize return the size of a single block.
