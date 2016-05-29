@@ -81,7 +81,7 @@ func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadI
 		// Read `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			var buffer = make([]byte, blockSize)
+			var buffer = make([]byte, blockSizeV1) // Allocate blockSized buffer.
 			n, rErr := disk.ReadFile(minioMetaBucket, uploadJSONPath, int64(0), buffer)
 			if rErr != nil {
 				errs[index] = rErr

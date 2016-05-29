@@ -305,7 +305,7 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	var buf = make([]byte, blockSize)
+	var buf = make([]byte, blockSizeV1)
 	for {
 		n, err := io.ReadFull(data, buf)
 		if err == io.EOF {
@@ -476,7 +476,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	tempObj := path.Join(tmpMetaPrefix, uploadID, "object1")
-	var buffer = make([]byte, blockSize)
+	var buffer = make([]byte, blockSizeV1)
 
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {

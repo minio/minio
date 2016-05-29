@@ -146,7 +146,10 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	buf := make([]byte, blockSize)
+	// Allocate blocksized buffer for reading.
+	buf := make([]byte, blockSizeV1)
+
+	// Read until io.EOF, fill the allocated buf.
 	for {
 		var n int
 		n, err = io.ReadFull(data, buf)
@@ -167,6 +170,8 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 			return "", toObjectErr(errUnexpected, bucket, object)
 		}
 	}
+
+	// Calculate new md5sum.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
@@ -174,6 +179,7 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 		}
 	}
 
+	// Rename temporary part file to its final location.
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
