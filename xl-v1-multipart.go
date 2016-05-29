@@ -110,38 +110,31 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	uploadIDLocked := false
-	defer func() {
-		if uploadIDLocked {
-			nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-		}
-	}()
-	// Figure out the erasure distribution first.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	uploadIDLocked = true
+	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
+	nsMutex.Lock(minioMetaBucket, uploadIDPath)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
-	}
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
 
 	// List all online disks.
-	onlineDisks, higherVersion, err := xl.listOnlineDisks(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Unlock the uploadID so that parallel uploads of parts can happen.
-	nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	uploadIDLocked = false
+	// Pick one from the first valid metadata.
+	xlMeta := pickValidXLMeta(partsMetadata)
 
 	// Initialize a new erasure with online disks and new distribution.
 	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
+
+	// Initialize sha512 hash.
+	erasure.InitHash("sha512")
 
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
@@ -182,31 +175,12 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 		}
 	}
 
-	// Hold lock as we are updating UPLODID/xl.json and renaming the part file from tmp location.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	uploadIDLocked = true
-
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	// List all online disks.
-	onlineDisks, higherVersion, err = xl.listOnlineDisks(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Increment version only if we have online disks less than configured storage disks.
-	if diskCount(onlineDisks) < len(xl.storageDisks) {
-		higherVersion++
-	}
-
-	xlMeta, err = xl.readXLMetadata(minioMetaBucket, uploadIDPath)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
-	}
 	// Rename temporary part file to its final location.
-	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+	partPath := path.Join(uploadIDPath, partSuffix)
 	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, partPath)
@@ -214,10 +188,32 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.Version = higherVersion
+	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
+	// Get calculated hash checksums from erasure to save in `xl.json`.
+	hashChecksums := erasure.GetHashes()
+
+	checkSums := make([]checkSumInfo, len(xl.storageDisks))
+	for index := range xl.storageDisks {
+		blockIndex := xlMeta.Erasure.Distribution[index] - 1
+		checkSums[blockIndex] = checkSumInfo{
+			Name:      partSuffix,
+			Algorithm: "sha512",
+			Hash:      hashChecksums[blockIndex],
+		}
+	}
+	for index := range partsMetadata {
+		blockIndex := xlMeta.Erasure.Distribution[index] - 1
+		partsMetadata[index].Parts = xlMeta.Parts
+		partsMetadata[index].Erasure.Checksum = append(partsMetadata[index].Erasure.Checksum, checkSums[blockIndex])
+	}
+
+	// Write all the checksum metadata.
 	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
-	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+
+	// Write unique `xl.json` each disk.
+	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
 	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
@@ -258,6 +254,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	result := ListPartsInfo{}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+
 	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
@@ -352,13 +349,17 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
 
-	// Read the current `xl.json`.
-	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
-	if err != nil {
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
+	if err = xl.reduceError(errs); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 
+	// Calculate full object size.
 	var objectSize int64
+
+	// Pick one from the first valid metadata.
+	xlMeta := pickValidXLMeta(partsMetadata)
 
 	// Save current xl meta for validation.
 	var currentXLMeta = xlMeta
@@ -405,7 +406,16 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	xlMeta.Meta["md5Sum"] = s3MD5
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
-	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+
+	// Update all xl metadata, make sure to not modify fields like
+	// checksum which are different on each disks.
+	for index := range partsMetadata {
+		partsMetadata[index].Stat = xlMeta.Stat
+		partsMetadata[index].Meta = xlMeta.Meta
+		partsMetadata[index].Parts = xlMeta.Parts
+	}
+	// Write unique `xl.json` for each disk.
+	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
 	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)

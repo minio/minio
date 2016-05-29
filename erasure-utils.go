@@ -16,7 +16,42 @@
 
 package main
 
-import "github.com/klauspost/reedsolomon"
+import (
+	"crypto/sha512"
+	"hash"
+	"io"
+
+	"github.com/klauspost/reedsolomon"
+)
+
+// newHash - gives you a newly allocated hash depending on the input algorithm.
+func newHash(algo string) hash.Hash {
+	switch algo {
+	case "sha512":
+		return sha512.New()
+	// Add new hashes here.
+	default:
+		return sha512.New()
+	}
+}
+
+func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
+	startOffset := int64(0)
+	// Read until io.EOF.
+	for {
+		buf := make([]byte, blockSizeV1)
+		n, err := disk.ReadFile(volume, path, startOffset, buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		writer.Write(buf[:n])
+		startOffset += n
+	}
+	return writer.Sum(nil), nil
+}
 
 // getDataBlocks - fetches the data block only part of the input encoded blocks.
 func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []byte, err error) {
@@ -31,6 +66,7 @@ func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []
 	if size < curBlockSize {
 		return nil, reedsolomon.ErrShortData
 	}
+
 	write := curBlockSize
 	for _, block := range blocks {
 		if write < len(block) {

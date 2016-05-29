@@ -41,19 +41,18 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			offset := int64(0)
-			var buffer = make([]byte, blockSizeV1)
-			n, err := disk.ReadFile(bucket, xlMetaPath, offset, buffer)
+			buffer, err := readAll(disk, bucket, xlMetaPath)
 			if err != nil {
 				errs[index] = err
 				return
 			}
-			err = json.Unmarshal(buffer[:n], &metadataArray[index])
+			err = json.Unmarshal(buffer, &metadataArray[index])
 			if err != nil {
 				// Unable to parse xl.json, set error.
 				errs[index] = err
 				return
 			}
+			// Relinquish buffer.
 			buffer = nil
 			errs[index] = nil
 		}(index, disk)
@@ -151,9 +150,8 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 // - xlMetaV1
 // - bool value indicating if healing is needed.
 // - error if any.
-func (xl xlObjects) listOnlineDisks(bucket, object string) (onlineDisks []StorageAPI, version int64, err error) {
+func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, version int64, err error) {
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
-	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
 	if err = xl.reduceError(errs); err != nil {
 		if err == errFileNotFound {
 			// For file not found, treat as if disks are available

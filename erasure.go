@@ -16,21 +16,30 @@
 
 package main
 
-import "github.com/klauspost/reedsolomon"
+import (
+	"encoding/hex"
+	"hash"
+
+	"github.com/klauspost/reedsolomon"
+)
 
 // erasure storage layer.
-type erasure struct {
-	ReedSolomon  reedsolomon.Encoder // Erasure encoder/decoder.
-	DataBlocks   int
-	ParityBlocks int
-	storageDisks []StorageAPI
-	distribution []int
+type erasureConfig struct {
+	reedSolomon  reedsolomon.Encoder // Erasure encoder/decoder.
+	dataBlocks   int                 // Calculated data disks.
+	storageDisks []StorageAPI        // Initialized storage disks.
+	distribution []int               // Erasure block distribution.
+	hashWriters  []hash.Hash         // Allocate hash writers.
+
+	// Carries hex checksums needed for validating Reads.
+	hashChecksums []string
+	checkSumAlgo  string
 }
 
 // newErasure instantiate a new erasure.
-func newErasure(disks []StorageAPI, distribution []int) *erasure {
+func newErasure(disks []StorageAPI, distribution []int) *erasureConfig {
 	// Initialize E.
-	e := &erasure{}
+	e := &erasureConfig{}
 
 	// Calculate data and parity blocks.
 	dataBlocks, parityBlocks := len(disks)/2, len(disks)/2
@@ -40,9 +49,8 @@ func newErasure(disks []StorageAPI, distribution []int) *erasure {
 	fatalIf(err, "Unable to initialize reedsolomon package.")
 
 	// Save the reedsolomon.
-	e.DataBlocks = dataBlocks
-	e.ParityBlocks = parityBlocks
-	e.ReedSolomon = rs
+	e.dataBlocks = dataBlocks
+	e.reedSolomon = rs
 
 	// Save all the initialized storage disks.
 	e.storageDisks = disks
@@ -52,4 +60,32 @@ func newErasure(disks []StorageAPI, distribution []int) *erasure {
 
 	// Return successfully initialized.
 	return e
+}
+
+// SaveAlgo - FIXME.
+func (e *erasureConfig) SaveAlgo(algo string) {
+	e.checkSumAlgo = algo
+}
+
+// Save hex encoded hashes - saves hashes that need to be validated
+// during reads for each blocks.
+func (e *erasureConfig) SaveHashes(hashes []string) {
+	e.hashChecksums = hashes
+}
+
+// InitHash - initializes new hash for all blocks.
+func (e *erasureConfig) InitHash(algo string) {
+	e.hashWriters = make([]hash.Hash, len(e.storageDisks))
+	for index := range e.storageDisks {
+		e.hashWriters[index] = newHash(algo)
+	}
+}
+
+// GetHashes - returns a slice of hex encoded hash.
+func (e erasureConfig) GetHashes() []string {
+	var hexHashes = make([]string, len(e.storageDisks))
+	for index, hashWriter := range e.hashWriters {
+		hexHashes[index] = hex.EncodeToString(hashWriter.Sum(nil))
+	}
+	return hexHashes
 }
