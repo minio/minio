@@ -81,13 +81,13 @@ func readUploadsJSON(bucket, object string, storageDisks ...StorageAPI) (uploadI
 		// Read `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			var buffer = make([]byte, blockSizeV1) // Allocate blockSized buffer.
-			n, rErr := disk.ReadFile(minioMetaBucket, uploadJSONPath, int64(0), buffer)
+			// Read all of 'uploads.json'
+			buffer, rErr := readAll(disk, minioMetaBucket, uploadJSONPath)
 			if rErr != nil {
 				errs[index] = rErr
 				return
 			}
-			rErr = json.Unmarshal(buffer[:n], &uploads[index])
+			rErr = json.Unmarshal(buffer, &uploads[index])
 			if rErr != nil {
 				errs[index] = rErr
 				return
@@ -331,9 +331,8 @@ func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo
 	return uploadsInfo, nil
 }
 
-// listMultipartUploadsCommon - lists all multipart uploads, common
-// function for both object layers.
-func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+// listMultipartUploads - lists all multipart uploads.
+func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	result := ListMultipartsInfo{}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -409,9 +408,9 @@ func (xl xlObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 		maxUploads = maxUploads - len(uploads)
 	}
 	if maxUploads > 0 {
-		walker := xl.lookupTreeWalkXL(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		walker := xl.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
 		if walker == nil {
-			walker = xl.startTreeWalkXL(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, xl.isMultipartUpload)
+			walker = xl.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, xl.isMultipartUpload)
 		}
 		for maxUploads > 0 {
 			walkResult, ok := <-walker.ch

@@ -57,12 +57,12 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 
 // readFSMetadata - returns the object metadata `fs.json` content.
 func (fs fsObjects) readFSMetadata(bucket, object string) (fsMeta fsMetaV1, err error) {
-	buffer := make([]byte, blockSizeV1)
-	n, err := fs.storage.ReadFile(bucket, path.Join(object, fsMetaJSONFile), int64(0), buffer)
+	var buffer []byte
+	buffer, err = readAll(fs.storage, bucket, path.Join(object, fsMetaJSONFile))
 	if err != nil {
 		return fsMetaV1{}, err
 	}
-	err = json.Unmarshal(buffer[:n], &fsMeta)
+	err = json.Unmarshal(buffer, &fsMeta)
 	if err != nil {
 		return fsMetaV1{}, err
 	}

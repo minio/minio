@@ -26,8 +26,25 @@ const (
 	blockSizeV1 = 10 * 1024 * 1024 // 10MiB.
 )
 
-// Common initialization needed for both object layers.
-func initObjectLayer(storageDisks ...StorageAPI) error {
+// House keeping code needed for FS.
+func fsHouseKeeping(storageDisk StorageAPI) error {
+	// Attempt to create `.minio`.
+	err := storageDisk.MakeVol(minioMetaBucket)
+	if err != nil {
+		if err != errVolumeExists && err != errDiskNotFound {
+			return err
+		}
+	}
+	// Cleanup all temp entries upon start.
+	err = cleanupDir(storageDisk, minioMetaBucket, tmpMetaPrefix)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// House keeping code needed for XL.
+func xlHouseKeeping(storageDisks []StorageAPI) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.

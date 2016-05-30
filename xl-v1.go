@@ -27,32 +27,38 @@ import (
 	"github.com/minio/minio/pkg/disk"
 )
 
+// XL constants.
 const (
+	// Format config file carries backend format specific details.
 	formatConfigFile = "format.json"
-	xlMetaJSONFile   = "xl.json"
-	uploadsJSONFile  = "uploads.json"
+	// XL metadata file carries per object metadata.
+	xlMetaJSONFile = "xl.json"
+	// Uploads metadata file carries per multipart object metadata.
+	uploadsJSONFile = "uploads.json"
 )
 
-// xlObjects - Implements fs object layer.
+// xlObjects - Implements XL object layer.
 type xlObjects struct {
-	storageDisks       []StorageAPI
-	physicalDisks      []string
-	dataBlocks         int
-	parityBlocks       int
-	readQuorum         int
-	writeQuorum        int
+	storageDisks  []StorageAPI // Collection of initialized backend disks.
+	physicalDisks []string     // Collection of regular disks.
+	dataBlocks    int          // dataBlocks count caculated for erasure.
+	parityBlocks  int          // parityBlocks count calculated for erasure.
+	readQuorum    int          // readQuorum minimum required disks to read data.
+	writeQuorum   int          // writeQuorum minimum required disks to write data.
+
+	// List pool management.
 	listObjectMap      map[listParams][]*treeWalker
 	listObjectMapMutex *sync.Mutex
 }
 
-// errMaxDisks - returned for reached maximum of disks.
-var errMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
+// errXLMaxDisks - returned for reached maximum of disks.
+var errXLMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
 
-// errMinDisks - returned for minimum number of disks.
-var errMinDisks = errors.New("Number of disks are smaller than supported minimum count '8'")
+// errXLMinDisks - returned for minimum number of disks.
+var errXLMinDisks = errors.New("Number of disks are smaller than supported minimum count '8'")
 
-// errNumDisks - returned for odd number of disks.
-var errNumDisks = errors.New("Number of disks should be multiples of '2'")
+// errXLNumDisks - returned for odd number of disks.
+var errXLNumDisks = errors.New("Number of disks should be multiples of '2'")
 
 const (
 	// Maximum erasure blocks.
@@ -61,14 +67,15 @@ const (
 	minErasureBlocks = 8
 )
 
+// Validate if input disks are sufficient for initializing XL.
 func checkSufficientDisks(disks []string) error {
 	// Verify total number of disks.
 	totalDisks := len(disks)
 	if totalDisks > maxErasureBlocks {
-		return errMaxDisks
+		return errXLMaxDisks
 	}
 	if totalDisks < minErasureBlocks {
-		return errMinDisks
+		return errXLMinDisks
 	}
 
 	// isEven function to verify if a given number if even.
@@ -77,16 +84,16 @@ func checkSufficientDisks(disks []string) error {
 	}
 
 	// Verify if we have even number of disks.
-	// only combination of 8, 10, 12, 14, 16 are supported.
+	// only combination of 8, 12, 16 are supported.
 	if !isEven(totalDisks) {
-		return errNumDisks
+		return errXLNumDisks
 	}
 
 	return nil
 }
 
-// Depending on the disk type network or local, initialize storage layer.
-func newStorageLayer(disk string) (storage StorageAPI, err error) {
+// Depending on the disk type network or local, initialize storage API.
+func newStorageAPI(disk string) (storage StorageAPI, err error) {
 	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
 		// Initialize filesystem storage API.
 		return newPosix(disk)
@@ -95,37 +102,27 @@ func newStorageLayer(disk string) (storage StorageAPI, err error) {
 	return newRPCClient(disk)
 }
 
-// Initialize all storage disks to bootstrap.
-func bootstrapDisks(disks []string) ([]StorageAPI, error) {
-	storageDisks := make([]StorageAPI, len(disks))
-	for index, disk := range disks {
-		var err error
-		// Intentionally ignore disk not found errors while
-		// initializing POSIX, so that we have successfully
-		// initialized posix Storage. Subsequent calls to XL/Erasure
-		// will manage any errors related to disks.
-		storageDisks[index], err = newStorageLayer(disk)
-		if err != nil && err != errDiskNotFound {
-			return nil, err
-		}
-	}
-	return storageDisks, nil
-}
-
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(disks []string) (ObjectLayer, error) {
+	// Validate if input disks are sufficient.
 	if err := checkSufficientDisks(disks); err != nil {
 		return nil, err
 	}
 
 	// Bootstrap disks.
-	storageDisks, err := bootstrapDisks(disks)
-	if err != nil {
-		return nil, err
+	storageDisks := make([]StorageAPI, len(disks))
+	for index, disk := range disks {
+		var err error
+		// Intentionally ignore disk not found errors. XL will
+		// manage such errors internally.
+		storageDisks[index], err = newStorageAPI(disk)
+		if err != nil && err != errDiskNotFound {
+			return nil, err
+		}
 	}
 
-	// Initialize object layer - like creating minioMetaBucket, cleaning up tmp files etc.
-	initObjectLayer(storageDisks...)
+	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
+	xlHouseKeeping(storageDisks)
 
 	// Load saved XL format.json and validate.
 	newPosixDisks, err := loadFormatXL(storageDisks)

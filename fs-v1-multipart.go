@@ -43,8 +43,8 @@ func (fs fsObjects) isBucketExist(bucket string) bool {
 	return true
 }
 
-// newMultipartUploadCommon - initialize a new multipart, is a common function for both object layers.
-func (fs fsObjects) newMultipartUploadCommon(bucket string, object string, meta map[string]string) (uploadID string, err error) {
+// newMultipartUpload - initialize a new multipart.
+func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -111,8 +111,8 @@ func (fs fsObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, er
 	return uploads, nil
 }
 
-// listMultipartUploadsCommon - lists all multipart uploads, common function for both object layers.
-func (fs fsObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+// listMultipartUploads - lists all multipart uploads.
+func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	result := ListMultipartsInfo{}
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -266,17 +266,17 @@ func (fs fsObjects) listMultipartUploadsCommon(bucket, prefix, keyMarker, upload
 
 // ListMultipartUploads - list multipart uploads.
 func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return fs.listMultipartUploadsCommon(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	return fs.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
 func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
 	meta = make(map[string]string) // Reset the meta value, we are not going to save headers for fs.
-	return fs.newMultipartUploadCommon(bucket, object, meta)
+	return fs.newMultipartUpload(bucket, object, meta)
 }
 
 // putObjectPartCommon - put object part.
-func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
+func (fs fsObjects) putObjectPart(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -364,10 +364,10 @@ func (fs fsObjects) putObjectPartCommon(bucket string, object string, uploadID s
 
 // PutObjectPart - writes the multipart upload chunks.
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
-	return fs.putObjectPartCommon(bucket, object, uploadID, partID, size, data, md5Hex)
+	return fs.putObjectPart(bucket, object, uploadID, partID, size, data, md5Hex)
 }
 
-func (fs fsObjects) listObjectPartsCommon(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
+func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
@@ -432,8 +432,9 @@ func (fs fsObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 	return result, nil
 }
 
+// ListObjectParts - list all parts.
 func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
-	return fs.listObjectPartsCommon(bucket, object, uploadID, partNumberMarker, maxParts)
+	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
@@ -450,6 +451,7 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 	return true
 }
 
+// CompleteMultipartUpload - implement complete multipart upload transaction.
 func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -533,9 +535,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	return s3MD5, nil
 }
 
-// abortMultipartUploadCommon - aborts a multipart upload, common
-// function used by both object layers.
-func (fs fsObjects) abortMultipartUploadCommon(bucket, object, uploadID string) error {
+// abortMultipartUpload - aborts a multipart upload.
+func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -581,7 +582,7 @@ func (fs fsObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 	return nil
 }
 
-// AbortMultipartUpload - aborts a multipart upload.
+// AbortMultipartUpload - aborts an multipart upload.
 func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	return fs.abortMultipartUploadCommon(bucket, object, uploadID)
+	return fs.abortMultipartUpload(bucket, object, uploadID)
 }

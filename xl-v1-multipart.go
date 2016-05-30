@@ -31,13 +31,11 @@ import (
 
 // ListMultipartUploads - list multipart uploads.
 func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return xl.listMultipartUploadsCommon(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	return xl.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
-/// Common multipart object layer functions.
-
-// newMultipartUploadCommon - initialize a new multipart, is a common function for both object layers.
-func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta map[string]string) (uploadID string, err error) {
+// newMultipartUpload - initialize a new multipart.
+func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -96,11 +94,11 @@ func (xl xlObjects) newMultipartUploadCommon(bucket string, object string, meta 
 
 // NewMultipartUpload - initialize a new multipart upload, returns a unique id.
 func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
-	return xl.newMultipartUploadCommon(bucket, object, meta)
+	return xl.newMultipartUpload(bucket, object, meta)
 }
 
-// putObjectPartCommon - put object part.
-func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
+// putObjectPart - put object part.
+func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -233,11 +231,11 @@ func (xl xlObjects) putObjectPartCommon(bucket string, object string, uploadID s
 
 // PutObjectPart - writes the multipart upload chunks.
 func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
-	return xl.putObjectPartCommon(bucket, object, uploadID, partID, size, data, md5Hex)
+	return xl.putObjectPart(bucket, object, uploadID, partID, size, data, md5Hex)
 }
 
-// ListObjectParts - list object parts, common function across both object layers.
-func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
+// ListObjectParts - list object parts.
+func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
@@ -319,7 +317,7 @@ func (xl xlObjects) listObjectPartsCommon(bucket, object, uploadID string, partN
 
 // ListObjectParts - list object parts.
 func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
-	return xl.listObjectPartsCommon(bucket, object, uploadID, partNumberMarker, maxParts)
+	return xl.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
 func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
@@ -476,8 +474,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	return s3MD5, nil
 }
 
-// abortMultipartUploadCommon - aborts a multipart upload, common function used by both object layers.
-func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) error {
+// abortMultipartUpload - aborts a multipart upload.
+func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -528,5 +526,5 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 
 // AbortMultipartUpload - aborts a multipart upload.
 func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	return xl.abortMultipartUploadCommon(bucket, object, uploadID)
+	return xl.abortMultipartUpload(bucket, object, uploadID)
 }
