@@ -19,7 +19,6 @@ package main
 import (
 	"sort"
 	"strings"
-	"time"
 )
 
 // listParams - list object params used for list object map
@@ -31,18 +30,10 @@ type listParams struct {
 }
 
 // Tree walk result carries results of tree walking.
-type treeWalkResult struct {
+type treeWalker struct {
 	entry string
 	err   error
 	end   bool
-}
-
-// Tree walk notify carries a channel which notifies tree walk
-// results, additionally it also carries information if treeWalk
-// should be timedOut.
-type treeWalker struct {
-	ch       <-chan treeWalkResult
-	timedOut bool
 }
 
 // listDir - listDir.
@@ -57,7 +48,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 		}
 		// Skip the entries which do not match the filter.
 		for i, entry := range entries {
-			if filter(entry) {
+			if !filter(entry) {
 				entries[i] = ""
 				continue
 			}
@@ -78,7 +69,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 }
 
 // treeWalk walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int, isLeaf func(string, string) bool) bool {
+func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, isLeaf func(string, string) bool, treeWalkCh chan treeWalker, doneCh chan struct{}, stackDepth int, isEnd bool) {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -94,14 +85,23 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		}
 	}
 	entries, err := xl.listDir(bucket, prefixDir, func(entry string) bool {
-		return !strings.HasPrefix(entry, entryPrefixMatch)
+		return strings.HasPrefix(entry, entryPrefixMatch)
 	}, isLeaf)
 	if err != nil {
-		send(treeWalkResult{err: err})
-		return false
+		select {
+		case <-doneCh:
+			if stackDepth == 0 {
+				close(treeWalkCh)
+			}
+		case treeWalkCh <- treeWalker{err: err}:
+		}
+		return
 	}
 	if len(entries) == 0 {
-		return true
+		if stackDepth == 0 {
+			close(treeWalkCh)
+		}
+		return
 	}
 
 	// example:
@@ -111,12 +111,16 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		return entries[i] >= markerDir
 	})
 	entries = entries[idx:]
-	*count += len(entries)
+	if len(entries) == 0 {
+		if stackDepth == 0 {
+			close(treeWalkCh)
+		}
+		return
+	}
 	for i, entry := range entries {
 		if i == 0 && markerDir == entry {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
-				*count--
 				continue
 			}
 			if recursive && !strings.HasSuffix(entry, slashSeparator) {
@@ -125,11 +129,9 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 				// should not be skipped, instead it will need to be treeWalk()'ed into.
 
 				// Skip if it is a file though as it would be listed in previous listing.
-				*count--
 				continue
 			}
 		}
-
 		if recursive && strings.HasSuffix(entry, slashSeparator) {
 			// If the entry is a directory, we will need recurse into it.
 			markerArg := ""
@@ -138,23 +140,37 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 				// recursing into "four/"
 				markerArg = markerBase
 			}
-			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !xl.treeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
-				return false
+			if i == len(entries)-1 && stackDepth == 0 {
+				isEnd = true
 			}
+			stackDepth++
+			xl.treeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, isLeaf, treeWalkCh, doneCh, stackDepth, isEnd)
+			stackDepth--
 			continue
 		}
-		*count--
-		if !send(treeWalkResult{entry: pathJoin(prefixDir, entry)}) {
-			return false
+		var isEOF bool
+		if stackDepth == 0 && i == len(entries)-1 {
+			isEOF = true
+		} else if i == len(entries)-1 && isEnd {
+			isEOF = true
+		}
+		select {
+		case <-doneCh:
+			if stackDepth == 0 {
+				close(treeWalkCh)
+				return
+			}
+		case treeWalkCh <- treeWalker{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}
-	return true
+	if stackDepth == 0 {
+		close(treeWalkCh)
+	}
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalker {
+func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool, doneCh chan struct{}) chan treeWalker {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -165,8 +181,7 @@ func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
 
-	ch := make(chan treeWalkResult, maxObjectList)
-	walkNotify := treeWalker{ch: ch}
+	treeWalkCh := make(chan treeWalker, maxObjectList)
 	entryPrefixMatch := prefix
 	prefixDir := ""
 	lastIndex := strings.LastIndex(prefix, slashSeparator)
@@ -174,58 +189,7 @@ func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 		entryPrefixMatch = prefix[lastIndex+1:]
 		prefixDir = prefix[:lastIndex+1]
 	}
-	count := 0
 	marker = strings.TrimPrefix(marker, prefixDir)
-	go func() {
-		defer close(ch)
-		send := func(walkResult treeWalkResult) bool {
-			if count == 0 {
-				walkResult.end = true
-			}
-			timer := time.After(time.Second * 60)
-			select {
-			case ch <- walkResult:
-				return true
-			case <-timer:
-				walkNotify.timedOut = true
-				return false
-			}
-		}
-		xl.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
-	}()
-	return &walkNotify
-}
-
-// Save the goroutine reference in the map
-func (xl xlObjects) saveTreeWalk(params listParams, walker *treeWalker) {
-	xl.listObjectMapMutex.Lock()
-	defer xl.listObjectMapMutex.Unlock()
-
-	walkers, _ := xl.listObjectMap[params]
-	walkers = append(walkers, walker)
-
-	xl.listObjectMap[params] = walkers
-}
-
-// Lookup the goroutine reference from map
-func (xl xlObjects) lookupTreeWalk(params listParams) *treeWalker {
-	xl.listObjectMapMutex.Lock()
-	defer xl.listObjectMapMutex.Unlock()
-
-	if walkChs, ok := xl.listObjectMap[params]; ok {
-		for i, walkCh := range walkChs {
-			if !walkCh.timedOut {
-				newWalkChs := walkChs[i+1:]
-				if len(newWalkChs) > 0 {
-					xl.listObjectMap[params] = newWalkChs
-				} else {
-					delete(xl.listObjectMap, params)
-				}
-				return walkCh
-			}
-		}
-		// As all channels are timed out, delete the map entry
-		delete(xl.listObjectMap, params)
-	}
-	return nil
+	go xl.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, isLeaf, treeWalkCh, doneCh, 0, false)
+	return treeWalkCh
 }

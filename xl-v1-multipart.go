@@ -78,13 +78,14 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	// Validate if we need to list further depending on maxUploads.
 	if maxUploads > 0 {
-		walker := xl.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
-		if walker == nil {
-			walker = xl.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, xl.isMultipartUpload)
+		walkerCh, walkerDoneCh := xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		if walkerCh == nil {
+			walkerDoneCh = make(chan struct{})
+			walkerCh = xl.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, xl.isMultipartUpload, walkerDoneCh)
 		}
 		// Collect uploads until we have reached maxUploads count to 0.
 		for maxUploads > 0 {
-			walkResult, ok := <-walker.ch
+			walkResult, ok := <-walkerCh
 			if !ok {
 				// Closed channel.
 				eof = true
@@ -107,10 +108,8 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				})
 				maxUploads--
 				if maxUploads == 0 {
-					if walkResult.end {
-						eof = true
-						break
-					}
+					eof = true
+					break
 				}
 				continue
 			}
@@ -136,7 +135,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			uploads = append(uploads, newUploads...)
 			maxUploads -= len(newUploads)
-			if walkResult.end && end {
+			if end && walkResult.end {
 				eof = true
 				break
 			}
