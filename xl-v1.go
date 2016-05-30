@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -45,8 +44,7 @@ type xlObjects struct {
 	writeQuorum   int          // writeQuorum minimum required disks to write data.
 
 	// List pool management.
-	listObjectMap      map[listParams][]*treeWalker
-	listObjectMapMutex *sync.Mutex
+	listPool *treeWalkerPool
 }
 
 // errXLMaxDisks - returned for reached maximum of disks.
@@ -159,12 +157,11 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks:      disks,
-		storageDisks:       newPosixDisks,
-		dataBlocks:         dataBlocks,
-		parityBlocks:       parityBlocks,
-		listObjectMap:      make(map[listParams][]*treeWalker),
-		listObjectMapMutex: &sync.Mutex{},
+		physicalDisks: disks,
+		storageDisks:  newPosixDisks,
+		dataBlocks:    dataBlocks,
+		parityBlocks:  parityBlocks,
+		listPool:      newTreeWalkerPool(globalLookupTimeout),
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
