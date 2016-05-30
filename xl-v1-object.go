@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"io"
@@ -63,27 +64,27 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			}
 			var buffer = make([]byte, curBlockSize)
 			var n int64
-			n, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), partOffset, beginOffset, buffer)
+			n, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), beginOffset, buffer)
 			if err != nil {
 				return err
 			}
 			if length > int64(len(buffer)) {
-				var m int
-				m, err = writer.Write(buffer)
+				var m int64
+				m, err = io.Copy(writer, bytes.NewReader(buffer[partOffset:]))
 				if err != nil {
 					return err
 				}
-				length -= int64(m)
+				length -= m
 			} else {
-				_, err = writer.Write(buffer[:length])
+				_, err = io.CopyN(writer, bytes.NewReader(buffer[partOffset:]), length)
 				if err != nil {
 					return err
 				}
 				return nil
 			}
-			totalLeft -= partOffset + n
+			totalLeft -= n
 			beginOffset += n
-			// Reset part offset to 0 to read rest of the parts from the beginning.
+			// Reset part offset to 0 to read rest of the part from the beginning.
 			partOffset = 0
 		}
 	}

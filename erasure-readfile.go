@@ -19,7 +19,7 @@ package main
 import "errors"
 
 // ReadFile - decoded erasure coded file.
-func (e erasure) ReadFile(volume, path string, bufferOffset int64, startOffset int64, buffer []byte) (int64, error) {
+func (e erasure) ReadFile(volume, path string, startOffset int64, buffer []byte) (int64, error) {
 	// Calculate the current encoded block size.
 	curEncBlockSize := getEncodedBlockLen(int64(len(buffer)), e.DataBlocks)
 	offsetEncOffset := getEncodedBlockLen(startOffset, e.DataBlocks)
@@ -89,7 +89,7 @@ func (e erasure) ReadFile(volume, path string, bufferOffset int64, startOffset i
 	}
 
 	// Copy data blocks.
-	copy(buffer, dataBlocks[bufferOffset:])
+	copy(buffer, dataBlocks)
 
 	// Relenquish memory.
 	dataBlocks = nil
