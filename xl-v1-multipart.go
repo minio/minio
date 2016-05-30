@@ -502,6 +502,8 @@ func (xl xlObjects) abortMultipartUploadCommon(bucket, object, uploadID string) 
 		return toObjectErr(err, bucket, object)
 	}
 
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := readUploadsJSON(bucket, object, xl.storageDisks...)
