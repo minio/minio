@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"math/rand"
 	"path"
 	"sort"
 	"sync"
@@ -39,6 +38,13 @@ type objectPartInfo struct {
 	ETag   string `json:"etag"`
 	Size   int64  `json:"size"`
 }
+
+// byPartName is a collection satisfying sort.Interface.
+type byPartNumber []objectPartInfo
+
+func (t byPartNumber) Len() int           { return len(t) }
+func (t byPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t byPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // A xlMetaV1 represents a metadata header mapping keys to sets of values.
 type xlMetaV1 struct {
@@ -69,12 +75,19 @@ type xlMetaV1 struct {
 	Parts []objectPartInfo  `json:"parts,omitempty"`
 }
 
-// byPartName is a collection satisfying sort.Interface.
-type byPartNumber []objectPartInfo
-
-func (t byPartNumber) Len() int           { return len(t) }
-func (t byPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
+// newXLMetaV1 - initializes new xlMetaV1.
+func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
+	xlMeta = xlMetaV1{}
+	xlMeta.Version = "1"
+	xlMeta.Format = "xl"
+	xlMeta.Minio.Release = minioReleaseTag
+	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
+	xlMeta.Erasure.DataBlocks = dataBlocks
+	xlMeta.Erasure.ParityBlocks = parityBlocks
+	xlMeta.Erasure.BlockSize = blockSizeV1
+	xlMeta.Erasure.Distribution = randInts(dataBlocks + parityBlocks)
+	return xlMeta
+}
 
 // ObjectPartIndex - returns the index of matching object part number.
 func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
@@ -139,16 +152,13 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	// Count for errors encountered.
 	var xlJSONErrCount = 0
 
-	// Allocate 10MiB buffer.
-	buffer := make([]byte, blockSizeV1)
-
 	// Return the first successful lookup from a random list of disks.
 	for xlJSONErrCount < len(xl.storageDisks) {
 		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
-		var n int64
-		n, err = disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), int64(0), buffer)
+		var buffer []byte
+		buffer, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
 		if err == nil {
-			err = json.Unmarshal(buffer[:n], &xlMeta)
+			err = json.Unmarshal(buffer, &xlMeta)
 			if err == nil {
 				return xlMeta, nil
 			}
@@ -156,20 +166,6 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		xlJSONErrCount++ // Update error count.
 	}
 	return xlMetaV1{}, err
-}
-
-// newXLMetaV1 - initializes new xlMetaV1.
-func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
-	xlMeta = xlMetaV1{}
-	xlMeta.Version = "1"
-	xlMeta.Format = "xl"
-	xlMeta.Minio.Release = minioReleaseTag
-	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
-	xlMeta.Erasure.DataBlocks = dataBlocks
-	xlMeta.Erasure.ParityBlocks = parityBlocks
-	xlMeta.Erasure.BlockSize = blockSizeV1
-	xlMeta.Erasure.Distribution = randErasureDistribution(dataBlocks + parityBlocks)
-	return xlMeta
 }
 
 // renameXLMetadata - renames `xl.json` from source prefix to destination prefix.
@@ -234,6 +230,7 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 				mErrs[index] = err
 				return
 			}
+			// Persist marshalled data.
 			n, mErr := disk.AppendFile(bucket, jsonFile, metadataBytes)
 			if mErr != nil {
 				mErrs[index] = mErr
@@ -258,19 +255,4 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 		return err
 	}
 	return nil
-}
-
-// randErasureDistribution - uses Knuth Fisher-Yates shuffle algorithm.
-func randErasureDistribution(numBlocks int) []int {
-	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
-	distribution := make([]int, numBlocks)
-	for i := 0; i < numBlocks; i++ {
-		distribution[i] = i + 1
-	}
-	for i := 0; i < numBlocks; i++ {
-		// Choose index uniformly in [i, numBlocks-1]
-		r := i + rand.Intn(numBlocks-i)
-		distribution[r], distribution[i] = distribution[i], distribution[r]
-	}
-	return distribution
 }

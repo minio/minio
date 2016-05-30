@@ -57,9 +57,8 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		}
 	}
 
-	// Initialize object layer - like creating minioMetaBucket,
-	// cleaning up tmp files etc.
-	initObjectLayer(storage)
+	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
+	fsHouseKeeping(storage)
 
 	// Return successfully initialized object layer.
 	return fsObjects{
@@ -311,7 +310,7 @@ func isBucketExist(storage StorageAPI, bucketName string) bool {
 	return true
 }
 
-func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Convert entry to FileInfo
 	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
 		if strings.HasSuffix(entry, slashSeparator) {
@@ -443,5 +442,5 @@ func (fs fsObjects) listObjectsFS(bucket, prefix, marker, delimiter string, maxK
 
 // ListObjects - list all objects.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return fs.listObjectsFS(bucket, prefix, marker, delimiter, maxKeys)
+	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
 }

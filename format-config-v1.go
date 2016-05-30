@@ -115,10 +115,8 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 
 // loadFormat - load format from disk.
 func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
-	buffer := make([]byte, blockSizeV1)
-	offset := int64(0)
-	var n int64
-	n, err = disk.ReadFile(minioMetaBucket, formatConfigFile, offset, buffer)
+	var buffer []byte
+	buffer, err = readAll(disk, minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
 		// same. 'volume not found' usually means its a fresh disk.
@@ -138,7 +136,7 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 		return nil, err
 	}
 	format = &formatConfigV1{}
-	err = json.Unmarshal(buffer[:n], format)
+	err = json.Unmarshal(buffer, format)
 	if err != nil {
 		return nil, err
 	}

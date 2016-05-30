@@ -17,7 +17,6 @@
 package main
 
 import (
-	"math/rand"
 	"sort"
 	"strings"
 	"time"
@@ -79,17 +78,8 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 	return nil, err
 }
 
-// getRandomDisk - gives a random disk at any point in time from the
-// available pool of disks.
-func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
-	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
-	randIndex := rand.Intn(len(xl.storageDisks) - 1)
-	disk = xl.storageDisks[randIndex] // Pick a random disk.
-	return disk
-}
-
-// treeWalkXL walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int, isLeaf func(string, string) bool) bool {
+// treeWalk walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
+func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResult) bool, count *int, isLeaf func(string, string) bool) bool {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -133,7 +123,7 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 			if recursive && !strings.HasSuffix(entry, slashSeparator) {
 				// We should not skip for recursive listing and if markerDir is a directory
 				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
-				// should not be skipped, instead it will need to be treeWalkXL()'ed into.
+				// should not be skipped, instead it will need to be treeWalk()'ed into.
 
 				// Skip if it is a file though as it would be listed in previous listing.
 				*count--
@@ -151,7 +141,7 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 			}
 			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !xl.treeWalkXL(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
+			if !xl.treeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
 				return false
 			}
 			continue
@@ -165,7 +155,7 @@ func (xl xlObjects) treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker strin
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalker {
+func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalker {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -202,13 +192,13 @@ func (xl xlObjects) startTreeWalkXL(bucket, prefix, marker string, recursive boo
 				return false
 			}
 		}
-		xl.treeWalkXL(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
+		xl.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
 	}()
 	return &walkNotify
 }
 
 // Save the goroutine reference in the map
-func (xl xlObjects) saveTreeWalkXL(params listParams, walker *treeWalker) {
+func (xl xlObjects) saveTreeWalk(params listParams, walker *treeWalker) {
 	xl.listObjectMapMutex.Lock()
 	defer xl.listObjectMapMutex.Unlock()
 
@@ -219,7 +209,7 @@ func (xl xlObjects) saveTreeWalkXL(params listParams, walker *treeWalker) {
 }
 
 // Lookup the goroutine reference from map
-func (xl xlObjects) lookupTreeWalkXL(params listParams) *treeWalker {
+func (xl xlObjects) lookupTreeWalk(params listParams) *treeWalker {
 	xl.listObjectMapMutex.Lock()
 	defer xl.listObjectMapMutex.Unlock()
 
