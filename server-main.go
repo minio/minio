@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
@@ -79,7 +80,10 @@ type serverCmdConfig struct {
 func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 	// Minio server config
 	apiServer := &http.Server{
-		Addr:           srvCmdConfig.serverAddr,
+		Addr: srvCmdConfig.serverAddr,
+		// Adding timeout of 10 minutes for unresponsive client connections.
+		ReadTimeout:    600 * time.Second,
+		WriteTimeout:   600 * time.Second,
 		Handler:        configureServerHandler(srvCmdConfig),
 		MaxHeaderBytes: 1 << 20,
 	}
