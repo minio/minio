@@ -401,7 +401,10 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
+		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, xl.getRandomDisk())
+		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -423,8 +426,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
 				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
-					eof = true
-					break
+					continue
 				}
 				return ListMultipartsInfo{}, err
 			}
@@ -445,8 +447,13 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var newUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
+			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, xl.getRandomDisk())
+			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			if err != nil {
+				if err == errFileNotFound || walkResult.err == errDiskNotFound {
+					continue
+				}
 				return ListMultipartsInfo{}, err
 			}
 			uploads = append(uploads, newUploads...)
