@@ -89,9 +89,10 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, buffer []byte)
 
 	// Copy data blocks.
 	copy(buffer, dataBlocks)
+	n := int64(len(dataBlocks))
 
 	// Relenquish memory.
 	dataBlocks = nil
 
-	return int64(len(buffer)), nil
+	return n, nil
 }
