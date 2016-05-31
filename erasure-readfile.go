@@ -34,12 +34,11 @@ func (e erasure) ReadFile(volume, path string, startOffset int64, buffer []byte)
 	// Read from all the disks.
 	for index, disk := range e.storageDisks {
 		blockIndex := e.distribution[index] - 1
-		// Initialize shard slice and fill the data from each parts.
-		enBlocks[blockIndex] = make([]byte, curEncBlockSize)
 		if disk == nil {
-			enBlocks[blockIndex] = nil
 			continue
 		}
+		// Initialize shard slice and fill the data from each parts.
+		enBlocks[blockIndex] = make([]byte, curEncBlockSize)
 		// Read the necessary blocks.
 		_, err := disk.ReadFile(volume, path, offsetEncOffset, enBlocks[blockIndex])
 		if err != nil {
