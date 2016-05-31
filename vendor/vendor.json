@@ -94,8 +94,8 @@
 		},
 		{
 			"path": "github.com/minio/miniobrowser",
-			"revision": "16a35547d5b0aea8de96b74416929ab2e2d248cd",
-			"revisionTime": "2016-04-21T19:57:24-07:00"
+			"revision": "9c9fbc91e4b2e952048f9299c45d53ee0a0d0f2b",
+			"revisionTime": "2016-05-30T17:30:33-07:00"
 		},
 		{
 			"path": "github.com/mitchellh/go-homedir",

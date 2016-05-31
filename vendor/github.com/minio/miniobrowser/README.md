@@ -6,6 +6,7 @@
 
 ```sh
 $ git clone https://github.com/minio/MinioBrowser
+$ cd MinioBrowser
 $ npm install
 ```
 
