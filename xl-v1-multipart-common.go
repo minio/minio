@@ -30,6 +30,7 @@ import (
 // uploadInfo -
 type uploadInfo struct {
 	UploadID  string    `json:"uploadId"`
+	Deleted   bool      `json:"deleted"` // Currently unused.
 	Initiated time.Time `json:"initiated"`
 }
 
