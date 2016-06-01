@@ -18,6 +18,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	slashpath "path"
+	"strings"
 	"sync"
 )
 
@@ -51,6 +54,60 @@ func initNSLock() {
 	}
 }
 
+func (n *nsLockMap) getParentLock(volume, path string) (nsLck *nsLock) {
+	path2 := slashpath.Clean(path)
+	tokens2 := strings.Split(path2, "/")
+	currDepth := len(tokens2)
+	for nsParam, lock := range n.lockMap {
+		if nsParam.volume != volume {
+			// As volume names are different, look for next entry in the map.
+			continue
+		}
+
+		path1 := slashpath.Clean(nsParam.path)
+		if path1 == path2 {
+			// As both paths are same, return existing lock
+			nsLck = lock
+			return
+		}
+
+		tokens1 := strings.Split(path1, "/")
+		fmt.Println("tokens1 =", tokens1, "tokens2 =", tokens2)
+		fmt.Println("nsLck =", nsLck)
+		if tokens1[0] != tokens2[0] {
+			continue
+		}
+
+		if len(tokens1) == len(tokens2) {
+			continue
+		}
+
+		maxDepth := len(tokens1)
+		if len(tokens2) < maxDepth {
+			maxDepth = len(tokens2)
+		}
+
+		if len(tokens1) < len(tokens2) {
+			depth := 1
+			for i := 1; i < maxDepth; i++ {
+				if tokens1[i] == tokens2[i] {
+					depth++
+				} else {
+					break
+				}
+			}
+
+			if depth < currDepth {
+				currDepth = depth
+				nsLck = lock
+			}
+		}
+	}
+
+	fmt.Println("nsLck =", nsLck)
+	return
+}
+
 // Lock the namespace resource.
 func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	n.mutex.Lock()
@@ -58,9 +115,12 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	param := nsParam{volume, path}
 	nsLk, found := n.lockMap[param]
 	if !found {
-		nsLk = &nsLock{
-			RWMutex: &sync.RWMutex{},
-			ref:     0,
+		nsLk = n.getParentLock(volume, path)
+		if nsLk == nil {
+			nsLk = &nsLock{
+				RWMutex: &sync.RWMutex{},
+				ref:     0,
+			}
 		}
 		n.lockMap[param] = nsLk
 	}
