@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -16,7 +32,13 @@ import (
 
 /// Object Operations
 
-// GetObject - get an object.
+// GetObject - reads an object erasured coded across multiple
+// disks. Supports additional parameters like offset and length
+// which is synonymous with HTTP Range requests.
+//
+// startOffset indicates the location at which the client requested
+// object to be read at. length indicates the total length of the
+// object requested by client.
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -60,26 +82,21 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return toObjectErr(err, bucket, object)
 	}
 
+	// Collect all the previous erasure infos across the disk.
+	var eInfos []erasureInfo
+	for index := range onlineDisks {
+		eInfos = append(eInfos, partsMetadata[index].Erasure)
+	}
+
 	// Read from all parts.
 	for ; partIndex < len(xlMeta.Parts); partIndex++ {
 		// Save the current part name and size.
 		partName := xlMeta.Parts[partIndex].Name
 		partSize := xlMeta.Parts[partIndex].Size
 
-		// Initialize a new erasure with online disks, with previous
-		// block distribution for each part reads.
-		erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
-
-		// Set previously calculated block checksums and algorithm for validation.
-		erasure.SaveAlgo(checkSumAlgorithm(xlMeta, partIndex+1))
-		erasure.SaveHashes(xl.metaPartBlockChecksums(partsMetadata, partIndex+1))
-
-		// Data block size.
-		blockSize := xlMeta.Erasure.BlockSize
-
 		// Start reading the part name.
 		var buffer []byte
-		buffer, err = erasure.ReadFile(bucket, pathJoin(object, partName), partSize, blockSize)
+		buffer, err = erasureReadFile(onlineDisks, bucket, pathJoin(object, partName), partName, partSize, eInfos)
 		if err != nil {
 			return err
 		}
@@ -100,18 +117,15 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			return nil
 		}
 
-		// Relinquish memory.
-		buffer = nil
-
 		// Reset part offset to 0 to read rest of the part from the beginning.
 		partOffset = 0
-	}
+	} // End of read all parts loop.
 
 	// Return success.
 	return nil
 }
 
-// GetObjectInfo - get object info.
+// GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -130,7 +144,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return info, nil
 }
 
-// getObjectInfo - get object info.
+// getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	var xlMeta xlMetaV1
 	xlMeta, err = xl.readXLMetadata(bucket, object)
@@ -138,19 +152,23 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		// Return error.
 		return ObjectInfo{}, err
 	}
-	objInfo = ObjectInfo{}
-	objInfo.IsDir = false
-	objInfo.Bucket = bucket
-	objInfo.Name = object
-	objInfo.Size = xlMeta.Stat.Size
-	objInfo.ModTime = xlMeta.Stat.ModTime
-	objInfo.MD5Sum = xlMeta.Meta["md5Sum"]
-	objInfo.ContentType = xlMeta.Meta["content-type"]
-	objInfo.ContentEncoding = xlMeta.Meta["content-encoding"]
+	objInfo = ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            xlMeta.Stat.Size,
+		ModTime:         xlMeta.Stat.ModTime,
+		MD5Sum:          xlMeta.Meta["md5Sum"],
+		ContentType:     xlMeta.Meta["content-type"],
+		ContentEncoding: xlMeta.Meta["content-encoding"],
+	}
 	return objInfo, nil
 }
 
-// renameObject - renaming all source objects to destination object across all disks.
+// renameObject - renames all source objects to destination object
+// across all disks in parallel. Additionally if we have errors and do
+// not have a readQuorum partially renamed files are renamed back to
+// its proper location.
 func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject string) error {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -167,14 +185,13 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			err := disk.RenameFile(srcBucket, retainSlash(srcObject), dstBucket, retainSlash(dstObject))
-			if err != nil {
+			if err != nil && err != errFileNotFound {
 				errs[index] = err
 			}
-			errs[index] = nil
 		}(index, disk)
 	}
 
-	// Wait for all RenameFile to finish.
+	// Wait for all renames to finish.
 	wg.Wait()
 
 	// Gather err count.
@@ -188,13 +205,14 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	if errCount > len(xl.storageDisks)-xl.writeQuorum {
-		// Special condition if readQuorum exists, then return success.
+		// Check we have successful read quorum.
 		if errCount <= len(xl.storageDisks)-xl.readQuorum {
-			return nil
-		}
-		// Rename back the object on disks where RenameFile succeeded
+			return nil // Return success.
+		} // else - failed to acquire read quorum.
+
+		// Undo rename object on disks where RenameFile succeeded.
 		for index, disk := range xl.storageDisks {
-			// Rename back the object in parallel to reduce overall disk latency
+			// Undo rename object in parallel.
 			wg.Add(1)
 			go func(index int, disk StorageAPI) {
 				defer wg.Done()
@@ -210,7 +228,10 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 	return nil
 }
 
-// PutObject - create an object.
+// PutObject - creates an object upon reading from the input stream
+// until EOF, erasure codes the data across all disk and additionally
+// writes `xl.json` which carries the necessary metadata for future
+// object operations.
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -254,36 +275,23 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		higherVersion++
 	}
 
-	// Initialize a new erasure with online disks and new distribution.
-	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
-
-	// Initialize sha512 hash.
-	erasure.InitHash("sha512")
-
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Allocated blockSized buffer for reading.
-	buf := make([]byte, blockSizeV1)
-	for {
-		var n int
-		n, err = io.ReadFull(data, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return "", toObjectErr(err, bucket, object)
-		}
-		// Update md5 writer.
-		md5Writer.Write(buf[:n])
-		var m int64
-		m, err = erasure.AppendFile(minioMetaBucket, tempErasureObj, buf[:n])
-		if err != nil {
-			return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
-		}
-		if m != int64(len(buf[:n])) {
-			return "", toObjectErr(errUnexpected, bucket, object)
-		}
+	// Tee reader combines incoming data stream and md5, data read
+	// from input stream is written to md5.
+	teeReader := io.TeeReader(data, md5Writer)
+
+	// Collect all the previous erasure infos across the disk.
+	var eInfos []erasureInfo
+	for range onlineDisks {
+		eInfos = append(eInfos, xlMeta.Erasure)
+	}
+
+	// Erasure code and write across all disks.
+	newEInfos, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
 
 	// Save additional erasureMetadata.
@@ -294,6 +302,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if len(metadata["md5Sum"]) == 0 {
 		metadata["md5Sum"] = newMD5Hex
 	}
+
 	// If not set default to "application/octet-stream"
 	if metadata["content-type"] == "" {
 		contentType := "application/octet-stream"
@@ -310,11 +319,15 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
+			// MD5 mismatch, delete the temporary object.
+			xl.deleteObject(minioMetaBucket, tempObj)
+			// Returns md5 mismatch.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
 
 	// Check if an object is present as one of the parent dir.
+	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
 		return "", toObjectErr(errFileAccessDenied, bucket, object)
 	}
@@ -334,26 +347,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Add the final part.
 	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
 
-	// Get hash checksums.
-	hashChecksums := erasure.GetHashes()
-
-	// Save the checksums.
-	checkSums := make([]checkSumInfo, len(xl.storageDisks))
-	for index := range xl.storageDisks {
-		blockIndex := xlMeta.Erasure.Distribution[index] - 1
-		checkSums[blockIndex] = checkSumInfo{
-			Name:      "object1",
-			Algorithm: "sha512",
-			Hash:      hashChecksums[blockIndex],
-		}
-	}
-
-	// Update all the necessary fields making sure that checkSum field
-	// is different for each disks.
+	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
-		blockIndex := xlMeta.Erasure.Distribution[index] - 1
 		partsMetadata[index] = xlMeta
-		partsMetadata[index].Erasure.Checksum = append(partsMetadata[index].Erasure.Checksum, checkSums[blockIndex])
+		partsMetadata[index].Erasure = newEInfos[index]
 	}
 
 	// Write unique `xl.json` for each disk.
@@ -361,7 +358,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Rename the successfully written tempoary object to final location.
+	// Rename the successfully written temporary object to final location.
 	err = xl.renameObject(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
@@ -374,7 +371,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	return newMD5Hex, nil
 }
 
-// deleteObject - deletes a regular object.
+// deleteObject - wrapper for delete object, deletes an object from
+// all the disks in parallel, including `xl.json` associated with the
+// object.
 func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -413,7 +412,6 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 		// Update error counter separately.
 		deleteFileErr++
 	}
-
 	// Return err if all disks report file not found.
 	if fileNotFoundCnt == len(xl.storageDisks) {
 		return errFileNotFound
@@ -426,7 +424,9 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	return nil
 }
 
-// DeleteObject - delete the object.
+// DeleteObject - deletes an object, this call doesn't necessary reply
+// any error as it is not necessary for the handler to reply back a
+// response to the client request.
 func (xl xlObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {

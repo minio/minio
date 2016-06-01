@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -70,27 +86,21 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	return nil
 }
 
-// getBucketInfo - returns the BucketInfo from one of the disks picked
-// at random.
+// getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
-	// Count for errors encountered.
-	var bucketErrCount = 0
-
-	// Return the first successful lookup from a random list of disks.
-	for bucketErrCount < len(xl.storageDisks) {
-		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
 		var volInfo VolInfo
 		volInfo, err = disk.StatVol(bucketName)
-		if err == nil {
-			bucketInfo = BucketInfo{
-				Name:    volInfo.Name,
-				Created: volInfo.Created,
-			}
-			return bucketInfo, nil
+		if err != nil {
+			return BucketInfo{}, err
 		}
-		bucketErrCount++ // Update error count.
+		bucketInfo = BucketInfo{
+			Name:    volInfo.Name,
+			Created: volInfo.Created,
+		}
+		break
 	}
-	return BucketInfo{}, err
+	return bucketInfo, nil
 }
 
 // Checks whether bucket exists.
@@ -127,12 +137,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 
 // listBuckets - returns list of all buckets from a disk picked at random.
 func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
-	// Count for errors encountered.
-	var listBucketsErrCount = 0
-
-	// Return the first successful lookup from a random list of disks.
-	for listBucketsErrCount < len(xl.storageDisks) {
-		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
 		if err == nil {
@@ -154,7 +159,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			}
 			return bucketsInfo, nil
 		}
-		listBucketsErrCount++ // Update error count.
+		break
 	}
 	return nil, err
 }

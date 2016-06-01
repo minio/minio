@@ -16,20 +16,23 @@
 
 package main
 
-import (
-	"math/rand"
-	"path"
-	"sync"
-	"time"
-)
+import "path"
 
-// getRandomDisk - gives a random disk at any point in time from the
-// available pool of disks.
-func (xl xlObjects) getRandomDisk() (disk StorageAPI) {
-	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
-	randIndex := rand.Intn(len(xl.storageDisks) - 1)
-	disk = xl.storageDisks[randIndex] // Pick a random disk.
-	return disk
+// getLoadBalancedQuorumDisks - fetches load balanced sufficiently
+// randomized quorum disk slice.
+func (xl xlObjects) getLoadBalancedQuorumDisks() (disks []StorageAPI) {
+	// It is okay to have readQuorum disks.
+	return xl.getLoadBalancedDisks()[:xl.readQuorum-1]
+}
+
+// getLoadBalancedDisks - fetches load balanced (sufficiently
+// randomized) disk slice.
+func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
+	// Based on the random shuffling return back randomized disks.
+	for _, i := range randInts(len(xl.storageDisks)) {
+		disks = append(disks, xl.storageDisks[i-1])
+	}
+	return disks
 }
 
 // This function does the following check, suppose
@@ -51,62 +54,27 @@ func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
 	return isParentDirObject(parent)
 }
 
+// isObject - returns `true` if the prefix is an object i.e if
+// `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) bool {
-	// Create errs and volInfo slices of storageDisks size.
-	var errs = make([]error, len(xl.storageDisks))
-
-	// Allocate a new waitgroup.
-	var wg = &sync.WaitGroup{}
-	for index, disk := range xl.storageDisks {
-		wg.Add(1)
-		// Stat file on all the disks in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			errs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the Stat operations to finish.
-	wg.Wait()
-
-	var errFileNotFoundCount int
-	for _, err := range errs {
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
 		if err != nil {
-			if err == errFileNotFound {
-				errFileNotFoundCount++
-				// If we have errors with file not found greater than allowed read
-				// quorum we return err as errFileNotFound.
-				if errFileNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
-					return false
-				}
-				continue
-			}
-			errorIf(err, "Unable to access file "+path.Join(bucket, prefix))
 			return false
 		}
+		break
 	}
 	return true
 }
 
-// statPart - stat a part file.
+// statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, objectPart string) (fileInfo FileInfo, err error) {
-	// Count for errors encountered.
-	var xlJSONErrCount = 0
-
-	// Return the first success entry based on the selected random disk.
-	for xlJSONErrCount < len(xl.storageDisks) {
-		// Choose a random disk on each attempt.
-		disk := xl.getRandomDisk()
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
 		fileInfo, err = disk.StatFile(bucket, objectPart)
-		if err == nil {
-			return fileInfo, nil
+		if err != nil {
+			return FileInfo{}, err
 		}
-		xlJSONErrCount++ // Update error count.
+		break
 	}
-	return FileInfo{}, err
+	return fileInfo, nil
 }
