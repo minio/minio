@@ -19,16 +19,16 @@ package main
 import "sync"
 
 // AppendFile - append data buffer at path.
-func (e erasure) AppendFile(volume, path string, dataBuffer []byte) (n int64, err error) {
+func (e erasureConfig) AppendFile(volume, path string, dataBuffer []byte) (n int64, err error) {
 	// Split the input buffer into data and parity blocks.
 	var blocks [][]byte
-	blocks, err = e.ReedSolomon.Split(dataBuffer)
+	blocks, err = e.reedSolomon.Split(dataBuffer)
 	if err != nil {
 		return 0, err
 	}
 
 	// Encode parity blocks using data blocks.
-	err = e.ReedSolomon.Encode(blocks)
+	err = e.reedSolomon.Encode(blocks)
 	if err != nil {
 		return 0, err
 	}
@@ -55,6 +55,10 @@ func (e erasure) AppendFile(volume, path string, dataBuffer []byte) (n int64, er
 				wErrs[index] = errUnexpected
 				return
 			}
+			// Calculate hash.
+			e.hashWriters[blockIndex].Write(blocks[blockIndex])
+
+			// Successfully wrote.
 			wErrs[index] = nil
 		}(index, disk)
 	}

@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"sort"
 	"sync"
@@ -39,12 +40,19 @@ type objectPartInfo struct {
 	Size   int64  `json:"size"`
 }
 
-// byPartName is a collection satisfying sort.Interface.
-type byPartNumber []objectPartInfo
+// byObjectPartNumber is a collection satisfying sort.Interface.
+type byObjectPartNumber []objectPartInfo
 
-func (t byPartNumber) Len() int           { return len(t) }
-func (t byPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
+func (t byObjectPartNumber) Len() int           { return len(t) }
+func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
+
+// checkSumInfo - carries checksums of individual part.
+type checkSumInfo struct {
+	Name      string `json:"name"`
+	Algorithm string `json:"algorithm"`
+	Hash      string `json:"hash"`
+}
 
 // A xlMetaV1 represents a metadata header mapping keys to sets of values.
 type xlMetaV1 struct {
@@ -56,17 +64,13 @@ type xlMetaV1 struct {
 		Version int64     `json:"version"`
 	} `json:"stat"`
 	Erasure struct {
-		Algorithm    string `json:"algorithm"`
-		DataBlocks   int    `json:"data"`
-		ParityBlocks int    `json:"parity"`
-		BlockSize    int64  `json:"blockSize"`
-		Index        int    `json:"index"`
-		Distribution []int  `json:"distribution"`
-		Checksum     []struct {
-			Name      string `json:"name"`
-			Algorithm string `json:"algorithm"`
-			Hash      string `json:"hash"`
-		} `json:"checksum"`
+		Algorithm    string         `json:"algorithm"`
+		DataBlocks   int            `json:"data"`
+		ParityBlocks int            `json:"parity"`
+		BlockSize    int64          `json:"blockSize"`
+		Index        int            `json:"index"`
+		Distribution []int          `json:"distribution"`
+		Checksum     []checkSumInfo `json:"checksum,omitempty"`
 	} `json:"erasure"`
 	Minio struct {
 		Release string `json:"release"`
@@ -89,6 +93,11 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	return xlMeta
 }
 
+// IsValid - is validate tells if the format is sane.
+func (m xlMetaV1) IsValid() bool {
+	return m.Version == "1" && m.Format == "xl"
+}
+
 // ObjectPartIndex - returns the index of matching object part number.
 func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
 	for i, part := range m.Parts {
@@ -98,6 +107,17 @@ func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
 		}
 	}
 	return -1
+}
+
+// ObjectCheckIndex - returns the checksum for the part name from the checksum slice.
+func (m xlMetaV1) PartObjectChecksum(partNumber int) checkSumInfo {
+	partName := fmt.Sprintf("object%d", partNumber)
+	for _, checksum := range m.Erasure.Checksum {
+		if checksum.Name == partName {
+			return checksum
+		}
+	}
+	return checkSumInfo{}
 }
 
 // AddObjectPart - add a new object part in order.
@@ -121,11 +141,11 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	m.Parts = append(m.Parts, partInfo)
 
 	// Parts in xlMeta should be in sorted order by part number.
-	sort.Sort(byPartNumber(m.Parts))
+	sort.Sort(byObjectPartNumber(m.Parts))
 }
 
-// objectToPartOffset - translate offset of an object to offset of its individual part.
-func (m xlMetaV1) objectToPartOffset(offset int64) (partIndex int, partOffset int64, err error) {
+// ObjectToPartOffset - translate offset of an object to offset of its individual part.
+func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset int64, err error) {
 	partOffset = offset
 	// Seek until object offset maps to a particular part offset.
 	for i, part := range m.Parts {
@@ -146,6 +166,18 @@ func (m xlMetaV1) objectToPartOffset(offset int64) (partIndex int, partOffset in
 	return 0, 0, InvalidRange{}
 }
 
+// pickValidXLMeta - picks one valid xlMeta content and returns from a
+// slice of xlmeta content. If no value is found this function panics
+// and dies.
+func pickValidXLMeta(xlMetas []xlMetaV1) xlMetaV1 {
+	for _, xlMeta := range xlMetas {
+		if xlMeta.IsValid() {
+			return xlMeta
+		}
+	}
+	panic("Unable to look for valid XL metadata content")
+}
+
 // readXLMetadata - returns the object metadata `xl.json` content from
 // one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
@@ -160,7 +192,10 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		if err == nil {
 			err = json.Unmarshal(buffer, &xlMeta)
 			if err == nil {
-				return xlMeta, nil
+				if xlMeta.IsValid() {
+					return xlMeta, nil
+				}
+				err = errDataCorrupt
 			}
 		}
 		xlJSONErrCount++ // Update error count.
@@ -209,12 +244,85 @@ func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix 
 	return nil
 }
 
+// writeXLMetadata - writes `xl.json` to a single disk.
+func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
+	jsonFile := path.Join(prefix, xlMetaJSONFile)
+
+	// Marshal json.
+	metadataBytes, err := json.Marshal(&xlMeta)
+	if err != nil {
+		return err
+	}
+	// Persist marshalled data.
+	n, err := disk.AppendFile(bucket, jsonFile, metadataBytes)
+	if err != nil {
+		return err
+	}
+	if n != int64(len(metadataBytes)) {
+		return errUnexpected
+	}
+	return nil
+}
+
+// checkSumAlgorithm - get the algorithm required for checksum
+// verification for a given part. Allocates a new hash and returns.
+func checkSumAlgorithm(xlMeta xlMetaV1, partIdx int) string {
+	partCheckSumInfo := xlMeta.PartObjectChecksum(partIdx)
+	return partCheckSumInfo.Algorithm
+}
+
+// xlMetaPartBlockChecksums - get block checksums for a given part.
+func (xl xlObjects) metaPartBlockChecksums(xlMetas []xlMetaV1, partIdx int) (blockCheckSums []string) {
+	for index := range xl.storageDisks {
+		// Save the read checksums for a given part.
+		blockCheckSums = append(blockCheckSums, xlMetas[index].PartObjectChecksum(partIdx).Hash)
+	}
+	return blockCheckSums
+}
+
+// writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
+func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMetaV1) error {
+	var wg = &sync.WaitGroup{}
+	var mErrs = make([]error, len(xl.storageDisks))
+
+	// Start writing `xl.json` to all disks in parallel.
+	for index, disk := range xl.storageDisks {
+		wg.Add(1)
+		// Write `xl.json` in a routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+
+			// Pick one xlMeta for a disk at index.
+			xlMetas[index].Erasure.Index = index + 1
+
+			// Write unique `xl.json` for a disk at index.
+			if err := writeXLMetadata(disk, bucket, prefix, xlMetas[index]); err != nil {
+				mErrs[index] = err
+				return
+			}
+			mErrs[index] = nil
+		}(index, disk)
+	}
+
+	// Wait for all the routines.
+	wg.Wait()
+
+	// Return the first error.
+	for _, err := range mErrs {
+		if err == nil {
+			continue
+		}
+		return err
+	}
+
+	return nil
+}
+
 // writeXLMetadata - write `xl.json` on all disks in order.
 func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(xl.storageDisks))
 
-	jsonFile := path.Join(prefix, xlMetaJSONFile)
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
 		wg.Add(1)
@@ -225,19 +333,9 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 			// Save the disk order index.
 			metadata.Erasure.Index = index + 1
 
-			metadataBytes, err := json.Marshal(&metadata)
-			if err != nil {
+			// Write xl metadata.
+			if err := writeXLMetadata(disk, bucket, prefix, metadata); err != nil {
 				mErrs[index] = err
-				return
-			}
-			// Persist marshalled data.
-			n, mErr := disk.AppendFile(bucket, jsonFile, metadataBytes)
-			if mErr != nil {
-				mErrs[index] = mErr
-				return
-			}
-			if n != int64(len(metadataBytes)) {
-				mErrs[index] = errUnexpected
 				return
 			}
 			mErrs[index] = nil

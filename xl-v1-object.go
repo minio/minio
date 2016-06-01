@@ -31,63 +31,83 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
 
-	// Read metadata associated with the object.
-	xlMeta, err := xl.readXLMetadata(bucket, object)
-	if err != nil {
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
+	if err := xl.reduceError(errs); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
-	onlineDisks, _, err := xl.listOnlineDisks(bucket, object)
+	onlineDisks, _, err := xl.listOnlineDisks(partsMetadata, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Initialize a new erasure with online disks, with previous block distribution.
-	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
+	// Pick one from the first valid metadata.
+	xlMeta := partsMetadata[0]
+	if !xlMeta.IsValid() {
+		for _, partMetadata := range partsMetadata {
+			if partMetadata.IsValid() {
+				xlMeta = partMetadata
+				break
+			}
+		}
+	}
 
 	// Get part index offset.
-	partIndex, partOffset, err := xlMeta.objectToPartOffset(startOffset)
+	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+
+	// Read from all parts.
 	for ; partIndex < len(xlMeta.Parts); partIndex++ {
-		part := xlMeta.Parts[partIndex]
-		totalLeft := part.Size
-		beginOffset := int64(0)
-		for totalLeft > 0 {
-			var curBlockSize int64
-			if xlMeta.Erasure.BlockSize < totalLeft {
-				curBlockSize = xlMeta.Erasure.BlockSize
-			} else {
-				curBlockSize = totalLeft
-			}
-			var buffer = make([]byte, curBlockSize)
-			var n int64
-			n, err = erasure.ReadFile(bucket, pathJoin(object, part.Name), beginOffset, buffer)
+		// Save the current part name and size.
+		partName := xlMeta.Parts[partIndex].Name
+		partSize := xlMeta.Parts[partIndex].Size
+
+		// Initialize a new erasure with online disks, with previous
+		// block distribution for each part reads.
+		erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
+
+		// Set previously calculated block checksums and algorithm for validation.
+		erasure.SaveAlgo(checkSumAlgorithm(xlMeta, partIndex+1))
+		erasure.SaveHashes(xl.metaPartBlockChecksums(partsMetadata, partIndex+1))
+
+		// Data block size.
+		blockSize := xlMeta.Erasure.BlockSize
+
+		// Start reading the part name.
+		var buffer []byte
+		buffer, err = erasure.ReadFile(bucket, pathJoin(object, partName), partSize, blockSize)
+		if err != nil {
+			return err
+		}
+
+		// Copy to client until length requested.
+		if length > int64(len(buffer)) {
+			var m int64
+			m, err = io.Copy(writer, bytes.NewReader(buffer[partOffset:]))
 			if err != nil {
 				return err
 			}
-			if length > int64(len(buffer)) {
-				var m int64
-				m, err = io.Copy(writer, bytes.NewReader(buffer[partOffset:]))
-				if err != nil {
-					return err
-				}
-				length -= m
-			} else {
-				_, err = io.CopyN(writer, bytes.NewReader(buffer[partOffset:]), length)
-				if err != nil {
-					return err
-				}
-				return nil
+			length -= m
+		} else {
+			_, err = io.CopyN(writer, bytes.NewReader(buffer[partOffset:]), length)
+			if err != nil {
+				return err
 			}
-			totalLeft -= n
-			beginOffset += n
-			// Reset part offset to 0 to read rest of the part from the beginning.
-			partOffset = 0
+			return nil
 		}
+
+		// Relinquish memory.
+		buffer = nil
+
+		// Reset part offset to 0 to read rest of the part from the beginning.
+		partOffset = 0
 	}
+
+	// Return success.
 	return nil
 }
 
@@ -220,8 +240,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize xl meta.
 	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
 
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
+
 	// List all online disks.
-	onlineDisks, higherVersion, err := xl.listOnlineDisks(bucket, object)
+	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -233,6 +256,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Initialize a new erasure with online disks and new distribution.
 	erasure := newErasure(onlineDisks, xlMeta.Erasure.Distribution)
+
+	// Initialize sha512 hash.
+	erasure.InitHash("sha512")
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -305,10 +331,33 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime
 	xlMeta.Stat.Version = higherVersion
+	// Add the final part.
 	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
 
-	// Write `xl.json` metadata.
-	if err = xl.writeXLMetadata(minioMetaBucket, tempObj, xlMeta); err != nil {
+	// Get hash checksums.
+	hashChecksums := erasure.GetHashes()
+
+	// Save the checksums.
+	checkSums := make([]checkSumInfo, len(xl.storageDisks))
+	for index := range xl.storageDisks {
+		blockIndex := xlMeta.Erasure.Distribution[index] - 1
+		checkSums[blockIndex] = checkSumInfo{
+			Name:      "object1",
+			Algorithm: "sha512",
+			Hash:      hashChecksums[blockIndex],
+		}
+	}
+
+	// Update all the necessary fields making sure that checkSum field
+	// is different for each disks.
+	for index := range partsMetadata {
+		blockIndex := xlMeta.Erasure.Distribution[index] - 1
+		partsMetadata[index] = xlMeta
+		partsMetadata[index].Erasure.Checksum = append(partsMetadata[index].Erasure.Checksum, checkSums[blockIndex])
+	}
+
+	// Write unique `xl.json` for each disk.
+	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempObj, partsMetadata); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 

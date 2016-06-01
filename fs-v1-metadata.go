@@ -52,7 +52,7 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	m.Parts = append(m.Parts, partInfo)
 
 	// Parts in fsMeta should be in sorted order by part number.
-	sort.Sort(byPartNumber(m.Parts))
+	sort.Sort(byObjectPartNumber(m.Parts))
 }
 
 // readFSMetadata - returns the object metadata `fs.json` content.

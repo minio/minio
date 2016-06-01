@@ -16,82 +16,136 @@
 
 package main
 
-import "errors"
+import (
+	"encoding/hex"
+	"errors"
+)
+
+// isValidBlock - calculates the checksum hash for the block and
+// validates if its correct returns true for valid cases, false otherwise.
+func (e erasureConfig) isValidBlock(volume, path string, blockIdx int) bool {
+	diskIndex := -1
+	// Find out the right disk index for the input block index.
+	for index, blockIndex := range e.distribution {
+		if blockIndex == blockIdx {
+			diskIndex = index
+		}
+	}
+	// Unknown block index requested, treat it as error.
+	if diskIndex == -1 {
+		return false
+	}
+	// Disk is not present, treat entire block to be non existent.
+	if e.storageDisks[diskIndex] == nil {
+		return false
+	}
+	// Read everything for a given block and calculate hash.
+	hashBytes, err := hashSum(e.storageDisks[diskIndex], volume, path, newHash(e.checkSumAlgo))
+	if err != nil {
+		return false
+	}
+	return hex.EncodeToString(hashBytes) == e.hashChecksums[diskIndex]
+}
 
 // ReadFile - decoded erasure coded file.
-func (e erasure) ReadFile(volume, path string, startOffset int64, buffer []byte) (int64, error) {
-	// Calculate the current encoded block size.
-	curEncBlockSize := getEncodedBlockLen(int64(len(buffer)), e.DataBlocks)
-	offsetEncOffset := getEncodedBlockLen(startOffset, e.DataBlocks)
+func (e erasureConfig) ReadFile(volume, path string, size int64, blockSize int64) ([]byte, error) {
+	// Return data buffer.
+	var buffer []byte
 
-	// Allocate encoded blocks up to storage disks.
-	enBlocks := make([][]byte, len(e.storageDisks))
+	// Total size left
+	totalSizeLeft := size
 
-	// Counter to keep success data blocks.
-	var successDataBlocksCount = 0
-	var noReconstruct bool // Set for no reconstruction.
+	// Starting offset for reading.
+	startOffset := int64(0)
 
-	// Read from all the disks.
-	for index, disk := range e.storageDisks {
-		blockIndex := e.distribution[index] - 1
-		if disk == nil {
-			continue
+	// Write until each parts are read and exhausted.
+	for totalSizeLeft > 0 {
+		// Calculate the proper block size.
+		var curBlockSize int64
+		if blockSize < totalSizeLeft {
+			curBlockSize = blockSize
+		} else {
+			curBlockSize = totalSizeLeft
 		}
-		// Initialize shard slice and fill the data from each parts.
-		enBlocks[blockIndex] = make([]byte, curEncBlockSize)
-		// Read the necessary blocks.
-		_, err := disk.ReadFile(volume, path, offsetEncOffset, enBlocks[blockIndex])
-		if err != nil {
-			enBlocks[blockIndex] = nil
-		}
-		// Verify if we have successfully read all the data blocks.
-		if blockIndex < e.DataBlocks && enBlocks[blockIndex] != nil {
-			successDataBlocksCount++
-			// Set when we have all the data blocks and no
-			// reconstruction is needed, so that we can avoid
-			// erasure reconstruction.
-			noReconstruct = successDataBlocksCount == e.DataBlocks
-			if noReconstruct {
-				// Break out we have read all the data blocks.
-				break
+
+		// Calculate the current encoded block size.
+		curEncBlockSize := getEncodedBlockLen(curBlockSize, e.dataBlocks)
+		offsetEncOffset := getEncodedBlockLen(startOffset, e.dataBlocks)
+
+		// Allocate encoded blocks up to storage disks.
+		enBlocks := make([][]byte, len(e.storageDisks))
+
+		// Counter to keep success data blocks.
+		var successDataBlocksCount = 0
+		var noReconstruct bool // Set for no reconstruction.
+
+		// Read from all the disks.
+		for index, disk := range e.storageDisks {
+			blockIndex := e.distribution[index] - 1
+			if !e.isValidBlock(volume, path, blockIndex) {
+				continue
+			}
+			// Initialize shard slice and fill the data from each parts.
+			enBlocks[blockIndex] = make([]byte, curEncBlockSize)
+			// Read the necessary blocks.
+			_, err := disk.ReadFile(volume, path, offsetEncOffset, enBlocks[blockIndex])
+			if err != nil {
+				enBlocks[blockIndex] = nil
+			}
+			// Verify if we have successfully read all the data blocks.
+			if blockIndex < e.dataBlocks && enBlocks[blockIndex] != nil {
+				successDataBlocksCount++
+				// Set when we have all the data blocks and no
+				// reconstruction is needed, so that we can avoid
+				// erasure reconstruction.
+				noReconstruct = successDataBlocksCount == e.dataBlocks
+				if noReconstruct {
+					// Break out we have read all the data blocks.
+					break
+				}
 			}
 		}
-	}
 
-	// Check blocks if they are all zero in length, we have corruption return error.
-	if checkBlockSize(enBlocks) == 0 {
-		return 0, errDataCorrupt
-	}
+		// Check blocks if they are all zero in length, we have corruption return error.
+		if checkBlockSize(enBlocks) == 0 {
+			return nil, errDataCorrupt
+		}
 
-	// Verify if reconstruction is needed, proceed with reconstruction.
-	if !noReconstruct {
-		err := e.ReedSolomon.Reconstruct(enBlocks)
+		// Verify if reconstruction is needed, proceed with reconstruction.
+		if !noReconstruct {
+			err := e.reedSolomon.Reconstruct(enBlocks)
+			if err != nil {
+				return nil, err
+			}
+			// Verify reconstructed blocks (parity).
+			ok, err := e.reedSolomon.Verify(enBlocks)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				// Blocks cannot be reconstructed, corrupted data.
+				err = errors.New("Verification failed after reconstruction, data likely corrupted.")
+				return nil, err
+			}
+		}
+
+		// Get data blocks from encoded blocks.
+		dataBlocks, err := getDataBlocks(enBlocks, e.dataBlocks, int(curBlockSize))
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		// Verify reconstructed blocks (parity).
-		ok, err := e.ReedSolomon.Verify(enBlocks)
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			// Blocks cannot be reconstructed, corrupted data.
-			err = errors.New("Verification failed after reconstruction, data likely corrupted.")
-			return 0, err
-		}
+
+		// Copy data blocks.
+		buffer = append(buffer, dataBlocks...)
+
+		// Negate the 'n' size written to client.
+		totalSizeLeft -= int64(len(dataBlocks))
+
+		// Increase the offset to move forward.
+		startOffset += int64(len(dataBlocks))
+
+		// Relenquish memory.
+		dataBlocks = nil
 	}
-
-	// Get data blocks from encoded blocks.
-	dataBlocks, err := getDataBlocks(enBlocks, e.DataBlocks, len(buffer))
-	if err != nil {
-		return 0, err
-	}
-
-	// Copy data blocks.
-	copy(buffer, dataBlocks)
-
-	// Relenquish memory.
-	dataBlocks = nil
-
-	return int64(len(buffer)), nil
+	return buffer, nil
 }
