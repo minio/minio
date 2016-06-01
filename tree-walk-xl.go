@@ -47,31 +47,27 @@ type treeWalker struct {
 
 // listDir - listDir.
 func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool, isLeaf func(string, string) bool) (entries []string, err error) {
-	// Count for list errors encountered.
-	var listErrCount = 0
-
-	// Return the first success entry based on the selected random disk.
-	for listErrCount < len(xl.storageDisks) {
-		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
-		if entries, err = disk.ListDir(bucket, prefixDir); err == nil {
-			// Skip the entries which do not match the filter.
-			for i, entry := range entries {
-				if filter(entry) {
-					entries[i] = ""
-					continue
-				}
-				if strings.HasSuffix(entry, slashSeparator) && isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
-			}
-			sort.Strings(entries)
-			// Skip the empty strings
-			for len(entries) > 0 && entries[0] == "" {
-				entries = entries[1:]
-			}
-			return entries, nil
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		entries, err = disk.ListDir(bucket, prefixDir)
+		if err != nil {
+			break
 		}
-		listErrCount++ // Update list error count.
+		// Skip the entries which do not match the filter.
+		for i, entry := range entries {
+			if filter(entry) {
+				entries[i] = ""
+				continue
+			}
+			if strings.HasSuffix(entry, slashSeparator) && isLeaf(bucket, pathJoin(prefixDir, entry)) {
+				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			}
+		}
+		sort.Strings(entries)
+		// Skip the empty strings
+		for len(entries) > 0 && entries[0] == "" {
+			entries = entries[1:]
+		}
+		return entries, nil
 	}
 
 	// Return error at the end.

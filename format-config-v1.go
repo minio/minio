@@ -190,10 +190,15 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 		// All disks are fresh, format.json will be written by initFormatXL()
 		return nil
 	}
+
+	// From reference config update UUID's not be in use.
 	for index, diskUUID := range referenceConfig.XL.JBOD {
 		uuidUsage[index].uuid = diskUUID
 		uuidUsage[index].inuse = false
 	}
+
+	// For all config formats validate if they are in use and update
+	// the uuidUsage values.
 	for _, config := range formatConfigs {
 		if config == nil {
 			continue
@@ -205,6 +210,9 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 			}
 		}
 	}
+
+	// This section heals the format.json and updates the fresh disks
+	// by reapply the unused UUID's .
 	for index, heal := range needHeal {
 		if !heal {
 			// Previously we detected that heal is not needed on the disk.
@@ -214,7 +222,8 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 		*config = *referenceConfig
 		config.XL.Disk = getUnusedUUID()
 		if config.XL.Disk == "" {
-			// getUnusedUUID() should have returned an unused uuid, if not return error.
+			// getUnusedUUID() should have returned an unused uuid, it
+			// is an unexpected error.
 			return errUnexpected
 		}
 
@@ -222,6 +231,7 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 		if err != nil {
 			return err
 		}
+
 		// Fresh disk without format.json
 		_, _ = bootstrapDisks[index].AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
 		// Ignore any error from AppendFile() as quorum might still be there to be operational.
@@ -229,7 +239,8 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 	return nil
 }
 
-// loadFormatXL - load XL format.json.
+// loadFormatXL - loads XL `format.json` and returns back properly
+// ordered storage slice based on `format.json`.
 func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 	var unformattedDisksFoundCnt = 0
 	var diskNotFoundCount = 0
@@ -238,9 +249,10 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 	// Heal missing format.json on the drives.
 	if err = healFormatXL(bootstrapDisks); err != nil {
 		// There was an unexpected unrecoverable error during healing.
-		return
+		return nil, err
 	}
 
+	// Try to load `format.json` bootstrap disks.
 	for index, disk := range bootstrapDisks {
 		var formatXL *formatConfigV1
 		formatXL, err = loadFormat(disk)
@@ -257,6 +269,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 		// Save valid formats.
 		formatConfigs[index] = formatXL
 	}
+
 	// If all disks indicate that 'format.json' is not available
 	// return 'errUnformattedDisk'.
 	if unformattedDisksFoundCnt == len(bootstrapDisks) {
@@ -269,6 +282,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 		return nil, errReadQuorum
 	}
 
+	// Validate the format configs read are correct.
 	if err = checkFormatXL(formatConfigs); err != nil {
 		return nil, err
 	}

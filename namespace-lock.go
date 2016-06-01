@@ -64,7 +64,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 		}
 		n.lockMap[param] = nsLk
 	}
-	nsLk.ref++
+	nsLk.ref++ // Update ref count here to avoid multiple races.
 	// Unlock map before Locking NS which might block.
 	n.mutex.Unlock()
 

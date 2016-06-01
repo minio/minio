@@ -24,6 +24,15 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
+// newHashWriters - inititialize a slice of hashes for the disk count.
+func newHashWriters(diskCount int) []hash.Hash {
+	hashWriters := make([]hash.Hash, diskCount)
+	for index := range hashWriters {
+		hashWriters[index] = newHash("sha512")
+	}
+	return hashWriters
+}
+
 // newHash - gives you a newly allocated hash depending on the input algorithm.
 func newHash(algo string) hash.Hash {
 	switch algo {

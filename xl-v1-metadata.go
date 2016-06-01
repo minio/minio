@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"path"
 	"sort"
 	"sync"
@@ -47,53 +46,68 @@ func (t byObjectPartNumber) Len() int           { return len(t) }
 func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
-// checkSumInfo - carries checksums of individual part.
+// checkSumInfo - carries checksums of individual scattered parts per disk.
 type checkSumInfo struct {
 	Name      string `json:"name"`
 	Algorithm string `json:"algorithm"`
 	Hash      string `json:"hash"`
 }
 
-// A xlMetaV1 represents a metadata header mapping keys to sets of values.
+// erasureInfo - carries erasure coding related information, block
+// distribution and checksums.
+type erasureInfo struct {
+	Algorithm    string         `json:"algorithm"`
+	DataBlocks   int            `json:"data"`
+	ParityBlocks int            `json:"parity"`
+	BlockSize    int64          `json:"blockSize"`
+	Index        int            `json:"index"`
+	Distribution []int          `json:"distribution"`
+	Checksum     []checkSumInfo `json:"checksum,omitempty"`
+}
+
+// statInfo - carries stat information of the object.
+type statInfo struct {
+	Size    int64     `json:"size"`    // Size of the object `xl.json`.
+	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.json`.
+	Version int64     `json:"version"` // Version of the object `xl.json`, useful to calculate quorum.
+}
+
+// A xlMetaV1 represents `xl.json` metadata header.
 type xlMetaV1 struct {
-	Version string `json:"version"`
-	Format  string `json:"format"`
-	Stat    struct {
-		Size    int64     `json:"size"`
-		ModTime time.Time `json:"modTime"`
-		Version int64     `json:"version"`
-	} `json:"stat"`
-	Erasure struct {
-		Algorithm    string         `json:"algorithm"`
-		DataBlocks   int            `json:"data"`
-		ParityBlocks int            `json:"parity"`
-		BlockSize    int64          `json:"blockSize"`
-		Index        int            `json:"index"`
-		Distribution []int          `json:"distribution"`
-		Checksum     []checkSumInfo `json:"checksum,omitempty"`
-	} `json:"erasure"`
+	Version string   `json:"version"` // Version of the current `xl.json`.
+	Format  string   `json:"format"`  // Format of the current `xl.json`.
+	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
+	// Erasure coded info for the current object `xl.json`.
+	Erasure erasureInfo `json:"erasure"`
+	// Minio release tag for current object `xl.json`.
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
-	Meta  map[string]string `json:"meta"`
-	Parts []objectPartInfo  `json:"parts,omitempty"`
+	// Metadata map for current object `xl.json`.
+	Meta map[string]string `json:"meta"`
+	// Captures all the individual object `xl.json`.
+	Parts []objectPartInfo `json:"parts,omitempty"`
 }
 
-// newXLMetaV1 - initializes new xlMetaV1.
+// newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a
+// fresh erasure info.
 func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta = xlMetaV1{}
 	xlMeta.Version = "1"
 	xlMeta.Format = "xl"
 	xlMeta.Minio.Release = minioReleaseTag
-	xlMeta.Erasure.Algorithm = erasureAlgorithmKlauspost
-	xlMeta.Erasure.DataBlocks = dataBlocks
-	xlMeta.Erasure.ParityBlocks = parityBlocks
-	xlMeta.Erasure.BlockSize = blockSizeV1
-	xlMeta.Erasure.Distribution = randInts(dataBlocks + parityBlocks)
+	xlMeta.Erasure = erasureInfo{
+		Algorithm:    erasureAlgorithmKlauspost,
+		DataBlocks:   dataBlocks,
+		ParityBlocks: parityBlocks,
+		BlockSize:    blockSizeV1,
+		Distribution: randInts(dataBlocks + parityBlocks),
+	}
 	return xlMeta
 }
 
-// IsValid - is validate tells if the format is sane.
+// IsValid - tells if the format is sane by validating the version
+// string and format style.
 func (m xlMetaV1) IsValid() bool {
 	return m.Version == "1" && m.Format == "xl"
 }
@@ -107,17 +121,6 @@ func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
 		}
 	}
 	return -1
-}
-
-// ObjectCheckIndex - returns the checksum for the part name from the checksum slice.
-func (m xlMetaV1) PartObjectChecksum(partNumber int) checkSumInfo {
-	partName := fmt.Sprintf("object%d", partNumber)
-	for _, checksum := range m.Erasure.Checksum {
-		if checksum.Name == partName {
-			return checksum
-		}
-	}
-	return checkSumInfo{}
 }
 
 // AddObjectPart - add a new object part in order.
@@ -181,26 +184,19 @@ func pickValidXLMeta(xlMetas []xlMetaV1) xlMetaV1 {
 // readXLMetadata - returns the object metadata `xl.json` content from
 // one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
-	// Count for errors encountered.
-	var xlJSONErrCount = 0
-
-	// Return the first successful lookup from a random list of disks.
-	for xlJSONErrCount < len(xl.storageDisks) {
-		disk := xl.getRandomDisk() // Choose a random disk on each attempt.
-		var buffer []byte
-		buffer, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
-		if err == nil {
-			err = json.Unmarshal(buffer, &xlMeta)
-			if err == nil {
-				if xlMeta.IsValid() {
-					return xlMeta, nil
-				}
-				err = errDataCorrupt
-			}
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		var buf []byte
+		buf, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
+		if err != nil {
+			return xlMetaV1{}, err
 		}
-		xlJSONErrCount++ // Update error count.
+		err = json.Unmarshal(buf, &xlMeta)
+		if err != nil {
+			return xlMetaV1{}, err
+		}
+		break
 	}
-	return xlMetaV1{}, err
+	return xlMeta, nil
 }
 
 // renameXLMetadata - renames `xl.json` from source prefix to destination prefix.
@@ -262,22 +258,6 @@ func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) er
 		return errUnexpected
 	}
 	return nil
-}
-
-// checkSumAlgorithm - get the algorithm required for checksum
-// verification for a given part. Allocates a new hash and returns.
-func checkSumAlgorithm(xlMeta xlMetaV1, partIdx int) string {
-	partCheckSumInfo := xlMeta.PartObjectChecksum(partIdx)
-	return partCheckSumInfo.Algorithm
-}
-
-// xlMetaPartBlockChecksums - get block checksums for a given part.
-func (xl xlObjects) metaPartBlockChecksums(xlMetas []xlMetaV1, partIdx int) (blockCheckSums []string) {
-	for index := range xl.storageDisks {
-		// Save the read checksums for a given part.
-		blockCheckSums = append(blockCheckSums, xlMetas[index].PartObjectChecksum(partIdx).Hash)
-	}
-	return blockCheckSums
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.

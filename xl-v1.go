@@ -39,8 +39,8 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	storageDisks  []StorageAPI // Collection of initialized backend disks.
 	physicalDisks []string     // Collection of regular disks.
+	storageDisks  []StorageAPI // Collection of initialized backend disks.
 	dataBlocks    int          // dataBlocks count caculated for erasure.
 	parityBlocks  int          // parityBlocks count calculated for erasure.
 	readQuorum    int          // readQuorum minimum required disks to read data.
@@ -141,14 +141,13 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 		}
 	}
 
-	// FIXME: healFormatXL(newDisks)
-
 	// Calculate data and parity blocks.
 	dataBlocks, parityBlocks := len(newPosixDisks)/2, len(newPosixDisks)/2
 
+	// Initialize xl objects.
 	xl := xlObjects{
-		storageDisks:       newPosixDisks,
 		physicalDisks:      disks,
+		storageDisks:       newPosixDisks,
 		dataBlocks:         dataBlocks,
 		parityBlocks:       parityBlocks,
 		listObjectMap:      make(map[listParams][]*treeWalker),

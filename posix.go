@@ -291,9 +291,6 @@ func (s posix) ListDir(volume, dirPath string) ([]string, error) {
 // for io.EOF. Additionally ReadFile also starts reading from an
 // offset.
 func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
-	nsMutex.RLock(volume, path)
-	defer nsMutex.RUnlock(volume, path)
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return 0, err
@@ -354,9 +351,6 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) {
-	nsMutex.Lock(volume, path)
-	defer nsMutex.Unlock(volume, path)
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return 0, err
@@ -404,9 +398,6 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 
 // StatFile - get file info.
 func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
-	nsMutex.RLock(volume, path)
-	defer nsMutex.RUnlock(volume, path)
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return FileInfo{}, err
@@ -484,9 +475,6 @@ func deleteFile(basePath, deletePath string) error {
 
 // DeleteFile - delete a file at path.
 func (s posix) DeleteFile(volume, path string) error {
-	nsMutex.Lock(volume, path)
-	defer nsMutex.Unlock(volume, path)
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -513,12 +501,6 @@ func (s posix) DeleteFile(volume, path string) error {
 
 // RenameFile - rename source path to destination path atomically.
 func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
-	nsMutex.Lock(srcVolume, srcPath)
-	defer nsMutex.Unlock(srcVolume, srcPath)
-
-	nsMutex.Lock(dstVolume, dstPath)
-	defer nsMutex.Unlock(dstVolume, dstPath)
-
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
