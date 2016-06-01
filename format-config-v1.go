@@ -143,11 +143,104 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	return format, nil
 }
 
+// Heals any missing format.json on the drives. Returns error only for unexpected errors
+// as regular errors can be ignored since there might be enough quorum to be operational.
+func healFormatXL(bootstrapDisks []StorageAPI) error {
+	uuidUsage := make([]struct {
+		uuid  string // Disk uuid
+		inuse bool   // indicates if the uuid is used by any disk
+	}, len(bootstrapDisks))
+
+	needHeal := make([]bool, len(bootstrapDisks)) // Slice indicating which drives needs healing.
+
+	// Returns any unused drive UUID.
+	getUnusedUUID := func() string {
+		for index := range uuidUsage {
+			if !uuidUsage[index].inuse {
+				uuidUsage[index].inuse = true
+				return uuidUsage[index].uuid
+			}
+		}
+		return ""
+	}
+	formatConfigs := make([]*formatConfigV1, len(bootstrapDisks))
+	var referenceConfig *formatConfigV1
+	for index, disk := range bootstrapDisks {
+		formatXL, err := loadFormat(disk)
+		if err == errUnformattedDisk {
+			// format.json is missing, should be healed.
+			needHeal[index] = true
+			continue
+		}
+		if err == nil {
+			if referenceConfig == nil {
+				// this config will be used to update the drives missing format.json
+				referenceConfig = formatXL
+			}
+			formatConfigs[index] = formatXL
+		} else {
+			// Abort format.json healing if any one of the drives is not available because we don't
+			// know if that drive is down permanently or temporarily. So we don't want to reuse
+			// its uuid for any other disks.
+			// Return nil so that operations can continue if quorum is available.
+			return nil
+		}
+	}
+	if referenceConfig == nil {
+		// All disks are fresh, format.json will be written by initFormatXL()
+		return nil
+	}
+	for index, diskUUID := range referenceConfig.XL.JBOD {
+		uuidUsage[index].uuid = diskUUID
+		uuidUsage[index].inuse = false
+	}
+	for _, config := range formatConfigs {
+		if config == nil {
+			continue
+		}
+		for index := range uuidUsage {
+			if config.XL.Disk == uuidUsage[index].uuid {
+				uuidUsage[index].inuse = true
+				break
+			}
+		}
+	}
+	for index, heal := range needHeal {
+		if !heal {
+			// Previously we detected that heal is not needed on the disk.
+			continue
+		}
+		config := &formatConfigV1{}
+		*config = *referenceConfig
+		config.XL.Disk = getUnusedUUID()
+		if config.XL.Disk == "" {
+			// getUnusedUUID() should have returned an unused uuid, if not return error.
+			return errUnexpected
+		}
+
+		formatBytes, err := json.Marshal(config)
+		if err != nil {
+			return err
+		}
+		// Fresh disk without format.json
+		_, _ = bootstrapDisks[index].AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
+		// Ignore any error from AppendFile() as quorum might still be there to be operational.
+	}
+	return nil
+}
+
 // loadFormatXL - load XL format.json.
 func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 	var unformattedDisksFoundCnt = 0
 	var diskNotFoundCount = 0
 	formatConfigs := make([]*formatConfigV1, len(bootstrapDisks))
+
+	// Heal missing format.json on the drives.
+	if err = healFormatXL(bootstrapDisks); err != nil {
+		// There was an unexpected unrecoverable error during healing.
+		return
+	}
+
 	for index, disk := range bootstrapDisks {
 		var formatXL *formatConfigV1
 		formatXL, err = loadFormat(disk)
