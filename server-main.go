@@ -82,8 +82,8 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 	apiServer := &http.Server{
 		Addr: srvCmdConfig.serverAddr,
 		// Adding timeout of 10 minutes for unresponsive client connections.
-		ReadTimeout:    600 * time.Second,
-		WriteTimeout:   600 * time.Second,
+		ReadTimeout:    10 * time.Minute,
+		WriteTimeout:   10 * time.Minute,
 		Handler:        configureServerHandler(srvCmdConfig),
 		MaxHeaderBytes: 1 << 20,
 	}
