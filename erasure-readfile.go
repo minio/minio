@@ -23,81 +23,11 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
-// PartObjectChecksum - returns the checksum for the part name from the checksum slice.
-func (e erasureInfo) PartObjectChecksum(partName string) checkSumInfo {
-	for _, checksum := range e.Checksum {
-		if checksum.Name == partName {
-			return checksum
-		}
-	}
-	return checkSumInfo{}
-}
-
-// xlMetaPartBlockChecksums - get block checksums for a given part.
-func metaPartBlockChecksums(disks []StorageAPI, eInfos []erasureInfo, partName string) (blockCheckSums []checkSumInfo) {
-	for index := range disks {
-		// Save the read checksums for a given part.
-		blockCheckSums = append(blockCheckSums, eInfos[index].PartObjectChecksum(partName))
-	}
-	return blockCheckSums
-}
-
-// Takes block index and block distribution to get the disk index.
-func toDiskIndex(blockIdx int, distribution []int) (diskIndex int) {
-	diskIndex = -1
-	// Find out the right disk index for the input block index.
-	for index, blockIndex := range distribution {
-		if blockIndex == blockIdx {
-			diskIndex = index
-		}
-	}
-	return diskIndex
-}
-
-// isValidBlock - calculates the checksum hash for the block and
-// validates if its correct returns true for valid cases, false otherwise.
-func isValidBlock(disks []StorageAPI, volume, path string, diskIndex int, blockCheckSums []checkSumInfo) bool {
-	// Unknown block index requested, treat it as error.
-	if diskIndex == -1 {
-		return false
-	}
-	// Disk is not present, treat entire block to be non existent.
-	if disks[diskIndex] == nil {
-		return false
-	}
-	// Read everything for a given block and calculate hash.
-	hashWriter := newHash(blockCheckSums[diskIndex].Algorithm)
-	hashBytes, err := hashSum(disks[diskIndex], volume, path, hashWriter)
-	if err != nil {
-		return false
-	}
-	return hex.EncodeToString(hashBytes) == blockCheckSums[diskIndex].Hash
-}
-
-// decodeData - decode encoded blocks.
-func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
-	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
-	if err != nil {
-		return err
-	}
-	err = rs.Reconstruct(enBlocks)
-	if err != nil {
-		return err
-	}
-	// Verify reconstructed blocks (parity).
-	ok, err := rs.Verify(enBlocks)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		// Blocks cannot be reconstructed, corrupted data.
-		err = errors.New("Verification failed after reconstruction, data likely corrupted.")
-		return err
-	}
-	return nil
-}
-
-// ReadFile - decoded erasure coded file.
+// erasureReadFile - read an entire erasure coded file at into a byte
+// array. Erasure coded parts are often few mega bytes in size and it
+// is convenient to return them as byte slice. This function also
+// supports bit-rot detection by verifying checksum of individual
+// block's checksum.
 func erasureReadFile(disks []StorageAPI, volume string, path string, partName string, size int64, eInfos []erasureInfo) ([]byte, error) {
 	// Return data buffer.
 	var buffer []byte
@@ -194,4 +124,78 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 		dataBlocks = nil
 	}
 	return buffer, nil
+}
+
+// PartObjectChecksum - returns the checksum for the part name from the checksum slice.
+func (e erasureInfo) PartObjectChecksum(partName string) checkSumInfo {
+	for _, checksum := range e.Checksum {
+		if checksum.Name == partName {
+			return checksum
+		}
+	}
+	return checkSumInfo{}
+}
+
+// xlMetaPartBlockChecksums - get block checksums for a given part.
+func metaPartBlockChecksums(disks []StorageAPI, eInfos []erasureInfo, partName string) (blockCheckSums []checkSumInfo) {
+	for index := range disks {
+		// Save the read checksums for a given part.
+		blockCheckSums = append(blockCheckSums, eInfos[index].PartObjectChecksum(partName))
+	}
+	return blockCheckSums
+}
+
+// Takes block index and block distribution to get the disk index.
+func toDiskIndex(blockIdx int, distribution []int) (diskIndex int) {
+	diskIndex = -1
+	// Find out the right disk index for the input block index.
+	for index, blockIndex := range distribution {
+		if blockIndex == blockIdx {
+			diskIndex = index
+		}
+	}
+	return diskIndex
+}
+
+// isValidBlock - calculates the checksum hash for the block and
+// validates if its correct returns true for valid cases, false otherwise.
+func isValidBlock(disks []StorageAPI, volume, path string, diskIndex int, blockCheckSums []checkSumInfo) bool {
+	// Unknown block index requested, treat it as error.
+	if diskIndex == -1 {
+		return false
+	}
+	// Disk is not present, treat entire block to be non existent.
+	if disks[diskIndex] == nil {
+		return false
+	}
+	// Read everything for a given block and calculate hash.
+	hashWriter := newHash(blockCheckSums[diskIndex].Algorithm)
+	hashBytes, err := hashSum(disks[diskIndex], volume, path, hashWriter)
+	if err != nil {
+		return false
+	}
+	return hex.EncodeToString(hashBytes) == blockCheckSums[diskIndex].Hash
+}
+
+// decodeData - decode encoded blocks.
+func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
+	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
+	if err != nil {
+		return err
+	}
+	err = rs.Reconstruct(enBlocks)
+	if err != nil {
+		return err
+	}
+	// Verify reconstructed blocks (parity).
+	ok, err := rs.Verify(enBlocks)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Blocks cannot be reconstructed, corrupted data.
+		err = errors.New("Verification failed after reconstruction, data likely corrupted.")
+		return err
+	}
+	return nil
 }

@@ -25,32 +25,9 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
-// encodeData - encodes incoming data buffer into
-// dataBlocks+parityBlocks returns a 2 dimensional byte array.
-func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, error) {
-	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
-	if err != nil {
-		return nil, err
-	}
-	// Split the input buffer into data and parity blocks.
-	var blocks [][]byte
-	blocks, err = rs.Split(dataBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	// Encode parity blocks using data blocks.
-	err = rs.Encode(blocks)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return encoded blocks.
-	return blocks, nil
-}
-
-// erasureCreateFile - take a data stream, reads until io.EOF erasure
-// code and writes to all the disks.
+// erasureCreateFile - writes an entire stream by erasure coding to
+// all the disks, writes also calculate individual block's checksum
+// for future bit-rot protection.
 func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo) (newEInfos []erasureInfo, err error) {
 	// Allocated blockSized buffer for reading.
 	buf := make([]byte, blockSizeV1)
@@ -102,6 +79,30 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 
 	// Return newEInfos.
 	return newEInfos, nil
+}
+
+// encodeData - encodes incoming data buffer into
+// dataBlocks+parityBlocks returns a 2 dimensional byte array.
+func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, error) {
+	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
+	if err != nil {
+		return nil, err
+	}
+	// Split the input buffer into data and parity blocks.
+	var blocks [][]byte
+	blocks, err = rs.Split(dataBuffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encode parity blocks using data blocks.
+	err = rs.Encode(blocks)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return encoded blocks.
+	return blocks, nil
 }
 
 // appendFile - append data buffer at path.

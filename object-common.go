@@ -17,6 +17,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -41,6 +42,16 @@ func fsHouseKeeping(storageDisk StorageAPI) error {
 		return err
 	}
 	return nil
+}
+
+// Depending on the disk type network or local, initialize storage API.
+func newStorageAPI(disk string) (storage StorageAPI, err error) {
+	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
+		// Initialize filesystem storage API.
+		return newPosix(disk)
+	}
+	// Initialize rpc client storage API.
+	return newRPCClient(disk)
 }
 
 // House keeping code needed for XL.

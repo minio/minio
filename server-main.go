@@ -34,7 +34,7 @@ import (
 
 var serverCmd = cli.Command{
 	Name:  "server",
-	Usage: "Start Minio cloud storage server.",
+	Usage: "Start object storage server.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "address",
@@ -65,9 +65,10 @@ EXAMPLES:
   3. Start minio server on Windows.
       $ minio {{.Name}} C:\MyShare
 
-  4. Start minio server 8 disks to enable erasure coded layer with 4 data and 4 parity.
+  4. Start minio server 12 disks to enable erasure coded layer with 6 data and 6 parity.
       $ minio {{.Name}} /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend \
-          /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend
+          /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend \
+          /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
 `,
 }
 

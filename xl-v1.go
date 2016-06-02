@@ -19,9 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/disk"
@@ -90,16 +88,6 @@ func checkSufficientDisks(disks []string) error {
 	}
 
 	return nil
-}
-
-// Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(disk string) (storage StorageAPI, err error) {
-	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
-		// Initialize filesystem storage API.
-		return newPosix(disk)
-	}
-	// Initialize rpc client storage API.
-	return newRPCClient(disk)
 }
 
 // newXLObjects - initialize new xl object layer.

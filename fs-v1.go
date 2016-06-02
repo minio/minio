@@ -41,20 +41,9 @@ type fsObjects struct {
 
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(disk string) (ObjectLayer, error) {
-	var storage StorageAPI
-	var err error
-	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
-		// Initialize filesystem storage API.
-		storage, err = newPosix(disk)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Initialize rpc client storage API.
-		storage, err = newRPCClient(disk)
-		if err != nil {
-			return nil, err
-		}
+	storage, err := newStorageAPI(disk)
+	if err != nil {
+		return nil, err
 	}
 
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
