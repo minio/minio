@@ -543,6 +543,35 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
+	// Hold the lock so that two parallel complete-multipart-uploads do not
+	// leave a stale uploads.json behind.
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+
+	// Validate if there are other incomplete upload-id's present for
+	// the object, if yes do not attempt to delete 'uploads.json'.
+	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, object)
+	}
+	// If we have successfully read `uploads.json`, then we proceed to
+	// purge or update `uploads.json`.
+	uploadIDIdx := uploadsJSON.Index(uploadID)
+	if uploadIDIdx != -1 {
+		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
+	}
+	if len(uploadsJSON.Uploads) > 0 {
+		if err = updateUploadsJSON(bucket, object, uploadsJSON, fs.storage); err != nil {
+			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		}
+		// Return success.
+		return s3MD5, nil
+	}
+
+	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+	}
+
 	// Return md5sum.
 	return s3MD5, nil
 }
