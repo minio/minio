@@ -639,7 +639,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Delete the previously successfully renamed object.
 	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
 
-	// Hold the lock so that two parallel complete-multipart-uploads do no
+	// Hold the lock so that two parallel complete-multipart-uploads do not
 	// leave a stale uploads.json behind.
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
