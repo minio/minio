@@ -58,6 +58,15 @@ var errXLMinDisks = errors.New("Number of disks are smaller than supported minim
 // errXLNumDisks - returned for odd number of disks.
 var errXLNumDisks = errors.New("Number of disks should be multiples of '2'")
 
+// errXLReadQuorum - did not meet read quorum.
+var errXLReadQuorum = errors.New("I/O error.  did not meet read quorum.")
+
+// errXLWriteQuorum - did not meet write quorum.
+var errXLWriteQuorum = errors.New("I/O error.  did not meet write quorum.")
+
+// errXLDataCorrupt - err data corrupt.
+var errXLDataCorrupt = errors.New("data likely corrupted, all blocks are zero in length")
+
 const (
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
@@ -112,21 +121,37 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
 	xlHouseKeeping(storageDisks)
 
+	// Attempt to load all `format.json`
+	formatConfigs, sErrs := loadAllFormats(storageDisks)
+
+	// Generic format check validates all necessary cases.
+	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
+		return nil, err
+	}
+
+	// Handles different cases properly.
+	switch reduceFormatErrs(sErrs, len(storageDisks)) {
+	case errUnformattedDisk:
+		// All drives online but fresh, initialize format.
+		if err := initFormatXL(storageDisks); err != nil {
+			return nil, fmt.Errorf("Unable to initialize format, %s", err)
+		}
+	case errSomeDiskUnformatted:
+		// All drives online but some report missing format.json.
+		if err := healFormatXL(storageDisks); err != nil {
+			// There was an unexpected unrecoverable error during healing.
+			return nil, fmt.Errorf("Unable to heal backend %s", err)
+		}
+	case errSomeDiskOffline:
+		// Some disks offline but some report missing format.json.
+		// FIXME.
+	}
+
 	// Load saved XL format.json and validate.
 	newPosixDisks, err := loadFormatXL(storageDisks)
 	if err != nil {
-		switch err {
-		case errUnformattedDisk:
-			// Save new XL format.
-			errSave := initFormatXL(storageDisks)
-			if errSave != nil {
-				return nil, errSave
-			}
-			newPosixDisks = storageDisks
-		default:
-			// errCorruptedDisk - error.
-			return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
-		}
+		// errCorruptedDisk - healing failed
+		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 	}
 
 	// Calculate data and parity blocks.

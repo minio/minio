@@ -58,6 +58,9 @@ func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
 // `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) bool {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
 		if err != nil {
 			return false
@@ -70,6 +73,9 @@ func (xl xlObjects) isObject(bucket, prefix string) bool {
 // statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, objectPart string) (fileInfo FileInfo, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		fileInfo, err = disk.StatFile(bucket, objectPart)
 		if err != nil {
 			return FileInfo{}, err

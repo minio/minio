@@ -34,7 +34,7 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 	hashWriters := newHashWriters(len(disks))
 
 	// Just pick one eInfo.
-	eInfo := eInfos[0]
+	eInfo := pickValidErasureInfo(eInfos)
 
 	// Read until io.EOF, erasure codes data and writes to all disks.
 	for {
@@ -72,9 +72,11 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 	// Erasure info update for checksum for each disks.
 	newEInfos = make([]erasureInfo, len(disks))
 	for index, eInfo := range eInfos {
-		blockIndex := eInfo.Distribution[index] - 1
-		newEInfos[index] = eInfo
-		newEInfos[index].Checksum = append(newEInfos[index].Checksum, checkSums[blockIndex])
+		if eInfo.IsValid() {
+			blockIndex := eInfo.Distribution[index] - 1
+			newEInfos[index] = eInfo
+			newEInfos[index].Checksum = append(newEInfos[index].Checksum, checkSums[blockIndex])
+		}
 	}
 
 	// Return newEInfos.

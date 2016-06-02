@@ -219,6 +219,11 @@ func (s posix) ListVols() (volsInfo []VolInfo, err error) {
 
 // StatVol - get volume info.
 func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return VolInfo{}, err
+	}
+
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
