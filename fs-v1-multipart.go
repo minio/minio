@@ -304,6 +304,10 @@ func (fs fsObjects) putObjectPart(bucket string, object string, uploadID string,
 		}
 	}
 
+	// Hold write lock on the uploadID as we are updating fs.json
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	fsMeta, err := fs.readFSMetadata(minioMetaBucket, uploadIDPath)
 	if err != nil {
