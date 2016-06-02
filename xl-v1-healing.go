@@ -38,6 +38,10 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 	xlMetaPath := path.Join(object, xlMetaJSONFile)
 	var wg = &sync.WaitGroup{}
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			errs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
@@ -138,7 +142,7 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 		// Verify if online disks count are lesser than readQuorum
 		// threshold, return an error.
 		if onlineDiskCount < xl.readQuorum {
-			errorIf(errReadQuorum, "Unable to establish read quorum, disks are offline.")
+			errorIf(errXLReadQuorum, "Unable to establish read quorum, disks are offline.")
 			return false
 		}
 	}

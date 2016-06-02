@@ -65,6 +65,24 @@ type erasureInfo struct {
 	Checksum     []checkSumInfo `json:"checksum,omitempty"`
 }
 
+// IsValid - tells if the erasure info is sane by validating the data
+// blocks, parity blocks and distribution.
+func (e erasureInfo) IsValid() bool {
+	return e.DataBlocks != 0 && e.ParityBlocks != 0 && len(e.Distribution) != 0
+}
+
+// pickValidErasureInfo - picks one valid erasure info content and returns, from a
+// slice of erasure info content. If no value is found this function panics
+// and dies.
+func pickValidErasureInfo(eInfos []erasureInfo) erasureInfo {
+	for _, eInfo := range eInfos {
+		if eInfo.IsValid() {
+			return eInfo
+		}
+	}
+	panic("Unable to look for valid erasure info content")
+}
+
 // statInfo - carries stat information of the object.
 type statInfo struct {
 	Size    int64     `json:"size"`    // Size of the object `xl.json`.
@@ -185,6 +203,9 @@ func pickValidXLMeta(xlMetas []xlMetaV1) xlMetaV1 {
 // one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		var buf []byte
 		buf, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
 		if err != nil {
@@ -208,6 +229,10 @@ func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix 
 	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
 	// Rename `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			mErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Rename `xl.json` in a routine.
 		go func(index int, disk StorageAPI) {
@@ -230,14 +255,47 @@ func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix 
 	// Wait for all the routines.
 	wg.Wait()
 
-	// Return the first error.
+	// Gather err count.
+	var errCount = 0
 	for _, err := range mErrs {
 		if err == nil {
 			continue
 		}
-		return err
+		errCount++
+	}
+	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
+	// otherwise return failure. Cleanup successful renames.
+	if errCount > len(xl.storageDisks)-xl.writeQuorum {
+		// Check we have successful read quorum.
+		if errCount <= len(xl.storageDisks)-xl.readQuorum {
+			return nil // Return success.
+		} // else - failed to acquire read quorum.
+
+		// Undo rename `xl.json` on disks where RenameFile succeeded.
+		for index, disk := range xl.storageDisks {
+			if disk == nil {
+				continue
+			}
+			// Undo rename object in parallel.
+			wg.Add(1)
+			go func(index int, disk StorageAPI) {
+				defer wg.Done()
+				if mErrs[index] != nil {
+					return
+				}
+				_ = disk.RenameFile(dstBucket, dstJSONFile, srcBucket, srcJSONFile)
+			}(index, disk)
+		}
+		wg.Wait()
+		return errXLWriteQuorum
 	}
 	return nil
+}
+
+// deleteXLMetadata - deletes `xl.json` on a single disk.
+func deleteXLMetdata(disk StorageAPI, bucket, prefix string) error {
+	jsonFile := path.Join(prefix, xlMetaJSONFile)
+	return disk.DeleteFile(bucket, jsonFile)
 }
 
 // writeXLMetadata - writes `xl.json` to a single disk.
@@ -267,6 +325,10 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			mErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Write `xl.json` in a routine.
 		go func(index int, disk StorageAPI) {
@@ -287,24 +349,52 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 	// Wait for all the routines.
 	wg.Wait()
 
+	var errCount = 0
 	// Return the first error.
 	for _, err := range mErrs {
 		if err == nil {
 			continue
 		}
-		return err
+		errCount++
 	}
-
+	// Count all the errors and validate if we have write quorum.
+	if errCount > len(xl.storageDisks)-xl.writeQuorum {
+		// Validate if we have read quorum, then return success.
+		if errCount > len(xl.storageDisks)-xl.readQuorum {
+			return nil
+		}
+		// Delete all the `xl.json` left over.
+		for index, disk := range xl.storageDisks {
+			if disk == nil {
+				continue
+			}
+			// Undo rename object in parallel.
+			wg.Add(1)
+			go func(index int, disk StorageAPI) {
+				defer wg.Done()
+				if mErrs[index] != nil {
+					return
+				}
+				_ = deleteXLMetdata(disk, bucket, prefix)
+			}(index, disk)
+		}
+		wg.Wait()
+		return errXLWriteQuorum
+	}
 	return nil
 }
 
-// writeXLMetadata - write `xl.json` on all disks in order.
-func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
+// writeSameXLMetadata - write `xl.json` on all disks in order.
+func (xl xlObjects) writeSameXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(xl.storageDisks))
 
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			mErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Write `xl.json` in a routine.
 		go func(index int, disk StorageAPI, metadata xlMetaV1) {
@@ -325,12 +415,37 @@ func (xl xlObjects) writeXLMetadata(bucket, prefix string, xlMeta xlMetaV1) erro
 	// Wait for all the routines.
 	wg.Wait()
 
+	var errCount = 0
 	// Return the first error.
 	for _, err := range mErrs {
 		if err == nil {
 			continue
 		}
-		return err
+		errCount++
+	}
+	// Count all the errors and validate if we have write quorum.
+	if errCount > len(xl.storageDisks)-xl.writeQuorum {
+		// Validate if we have read quorum, then return success.
+		if errCount > len(xl.storageDisks)-xl.readQuorum {
+			return nil
+		}
+		// Delete all the `xl.json` left over.
+		for index, disk := range xl.storageDisks {
+			if disk == nil {
+				continue
+			}
+			// Undo rename object in parallel.
+			wg.Add(1)
+			go func(index int, disk StorageAPI) {
+				defer wg.Done()
+				if mErrs[index] != nil {
+					return
+				}
+				_ = deleteXLMetdata(disk, bucket, prefix)
+			}(index, disk)
+		}
+		wg.Wait()
+		return errXLWriteQuorum
 	}
 	return nil
 }

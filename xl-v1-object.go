@@ -178,6 +178,10 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 
 	// Rename file on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			errs[index] = errDiskNotFound
+			continue
+		}
 		// Append "/" as srcObject and dstObject are either leaf-dirs or non-leaf-dris.
 		// If srcObject is an object instead of prefix we just rename the leaf-dir and
 		// not rename the part and metadata files separately.
@@ -212,6 +216,9 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 
 		// Undo rename object on disks where RenameFile succeeded.
 		for index, disk := range xl.storageDisks {
+			if disk == nil {
+				continue
+			}
 			// Undo rename object in parallel.
 			wg.Add(1)
 			go func(index int, disk StorageAPI) {
@@ -223,7 +230,7 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 			}(index, disk)
 		}
 		wg.Wait()
-		return errWriteQuorum
+		return errXLWriteQuorum
 	}
 	return nil
 }
@@ -382,6 +389,10 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	var dErrs = make([]error, len(xl.storageDisks))
 
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			dErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
@@ -416,9 +427,9 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	if fileNotFoundCnt == len(xl.storageDisks) {
 		return errFileNotFound
 	} else if deleteFileErr > len(xl.storageDisks)-xl.writeQuorum {
-		// Return errWriteQuorum if errors were more than
+		// Return errXLWriteQuorum if errors were more than
 		// allowed write quorum.
-		return errWriteQuorum
+		return errXLWriteQuorum
 	}
 
 	return nil

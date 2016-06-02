@@ -63,8 +63,13 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	// uploadIDMarker first.
 	if uploadIDMarker != "" {
 		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
-		disk := xl.getLoadBalancedQuorumDisks()[0]
-		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
+		for _, disk := range xl.getLoadBalancedQuorumDisks() {
+			if disk == nil {
+				continue
+			}
+			uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
+			break
+		}
 		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
 		if err != nil {
 			return ListMultipartsInfo{}, err
@@ -114,7 +119,13 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			uploadIDMarker = ""
 			// For the new object entry we get all its pending uploadIDs.
 			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
-			disk := xl.getLoadBalancedQuorumDisks()[0]
+			var disk StorageAPI
+			for _, disk = range xl.getLoadBalancedQuorumDisks() {
+				if disk == nil {
+					continue
+				}
+				break
+			}
 			newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
 			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			if err != nil {
@@ -248,7 +259,8 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
-	if err = xl.writeXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+	// Write updated `xl.json` to all disks.
+	if err = xl.writeSameXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
 	rErr := xl.renameObject(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
@@ -646,7 +658,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	disk := xl.getLoadBalancedQuorumDisks()[0]
+	var disk StorageAPI
+	for _, disk = range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
+		break
+	}
 	uploadsJSON, err := readUploadsJSON(bucket, object, disk)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, object)
@@ -688,7 +706,13 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	disk := xl.getLoadBalancedQuorumDisks()[0]
+	var disk StorageAPI
+	for _, disk = range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
+		break
+	}
 	uploadsJSON, err := readUploadsJSON(bucket, object, disk)
 	if err != nil {
 		return toObjectErr(err, bucket, object)

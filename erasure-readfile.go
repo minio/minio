@@ -42,7 +42,7 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 	blockCheckSums := metaPartBlockChecksums(disks, eInfos, partName)
 
 	// Pick one erasure info.
-	eInfo := eInfos[0]
+	eInfo := pickValidErasureInfo(eInfos)
 
 	// Write until each parts are read and exhausted.
 	for totalSizeLeft > 0 {
@@ -71,6 +71,9 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 			if !isValidBlock(disks, volume, path, toDiskIndex(blockIndex, eInfo.Distribution), blockCheckSums) {
 				continue
 			}
+			if disk == nil {
+				continue
+			}
 			// Initialize shard slice and fill the data from each parts.
 			enBlocks[blockIndex] = make([]byte, curEncBlockSize)
 			// Read the necessary blocks.
@@ -94,7 +97,7 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 
 		// Check blocks if they are all zero in length, we have corruption return error.
 		if checkBlockSize(enBlocks) == 0 {
-			return nil, errDataCorrupt
+			return nil, errXLDataCorrupt
 		}
 
 		// Verify if reconstruction is needed, proceed with reconstruction.
@@ -139,8 +142,12 @@ func (e erasureInfo) PartObjectChecksum(partName string) checkSumInfo {
 // xlMetaPartBlockChecksums - get block checksums for a given part.
 func metaPartBlockChecksums(disks []StorageAPI, eInfos []erasureInfo, partName string) (blockCheckSums []checkSumInfo) {
 	for index := range disks {
-		// Save the read checksums for a given part.
-		blockCheckSums = append(blockCheckSums, eInfos[index].PartObjectChecksum(partName))
+		if eInfos[index].IsValid() {
+			// Save the read checksums for a given part.
+			blockCheckSums = append(blockCheckSums, eInfos[index].PartObjectChecksum(partName))
+		} else {
+			blockCheckSums = append(blockCheckSums, checkSumInfo{})
+		}
 	}
 	return blockCheckSums
 }

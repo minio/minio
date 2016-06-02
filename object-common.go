@@ -66,6 +66,10 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 	// Initialize all disks in parallel.
 	for index, disk := range storageDisks {
+		if disk == nil {
+			errs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			// Indicate this wait group is done.
@@ -73,11 +77,9 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 			// Attempt to create `.minio`.
 			err := disk.MakeVol(minioMetaBucket)
-			if err != nil {
-				if err != errVolumeExists && err != errDiskNotFound {
-					errs[index] = err
-					return
-				}
+			if err != nil && err != errVolumeExists && err != errDiskNotFound {
+				errs[index] = err
+				return
 			}
 			// Cleanup all temp entries upon start.
 			err = cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
@@ -130,5 +132,6 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		}
 		return nil
 	}
-	return delFunc(retainSlash(pathJoin(dirPath)))
+	err := delFunc(retainSlash(pathJoin(dirPath)))
+	return err
 }

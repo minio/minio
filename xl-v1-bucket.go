@@ -45,6 +45,10 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			dErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
@@ -77,11 +81,11 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	}
 
 	// Return err if all disks report volume exists.
-	if volumeExistsErrCnt == len(xl.storageDisks) {
+	if volumeExistsErrCnt > len(xl.storageDisks)-xl.readQuorum {
 		return toObjectErr(errVolumeExists, bucket)
 	} else if createVolErr > len(xl.storageDisks)-xl.writeQuorum {
-		// Return errWriteQuorum if errors were more than allowed write quorum.
-		return toObjectErr(errWriteQuorum, bucket)
+		// Return errXLWriteQuorum if errors were more than allowed write quorum.
+		return toObjectErr(errXLWriteQuorum, bucket)
 	}
 	return nil
 }
@@ -89,9 +93,16 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		var volInfo VolInfo
 		volInfo, err = disk.StatVol(bucketName)
 		if err != nil {
+			// For some reason disk went offline pick the next one.
+			if err == errDiskNotFound {
+				continue
+			}
 			return BucketInfo{}, err
 		}
 		bucketInfo = BucketInfo{
@@ -138,6 +149,9 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 // listBuckets - returns list of all buckets from a disk picked at random.
 func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
 		if err == nil {
@@ -193,6 +207,10 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 	// Remove a volume entry on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			dErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Delete volume inside a go-routine.
 		go func(index int, disk StorageAPI) {

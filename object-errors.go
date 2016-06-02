@@ -40,10 +40,6 @@ func toObjectErr(err error, params ...string) error {
 		}
 	case errDiskFull:
 		return StorageFull{}
-	case errReadQuorum:
-		return InsufficientReadQuorum{}
-	case errWriteQuorum:
-		return InsufficientWriteQuorum{}
 	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
 			return ObjectExistsAsDirectory{
@@ -65,6 +61,10 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errXLReadQuorum:
+		return InsufficientReadQuorum{}
+	case errXLWriteQuorum:
+		return InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		return IncompleteBody{}
 	}

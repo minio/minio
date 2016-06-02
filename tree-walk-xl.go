@@ -48,6 +48,9 @@ type treeWalker struct {
 // listDir - listDir.
 func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) bool, isLeaf func(string, string) bool) (entries []string, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
 		entries, err = disk.ListDir(bucket, prefixDir)
 		if err != nil {
 			break
