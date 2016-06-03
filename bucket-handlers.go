@@ -220,9 +220,22 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 			return
 		}
 	}
-
+	var prefix, marker, token, delimiter, startAfter string
+	var maxkeys int
+	var listV2 bool
 	// TODO handle encoding type.
-	prefix, marker, delimiter, maxkeys, _ := getBucketResources(r.URL.Query())
+	if r.URL.Query().Get("list-type") == "2" {
+		listV2 = true
+		prefix, token, startAfter, delimiter, maxkeys, _ = getListObjectsV2Args(r.URL.Query())
+		// For ListV2 "start-after" is considered only if "continuation-token" is empty.
+		if token == "" {
+			marker = startAfter
+		} else {
+			marker = token
+		}
+	} else {
+		prefix, marker, delimiter, maxkeys, _ = getListObjectsV1Args(r.URL.Query())
+	}
 	if maxkeys < 0 {
 		writeErrorResponse(w, r, ErrInvalidMaxKeys, r.URL.Path)
 		return
@@ -242,10 +255,17 @@ func (api objectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	listObjectsInfo, err := api.ObjectAPI.ListObjects(bucket, prefix, marker, delimiter, maxkeys)
+
 	if err == nil {
+		var encodedSuccessResponse []byte
 		// generate response
-		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listObjectsInfo)
-		encodedSuccessResponse := encodeResponse(response)
+		if listV2 {
+			response := generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter, maxkeys, listObjectsInfo)
+			encodedSuccessResponse = encodeResponse(response)
+		} else {
+			response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listObjectsInfo)
+			encodedSuccessResponse = encodeResponse(response)
+		}
 		// Write headers
 		setCommonHeaders(w)
 		// Write success response.

@@ -20,14 +20,11 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"io"
 	"math/rand"
 	"strconv"
 
 	"gopkg.in/check.v1"
 )
-
-// TODO - enable all the commented tests.
 
 // APITestSuite - collection of API tests.
 func APITestSuite(c *check.C, create func() ObjectLayer) {
@@ -135,24 +132,21 @@ func testMultipleObjectCreation(c *check.C, create func() ObjectLayer) {
 		objects[key] = []byte(randomString)
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = expectedMD5Sumhex
-		md5Sum, err := obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
+		var md5Sum string
+		md5Sum, err = obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		c.Assert(err, check.IsNil)
 		c.Assert(md5Sum, check.Equals, expectedMD5Sumhex)
 	}
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		r, err := obj.GetObject("bucket", key, 0)
+		err = obj.GetObject("bucket", key, 0, int64(len(value)), &byteBuffer)
 		c.Assert(err, check.IsNil)
-		_, e := io.Copy(&byteBuffer, r)
-		c.Assert(e, check.IsNil)
 		c.Assert(byteBuffer.Bytes(), check.DeepEquals, value)
-		c.Assert(r.Close(), check.IsNil)
 
 		objInfo, err := obj.GetObjectInfo("bucket", key)
 		c.Assert(err, check.IsNil)
 		c.Assert(objInfo.Size, check.Equals, int64(len(value)))
-		r.Close()
 	}
 }
 
@@ -269,16 +263,14 @@ func testObjectOverwriteWorks(c *check.C, create func() ObjectLayer) {
 	_, err = obj.PutObject("bucket", "object", int64(len("The list of parts was not in ascending order. The parts list must be specified in order by part number.")), bytes.NewBufferString("The list of parts was not in ascending order. The parts list must be specified in order by part number."), nil)
 	c.Assert(err, check.IsNil)
 
-	_, err = obj.PutObject("bucket", "object", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
+	length := int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."))
+	_, err = obj.PutObject("bucket", "object", length, bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer
-	r, err := obj.GetObject("bucket", "object", 0)
+	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer)
 	c.Assert(err, check.IsNil)
-	_, e := io.Copy(&bytesBuffer, r)
-	c.Assert(e, check.IsNil)
 	c.Assert(string(bytesBuffer.Bytes()), check.Equals, "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")
-	c.Assert(r.Close(), check.IsNil)
 }
 
 // Tests validate that bucket operation on non-existent bucket fails.
@@ -305,17 +297,14 @@ func testPutObjectInSubdir(c *check.C, create func() ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = obj.PutObject("bucket", "dir1/dir2/object", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
+	length := int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."))
+	_, err = obj.PutObject("bucket", "dir1/dir2/object", length, bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer
-	r, err := obj.GetObject("bucket", "dir1/dir2/object", 0)
+	err = obj.GetObject("bucket", "dir1/dir2/object", 0, length, &bytesBuffer)
 	c.Assert(err, check.IsNil)
-	n, e := io.Copy(&bytesBuffer, r)
-	c.Assert(e, check.IsNil)
 	c.Assert(len(bytesBuffer.Bytes()), check.Equals, len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."))
-	c.Assert(int64(len(bytesBuffer.Bytes())), check.Equals, int64(n))
-	c.Assert(r.Close(), check.IsNil)
 }
 
 // Tests validate ListBuckets.
@@ -386,7 +375,8 @@ func testNonExistantObjectInBucket(c *check.C, create func() ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = obj.GetObject("bucket", "dir1", 0)
+	var bytesBuffer bytes.Buffer
+	err = obj.GetObject("bucket", "dir1", 0, 10, &bytesBuffer)
 	c.Assert(err, check.Not(check.IsNil))
 	switch err := err.(type) {
 	case ObjectNotFound:
@@ -405,7 +395,8 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 	_, err = obj.PutObject("bucket", "dir1/dir3/object", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("One or more of the specified parts could not be found. The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."), nil)
 	c.Assert(err, check.IsNil)
 
-	_, err = obj.GetObject("bucket", "dir1", 0)
+	var bytesBuffer bytes.Buffer
+	err = obj.GetObject("bucket", "dir1", 0, 10, &bytesBuffer)
 	switch err := err.(type) {
 	case ObjectNotFound:
 		c.Assert(err.Bucket, check.Equals, "bucket")
@@ -415,7 +406,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 		c.Assert(err, check.Equals, "ObjectNotFound")
 	}
 
-	_, err = obj.GetObject("bucket", "dir1/", 0)
+	err = obj.GetObject("bucket", "dir1/", 0, 10, &bytesBuffer)
 	switch err := err.(type) {
 	case ObjectNameInvalid:
 		c.Assert(err.Bucket, check.Equals, "bucket")

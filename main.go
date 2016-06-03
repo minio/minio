@@ -118,8 +118,8 @@ func registerApp() *cli.App {
 	app := cli.NewApp()
 	app.Name = "Minio"
 	app.Author = "Minio.io"
-	app.Usage = "Distributed Object Storage Server for Micro Services."
-	app.Description = `Micro services environment provisions one Minio server per application instance. Scalability is achieved through large number of smaller personalized instances. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.`
+	app.Usage = "Cloud Storage Server."
+	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
 	app.Flags = append(minioFlags, globalFlags...)
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate

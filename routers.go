@@ -33,7 +33,7 @@ func newObjectLayer(exportPaths []string) (ObjectLayer, error) {
 	}
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(exportPaths)
-	if err == errWriteQuorum {
+	if err == errXLWriteQuorum {
 		return objAPI, errors.New("Disks are different with last minio server run.")
 	}
 	return objAPI, err

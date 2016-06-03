@@ -27,25 +27,40 @@ type ListVolsReply struct {
 	Vols []VolInfo
 }
 
-// StatFileArgs stat file args.
+// ReadFileArgs contains read file arguments.
+type ReadFileArgs struct {
+	Vol    string
+	Path   string
+	Offset int64
+	Buffer []byte
+}
+
+// AppendFileArgs contains append file arguments.
+type AppendFileArgs struct {
+	Vol    string
+	Path   string
+	Buffer []byte
+}
+
+// StatFileArgs contains stat file arguments.
 type StatFileArgs struct {
 	Vol  string
 	Path string
 }
 
-// DeleteFileArgs delete file args.
+// DeleteFileArgs contains delete file arguments.
 type DeleteFileArgs struct {
 	Vol  string
 	Path string
 }
 
-// ListDirArgs list dir args.
+// ListDirArgs contains list dir arguments.
 type ListDirArgs struct {
 	Vol  string
 	Path string
 }
 
-// RenameFileArgs rename file args.
+// RenameFileArgs contains rename file arguments.
 type RenameFileArgs struct {
 	SrcVol  string
 	SrcPath string

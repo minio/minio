@@ -124,38 +124,22 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get the object.
-	startOffset := hrange.start
-	readCloser, err := api.ObjectAPI.GetObject(bucket, object, startOffset)
-	if err != nil {
-		errorIf(err, "Unable to read object.")
-		apiErr := toAPIErrorCode(err)
-		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(bucket, r)
-		}
-		writeErrorResponse(w, r, apiErr, r.URL.Path)
-		return
-	}
-	defer readCloser.Close() // Close after this handler returns.
-
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, hrange)
 
 	// Set any additional requested response headers.
 	setGetRespHeaders(w, r.URL.Query())
 
-	if hrange.length > 0 {
-		if _, err := io.CopyN(w, readCloser, hrange.length); err != nil {
-			errorIf(err, "Writing to client failed.")
-			// Do not send error response here, since client could have died.
-			return
-		}
-	} else {
-		if _, err := io.Copy(w, readCloser); err != nil {
-			errorIf(err, "Writing to client failed.")
-			// Do not send error response here, since client could have died.
-			return
-		}
+	// Get the object.
+	startOffset := hrange.start
+	length := hrange.length
+	if length == 0 {
+		length = objInfo.Size - startOffset
+	}
+	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, w); err != nil {
+		errorIf(err, "Writing to client failed.")
+		// Do not send error response here, client would have already died.
+		return
 	}
 }
 
@@ -393,14 +377,19 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	startOffset := int64(0) // Read the whole file.
-	// Get the object.
-	readCloser, err := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset)
-	if err != nil {
-		errorIf(err, "Unable to read an object.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
-		return
-	}
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		startOffset := int64(0) // Read the whole file.
+		// Get the object.
+		gErr := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset, objInfo.Size, pipeWriter)
+		if gErr != nil {
+			errorIf(gErr, "Unable to read an object.")
+			pipeWriter.CloseWithError(gErr)
+			return
+		}
+		pipeWriter.Close() // Close.
+	}()
+
 	// Size of object.
 	size := objInfo.Size
 
@@ -413,7 +402,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// same md5sum as the source.
 
 	// Create the object.
-	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, readCloser, metadata)
+	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, pipeReader, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -434,7 +423,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 	// Explicitly close the reader, to avoid fd leaks.
-	readCloser.Close()
+	pipeReader.Close()
 }
 
 // checkCopySource implements x-amz-copy-source-if-modified-since and
@@ -887,10 +876,6 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	if maxParts == 0 {
-		maxParts = maxPartsList
-	}
-
 	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "Unable to list uploaded parts.")
@@ -942,6 +927,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	complMultipartUpload := &completeMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
 		errorIf(err, "Unable to parse complete multipart upload XML.")
+		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		return
+	}
+	if len(complMultipartUpload.Parts) == 0 {
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
 		return
 	}

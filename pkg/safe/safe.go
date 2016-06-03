@@ -16,115 +16,109 @@
 
 // NOTE - Rename() not guaranteed to be safe on all filesystems which are not fully POSIX compatible
 
-// Package safe provides safe file write semantics by leveraging Rename's() safeity.
 package safe
 
 import (
-	"io"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 )
 
-// Vault - vault is an interface for different implementations of safe
-// i/o semantics.
-type Vault interface {
-	io.ReadWriteCloser
-	SyncClose() error
-	CloseAndRemove() error
-}
-
-// File provides for safe file writes.
+// File represents safe file descriptor.
 type File struct {
-	*os.File
-	file string
+	name    string
+	tmpfile *os.File
+	closed  bool
+	aborted bool
 }
 
-// SyncClose sync file to disk and close, returns an error if any
-func (f *File) SyncClose() error {
-	// sync to the disk
-	if err := f.File.Sync(); err != nil {
-		return err
+// Write writes len(b) bytes to the temporary File.  In case of error, the temporary file is removed.
+func (file *File) Write(b []byte) (n int, err error) {
+	if file.aborted {
+		err = errors.New("write on aborted file")
+		return
 	}
-	// Close the fd.
-	if err := f.Close(); err != nil {
-		return err
+	if file.closed {
+		err = errors.New("write on closed file")
+		return
 	}
-	return nil
+
+	defer func() {
+		if err != nil {
+			os.Remove(file.tmpfile.Name())
+			file.aborted = true
+		}
+	}()
+
+	n, err = file.tmpfile.Write(b)
+	return
 }
 
-// Close the file, returns an error if any
-func (f *File) Close() error {
-	// Close the embedded fd.
-	if err := f.File.Close(); err != nil {
-		return err
+// Close closes the temporary File and renames to the named file.  In case of error, the temporary file is removed.
+func (file *File) Close() (err error) {
+	defer func() {
+		if err != nil {
+			os.Remove(file.tmpfile.Name())
+			file.aborted = true
+		}
+	}()
+
+	if file.aborted || file.closed {
+		return
 	}
-	// Safe rename to final destination
-	if err := os.Rename(f.Name(), f.file); err != nil {
-		return err
+
+	if err = file.tmpfile.Close(); err != nil {
+		return
 	}
-	return nil
+
+	err = os.Rename(file.tmpfile.Name(), file.name)
+
+	file.closed = true
+	return
 }
 
-// CloseAndRemove closes the temp file, and safely removes it. Returns
-// error if any.
-func (f *File) CloseAndRemove() error {
-	// close the embedded fd
-	f.File.Close()
-
-	// Remove the temp file.
-	if err := os.Remove(f.Name()); err != nil {
-		return err
+// Abort aborts the temporary File by closing and removing the temporary file.
+func (file *File) Abort() (err error) {
+	if file.aborted || file.closed {
+		return
 	}
-	return nil
+
+	file.tmpfile.Close()
+	err = os.Remove(file.tmpfile.Name())
+	file.aborted = true
+	return
 }
 
-// CreateFile creates a new file at filePath for safe writes, it also
-// creates parent directories if they don't exist.
-func CreateFile(filePath string) (*File, error) {
-	return CreateFileWithPrefix(filePath, "$deleteme.")
-}
-
-// CreateFileWithSuffix is similar to CreateFileWithPrefix, but the
-// second argument is treated as suffix for the temporary files.
-func CreateFileWithSuffix(filePath string, suffix string) (*File, error) {
-	// If parent directories do not exist, ioutil.TempFile doesn't create them
-	// handle such a case with os.MkdirAll()
-	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
+// CreateFile creates the named file safely from unique temporary file.
+// The temporary file is renamed to the named file upon successful close
+// to safeguard intermediate state in the named file.  The temporary file
+// is created in the name of the named file with suffixed unique number
+// and prefixed "$tmpfile" string.  While creating the temporary file,
+// missing parent directories are also created.  The temporary file is
+// removed if case of any intermediate failure.  Not removed temporary
+// files can be cleaned up by identifying them using "$tmpfile" prefix
+// string.
+func CreateFile(name string) (*File, error) {
+	// ioutil.TempFile() fails if parent directory is missing.
+	// Create parent directory to avoid such error.
+	dname := filepath.Dir(name)
+	if err := os.MkdirAll(dname, 0700); err != nil {
 		return nil, err
 	}
-	f, err := ioutil.TempFile(filepath.Dir(filePath), filepath.Base(filePath)+suffix)
+
+	fname := filepath.Base(name)
+	tmpfile, err := ioutil.TempFile(dname, "$tmpfile."+fname+".")
 	if err != nil {
 		return nil, err
 	}
-	if err = os.Chmod(f.Name(), 0600); err != nil {
-		if err = os.Remove(f.Name()); err != nil {
-			return nil, err
-		}
-		return nil, err
-	}
-	return &File{File: f, file: filePath}, nil
-}
 
-// CreateFileWithPrefix creates a new file at filePath for safe
-// writes, it also creates parent directories if they don't exist.
-// prefix specifies the prefix of the temporary files so that cleaning
-// stale temp files is easy.
-func CreateFileWithPrefix(filePath string, prefix string) (*File, error) {
-	// If parent directories do not exist, ioutil.TempFile doesn't create them
-	// handle such a case with os.MkdirAll()
-	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
-		return nil, err
-	}
-	f, err := ioutil.TempFile(filepath.Dir(filePath), prefix+filepath.Base(filePath))
-	if err != nil {
-		return nil, err
-	}
-	if err = os.Chmod(f.Name(), 0600); err != nil {
-		if err = os.Remove(f.Name()); err != nil {
-			return nil, err
+	if err = os.Chmod(tmpfile.Name(), 0600); err != nil {
+		if rerr := os.Remove(tmpfile.Name()); rerr != nil {
+			err = rerr
 		}
 		return nil, err
 	}
-	return &File{File: f, file: filePath}, nil
+
+	return &File{name: name, tmpfile: tmpfile}, nil
 }

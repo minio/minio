@@ -920,18 +920,27 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Prepare request
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/partial-content/bar", 0, nil)
-	c.Assert(err, IsNil)
-	request.Header.Add("Range", "bytes=6-7")
+	var table = []struct {
+		byteRange      string
+		expectedString string
+	}{
+		{"6-7", "Wo"},
+		{"6-", "World"},
+		{"-7", "o World"},
+	}
+	for _, t := range table {
+		request, err = s.newRequest("GET", testAPIXLServer.URL+"/partial-content/bar", 0, nil)
+		c.Assert(err, IsNil)
+		request.Header.Add("Range", "bytes="+t.byteRange)
 
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
-	partialObject, err := ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-
-	c.Assert(string(partialObject), Equals, "Wo")
+		client = http.Client{}
+		response, err = client.Do(request)
+		c.Assert(err, IsNil)
+		c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+		partialObject, err := ioutil.ReadAll(response.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(partialObject), Equals, t.expectedString)
+	}
 }
 
 func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {

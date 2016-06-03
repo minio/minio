@@ -1,0 +1,15 @@
+{
+    "version": "1",
+    "format": "fs",
+    "minio": {
+        "release": "DEVELOPMENT.GOGET"
+    },
+    "parts": [
+        {
+            "number": 1,
+            "name": "object1",
+            "size": 29,
+            "eTag": "",
+        },
+    ]
+}

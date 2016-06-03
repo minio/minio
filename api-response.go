@@ -65,6 +65,37 @@ type ListObjectsResponse struct {
 	Prefix     string
 }
 
+// ListObjectsV2Response - format for list objects response.
+type ListObjectsV2Response struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
+
+	CommonPrefixes []CommonPrefix
+	Contents       []Object
+
+	Delimiter string
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string
+
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
+	StartAfter  string
+	MaxKeys     int
+	Name        string
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects. Server lists objects in alphabetical
+	// order Note: This element is returned only if you have delimiter request parameter
+	// specified. If response does not include the NextMaker and it is truncated,
+	// you can use the value of the last Key in the response as the marker in the
+	// subsequent request to get the next set of object keys.
+	ContinuationToken     string
+	NextContinuationToken string
+	Prefix                string
+}
+
 // Part container for part metadata.
 type Part struct {
 	PartNumber   int
@@ -294,6 +325,51 @@ func generateListObjectsResponse(bucket, prefix, marker, delimiter string, maxKe
 	data.MaxKeys = maxKeys
 
 	data.NextMarker = resp.NextMarker
+	data.IsTruncated = resp.IsTruncated
+	for _, prefix := range resp.Prefixes {
+		var prefixItem = CommonPrefix{}
+		prefixItem.Prefix = prefix
+		prefixes = append(prefixes, prefixItem)
+	}
+	data.CommonPrefixes = prefixes
+	return data
+}
+
+// generates an ListObjects response for the said bucket with other enumerated options.
+func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter string, maxKeys int, resp ListObjectsInfo) ListObjectsV2Response {
+	var contents []Object
+	var prefixes []CommonPrefix
+	var owner = Owner{}
+	var data = ListObjectsV2Response{}
+
+	owner.ID = "minio"
+	owner.DisplayName = "minio"
+
+	for _, object := range resp.Objects {
+		var content = Object{}
+		if object.Name == "" {
+			continue
+		}
+		content.Key = object.Name
+		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZ)
+		if object.MD5Sum != "" {
+			content.ETag = "\"" + object.MD5Sum + "\""
+		}
+		content.Size = object.Size
+		content.StorageClass = "STANDARD"
+		content.Owner = owner
+		contents = append(contents, content)
+	}
+	// TODO - support EncodingType in xml decoding
+	data.Name = bucket
+	data.Contents = contents
+
+	data.StartAfter = startAfter
+	data.Delimiter = delimiter
+	data.Prefix = prefix
+	data.MaxKeys = maxKeys
+	data.ContinuationToken = token
+	data.NextContinuationToken = resp.NextMarker
 	data.IsTruncated = resp.IsTruncated
 	for _, prefix := range resp.Prefixes {
 		var prefixItem = CommonPrefix{}

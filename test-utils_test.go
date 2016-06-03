@@ -44,6 +44,10 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 			}
 			erasureDisks = append(erasureDisks, path)
 		}
+
+		// Initialize name space lock.
+		initNSLock()
+
 		objLayer, err := newXLObjects(erasureDisks)
 		if err != nil {
 			return nil, nil, err
@@ -58,6 +62,9 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 		if err != nil {
 			return nil, "", err
 		}
+
+		// Initialize name space lock.
+		initNSLock()
 
 		// Create the obj.
 		objLayer, err := newFSObjects(fsDir)
@@ -80,7 +87,7 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 	}
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, singleNodeTestStr, t)
-	initNSLock()
+
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())

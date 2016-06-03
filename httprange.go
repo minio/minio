@@ -28,13 +28,10 @@ const (
 )
 
 // InvalidRange - invalid range
-type InvalidRange struct {
-	Start  int64
-	Length int64
-}
+type InvalidRange struct{}
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("Invalid range start:%d length:%d", e.Start, e.Length)
+	return "The requested range is not satisfiable"
 }
 
 // HttpRange specifies the byte range to be sent to the client.

@@ -1,0 +1,10 @@
+{
+    "version": "1",
+    "format": "xl",
+    "uploadIds": [
+        {
+            "uploadID": "id",
+            "startTime": "time",
+        }
+    ]
+}

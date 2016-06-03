@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
@@ -98,6 +97,22 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	return nil
 }
 
+// StorageInfoRep - contains storage usage statistics.
+type StorageInfoRep struct {
+	StorageInfo StorageInfo `json:"storageInfo"`
+	UIVersion   string      `json:"uiVersion"`
+}
+
+// StorageInfo - web call to gather storage usage statistics.
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply *StorageInfoRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	reply.UIVersion = miniobrowser.UIVersion
+	reply.StorageInfo = web.ObjectAPI.StorageInfo()
+	return nil
+}
+
 // MakeBucketArgs - make bucket args.
 type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
@@ -127,10 +142,6 @@ type WebBucketInfo struct {
 	Name string `json:"name"`
 	// Date the bucket was created.
 	CreationDate time.Time `json:"creationDate"`
-	// Total storage space where the bucket resides.
-	Total int64 `json:"total"`
-	// Free storage space where the bucket resides.
-	Free int64 `json:"free"`
 }
 
 // ListBuckets - list buckets api.
@@ -148,8 +159,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			reply.Buckets = append(reply.Buckets, WebBucketInfo{
 				Name:         bucket.Name,
 				CreationDate: bucket.Created,
-				Total:        bucket.Total,
-				Free:         bucket.Free,
 			})
 		}
 	}
@@ -373,12 +382,14 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(object)))
 
-	objReader, err := web.ObjectAPI.GetObject(bucket, object, 0)
+	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	if _, err := io.Copy(w, objReader); err != nil {
+	offset := int64(0)
+	err = web.ObjectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
+	if err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}

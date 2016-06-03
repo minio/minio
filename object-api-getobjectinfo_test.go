@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -111,7 +110,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t *testing.T) {
 	}
 }
 
-func BenchmarkGetObject(b *testing.B) {
+func BenchmarkGetObjectFS(b *testing.B) {
 	// Make a temporary directory to use as the obj.
 	directory, err := ioutil.TempDir("", "minio-benchmark-getobject")
 	if err != nil {
@@ -146,16 +145,12 @@ func BenchmarkGetObject(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var buffer = new(bytes.Buffer)
-		r, err := obj.GetObject("bucket", "object"+strconv.Itoa(i%10), 0)
+		err = obj.GetObject("bucket", "object"+strconv.Itoa(i%10), 0, int64(len([]byte(text))), buffer)
 		if err != nil {
-			b.Error(err)
-		}
-		if _, err := io.Copy(buffer, r); err != nil {
 			b.Error(err)
 		}
 		if buffer.Len() != len(text) {
 			b.Errorf("GetObject returned incorrect length %d (should be %d)\n", buffer.Len(), len(text))
 		}
-		r.Close()
 	}
 }
