@@ -209,6 +209,10 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		var buf []byte
 		buf, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
 		if err != nil {
+			// For any reason disk is not available continue and read from other disks.
+			if err == errDiskNotFound {
+				continue
+			}
 			return xlMetaV1{}, err
 		}
 		err = json.Unmarshal(buf, &xlMeta)
@@ -338,11 +342,10 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 			xlMetas[index].Erasure.Index = index + 1
 
 			// Write unique `xl.json` for a disk at index.
-			if err := writeXLMetadata(disk, bucket, prefix, xlMetas[index]); err != nil {
+			err := writeXLMetadata(disk, bucket, prefix, xlMetas[index])
+			if err != nil {
 				mErrs[index] = err
-				return
 			}
-			mErrs[index] = nil
 		}(index, disk)
 	}
 
@@ -404,11 +407,10 @@ func (xl xlObjects) writeSameXLMetadata(bucket, prefix string, xlMeta xlMetaV1) 
 			metadata.Erasure.Index = index + 1
 
 			// Write xl metadata.
-			if err := writeXLMetadata(disk, bucket, prefix, metadata); err != nil {
+			err := writeXLMetadata(disk, bucket, prefix, metadata)
+			if err != nil {
 				mErrs[index] = err
-				return
 			}
-			mErrs[index] = nil
 		}(index, disk, xlMeta)
 	}
 

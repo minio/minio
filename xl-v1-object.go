@@ -401,9 +401,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 			err := cleanupDir(disk, bucket, object)
 			if err != nil {
 				dErrs[index] = err
-				return
 			}
-			dErrs[index] = nil
 		}(index, disk)
 	}
 

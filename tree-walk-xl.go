@@ -53,6 +53,11 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 		}
 		entries, err = disk.ListDir(bucket, prefixDir)
 		if err != nil {
+			// For any reason disk was deleted or goes offline, continue
+			// and list form other disks if possible.
+			if err == errDiskNotFound {
+				continue
+			}
 			break
 		}
 		// Skip the entries which do not match the filter.

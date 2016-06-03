@@ -56,9 +56,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 			err := disk.MakeVol(bucket)
 			if err != nil {
 				dErrs[index] = err
-				return
 			}
-			dErrs[index] = nil
 		}(index, disk)
 	}
 
@@ -99,7 +97,7 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 		var volInfo VolInfo
 		volInfo, err = disk.StatVol(bucketName)
 		if err != nil {
-			// For some reason disk went offline pick the next one.
+			// For any reason disk went offline continue and pick the next one.
 			if err == errDiskNotFound {
 				continue
 			}
@@ -154,6 +152,10 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 		}
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
+		// Ignore any disks not found.
+		if err == errDiskNotFound {
+			continue
+		}
 		if err == nil {
 			// NOTE: The assumption here is that volumes across all disks in
 			// readQuorum have consistent view i.e they all have same number
@@ -218,9 +220,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 			err := disk.DeleteVol(bucket)
 			if err != nil {
 				dErrs[index] = err
-				return
 			}
-			dErrs[index] = nil
 		}(index, disk)
 	}
 
