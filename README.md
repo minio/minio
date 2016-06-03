@@ -80,7 +80,7 @@ Read more here on [How to configure data volume containers for Minio?](./Docker.
 
 #### Source
 <blockquote>
-NOTE: Source installation is intended for only developers and advanced users.  For general use, please download official releases from https://minio.io/download.
+NOTE: Source installation is intended for only developers and advanced users.  For general use, please download official releases from https://minio.io/downloads.
 </blockquote>
 
 If you do not have a working Golang environment, please follow [Install Golang](./INSTALLGO.md).
