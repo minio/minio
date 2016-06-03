@@ -296,11 +296,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Erasure code and write across all disks.
-	newEInfos, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos)
+	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
-
+	if size == -1 {
+		size = n
+	}
 	// Save additional erasureMetadata.
 	modTime := time.Now().UTC()
 

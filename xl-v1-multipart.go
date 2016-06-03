@@ -337,11 +337,13 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	}
 
 	// Erasure code data and write across all disks.
-	newEInfos, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, partSuffix, teeReader, eInfos)
+	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, partSuffix, teeReader, eInfos)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 	}
-
+	if size == -1 {
+		size = n
+	}
 	// Calculate new md5sum.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {

@@ -28,7 +28,7 @@ import (
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo) (newEInfos []erasureInfo, err error) {
+func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo) (newEInfos []erasureInfo, size int64, err error) {
 	// Allocated blockSized buffer for reading.
 	buf := make([]byte, blockSizeV1)
 	hashWriters := newHashWriters(len(disks))
@@ -44,17 +44,18 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 			break
 		}
 		if err != nil && err != io.ErrUnexpectedEOF {
-			return nil, err
+			return nil, 0, err
 		}
+		size += int64(n)
 		var blocks [][]byte
 		// Returns encoded blocks.
 		blocks, err = encodeData(buf[:n], eInfo.DataBlocks, eInfo.ParityBlocks)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 
@@ -80,7 +81,7 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 	}
 
 	// Return newEInfos.
-	return newEInfos, nil
+	return newEInfos, size, nil
 }
 
 // encodeData - encodes incoming data buffer into
