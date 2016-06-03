@@ -249,6 +249,11 @@ func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 
 // DeleteVol - delete a volume.
 func (s posix) DeleteVol(volume string) error {
+	// Validate if disk is free.
+	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return err
+	}
+
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -274,6 +279,11 @@ func (s posix) DeleteVol(volume string) error {
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
 func (s posix) ListDir(volume, dirPath string) ([]string, error) {
+	// Validate if disk is free.
+	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return nil, err
+	}
+
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -296,6 +306,11 @@ func (s posix) ListDir(volume, dirPath string) ([]string, error) {
 // for io.EOF. Additionally ReadFile also starts reading from an
 // offset.
 func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return 0, err
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return 0, err
@@ -356,6 +371,11 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) {
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return 0, err
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return 0, err
@@ -403,6 +423,11 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 
 // StatFile - get file info.
 func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return FileInfo{}, err
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return FileInfo{}, err
@@ -480,6 +505,11 @@ func deleteFile(basePath, deletePath string) error {
 
 // DeleteFile - delete a file at path.
 func (s posix) DeleteFile(volume, path string) error {
+	// Validate if disk is free.
+	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return err
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -506,6 +536,11 @@ func (s posix) DeleteFile(volume, path string) error {
 
 // RenameFile - rename source path to destination path atomically.
 func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+	// Validate if disk is free.
+	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return err
+	}
+
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err

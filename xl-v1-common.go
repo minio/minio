@@ -63,6 +63,9 @@ func (xl xlObjects) isObject(bucket, prefix string) bool {
 		}
 		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			return false
 		}
 		break
