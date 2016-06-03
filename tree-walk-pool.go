@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -25,6 +26,9 @@ import (
 const (
 	globalLookupTimeout = time.Minute * 30 // 30minutes.
 )
+
+// errWalkAbort - returned by the treeWalker routine, it signals the end of treeWalk.
+var errWalkAbort = errors.New("treeWalk abort")
 
 // treeWalkerPoolInfo - tree walker pool info carries temporary walker
 // channel stored until timeout is called.
@@ -62,17 +66,19 @@ func newTreeWalkerPool(timeout time.Duration) *treeWalkerPool {
 func (t treeWalkerPool) Release(params listParams) (treeWalkerCh chan treeWalker, treeWalkerDoneCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	treeWalk, ok := t.pool[params]
+	walks, ok := t.pool[params] // Pick the valid walks.
 	if ok {
-		if len(treeWalk) > 0 {
-			treeWalker := treeWalk[0]
-			if len(treeWalk[1:]) > 0 {
-				t.pool[params] = treeWalk[1:]
+		if len(walks) > 0 {
+			// Pop out the first valid walk entry.
+			walk := walks[0]
+			walks = walks[1:]
+			if len(walks) > 0 {
+				t.pool[params] = walks
 			} else {
 				delete(t.pool, params)
 			}
-			treeWalker.doneCh <- struct{}{}
-			return treeWalker.treeWalkerCh, treeWalker.treeWalkerDoneCh
+			walk.doneCh <- struct{}{}
+			return walk.treeWalkerCh, walk.treeWalkerDoneCh
 		}
 	}
 	// Release return nil if params not found.
@@ -88,13 +94,15 @@ func (t treeWalkerPool) Set(params listParams, treeWalkerCh chan treeWalker, tre
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	var treeWalkerIdx = len(t.pool[params])
-	var doneCh = make(chan struct{})
-	t.pool[params] = append(t.pool[params], treeWalkerPoolInfo{
+	// Should be a buffered channel so that Release() never blocks.
+	var doneCh = make(chan struct{}, 1)
+	walkInfo := treeWalkerPoolInfo{
 		treeWalkerCh:     treeWalkerCh,
 		treeWalkerDoneCh: treeWalkerDoneCh,
 		doneCh:           doneCh,
-	})
+	}
+	// Append new walk info.
+	t.pool[params] = append(t.pool[params], walkInfo)
 
 	// Safe expiry of treeWalkerCh after timeout.
 	go func(doneCh <-chan struct{}) {
@@ -102,13 +110,23 @@ func (t treeWalkerPool) Set(params listParams, treeWalkerCh chan treeWalker, tre
 		// Wait until timeOut
 		case <-time.After(t.timeOut):
 			t.lock.Lock()
-			treeWalk := t.pool[params]
-			treeWalk = append(treeWalk[:treeWalkerIdx], treeWalk[treeWalkerIdx+1:]...)
-			if len(treeWalk) == 0 {
-				delete(t.pool, params)
-			} else {
-				t.pool[params] = treeWalk
+			walks, ok := t.pool[params] // Look for valid walks.
+			if ok {
+				// Look for walkInfo, remove it from the walks list.
+				for i, walk := range walks {
+					if walk == walkInfo {
+						walks = append(walks[:i], walks[i+1:]...)
+					}
+				}
+				// Walks is empty we have no more pending requests.
+				// Remove map entry.
+				if len(walks) == 0 {
+					delete(t.pool, params)
+				} else { // Save the updated walks.
+					t.pool[params] = walks
+				}
 			}
+			// Close tree walker for the backing go-routine to die.
 			close(treeWalkerDoneCh)
 			t.lock.Unlock()
 		case <-doneCh:
