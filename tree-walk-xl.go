@@ -53,6 +53,9 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 		}
 		entries, err = disk.ListDir(bucket, prefixDir)
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			break
 		}
 		// Skip the entries which do not match the filter.

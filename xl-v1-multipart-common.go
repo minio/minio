@@ -363,6 +363,9 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 		}
 		_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			return false
 		}
 		break
@@ -377,8 +380,12 @@ func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo
 			continue
 		}
 		splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-		uploadsJSON, err := readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
+		var uploadsJSON uploadsV1
+		uploadsJSON, err = readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			if err == errFileNotFound {
 				return []uploadInfo{}, nil
 			}

@@ -209,6 +209,9 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		var buf []byte
 		buf, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			return xlMetaV1{}, err
 		}
 		err = json.Unmarshal(buf, &xlMeta)

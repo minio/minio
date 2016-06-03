@@ -68,6 +68,9 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				continue
 			}
 			uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
+			if err == errDiskNotFound {
+				continue
+			}
 			break
 		}
 		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
@@ -124,9 +127,12 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				if disk == nil {
 					continue
 				}
+				newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
+				if err == errDiskNotFound {
+					continue
+				}
 				break
 			}
-			newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
 			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			if err != nil {
 				if err == errFileNotFound || walkResult.err == errDiskNotFound {
@@ -661,13 +667,17 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var disk StorageAPI
+	var uploadsJSON uploadsV1
 	for _, disk = range xl.getLoadBalancedQuorumDisks() {
 		if disk == nil {
 			continue
 		}
+		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
+		if err == errDiskNotFound {
+			continue
+		}
 		break
 	}
-	uploadsJSON, err := readUploadsJSON(bucket, object, disk)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, object)
 	}
@@ -709,13 +719,17 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var disk StorageAPI
+	var uploadsJSON uploadsV1
 	for _, disk = range xl.getLoadBalancedQuorumDisks() {
 		if disk == nil {
 			continue
 		}
+		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
+		if err == errDiskNotFound {
+			continue
+		}
 		break
 	}
-	uploadsJSON, err := readUploadsJSON(bucket, object, disk)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
