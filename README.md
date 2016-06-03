@@ -9,8 +9,8 @@ Minio is light enough to be bundled with the application stack. It sits on the s
 
 Minio currently implements two backends
 
-  - Filesystem (FS) - is available and ready for general purpose use. This version of the Minio binary is built using Filesystem storage backend for magnetic and solid state disks.
-  - ErasureCoded (XL) - is work in progress and not ready for general purpose use.
+  - Filesystem (FS) - is available and ready for general purpose use.
+  - ErasureCoded (XL) - is available, but it is not ready for general purpose use.
 
 ## Minio Client
 
