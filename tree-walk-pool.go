@@ -27,43 +27,53 @@ const (
 	globalLookupTimeout = time.Minute * 30 // 30minutes.
 )
 
-// errWalkAbort - returned by the treeWalker routine, it signals the end of treeWalk.
-var errWalkAbort = errors.New("treeWalk abort")
-
-// treeWalkerPoolInfo - tree walker pool info carries temporary walker
-// channel stored until timeout is called.
-type treeWalkerPoolInfo struct {
-	treeWalkerCh     chan treeWalker
-	treeWalkerDoneCh chan struct{}
-	doneCh           chan<- struct{}
+// listParams - list object params used for list object map
+type listParams struct {
+	bucket    string
+	recursive bool
+	marker    string
+	prefix    string
 }
 
-// treeWalkerPool - tree walker pool is a set of temporary tree walker
-// objects. Any item stored in the pool will be removed automatically at
-// a given timeOut value. This pool is safe for use by multiple
-// goroutines simultaneously. pool's purpose is to cache tree walker
-// channels for later reuse.
-type treeWalkerPool struct {
-	pool    map[listParams][]treeWalkerPoolInfo
+// errWalkAbort - returned by doTreeWalk() if it returns prematurely.
+// doTreeWalk() can return prematurely if
+// 1) treeWalk is timed out by the timer go-routine.
+// 2) there is an error during tree walk.
+var errWalkAbort = errors.New("treeWalk abort")
+
+// treeWalk - represents the go routine that does the file tree walk.
+type treeWalk struct {
+	resultCh   chan treeWalkResult
+	endWalkCh  chan struct{}   // To signal when treeWalk go-routine should end.
+	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
+}
+
+// treeWalkPool - pool of treeWalk go routines.
+// A treeWalk is added to the pool by Set() and removed either by
+// doing a Release() or if the concerned timer goes off.
+// treeWalkPool's purpose is to maintain active treeWalk go-routines in a map so that
+// it can be looked up across related list calls.
+type treeWalkPool struct {
+	pool    map[listParams][]treeWalk
 	timeOut time.Duration
 	lock    *sync.Mutex
 }
 
-// newTreeWalkerPool - initialize new tree walker pool.
-func newTreeWalkerPool(timeout time.Duration) *treeWalkerPool {
-	tPool := &treeWalkerPool{
-		pool:    make(map[listParams][]treeWalkerPoolInfo),
+// newTreeWalkPool - initialize new tree walk pool.
+func newTreeWalkPool(timeout time.Duration) *treeWalkPool {
+	tPool := &treeWalkPool{
+		pool:    make(map[listParams][]treeWalk),
 		timeOut: timeout,
 		lock:    &sync.Mutex{},
 	}
 	return tPool
 }
 
-// Release - selects an item from the pool based on the input
-// listParams, removes it from the pool, and returns treeWalker
-// channels. Release will return nil, if listParams is not
-// recognized.
-func (t treeWalkerPool) Release(params listParams) (treeWalkerCh chan treeWalker, treeWalkerDoneCh chan struct{}) {
+// Release - selects a treeWalk from the pool based on the input
+// listParams, removes it from the pool, and returns the treeWalkResult
+// channel.
+// Returns nil if listParams does not have an asccociated treeWalk.
+func (t treeWalkPool) Release(params listParams) (resultCh chan treeWalkResult, endWalkCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
@@ -77,40 +87,45 @@ func (t treeWalkerPool) Release(params listParams) (treeWalkerCh chan treeWalker
 			} else {
 				delete(t.pool, params)
 			}
-			walk.doneCh <- struct{}{}
-			return walk.treeWalkerCh, walk.treeWalkerDoneCh
+			walk.endTimerCh <- struct{}{}
+			return walk.resultCh, walk.endWalkCh
 		}
 	}
 	// Release return nil if params not found.
 	return nil, nil
 }
 
-// Set - adds new list params along with treeWalker channel to the
-// pool for future. Additionally this also starts a go routine which
-// waits at the configured timeout. Additionally this go-routine is
-// also closed pro-actively by 'Release' call when the treeWalker
-// item is obtained from the pool.
-func (t treeWalkerPool) Set(params listParams, treeWalkerCh chan treeWalker, treeWalkerDoneCh chan struct{}) {
+// Set - adds a treeWalk to the treeWalkPool.
+// Also starts a timer go-routine that ends when:
+// 1) time.After() expires after t.timeOut seconds.
+//    The expiration is needed so that the treeWalk go-routine resources are freed after a timeout
+//    if the S3 client does only partial listing of objects.
+// 2) Relase() signals the timer go-routine to end on endTimerCh.
+//    During listing the timer should not timeout and end the treeWalk go-routine, hence the
+//    timer go-routine should be ended.
+func (t treeWalkPool) Set(params listParams, resultCh chan treeWalkResult, endWalkCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// Should be a buffered channel so that Release() never blocks.
-	var doneCh = make(chan struct{}, 1)
-	walkInfo := treeWalkerPoolInfo{
-		treeWalkerCh:     treeWalkerCh,
-		treeWalkerDoneCh: treeWalkerDoneCh,
-		doneCh:           doneCh,
+	endTimerCh := make(chan struct{}, 1)
+	walkInfo := treeWalk{
+		resultCh:   resultCh,
+		endWalkCh:  endWalkCh,
+		endTimerCh: endTimerCh,
 	}
 	// Append new walk info.
 	t.pool[params] = append(t.pool[params], walkInfo)
 
-	// Safe expiry of treeWalkerCh after timeout.
-	go func(doneCh <-chan struct{}) {
+	// Timer go-routine which times out after t.timeOut seconds.
+	go func(endTimerCh <-chan struct{}) {
 		select {
 		// Wait until timeOut
 		case <-time.After(t.timeOut):
+			// Timeout has expired. Remove the treeWalk from treeWalkPool and
+			// end the treeWalk go-routine.
 			t.lock.Lock()
-			walks, ok := t.pool[params] // Look for valid walks.
+			walks, ok := t.pool[params]
 			if ok {
 				// Look for walkInfo, remove it from the walks list.
 				for i, walk := range walks {
@@ -118,19 +133,21 @@ func (t treeWalkerPool) Set(params listParams, treeWalkerCh chan treeWalker, tre
 						walks = append(walks[:i], walks[i+1:]...)
 					}
 				}
-				// Walks is empty we have no more pending requests.
-				// Remove map entry.
 				if len(walks) == 0 {
+					// No more treeWalk go-routines associated with listParams
+					// hence remove map entry.
 					delete(t.pool, params)
-				} else { // Save the updated walks.
+				} else {
+					// There are more treeWalk go-routines associated with listParams
+					// hence save the list in the map.
 					t.pool[params] = walks
 				}
 			}
-			// Close tree walker for the backing go-routine to die.
-			close(treeWalkerDoneCh)
+			// Signal the treeWalk go-routine to die.
+			close(endWalkCh)
 			t.lock.Unlock()
-		case <-doneCh:
+		case <-endTimerCh:
 			return
 		}
-	}(doneCh)
+	}(endTimerCh)
 }
