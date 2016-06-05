@@ -26,17 +26,17 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		recursive = false
 	}
 
-	walkerCh, walkerDoneCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
-	if walkerCh == nil {
-		walkerDoneCh = make(chan struct{})
-		walkerCh = xl.startTreeWalk(bucket, prefix, marker, recursive, xl.isObject, walkerDoneCh)
+	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
+	if walkResultCh == nil {
+		endWalkCh = make(chan struct{})
+		walkResultCh = xl.startTreeWalk(bucket, prefix, marker, recursive, xl.isObject, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
 	var eof bool
 	var nextMarker string
 	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walkerCh
+		walkResult, ok := <-walkResultCh
 		if !ok {
 			// Closed channel.
 			eof = true
@@ -76,7 +76,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
-		xl.listPool.Set(params, walkerCh, walkerDoneCh)
+		xl.listPool.Set(params, walkResultCh, endWalkCh)
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}

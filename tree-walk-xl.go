@@ -21,16 +21,8 @@ import (
 	"strings"
 )
 
-// listParams - list object params used for list object map
-type listParams struct {
-	bucket    string
-	recursive bool
-	marker    string
-	prefix    string
-}
-
 // Tree walk result carries results of tree walking.
-type treeWalker struct {
+type treeWalkResult struct {
 	entry string
 	err   error
 	end   bool
@@ -80,7 +72,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 }
 
 // treeWalk walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, isLeaf func(string, string) bool, treeWalkCh chan treeWalker, doneCh chan struct{}, isEnd bool) error {
+func (xl xlObjects) doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, isLeaf func(string, string) bool, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -100,9 +92,9 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 	}, isLeaf)
 	if err != nil {
 		select {
-		case <-doneCh:
+		case <-endWalkCh:
 			return errWalkAbort
-		case treeWalkCh <- treeWalker{err: err}:
+		case resultCh <- treeWalkResult{err: err}:
 			return err
 		}
 	}
@@ -149,7 +141,7 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
-			if tErr := xl.treeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, isLeaf, treeWalkCh, doneCh, markIsEnd); tErr != nil {
+			if tErr := xl.doTreeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
 				return tErr
 			}
 			continue
@@ -157,9 +149,9 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		// EOF is set if we are at last entry and the caller indicated we at the end.
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
-		case <-doneCh:
+		case <-endWalkCh:
 			return errWalkAbort
-		case treeWalkCh <- treeWalker{entry: pathJoin(prefixDir, entry), end: isEOF}:
+		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}
 
@@ -168,7 +160,7 @@ func (xl xlObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool, doneCh chan struct{}) chan treeWalker {
+func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -179,7 +171,7 @@ func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
 
-	treeWalkCh := make(chan treeWalker, maxObjectList)
+	resultCh := make(chan treeWalkResult, maxObjectList)
 	entryPrefixMatch := prefix
 	prefixDir := ""
 	lastIndex := strings.LastIndex(prefix, slashSeparator)
@@ -190,8 +182,8 @@ func (xl xlObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 	marker = strings.TrimPrefix(marker, prefixDir)
 	go func() {
 		isEnd := true // Indication to start walking the tree with end as true.
-		xl.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, isLeaf, treeWalkCh, doneCh, isEnd)
-		close(treeWalkCh)
+		xl.doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, isLeaf, resultCh, endWalkCh, isEnd)
+		close(resultCh)
 	}()
-	return treeWalkCh
+	return resultCh
 }

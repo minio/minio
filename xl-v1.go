@@ -44,7 +44,7 @@ type xlObjects struct {
 	writeQuorum   int          // writeQuorum minimum required disks to write data.
 
 	// List pool management.
-	listPool *treeWalkerPool
+	listPool *treeWalkPool
 }
 
 // errXLMaxDisks - returned for reached maximum of disks.
@@ -161,7 +161,7 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 		storageDisks:  newPosixDisks,
 		dataBlocks:    dataBlocks,
 		parityBlocks:  parityBlocks,
-		listPool:      newTreeWalkerPool(globalLookupTimeout),
+		listPool:      newTreeWalkPool(globalLookupTimeout),
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
