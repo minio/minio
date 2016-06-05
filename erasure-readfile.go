@@ -153,35 +153,36 @@ func metaPartBlockChecksums(disks []StorageAPI, eInfos []erasureInfo, partName s
 }
 
 // Takes block index and block distribution to get the disk index.
-func toDiskIndex(blockIdx int, distribution []int) (diskIndex int) {
-	diskIndex = -1
+func toDiskIndex(blockIdx int, distribution []int) int {
 	// Find out the right disk index for the input block index.
 	for index, blockIndex := range distribution {
-		if blockIndex == blockIdx {
-			diskIndex = index
+		if blockIndex-1 == blockIdx {
+			return index
 		}
 	}
-	return diskIndex
+	return -1
 }
 
 // isValidBlock - calculates the checksum hash for the block and
 // validates if its correct returns true for valid cases, false otherwise.
-func isValidBlock(disks []StorageAPI, volume, path string, diskIndex int, blockCheckSums []checkSumInfo) bool {
+func isValidBlock(disks []StorageAPI, volume, path string, diskIndex int, blockCheckSums []checkSumInfo) (ok bool) {
+	ok = false
 	// Unknown block index requested, treat it as error.
 	if diskIndex == -1 {
-		return false
+		return ok
 	}
 	// Disk is not present, treat entire block to be non existent.
 	if disks[diskIndex] == nil {
-		return false
+		return ok
 	}
 	// Read everything for a given block and calculate hash.
 	hashWriter := newHash(blockCheckSums[diskIndex].Algorithm)
 	hashBytes, err := hashSum(disks[diskIndex], volume, path, hashWriter)
 	if err != nil {
-		return false
+		return ok
 	}
-	return hex.EncodeToString(hashBytes) == blockCheckSums[diskIndex].Hash
+	ok = hex.EncodeToString(hashBytes) == blockCheckSums[diskIndex].Hash
+	return ok
 }
 
 // decodeData - decode encoded blocks.
