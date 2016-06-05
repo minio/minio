@@ -231,6 +231,7 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 	// Collect currently available disk uuids.
 	for index, formatConfig := range formatConfigs {
 		if formatConfig == nil {
+			disks[index] = ""
 			continue
 		}
 		disks[index] = formatConfig.XL.Disk
