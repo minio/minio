@@ -456,11 +456,10 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	}
 	count := maxParts
 	for _, part := range parts {
-		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 		var fi FileInfo
-		fi, err = xl.statPart(minioMetaBucket, partNamePath)
+		fi, err = xl.statPart(bucket, object, uploadID, part.Name)
 		if err != nil {
-			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
+			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, path.Join(uploadID, part.Name))
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   part.Number,

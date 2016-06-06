@@ -29,58 +29,71 @@ const (
 	xLTestStr string = "XL"
 )
 
-// ExecObjectLayerTest - executes object layer tests.
-// Creates single node and XL ObjectLayer instance and runs test for both the layers.
-func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceType string, t *testing.T)) {
-
-	// getXLObjectLayer - Instantiates XL object layer and returns it.
-	getXLObjectLayer := func() (ObjectLayer, []string, error) {
-		var nDisks = 16 // Maximum disks.
-		var erasureDisks []string
-		for i := 0; i < nDisks; i++ {
-			path, err := ioutil.TempDir(os.TempDir(), "minio-")
-			if err != nil {
-				return nil, nil, err
-			}
-			erasureDisks = append(erasureDisks, path)
-		}
-
-		// Initialize name space lock.
-		initNSLock()
-
-		objLayer, err := newXLObjects(erasureDisks)
+// getXLObjectLayer - Instantiates XL object layer and returns it.
+func getXLObjectLayer() (ObjectLayer, []string, error) {
+	var nDisks = 16 // Maximum disks.
+	var erasureDisks []string
+	for i := 0; i < nDisks; i++ {
+		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		if err != nil {
 			return nil, nil, err
 		}
-		return objLayer, erasureDisks, nil
+		erasureDisks = append(erasureDisks, path)
 	}
 
-	// getSingleNodeObjectLayer - Instantiates single node object layer and returns it.
-	getSingleNodeObjectLayer := func() (ObjectLayer, string, error) {
-		// Make a temporary directory to use as the obj.
-		fsDir, err := ioutil.TempDir("", "minio-")
-		if err != nil {
-			return nil, "", err
-		}
+	// Initialize name space lock.
+	initNSLock()
 
-		// Initialize name space lock.
-		initNSLock()
+	objLayer, err := newXLObjects(erasureDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+	return objLayer, erasureDisks, nil
+}
 
-		// Create the obj.
-		objLayer, err := newFSObjects(fsDir)
-		if err != nil {
-			return nil, "", err
-		}
-		return objLayer, fsDir, nil
+// getSingleNodeObjectLayer - Instantiates single node object layer and returns it.
+func getSingleNodeObjectLayer() (ObjectLayer, string, error) {
+	// Make a temporary directory to use as the obj.
+	fsDir, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		return nil, "", err
 	}
 
-	// removeRoots - Cleans up initialized directories during tests.
-	removeRoots := func(roots []string) {
-		for _, root := range roots {
-			os.RemoveAll(root)
-		}
-	}
+	// Initialize name space lock.
+	initNSLock()
 
+	// Create the obj.
+	objLayer, err := newFSObjects(fsDir)
+	if err != nil {
+		return nil, "", err
+	}
+	return objLayer, fsDir, nil
+}
+
+// removeRoots - Cleans up initialized directories during tests.
+func removeRoots(roots []string) {
+	for _, root := range roots {
+		os.RemoveAll(root)
+	}
+}
+
+// removeRandomDisk - removes a count of random disks from a disk slice.
+func removeRandomDisk(disks []string, removeCount int) {
+	ints := randInts(len(disks))
+	for _, i := range ints[:removeCount] {
+		os.RemoveAll(disks[i-1])
+	}
+}
+
+// Regular object test type.
+type objTestType func(obj ObjectLayer, instanceType string, t *testing.T)
+
+// Special object test type for disk not found situations.
+type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []string, t *testing.T)
+
+// ExecObjectLayerTest - executes object layer tests.
+// Creates single node and XL ObjectLayer instance and runs test for both the layers.
+func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err.Error())
@@ -95,4 +108,16 @@ func ExecObjectLayerTest(t *testing.T, objTest func(obj ObjectLayer, instanceTyp
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, t)
 	defer removeRoots(append(fsDirs, fsDir))
+}
+
+// ExecObjectLayerDiskNotFoundTest - executes object layer tests while deleting
+// disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
+func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundType) {
+	objLayer, fsDirs, err := getXLObjectLayer()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+	}
+	// Executing the object layer tests for XL.
+	objTest(objLayer, xLTestStr, fsDirs, t)
+	defer removeRoots(fsDirs)
 }

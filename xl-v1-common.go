@@ -56,37 +56,21 @@ func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
 
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
-func (xl xlObjects) isObject(bucket, prefix string) bool {
+func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
 		if disk == nil {
 			continue
 		}
-		// Check if 'prefix' is an object in this 'disk', else continue the check with next disk
+		// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
 		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
-		if err != nil {
-			if err == errFileNotFound || err == errDiskNotFound {
-				continue
-			}
-			// TODO: log the error
-		} else {
+		if err == nil {
 			return true
 		}
-	}
-
-	return false
-}
-
-// statPart - returns fileInfo structure for a successful stat on part file.
-func (xl xlObjects) statPart(bucket, objectPart string) (fileInfo FileInfo, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
-		if disk == nil {
+		// Ignore for file not found and disk not found.
+		if err == errFileNotFound || err == errDiskNotFound {
 			continue
 		}
-		fileInfo, err = disk.StatFile(bucket, objectPart)
-		if err != nil {
-			return FileInfo{}, err
-		}
-		break
-	}
-	return fileInfo, nil
+		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)
+	} // Exhausted all disks - return false.
+	return false
 }
