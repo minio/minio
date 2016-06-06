@@ -215,7 +215,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	uniqueID := getUUID()
 
-	// Temporary object.
+	// Uploaded object will first be written to the temporary location which will eventually
+	// be renamed to the actual location. It is first written to the temporary location
+	// so that cleaning it up will be easy if the server goes down.
 	tempObj := path.Join(tmpMetaPrefix, uniqueID)
 
 	// Initialize md5 writer.
@@ -228,24 +230,28 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		// Allocate buffer.
+		// Allocate a buffer to Read() the object upload stream.
 		buf := make([]byte, blockSizeV1)
+		// Read the buffer till io.EOF and append the read data to
+		// the temporary file.
 		for {
 			n, rErr := data.Read(buf)
-			if rErr == io.EOF {
-				break
-			}
-			if rErr != nil {
+			if rErr != nil && rErr != io.EOF {
 				return "", toObjectErr(rErr, bucket, object)
 			}
-			// Update md5 writer.
-			md5Writer.Write(buf[:n])
-			m, wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
-			if wErr != nil {
-				return "", toObjectErr(wErr, bucket, object)
+			if n > 0 {
+				// Update md5 writer.
+				md5Writer.Write(buf[:n])
+				m, wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
+				if wErr != nil {
+					return "", toObjectErr(wErr, bucket, object)
+				}
+				if m != int64(n) {
+					return "", toObjectErr(errUnexpected, bucket, object)
+				}
 			}
-			if m != int64(len(buf[:n])) {
-				return "", toObjectErr(errUnexpected, bucket, object)
+			if rErr == io.EOF {
+				break
 			}
 		}
 	}
@@ -262,6 +268,8 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
+	// Entire object was written to the temp location, now it's safe to rename it
+	// to the actual location.
 	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
