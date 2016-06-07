@@ -53,7 +53,7 @@ func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, er
 		if err == io.EOF {
 			break
 		}
-		if err != nil && err != io.EOF {
+		if err != nil {
 			return nil, err
 		}
 		writer.Write(buf[:n])
