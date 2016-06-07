@@ -438,7 +438,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
-func (xl xlObjects) DeleteObject(bucket, object string) error {
+func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -448,6 +448,11 @@ func (xl xlObjects) DeleteObject(bucket, object string) error {
 	}
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
-	xl.deleteObject(bucket, object)
-	return nil
+
+	if err = xl.deleteObject(bucket, object); err == errFileNotFound {
+		// Its valid to return success if given object is not found.
+		err = nil
+	}
+
+	return err
 }
