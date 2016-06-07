@@ -33,6 +33,7 @@ const (
 )
 
 // supportedActionMap - lists all the actions supported by minio.
+// actions beginning with s3:None are pseudo statements used to prevent nesting. These statements are only encountered in Put Bucket Policy request and are promptly removed, they will never be saved in access-policy.
 var supportedActionMap = map[string]struct{}{
 	"s3:GetObject":                  {},
 	"s3:ListBucket":                 {},
@@ -42,6 +43,10 @@ var supportedActionMap = map[string]struct{}{
 	"s3:AbortMultipartUpload":       {},
 	"s3:ListBucketMultipartUploads": {},
 	"s3:ListMultipartUploadParts":   {},
+
+	// Pseudo Statements
+	"s3:None":                       {},
+	"s3:NoneBucket":                 {},
 }
 
 // supported Conditions type.
@@ -197,6 +202,7 @@ var invalidPrefixActions = map[string]struct{}{
 	"s3:GetBucketLocation":          {},
 	"s3:ListBucket":                 {},
 	"s3:ListBucketMultipartUploads": {},
+	"s3:NoneBucket":                 {},
 	// Add actions which do not honor prefixes.
 }
 
@@ -262,6 +268,28 @@ func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErr
 
 	// No errors found.
 	return ErrNone
+}
+
+
+// removeNonePseudoStatements - removes the pseudo 'none' statements (s3:None and s3:NoneBucket) from bucket policy
+func removePseudoNoneStatements(bucketPolicy BucketPolicy) (statements []policyStatement, changed bool) {
+	// Swap all of the none statements to the beginning and return slice of the remaining portion
+	swapIndex := 0
+	for index, statement := range bucketPolicy.Statements {
+		for _, action := range statement.Actions {
+			if strings.HasPrefix(action, "s3:None") {
+				bucketPolicy.Statements[index], bucketPolicy.Statements[swapIndex] = bucketPolicy.Statements[swapIndex], bucketPolicy.Statements[index]
+				swapIndex++
+			}
+		}
+	}
+
+	if swapIndex == 0 {
+		// No pseudo none statements present, no change
+		return bucketPolicy.Statements, false
+	}
+
+	return bucketPolicy.Statements[swapIndex:], true
 }
 
 // parseBucketPolicy - parses and validates if bucket policy is of

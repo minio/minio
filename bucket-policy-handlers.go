@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"encoding/json"
 
 	mux "github.com/gorilla/mux"
 )
@@ -207,6 +208,19 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	if s3Error := checkBucketPolicyResources(bucket, bucketPolicy); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
+	}
+
+	// Remove the pseudo 'none' statements
+	statements, changed := removePseudoNoneStatements(bucketPolicy)
+	// If pseudo none statements are removed, regenerate the buffer with the new set of statements
+	if changed {
+		bucketPolicy.Statements = statements
+		bucketPolicyBuf, err = json.Marshal(bucketPolicy)
+		if err != nil {
+			errorIf(err, "Unable to marshal modified bucket policy.")
+			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+			return
+		}
 	}
 
 	// Save bucket policy.
