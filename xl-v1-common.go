@@ -61,16 +61,19 @@ func (xl xlObjects) isObject(bucket, prefix string) bool {
 		if disk == nil {
 			continue
 		}
+		// Check if 'prefix' is an object in this 'disk', else continue the check with next disk
 		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
 		if err != nil {
-			if err == errDiskNotFound {
+			if err == errFileNotFound || err == errDiskNotFound {
 				continue
 			}
-			return false
+			// TODO: log the error
+		} else {
+			return true
 		}
-		break
 	}
-	return true
+
+	return false
 }
 
 // statPart - returns fileInfo structure for a successful stat on part file.
