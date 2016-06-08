@@ -44,7 +44,7 @@ func (xl xlObjects) listDir(bucket, prefixDir string, filter func(entry string) 
 		if err != nil {
 			// For any reason disk was deleted or goes offline, continue
 			// and list form other disks if possible.
-			if err == errDiskNotFound {
+			if err == errDiskNotFound || err == errFaultyDisk {
 				continue
 			}
 			break

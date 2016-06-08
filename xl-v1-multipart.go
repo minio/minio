@@ -68,7 +68,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				continue
 			}
 			uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
-			if err == errDiskNotFound {
+			if err == errDiskNotFound || err == errFaultyDisk {
 				continue
 			}
 			break
@@ -97,7 +97,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound {
+				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound || walkResult.err == errFaultyDisk {
 					continue
 				}
 				return ListMultipartsInfo{}, err
@@ -127,14 +127,14 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 					continue
 				}
 				newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
-				if err == errDiskNotFound {
+				if err == errDiskNotFound || err == errFaultyDisk {
 					continue
 				}
 				break
 			}
 			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			if err != nil {
-				if err == errFileNotFound || walkResult.err == errDiskNotFound {
+				if err == errFileNotFound || walkResult.err == errDiskNotFound || walkResult.err == errFaultyDisk {
 					continue
 				}
 				return ListMultipartsInfo{}, err
@@ -671,7 +671,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			continue
 		}
 		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == errDiskNotFound {
+		if err == errDiskNotFound || err == errFaultyDisk {
 			continue
 		}
 		break
@@ -723,7 +723,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 			continue
 		}
 		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == errDiskNotFound {
+		if err == errDiskNotFound || err == errFaultyDisk {
 			continue
 		}
 		break

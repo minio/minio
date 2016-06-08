@@ -32,7 +32,7 @@ func fsHouseKeeping(storageDisk StorageAPI) error {
 	// Attempt to create `.minio`.
 	err := storageDisk.MakeVol(minioMetaBucket)
 	if err != nil {
-		if err != errVolumeExists && err != errDiskNotFound {
+		if err != errVolumeExists && err != errDiskNotFound && err != errFaultyDisk {
 			return err
 		}
 	}
@@ -77,7 +77,7 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 			// Attempt to create `.minio`.
 			err := disk.MakeVol(minioMetaBucket)
-			if err != nil && err != errVolumeExists && err != errDiskNotFound {
+			if err != nil && err != errVolumeExists && err != errDiskNotFound && err != errFaultyDisk {
 				errs[index] = err
 				return
 			}
