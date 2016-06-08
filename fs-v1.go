@@ -221,6 +221,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
+	var bytesRead int64
 	if size == 0 {
 		// For size 0 we write a 0byte file.
 		_, err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
@@ -238,6 +239,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			if rErr != nil {
 				return "", toObjectErr(rErr, bucket, object)
 			}
+			bytesRead += int64(n)
 			// Update md5 writer.
 			md5Writer.Write(buf[:n])
 			m, wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
@@ -260,6 +262,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		if newMD5Hex != md5Hex {
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
+	}
+	if bytesRead != size {
+		fs.storage.DeleteFile(minioMetaBucket, tempObj)
+		return "", errSignatureMismatch
 	}
 
 	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)

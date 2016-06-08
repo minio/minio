@@ -300,6 +300,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	md5Writer := md5.New()
 
 	var buf = make([]byte, blockSizeV1)
+	var bytesRead int64
 	for {
 		n, err := io.ReadFull(data, buf)
 		if err == io.EOF {
@@ -308,6 +309,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		if err != nil && err != io.ErrUnexpectedEOF {
 			return "", toObjectErr(err, bucket, object)
 		}
+		bytesRead += int64(n)
 		// Update md5 writer.
 		md5Writer.Write(buf[:n])
 		m, err := fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
@@ -322,8 +324,15 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
+			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
+	}
+
+	if size != bytesRead {
+		// content length doesn't match with part size, delete the part
+		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		return "", errSignatureMismatch
 	}
 
 	// Hold write lock as we are updating fs.json

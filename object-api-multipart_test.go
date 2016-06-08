@@ -178,14 +178,14 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing
 		// Input to replicate Md5 mismatch.
 		{bucket, object, uploadID, 1, "", "a35", 0, false, "",
 			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated "+"d41d8cd98f00b204e9800998ecf8427e")},
-		// Test case - 13.
-		// Input with size more than the size of actual data inside the reader.
-		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") + 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated e2fc714c4727ee9395f324cd2e7f331f")},
+		//Test case - 13.
+		//Input with size more than the size of actual data inside the reader.
+		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd") + 1), false, "",
+			fmt.Errorf("Signature does not match")},
 		// Test case - 14.
 		// Input with size less than the size of actual data inside the reader.
-		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") - 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated e2fc714c4727ee9395f324cd2e7f331f")},
+		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd") - 1), false, "",
+			fmt.Errorf("Signature does not match")},
 		// Test case - 15-18.
 		// Validating for success cases.
 		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), true, "", nil},

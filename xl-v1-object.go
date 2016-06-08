@@ -334,6 +334,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
+	if size != n {
+		// content-length mismatch with object size, delete the temporary object.
+		xl.deleteObject(minioMetaBucket, tempObj)
+		return "", errSignatureMismatch
+	}
 
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
