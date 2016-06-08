@@ -42,7 +42,7 @@ func (s *MySuite) TestFSAPISuite(c *C) {
 		return objAPI
 	}
 	APITestSuite(c, create)
-	defer removeRoots(c, storageList)
+	defer removeRootsC(c, storageList)
 }
 
 func (s *MySuite) TestXLAPISuite(c *C) {
@@ -64,10 +64,10 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 		return objAPI
 	}
 	APITestSuite(c, create)
-	defer removeRoots(c, storageList)
+	defer removeRootsC(c, storageList)
 }
 
-func removeRoots(c *C, roots []string) {
+func removeRootsC(c *C, roots []string) {
 	for _, root := range roots {
 		os.RemoveAll(root)
 	}

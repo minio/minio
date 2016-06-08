@@ -363,6 +363,7 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 		}
 		_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
 		if err != nil {
+			// For any reason disk was deleted or goes offline, continue
 			if err == errDiskNotFound {
 				continue
 			}
@@ -383,6 +384,7 @@ func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo
 		var uploadsJSON uploadsV1
 		uploadsJSON, err = readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
 		if err != nil {
+			// For any reason disk was deleted or goes offline, continue
 			if err == errDiskNotFound {
 				continue
 			}
@@ -421,4 +423,24 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 		}(i, disk)
 	}
 	wg.Wait()
+}
+
+// statPart - returns fileInfo structure for a successful stat on part file.
+func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
+	partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partName)
+	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		if disk == nil {
+			continue
+		}
+		fileInfo, err = disk.StatFile(minioMetaBucket, partNamePath)
+		if err != nil {
+			// For any reason disk was deleted or goes offline, continue
+			if err == errDiskNotFound {
+				continue
+			}
+			return FileInfo{}, err
+		}
+		break
+	}
+	return fileInfo, nil
 }

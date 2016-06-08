@@ -19,6 +19,7 @@
 package disk
 
 import (
+	"os"
 	"syscall"
 	"unsafe"
 )
@@ -28,6 +29,11 @@ import (
 //
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
 func GetInfo(path string) (info Info, err error) {
+	// Stat to know if the path exists.
+	if _, err = os.Stat(path); err != nil {
+		return Info{}, err
+	}
+
 	dll := syscall.MustLoadDLL("kernel32.dll")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
 	// Retrieves information about the amount of space that is available on a disk volume,
