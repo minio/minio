@@ -514,8 +514,8 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		{bucketAccessPolicies[4], ErrMalformedPolicy, false},
 		// Test case - 6.
 		// contructing policy statement with recursive resources.
-		// should result in ErrMalformedPolicy.
-		{bucketAccessPolicies[5], ErrMalformedPolicy, false},
+		// should result in ErrPolicyNesting.
+		{bucketAccessPolicies[5], ErrPolicyNesting, false},
 		// Test case - 7.
 		// constructing policy statement with lexically close
 		// characters.

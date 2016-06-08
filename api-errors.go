@@ -109,6 +109,7 @@ const (
 	ErrWriteQuorum
 	ErrStorageFull
 	ErrObjectExistsAsDirectory
+	ErrPolicyNesting
 )
 
 // error code to APIError structure, these fields carry respective
@@ -414,6 +415,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioWriteQuorum",
 		Description:    "Multiple disks failures, unable to write data.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrPolicyNesting: {
+		Code:           "XMinioPolicyNesting",
+		Description:    "Policy nesting conflict has occurred.",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	// Add your error structure here.
 }

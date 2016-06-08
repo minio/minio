@@ -255,7 +255,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErr
 		for _, otherResource := range resources {
 			// Common prefix reject such rules.
 			if strings.HasPrefix(otherResource, resource) {
-				return ErrMalformedPolicy
+				return ErrPolicyNesting
 			}
 		}
 	}
