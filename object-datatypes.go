@@ -20,96 +20,202 @@ import "time"
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Total int64 // Total disk space.
-	Free  int64 // Free total available disk space.
+	// Total disk space.
+	Total int64
+	// Free available disk space.
+	Free int64
 }
 
-// BucketInfo - bucket name and create date
+// BucketInfo - represents bucket metadata.
 type BucketInfo struct {
-	Name    string
+	// Name of the bucket.
+	Name string
+
+	// Date and time when the bucket was created.
 	Created time.Time
 }
 
-// ObjectInfo - object info.
+// ObjectInfo - represents object metadata.
 type ObjectInfo struct {
-	Bucket          string
-	Name            string
-	ModTime         time.Time
-	Size            int64
-	IsDir           bool
-	MD5Sum          string
-	ContentType     string
+	// Name of the bucket.
+	Bucket string
+
+	// Name of the object.
+	Name string
+
+	// Date and time when the object was last modified.
+	ModTime time.Time
+
+	// Total object size.
+	Size int64
+
+	// IsDir indicates if the object is prefix.
+	IsDir bool
+
+	// Hex encoded md5 checksum of the object.
+	MD5Sum string
+
+	// A standard MIME type describing the format of the object.
+	ContentType string
+
+	// Specifies what content encodings have been applied to the object and thus
+	// what decoding mechanisms must be applied to obtain the object referenced
+	// by the Content-Type header field.
 	ContentEncoding string
 }
 
-// ListPartsInfo - various types of object resources.
+// ListPartsInfo - represents list of all parts.
 type ListPartsInfo struct {
-	Bucket               string
-	Object               string
-	UploadID             string
-	StorageClass         string
-	PartNumberMarker     int
-	NextPartNumberMarker int
-	MaxParts             int
-	IsTruncated          bool
+	// Name of the bucket.
+	Bucket string
 
-	Parts        []partInfo
-	EncodingType string
+	// Name of the object.
+	Object string
+
+	// Upload ID identifying the multipart upload whose parts are being listed.
+	UploadID string
+
+	// The class of storage used to store the object.
+	StorageClass string
+
+	// Part number after which listing begins.
+	PartNumberMarker int
+
+	// When a list is truncated, this element specifies the last part in the list,
+	// as well as the value to use for the part-number-marker request parameter
+	// in a subsequent request.
+	NextPartNumberMarker int
+
+	// Maximum number of parts that were allowed in the response.
+	MaxParts int
+
+	// Indicates whether the returned list of parts is truncated.
+	IsTruncated bool
+
+	// List of all parts.
+	Parts []partInfo
+
+	EncodingType string // Not supported yet.
 }
 
-// ListMultipartsInfo - various types of bucket resources for inprogress multipart uploads.
+// ListMultipartsInfo - represnets bucket resources for incomplete multipart uploads.
 type ListMultipartsInfo struct {
-	KeyMarker          string
-	UploadIDMarker     string
-	NextKeyMarker      string
+	// Together with upload-id-marker, this parameter specifies the multipart upload
+	// after which listing should begin.
+	KeyMarker string
+
+	// Together with key-marker, specifies the multipart upload after which listing
+	// should begin. If key-marker is not specified, the upload-id-marker parameter
+	// is ignored.
+	UploadIDMarker string
+
+	// When a list is truncated, this element specifies the value that should be
+	// used for the key-marker request parameter in a subsequent request.
+	NextKeyMarker string
+
+	// When a list is truncated, this element specifies the value that should be
+	// used for the upload-id-marker request parameter in a subsequent request.
 	NextUploadIDMarker string
-	EncodingType       string
-	MaxUploads         int
-	IsTruncated        bool
-	Uploads            []uploadMetadata
-	Prefix             string
-	Delimiter          string
-	CommonPrefixes     []string
+
+	// Maximum number of multipart uploads that could have been included in the
+	// response.
+	MaxUploads int
+
+	// Indicates whether the returned list of multipart uploads is truncated. A
+	// value of true indicates that the list was truncated. The list can be truncated
+	// if the number of multipart uploads exceeds the limit allowed or specified
+	// by max uploads.
+	IsTruncated bool
+
+	// List of all pending uploads.
+	Uploads []uploadMetadata
+
+	// When a prefix is provided in the request, The result contains only keys
+	// starting with the specified prefix.
+	Prefix string
+
+	// A character used to truncate the object prefixes.
+	// NOTE: only supported delimiter is '/'.
+	Delimiter string
+
+	// CommonPrefixes contains all (if there are any) keys between Prefix and the
+	// next occurrence of the string specified by delimiter.
+	CommonPrefixes []string
+
+	EncodingType string // Not supported yet.
 }
 
 // ListObjectsInfo - container for list objects.
 type ListObjectsInfo struct {
+	// Indicates whether the returned list objects response is truncated. A
+	// value of true indicates that the list was truncated. The list can be truncated
+	// if the number of objects exceeds the limit allowed or specified
+	// by max keys.
 	IsTruncated bool
-	NextMarker  string
-	Objects     []ObjectInfo
-	Prefixes    []string
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects.
+	//
+	// NOTE: This element is returned only if you have delimiter request parameter
+	// specified.
+	NextMarker string
+
+	// List of objects info for this request.
+	Objects []ObjectInfo
+
+	// List of prefixes for this request.
+	Prefixes []string
 }
 
-// partInfo - various types of individual part resources.
+// partInfo - represents individual part metadata.
 type partInfo struct {
-	PartNumber   int
+	// Part number that identifies the part. This is a positive integer between
+	// 1 and 10,000.
+	PartNumber int
+
+	// Date and time at which the part was uploaded.
 	LastModified time.Time
-	ETag         string
-	Size         int64
+
+	// Entity tag returned when the part was initially uploaded.
+	ETag string
+
+	// Size in bytes of the part.
+	Size int64
 }
 
-// uploadMetadata container capturing metadata on in progress multipart upload in a given bucket
+// uploadMetadata - represents metadata in progress multipart upload.
 type uploadMetadata struct {
-	Object       string
-	UploadID     string
-	StorageClass string
-	Initiated    time.Time
+	// Object name for which the multipart upload was initiated.
+	Object string
+
+	// Unique identifier for this multipart upload.
+	UploadID string
+
+	// Date and time at which the multipart upload was initiated.
+	Initiated time.Time
+
+	StorageClass string // Not supported yet.
 }
 
 // completePart - completed part container.
 type completePart struct {
+	// Part number identifying the part. This is a positive integer between 1 and
+	// 10,000
 	PartNumber int
-	ETag       string
+
+	// Entity tag returned when the part was uploaded.
+	ETag string
 }
 
-// completedParts is a sortable interface for Part slice
+// completedParts - is a collection satisfying sort.Interface.
 type completedParts []completePart
 
 func (a completedParts) Len() int           { return len(a) }
 func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-// completeMultipartUpload container for completing multipart upload
+// completeMultipartUpload - represents input fields for completing multipart upload.
 type completeMultipartUpload struct {
 	Parts []completePart `xml:"Part"`
 }

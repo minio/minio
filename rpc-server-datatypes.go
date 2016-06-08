@@ -16,54 +16,83 @@
 
 package main
 
-// GenericReply generic rpc reply.
+// GenericReply represents any generic RPC reply.
 type GenericReply struct{}
 
-// GenericArgs generic rpc args.
+// GenericArgs represents any generic RPC arguments.
 type GenericArgs struct{}
 
-// ListVolsReply list vols rpc reply.
+// ListVolsReply represents list of vols RPC reply.
 type ListVolsReply struct {
+	// List of volumes stat information.
 	Vols []VolInfo
 }
 
-// ReadFileArgs contains read file arguments.
+// ReadFileArgs represents read file RPC arguments.
 type ReadFileArgs struct {
-	Vol    string
-	Path   string
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
+	Path string
+
+	// Starting offset to start reading into Buffer.
 	Offset int64
+
+	// Data buffer read from the path at offset.
 	Buffer []byte
 }
 
-// AppendFileArgs contains append file arguments.
+// AppendFileArgs represents append file RPC arguments.
 type AppendFileArgs struct {
-	Vol    string
-	Path   string
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
+	Path string
+
+	// Data buffer to be saved at path.
 	Buffer []byte
 }
 
-// StatFileArgs contains stat file arguments.
+// StatFileArgs represents stat file RPC arguments.
 type StatFileArgs struct {
-	Vol  string
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
 	Path string
 }
 
-// DeleteFileArgs contains delete file arguments.
+// DeleteFileArgs represents delete file RPC arguments.
 type DeleteFileArgs struct {
-	Vol  string
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
 	Path string
 }
 
-// ListDirArgs contains list dir arguments.
+// ListDirArgs represents list contents RPC arguments.
 type ListDirArgs struct {
-	Vol  string
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
 	Path string
 }
 
-// RenameFileArgs contains rename file arguments.
+// RenameFileArgs represents rename file RPC arguments.
 type RenameFileArgs struct {
-	SrcVol  string
+	// Name of source volume.
+	SrcVol string
+
+	// Source path to be renamed.
 	SrcPath string
-	DstVol  string
+
+	// Name of destination volume.
+	DstVol string
+
+	// Destination path of renamed file.
 	DstPath string
 }
