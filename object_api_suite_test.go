@@ -392,7 +392,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
-	_, err = obj.PutObject("bucket", "dir1/dir3/object", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("One or more of the specified parts could not be found. The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."), nil)
+	_, err = obj.PutObject("bucket", "dir1/dir3/object", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 	c.Assert(err, check.IsNil)
 
 	var bytesBuffer bytes.Buffer

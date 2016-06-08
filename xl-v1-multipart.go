@@ -346,9 +346,6 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 	}
-	if size == -1 {
-		size = n
-	}
 	// Calculate new md5sum.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
@@ -358,6 +355,11 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 			// Returns md5 mismatch.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
+	}
+	if size != n {
+		// content-length mismatch, delete the temporary object.
+		xl.deleteObject(minioMetaBucket, tmpPartPath)
+		return "", errSignatureMismatch
 	}
 
 	// Validates if upload ID exists again.
