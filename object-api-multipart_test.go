@@ -18,6 +18,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -1351,6 +1353,196 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t *testing.T) {
 						t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
 					}
 				}
+			}
+		}
+	}
+}
+
+// Test for validating complete Multipart upload.
+func TestObjectCompleteMultipartUpload(t *testing.T) {
+	ExecObjectLayerTest(t, testObjectCompleteMultipartUpload)
+}
+
+// Tests validate CompleteMultipart functionality.
+func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t *testing.T) {
+	// Calculates MD5 sum of the given byte array.
+	findMD5 := func(toBeHashed []byte) string {
+		hasher := md5.New()
+		hasher.Write(toBeHashed)
+		return hex.EncodeToString(hasher.Sum(nil))
+	}
+	var err error
+	var uploadID string
+	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
+	objectNames := []string{"minio-object-1.txt"}
+	uploadIDs := []string{}
+
+	// bucketnames[0].
+	// objectNames[0].
+	// uploadIds [0].
+	// Create bucket before intiating NewMultipartUpload.
+	err = obj.MakeBucket(bucketNames[0])
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+	// Initiate Multipart Upload on the above created bucket.
+	uploadID, err = obj.NewMultipartUpload(bucketNames[0], objectNames[0], nil)
+	if err != nil {
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+
+	uploadIDs = append(uploadIDs, uploadID)
+	// Parts with size greater than 5 MB.
+	// Generating a 6MB byte array.
+	validPart := bytes.Repeat([]byte("0123456789abcdef"), 1024*1024)
+	validPartMD5 := findMD5(validPart)
+	// Create multipart parts.
+	// Need parts to be uploaded before CompleteMultiPartUpload can be called tested.
+	parts := []struct {
+		bucketName      string
+		objName         string
+		uploadID        string
+		PartID          int
+		inputReaderData string
+		inputMd5        string
+		intputDataSize  int64
+	}{
+		// Case 1-4.
+		// Creating sequence of parts for same uploadID.
+		{bucketNames[0], objectNames[0], uploadIDs[0], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd"))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh"))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
+		// Part with size larger than 5Mb.
+		{bucketNames[0], objectNames[0], uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
+	}
+	// Iterating over creatPartCases to generate multipart chunks.
+	for _, part := range parts {
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
+			bytes.NewBufferString(part.inputReaderData), part.inputMd5)
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+	}
+	// Parts to be sent as input for CompleteMultipartUpload.
+	inputParts := []struct {
+		parts []completePart
+	}{
+		// inputParts - 0.
+		// Case for replicating ETag mismatch.
+		{
+			[]completePart{
+				{ETag: "abcd", PartNumber: 1},
+			},
+		},
+		// inputParts - 1.
+		// should error out with part too small.
+		{
+			[]completePart{
+				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 1},
+				{ETag: "1f7690ebdd9b4caf8fab49ca1757bf27", PartNumber: 2},
+			},
+		},
+		// inputParts - 2.
+		// Case with invalid Part number.
+		{
+			[]completePart{
+				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 10},
+			},
+		},
+		// inputParts - 3.
+		// Case with valid part.
+		// Part size greater than 5MB.
+		{
+			[]completePart{
+				{ETag: validPartMD5, PartNumber: 5},
+			},
+		},
+		// inputParts - 4.
+		// Used to verify that the other remaining parts are deleted after
+		// a successful call to CompleteMultipartUpload.
+		{
+			[]completePart{
+				{ETag: validPartMD5, PartNumber: 6},
+			},
+		},
+	}
+	s3MD5, err := completeMultipartMD5(inputParts[3].parts...)
+	if err != nil {
+		t.Fatalf("Obtaining S3MD5 failed")
+	}
+
+	// Test cases with sample input values for CompleteMultipartUpload.
+	testCases := []struct {
+		bucket   string
+		object   string
+		uploadID string
+		parts    []completePart
+		// Expected output of CompleteMultipartUpload.
+		expectedS3MD5 string
+		expectedErr   error
+		// Flag indicating whether the test is expected to pass or not.
+		shouldPass bool
+	}{
+		// Test cases with invalid bucket names (Test number 1-4).
+		{".test", "", "", []completePart{}, "", BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "ad"}, false},
+		// Test cases for listing uploadID with single part.
+		// Valid bucket names, but they donot exist (Test number 5-7).
+		{"volatile-bucket-1", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		// Test case for Asserting for invalid objectName (Test number 8).
+		{bucketNames[0], "", "", []completePart{}, "", ObjectNameInvalid{Bucket: bucketNames[0]}, false},
+		// Asserting for Invalid UploadID (Test number 9).
+		{bucketNames[0], objectNames[0], "abc", []completePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
+		// Test case with invalid Part Etag (Test number 10-11).
+		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abc"}}, "", fmt.Errorf("encoding/hex: odd length hex string"), false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abcz"}}, "", fmt.Errorf("encoding/hex: invalid byte: U+007A 'z'"), false},
+		// Part number 0 doesn't exist, expecting InvalidPart error (Test number 12).
+		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abcd", PartNumber: 0}}, "", InvalidPart{}, false},
+		// // Upload and PartNumber exists, But a deliberate ETag mismatch is introduced (Test number 13).
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[0].parts, "", BadDigest{}, false},
+		// Test case with non existent object name (Test number 14).
+		{bucketNames[0], "my-object", uploadIDs[0], []completePart{{ETag: "abcd", PartNumber: 1}}, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
+		// Testing for Part being too small (Test number 15).
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[1].parts, "", PartTooSmall{}, false},
+		// TestCase with invalid Part Number (Test number 16).
+		// Should error with Invalid Part .
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[2].parts, "", InvalidPart{}, false},
+		// Test case with unsorted parts (Test number 17).
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[3].parts, s3MD5, nil, true},
+		// The other parts will be flushed after a successful completePart (Test number 18).
+		// the case above successfully completes CompleteMultipartUpload, the remaining Parts will be flushed.
+		// Expecting to fail with Invalid UploadID.
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[4].parts, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
+	}
+
+	for i, testCase := range testCases {
+		actualResult, actualErr := obj.CompleteMultipartUpload(testCase.bucket, testCase.object, testCase.uploadID, testCase.parts)
+		if actualErr != nil && testCase.shouldPass {
+			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, actualErr)
+		}
+		if actualErr == nil && !testCase.shouldPass {
+			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.expectedErr)
+		}
+		// Failed as expected, but does it fail for the expected reason.
+		if actualErr != nil && !testCase.shouldPass {
+			if !strings.Contains(actualErr.Error(), testCase.expectedErr.Error()) {
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\"", i+1, instanceType, testCase.expectedErr, actualErr)
+			}
+		}
+		// Passes as expected, but asserting the results.
+		if actualErr == nil && testCase.shouldPass {
+
+			// Asserting IsTruncated.
+			if actualResult != testCase.expectedS3MD5 {
+				t.Errorf("Test %d: %s: Expected the result to be \"%v\", but found it to \"%v\"", i+1, instanceType, testCase.expectedS3MD5, actualResult)
 			}
 		}
 	}
