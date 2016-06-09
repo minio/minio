@@ -21,18 +21,32 @@ import (
 	"time"
 )
 
-// VolInfo - volume info
+// VolInfo - represents volume stat information.
 type VolInfo struct {
-	Name    string
+	// Name of the volume.
+	Name string
+
+	// Date and time when the volume was created.
 	Created time.Time
 }
 
-// FileInfo - file stat information.
+// FileInfo - represents file stat information.
 type FileInfo struct {
-	Volume  string
-	Name    string
-	MD5Sum  string
+	// Name of the volume.
+	Volume string
+
+	// Name of the file.
+	Name string
+
+	// Date and time when the file was last modified.
 	ModTime time.Time
-	Size    int64
-	Mode    os.FileMode
+
+	// Total file size.
+	Size int64
+
+	// File mode bits.
+	Mode os.FileMode
+
+	// Hex encoded md5 checksum of the file.
+	MD5Sum string
 }
