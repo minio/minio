@@ -577,7 +577,7 @@ func BenchmarkListObjects(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer os.RemoveAll(directory)
+	defer removeAll(directory)
 
 	// Create the obj.
 	obj, err := newFSObjects(directory)

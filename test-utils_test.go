@@ -73,7 +73,7 @@ func getSingleNodeObjectLayer() (ObjectLayer, string, error) {
 // removeRoots - Cleans up initialized directories during tests.
 func removeRoots(roots []string) {
 	for _, root := range roots {
-		os.RemoveAll(root)
+		removeAll(root)
 	}
 }
 
@@ -81,7 +81,7 @@ func removeRoots(roots []string) {
 func removeRandomDisk(disks []string, removeCount int) {
 	ints := randInts(len(disks))
 	for _, i := range ints[:removeCount] {
-		os.RemoveAll(disks[i-1])
+		removeAll(disks[i-1])
 	}
 }
 

@@ -19,6 +19,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -26,10 +27,11 @@ import (
 
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
-	d, err := os.Open(dirPath)
+	d, err := os.Open(preparePath(dirPath))
 	if err != nil {
 		// File is really not found.
 		if os.IsNotExist(err) {
+			fmt.Println(preparePath(dirPath), err)
 			return nil, errFileNotFound
 		}
 
@@ -50,12 +52,12 @@ func readDir(dirPath string) (entries []string, err error) {
 			return nil, err
 		}
 		for _, fi := range fis {
-			// Skip special files.
+			// Skip special files, if found.
 			if hasPosixReservedPrefix(fi.Name()) {
 				continue
 			}
 			if fi.Mode().IsDir() {
-				// append "/" instead of "\" so that sorting is done as expected.
+				// Append "/" instead of "\" so that sorting is achieved as expected.
 				entries = append(entries, fi.Name()+slashSeparator)
 			} else if fi.Mode().IsRegular() {
 				entries = append(entries, fi.Name())

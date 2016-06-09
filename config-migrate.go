@@ -49,7 +49,7 @@ func purgeV1() {
 		fatalIf(err, "Unable to retrieve config path.")
 
 		configFile := filepath.Join(configPath, "fsUsers.json")
-		os.RemoveAll(configFile)
+		removeAll(configFile)
 	}
 	fatalIf(errors.New(""), "Failed to migrate unrecognized config version ‘"+cv1.Version+"’.")
 }

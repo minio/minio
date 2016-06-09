@@ -23,7 +23,6 @@ import (
 	"os"
 	slashpath "path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 
@@ -46,16 +45,7 @@ var errFaultyDisk = errors.New("Faulty disk")
 
 // checkPathLength - returns error if given path name length more than 255
 func checkPathLength(pathName string) error {
-	// For MS Windows, the maximum path length is 255
-	if runtime.GOOS == "windows" {
-		if len(pathName) > 255 {
-			return errFileNameTooLong
-		}
-
-		return nil
-	}
-
-	// For non-windows system, check each path segment length is > 255
+	// Check each path segment length is > 255
 	for len(pathName) > 0 && pathName != "." && pathName != "/" {
 		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
 
@@ -64,8 +54,7 @@ func checkPathLength(pathName string) error {
 		}
 
 		pathName = dir
-	}
-
+	} // Success.
 	return nil
 }
 
@@ -96,11 +85,17 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
 		return nil, errInvalidArgument
 	}
+	var err error
+	// Disallow relative paths, figure out absolute paths.
+	diskPath, err = filepath.Abs(diskPath)
+	if err != nil {
+		return nil, err
+	}
 	fs := posix{
 		diskPath:    diskPath,
 		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
 	}
-	st, err := os.Stat(diskPath)
+	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fs, errDiskNotFound
@@ -153,7 +148,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 			continue
 		}
 		var fi os.FileInfo
-		fi, err = os.Stat(pathJoin(dirPath, entry))
+		fi, err = os.Stat(preparePath(pathJoin(dirPath, entry)))
 		if err != nil {
 			// If the file does not exist, skip the entry.
 			if os.IsNotExist(err) {
@@ -208,7 +203,7 @@ func (s posix) MakeVol(volume string) (err error) {
 		return err
 	}
 	// Make a volume entry.
-	err = os.Mkdir(volumeDir, 0700)
+	err = os.Mkdir(preparePath(volumeDir), 0700)
 	if err != nil && os.IsExist(err) {
 		return errVolumeExists
 	}
@@ -266,7 +261,7 @@ func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	// Stat a volume entry.
 	var st os.FileInfo
-	st, err = os.Stat(volumeDir)
+	st, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
@@ -304,7 +299,7 @@ func (s posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove(volumeDir)
+	err = os.Remove(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -345,7 +340,7 @@ func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -381,7 +376,7 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 		return 0, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errVolumeNotFound
@@ -393,7 +388,7 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 	if err = checkPathLength(filePath); err != nil {
 		return 0, err
 	}
-	file, err := os.Open(filePath)
+	file, err := os.Open(preparePath(filePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errFileNotFound
@@ -456,7 +451,7 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 		return 0, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errVolumeNotFound
@@ -472,16 +467,16 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 	}
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
-	if st, err = os.Stat(filePath); err == nil {
+	if st, err = os.Stat(preparePath(filePath)); err == nil {
 		if st.IsDir() {
 			return 0, errIsNotRegular
 		}
 	}
 	// Create top level directories if they don't exist.
-	if err = os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
+	if err = mkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return 0, err
 	}
-	w, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
@@ -518,7 +513,7 @@ func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return FileInfo{}, errVolumeNotFound
@@ -530,7 +525,7 @@ func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
 	if err = checkPathLength(filePath); err != nil {
 		return FileInfo{}, err
 	}
-	st, err := os.Stat(filePath)
+	st, err := os.Stat(preparePath(filePath))
 	if err != nil {
 		// File is really not found.
 		if os.IsNotExist(err) {
@@ -564,7 +559,7 @@ func deleteFile(basePath, deletePath string) error {
 		return nil
 	}
 	// Verify if the path exists.
-	pathSt, err := os.Stat(deletePath)
+	pathSt, err := os.Stat(preparePath(deletePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
@@ -578,7 +573,7 @@ func deleteFile(basePath, deletePath string) error {
 		return nil
 	}
 	// Attempt to remove path.
-	if err := os.Remove(deletePath); err != nil {
+	if err := os.Remove(preparePath(deletePath)); err != nil {
 		return err
 	}
 	// Recursively go down the next path and delete again.
@@ -610,7 +605,7 @@ func (s posix) DeleteFile(volume, path string) (err error) {
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -655,14 +650,14 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(srcVolumeDir)
+	_, err = os.Stat(preparePath(srcVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		}
 		return err
 	}
-	_, err = os.Stat(dstVolumeDir)
+	_, err = os.Stat(preparePath(dstVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -677,7 +672,7 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 	}
 	if srcIsDir {
 		// If source is a directory we expect the destination to be non-existent always.
-		_, err = os.Stat(slashpath.Join(dstVolumeDir, dstPath))
+		_, err = os.Stat(preparePath(slashpath.Join(dstVolumeDir, dstPath)))
 		if err == nil {
 			return errFileAccessDenied
 		}
@@ -686,14 +681,14 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 		}
 		// Destination does not exist, hence proceed with the rename.
 	}
-	if err = os.MkdirAll(slashpath.Dir(slashpath.Join(dstVolumeDir, dstPath)), 0755); err != nil {
+	if err = mkdirAll(preparePath(slashpath.Dir(slashpath.Join(dstVolumeDir, dstPath))), 0755); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
 		}
 		return err
 	}
-	err = os.Rename(slashpath.Join(srcVolumeDir, srcPath), slashpath.Join(dstVolumeDir, dstPath))
+	err = os.Rename(preparePath(slashpath.Join(srcVolumeDir, srcPath)), preparePath(slashpath.Join(dstVolumeDir, dstPath)))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
