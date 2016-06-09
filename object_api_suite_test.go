@@ -20,11 +20,53 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"io"
 	"math/rand"
 	"strconv"
 
 	"gopkg.in/check.v1"
 )
+
+// Return pointer to testOneByteReadEOF{}
+func newTestReaderEOF(data []byte) io.Reader {
+	return &testOneByteReadEOF{false, data}
+}
+
+// OneByteReadEOF - implements io.Reader which returns 1 byte along with io.EOF error.
+type testOneByteReadEOF struct {
+	eof  bool
+	data []byte
+}
+
+func (r *testOneByteReadEOF) Read(p []byte) (n int, err error) {
+	if r.eof {
+		return 0, io.EOF
+	}
+	n = copy(p, r.data)
+	r.eof = true
+	return n, io.EOF
+}
+
+// Return pointer to testOneByteReadNoEOF{}
+func newTestReaderNoEOF(data []byte) io.Reader {
+	return &testOneByteReadNoEOF{false, data}
+}
+
+// testOneByteReadNoEOF - implements io.Reader which returns 1 byte and nil error, but
+// returns io.EOF on the next Read().
+type testOneByteReadNoEOF struct {
+	eof  bool
+	data []byte
+}
+
+func (r *testOneByteReadNoEOF) Read(p []byte) (n int, err error) {
+	if r.eof {
+		return 0, io.EOF
+	}
+	n = copy(p, r.data)
+	r.eof = true
+	return n, nil
+}
 
 // APITestSuite - collection of API tests.
 func APITestSuite(c *check.C, create func() ObjectLayer) {
@@ -34,6 +76,7 @@ func APITestSuite(c *check.C, create func() ObjectLayer) {
 	testObjectOverwriteWorks(c, create)
 	testNonExistantBucketOperations(c, create)
 	testBucketRecreateFails(c, create)
+	testPutObject(c, create)
 	testPutObjectInSubdir(c, create)
 	testListBuckets(c, create)
 	testListBucketsOrder(c, create)
@@ -289,6 +332,31 @@ func testBucketRecreateFails(c *check.C, create func() ObjectLayer) {
 	err = obj.MakeBucket("string")
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(err.Error(), check.Equals, "Bucket exists: string")
+}
+
+// Tests validate PutObject without prefix.
+func testPutObject(c *check.C, create func() ObjectLayer) {
+	obj := create()
+	content := []byte("testcontent")
+	length := int64(len(content))
+	readerEOF := newTestReaderEOF(content)
+	readerNoEOF := newTestReaderNoEOF(content)
+	err := obj.MakeBucket("bucket")
+	c.Assert(err, check.IsNil)
+
+	var bytesBuffer1 bytes.Buffer
+	_, err = obj.PutObject("bucket", "object", length, readerEOF, nil)
+	c.Assert(err, check.IsNil)
+	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer1)
+	c.Assert(err, check.IsNil)
+	c.Assert(len(bytesBuffer1.Bytes()), check.Equals, len(content))
+
+	var bytesBuffer2 bytes.Buffer
+	_, err = obj.PutObject("bucket", "object", length, readerNoEOF, nil)
+	c.Assert(err, check.IsNil)
+	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer2)
+	c.Assert(err, check.IsNil)
+	c.Assert(len(bytesBuffer2.Bytes()), check.Equals, len(content))
 }
 
 // Tests validate PutObject with subdirectory prefix.
