@@ -169,9 +169,9 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// erasure requirements)
 	xl.readQuorum = len(xl.storageDisks)/2 + 1
 
-	// Write quorum is assumed if we have total disks + 3
-	// parity. (Need to discuss this again)
-	xl.writeQuorum = len(xl.storageDisks)/2 + 3
+	// Write quorum is assumed if we have total disks + 2
+	// parity.
+	xl.writeQuorum = len(xl.storageDisks)/2 + 2
 	if xl.writeQuorum > len(xl.storageDisks) {
 		xl.writeQuorum = len(xl.storageDisks)
 	}
