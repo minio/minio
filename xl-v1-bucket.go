@@ -98,7 +98,7 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 		volInfo, err = disk.StatVol(bucketName)
 		if err != nil {
 			// For any reason disk went offline continue and pick the next one.
-			if err == errDiskNotFound {
+			if err == errDiskNotFound || err == errFaultyDisk {
 				continue
 			}
 			return BucketInfo{}, err
@@ -153,7 +153,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
 		// Ignore any disks not found.
-		if err == errDiskNotFound {
+		if err == errDiskNotFound || err == errFaultyDisk {
 			continue
 		}
 		if err == nil {
@@ -231,8 +231,8 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// an unknown error.
 	for _, err := range dErrs {
 		if err != nil {
-			// We ignore error if errVolumeNotFound or errDiskNotFound
-			if err == errVolumeNotFound || err == errDiskNotFound {
+			// We ignore error if errVolumeNotFound, errDiskNotFound or errFaultyDisk
+			if err == errVolumeNotFound || err == errDiskNotFound || err == errFaultyDisk {
 				volumeNotFoundErrCnt++
 				continue
 			}

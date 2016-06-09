@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	slashpath "path"
@@ -31,13 +32,17 @@ import (
 
 const (
 	fsMinSpacePercent = 5
+	maxAllowedIOError = 5
 )
 
 // posix - implements StorageAPI interface.
 type posix struct {
 	diskPath    string
 	minFreeDisk int64
+	ioErrCount  int
 }
+
+var errFaultyDisk = errors.New("Faulty disk")
 
 // checkPathLength - returns error if given path name length more than 255
 func checkPathLength(pathName string) error {
@@ -183,6 +188,16 @@ func (s posix) getVolDir(volume string) (string, error) {
 
 // Make a volume entry.
 func (s posix) MakeVol(volume string) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return err
@@ -203,6 +218,16 @@ func (s posix) MakeVol(volume string) (err error) {
 
 // ListVols - list volumes.
 func (s posix) ListVols() (volsInfo []VolInfo, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return nil, errFaultyDisk
+	}
+
 	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
 		return nil, err
@@ -219,6 +244,16 @@ func (s posix) ListVols() (volsInfo []VolInfo, err error) {
 
 // StatVol - get volume info.
 func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return VolInfo{}, errFaultyDisk
+	}
+
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return VolInfo{}, err
@@ -248,9 +283,19 @@ func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - delete a volume.
-func (s posix) DeleteVol(volume string) error {
+func (s posix) DeleteVol(volume string) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
 	// Validate if disk is free.
-	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return err
 	}
 
@@ -278,9 +323,19 @@ func (s posix) DeleteVol(volume string) error {
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (s posix) ListDir(volume, dirPath string) ([]string, error) {
+func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return nil, errFaultyDisk
+	}
+
 	// Validate if disk is free.
-	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return nil, err
 	}
 
@@ -306,6 +361,16 @@ func (s posix) ListDir(volume, dirPath string) ([]string, error) {
 // for io.EOF. Additionally ReadFile also starts reading from an
 // offset.
 func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return 0, errFaultyDisk
+	}
+
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return 0, err
@@ -371,6 +436,16 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return 0, errFaultyDisk
+	}
+
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return 0, err
@@ -423,6 +498,16 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 
 // StatFile - get file info.
 func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return FileInfo{}, errFaultyDisk
+	}
+
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return FileInfo{}, err
@@ -504,9 +589,19 @@ func deleteFile(basePath, deletePath string) error {
 }
 
 // DeleteFile - delete a file at path.
-func (s posix) DeleteFile(volume, path string) error {
+func (s posix) DeleteFile(volume, path string) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
 	// Validate if disk is free.
-	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return err
 	}
 
@@ -535,9 +630,19 @@ func (s posix) DeleteFile(volume, path string) error {
 }
 
 // RenameFile - rename source path to destination path atomically.
-func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			s.ioErrCount++
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
 	// Validate if disk is free.
-	if err := checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
 		return err
 	}
 

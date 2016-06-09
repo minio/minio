@@ -66,8 +66,8 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 		if err == nil {
 			return true
 		}
-		// Ignore for file not found and disk not found.
-		if err == errFileNotFound || err == errDiskNotFound {
+		// Ignore for file not found,  disk not found or faulty disk.
+		if err == errFileNotFound || err == errDiskNotFound || err == errFaultyDisk {
 			continue
 		}
 		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)
