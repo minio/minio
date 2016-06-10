@@ -407,6 +407,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // Download - file download handler.
+func (web *webAPIHandlers) Heal(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	web.ObjectAPI.Heal(bucket, object, false)
+}
+
+// Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
