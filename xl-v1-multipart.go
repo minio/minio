@@ -625,7 +625,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
-	// Hold write lock on the destination before rename
+	// Hold write lock on the destination before rename.
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
@@ -636,7 +636,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Remove parts that weren't present in CompleteMultipartUpload request
+	// Remove parts that weren't present in CompleteMultipartUpload request.
 	for _, curpart := range currentXLMeta.Parts {
 		if xlMeta.ObjectPartIndex(curpart.Number) == -1 {
 			// Delete the missing part files. e.g,
