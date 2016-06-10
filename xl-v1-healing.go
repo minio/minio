@@ -130,25 +130,6 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
-	onlineDiskCount := diskCount(onlineDisks)
-	// If online disks count is lesser than configured disks, most
-	// probably we need to heal the file, additionally verify if the
-	// count is lesser than readQuorum, if not we throw an error.
-	if onlineDiskCount < len(xl.storageDisks) {
-		// Online disks lesser than total storage disks, needs to be
-		// healed. unless we do not have readQuorum.
-		heal = true
-		// Verify if online disks count are lesser than readQuorum
-		// threshold, return an error.
-		if onlineDiskCount < xl.readQuorum {
-			errorIf(errXLReadQuorum, "Unable to establish read quorum, disks are offline.")
-			return false
-		}
-	}
-	return heal
-}
-
 // Returns slice of online disks needed.
 // - slice returing readable disks.
 // - xlMetaV1
@@ -181,4 +162,88 @@ func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onl
 		}
 	}
 	return onlineDisks, highestVersion, nil
+}
+
+// Return disks with the latest version of the object.
+func (xl xlObjects) latestDisks(partsMetadata []xlMetaV1, errs []error) (latestDisks []StorageAPI) {
+	latestDisks = make([]StorageAPI, len(xl.storageDisks))
+	highestVersion := int64(0)
+	// List all the file versions from partsMetadata list.
+	versions := listObjectVersions(partsMetadata, errs)
+
+	// Get highest object version.
+	highestVersion = highestInt(versions)
+
+	for index, version := range versions {
+		if version == highestVersion {
+			latestDisks[index] = xl.storageDisks[index]
+		}
+	}
+	return latestDisks
+}
+
+// Return disks with the outdated version or missing object.
+func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+	outDatedDisks = make([]StorageAPI, len(xl.storageDisks))
+	highestVersion := int64(0)
+	// List all the file versions from partsMetadata list.
+	versions := listObjectVersions(partsMetadata, errs)
+
+	// Get highest object version.
+	highestVersion = highestInt(versions)
+
+	for index, version := range versions {
+		if errs[index] == errFileNotFound {
+			outDatedDisks[index] = xl.storageDisks[index]
+			continue
+		}
+		if errs[index] != nil {
+			continue
+		}
+		if version < highestVersion {
+			outDatedDisks[index] = xl.storageDisks[index]
+		}
+	}
+	return outDatedDisks
+}
+
+// Return xlMetaV1 of the latest version of the object.
+func xlLatestMetadata(partsMetadata []xlMetaV1, errs []error) (latestMeta xlMetaV1) {
+	highestVersion := int64(0)
+	// List all the file versions from partsMetadata list.
+	versions := listObjectVersions(partsMetadata, errs)
+
+	// Get highest object version.
+	highestVersion = highestInt(versions)
+
+	for index, version := range versions {
+		if version == highestVersion {
+			latestMeta = partsMetadata[index]
+			break
+		}
+	}
+	return
+}
+
+// Returns if the object should be healed.
+func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
+	highestVersion := int64(0)
+	// List all the file versions from partsMetadata list.
+	versions := listObjectVersions(partsMetadata, errs)
+
+	// Get highest object version.
+	highestVersion = highestInt(versions)
+
+	for index, version := range versions {
+		if errs[index] == errFileNotFound {
+			return true
+		}
+		if errs[index] != nil {
+			continue
+		}
+		if version < highestVersion {
+			return true
+		}
+	}
+	return false
 }

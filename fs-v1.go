@@ -441,3 +441,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
+
+func (fs fsObjects) Heal(bucket, prefix string, recursive bool) error {
+	return nil
+}
