@@ -119,7 +119,7 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
 	xlHouseKeeping(storageDisks)
 
-	// Attempt to load all `format.json`
+	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)
 
 	// Generic format check validates all necessary cases.

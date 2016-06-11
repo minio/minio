@@ -224,10 +224,46 @@ func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err err
 	return nil
 }
 
+// errDiskOrderMismatch - returned when disk UUID is not in consistent JBOD order.
+var errDiskOrderMismatch = errors.New("disk order mismatch")
+
+// isSavedUUIDInOrder - validates if disk uuid is present and valid in all
+// available format config JBOD. This function also validates if the disk UUID
+// is always available on all JBOD under the same order.
+func isSavedUUIDInOrder(uuid string, formatConfigs []*formatConfigV1) bool {
+	var orderIndexes []int
+	// Validate each for format.json for relevant uuid.
+	for _, formatConfig := range formatConfigs {
+		if formatConfig == nil {
+			continue
+		}
+		// Validate if UUID is present in JBOD.
+		uuidIndex := findDiskIndex(uuid, formatConfig.XL.JBOD)
+		if uuidIndex == -1 {
+			// UUID not found.
+			errorIf(errDiskNotFound, "Disk %s not found in JBOD list", uuid)
+			return false
+		}
+		// Save the position of UUID present in JBOD.
+		orderIndexes = append(orderIndexes, uuidIndex+1)
+	}
+	// Once uuid is found, verify if the uuid
+	// present in same order across all format configs.
+	prevOrderIndex := orderIndexes[0]
+	for _, orderIndex := range orderIndexes {
+		if prevOrderIndex != orderIndex {
+			errorIf(errDiskOrderMismatch, "Disk %s is in wrong order wanted %d, saw %d ", uuid, prevOrderIndex, orderIndex)
+			return false
+		}
+	}
+	// Returns success, when we have verified if uuid
+	// is consistent and valid across all format configs.
+	return true
+}
+
 // checkDisksConsistency - checks if all disks are consistent with all JBOD entries on all disks.
 func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 	var disks = make([]string, len(formatConfigs))
-	var disksFound = make(map[string]bool)
 	// Collect currently available disk uuids.
 	for index, formatConfig := range formatConfigs {
 		if formatConfig == nil {
@@ -237,21 +273,13 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 		disks[index] = formatConfig.XL.Disk
 	}
 	// Validate collected uuids and verify JBOD.
-	for index, uuid := range disks {
+	for _, uuid := range disks {
 		if uuid == "" {
 			continue
 		}
-		var formatConfig = formatConfigs[index]
-		for _, savedUUID := range formatConfig.XL.JBOD {
-			if savedUUID == uuid {
-				disksFound[uuid] = true
-			}
-		}
-	}
-	// Check if all disks are found.
-	for _, value := range disksFound {
-		if !value {
-			return errors.New("Some disks not found in JBOD.")
+		// Is uuid present on all JBOD ?.
+		if !isSavedUUIDInOrder(uuid, formatConfigs) {
+			return fmt.Errorf("%s disk not found in JBOD", uuid)
 		}
 	}
 	return nil
@@ -259,16 +287,15 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 
 // checkJBODConsistency - validate xl jbod order if they are consistent.
 func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
-	var firstJBOD []string
+	var jbodStr string
 	// Extract first valid JBOD.
 	for _, format := range formatConfigs {
 		if format == nil {
 			continue
 		}
-		firstJBOD = format.XL.JBOD
+		jbodStr = strings.Join(format.XL.JBOD, ".")
 		break
 	}
-	jbodStr := strings.Join(firstJBOD, ".")
 	for _, format := range formatConfigs {
 		if format == nil {
 			continue
@@ -281,7 +308,8 @@ func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
 	return nil
 }
 
-func findIndex(disk string, jbod []string) int {
+// findDiskIndex returns position of disk in JBOD.
+func findDiskIndex(disk string, jbod []string) int {
 	for index, uuid := range jbod {
 		if uuid == disk {
 			return index
@@ -306,7 +334,7 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 		if format == nil {
 			continue
 		}
-		jIndex := findIndex(format.XL.Disk, savedJBOD)
+		jIndex := findDiskIndex(format.XL.Disk, savedJBOD)
 		if jIndex == -1 {
 			return nil, errors.New("Unrecognized uuid " + format.XL.Disk + " found")
 		}
