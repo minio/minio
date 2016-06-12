@@ -37,7 +37,7 @@ type ObjectLayer interface {
 	PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string) (md5 string, err error)
 	DeleteObject(bucket, object string) error
 
-	Heal(bucket, prefix string, recursive bool) error
+	HealObject(bucket, object string) error
 	// Multipart operations.
 	ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
 	NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error)

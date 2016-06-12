@@ -45,6 +45,8 @@ func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
 	// AbortMultipartUpload
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	// HealObject
+	bucket.Methods("GET").Path("/{object:.+}").Headers("X-Minio-Heal", "heal").HandlerFunc(api.HealObjectHandler)
 	// GetObject
 	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
 	// CopyObject

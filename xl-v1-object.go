@@ -213,18 +213,16 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	return nil
 }
 
-func (xl xlObjects) Heal(bucket, prefix string, recursive bool) error {
+func (xl xlObjects) HealObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
-	if !IsValidObjectPrefix(prefix) {
+	if !IsValidObjectName(object) {
 		// FIXME: return Invalid prefix.
-		return ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-
-	object := prefix
 
 	// Lock the object before healing.
 	nsMutex.RLock(bucket, object)
