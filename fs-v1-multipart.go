@@ -69,7 +69,8 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var walkResultCh chan treeWalkResult
 	var endWalkCh chan struct{}
 	if maxUploads > 0 {
-		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		heal := false
+		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
 			isLeaf := fs.isMultipartUpload
