@@ -17,6 +17,7 @@
 package main
 
 import (
+	"path"
 	"sort"
 	"strings"
 )
@@ -28,40 +29,56 @@ import (
 // backend since objects are kept as directories, the only way to know if a directory is truly an object
 // we validate if 'xl.json' exists at the leaf. isLeaf replies true/false based on the outcome of a Stat
 // operation.
-func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
-		if disk == nil {
-			continue
-		}
+func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry string) bool) (mergedentries []string, err error) {
+	for _, disk := range xl.storageDisks {
+		var entries []string
+		var newEntries []string
 		entries, err = disk.ListDir(bucket, prefixDir)
 		if err != nil {
-			// For any reason disk was deleted or goes offline, continue
-			// and list form other disks if possible.
-			if err == errDiskNotFound || err == errFaultyDisk {
-				continue
-			}
-			break
+			// Skip the disk of listDir returns error.
+			continue
 		}
+
 		// Skip the entries which do not match the filter.
 		for i, entry := range entries {
 			if !filter(entry) {
 				entries[i] = ""
 				continue
 			}
-			if strings.HasSuffix(entry, slashSeparator) && xl.isObject(bucket, pathJoin(prefixDir, entry)) {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			if strings.HasSuffix(entry, slashSeparator) {
+				if _, err := disk.StatFile(bucket, path.Join(entry, xlMetaJSONFile)); err == nil {
+					// If it is an object trim the trailing "/"
+					entries[i] = strings.TrimSuffix(entry, slashSeparator)
+				}
 			}
 		}
-		sort.Strings(entries)
+
 		// Skip the empty strings
 		for len(entries) > 0 && entries[0] == "" {
 			entries = entries[1:]
 		}
-		return entries, nil
+
+		if len(mergedentries) == 0 {
+			mergedentries = entries
+			sort.Strings(mergedentries)
+			continue
+		}
+
+		for _, entry := range entries {
+			idx := sort.SearchStrings(mergedentries, entry)
+			if mergedentries[idx] == entry {
+				continue
+			}
+			newEntries = append(newEntries, entry)
+		}
+
+		if len(newEntries) > 0 {
+			mergedentries = append(mergedentries, newEntries...)
+			sort.Strings(mergedentries)
+		}
 	}
 
-	// Return error at the end.
-	return nil, err
+	return mergedentries, err
 }
 
 // treeWalk walks directory tree recursively pushing fileInfo into the channel as and when it encounters files.
