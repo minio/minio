@@ -59,12 +59,8 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			objInfo.Name = entry
 			objInfo.IsDir = true
 		} else {
-			// Set the Mode to a "regular" file.
-			var err error
-			objInfo, err = xl.getObjectInfo(bucket, entry)
-			if err != nil {
-				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
-			}
+			objInfo.Bucket = bucket
+			objInfo.Name = entry
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
