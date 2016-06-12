@@ -64,6 +64,8 @@ func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
 	// ListMultipartUploads
 	bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+	// ListObjectsHeal
+	bucket.Methods("GET").Headers("X-Minio-Heal", "heal").HandlerFunc(api.ListObjectsHealHandler)
 	// ListObjects
 	bucket.Methods("GET").HandlerFunc(api.ListObjectsHandler)
 	// PutBucketPolicy

@@ -193,6 +193,66 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
+func (api objectAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
+	case authTypeAnonymous:
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		if s3Error := enforceBucketPolicy("s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	}
+
+	var prefix, marker, delimiter string
+	var maxkeys int
+	prefix, marker, delimiter, maxkeys, _ = getListObjectsV1Args(r.URL.Query())
+
+	if maxkeys < 0 {
+		writeErrorResponse(w, r, ErrInvalidMaxKeys, r.URL.Path)
+		return
+	}
+	// Verify if delimiter is anything other than '/', which we do not support.
+	if delimiter != "" && delimiter != "/" {
+		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+		return
+	}
+	// If marker is set unescape.
+	if marker != "" {
+		// Marker not common with prefix is not implemented.
+		if !strings.HasPrefix(marker, prefix) {
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			return
+		}
+	}
+
+	listObjectsInfo, err := api.ObjectAPI.ListObjectsHeal(bucket, prefix, marker, delimiter, maxkeys)
+
+	if err == nil {
+		var encodedSuccessResponse []byte
+		response := generateListObjectsResponse(bucket, prefix, marker, delimiter, maxkeys, listObjectsInfo)
+		encodedSuccessResponse = encodeResponse(response)
+		// Write headers
+		setCommonHeaders(w)
+		// Write success response.
+		writeSuccessResponse(w, encodedSuccessResponse)
+		return
+	}
+	errorIf(err, "Unable to list-objects-heal.")
+	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+}
+
 // ListObjectsHandler - GET Bucket (List Objects)
 // -- -----------------------
 // This implementation of the GET operation returns some or all (up to 1000)
