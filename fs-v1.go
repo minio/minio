@@ -442,6 +442,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
-func (fs fsObjects) Heal(bucket, prefix string, recursive bool) error {
+// HealObject - no-op for fs.
+func (fs fsObjects) HealObject(bucket, object string) error {
 	return nil
 }
