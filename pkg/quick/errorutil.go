@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/olekukonko/ts"
+	"github.com/cheggaaa/pb"
 )
 
 const errorFmt = "%5d: %s <--  "
@@ -53,8 +53,8 @@ func FormatJSONSyntaxError(data io.Reader, sErr *json.SyntaxError) error {
 	// dynamically to avoid an eventual bug after modifying errorFmt
 	errorShift := len(fmt.Sprintf(errorFmt, 1, ""))
 
-	if termSize, err := ts.GetSize(); err == nil {
-		termWidth = termSize.Col()
+	if width, err := pb.GetTerminalWidth(); err == nil {
+		termWidth = width
 	}
 
 	for {

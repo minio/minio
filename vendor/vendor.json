@@ -8,6 +8,11 @@
 			"revisionTime": "2015-09-08T20:46:18Z"
 		},
 		{
+			"path": "github.com/cheggaaa/pb",
+			"revision": "c1f48d5ce4f292dfb775ef52aaedd15be323510d",
+			"revisionTime": "2016-05-20T13:10:51+03:00"
+		},
+		{
 			"path": "github.com/dgrijalva/jwt-go",
 			"revision": "afef698c326bfd906b11659432544e5aae441d44",
 			"revisionTime": "2015-12-30T10:00:00-08:00"
@@ -101,11 +106,6 @@
 			"path": "github.com/mitchellh/go-homedir",
 			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
 			"revisionTime": "2015-10-24T22:24:27-07:00"
-		},
-		{
-			"path": "github.com/olekukonko/ts",
-			"revision": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8",
-			"revisionTime": "2014-04-12T15:01:45-07:00"
 		},
 		{
 			"path": "github.com/pkg/profile",
