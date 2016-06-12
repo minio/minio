@@ -376,7 +376,8 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		recursive = false
 	}
 
-	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix})
+	heal := false // Valid only for XL
+	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix, heal})
 	if walker == nil {
 		walker = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
 			return !strings.HasSuffix(object, slashSeparator)
@@ -412,7 +413,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		i++
 	}
-	params := listParams{bucket, recursive, nextMarker, prefix}
+	params := listParams{bucket, recursive, nextMarker, prefix, heal}
 	if !eof {
 		fs.saveTreeWalk(params, walker)
 	}

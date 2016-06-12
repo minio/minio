@@ -67,7 +67,8 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		maxUploads = maxUploads - len(uploads)
 	}
 	if maxUploads > 0 {
-		walker := fs.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		heal := false // Valid only for XL.
+		walker := fs.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walker == nil {
 			walker = fs.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, func(bucket, object string) bool {
 				return fs.isMultipartUpload(bucket, object)
