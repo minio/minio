@@ -88,8 +88,7 @@ func (u updateMessage) String() string {
 		updateMessage := color.New(color.FgGreen, color.Bold).SprintfFunc()
 		return updateMessage("You are already running the most recent version of ‘minio’.")
 	}
-	msg, err := colorizeUpdateMessage(u.Download)
-	fatalIf(err, "Unable to colorize update notice ‘"+msg+"’.")
+	msg := colorizeUpdateMessage(u.Download)
 	return msg
 }
 

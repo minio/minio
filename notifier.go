@@ -21,12 +21,12 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/cheggaaa/pb"
 	"github.com/fatih/color"
-	"github.com/olekukonko/ts"
 )
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
-func colorizeUpdateMessage(updateString string) (string, error) {
+func colorizeUpdateMessage(updateString string) string {
 	// Initialize coloring.
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
@@ -44,14 +44,17 @@ func colorizeUpdateMessage(updateString string) (string, error) {
 	maxContentWidth := line1Length
 	line1Rest := maxContentWidth - line1Length
 
-	terminal, err := ts.GetSize()
-	if err != nil {
-		return "", err
+	// termWidth is set to a default one to use when we are
+	// not able to calculate terminal width via OS syscalls
+	termWidth := 25
+
+	if width, err := pb.GetTerminalWidth(); err == nil {
+		termWidth = width
 	}
 
 	var message string
 	switch {
-	case len(line1Str) > terminal.Col():
+	case len(line1Str) > termWidth:
 		message = "\n" + line1InColor + "\n"
 	default:
 		// On windows terminal turn off unicode characters.
@@ -75,5 +78,5 @@ func colorizeUpdateMessage(updateString string) (string, error) {
 			bottom + "\n"
 	}
 	// Return the final message.
-	return message, nil
+	return message
 }
