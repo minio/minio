@@ -17,6 +17,8 @@
 package main
 
 import (
+	"net/http"
+	"sort"
 	"testing"
 )
 
@@ -40,6 +42,26 @@ func TestIsValidRegion(t *testing.T) {
 		result := isValidRegion(test.reqRegion, test.confRegion)
 		if result != test.expected {
 			t.Errorf("Failed for test %d with reqRegion = %s confRegion %s", i, test.reqRegion, test.confRegion)
+		}
+	}
+}
+
+func TestExtractSignedHeaders(t *testing.T) {
+	req, _ := http.NewRequest("GET", "play.minio.io:9000", nil)
+	req.Header.Set("Expect", "100-continue")
+	req.Header.Set("ToBeRemoved", "now")
+	signedHeaders := []string{"Expect"}
+	resultHeaders := extractSignedHeaders(signedHeaders, req.Header)
+	if _, ok := resultHeaders["ToBeRemoved"]; ok {
+		t.Error("The key \"ToBeRemoved\" should be removed")
+	}
+	if v, ok := resultHeaders["Expect"]; !ok {
+		t.Error("Couldn't find \"Expect\" in signed headers")
+	} else {
+		v_ := sort.StringSlice(v)
+		sort.Strings(v_)
+		if v_.Search("100-continue") == len(v_) {
+			t.Error("Couldn't find \"100-continue\" in signed headers")
 		}
 	}
 }
