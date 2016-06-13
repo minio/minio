@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -86,7 +87,7 @@ func (s *MyAPISuite) SetUpSuite(c *C) {
 }
 
 func (s *MyAPISuite) TearDownSuite(c *C) {
-	os.RemoveAll(s.root)
+	removeAll(s.root)
 	testAPIFSCacheServer.Close()
 }
 
@@ -684,6 +685,34 @@ func (s *MyAPISuite) TestListBuckets(c *C) {
 	decoder := xml.NewDecoder(response.Body)
 	err = decoder.Decode(&results)
 	c.Assert(err, IsNil)
+}
+
+// Tests put object with long names.
+func (s *MyAPISuite) TestPutObjectLongName(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-long-name", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer := bytes.NewReader([]byte("hello world"))
+	longObjName := fmt.Sprintf("%0255d/%0255d/%0255d", 1, 1, 1)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	longObjName = fmt.Sprintf("%0256d", 1)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (s *MyAPISuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {

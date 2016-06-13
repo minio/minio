@@ -16,42 +16,7 @@
 
 package main
 
-import (
-	"runtime"
-	"strings"
-	"unicode/utf8"
-)
-
-// isValidVolname verifies a volname name in accordance with object
-// layer requirements.
-func isValidVolname(volname string) bool {
-	if len(volname) < 3 || len(volname) > 63 {
-		return false
-	}
-	switch runtime.GOOS {
-	case "windows":
-		// Volname shouldn't have reserved characters on windows in it.
-		return !strings.ContainsAny(volname, "/\\:*?\"<>|")
-	default:
-		// Volname shouldn't have '/' in it.
-		return !strings.ContainsAny(volname, "/")
-	}
-}
-
-// Keeping this as lower bound value supporting Linux, Darwin and Windows operating systems.
-const pathMax = 4096
-
-// isValidPath verifies if a path name is in accordance with FS limitations.
-func isValidPath(path string) bool {
-	// TODO: Make this FSType or Operating system specific.
-	if len(path) > pathMax || len(path) == 0 {
-		return false
-	}
-	if !utf8.ValidString(path) {
-		return false
-	}
-	return true
-}
+import "strings"
 
 // List of reserved words for files, includes old and new ones.
 var posixReservedPrefix = []string{

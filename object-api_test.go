@@ -69,6 +69,6 @@ func (s *MySuite) TestXLAPISuite(c *C) {
 
 func removeRootsC(c *C, roots []string) {
 	for _, root := range roots {
-		os.RemoveAll(root)
+		removeAll(root)
 	}
 }

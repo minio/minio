@@ -94,9 +94,9 @@ func (s *MyAPIXLSuite) SetUpSuite(c *C) {
 }
 
 func (s *MyAPIXLSuite) TearDownSuite(c *C) {
-	os.RemoveAll(s.root)
+	removeAll(s.root)
 	for _, disk := range s.erasureDisks {
-		os.RemoveAll(disk)
+		removeAll(disk)
 	}
 	testAPIXLServer.Close()
 }
@@ -706,7 +706,15 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer := bytes.NewReader([]byte("hello world"))
-	longObjName := fmt.Sprintf("%0256d", 1)
+	longObjName := fmt.Sprintf("%0255d/%0255d/%0255d", 1, 1, 1)
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	longObjName = fmt.Sprintf("%0256d", 1)
 	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
 	c.Assert(err, IsNil)
 
