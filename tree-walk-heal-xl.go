@@ -46,7 +46,7 @@ func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry stri
 				continue
 			}
 			if strings.HasSuffix(entry, slashSeparator) {
-				if _, err := disk.StatFile(bucket, path.Join(entry, xlMetaJSONFile)); err == nil {
+				if _, err := disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
 					// If it is an object trim the trailing "/"
 					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
