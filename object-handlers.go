@@ -951,26 +951,26 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.WriteHeader(http.StatusOK)
 
 	//Send whitespace character, once every 5secs, until CompleteMultipartUpload is done
-	done := make(chan bool)
-	go func() {
+	doneCh := make(chan bool)
+	go func(doneCh <-chan bool) {
 		for {
 			select {
 			case <-time.After(5 * time.Second):
 				w.Write([]byte(" "))
-			case <-done:
+			case <-doneCh:
 				return
 			}
 		}
-	}()
+	}(doneCh)
 
 	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
-		done <- true
+		doneCh <- true
+		writeErrorResponseNoHeader(w, r, getAPIError(toAPIErrorCode(err)), r.URL.Path)
 		return
 	}
-	done <- true
+	doneCh <- true
 
 	// Get object location.
 	location := getLocation(r)
