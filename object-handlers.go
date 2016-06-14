@@ -843,6 +843,17 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	writeSuccessNoContent(w)
 }
 
+func sendWhiteSpaceChars(w http.ResponseWriter, doneCh <-chan struct{}) {
+	for {
+		select {
+		case <-time.After(5 * time.Second):
+			w.Write([]byte(" "))
+		case <-doneCh:
+			return
+		}
+	}
+}
+
 // ListObjectPartsHandler - List object parts
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -950,27 +961,20 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	setCommonHeaders(w)
 	w.WriteHeader(http.StatusOK)
 
-	//Send whitespace character, once every 5secs, until CompleteMultipartUpload is done
-	doneCh := make(chan bool)
-	go func(doneCh <-chan bool) {
-		for {
-			select {
-			case <-time.After(5 * time.Second):
-				w.Write([]byte(" "))
-			case <-doneCh:
-				return
-			}
-		}
+	doneCh := make(chan struct{})
+	go func(doneCh chan<- struct{}) {
+		md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+		doneCh <- struct{}{}
 	}(doneCh)
 
-	md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+	// Send whitespace character, once every 5secs, until CompleteMultipartUpload is done
+	sendWhiteSpaceChars(w, doneCh)
+
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
-		doneCh <- true
 		writeErrorResponseNoHeader(w, r, getAPIError(toAPIErrorCode(err)), r.URL.Path)
 		return
 	}
-	doneCh <- true
 
 	// Get object location.
 	location := getLocation(r)
