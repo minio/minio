@@ -342,7 +342,7 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	}
 
 	// Erasure code data and write across all disks.
-	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, partSuffix, teeReader, eInfos)
+	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, partSuffix, teeReader, eInfos, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
 	}
@@ -553,7 +553,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
-	if err = xl.reduceError(errs); err != nil {
+	if err = reduceError(errs, xl.readQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 

@@ -55,7 +55,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
-	if err := xl.reduceError(errs); err != nil {
+	if err := reduceError(errs, xl.readQuorum); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
@@ -296,7 +296,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Erasure code and write across all disks.
-	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos)
+	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
