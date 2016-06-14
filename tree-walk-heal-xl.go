@@ -22,13 +22,7 @@ import (
 	"strings"
 )
 
-// listDir - lists all the entries at a given prefix, takes additional params as filter and leaf detection.
-// filter is required to filter out the listed entries usually this function is supposed to return
-// true or false.
-// isLeaf is required to differentiate between directories and objects, this is a special requirement for XL
-// backend since objects are kept as directories, the only way to know if a directory is truly an object
-// we validate if 'xl.json' exists at the leaf. isLeaf replies true/false based on the outcome of a Stat
-// operation.
+// listDirHeal - Sorted union of entries from all the disks under prefixDir.
 func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry string) bool) (mergedentries []string, err error) {
 	for _, disk := range xl.storageDisks {
 		var entries []string
@@ -46,7 +40,7 @@ func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry stri
 				continue
 			}
 			if strings.HasSuffix(entry, slashSeparator) {
-				if _, err := disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
+				if _, err = disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
 					// If it is an object trim the trailing "/"
 					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
@@ -59,11 +53,13 @@ func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry stri
 		}
 
 		if len(mergedentries) == 0 {
+			// For the first successful disk.ListDir()
 			mergedentries = entries
 			sort.Strings(mergedentries)
 			continue
 		}
 
+		// find elements in entries which are not in mergedentries
 		for _, entry := range entries {
 			idx := sort.SearchStrings(mergedentries, entry)
 			if mergedentries[idx] == entry {
@@ -73,6 +69,7 @@ func (xl xlObjects) listDirHeal(bucket, prefixDir string, filter func(entry stri
 		}
 
 		if len(newEntries) > 0 {
+			// Merge the entries and sort it.
 			mergedentries = append(mergedentries, newEntries...)
 			sort.Strings(mergedentries)
 		}
@@ -170,7 +167,7 @@ func (xl xlObjects) doTreeWalkHeal(bucket, prefixDir, entryPrefixMatch, marker s
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (xl xlObjects) startTreeWalkHeal(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool, endWalkCh chan struct{}) chan treeWalkResult {
+func (xl xlObjects) startTreeWalkHeal(bucket, prefix, marker string, recursive bool, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"

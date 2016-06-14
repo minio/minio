@@ -26,11 +26,12 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		recursive = false
 	}
 
+	// "heal" true for listObjectsHeal() and false for listObjects()
 	heal := true
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		walkResultCh = xl.startTreeWalkHeal(bucket, prefix, marker, recursive, xl.isObject, endWalkCh)
+		walkResultCh = xl.startTreeWalkHeal(bucket, prefix, marker, recursive, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
