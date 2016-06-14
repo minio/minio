@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	fsMetaJSONFile = "fs.json"
+	fsMetaJSONFile   = "fs.json"
+	fsFormatJSONFile = "format.json"
 )
 
 // A fsMetaV1 represents a metadata header mapping keys to sets of values.
@@ -76,6 +77,34 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta.Format = "fs"
 	fsMeta.Minio.Release = minioReleaseTag
 	return fsMeta
+}
+
+// newFSFormatV1 - initializes new formatConfigV1 with FS format info.
+func newFSFormatV1() (format formatConfigV1) {
+	return formatConfigV1{
+		Version: "1",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "1",
+		},
+	}
+}
+
+// writes FS format (format.json) into minioMetaBucket.
+func writeFSFormatData(storage StorageAPI, fsFormat formatConfigV1) error {
+	metadataBytes, err := json.Marshal(fsFormat)
+	if err != nil {
+		return err
+	}
+	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio) directory.
+	n, err := storage.AppendFile(minioMetaBucket, fsFormatJSONFile, metadataBytes)
+	if err != nil {
+		return err
+	}
+	if n != int64(len(metadataBytes)) {
+		return errUnexpected
+	}
+	return nil
 }
 
 // writeFSMetadata - writes `fs.json` metadata.

@@ -126,6 +126,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		}
 		for _, entry := range entries {
 			err = delFunc(pathJoin(entryPath, entry))
+
 			if err != nil {
 				return err
 			}

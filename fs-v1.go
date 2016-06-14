@@ -39,6 +39,16 @@ type fsObjects struct {
 	listObjectMapMutex *sync.Mutex
 }
 
+// creates format.json, the FS format info in minioMetaBucket.
+func initFormatFS(storageDisk StorageAPI) error {
+	return writeFSFormatData(storageDisk, newFSFormatV1())
+}
+
+// loads format.json from minioMetaBucket if it exists.
+func loadFormatFS(storageDisk StorageAPI) ([]byte, error) {
+	return readAll(storageDisk, minioMetaBucket, fsFormatJSONFile)
+}
+
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(disk string) (ObjectLayer, error) {
 	storage, err := newStorageAPI(disk)
@@ -48,7 +58,20 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
 	fsHouseKeeping(storage)
-
+	// loading format.json from minioMetaBucket.
+	// Note: The format.json content is ignored, reserved for future use.
+	_, err = loadFormatFS(storage)
+	if err != nil {
+		if err == errFileNotFound {
+			// format.json doesn't exist, create it inside minioMetaBucket.
+			err = initFormatFS(storage)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
 	// Return successfully initialized object layer.
 	return fsObjects{
 		storage:            storage,
