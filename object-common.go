@@ -17,15 +17,28 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 const (
 	// Block size used for all internal operations version 1.
 	blockSizeV1 = 10 * 1024 * 1024 // 10MiB.
 )
+
+// Register callback functions that needs to be called when process shutsdown.
+// For now, SIGINT triggers the callbacks, in future controller can trigger
+// shutdown callbacks.
+func registerShutdown(callback func()) {
+	go func() {
+		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
+		<-trapCh
+		callback()
+	}()
+}
 
 // House keeping code needed for FS.
 func fsHouseKeeping(storageDisk StorageAPI) error {

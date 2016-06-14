@@ -49,6 +49,22 @@ func loadFormatFS(storageDisk StorageAPI) ([]byte, error) {
 	return readAll(storageDisk, minioMetaBucket, fsFormatJSONFile)
 }
 
+// Should be called when process shuts down.
+func shutdownFS(storage StorageAPI) {
+	_, err := storage.ListDir(minioMetaBucket, mpartMetaPrefix)
+	if err != errFileNotFound {
+		// Multipart directory is not empty hence do not remove .minio volume.
+		os.Exit(0)
+	}
+	prefix := ""
+	if err := cleanupDir(storage, minioMetaBucket, prefix); err != nil {
+		os.Exit(0)
+		return
+	}
+	storage.DeleteVol(minioMetaBucket)
+	os.Exit(0)
+}
+
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(disk string) (ObjectLayer, error) {
 	storage, err := newStorageAPI(disk)
@@ -72,6 +88,10 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 			return nil, err
 		}
 	}
+	// Register the callback that should be called when the process shuts down.
+	registerShutdown(func() {
+		shutdownFS(storage)
+	})
 	// Return successfully initialized object layer.
 	return fsObjects{
 		storage:            storage,
