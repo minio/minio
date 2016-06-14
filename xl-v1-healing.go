@@ -69,8 +69,8 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 	return metadataArray, errs
 }
 
-// error based on total errors and read quorum.
-func (xl xlObjects) reduceError(errs []error) error {
+// error based on total errors and quorum.
+func reduceError(errs []error, quorum int) error {
 	fileNotFoundCount := 0
 	longNameCount := 0
 	diskNotFoundCount := 0
@@ -90,28 +90,28 @@ func (xl xlObjects) reduceError(errs []error) error {
 		}
 	}
 	// If we have errors with 'file not found' greater than
-	// readQuorum, return as errFileNotFound.
+	// quorum, return as errFileNotFound.
 	// else if we have errors with 'volume not found'
-	// greater than readQuorum, return as errVolumeNotFound.
-	if fileNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+	// greater than quorum, return as errVolumeNotFound.
+	if fileNotFoundCount > len(errs)-quorum {
 		return errFileNotFound
-	} else if longNameCount > len(xl.storageDisks)-xl.readQuorum {
+	} else if longNameCount > len(errs)-quorum {
 		return errFileNameTooLong
-	} else if volumeNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+	} else if volumeNotFoundCount > len(errs)-quorum {
 		return errVolumeNotFound
 	}
 	// If we have errors with disk not found equal to the
 	// number of disks, return as errDiskNotFound.
-	if diskNotFoundCount == len(xl.storageDisks) {
+	if diskNotFoundCount == len(errs) {
 		return errDiskNotFound
-	} else if diskNotFoundCount > len(xl.storageDisks)-xl.readQuorum {
+	} else if diskNotFoundCount > len(errs)-quorum {
 		// If we have errors with 'disk not found'
-		// greater than readQuorum, return as errFileNotFound.
+		// greater than quorum, return as errFileNotFound.
 		return errFileNotFound
 	}
 	// If we have errors with disk not found equal to the
 	// number of disks, return as errDiskNotFound.
-	if diskAccessDeniedCount == len(xl.storageDisks) {
+	if diskAccessDeniedCount == len(errs) {
 		return errVolumeAccessDenied
 	}
 	return nil
@@ -156,7 +156,7 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 // - error if any.
 func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, version int64, err error) {
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
-	if err = xl.reduceError(errs); err != nil {
+	if err = reduceError(errs, xl.readQuorum); err != nil {
 		if err == errFileNotFound {
 			// For file not found, treat as if disks are available
 			// return all the configured ones.

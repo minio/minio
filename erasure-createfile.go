@@ -28,7 +28,7 @@ import (
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo) (newEInfos []erasureInfo, size int64, err error) {
+func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo, writeQuorum int) (newEInfos []erasureInfo, size int64, err error) {
 	// Allocated blockSized buffer for reading.
 	buf := make([]byte, blockSizeV1)
 	hashWriters := newHashWriters(len(disks))
@@ -53,7 +53,7 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 		if err != nil {
 			return nil, 0, err
 		}
-		err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters)
+		err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -109,7 +109,7 @@ func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, erro
 }
 
 // appendFile - append data buffer at path.
-func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, distribution []int, hashWriters []hash.Hash) (err error) {
+func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, distribution []int, hashWriters []hash.Hash, writeQuorum int) (err error) {
 	var wg = &sync.WaitGroup{}
 	var wErrs = make([]error, len(disks))
 	// Write encoded data to quorum disks in parallel.
@@ -144,6 +144,5 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, dist
 	// Wait for all the appends to finish.
 	wg.Wait()
 
-	// Return success.
-	return nil
+	return reduceError(wErrs, writeQuorum)
 }
