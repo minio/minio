@@ -213,6 +213,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	return nil
 }
 
+// HealObject - heal the object.
+// FIXME: If an object object was deleted and one disk was down, and later the disk comes back
+// up again, heal on the object should delete it.
 func (xl xlObjects) HealObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -275,7 +278,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	checkSumInfos := make([][]checkSumInfo, len(xl.storageDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
-	// .minio/tmpID/ which needs to be renamed later.
+	// .minio/tmp/{tmpID}/ which needs to be renamed later.
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
@@ -293,7 +296,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		}
 	}
 
-	// Write xl.json to all the outdate disks.
+	// Write xl.json to all the outdated disks.
 	for index, disk := range outDatedDisks {
 		if disk == nil {
 			continue
