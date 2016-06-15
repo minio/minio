@@ -335,9 +335,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Rename if an object already exists to temporary location.
 	newUniqueID := getUUID()
-	err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+	if xl.isObject(bucket, object) {
+		err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
 	}
 
 	// Fill all the necessary metadata.

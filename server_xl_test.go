@@ -226,6 +226,111 @@ func (s *MyAPIXLSuite) newRequest(method, urlStr string, contentLength int64, bo
 	return req, nil
 }
 
+// putSimpleObjectMultipart uploads a multipart object consisting of 2 parts, repeated constant byte string and a single byte ('0').
+func (s *MyAPIXLSuite) putSimpleObjectMultipart(bucketName, object string) (response *http.Response, err error) {
+	request, err := s.newRequest("POST", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploads", 0, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := http.Client{}
+	response, err = client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return response, nil
+	}
+
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(newResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	uploadID := newResponse.UploadID
+
+	// Create a byte array of 5MB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+
+	hasher := md5.New()
+	hasher.Write(data)
+	md5Sum := hasher.Sum(nil)
+
+	buffer1 := bytes.NewReader(data)
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	if err != nil {
+		return nil, err
+	}
+
+	client = http.Client{}
+	response1, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response1.StatusCode != http.StatusOK {
+		return response1, nil
+	}
+
+	// Byte array one 1 byte.
+	data = []byte("0")
+
+	hasher = md5.New()
+	hasher.Write(data)
+	md5Sum = hasher.Sum(nil)
+
+	buffer2 := bytes.NewReader(data)
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	if err != nil {
+		return nil, err
+	}
+
+	client = http.Client{}
+	response2, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response2.StatusCode != http.StatusOK {
+		return response2, nil
+	}
+
+	// Complete multipart upload
+	completeUploads := &completeMultipartUpload{
+		Parts: []completePart{
+			{
+				PartNumber: 1,
+				ETag:       response1.Header.Get("ETag"),
+			},
+			{
+				PartNumber: 2,
+				ETag:       response2.Header.Get("ETag"),
+			},
+		},
+	}
+
+	completeBytes, err := xml.Marshal(completeUploads)
+	if err != nil {
+		return nil, err
+	}
+	request, err = s.newRequest("POST", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID, int64(len(completeBytes)), bytes.NewReader(completeBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	response, err = client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return response, nil
+	}
+
+	return response, nil
+}
+
 func (s *MyAPIXLSuite) TestAuth(c *C) {
 	secretID, err := genSecretAccessKey()
 	c.Assert(err, IsNil)
@@ -1571,4 +1676,112 @@ func (s *MyAPIXLSuite) TestListObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resultPartial2.NextContinuationToken, Equals, "object1")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
+
+func (s *MyAPIXLSuite) TestMultipleObjectsOverlappingPath(c *C) {
+	// Put object /a/b/c/d, should succeed
+	buffer1 := bytes.NewReader([]byte("hello one"))
+	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", int64(buffer1.Len()), buffer1)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify response data
+	responseBody, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
+
+	// Put object a/b/c, should fail because it is a directory
+	buffer2 := bytes.NewReader([]byte("hello two"))
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c", int64(buffer2.Len()), buffer2)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response, Not(Equals), http.StatusOK)
+
+	// Put object a/b/c/d, should succeed and overwrite original object
+	buffer3 := bytes.NewReader([]byte("hello three"))
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", int64(buffer3.Len()), buffer3)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify object
+	responseBody, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
+
+	// Put object a/b/c/d/e, should fail because a/b/c/d is not a directory
+	buffer4 := bytes.NewReader([]byte("hello four"))
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d/e", int64(buffer4.Len()), buffer4)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusConflict)
+
+	// Put object multipart a/b/c, should fail because it is a directory
+	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c")
+	c.Assert(err, IsNil)
+	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusOK)
+
+	// Put object multipart a/b/c/d, should succeed and overwrite previous object
+	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c/d")
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// verify object
+	// putSimpleObjectMultipart puts a default object consisting of 2 parts, repeated byte string and a single byte
+	expectedBytes := append(bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16), byte('0'))
+
+	responseBody, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(true, Equals, bytes.Equal(responseBody, expectedBytes))
+
+	// Put object multipart a/b/c/d/e, should fail because a/b/c/d is not a directory
+	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c/d/e")
+	c.Assert(err, IsNil)
+	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusOK)
+
+	// Delete object a/b/c/d, should succeed
+	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
