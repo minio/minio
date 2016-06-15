@@ -843,6 +843,8 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	writeSuccessNoContent(w)
 }
 
+// Send whitespace character, once every 5secs, until CompleteMultipartUpload is done.
+// CompleteMultipartUpload method of the object layer indicates that it's done via doneCh
 func sendWhiteSpaceChars(w http.ResponseWriter, doneCh <-chan struct{}) {
 	for {
 		select {
@@ -962,12 +964,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.WriteHeader(http.StatusOK)
 
 	doneCh := make(chan struct{})
+	// Signal that completeMultipartUpload is over via doneCh
 	go func(doneCh chan<- struct{}) {
 		md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 		doneCh <- struct{}{}
 	}(doneCh)
 
-	// Send whitespace character, once every 5secs, until CompleteMultipartUpload is done
 	sendWhiteSpaceChars(w, doneCh)
 
 	if err != nil {
