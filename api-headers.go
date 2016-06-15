@@ -66,7 +66,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
 	w.Header().Set("Last-Modified", lastModified)
 
-	w.Header().Set("Content-Type", objInfo.ContentType)
+	if objInfo.ContentType != "" {
+		w.Header().Set("Content-Type", objInfo.ContentType)
+	}
 	if objInfo.MD5Sum != "" {
 		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}

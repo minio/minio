@@ -22,13 +22,11 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/mimedb"
 )
 
 // fsObjects - Implements fs object layer.
@@ -205,21 +203,13 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	contentType := "application/octet-stream"
-	if objectExt := filepath.Ext(object); objectExt != "" {
-		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-		if ok {
-			contentType = content.ContentType
-		}
-	}
 	return ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ModTime:     fi.ModTime,
-		Size:        fi.Size,
-		IsDir:       fi.Mode.IsDir(),
-		ContentType: contentType,
-		MD5Sum:      "", // Read from metadata.
+		Bucket:  bucket,
+		Name:    object,
+		ModTime: fi.ModTime,
+		Size:    fi.Size,
+		IsDir:   fi.Mode.IsDir(),
+		MD5Sum:  "", // Read from metadata.
 	}, nil
 }
 
