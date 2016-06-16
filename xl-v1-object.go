@@ -55,9 +55,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := xl.readAllXLMetadata(bucket, object)
-	if err := reduceError(errs, xl.readQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
-	}
 
 	// List all online disks.
 	onlineDisks, highestVersion, err := xl.listOnlineDisks(metaArr, errs)
@@ -163,6 +160,27 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	return objInfo, nil
 }
 
+// undoRenameObject - renames back the partially successful rename operations.
+func (xl xlObjects) undoRenameObject(srcBucket, srcObject, dstBucket, dstObject string, errs []error) {
+	var wg = &sync.WaitGroup{}
+	// Undo rename object on disks where RenameFile succeeded.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
+		// Undo rename object in parallel.
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			if errs[index] != nil {
+				return
+			}
+			_ = disk.RenameFile(dstBucket, retainSlash(dstObject), srcBucket, retainSlash(srcObject))
+		}(index, disk)
+	}
+	wg.Wait()
+}
+
 // renameObject - renames all source objects to destination object
 // across all disks in parallel. Additionally if we have errors and do
 // not have a readQuorum partially renamed files are renamed back to
@@ -196,39 +214,24 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 	// Wait for all renames to finish.
 	wg.Wait()
 
-	// Gather err count.
-	var errCount = 0
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		errCount++
-	}
 	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 	// otherwise return failure. Cleanup successful renames.
-	if errCount > len(xl.storageDisks)-xl.writeQuorum {
+	if !isQuorum(errs, xl.writeQuorum) {
 		// Check we have successful read quorum.
-		if errCount <= len(xl.storageDisks)-xl.readQuorum {
+		if isQuorum(errs, xl.readQuorum) {
 			return nil // Return success.
 		} // else - failed to acquire read quorum.
-
-		// Undo rename object on disks where RenameFile succeeded.
-		for index, disk := range xl.storageDisks {
-			if disk == nil {
-				continue
-			}
-			// Undo rename object in parallel.
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				if errs[index] != nil {
-					return
-				}
-				_ = disk.RenameFile(dstBucket, retainSlash(dstObject), srcBucket, retainSlash(srcObject))
-			}(index, disk)
-		}
-		wg.Wait()
+		// Undo all the partial rename operations.
+		xl.undoRenameObject(srcBucket, srcObject, dstBucket, dstObject, errs)
 		return errXLWriteQuorum
+	}
+	// Return on first error, also undo any partially successful rename operations.
+	for _, err := range errs {
+		if err != nil && err != errDiskNotFound {
+			// Undo all the partial rename operations.
+			xl.undoRenameObject(srcBucket, srcObject, dstBucket, dstObject, errs)
+			return err
+		}
 	}
 	return nil
 }
@@ -394,7 +397,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			err := cleanupDir(disk, bucket, object)
-			if err != nil {
+			if err != nil && err != errFileNotFound {
 				dErrs[index] = err
 			}
 		}(index, disk)
@@ -403,25 +406,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Wait for all routines to finish.
 	wg.Wait()
 
-	var fileNotFoundCnt, deleteFileErr int
-	// Count for specific errors.
-	for _, err := range dErrs {
-		if err == nil {
-			continue
-		}
-		// If file not found, count them.
-		if err == errFileNotFound {
-			fileNotFoundCnt++
-			continue
-		}
-
-		// Update error counter separately.
-		deleteFileErr++
-	}
-	// Return err if all disks report file not found.
-	if fileNotFoundCnt == len(xl.storageDisks) {
-		return errFileNotFound
-	} else if deleteFileErr > len(xl.storageDisks)-xl.writeQuorum {
+	if !isQuorum(dErrs, xl.writeQuorum) {
 		// Return errXLWriteQuorum if errors were more than
 		// allowed write quorum.
 		return errXLWriteQuorum
@@ -444,14 +429,17 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
+	// Validate object exists.
 	if !xl.isObject(bucket, object) {
 		return ObjectNotFound{bucket, object}
+	} // else proceed to delete the object.
+
+	// Delete the object on all disks.
+	err = xl.deleteObject(bucket, object)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
 	}
 
-	if err = xl.deleteObject(bucket, object); err == errFileNotFound {
-		// Its valid to return success if given object is not found.
-		err = nil
-	}
-
-	return err
+	// Success.
+	return nil
 }

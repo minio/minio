@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -7,11 +23,12 @@ import (
 )
 
 // Get the highest integer from a given integer slice.
-func highestInt(intSlice []int64) (highestInteger int64) {
-	highestInteger = int64(1)
+func highestInt(intSlice []int64, highestInt int64) (highestInteger int64) {
+	highestInteger = highestInt
 	for _, integer := range intSlice {
 		if highestInteger < integer {
 			highestInteger = integer
+			break
 		}
 	}
 	return highestInteger
@@ -23,6 +40,8 @@ func listObjectVersions(partsMetadata []xlMetaV1, errs []error) (versions []int6
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
 			versions[index] = metadata.Stat.Version
+		} else if errs[index] == errFileNotFound {
+			versions[index] = 1
 		} else {
 			versions[index] = -1
 		}
@@ -56,8 +75,6 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 				errs[index] = err
 				return
 			}
-			// Relinquish buffer.
-			buffer = nil
 			errs[index] = nil
 		}(index, disk)
 	}
@@ -67,67 +84,6 @@ func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []erro
 
 	// Return all the metadata.
 	return metadataArray, errs
-}
-
-// error based on total errors and quorum.
-func reduceError(errs []error, quorum int) error {
-	fileNotFoundCount := 0
-	longNameCount := 0
-	diskNotFoundCount := 0
-	volumeNotFoundCount := 0
-	diskAccessDeniedCount := 0
-	for _, err := range errs {
-		if err == errFileNotFound {
-			fileNotFoundCount++
-		} else if err == errFileNameTooLong {
-			longNameCount++
-		} else if err == errDiskNotFound {
-			diskNotFoundCount++
-		} else if err == errVolumeAccessDenied {
-			diskAccessDeniedCount++
-		} else if err == errVolumeNotFound {
-			volumeNotFoundCount++
-		}
-	}
-	// If we have errors with 'file not found' greater than
-	// quorum, return as errFileNotFound.
-	// else if we have errors with 'volume not found'
-	// greater than quorum, return as errVolumeNotFound.
-	if fileNotFoundCount > len(errs)-quorum {
-		return errFileNotFound
-	} else if longNameCount > len(errs)-quorum {
-		return errFileNameTooLong
-	} else if volumeNotFoundCount > len(errs)-quorum {
-		return errVolumeNotFound
-	}
-	// If we have errors with disk not found equal to the
-	// number of disks, return as errDiskNotFound.
-	if diskNotFoundCount == len(errs) {
-		return errDiskNotFound
-	} else if diskNotFoundCount > len(errs)-quorum {
-		// If we have errors with 'disk not found'
-		// greater than quorum, return as errFileNotFound.
-		return errFileNotFound
-	}
-	// If we have errors with disk not found equal to the
-	// number of disks, return as errDiskNotFound.
-	if diskAccessDeniedCount == len(errs) {
-		return errVolumeAccessDenied
-	}
-	return nil
-}
-
-// Similar to 'len(slice)' but returns  the actualelements count
-// skipping the unallocated elements.
-func diskCount(disks []StorageAPI) int {
-	diskCount := 0
-	for _, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		diskCount++
-	}
-	return diskCount
 }
 
 func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
@@ -156,21 +112,16 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 // - error if any.
 func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, version int64, err error) {
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
-	if err = reduceError(errs, xl.readQuorum); err != nil {
-		if err == errFileNotFound {
-			// For file not found, treat as if disks are available
-			// return all the configured ones.
-			onlineDisks = xl.storageDisks
-			return onlineDisks, 1, nil
-		}
-		return nil, 0, err
+	// Do we have read Quorum?.
+	if !isQuorum(errs, xl.readQuorum) {
+		return nil, 0, errXLReadQuorum
 	}
-	highestVersion := int64(0)
+
 	// List all the file versions from partsMetadata list.
 	versions := listObjectVersions(partsMetadata, errs)
 
 	// Get highest object version.
-	highestVersion = highestInt(versions)
+	highestVersion := highestInt(versions, int64(1))
 
 	// Pick online disks with version set to highestVersion.
 	for index, version := range versions {

@@ -400,7 +400,7 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
-	// Delete of non-existant data should return success.
+	// Delete of non-existent data should return success.
 	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject1", 0, nil)
 	c.Assert(err, IsNil)
 	client = http.Client{}

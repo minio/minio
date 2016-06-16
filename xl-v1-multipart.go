@@ -323,6 +323,11 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// Increment version only if we have online disks less than configured storage disks.
+	if diskCount(onlineDisks) < len(xl.storageDisks) {
+		higherVersion++
+	}
+
 	// Pick one from the first valid metadata.
 	xlMeta := pickValidXLMeta(partsMetadata)
 
@@ -374,6 +379,7 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.Version = higherVersion
+
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
@@ -391,7 +397,7 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
+	rErr := xl.commitXLMetadata(tempUploadIDPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -553,8 +559,9 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
-	if err = reduceError(errs, xl.readQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	// Do we have readQuorum?.
+	if !isQuorum(errs, xl.readQuorum) {
+		return "", toObjectErr(errXLReadQuorum, minioMetaBucket, uploadIDPath)
 	}
 
 	// Calculate full object size.
@@ -621,7 +628,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := xl.renameXLMetadata(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
+	rErr := xl.commitXLMetadata(tempUploadIDPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -693,8 +700,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return s3MD5, nil
 	} // No more pending uploads for the object, proceed to delete
 	// object completely from '.minio/multipart'.
-	err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
-	if err != nil {
+	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
