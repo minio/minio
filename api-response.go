@@ -497,13 +497,17 @@ func writeSuccessNoContent(w http.ResponseWriter) {
 // writeErrorRespone write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
 	error := getAPIError(errorCode)
-	// generate error response
-	errorResponse := getAPIErrorResponse(error, resource)
-	encodedErrorResponse := encodeResponse(errorResponse)
 	// set common headers
 	setCommonHeaders(w)
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
+	writeErrorResponseNoHeader(w, req, error, resource)
+}
+
+func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, error APIError, resource string) {
+	// generate error response
+	errorResponse := getAPIErrorResponse(error, resource)
+	encodedErrorResponse := encodeResponse(errorResponse)
 	// HEAD should have no body, do not attempt to write to it
 	if req.Method != "HEAD" {
 		// write error body
