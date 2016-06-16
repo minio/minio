@@ -68,6 +68,31 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	return ErrNoSuchKey
 }
 
+// HealObjectHandler - heal the spcified object. Always authenticated.
+func (api objectAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *http.Request) {
+	var object, bucket string
+	vars := mux.Vars(r)
+	bucket = vars["bucket"]
+	object = vars["object"]
+
+	switch getRequestAuthType(r) {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		return
+	case authTypeSigned:
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	}
+
+	err := api.ObjectAPI.HealObject(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+	}
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,

@@ -419,7 +419,8 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		recursive = false
 	}
 
-	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix})
+	heal := false // Valid only for XL
+	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix, heal})
 	if walker == nil {
 		walker = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
 			return !strings.HasSuffix(object, slashSeparator)
@@ -455,7 +456,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		i++
 	}
-	params := listParams{bucket, recursive, nextMarker, prefix}
+	params := listParams{bucket, recursive, nextMarker, prefix, heal}
 	if !eof {
 		fs.saveTreeWalk(params, walker)
 	}
@@ -483,4 +484,13 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 // ListObjects - list all objects.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
+}
+
+// HealObject - no-op for fs.
+func (fs fsObjects) HealObject(bucket, object string) error {
+	return nil
+}
+
+func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	return ListObjectsInfo{}, nil
 }
