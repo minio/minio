@@ -339,21 +339,10 @@ func metaPartBlockChecksums(disks []StorageAPI, eInfos []erasureInfo, partName s
 	return blockCheckSums
 }
 
-// Takes block index and block distribution to get the disk index.
-func toDiskIndex(blockIdx int, distribution []int) int {
-	// Find out the right disk index for the input block index.
-	for index, blockIndex := range distribution {
-		if blockIndex-1 == blockIdx {
-			return index
-		}
-	}
-	return -1
-}
-
 // isValidBlock - calculates the checksum hash for the block and
 // validates if its correct returns true for valid cases, false otherwise.
 func isValidBlock(disk StorageAPI, volume, path string, blockCheckSum checkSumInfo) (ok bool) {
-	ok = false
+	// Disk is not available, not a valid block.
 	if disk == nil {
 		return false
 	}
@@ -361,10 +350,10 @@ func isValidBlock(disk StorageAPI, volume, path string, blockCheckSum checkSumIn
 	hashWriter := newHash(blockCheckSum.Algorithm)
 	hashBytes, err := hashSum(disk, volume, path, hashWriter)
 	if err != nil {
-		return ok
+		errorIf(err, "Unable to calculate checksum %s/%s", volume, path)
+		return false
 	}
-	ok = hex.EncodeToString(hashBytes) == blockCheckSum.Hash
-	return ok
+	return hex.EncodeToString(hashBytes) == blockCheckSum.Hash
 }
 
 // decodeData - decode encoded blocks.
