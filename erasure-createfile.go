@@ -29,12 +29,12 @@ import (
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
 func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo, writeQuorum int) (newEInfos []erasureInfo, size int64, err error) {
-	// Allocated blockSized buffer for reading.
-	buf := make([]byte, blockSizeV1)
-	hashWriters := newHashWriters(len(disks))
-
 	// Just pick one eInfo.
 	eInfo := pickValidErasureInfo(eInfos)
+
+	// Allocated blockSized buffer for reading.
+	buf := make([]byte, eInfo.BlockSize)
+	hashWriters := newHashWriters(len(disks))
 
 	// Read until io.EOF, erasure codes data and writes to all disks.
 	for {
