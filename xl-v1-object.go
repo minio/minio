@@ -54,25 +54,23 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	defer nsMutex.RUnlock(bucket, object)
 
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
+	metaArr, errs := xl.readAllXLMetadata(bucket, object)
 	if err := reduceError(errs, xl.readQuorum); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
-	onlineDisks, _, err := xl.listOnlineDisks(partsMetadata, errs)
+	onlineDisks, highestVersion, err := xl.listOnlineDisks(metaArr, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Pick one from the first valid metadata.
-	xlMeta := partsMetadata[0]
-	if !xlMeta.IsValid() {
-		for _, partMetadata := range partsMetadata {
-			if partMetadata.IsValid() {
-				xlMeta = partMetadata
-				break
-			}
+	// Pick latest valid metadata.
+	var xlMeta xlMetaV1
+	for _, meta := range metaArr {
+		if meta.IsValid() && meta.Stat.Version == highestVersion {
+			xlMeta = meta
+			break
 		}
 	}
 
@@ -85,7 +83,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Collect all the previous erasure infos across the disk.
 	var eInfos []erasureInfo
 	for index := range onlineDisks {
-		eInfos = append(eInfos, partsMetadata[index].Erasure)
+		eInfos = append(eInfos, metaArr[index].Erasure)
 	}
 
 	// Read from all parts.
