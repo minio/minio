@@ -33,10 +33,6 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	nsMutex.Lock(bucket, "")
 	defer nsMutex.Unlock(bucket, "")
 
-	// Err counters.
-	createVolErr := 0       // Count generic create vol errs.
-	volumeExistsErrCnt := 0 // Count all errVolumeExists errs.
-
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -63,29 +59,47 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	// Look for specific errors and count them to be verified later.
-	for _, err := range dErrs {
-		if err == nil {
-			continue
-		}
-		// if volume already exists, count them.
-		if err == errVolumeExists {
-			volumeExistsErrCnt++
-			continue
-		}
-
-		// Update error counter separately.
-		createVolErr++
-	}
-
-	// Return err if all disks report volume exists.
-	if volumeExistsErrCnt > len(xl.storageDisks)-xl.readQuorum {
-		return toObjectErr(errVolumeExists, bucket)
-	} else if createVolErr > len(xl.storageDisks)-xl.writeQuorum {
-		// Return errXLWriteQuorum if errors were more than allowed write quorum.
+	// Do we have write quorum?.
+	if !isQuorum(dErrs, xl.writeQuorum) {
+		// Purge successfully created buckets if we don't have writeQuorum.
+		xl.undoMakeBucket(bucket)
 		return toObjectErr(errXLWriteQuorum, bucket)
 	}
+
+	// Verify we have any other errors which should undo make bucket.
+	for _, err := range dErrs {
+		// Bucket already exists, return BucketExists error.
+		if err == errVolumeExists {
+			return toObjectErr(errVolumeExists, bucket)
+		}
+		// Undo make bucket for any other errors.
+		if err != nil && err != errDiskNotFound {
+			xl.undoMakeBucket(bucket)
+			return toObjectErr(err, bucket)
+		}
+	}
 	return nil
+}
+
+// undo make bucket operation upon quorum failure.
+func (xl xlObjects) undoMakeBucket(bucket string) {
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+	// Undo previous make bucket entry on all underlying storage disks.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
+		wg.Add(1)
+		// Delete a bucket inside a go-routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			_ = disk.DeleteVol(bucket)
+		}(index, disk)
+	}
+
+	// Wait for all make vol to finish.
+	wg.Wait()
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.

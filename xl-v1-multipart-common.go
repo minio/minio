@@ -444,3 +444,57 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 	}
 	return fileInfo, nil
 }
+
+// commitXLMetadata - commit `xl.json` from source prefix to destination prefix.
+func (xl xlObjects) commitXLMetadata(srcPrefix, dstPrefix string) error {
+	var wg = &sync.WaitGroup{}
+	var mErrs = make([]error, len(xl.storageDisks))
+
+	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
+	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
+
+	// Rename `xl.json` to all disks in parallel.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			mErrs[index] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		// Rename `xl.json` in a routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// Renames `xl.json` from source prefix to destination prefix.
+			rErr := disk.RenameFile(minioMetaBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
+			if rErr != nil {
+				mErrs[index] = rErr
+				return
+			}
+			// Delete any dangling directories.
+			dErr := disk.DeleteFile(minioMetaBucket, srcPrefix)
+			if dErr != nil {
+				mErrs[index] = dErr
+				return
+			}
+			mErrs[index] = nil
+		}(index, disk)
+	}
+	// Wait for all the routines.
+	wg.Wait()
+
+	// Do we have write quorum?.
+	if !isQuorum(mErrs, xl.writeQuorum) {
+		// Do we have read quorum?.
+		if isQuorum(mErrs, xl.readQuorum) {
+			// Return success on read quorum.
+			return nil
+		}
+		return errXLWriteQuorum
+	}
+	// For all other errors return.
+	for _, err := range mErrs {
+		if err != nil && err != errDiskNotFound {
+			return err
+		}
+	}
+	return nil
+}

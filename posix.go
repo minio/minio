@@ -458,9 +458,6 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 		}
 		return 0, err
 	}
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
-		return 0, err
-	}
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return 0, err
@@ -670,9 +667,17 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied
 	}
+	srcFilePath := slashpath.Join(srcVolumeDir, srcPath)
+	if err = checkPathLength(srcFilePath); err != nil {
+		return err
+	}
+	dstFilePath := slashpath.Join(dstVolumeDir, dstPath)
+	if err = checkPathLength(dstFilePath); err != nil {
+		return err
+	}
 	if srcIsDir {
 		// If source is a directory we expect the destination to be non-existent always.
-		_, err = os.Stat(preparePath(slashpath.Join(dstVolumeDir, dstPath)))
+		_, err = os.Stat(preparePath(dstFilePath))
 		if err == nil {
 			return errFileAccessDenied
 		}
@@ -681,14 +686,14 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 		}
 		// Destination does not exist, hence proceed with the rename.
 	}
-	if err = mkdirAll(preparePath(slashpath.Dir(slashpath.Join(dstVolumeDir, dstPath))), 0755); err != nil {
+	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0755); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
 		}
 		return err
 	}
-	err = os.Rename(preparePath(slashpath.Join(srcVolumeDir, srcPath)), preparePath(slashpath.Join(dstVolumeDir, dstPath)))
+	err = os.Rename(preparePath(srcFilePath), preparePath(dstFilePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound

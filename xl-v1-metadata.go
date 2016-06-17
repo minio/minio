@@ -224,76 +224,28 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	return xlMeta, nil
 }
 
-// renameXLMetadata - renames `xl.json` from source prefix to destination prefix.
-func (xl xlObjects) renameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string) error {
+// Undo rename xl metadata, renames successfully renamed `xl.json` back to source location.
+func (xl xlObjects) undoRenameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string, errs []error) {
 	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(xl.storageDisks))
-
 	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
 	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
-	// Rename `xl.json` to all disks in parallel.
+
+	// Undo rename `xl.json` on disks where RenameFile succeeded.
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
-			mErrs[index] = errDiskNotFound
 			continue
 		}
+		// Undo rename object in parallel.
 		wg.Add(1)
-		// Rename `xl.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			// Renames `xl.json` from source prefix to destination prefix.
-			rErr := disk.RenameFile(srcBucket, srcJSONFile, dstBucket, dstJSONFile)
-			if rErr != nil {
-				mErrs[index] = rErr
+			if errs[index] != nil {
 				return
 			}
-			// Delete any dangling directories.
-			dErr := disk.DeleteFile(srcBucket, srcPrefix)
-			if dErr != nil {
-				mErrs[index] = dErr
-				return
-			}
-			mErrs[index] = nil
+			_ = disk.RenameFile(dstBucket, dstJSONFile, srcBucket, srcJSONFile)
 		}(index, disk)
 	}
-	// Wait for all the routines.
 	wg.Wait()
-
-	// Gather err count.
-	var errCount = 0
-	for _, err := range mErrs {
-		if err == nil {
-			continue
-		}
-		errCount++
-	}
-	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
-	// otherwise return failure. Cleanup successful renames.
-	if errCount > len(xl.storageDisks)-xl.writeQuorum {
-		// Check we have successful read quorum.
-		if errCount <= len(xl.storageDisks)-xl.readQuorum {
-			return nil // Return success.
-		} // else - failed to acquire read quorum.
-
-		// Undo rename `xl.json` on disks where RenameFile succeeded.
-		for index, disk := range xl.storageDisks {
-			if disk == nil {
-				continue
-			}
-			// Undo rename object in parallel.
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				if mErrs[index] != nil {
-					return
-				}
-				_ = disk.RenameFile(dstBucket, dstJSONFile, srcBucket, srcJSONFile)
-			}(index, disk)
-		}
-		wg.Wait()
-		return errXLWriteQuorum
-	}
-	return nil
 }
 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
@@ -320,6 +272,27 @@ func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) er
 		return errUnexpected
 	}
 	return nil
+}
+
+// deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.
+func (xl xlObjects) deleteAllXLMetadata(bucket, prefix string, errs []error) {
+	var wg = &sync.WaitGroup{}
+	// Delete all the `xl.json` left over.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
+		// Undo rename object in parallel.
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			if errs[index] != nil {
+				return
+			}
+			_ = deleteXLMetdata(disk, bucket, prefix)
+		}(index, disk)
+	}
+	wg.Wait()
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
@@ -352,38 +325,26 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 	// Wait for all the routines.
 	wg.Wait()
 
-	var errCount = 0
-	// Return the first error.
-	for _, err := range mErrs {
-		if err == nil {
-			continue
-		}
-		errCount++
-	}
-	// Count all the errors and validate if we have write quorum.
-	if errCount > len(xl.storageDisks)-xl.writeQuorum {
-		// Validate if we have read quorum, then return success.
-		if errCount > len(xl.storageDisks)-xl.readQuorum {
+	// Do we have write quorum?.
+	if !isQuorum(mErrs, xl.writeQuorum) {
+		// Validate if we have read quorum.
+		if isQuorum(mErrs, xl.readQuorum) {
+			// Return success.
 			return nil
 		}
-		// Delete all the `xl.json` left over.
-		for index, disk := range xl.storageDisks {
-			if disk == nil {
-				continue
-			}
-			// Undo rename object in parallel.
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				if mErrs[index] != nil {
-					return
-				}
-				_ = deleteXLMetdata(disk, bucket, prefix)
-			}(index, disk)
-		}
-		wg.Wait()
+		// Delete all `xl.json` successfully renamed.
+		xl.deleteAllXLMetadata(bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
+
+	// For all other errors return.
+	for _, err := range mErrs {
+		if err != nil && err != errDiskNotFound {
+			return err
+		}
+	}
+
+	// Success.
 	return nil
 }
 
@@ -417,37 +378,25 @@ func (xl xlObjects) writeSameXLMetadata(bucket, prefix string, xlMeta xlMetaV1) 
 	// Wait for all the routines.
 	wg.Wait()
 
-	var errCount = 0
-	// Return the first error.
-	for _, err := range mErrs {
-		if err == nil {
-			continue
-		}
-		errCount++
-	}
-	// Count all the errors and validate if we have write quorum.
-	if errCount > len(xl.storageDisks)-xl.writeQuorum {
-		// Validate if we have read quorum, then return success.
-		if errCount > len(xl.storageDisks)-xl.readQuorum {
+	// Do we have write Quorum?.
+	if !isQuorum(mErrs, xl.writeQuorum) {
+		// Do we have readQuorum?.
+		if isQuorum(mErrs, xl.readQuorum) {
+			// Return success.
 			return nil
 		}
-		// Delete all the `xl.json` left over.
-		for index, disk := range xl.storageDisks {
-			if disk == nil {
-				continue
-			}
-			// Undo rename object in parallel.
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				if mErrs[index] != nil {
-					return
-				}
-				_ = deleteXLMetdata(disk, bucket, prefix)
-			}(index, disk)
-		}
-		wg.Wait()
+		// Delete all `xl.json` successfully renamed.
+		xl.deleteAllXLMetadata(bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
+
+	// For any other errors delete `xl.json` as well.
+	for _, err := range mErrs {
+		if err != nil && err != errDiskNotFound {
+			return err
+		}
+	}
+
+	// Success.
 	return nil
 }

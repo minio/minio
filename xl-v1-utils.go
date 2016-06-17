@@ -24,6 +24,31 @@ import (
 	"time"
 )
 
+// Validates if we have quorum based on the errors with errDiskNotFound.
+func isQuorum(errs []error, minQuorumCount int) bool {
+	var diskFoundCount int
+	for _, err := range errs {
+		if err == errDiskNotFound {
+			continue
+		}
+		diskFoundCount++
+	}
+	return diskFoundCount >= minQuorumCount
+}
+
+// Similar to 'len(slice)' but returns  the actual elements count
+// skipping the unallocated elements.
+func diskCount(disks []StorageAPI) int {
+	diskCount := 0
+	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		diskCount++
+	}
+	return diskCount
+}
+
 // randInts - uses Knuth Fisher-Yates shuffle algorithm for generating uniform shuffling.
 func randInts(count int) []int {
 	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
