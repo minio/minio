@@ -69,8 +69,8 @@
 		},
 		{
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "4fadad856421f3f13883bd681de8a9283809076e",
-			"revisionTime": "2016-05-01T12:00:51+02:00"
+			"revision": "2fde63d2889a399426862a16611c489b1fed87bc",
+			"revisionTime": "2016-06-04T08:05:20+02:00"
 		},
 		{
 			"path": "github.com/mattn/go-colorable",

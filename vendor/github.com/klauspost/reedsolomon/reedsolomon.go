@@ -85,9 +85,13 @@ type reedSolomon struct {
 }
 
 // ErrInvShardNum will be returned by New, if you attempt to create
-// an Encoder where either data or parity shards is zero or less,
-// or the number of data shards is higher than 256.
+// an Encoder where either data or parity shards is zero or less.
 var ErrInvShardNum = errors.New("cannot create Encoder with zero or less data/parity shards")
+
+// ErrMaxShardNum will be returned by New, if you attempt to create
+// an Encoder where data and parity shards cannot be bigger than
+// Galois field GF(2^8) - 1.
+var ErrMaxShardNum = errors.New("cannot create Encoder with 255 or more data+parity shards")
 
 // New creates a new encoder and initializes it to
 // the number of data shards and parity shards that
@@ -104,8 +108,8 @@ func New(dataShards, parityShards int) (Encoder, error) {
 		return nil, ErrInvShardNum
 	}
 
-	if dataShards > 256 {
-		return nil, ErrInvShardNum
+	if dataShards+parityShards > 255 {
+		return nil, ErrMaxShardNum
 	}
 
 	// Start with a Vandermonde matrix.  This matrix would work,
