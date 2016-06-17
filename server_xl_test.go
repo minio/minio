@@ -369,7 +369,7 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/deletebucketobject/myobject", 0, nil)
+	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -377,7 +377,15 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/deletebucketobject/myobject", 0, nil)
+	// Should not delete "prefix/myobject"
+	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix", 0, nil)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+
+	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -385,7 +393,15 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/myobject", 0, nil)
+	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+
+	// Delete of non-existant data should return success.
+	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject1", 0, nil)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)

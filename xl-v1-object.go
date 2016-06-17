@@ -446,6 +446,10 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	nsMutex.Lock(bucket, object)
 	defer nsMutex.Unlock(bucket, object)
 
+	if !xl.isObject(bucket, object) {
+		return ObjectNotFound{bucket, object}
+	}
+
 	if err = xl.deleteObject(bucket, object); err == errFileNotFound {
 		// Its valid to return success if given object is not found.
 		err = nil
