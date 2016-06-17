@@ -225,13 +225,15 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	contentType := "application/octet-stream"
+
+	// Guess content-type from the extension if possible.
+	contentType := ""
 	if objectExt := filepath.Ext(object); objectExt != "" {
-		content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-		if ok {
+		if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
 			contentType = content.ContentType
 		}
 	}
+
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,

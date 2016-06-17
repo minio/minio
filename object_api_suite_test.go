@@ -83,7 +83,7 @@ func APITestSuite(c *check.C, create func() ObjectLayer) {
 	testListObjectsTestsForNonExistantBucket(c, create)
 	testNonExistantObjectInBucket(c, create)
 	testGetDirectoryReturnsObjectNotFound(c, create)
-	testDefaultContentType(c, create)
+	testContentType(c, create)
 	testMultipartObjectCreation(c, create)
 	testMultipartObjectAbort(c, create)
 }
@@ -485,16 +485,16 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 	}
 }
 
-// Tests valdiate the default ContentType.
-func testDefaultContentType(c *check.C, create func() ObjectLayer) {
+// Test content-type
+func testContentType(c *check.C, create func() ObjectLayer) {
 	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
 	// Test empty.
-	_, err = obj.PutObject("bucket", "one", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
+	_, err = obj.PutObject("bucket", "minio.png", int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")), bytes.NewBufferString("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."), nil)
 	c.Assert(err, check.IsNil)
-	objInfo, err := obj.GetObjectInfo("bucket", "one")
+	objInfo, err := obj.GetObjectInfo("bucket", "minio.png")
 	c.Assert(err, check.IsNil)
-	c.Assert(objInfo.ContentType, check.Equals, "application/octet-stream")
+	c.Assert(objInfo.ContentType, check.Equals, "image/png")
 }

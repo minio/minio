@@ -312,16 +312,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		metadata["md5Sum"] = newMD5Hex
 	}
 
-	// If not set default to "application/octet-stream"
+	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
-		contentType := "application/octet-stream"
 		if objectExt := filepath.Ext(object); objectExt != "" {
-			content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-			if ok {
-				contentType = content.ContentType
+			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
+				metadata["content-type"] = content.ContentType
 			}
 		}
-		metadata["content-type"] = contentType
 	}
 
 	// md5Hex representation.

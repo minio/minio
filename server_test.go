@@ -835,7 +835,7 @@ func (s *MyAPISuite) TestContentTypePersists(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/contenttype-persists/one", int64(buffer1.Len()), buffer1)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/contenttype-persists/minio.png", int64(buffer1.Len()), buffer1)
 	delete(request.Header, "Content-Type")
 	c.Assert(err, IsNil)
 
@@ -844,24 +844,24 @@ func (s *MyAPISuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/contenttype-persists/one", 0, nil)
+	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/contenttype-persists/minio.png", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "image/png")
 
-	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/contenttype-persists/one", 0, nil)
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/contenttype-persists/minio.png", 0, nil)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "image/png")
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/contenttype-persists/two", int64(buffer2.Len()), buffer2)
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/contenttype-persists/minio.json", int64(buffer2.Len()), buffer2)
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
@@ -870,19 +870,19 @@ func (s *MyAPISuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/contenttype-persists/two", 0, nil)
+	request, err = s.newRequest("HEAD", testAPIFSCacheServer.URL+"/contenttype-persists/minio.json", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 
-	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/contenttype-persists/two", 0, nil)
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/contenttype-persists/minio.json", 0, nil)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 }
 
 func (s *MyAPISuite) TestPartialContent(c *C) {
