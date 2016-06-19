@@ -1387,3 +1387,77 @@ func (s *MyAPISuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
+
+func (s *MyAPISuite) TestListObjects(c *C) {
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/list-objects-bucket", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer1 := []byte("hello world")
+	objects := []string{"object1", "object2", "object3"}
+
+	for _, object := range objects {
+		request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/list-objects-bucket/"+object, int64(len(buffer1)), bytes.NewReader(buffer1))
+		c.Assert(err, IsNil)
+
+		response, err = client.Do(request)
+		c.Assert(err, IsNil)
+		c.Assert(response.StatusCode, Equals, http.StatusOK)
+	}
+
+	// ListV1 - Should list all 3 entries.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/list-objects-bucket", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	result := ListObjectsResponse{}
+	err = xmlDecoder(response.Body, &result)
+	c.Assert(err, IsNil)
+	for i, object := range objects {
+		c.Assert(object, Equals, result.Contents[i].Key)
+	}
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// ListV1 - should set NextMarker in the result.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/list-objects-bucket?max-keys=1&delimiter=/", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	resultPartial := ListObjectsResponse{}
+	err = xmlDecoder(response.Body, &resultPartial)
+	c.Assert(err, IsNil)
+	c.Assert(resultPartial.NextMarker, Equals, "object1")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// ListV2 - Should list all 3 entries.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/list-objects-bucket?list-type=2", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	resultV2 := ListObjectsV2Response{}
+	err = xmlDecoder(response.Body, &resultV2)
+	c.Assert(err, IsNil)
+	for i, object := range objects {
+		c.Assert(object, Equals, resultV2.Contents[i].Key)
+	}
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// ListV2 - Should set NextContinuationToken in the result.
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/list-objects-bucket?list-type=2&max-keys=1&delimiter=/", 0, nil)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	resultPartial2 := ListObjectsV2Response{}
+	err = xmlDecoder(response.Body, &resultPartial2)
+	c.Assert(err, IsNil)
+	c.Assert(resultPartial2.NextContinuationToken, Equals, "object1")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
