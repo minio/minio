@@ -201,17 +201,12 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		if disk == nil {
 			continue
 		}
-		var buf []byte
-		buf, err = readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
+		xlMeta, err = readXLMeta(disk, bucket, object)
 		if err != nil {
 			// For any reason disk is not available continue and read from other disks.
 			if err == errDiskNotFound || err == errFaultyDisk {
 				continue
 			}
-			return xlMetaV1{}, err
-		}
-		err = json.Unmarshal(buf, &xlMeta)
-		if err != nil {
 			return xlMetaV1{}, err
 		}
 		break

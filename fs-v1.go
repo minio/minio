@@ -188,25 +188,8 @@ func (fs fsObjects) GetObject(bucket, object string, startOffset int64, length i
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	var totalLeft = length
-	for totalLeft > 0 {
-		// Figure out the right blockSize as it was encoded before.
-		var curBlockSize int64
-		if blockSizeV1 < totalLeft {
-			curBlockSize = blockSizeV1
-		} else {
-			curBlockSize = totalLeft
-		}
-		buf := make([]byte, curBlockSize)
-		n, err := fs.storage.ReadFile(bucket, object, startOffset, buf)
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
-		_, err = writer.Write(buf[:n])
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
-		totalLeft -= n
-		startOffset += n
+	if err := writeN(fs.storage, bucket, object, startOffset, totalLeft, writer); err != nil {
+		return toObjectErr(err, bucket, object)
 	}
 	return nil
 }

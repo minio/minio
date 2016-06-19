@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/sha512"
 	"hash"
-	"io"
 
 	"github.com/klauspost/reedsolomon"
 )
@@ -44,21 +43,18 @@ func newHash(algo string) hash.Hash {
 	}
 }
 
+// hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	startOffset := int64(0)
-	// Read until io.EOF.
-	for {
-		buf := make([]byte, blockSizeV1)
-		n, err := disk.ReadFile(volume, path, startOffset, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		writer.Write(buf[:n])
-		startOffset += n
+	fi, err := disk.StatFile(volume, path)
+	if err != nil {
+		return nil, err
 	}
+	var startOffset = int64(0)
+	var totalLeft = fi.Size
+	if err = writeN(disk, volume, path, startOffset, totalLeft, writer); err != nil {
+		return nil, err
+	}
+	// Return the final hash sum.
 	return writer.Sum(nil), nil
 }
 

@@ -352,12 +352,12 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 	return readDir(pathJoin(volumeDir, dirPath))
 }
 
-// ReadFile reads exactly len(buf) bytes into buf. It returns the
-// number of bytes copied. The error is EOF only if no bytes were
-// read. On return, n == len(buf) if and only if err == nil. n == 0
-// for io.EOF. Additionally ReadFile also starts reading from an
-// offset.
-func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+// ReadFile reads exactly length bytes. It returns the length bytes
+// read. The error is EOF only if no bytes were read. On return,
+// len(buf) == length if and only if err == nil. len(buf) < length
+// for err == io.ErrUnexpectedEOF. Additionally ReadFile also
+// supportings reading at an offset.
+func (s *posix) ReadFile(volume string, path string, offset int64, length int64) (buf []byte, err error) {
 	defer func() {
 		if err == syscall.EIO {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -365,69 +365,79 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	}()
 
 	if s.ioErrCount > maxAllowedIOError {
-		return 0, errFaultyDisk
+		return nil, errFaultyDisk
 	}
 
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	// Stat a volume entry.
 	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errVolumeNotFound
+			return nil, errVolumeNotFound
 		}
-		return 0, err
+		return nil, err
 	}
 
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
-		return 0, err
+		return nil, err
 	}
 	file, err := os.Open(preparePath(filePath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errFileNotFound
+			return nil, errFileNotFound
 		} else if os.IsPermission(err) {
-			return 0, errFileAccessDenied
+			return nil, errFileAccessDenied
 		} else if strings.Contains(err.Error(), "not a directory") {
-			return 0, errFileNotFound
+			return nil, errFileNotFound
 		}
-		return 0, err
+		return nil, err
 	}
 	st, err := file.Stat()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return 0, errFileNotFound
+		return nil, errFileNotFound
 	}
 	// Seek to requested offset.
 	_, err = file.Seek(offset, os.SEEK_SET)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Close the reader.
 	defer file.Close()
 
-	// Read file.
-	m, err := io.ReadFull(file, buf)
+	// Allocate read buffer.
+	readBuf := make([]byte, length)
 
-	// Error unexpected is valid, set this back to nil.
-	if err == io.ErrUnexpectedEOF {
-		err = nil
+	// Read file.
+	m, err := io.ReadFull(file, readBuf)
+	if err != nil {
+		// On EOF no bytes were read.
+		if err == io.EOF {
+			// Return io.EOF
+			return nil, io.EOF
+		}
+		// For any other errors return failure.
+		if err != io.ErrUnexpectedEOF {
+			// Failure
+			return nil, err
+		}
 	}
 
 	// Success.
-	return int64(m), err
+	return readBuf[:m], err
 }
 
 // AppendFile - append a byte array at path, if file doesn't exist at

@@ -17,8 +17,7 @@
 package main
 
 import (
-	"bytes"
-	"io"
+	"encoding/json"
 	"math/rand"
 	"path"
 	"time"
@@ -64,48 +63,16 @@ func randInts(count int) []int {
 	return ints
 }
 
-// readAll - returns contents from volume/path as byte array.
-func readAll(disk StorageAPI, volume string, path string) ([]byte, error) {
-	var writer = new(bytes.Buffer)
-	startOffset := int64(0)
-
-	// Allocate 10MiB buffer.
-	buf := make([]byte, blockSizeV1)
-
-	// Read until io.EOF.
-	for {
-		n, err := disk.ReadFile(volume, path, startOffset, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-		writer.Write(buf[:n])
-		startOffset += n
-	}
-	return writer.Bytes(), nil
-}
-
 // readXLMeta reads `xl.json` returns contents as byte array.
-func readXLMeta(disk StorageAPI, bucket string, object string) ([]byte, error) {
-	var writer = new(bytes.Buffer)
-	startOffset := int64(0)
-
-	// Allocate 2MiB buffer, this is sufficient for the most of `xl.json`.
-	buf := make([]byte, 2*1024*1024)
-
-	// Read until io.EOF.
-	for {
-		n, err := disk.ReadFile(bucket, path.Join(object, xlMetaJSONFile), startOffset, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-		writer.Write(buf[:n])
-		startOffset += n
+func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
+	buf, err := readAll(disk, bucket, path.Join(object, xlMetaJSONFile))
+	if err != nil {
+		return xlMetaV1{}, err
 	}
-	return writer.Bytes(), nil
+	// Marshal xl meta.
+	err = json.Unmarshal(buf, &xlMeta)
+	if err != nil {
+		return xlMetaV1{}, err
+	}
+	return xlMeta, nil
 }

@@ -169,16 +169,16 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 }
 
 // ReadFile - reads a file.
-func (n networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
+func (n networkStorage) ReadFile(volume string, path string, offset int64, length int64) (buf []byte, err error) {
 	if err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{
 		Vol:    volume,
 		Path:   path,
 		Offset: offset,
-		Buffer: buffer,
-	}, &m); err != nil {
-		return 0, toStorageErr(err)
+		Length: length,
+	}, &buf); err != nil {
+		return nil, toStorageErr(err)
 	}
-	return m, nil
+	return buf, nil
 }
 
 // ListDir - list all entries at prefix.
