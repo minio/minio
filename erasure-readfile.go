@@ -17,26 +17,22 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
+	"io"
 
 	"github.com/klauspost/reedsolomon"
 )
 
-// erasureReadFile - read an entire erasure coded file at into a byte
-// array. Erasure coded parts are often few mega bytes in size and it
-// is convenient to return them as byte slice. This function also
-// supports bit-rot detection by verifying checksum of individual
-// block's checksum.
-func erasureReadFile(disks []StorageAPI, volume string, path string, partName string, size int64, eInfos []erasureInfo) ([]byte, error) {
-	// Return data buffer.
-	var buffer []byte
-
-	// Total size left
-	totalSizeLeft := size
-
-	// Starting offset for reading.
-	startOffset := int64(0)
+// erasureReadFile - read bytes from erasure coded files and writes to given writer.
+// Erasure coded files are read block by block as per given erasureInfo and data chunks
+// are decoded into a data block.  Data block is trimmed for given offset and length,
+// then written to given writer.  This function also supports bit-rot detection by
+// verifying checksum of individual block's checksum.
+func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, partName string, eInfos []erasureInfo, offset int64, length int64) (int64, error) {
+	// Total bytes written to writer
+	bytesWritten := int64(0)
 
 	// Gather previously calculated block checksums.
 	blockCheckSums := metaPartBlockChecksums(disks, eInfos, partName)
@@ -44,26 +40,20 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 	// Pick one erasure info.
 	eInfo := pickValidErasureInfo(eInfos)
 
-	// Write until each parts are read and exhausted.
-	for totalSizeLeft > 0 {
-		// Calculate the proper block size.
-		var curBlockSize int64
-		if eInfo.BlockSize < totalSizeLeft {
-			curBlockSize = eInfo.BlockSize
-		} else {
-			curBlockSize = totalSizeLeft
-		}
+	// Get block info for given offset, length and block size.
+	startBlock, bytesToSkip, endBlock := getBlockInfo(offset, length, eInfo.BlockSize)
 
-		// Calculate the current encoded block size.
-		curEncBlockSize := getEncodedBlockLen(curBlockSize, eInfo.DataBlocks)
-		offsetEncOffset := getEncodedBlockLen(startOffset, eInfo.DataBlocks)
-
+	for block := startBlock; block <= endBlock; block++ {
 		// Allocate encoded blocks up to storage disks.
 		enBlocks := make([][]byte, len(disks))
 
 		// Counter to keep success data blocks.
 		var successDataBlocksCount = 0
 		var noReconstruct bool // Set for no reconstruction.
+
+		// Keep how many bytes are read for this block.
+		// In most cases, last block in the file is shorter than eInfo.BlockSize.
+		lastReadSize := int64(0)
 
 		// Read from all the disks.
 		for index, disk := range disks {
@@ -74,13 +64,29 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 			if disk == nil {
 				continue
 			}
-			// Initialize shard slice and fill the data from each parts.
-			enBlocks[blockIndex] = make([]byte, curEncBlockSize)
+
+			// Initialize chunk slice and fill the data from each parts.
+			enBlocks[blockIndex] = make([]byte, eInfo.BlockSize)
+
 			// Read the necessary blocks.
-			_, err := disk.ReadFile(volume, path, offsetEncOffset, enBlocks[blockIndex])
+			n, err := disk.ReadFile(volume, path, block*eInfo.BlockSize, enBlocks[blockIndex])
 			if err != nil {
 				enBlocks[blockIndex] = nil
+			} else if n < eInfo.BlockSize {
+				// As the data we got is smaller than eInfo.BlockSize, keep only required chunk slice
+				enBlocks[blockIndex] = append([]byte{}, enBlocks[blockIndex][:n]...)
 			}
+
+			// Remember bytes read at first time.
+			if lastReadSize == 0 {
+				lastReadSize = n
+			}
+
+			// If bytes read is not equal to bytes read lastly, treat it as corrupted chunk.
+			if n != lastReadSize {
+				return bytesWritten, errXLDataCorrupt
+			}
+
 			// Verify if we have successfully read all the data blocks.
 			if blockIndex < eInfo.DataBlocks && enBlocks[blockIndex] != nil {
 				successDataBlocksCount++
@@ -95,38 +101,43 @@ func erasureReadFile(disks []StorageAPI, volume string, path string, partName st
 			}
 		}
 
-		// Check blocks if they are all zero in length, we have corruption return error.
-		if checkBlockSize(enBlocks) == 0 {
-			return nil, errXLDataCorrupt
-		}
-
 		// Verify if reconstruction is needed, proceed with reconstruction.
 		if !noReconstruct {
 			err := decodeData(enBlocks, eInfo.DataBlocks, eInfo.ParityBlocks)
 			if err != nil {
-				return nil, err
+				return bytesWritten, err
 			}
 		}
 
 		// Get data blocks from encoded blocks.
-		dataBlocks, err := getDataBlocks(enBlocks, eInfo.DataBlocks, int(curBlockSize))
+		dataBlocks, err := getDataBlocks(enBlocks, eInfo.DataBlocks, int(lastReadSize)*eInfo.DataBlocks)
 		if err != nil {
-			return nil, err
+			return bytesWritten, err
+		}
+
+		// Keep required bytes into buf.
+		buf := dataBlocks
+
+		// If this is start block, skip unwanted bytes.
+		if block == startBlock {
+			buf = append([]byte{}, dataBlocks[bytesToSkip:]...)
+		}
+
+		// If this is end block, retain only required bytes.
+		if block == endBlock {
+			buf = append([]byte{}, buf[:length-bytesWritten]...)
 		}
 
 		// Copy data blocks.
-		buffer = append(buffer, dataBlocks...)
-
-		// Negate the 'n' size written to client.
-		totalSizeLeft -= int64(len(dataBlocks))
-
-		// Increase the offset to move forward.
-		startOffset += int64(len(dataBlocks))
-
-		// Relenquish memory.
-		dataBlocks = nil
+		var n int64
+		n, err = io.Copy(writer, bytes.NewReader(buf))
+		bytesWritten += int64(n)
+		if err != nil {
+			return bytesWritten, err
+		}
 	}
-	return buffer, nil
+
+	return bytesWritten, nil
 }
 
 // PartObjectChecksum - returns the checksum for the part name from the checksum slice.
