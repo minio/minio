@@ -171,11 +171,6 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 	// Seek until object offset maps to a particular part offset.
 	for i, part := range m.Parts {
 		partIndex = i
-		// Last part can be of '0' bytes, treat it specially and
-		// return right here.
-		if part.Size == 0 {
-			return partIndex, partOffset, nil
-		}
 		// Offset is smaller than size we have reached the proper part offset.
 		if partOffset < part.Size {
 			return partIndex, partOffset, nil

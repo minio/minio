@@ -579,15 +579,26 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
 		partIdx := currentXLMeta.ObjectPartIndex(part.PartNumber)
+		// All parts should have same part number.
 		if partIdx == -1 {
 			return "", InvalidPart{}
 		}
+
+		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
 			return "", BadDigest{}
 		}
+
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
 			return "", PartTooSmall{}
+		}
+
+		// Last part could have been uploaded as 0bytes, do not need
+		// to save it in final `xl.json`.
+		if (i == len(parts)-1) && currentXLMeta.Parts[partIdx].Size == 0 {
+			xlMeta.Parts = xlMeta.Parts[:i] // Skip the part.
+			continue
 		}
 
 		// Save for total object size.
