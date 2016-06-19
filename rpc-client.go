@@ -145,15 +145,16 @@ func (n networkStorage) DeleteVol(volume string) error {
 // File operations.
 
 // CreateFile - create file.
-func (n networkStorage) AppendFile(volume, path string, buffer []byte) (m int64, err error) {
+func (n networkStorage) AppendFile(volume, path string, buffer []byte) (err error) {
+	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.AppendFileHandler", AppendFileArgs{
 		Vol:    volume,
 		Path:   path,
 		Buffer: buffer,
-	}, &m); err != nil {
-		return 0, toStorageErr(err)
+	}, &reply); err != nil {
+		return toStorageErr(err)
 	}
-	return m, nil
+	return nil
 }
 
 // StatFile - get latest Stat information for a file at path.

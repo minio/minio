@@ -259,14 +259,7 @@ func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) er
 		return err
 	}
 	// Persist marshalled data.
-	n, err := disk.AppendFile(bucket, jsonFile, metadataBytes)
-	if err != nil {
-		return err
-	}
-	if n != int64(len(metadataBytes)) {
-		return errUnexpected
-	}
-	return nil
+	return disk.AppendFile(bucket, jsonFile, metadataBytes)
 }
 
 // deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.

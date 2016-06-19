@@ -137,13 +137,9 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, dist
 			defer wg.Done()
 			// Pick the block from the distribution.
 			blockIndex := distribution[index] - 1
-			n, wErr := disk.AppendFile(volume, path, enBlocks[blockIndex])
+			wErr := disk.AppendFile(volume, path, enBlocks[blockIndex])
 			if wErr != nil {
 				wErrs[index] = wErr
-				return
-			}
-			if n != int64(len(enBlocks[blockIndex])) {
-				wErrs[index] = errUnexpected
 				return
 			}
 

@@ -430,7 +430,7 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
-func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) {
+func (s posix) AppendFile(volume, path string, buf []byte) (err error) {
 	defer func() {
 		if err == syscall.EIO {
 			s.ioErrCount++
@@ -438,54 +438,55 @@ func (s posix) AppendFile(volume, path string, buf []byte) (n int64, err error) 
 	}()
 
 	if s.ioErrCount > maxAllowedIOError {
-		return 0, errFaultyDisk
+		return errFaultyDisk
 	}
 
 	// Validate if disk is free.
 	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
-		return 0, err
+		return err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	// Stat a volume entry.
 	_, err = os.Stat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errVolumeNotFound
+			return errVolumeNotFound
 		}
-		return 0, err
+		return err
 	}
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
-		return 0, err
+		return err
 	}
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
 	if st, err = os.Stat(preparePath(filePath)); err == nil {
 		if st.IsDir() {
-			return 0, errIsNotRegular
+			return errIsNotRegular
 		}
 	}
 	// Create top level directories if they don't exist.
 	if err = mkdirAll(filepath.Dir(filePath), 0700); err != nil {
-		return 0, err
+		return err
 	}
 	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
-			return 0, errFileAccessDenied
+			return errFileAccessDenied
 		}
-		return 0, err
+		return err
 	}
 	// Close upon return.
 	defer w.Close()
 
 	// Return io.Copy
-	return io.Copy(w, bytes.NewReader(buf))
+	_, err = io.Copy(w, bytes.NewReader(buf))
+	return err
 }
 
 // StatFile - get file info.

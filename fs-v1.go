@@ -270,7 +270,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	if size == 0 {
 		// For size 0 we write a 0byte file.
-		_, err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
+		err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
@@ -287,12 +287,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			if n > 0 {
 				// Update md5 writer.
 				md5Writer.Write(buf[:n])
-				m, wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
+				wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
 				if wErr != nil {
 					return "", toObjectErr(wErr, bucket, object)
-				}
-				if m != int64(n) {
-					return "", toObjectErr(errUnexpected, bucket, object)
 				}
 			}
 			if rErr == io.EOF {

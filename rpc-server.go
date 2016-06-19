@@ -86,31 +86,18 @@ func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *int64) error {
 }
 
 // AppendFileHandler - append file handler is rpc wrapper to append file.
-func (s *storageServer) AppendFileHandler(arg *AppendFileArgs, reply *int64) error {
-	n, err := s.storage.AppendFile(arg.Vol, arg.Path, arg.Buffer)
-	if err != nil {
-		return err
-	}
-	reply = &n
-	return nil
+func (s *storageServer) AppendFileHandler(arg *AppendFileArgs, reply *GenericReply) error {
+	return s.storage.AppendFile(arg.Vol, arg.Path, arg.Buffer)
 }
 
 // DeleteFileHandler - delete file handler is rpc wrapper to delete file.
 func (s *storageServer) DeleteFileHandler(arg *DeleteFileArgs, reply *GenericReply) error {
-	err := s.storage.DeleteFile(arg.Vol, arg.Path)
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.storage.DeleteFile(arg.Vol, arg.Path)
 }
 
 // RenameFileHandler - rename file handler is rpc wrapper to rename file.
 func (s *storageServer) RenameFileHandler(arg *RenameFileArgs, reply *GenericReply) error {
-	err := s.storage.RenameFile(arg.SrcVol, arg.SrcPath, arg.DstVol, arg.DstPath)
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.storage.RenameFile(arg.SrcVol, arg.SrcPath, arg.DstVol, arg.DstPath)
 }
 
 // Initialize new storage rpc.

@@ -105,13 +105,8 @@ func updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1, storageDisk
 				errs[index] = wErr
 				return
 			}
-			n, wErr := disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes)
-			if wErr != nil {
+			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
 				errs[index] = wErr
-				return
-			}
-			if n != int64(len(uploadsBytes)) {
-				errs[index] = errUnexpected
 				return
 			}
 			if wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
@@ -219,13 +214,8 @@ func writeUploadJSON(bucket, object, uploadID string, initiated time.Time, stora
 				return
 			}
 			// Write `uploads.json` to disk.
-			n, wErr := disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes)
-			if wErr != nil {
+			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
 				errs[index] = wErr
-				return
-			}
-			if n != int64(len(uploadsJSONBytes)) {
-				errs[index] = errUnexpected
 				return
 			}
 			wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)

@@ -483,7 +483,7 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 			return err
 		}
 		// Fresh disk without format.json
-		_, _ = bootstrapDisks[index].AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
+		_ = bootstrapDisks[index].AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
 		// Ignore any error from AppendFile() as
 		// quorum might still be there to be operational.
 	}
@@ -605,12 +605,8 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 		if err != nil {
 			return err
 		}
-		n, err := disk.AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
-		if err != nil {
+		if err = disk.AppendFile(minioMetaBucket, formatConfigFile, formatBytes); err != nil {
 			return err
-		}
-		if n != int64(len(formatBytes)) {
-			return errUnexpected
 		}
 	}
 	return nil

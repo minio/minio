@@ -97,12 +97,8 @@ func writeFSFormatData(storage StorageAPI, fsFormat formatConfigV1) error {
 		return err
 	}
 	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio) directory.
-	n, err := storage.AppendFile(minioMetaBucket, fsFormatJSONFile, metadataBytes)
-	if err != nil {
+	if err = storage.AppendFile(minioMetaBucket, fsFormatJSONFile, metadataBytes); err != nil {
 		return err
-	}
-	if n != int64(len(metadataBytes)) {
-		return errUnexpected
 	}
 	return nil
 }
@@ -113,12 +109,8 @@ func (fs fsObjects) writeFSMetadata(bucket, prefix string, fsMeta fsMetaV1) erro
 	if err != nil {
 		return err
 	}
-	n, err := fs.storage.AppendFile(bucket, path.Join(prefix, fsMetaJSONFile), metadataBytes)
-	if err != nil {
+	if err = fs.storage.AppendFile(bucket, path.Join(prefix, fsMetaJSONFile), metadataBytes); err != nil {
 		return err
-	}
-	if n != int64(len(metadataBytes)) {
-		return errUnexpected
 	}
 	return nil
 }

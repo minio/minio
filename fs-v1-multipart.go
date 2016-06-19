@@ -310,12 +310,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 		// Update md5 writer.
 		md5Writer.Write(buf[:n])
-		m, err := fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
-		if err != nil {
+		if err = fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n]); err != nil {
 			return "", toObjectErr(err, bucket, object)
-		}
-		if m != int64(len(buf[:n])) {
-			return "", toObjectErr(errUnexpected, bucket, object)
 		}
 	}
 
@@ -520,8 +516,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				}
 				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
 			}
-			n, err = fs.storage.AppendFile(minioMetaBucket, tempObj, buffer[:n])
-			if err != nil {
+			if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buffer[:n]); err != nil {
 				return "", toObjectErr(err, minioMetaBucket, tempObj)
 			}
 			offset += n
