@@ -24,21 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"unicode/utf8"
 )
-
-const pathMax = 32 * 1024 // 32K is the maximum limit for UNC paths.
-
-// isValidPath verifies if a path name is in accordance with FS limitations.
-func isValidPath(path string) bool {
-	if len(path) > pathMax || len(path) == 0 {
-		return false
-	}
-	if !utf8.ValidString(path) {
-		return false
-	}
-	return true
-}
 
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
