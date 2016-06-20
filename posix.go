@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/minio/minio/pkg/disk"
@@ -37,9 +38,9 @@ const (
 
 // posix - implements StorageAPI interface.
 type posix struct {
+	ioErrCount  int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	diskPath    string
 	minFreeDisk int64
-	ioErrCount  int
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -92,7 +93,7 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	if err != nil {
 		return nil, err
 	}
-	fs := posix{
+	fs := &posix{
 		diskPath:    diskPath,
 		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
 	}
@@ -171,7 +172,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found
 // an error is generated.
-func (s posix) getVolDir(volume string) (string, error) {
+func (s *posix) getVolDir(volume string) (string, error) {
 	if !isValidVolname(volume) {
 		return "", errInvalidArgument
 	}
@@ -183,10 +184,10 @@ func (s posix) getVolDir(volume string) (string, error) {
 }
 
 // Make a volume entry.
-func (s posix) MakeVol(volume string) (err error) {
+func (s *posix) MakeVol(volume string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -213,10 +214,10 @@ func (s posix) MakeVol(volume string) (err error) {
 }
 
 // ListVols - list volumes.
-func (s posix) ListVols() (volsInfo []VolInfo, err error) {
+func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -239,10 +240,10 @@ func (s posix) ListVols() (volsInfo []VolInfo, err error) {
 }
 
 // StatVol - get volume info.
-func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
+func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -279,10 +280,10 @@ func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - delete a volume.
-func (s posix) DeleteVol(volume string) (err error) {
+func (s *posix) DeleteVol(volume string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -319,10 +320,10 @@ func (s posix) DeleteVol(volume string) (err error) {
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
+func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -356,10 +357,10 @@ func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
 // read. On return, n == len(buf) if and only if err == nil. n == 0
 // for io.EOF. Additionally ReadFile also starts reading from an
 // offset.
-func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -431,10 +432,10 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
-func (s posix) AppendFile(volume, path string, buf []byte) (err error) {
+func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -491,10 +492,10 @@ func (s posix) AppendFile(volume, path string, buf []byte) (err error) {
 }
 
 // StatFile - get file info.
-func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
+func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -583,10 +584,10 @@ func deleteFile(basePath, deletePath string) error {
 }
 
 // DeleteFile - delete a file at path.
-func (s posix) DeleteFile(volume, path string) (err error) {
+func (s *posix) DeleteFile(volume, path string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
@@ -624,10 +625,10 @@ func (s posix) DeleteFile(volume, path string) (err error) {
 }
 
 // RenameFile - rename source path to destination path atomically.
-func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
