@@ -23,6 +23,7 @@ import (
 	"os"
 	slashpath "path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -690,6 +691,11 @@ func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err er
 	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0755); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
+			return errFileAccessDenied
+		} else if strings.Contains(err.Error(), "The system cannot find the path specified.") && runtime.GOOS == "windows" {
+			// This is a special case should be handled only for
+			// windows, because windows API does not return "not a
+			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
 		}
 		return err

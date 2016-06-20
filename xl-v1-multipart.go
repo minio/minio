@@ -649,9 +649,11 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Rename if an object already exists to temporary location.
 	uniqueID := getUUID()
-	err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+	if xl.isObject(bucket, object) {
+		err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
+		if err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
 	}
 
 	// Remove parts that weren't present in CompleteMultipartUpload request.
