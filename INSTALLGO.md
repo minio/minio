@@ -53,7 +53,7 @@ $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/maste
 $ brew install git python
 ```
 
-##### Install Go 1.5+
+##### Install Go 1.6+
 
 Install golang binaries using `brew`
 
