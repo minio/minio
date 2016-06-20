@@ -21,21 +21,7 @@ package main
 import (
 	"os"
 	"strings"
-	"unicode/utf8"
 )
-
-const pathMax = 4096 // 4k limit on all unixes.
-
-// isValidPath verifies if a path name is in accordance with FS limitations.
-func isValidPath(path string) bool {
-	if len(path) > pathMax || len(path) == 0 {
-		return false
-	}
-	if !utf8.ValidString(path) {
-		return false
-	}
-	return true
-}
 
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
