@@ -19,7 +19,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -31,7 +30,6 @@ func readDir(dirPath string) (entries []string, err error) {
 	if err != nil {
 		// File is really not found.
 		if os.IsNotExist(err) {
-			fmt.Println(preparePath(dirPath), err)
 			return nil, errFileNotFound
 		}
 
