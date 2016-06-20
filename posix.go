@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/minio/minio/pkg/disk"
@@ -39,7 +40,7 @@ const (
 type posix struct {
 	diskPath    string
 	minFreeDisk int64
-	ioErrCount  int
+	ioErrCount  *int32
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -95,6 +96,7 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	fs := posix{
 		diskPath:    diskPath,
 		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
+		ioErrCount:  new(int32),
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -186,11 +188,11 @@ func (s posix) getVolDir(volume string) (string, error) {
 func (s posix) MakeVol(volume string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -216,11 +218,11 @@ func (s posix) MakeVol(volume string) (err error) {
 func (s posix) ListVols() (volsInfo []VolInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -242,11 +244,11 @@ func (s posix) ListVols() (volsInfo []VolInfo, err error) {
 func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return VolInfo{}, errFaultyDisk
 	}
 
@@ -282,11 +284,11 @@ func (s posix) StatVol(volume string) (volInfo VolInfo, err error) {
 func (s posix) DeleteVol(volume string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -322,11 +324,11 @@ func (s posix) DeleteVol(volume string) (err error) {
 func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -359,11 +361,11 @@ func (s posix) ListDir(volume, dirPath string) (entries []string, err error) {
 func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return 0, errFaultyDisk
 	}
 
@@ -434,11 +436,11 @@ func (s posix) ReadFile(volume string, path string, offset int64, buf []byte) (n
 func (s posix) AppendFile(volume, path string, buf []byte) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -494,11 +496,11 @@ func (s posix) AppendFile(volume, path string, buf []byte) (err error) {
 func (s posix) StatFile(volume, path string) (file FileInfo, err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return FileInfo{}, errFaultyDisk
 	}
 
@@ -586,11 +588,11 @@ func deleteFile(basePath, deletePath string) error {
 func (s posix) DeleteFile(volume, path string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -627,11 +629,11 @@ func (s posix) DeleteFile(volume, path string) (err error) {
 func (s posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	defer func() {
 		if err == syscall.EIO {
-			s.ioErrCount++
+			atomic.AddInt32(s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if *s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
