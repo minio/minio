@@ -96,6 +96,9 @@ func getBlockInfo(offset, length, blockSize int64) (startBlock, bytesToSkip, end
 
 	// Calculate end block for given size to read
 	endBlock = (offset + length) / blockSize
+	if endBlock > 0 && (offset+length)%blockSize == 0 {
+		endBlock--
+	}
 
 	return
 }

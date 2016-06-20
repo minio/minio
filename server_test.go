@@ -1158,6 +1158,136 @@ func (s *MyAPISuite) TestGetObjectRangeErrors(c *C) {
 	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
 }
 
+func (s *MyAPISuite) TestGetObjectLarge10MiB(c *C) {
+	// Make bucket for this test.
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-10", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 10MiB content where each line contains 1024 characters.
+	for i := 0; i < 10*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-10/big-file-10", int64(buf.Len()), buf)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/test-bucket-10/big-file-10", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent)
+}
+
+func (s *MyAPISuite) TestGetObjectLarge11MiB(c *C) {
+	// Make bucket for this test.
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-11", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 11MiB content where each line contains 1024 characters.
+	for i := 0; i < 11*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-11/big-file-11", int64(buf.Len()), buf)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/test-bucket-11/big-file-11", 0, nil)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent)
+}
+
+func (s *MyAPISuite) TestGetPartialObjectLarge10MiB(c *C) {
+	// Make bucket for this test.
+	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-10p", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 10MiB content where each line contains 1024 characters.
+	for i := 0; i < 10*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = s.newRequest("PUT", testAPIFSCacheServer.URL+"/test-bucket-10p/big-file-10", int64(buf.Len()), buf)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = s.newRequest("GET", testAPIFSCacheServer.URL+"/test-bucket-10p/big-file-10", 0, nil)
+	c.Assert(err, IsNil)
+	request.Header.Add("Range", "bytes=2048-2058")
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent[2048:2059])
+}
+
 func (s *MyAPISuite) TestObjectMultipartAbort(c *C) {
 	request, err := s.newRequest("PUT", testAPIFSCacheServer.URL+"/objectmultipartabort", 0, nil)
 	c.Assert(err, IsNil)
