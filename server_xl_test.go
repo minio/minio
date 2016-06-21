@@ -19,316 +19,37 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
+	"strings"
+	"sync"
+	"time"
 
 	. "gopkg.in/check.v1"
 )
 
 // API suite container.
 type MyAPIXLSuite struct {
-	root         string
-	erasureDisks []string
-	req          *http.Request
-	body         io.ReadSeeker
-	credential   credential
+	testServer TestServer
 }
 
+// Initializing the test suite.
 var _ = Suite(&MyAPIXLSuite{})
 
-var testAPIXLServer *httptest.Server
-
+// Setting up the test suite.
+// Starting the Test server with temporary XL backend.
 func (s *MyAPIXLSuite) SetUpSuite(c *C) {
-	var nDisks = 16 // Maximum disks.
-	var erasureDisks []string
-	for i := 0; i < nDisks; i++ {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-")
-		c.Check(err, IsNil)
-		erasureDisks = append(erasureDisks, path)
-	}
-
-	root, e := ioutil.TempDir(os.TempDir(), "api-")
-	c.Assert(e, IsNil)
-	s.root = root
-	s.erasureDisks = erasureDisks
-
-	// Initialize server config.
-	initConfig()
-
-	// Initialize name space lock.
-	initNSLock()
-
-	// Set port.
-	addr := ":" + strconv.Itoa(getFreePort())
-
-	// Get credential.
-	s.credential = serverConfig.GetCredential()
-
-	// Set a default region.
-	serverConfig.SetRegion("us-east-1")
-
-	// Do this only once here
-	setGlobalConfigPath(root)
-
-	// Save config.
-	c.Assert(serverConfig.Save(), IsNil)
-
-	apiServer := configureServer(serverCmdConfig{
-		serverAddr:  addr,
-		exportPaths: erasureDisks,
-	})
-	testAPIXLServer = httptest.NewServer(apiServer.Handler)
+	s.testServer = StartTestServer(c, "XL")
 }
 
+// Called implicitly by "gopkg.in/check.v1" after all tests are run.
 func (s *MyAPIXLSuite) TearDownSuite(c *C) {
-	removeAll(s.root)
-	for _, disk := range s.erasureDisks {
-		removeAll(disk)
-	}
-	testAPIXLServer.Close()
-}
-
-func (s *MyAPIXLSuite) newRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
-	if method == "" {
-		method = "POST"
-	}
-	t := time.Now().UTC()
-
-	req, err := http.NewRequest(method, urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("x-amz-date", t.Format(iso8601Format))
-
-	// Add Content-Length
-	req.ContentLength = contentLength
-
-	// Save for subsequent use
-	var hashedPayload string
-	switch {
-	case body == nil:
-		hashedPayload = hex.EncodeToString(sum256([]byte{}))
-	default:
-		payloadBytes, e := ioutil.ReadAll(body)
-		if e != nil {
-			return nil, e
-		}
-		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
-		md5base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
-		req.Header.Set("Content-Md5", md5base64)
-	}
-	req.Header.Set("x-amz-content-sha256", hashedPayload)
-
-	// Seek back to beginning.
-	if body != nil {
-		body.Seek(0, 0)
-		// Add body
-		req.Body = ioutil.NopCloser(body)
-	}
-
-	var headers []string
-	vals := make(map[string][]string)
-	for k, vv := range req.Header {
-		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
-			continue // ignored header
-		}
-		headers = append(headers, strings.ToLower(k))
-		vals[strings.ToLower(k)] = vv
-	}
-	headers = append(headers, "host")
-	sort.Strings(headers)
-
-	var canonicalHeaders bytes.Buffer
-	for _, k := range headers {
-		canonicalHeaders.WriteString(k)
-		canonicalHeaders.WriteByte(':')
-		switch {
-		case k == "host":
-			canonicalHeaders.WriteString(req.URL.Host)
-			fallthrough
-		default:
-			for idx, v := range vals[k] {
-				if idx > 0 {
-					canonicalHeaders.WriteByte(',')
-				}
-				canonicalHeaders.WriteString(v)
-			}
-			canonicalHeaders.WriteByte('\n')
-		}
-	}
-
-	signedHeaders := strings.Join(headers, ";")
-
-	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath := getURLEncodedName(req.URL.Path)
-	// convert any space strings back to "+"
-	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
-
-	//
-	// canonicalRequest =
-	//  <HTTPMethod>\n
-	//  <CanonicalURI>\n
-	//  <CanonicalQueryString>\n
-	//  <CanonicalHeaders>\n
-	//  <SignedHeaders>\n
-	//  <HashedPayload>
-	//
-	canonicalRequest := strings.Join([]string{
-		req.Method,
-		encodedPath,
-		req.URL.RawQuery,
-		canonicalHeaders.String(),
-		signedHeaders,
-		hashedPayload,
-	}, "\n")
-
-	scope := strings.Join([]string{
-		t.Format(yyyymmdd),
-		"us-east-1",
-		"s3",
-		"aws4_request",
-	}, "/")
-
-	stringToSign := "AWS4-HMAC-SHA256" + "\n" + t.Format(iso8601Format) + "\n"
-	stringToSign = stringToSign + scope + "\n"
-	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
-
-	date := sumHMAC([]byte("AWS4"+s.credential.SecretAccessKey), []byte(t.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
-	service := sumHMAC(region, []byte("s3"))
-	signingKey := sumHMAC(service, []byte("aws4_request"))
-
-	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
-
-	// final Authorization header
-	parts := []string{
-		"AWS4-HMAC-SHA256" + " Credential=" + s.credential.AccessKeyID + "/" + scope,
-		"SignedHeaders=" + signedHeaders,
-		"Signature=" + signature,
-	}
-	auth := strings.Join(parts, ", ")
-	req.Header.Set("Authorization", auth)
-
-	return req, nil
-}
-
-// putSimpleObjectMultipart uploads a multipart object consisting of 2 parts, repeated constant byte string and a single byte ('0').
-func (s *MyAPIXLSuite) putSimpleObjectMultipart(bucketName, object string) (response *http.Response, err error) {
-	request, err := s.newRequest("POST", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploads", 0, nil)
-	if err != nil {
-		return nil, err
-	}
-	client := http.Client{}
-	response, err = client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode != http.StatusOK {
-		return response, nil
-	}
-
-	decoder := xml.NewDecoder(response.Body)
-	newResponse := &InitiateMultipartUploadResponse{}
-
-	err = decoder.Decode(newResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	uploadID := newResponse.UploadID
-
-	// Create a byte array of 5MB.
-	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
-
-	hasher := md5.New()
-	hasher.Write(data)
-	md5Sum := hasher.Sum(nil)
-
-	buffer1 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
-	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
-	if err != nil {
-		return nil, err
-	}
-
-	client = http.Client{}
-	response1, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	if response1.StatusCode != http.StatusOK {
-		return response1, nil
-	}
-
-	// Byte array one 1 byte.
-	data = []byte("0")
-
-	hasher = md5.New()
-	hasher.Write(data)
-	md5Sum = hasher.Sum(nil)
-
-	buffer2 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
-	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
-	if err != nil {
-		return nil, err
-	}
-
-	client = http.Client{}
-	response2, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	if response2.StatusCode != http.StatusOK {
-		return response2, nil
-	}
-
-	// Complete multipart upload
-	completeUploads := &completeMultipartUpload{
-		Parts: []completePart{
-			{
-				PartNumber: 1,
-				ETag:       response1.Header.Get("ETag"),
-			},
-			{
-				PartNumber: 2,
-				ETag:       response2.Header.Get("ETag"),
-			},
-		},
-	}
-
-	completeBytes, err := xml.Marshal(completeUploads)
-	if err != nil {
-		return nil, err
-	}
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/"+bucketName+"/"+object+"?uploadId="+uploadID, int64(len(completeBytes)), bytes.NewReader(completeBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	response, err = client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode != http.StatusOK {
-		return response, nil
-	}
-
-	return response, nil
+	s.testServer.Stop()
 }
 
 func (s *MyAPIXLSuite) TestAuth(c *C) {
@@ -380,7 +101,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 }`
 
 	// Put a new bucket policy.
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/policybucket?policy", int64(len(bucketPolicyBuf)), bytes.NewReader([]byte(bucketPolicyBuf)))
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/policybucket?policy",
+		int64(len(bucketPolicyBuf)), bytes.NewReader([]byte(bucketPolicyBuf)), s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -389,7 +111,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Fetch the uploaded policy.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/policybucket?policy", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/policybucket?policy", 0, nil,
+		s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -403,7 +126,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	c.Assert(bytes.Equal([]byte(bucketPolicyBuf), bucketPolicyReadBuf), Equals, true)
 
 	// Delete policy.
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/policybucket?policy", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/policybucket?policy", 0, nil,
+		s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -412,7 +136,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Verify if the policy was indeed deleted.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/policybucket?policy", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/policybucket?policy",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -422,7 +147,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/deletebucket", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -430,7 +156,8 @@ func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucket", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -439,8 +166,12 @@ func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
+func (s *MyAPIXLSuite) BenchMarkDeleteBucket(c *C) {
+
+}
 func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/deletebucket-notempty", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket-notempty",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -448,7 +179,8 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/deletebucket-notempty/myobject", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket-notempty/myobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -456,7 +188,8 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucket-notempty", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucket-notempty",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -466,7 +199,8 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/deletebucketobject", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucketobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -474,7 +208,8 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -483,14 +218,16 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Should not delete "prefix/myobject"
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -498,7 +235,8 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -506,7 +244,8 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Delete of non-existent data should return success.
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/deletebucketobject/prefix/myobject1", 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -515,7 +254,8 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
-	request, err := s.newRequest("HEAD", testAPIXLServer.URL+"/nonexistentbucket", 0, nil)
+	request, err := newTestRequest("HEAD", s.testServer.Server.URL+"/nonexistentbucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -525,7 +265,8 @@ func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/emptyobject", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/emptyobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -533,7 +274,8 @@ func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/emptyobject/object", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/emptyobject/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -541,7 +283,8 @@ func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/emptyobject/object", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/emptyobject/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -556,7 +299,8 @@ func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestBucket(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/bucket", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -564,7 +308,8 @@ func (s *MyAPIXLSuite) TestBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/bucket", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/bucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -575,7 +320,8 @@ func (s *MyAPIXLSuite) TestBucket(c *C) {
 
 func (s *MyAPIXLSuite) TestObject(c *C) {
 	buffer := bytes.NewReader([]byte("hello world"))
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/testobject", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/testobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -583,7 +329,8 @@ func (s *MyAPIXLSuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/testobject/object", int64(buffer.Len()), buffer)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/testobject/object",
+		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -591,7 +338,8 @@ func (s *MyAPIXLSuite) TestObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/testobject/object", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/testobject/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -606,7 +354,8 @@ func (s *MyAPIXLSuite) TestObject(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -614,7 +363,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/object", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -626,7 +376,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 
 	// get object
 	buffer1 := bytes.NewReader([]byte("hello one"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/object1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -634,7 +385,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/object1", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -648,7 +400,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
 
 	buffer2 := bytes.NewReader([]byte("hello two"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/object2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -656,7 +409,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/object2", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object2",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -670,7 +424,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello two")))
 
 	buffer3 := bytes.NewReader([]byte("hello three"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/object3", int64(buffer3.Len()), buffer3)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object3",
+		int64(buffer3.Len()), buffer3, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -678,7 +433,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/object3", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object3",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -693,7 +449,8 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/bucket/object?policy", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/bucket/object?policy",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -703,7 +460,8 @@ func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestHeader(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/bucket/object", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/bucket/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -723,7 +481,8 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-bucket", 0, nil)
+			request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-bucket",
+				0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 			c.Assert(err, IsNil)
 
 			client := http.Client{}
@@ -734,7 +493,8 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 	wg.Wait()
 
 	//Block 2: testing for correctness of the functionality
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-bucket-slash/", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-bucket-slash/",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -747,7 +507,8 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 
 // Tests copy object.
 func (s *MyAPIXLSuite) TestCopyObject(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-object-copy", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -756,7 +517,8 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-copy/object", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy/object",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Type", "application/json")
 	c.Assert(err, IsNil)
 
@@ -764,7 +526,8 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-copy/object1", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("X-Amz-Copy-Source", "/put-object-copy/object")
 	c.Assert(err, IsNil)
 
@@ -772,7 +535,8 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/put-object-copy/object1", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/put-object-copy/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -786,7 +550,8 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 
 // Tests successful put object request.
 func (s *MyAPIXLSuite) TestPutObject(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-object", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -795,14 +560,16 @@ func (s *MyAPIXLSuite) TestPutObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object/object", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object/object",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/put-object/object", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/put-object/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -818,7 +585,8 @@ func (s *MyAPIXLSuite) TestPutObject(c *C) {
 
 // Tests put object with long names.
 func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -828,7 +596,8 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 
 	buffer := bytes.NewReader([]byte("hello world"))
 	longObjName := fmt.Sprintf("%0255d/%0255d/%0255d", 1, 1, 1)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name/"+longObjName,
+		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -836,7 +605,8 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	longObjName = fmt.Sprintf("%0256d", 1)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/put-object-long-name/"+longObjName, int64(buffer.Len()), buffer)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name/"+longObjName,
+		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -845,7 +615,8 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestListBuckets(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -861,7 +632,8 @@ func (s *MyAPIXLSuite) TestListBuckets(c *C) {
 
 func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/innonexistentbucket/object", int64(buffer1.Len()), buffer1)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/innonexistentbucket/object",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -871,7 +643,8 @@ func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/headonobject", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/headonobject",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -880,14 +653,16 @@ func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/headonobject/object1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/headonobject/object1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/headonobject/object1", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -898,14 +673,16 @@ func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
 	t, err := time.Parse(http.TimeFormat, lastModified)
 	c.Assert(err, IsNil)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/headonobject/object1", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Set("If-Modified-Since", t.Add(1*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/headonobject/object1", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Set("If-Unmodified-Since", t.Add(-1*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
@@ -914,7 +691,8 @@ func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/headonbucket", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/headonbucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -922,7 +700,8 @@ func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/headonbucket", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonbucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -931,7 +710,8 @@ func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestXMLNameNotInBucketListJson(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -946,7 +726,8 @@ func (s *MyAPIXLSuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/xmlnamenotinobjectlistjson", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/xmlnamenotinobjectlistjson",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -955,7 +736,8 @@ func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/xmlnamenotinobjectlistjson", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/xmlnamenotinobjectlistjson",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -971,7 +753,8 @@ func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
 
 // Tests if content type persists.
 func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -980,7 +763,8 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists/one", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists/one",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Type", "application/zip")
 	c.Assert(err, IsNil)
 
@@ -989,14 +773,16 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/contenttype-persists/one", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/contenttype-persists/one",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/contenttype-persists/one", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/contenttype-persists/one",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1006,7 +792,8 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/contenttype-persists/two", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists/two",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
@@ -1015,14 +802,16 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("HEAD", testAPIXLServer.URL+"/contenttype-persists/two", 0, nil)
+	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/contenttype-persists/two",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/contenttype-persists/two", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/contenttype-persists/two",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1031,7 +820,8 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestPartialContent(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/partial-content", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/partial-content",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1040,7 +830,8 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/partial-content/bar", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/partial-content/bar",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1058,7 +849,8 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 		{"-7", "o World"},
 	}
 	for _, t := range table {
-		request, err = s.newRequest("GET", testAPIXLServer.URL+"/partial-content/bar", 0, nil)
+		request, err = newTestRequest("GET", s.testServer.Server.URL+"/partial-content/bar",
+			0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 		c.Assert(err, IsNil)
 		request.Header.Add("Range", "bytes="+t.byteRange)
 
@@ -1073,7 +865,8 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/objecthandlererrors-.", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors-.",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1081,7 +874,8 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/objecthandlererrors", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1089,7 +883,8 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objecthandlererrors", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objecthandlererrors",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1097,7 +892,8 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/objecthandlererrors?max-keys=-2", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors?max-keys=-2",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -1106,7 +902,8 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/putbucket-.", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/putbucket-.",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1114,7 +911,8 @@ func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/putbucket", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1122,14 +920,16 @@ func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/putbucket", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it.", http.StatusConflict)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/putbucket?acl", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket?acl",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1139,7 +939,8 @@ func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
 
 func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 	// Make bucket for this test.
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-10", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1157,7 +958,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-10/big-file-10", int64(buf.Len()), buf)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1166,7 +968,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/test-bucket-10/big-file-10", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1182,7 +985,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 
 func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 	// Make bucket for this test.
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-11", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1200,7 +1004,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader(buffer.Bytes())
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-11/big-file-11", int64(buf.Len()), buf)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1209,7 +1014,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/test-bucket-11/big-file-11", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1227,7 +1033,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 
 func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 	// Make bucket for this test.
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-11p", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1246,7 +1053,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-11p/big-file-11", int64(buf.Len()), buf)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1255,7 +1063,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/test-bucket-11p/big-file-11", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	// This range spans into first two blocks.
 	request.Header.Add("Range", "bytes=10485750-10485769")
@@ -1273,7 +1082,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 
 func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 	// Make bucket for this test.
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-10p", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1291,7 +1101,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/test-bucket-10p/big-file-10", int64(buf.Len()), buf)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1300,7 +1111,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/test-bucket-10p/big-file-10", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Range", "bytes=2048-2058")
 
@@ -1316,7 +1128,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
-	request, err := s.newRequest("GET", testAPIXLServer.URL+"/getobjecterrors", 0, nil)
+	request, err := newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1324,7 +1137,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/getobjecterrors", 0, nil)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/getobjecterrors",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1332,7 +1146,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/getobjecterrors/bar", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors/bar",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1340,7 +1155,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/getobjecterrors-./bar", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors-./bar",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1350,7 +1166,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/getobjectrangeerrors", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.
+		URL+"/getobjectrangeerrors", 0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1359,7 +1176,8 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/getobjectrangeerrors/bar", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/getobjectrangeerrors/bar",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1367,7 +1185,8 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/getobjectrangeerrors/bar", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjectrangeerrors/bar",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
 
@@ -1378,7 +1197,8 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartabort", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1386,7 +1206,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultipartabort/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartabort/object?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1401,7 +1222,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1409,14 +1231,16 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/objectmultipartabort/object?uploadId="+uploadID, 0, nil)
+	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID,
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -1425,7 +1249,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/bucketmultipartlist", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist", 0,
+		nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1433,7 +1258,8 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/bucketmultipartlist/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/bucketmultipartlist/object?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1449,7 +1275,8 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1457,14 +1284,16 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/bucketmultipartlist?uploads", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/bucketmultipartlist?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -1515,7 +1344,8 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 
 // TestMakeBucketLocation - tests make bucket location header response.
 func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/make-bucket-location", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/make-bucket-location",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1527,7 +1357,8 @@ func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartlist-uploadid", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist-uploadid",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1535,7 +1366,8 @@ func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultipartlist-uploadid/directory1/directory2/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartlist-uploadid/directory1/directory2/object?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1551,7 +1383,8 @@ func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartlist", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1559,7 +1392,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultipartlist/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartlist/object?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1574,7 +1408,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1582,21 +1417,24 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/objectmultipartlist/object?uploadId="+uploadID, 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID,
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID, 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID,
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response4, err := client.Do(request)
@@ -1606,7 +1444,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 
 // Tests object multipart.
 func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1614,7 +1453,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultiparts/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts/object?uploads",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1638,7 +1478,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	md5Sum := hasher.Sum(nil)
 
 	buffer1 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1655,7 +1496,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	md5Sum = hasher.Sum(nil)
 
 	buffer2 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1681,7 +1523,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, IsNil)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultiparts/object?uploadId="+uploadID, int64(len(completeBytes)), bytes.NewReader(completeBytes))
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID,
+		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1691,7 +1534,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 
 // Tests object multipart overwrite with single put object.
 func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts-overwrite", 0, nil)
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1699,7 +1543,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultiparts-overwrite/object?uploads", 0, nil)
+	request, err = newTestRequest("POST", s.testServer.Server.URL+
+		"/objectmultiparts-overwrite/object?uploads", 0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1723,7 +1568,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	md5Sum := hasher.Sum(nil)
 
 	buffer1 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=1", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1740,7 +1586,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	md5Sum = hasher.Sum(nil)
 
 	buffer2 := bytes.NewReader(data)
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=2", int64(buffer2.Len()), buffer2)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1766,7 +1613,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, IsNil)
 
-	request, err = s.newRequest("POST", testAPIXLServer.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID, int64(len(completeBytes)), bytes.NewReader(completeBytes))
+	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID,
+		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1774,14 +1622,16 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 = bytes.NewReader([]byte("hello world"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/objectmultiparts-overwrite/object", int64(buffer1.Len()), buffer1)
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object",
+		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/objectmultiparts-overwrite/object", 0, nil)
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultiparts-overwrite/object",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1793,186 +1643,4 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(len([]byte("hello world"))))
 	c.Assert(true, Equals, bytes.Equal(buffer3.Bytes(), []byte("hello world")))
-}
-
-func (s *MyAPIXLSuite) TestListObjects(c *C) {
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/list-objects-bucket", 0, nil)
-	c.Assert(err, IsNil)
-
-	client := http.Client{}
-	response, err := client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	buffer1 := []byte("hello world")
-	objects := []string{"object1", "object2", "object3"}
-
-	for _, object := range objects {
-		request, err = s.newRequest("PUT", testAPIXLServer.URL+"/list-objects-bucket/"+object, int64(len(buffer1)), bytes.NewReader(buffer1))
-		c.Assert(err, IsNil)
-
-		response, err = client.Do(request)
-		c.Assert(err, IsNil)
-		c.Assert(response.StatusCode, Equals, http.StatusOK)
-	}
-
-	// ListV1 - Should list all 3 entries.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/list-objects-bucket", 0, nil)
-	c.Assert(err, IsNil)
-
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	result := ListObjectsResponse{}
-	err = xmlDecoder(response.Body, &result)
-	c.Assert(err, IsNil)
-	for i, object := range objects {
-		c.Assert(object, Equals, result.Contents[i].Key)
-	}
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// ListV1 - should set NextMarker in the result.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/list-objects-bucket?max-keys=1&delimiter=/", 0, nil)
-	c.Assert(err, IsNil)
-
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	resultPartial := ListObjectsResponse{}
-	err = xmlDecoder(response.Body, &resultPartial)
-	c.Assert(err, IsNil)
-	c.Assert(resultPartial.NextMarker, Equals, "object1")
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// ListV2 - Should list all 3 entries.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/list-objects-bucket?list-type=2", 0, nil)
-	c.Assert(err, IsNil)
-
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	resultV2 := ListObjectsV2Response{}
-	err = xmlDecoder(response.Body, &resultV2)
-	c.Assert(err, IsNil)
-	for i, object := range objects {
-		c.Assert(object, Equals, resultV2.Contents[i].Key)
-	}
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// ListV2 - Should set NextContinuationToken in the result.
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/list-objects-bucket?list-type=2&max-keys=1&delimiter=/", 0, nil)
-	c.Assert(err, IsNil)
-
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	resultPartial2 := ListObjectsV2Response{}
-	err = xmlDecoder(response.Body, &resultPartial2)
-	c.Assert(err, IsNil)
-	c.Assert(resultPartial2.NextContinuationToken, Equals, "object1")
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-}
-
-func (s *MyAPIXLSuite) TestMultipleObjectsOverlappingPath(c *C) {
-	// Put object /a/b/c/d, should succeed
-	buffer1 := bytes.NewReader([]byte("hello one"))
-	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", int64(buffer1.Len()), buffer1)
-	c.Assert(err, IsNil)
-
-	client := http.Client{}
-	response, err := client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// verify response data
-	responseBody, err := ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
-
-	// Put object a/b/c, should fail because it is a directory
-	buffer2 := bytes.NewReader([]byte("hello two"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c", int64(buffer2.Len()), buffer2)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response, Not(Equals), http.StatusOK)
-
-	// Put object a/b/c/d, should succeed and overwrite original object
-	buffer3 := bytes.NewReader([]byte("hello three"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", int64(buffer3.Len()), buffer3)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// verify object
-	responseBody, err = ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
-
-	// Put object a/b/c/d/e, should fail because a/b/c/d is not a directory
-	buffer4 := bytes.NewReader([]byte("hello four"))
-	request, err = s.newRequest("PUT", testAPIXLServer.URL+"/multipleobjects/a/b/c/d/e", int64(buffer4.Len()), buffer4)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusConflict)
-
-	// Put object multipart a/b/c, should fail because it is a directory
-	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c")
-	c.Assert(err, IsNil)
-	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusOK)
-
-	// Put object multipart a/b/c/d, should succeed and overwrite previous object
-	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c/d")
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = s.newRequest("GET", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	// verify object
-	// putSimpleObjectMultipart puts a default object consisting of 2 parts, repeated byte string and a single byte
-	expectedBytes := append(bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16), byte('0'))
-
-	responseBody, err = ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	c.Assert(true, Equals, bytes.Equal(responseBody, expectedBytes))
-
-	// Put object multipart a/b/c/d/e, should fail because a/b/c/d is not a directory
-	response, err = s.putSimpleObjectMultipart("multipleobjects", "a/b/c/d/e")
-	c.Assert(err, IsNil)
-	verifyError(c, response, "XMinioObjectExistsAsDirectory", "Object name already exists as a directory.", http.StatusOK)
-
-	// Delete object a/b/c/d, should succeed
-	request, err = s.newRequest("DELETE", testAPIXLServer.URL+"/multipleobjects/a/b/c/d", 0, nil)
-	c.Assert(err, IsNil)
-
-	client = http.Client{}
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
