@@ -20,40 +20,13 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"io/ioutil"
-	"os"
 	"testing"
 )
 
-func initializeObjLayer() (objLayer ObjectLayer, err error) {
-	initNSLock()
-	var disks []string
-	var d string
-	for i := 0; i < 8; i++ {
-		d, err = ioutil.TempDir("", "disk")
-		if err != nil {
-			return nil, err
-		}
-		disks = append(disks, d)
-	}
-	objLayer, err = newXLObjects(disks)
-	if err != nil {
-		return nil, err
-	}
-	return objLayer, nil
-}
-
-func cleanupObjLayer(xl xlObjects) {
-	disks := xl.physicalDisks
-	for i := range disks {
-		os.RemoveAll(disks[i])
-	}
-}
-
 func failDisks(xl xlObjects, n int) (removedDisks []StorageAPI) {
-	removedDisks = make([]StorageAPI, 4)
-	copy(removedDisks, xl.storageDisks[4:])
-	xl.storageDisks = xl.storageDisks[:4]
+	removedDisks = make([]StorageAPI, 8)
+	copy(removedDisks, xl.storageDisks[8:])
+	xl.storageDisks = xl.storageDisks[:8]
 	for i := 0; i < n; i++ {
 		xl.storageDisks = append(xl.storageDisks, nil)
 	}
@@ -62,17 +35,16 @@ func failDisks(xl xlObjects, n int) (removedDisks []StorageAPI) {
 
 func TestRenameObjectWriteQuorum(t *testing.T) {
 	var objLayer ObjectLayer
+	var disks []string
 	var err error
 
-	objLayer, err = initializeObjLayer()
+	objLayer, disks, err = getXLObjectLayer()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	xl := objLayer.(xlObjects)
-
 	// cleaning up of temporary test directories
-	defer cleanupObjLayer(xl)
+	defer removeRoots(disks)
 
 	err = objLayer.MakeBucket("bucket1")
 	if err != nil {
@@ -85,7 +57,8 @@ func TestRenameObjectWriteQuorum(t *testing.T) {
 	}
 
 	// Simulate failure of disks
-	removedDisks := failDisks(xl, 4)
+	xl := objLayer.(xlObjects)
+	removedDisks := failDisks(xl, 8)
 	if err = xl.renameObject("bucket1", "obj1", ".minio", "obj1"); err != errXLWriteQuorum {
 		t.Fatal(err)
 	}
@@ -106,19 +79,16 @@ func TestRenameObjectWriteQuorum(t *testing.T) {
 
 func TestRepeatPutObjectPart(t *testing.T) {
 	var objLayer ObjectLayer
+	var disks []string
 	var err error
 
-	objLayer, err = initializeObjLayer()
+	objLayer, disks, err = getXLObjectLayer()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	xl := objLayer.(xlObjects)
-
-	defer cleanupObjLayer(xl)
-
 	// cleaning up of temporary test directories
-	defer cleanupObjLayer(xl)
+	defer removeRoots(disks)
 
 	err = objLayer.MakeBucket("bucket1")
 	if err != nil {
