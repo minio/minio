@@ -183,12 +183,14 @@ func (xl xlObjects) undoRename(srcBucket, srcEntry, dstBucket, dstEntry string, 
 
 // undoRenameObject - renames back the partially successful rename operations.
 func (xl xlObjects) undoRenameObject(srcBucket, srcObject, dstBucket, dstObject string, errs []error) {
-	xl.undoRename(srcBucket, srcObject, dstBucket, dstObject, false, errs)
+	isPart := false
+	xl.undoRename(srcBucket, srcObject, dstBucket, dstObject, isPart, errs)
 }
 
 // undoRenamePart - renames back the partially successful rename operation.
 func (xl xlObjects) undoRenamePart(srcBucket, srcPart, dstBucket, dstPart string, errs []error) {
-	xl.undoRename(srcBucket, srcPart, dstBucket, dstPart, true, errs)
+	isPart := true
+	xl.undoRename(srcBucket, srcPart, dstBucket, dstPart, isPart, errs)
 }
 
 // rename - common function that renamePart and renameObject use to rename
@@ -251,7 +253,8 @@ func (xl xlObjects) rename(srcBucket, srcEntry, dstBucket, dstEntry string, isPa
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
 func (xl xlObjects) renamePart(srcBucket, srcObject, dstBucket, dstObject string) error {
-	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, true)
+	isPart := true
+	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, isPart)
 }
 
 // renameObject - renames all source objects to destination object
@@ -259,7 +262,8 @@ func (xl xlObjects) renamePart(srcBucket, srcObject, dstBucket, dstObject string
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
 func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject string) error {
-	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, false)
+	isPart := false
+	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, isPart)
 }
 
 // PutObject - creates an object upon reading from the input stream
