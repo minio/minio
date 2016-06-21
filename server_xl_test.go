@@ -1513,6 +1513,19 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
 }
 
+// TestMakeBucketLocation - tests make bucket location header response.
+func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
+	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/make-bucket-location", 0, nil)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+	// Validate location header value equals proper bucket name.
+	c.Assert(response.Header.Get("Location"), Equals, "/make-bucket-location")
+}
+
 func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
 	request, err := s.newRequest("PUT", testAPIXLServer.URL+"/objectmultipartlist-uploadid", 0, nil)
 	c.Assert(err, IsNil)

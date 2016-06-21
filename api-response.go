@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/xml"
 	"net/http"
+	"path"
 	"time"
 )
 
@@ -255,7 +256,7 @@ type DeleteObjectsResponse struct {
 
 // getLocation get URL location.
 func getLocation(r *http.Request) string {
-	return r.URL.Path
+	return path.Clean(r.URL.Path) // Clean any trailing slashes.
 }
 
 // getObjectLocation gets the relative URL for an object
