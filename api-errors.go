@@ -262,7 +262,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrSignatureDoesNotMatch: {
 		Code:           "SignatureDoesNotMatch",
-		Description:    "The request signature we calculated does not match the signature you provided.",
+		Description:    "The request signature we calculated does not match the signature you provided. Check your key and signing method.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrMethodNotAllowed: {
