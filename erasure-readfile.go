@@ -43,6 +43,9 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	// Get block info for given offset, length and block size.
 	startBlock, bytesToSkip, endBlock := getBlockInfo(offset, length, eInfo.BlockSize)
 
+	// Data chunk size on each block.
+	chunkSize := eInfo.BlockSize / int64(eInfo.DataBlocks)
+
 	for block := startBlock; block <= endBlock; block++ {
 		// Allocate encoded blocks up to storage disks.
 		enBlocks := make([][]byte, len(disks))
@@ -52,7 +55,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 		var noReconstruct bool // Set for no reconstruction.
 
 		// Keep how many bytes are read for this block.
-		// In most cases, last block in the file is shorter than eInfo.BlockSize.
+		// In most cases, last block in the file is shorter than chunkSize
 		lastReadSize := int64(0)
 
 		// Read from all the disks.
@@ -66,14 +69,14 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			}
 
 			// Initialize chunk slice and fill the data from each parts.
-			enBlocks[blockIndex] = make([]byte, eInfo.BlockSize)
+			enBlocks[blockIndex] = make([]byte, chunkSize)
 
 			// Read the necessary blocks.
-			n, err := disk.ReadFile(volume, path, block*eInfo.BlockSize, enBlocks[blockIndex])
+			n, err := disk.ReadFile(volume, path, block*chunkSize, enBlocks[blockIndex])
 			if err != nil {
 				enBlocks[blockIndex] = nil
-			} else if n < eInfo.BlockSize {
-				// As the data we got is smaller than eInfo.BlockSize, keep only required chunk slice
+			} else if n < chunkSize {
+				// As the data we got is smaller than chunk size, keep only required chunk slice
 				enBlocks[blockIndex] = append([]byte{}, enBlocks[blockIndex][:n]...)
 			}
 
