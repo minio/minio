@@ -1,8 +1,6 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
-DOCKER_BIN := $(shell which docker)
 PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
-DOCKER_LDFLAGS := '$(LDFLAGS) -extldflags "-static"'
 BUILD_LDFLAGS := '$(LDFLAGS)'
 TAG := latest
 
@@ -61,10 +59,6 @@ checks:
 	@echo "Checking deps:"
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
-
-checkdocker:
-	@echo "Checking if docker is installed.. "
-	@if [ -z ${DOCKER_BIN} ]; then echo "Docker not installed, cannot build docker image. Please install 'sudo apt-get install docker.io'" && exit 1; else echo "Docker installed at ${DOCKER_BIN}."; fi;
 
 getdeps: checks
 	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
@@ -132,13 +126,6 @@ pkg-list:
 	@GO15VENDOREXPERIMENT=1 $(GOPATH)/bin/govendor list
 
 install: gomake-all
-
-dockerimage: checkdocker getdeps verifiers $(UI_ASSETS)
-	@echo "Building docker image:" minio:$(TAG)
-	@GO15VENDOREXPERIMENT=1 GOOS=linux GOARCH=amd64 go build --ldflags $(DOCKER_LDFLAGS) -o docker/minio.dockerimage
-	@cd docker; mkdir -p export; sudo docker build --rm --tag=minio/minio:$(TAG) .
-	@rmdir docker/export
-	@rm docker/minio.dockerimage
 
 release: verifiers
 	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
