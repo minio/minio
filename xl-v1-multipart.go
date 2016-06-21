@@ -372,7 +372,7 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 
 	// Rename temporary part file to its final location.
 	partPath := path.Join(uploadIDPath, partSuffix)
-	err = xl.renameObject(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
+	err = xl.renamePart(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}

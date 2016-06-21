@@ -154,10 +154,16 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	return objInfo, nil
 }
 
-// undoRenameObject - renames back the partially successful rename operations.
-func (xl xlObjects) undoRenameObject(srcBucket, srcObject, dstBucket, dstObject string, errs []error) {
+func (xl xlObjects) undoRename(srcBucket, srcEntry, dstBucket, dstEntry string, isPart bool, errs []error) {
 	var wg = &sync.WaitGroup{}
 	// Undo rename object on disks where RenameFile succeeded.
+
+	// If srcEntry/dstEntry are objects then add a trailing slash to copy
+	// over all the parts inside the object directory
+	if !isPart {
+		srcEntry = retainSlash(srcEntry)
+		dstEntry = retainSlash(dstEntry)
+	}
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
 			continue
@@ -169,22 +175,37 @@ func (xl xlObjects) undoRenameObject(srcBucket, srcObject, dstBucket, dstObject 
 			if errs[index] != nil {
 				return
 			}
-			_ = disk.RenameFile(dstBucket, retainSlash(dstObject), srcBucket, retainSlash(srcObject))
+			_ = disk.RenameFile(dstBucket, dstEntry, srcBucket, srcEntry)
 		}(index, disk)
 	}
 	wg.Wait()
 }
 
-// renameObject - renames all source objects to destination object
-// across all disks in parallel. Additionally if we have errors and do
-// not have a readQuorum partially renamed files are renamed back to
-// its proper location.
-func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject string) error {
+// undoRenameObject - renames back the partially successful rename operations.
+func (xl xlObjects) undoRenameObject(srcBucket, srcObject, dstBucket, dstObject string, errs []error) {
+	isPart := false
+	xl.undoRename(srcBucket, srcObject, dstBucket, dstObject, isPart, errs)
+}
+
+// undoRenamePart - renames back the partially successful rename operation.
+func (xl xlObjects) undoRenamePart(srcBucket, srcPart, dstBucket, dstPart string, errs []error) {
+	isPart := true
+	xl.undoRename(srcBucket, srcPart, dstBucket, dstPart, isPart, errs)
+}
+
+// rename - common function that renamePart and renameObject use to rename
+// the respective underlying storage layer representations.
+func (xl xlObjects) rename(srcBucket, srcEntry, dstBucket, dstEntry string, isPart bool) error {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
 	// Initialize list of errors.
 	var errs = make([]error, len(xl.storageDisks))
+
+	if !isPart {
+		dstEntry = retainSlash(dstEntry)
+		srcEntry = retainSlash(srcEntry)
+	}
 
 	// Rename file on all underlying storage disks.
 	for index, disk := range xl.storageDisks {
@@ -192,13 +213,10 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 			errs[index] = errDiskNotFound
 			continue
 		}
-		// Append "/" as srcObject and dstObject are either leaf-dirs or non-leaf-dris.
-		// If srcObject is an object instead of prefix we just rename the leaf-dir and
-		// not rename the part and metadata files separately.
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			err := disk.RenameFile(srcBucket, retainSlash(srcObject), dstBucket, retainSlash(dstObject))
+			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
 				errs[index] = err
 			}
@@ -216,18 +234,36 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 			return nil // Return success.
 		} // else - failed to acquire read quorum.
 		// Undo all the partial rename operations.
-		xl.undoRenameObject(srcBucket, srcObject, dstBucket, dstObject, errs)
+		xl.undoRename(srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs)
 		return errXLWriteQuorum
 	}
 	// Return on first error, also undo any partially successful rename operations.
 	for _, err := range errs {
 		if err != nil && err != errDiskNotFound {
 			// Undo all the partial rename operations.
-			xl.undoRenameObject(srcBucket, srcObject, dstBucket, dstObject, errs)
+			xl.undoRename(srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs)
 			return err
 		}
 	}
 	return nil
+}
+
+// renamePart - renames a part of the source object to the destination
+// across all disks in parallel. Additionally if we have errors and do
+// not have a readQuorum partially renamed files are renamed back to
+// its proper location.
+func (xl xlObjects) renamePart(srcBucket, srcObject, dstBucket, dstObject string) error {
+	isPart := true
+	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, isPart)
+}
+
+// renameObject - renames all source objects to destination object
+// across all disks in parallel. Additionally if we have errors and do
+// not have a readQuorum partially renamed files are renamed back to
+// its proper location.
+func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject string) error {
+	isPart := false
+	return xl.rename(srcBucket, srcObject, dstBucket, dstObject, isPart)
 }
 
 // PutObject - creates an object upon reading from the input stream
