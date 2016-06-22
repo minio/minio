@@ -68,25 +68,20 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 				continue
 			}
 
-			// Initialize chunk slice and fill the data from each parts.
-			enBlocks[blockIndex] = make([]byte, chunkSize)
-
 			// Read the necessary blocks.
-			n, err := disk.ReadFile(volume, path, block*chunkSize, enBlocks[blockIndex])
-			if err != nil {
+			var err error
+			enBlocks[blockIndex], err = disk.ReadFile(volume, path, block*chunkSize, chunkSize)
+			if err != nil && err != io.ErrUnexpectedEOF {
 				enBlocks[blockIndex] = nil
-			} else if n < chunkSize {
-				// As the data we got is smaller than chunk size, keep only required chunk slice
-				enBlocks[blockIndex] = append([]byte{}, enBlocks[blockIndex][:n]...)
 			}
 
 			// Remember bytes read at first time.
 			if lastReadSize == 0 {
-				lastReadSize = n
+				lastReadSize = int64(len(enBlocks[blockIndex]))
 			}
 
 			// If bytes read is not equal to bytes read lastly, treat it as corrupted chunk.
-			if n != lastReadSize {
+			if int64(len(enBlocks[blockIndex])) != lastReadSize {
 				return bytesWritten, errXLDataCorrupt
 			}
 

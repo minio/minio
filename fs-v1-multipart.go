@@ -487,7 +487,6 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	tempObj := path.Join(tmpMetaPrefix, uploadID, "object1")
-	var buffer = make([]byte, blockSizeV1)
 
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
@@ -505,22 +504,29 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
 		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-		offset := int64(0)
+		startOffset := int64(0)
 		totalLeft := fsMeta.Parts[partIdx].Size
 		for totalLeft > 0 {
-			var n int64
-			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buffer)
+			// Figure out the right blockSize to read.
+			var curBlockSize int64
+			if blockSizeV1 < totalLeft {
+				curBlockSize = blockSizeV1
+			} else {
+				curBlockSize = totalLeft
+			}
+			var buf []byte
+			buf, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, startOffset, curBlockSize)
 			if err != nil {
 				if err == errFileNotFound {
 					return "", InvalidPart{}
 				}
 				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
 			}
-			if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buffer[:n]); err != nil {
+			if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf); err != nil {
 				return "", toObjectErr(err, minioMetaBucket, tempObj)
 			}
-			offset += n
-			totalLeft -= n
+			startOffset += int64(len(buf))
+			totalLeft -= int64(len(buf))
 		}
 	}
 

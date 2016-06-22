@@ -76,12 +76,12 @@ func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error 
 }
 
 // ReadFileHandler - read file handler is rpc wrapper to read file.
-func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *int64) error {
-	n, err := s.storage.ReadFile(arg.Vol, arg.Path, arg.Offset, arg.Buffer)
+func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *[]byte) error {
+	buf, err := s.storage.ReadFile(arg.Vol, arg.Path, arg.Offset, arg.Length)
 	if err != nil {
 		return err
 	}
-	reply = &n
+	reply = &buf
 	return nil
 }
 
