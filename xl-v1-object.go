@@ -97,7 +97,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Save the current part name and size.
 		partName := xlMeta.Parts[partIndex].Name
 		partSize := xlMeta.Parts[partIndex].Size
+
 		readSize := partSize - partOffset
+		// readSize should be adjusted so that we don't write more data than what was requested.
 		if readSize > (length - totalBytesRead) {
 			readSize = length - totalBytesRead
 		}
@@ -110,7 +112,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		totalBytesRead += n
 
-		// Reset part offset to 0 to read rest of the part from the beginning.
+		// partOffset will be valid only for the first part, hence reset it to 0 for
+		// the remaining parts.
 		partOffset = 0
 	} // End of read all parts loop.
 

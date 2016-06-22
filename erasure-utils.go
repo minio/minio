@@ -89,10 +89,11 @@ func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []
 }
 
 // getBlockInfo - find start/end block and bytes to skip for given offset, length and block size.
-func getBlockInfo(offset, blockSize int64) (startBlock, bytesToSkip int64) {
+func getBlockInfo(offset, length, blockSize int64) (startBlock, endBlock, bytesToSkip int64) {
 	// Calculate start block for given offset and how many bytes to skip to get the offset.
 	startBlock = offset / blockSize
 	bytesToSkip = offset % blockSize
+	endBlock = length / blockSize
 	return
 }
 
