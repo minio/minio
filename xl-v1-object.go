@@ -91,22 +91,29 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	totalBytesRead := int64(0)
 	// Read from all parts.
 	for ; partIndex <= lastPartIndex; partIndex++ {
+		if length == totalBytesRead {
+			break
+		}
 		// Save the current part name and size.
 		partName := xlMeta.Parts[partIndex].Name
 		partSize := xlMeta.Parts[partIndex].Size
-		if partSize > (length - totalBytesRead) {
-			partSize = length - totalBytesRead
+
+		readSize := partSize - partOffset
+		// readSize should be adjusted so that we don't write more data than what was requested.
+		if readSize > (length - totalBytesRead) {
+			readSize = length - totalBytesRead
 		}
 
 		// Start reading the part name.
-		n, err := erasureReadFile(writer, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, partSize)
+		n, err := erasureReadFile(writer, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
 		if err != nil {
 			return err
 		}
 
 		totalBytesRead += n
 
-		// Reset part offset to 0 to read rest of the part from the beginning.
+		// partOffset will be valid only for the first part, hence reset it to 0 for
+		// the remaining parts.
 		partOffset = 0
 	} // End of read all parts loop.
 
