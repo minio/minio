@@ -840,15 +840,17 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Prepare request
-	var table = []struct {
+	var testCases = []struct {
 		byteRange      string
 		expectedString string
 	}{
-		{"6-7", "Wo"},
+		{"4-7", "o Wo"},
+		{"1-", "ello World"},
 		{"6-", "World"},
+		{"-2", "ld"},
 		{"-7", "o World"},
 	}
-	for _, t := range table {
+	for _, t := range testCases {
 		request, err = newTestRequest("GET", s.testServer.Server.URL+"/partial-content/bar",
 			0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 		c.Assert(err, IsNil)

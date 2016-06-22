@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -112,32 +111,26 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			}
 		}
 
-		// Get data blocks from encoded blocks.
-		dataBlocks, err := getDataBlocks(enBlocks, eInfo.DataBlocks, int(lastReadSize)*eInfo.DataBlocks)
-		if err != nil {
-			return bytesWritten, err
-		}
-
-		// Keep required bytes into buf.
-		buf := dataBlocks
-
+		var outSize, outOffset int64
 		// If this is start block, skip unwanted bytes.
 		if block == startBlock {
-			buf = append([]byte{}, dataBlocks[bytesToSkip:]...)
+			outOffset = bytesToSkip
 		}
 
-		// If this is end block, retain only required bytes.
+		// For all blocks read entire block.
+		outSize = lastReadSize * int64(eInfo.DataBlocks)
+
+		// If this is end block, read only required bytes.
 		if block == endBlock {
-			buf = append([]byte{}, buf[:length-bytesWritten]...)
+			outSize = length - bytesWritten
 		}
 
-		// Copy data blocks.
-		var n int64
-		n, err = io.Copy(writer, bytes.NewReader(buf))
-		bytesWritten += int64(n)
+		// Write data blocks writes only data blocks from encoded blocks to writer.
+		n, err := writeDataBlocks(writer, enBlocks, eInfo.DataBlocks, outOffset, outSize)
 		if err != nil {
 			return bytesWritten, err
 		}
+		bytesWritten += n
 	}
 
 	return bytesWritten, nil
