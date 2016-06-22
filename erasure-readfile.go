@@ -189,6 +189,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			}
 		}
 
+		var outSize, outOffset int64
 		// enBlocks data can have 0-padding hence we need to figure the exact number
 		// of bytes we want to read from enBlocks.
 		blockSize := eInfo.BlockSize
@@ -196,26 +197,24 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			// For the last block, the block size can be less than BlockSize.
 			blockSize = totalLength % eInfo.BlockSize
 		}
-		data, err := getDataBlocks(enBlocks, eInfo.DataBlocks, int(blockSize))
-		if err != nil {
-			return bytesWritten, err
-		}
 
 		// If this is start block, skip unwanted bytes.
 		if block == startBlock {
-			data = data[bytesToSkip:]
+			outOffset = bytesToSkip
 		}
 
-		if len(data) > int(length-bytesWritten) {
+		// Total data to be read.
+		outSize = blockSize
+		if length-bytesWritten < blockSize {
 			// We should not send more data than what was requested.
-			data = data[:length-bytesWritten]
+			outSize = length - bytesWritten
 		}
-
-		_, err = writer.Write(data)
+		// Write data blocks.
+		n, err := writeDataBlocks(writer, enBlocks, eInfo.DataBlocks, outOffset, outSize)
 		if err != nil {
 			return bytesWritten, err
 		}
-		bytesWritten += int64(len(data))
+		bytesWritten += n
 	}
 
 	return bytesWritten, nil

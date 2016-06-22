@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"hash"
 	"io"
@@ -62,30 +63,74 @@ func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, er
 	return writer.Sum(nil), nil
 }
 
-// getDataBlocks - fetches the data block only part of the input encoded blocks.
-func getDataBlocks(enBlocks [][]byte, dataBlocks int, curBlockSize int) (data []byte, err error) {
-	if len(enBlocks) < dataBlocks {
-		return nil, reedsolomon.ErrTooFewShards
-	}
+// getDataBlockLen - get length of data blocks from encoded blocks.
+func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 	size := 0
-	blocks := enBlocks[:dataBlocks]
-	for _, block := range blocks {
+	// Figure out the data block length.
+	for _, block := range enBlocks[:dataBlocks] {
 		size += len(block)
 	}
-	if size < curBlockSize {
-		return nil, reedsolomon.ErrShortData
+	return size
+}
+
+// Writes all the data blocks from encoded blocks until requested
+// outSize length. Provides a way to skip bytes until the offset.
+func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, outOffset int64, outSize int64) (int64, error) {
+	// Do we have enough blocks?
+	if len(enBlocks) < dataBlocks {
+		return 0, reedsolomon.ErrTooFewShards
 	}
 
-	write := curBlockSize
-	for _, block := range blocks {
-		if write < len(block) {
-			data = append(data, block[:write]...)
-			return data, nil
-		}
-		data = append(data, block...)
-		write -= len(block)
+	// Do we have enough data?
+	if int64(getDataBlockLen(enBlocks, dataBlocks)) < outSize {
+		return 0, reedsolomon.ErrShortData
 	}
-	return data, nil
+
+	// Counter to decrement total left to write.
+	write := outSize
+
+	// Counter to increment total written.
+	totalWritten := int64(0)
+
+	// Write all data blocks to dst.
+	for _, block := range enBlocks[:dataBlocks] {
+		// Skip blocks until we have reached our offset.
+		if outOffset >= int64(len(block)) {
+			// Decrement offset.
+			outOffset -= int64(len(block))
+			continue
+		} else {
+			// Skip until offset.
+			block = block[outOffset:]
+
+			// Reset the offset for next iteration to read everything
+			// from subsequent blocks.
+			outOffset = 0
+		}
+		// We have written all the blocks, write the last remaining block.
+		if write < int64(len(block)) {
+			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
+			if err != nil {
+				return 0, err
+			}
+			totalWritten += n
+			break
+		}
+		// Copy the block.
+		n, err := io.Copy(dst, bytes.NewReader(block))
+		if err != nil {
+			return 0, err
+		}
+
+		// Decrement output size.
+		write -= n
+
+		// Increment written.
+		totalWritten += n
+	}
+
+	// Success.
+	return totalWritten, nil
 }
 
 // getBlockInfo - find start/end block and bytes to skip for given offset, length and block size.
