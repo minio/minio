@@ -299,7 +299,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	var buf = make([]byte, blockSizeV1)
+	// Allocate 32KiB buffer for staging buffer.
+	var buf = make([]byte, 128*1024)
 	for {
 		n, err := io.ReadFull(data, buf)
 		if err == io.EOF {
@@ -331,7 +332,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	fsMeta, err := fs.readFSMetadata(minioMetaBucket, uploadIDPath)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -367,7 +368,7 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	result := ListPartsInfo{}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	fsMeta, err := fs.readFSMetadata(minioMetaBucket, uploadIDPath)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -475,7 +476,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Read saved fs metadata for ongoing multipart.
-	fsMeta, err := fs.readFSMetadata(minioMetaBucket, uploadIDPath)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -487,7 +488,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	tempObj := path.Join(tmpMetaPrefix, uploadID, "object1")
-	var buffer = make([]byte, blockSizeV1)
+
+	// Allocate 32KiB buffer for staging buffer.
+	var buf = make([]byte, 128*1024)
 
 	// Loop through all parts, validate them and then commit to disk.
 	for i, part := range parts {
@@ -509,15 +512,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		totalLeft := fsMeta.Parts[partIdx].Size
 		for totalLeft > 0 {
 			var n int64
-			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buffer)
+			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf)
+			if n > 0 {
+				if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
+					return "", toObjectErr(err, minioMetaBucket, tempObj)
+				}
+			}
 			if err != nil {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
+					break
+				}
 				if err == errFileNotFound {
 					return "", InvalidPart{}
 				}
 				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
-			}
-			if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buffer[:n]); err != nil {
-				return "", toObjectErr(err, minioMetaBucket, tempObj)
 			}
 			offset += n
 			totalLeft -= n

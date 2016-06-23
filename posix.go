@@ -418,13 +418,8 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	// Close the reader.
 	defer file.Close()
 
-	// Read file.
+	// Read full until buffer.
 	m, err := io.ReadFull(file, buf)
-
-	// Error unexpected is valid, set this back to nil.
-	if err == io.ErrUnexpectedEOF {
-		err = nil
-	}
 
 	// Success.
 	return int64(m), err

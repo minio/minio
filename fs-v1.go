@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"os"
 	"path"
@@ -45,8 +47,26 @@ func initFormatFS(storageDisk StorageAPI) error {
 }
 
 // loads format.json from minioMetaBucket if it exists.
-func loadFormatFS(storageDisk StorageAPI) ([]byte, error) {
-	return readAll(storageDisk, minioMetaBucket, fsFormatJSONFile)
+func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
+	// Allocate 32k buffer, this is sufficient for the most of `format.json`.
+	buf := make([]byte, 32*1024)
+
+	// Allocate a new `format.json` buffer writer.
+	var buffer = new(bytes.Buffer)
+
+	// Reads entire `format.json`.
+	if err = copyBuffer(buffer, storageDisk, minioMetaBucket, fsFormatJSONFile, buf); err != nil {
+		return formatConfigV1{}, err
+	}
+
+	// Unmarshal format config.
+	d := json.NewDecoder(buffer)
+	if err = d.Decode(&format); err != nil {
+		return formatConfigV1{}, err
+	}
+
+	// Return structured `format.json`.
+	return format, nil
 }
 
 // Should be called when process shuts down.
@@ -74,6 +94,7 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
 	fsHouseKeeping(storage)
+
 	// loading format.json from minioMetaBucket.
 	// Note: The format.json content is ignored, reserved for future use.
 	_, err = loadFormatFS(storage)
@@ -88,10 +109,12 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 			return nil, err
 		}
 	}
+
 	// Register the callback that should be called when the process shuts down.
 	registerShutdown(func() {
 		shutdownFS(storage)
 	})
+
 	// Return successfully initialized object layer.
 	return fsObjects{
 		storage:            storage,
@@ -178,7 +201,7 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 /// Object Operations
 
 // GetObject - get an object.
-func (fs fsObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -188,26 +211,28 @@ func (fs fsObjects) GetObject(bucket, object string, startOffset int64, length i
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	var totalLeft = length
+	buf := make([]byte, 32*1024) // Allocate a 32KiB staging buffer.
 	for totalLeft > 0 {
-		// Figure out the right blockSize as it was encoded before.
-		var curBlockSize int64
+		// Figure out the right size for the buffer.
+		var curSize int64
 		if blockSizeV1 < totalLeft {
-			curBlockSize = blockSizeV1
+			curSize = blockSizeV1
 		} else {
-			curBlockSize = totalLeft
+			curSize = totalLeft
 		}
-		buf := make([]byte, curBlockSize)
-		n, err := fs.storage.ReadFile(bucket, object, startOffset, buf)
+		// Reads the file at offset.
+		n, err := fs.storage.ReadFile(bucket, object, offset, buf[:curSize])
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
-		_, err = writer.Write(buf[:n])
+		// Write to response writer.
+		m, err := writer.Write(buf[:n])
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
-		totalLeft -= n
-		startOffset += n
-	}
+		totalLeft -= int64(m)
+		offset += int64(m)
+	} // Success.
 	return nil
 }
 
@@ -276,7 +301,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	} else {
 		// Allocate a buffer to Read() the object upload stream.
-		buf := make([]byte, blockSizeV1)
+		buf := make([]byte, 32*1024)
 		// Read the buffer till io.EOF and append the read data to
 		// the temporary file.
 		for {
