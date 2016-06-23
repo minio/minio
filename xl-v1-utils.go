@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"math/rand"
 	"path"
@@ -64,22 +63,16 @@ func randInts(count int) []int {
 	return ints
 }
 
-// readXLMeta reads `xl.json` returns contents as byte array.
+// readXLMeta reads `xl.json` and returns back XL metadata structure.
 func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
-	// Allocate 32k buffer, this is sufficient for the most of `xl.json`.
-	buf := make([]byte, 128*1024)
-
-	// Allocate a new `xl.json` buffer writer.
-	var buffer = new(bytes.Buffer)
-
 	// Reads entire `xl.json`.
-	if err = copyBuffer(buffer, disk, bucket, path.Join(object, xlMetaJSONFile), buf); err != nil {
+	buf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
+	if err != nil {
 		return xlMetaV1{}, err
 	}
 
 	// Unmarshal xl metadata.
-	d := json.NewDecoder(buffer)
-	if err = d.Decode(&xlMeta); err != nil {
+	if err = json.Unmarshal(buf, &xlMeta); err != nil {
 		return xlMetaV1{}, err
 	}
 

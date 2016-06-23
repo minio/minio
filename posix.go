@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	slashpath "path"
 	"path/filepath"
@@ -352,6 +353,67 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 	return readDir(pathJoin(volumeDir, dirPath))
 }
 
+// ReadAll reads from r until an error or EOF and returns the data it read.
+// A successful call returns err == nil, not err == EOF. Because ReadAll is
+// defined to read from src until EOF, it does not treat an EOF from Read
+// as an error to be reported.
+// This API is meant to be used on files which have small memory footprint, do
+// not use this on large files as it would cause server to crash.
+func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return nil, errFaultyDisk
+	}
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return nil, err
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(preparePath(volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		}
+		return nil, err
+	}
+
+	// Validate file path length, before reading.
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return nil, err
+	}
+
+	// Open the file for reading.
+	buf, err = ioutil.ReadFile(preparePath(filePath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errFileNotFound
+		} else if os.IsPermission(err) {
+			return nil, errFileAccessDenied
+		} else if pathErr, ok := err.(*os.PathError); ok {
+			if pathErr.Err == syscall.EISDIR {
+				return nil, errFileNotFound
+			} else if strings.Contains(pathErr.Err.Error(), "The handle is invalid") {
+				// This case is special and needs to be handled for windows.
+				return nil, errFileNotFound
+			}
+			return nil, pathErr
+		}
+		return nil, err
+	}
+	return buf, nil
+}
+
 // ReadFile reads exactly len(buf) bytes into buf. It returns the
 // number of bytes copied. The error is EOF only if no bytes were
 // read. On return, n == len(buf) if and only if err == nil. n == 0
@@ -386,10 +448,13 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		return 0, err
 	}
 
+	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return 0, err
 	}
+
+	// Open the file for reading.
 	file, err := os.Open(preparePath(filePath))
 	if err != nil {
 		if os.IsNotExist(err) {

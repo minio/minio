@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -48,20 +47,14 @@ func initFormatFS(storageDisk StorageAPI) error {
 
 // loads format.json from minioMetaBucket if it exists.
 func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
-	// Allocate 32k buffer, this is sufficient for the most of `format.json`.
-	buf := make([]byte, 32*1024)
-
-	// Allocate a new `format.json` buffer writer.
-	var buffer = new(bytes.Buffer)
-
 	// Reads entire `format.json`.
-	if err = copyBuffer(buffer, storageDisk, minioMetaBucket, fsFormatJSONFile, buf); err != nil {
+	buf, err := storageDisk.ReadAll(minioMetaBucket, fsFormatJSONFile)
+	if err != nil {
 		return formatConfigV1{}, err
 	}
 
 	// Unmarshal format config.
-	d := json.NewDecoder(buffer)
-	if err = d.Decode(&format); err != nil {
+	if err = json.Unmarshal(buf, &format); err != nil {
 		return formatConfigV1{}, err
 	}
 
