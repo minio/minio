@@ -79,7 +79,7 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 		blockIndex := eInfo.Distribution[index] - 1
 		checkSums[blockIndex] = checkSumInfo{
 			Name:      partName,
-			Algorithm: "sha512",
+			Algorithm: "blake2b",
 			Hash:      hex.EncodeToString(hashWriters[blockIndex].Sum(nil)),
 		}
 	}

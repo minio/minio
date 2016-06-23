@@ -37,13 +37,13 @@
         "checksum": [
             {
                 "name": "object1",
-                "algorithm": "sha512",
-                "hash": "d9910e1492446389cfae6fe979db0245f96ca97ca2c7a25cab45805882004479320d866a47ea1f7be6a62625dd4de6caf7816009ef9d62779346d01a221b335c",
+                "algorithm": "blake2b",
+                "hash": "173c2cda7fb9e2798f91ba10135b65475fd2b97684355b328941d1c470a37549502672b2b4630c8268d5e5f79c8eb2fe433a25c6368f31d75b2c0504e3104c0e",
             },
             {
                 "name": "object2",
-                "algorithm": "sha512",
-                "hash": "d9910e1492446389cfae6fe979db0245f96ca97ca2c7a25cab45805882004479320d866a47ea1f7be6a62625dd4de6caf7816009ef9d62779346d01a221b335c",
+                "algorithm": "blake2b",
+                "hash": "14f9ba0006b2db7cd171507e79032ad3a34eab7df02b6564c487614b6d1e6613343a4f56074aa3473ac9c3b26e00cbbeae937d478cca4cfb138e72838ebb0826",
             },
         ],
     },

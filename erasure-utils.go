@@ -18,10 +18,10 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"hash"
 	"io"
 
+	"github.com/dchest/blake2b"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -29,7 +29,7 @@ import (
 func newHashWriters(diskCount int) []hash.Hash {
 	hashWriters := make([]hash.Hash, diskCount)
 	for index := range hashWriters {
-		hashWriters[index] = newHash("sha512")
+		hashWriters[index] = newHash("blake2b")
 	}
 	return hashWriters
 }
@@ -37,11 +37,12 @@ func newHashWriters(diskCount int) []hash.Hash {
 // newHash - gives you a newly allocated hash depending on the input algorithm.
 func newHash(algo string) hash.Hash {
 	switch algo {
-	case "sha512":
-		return sha512.New()
+	case "blake2b":
+		return blake2b.New512()
 	// Add new hashes here.
 	default:
-		return sha512.New()
+		// Default to blake2b.
+		return blake2b.New512()
 	}
 }
 
