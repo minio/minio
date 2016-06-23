@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 // fsFormat - structure holding 'fs' format.
@@ -107,8 +105,14 @@ else // No healing at this point forward, some disks are offline or dead.
 fi
 */
 
+// error returned when some disks are found to be unformatted.
 var errSomeDiskUnformatted = errors.New("some disks are found to be unformatted")
+
+// error returned when some disks are offline.
 var errSomeDiskOffline = errors.New("some disks are offline")
+
+// errDiskOrderMismatch - returned when disk UUID is not in consistent JBOD order.
+var errDiskOrderMismatch = errors.New("disk order mismatch")
 
 // Returns error slice into understandable errors.
 func reduceFormatErrs(errs []error, diskCount int) error {
@@ -223,9 +227,6 @@ func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err err
 	// Success..
 	return nil
 }
-
-// errDiskOrderMismatch - returned when disk UUID is not in consistent JBOD order.
-var errDiskOrderMismatch = errors.New("disk order mismatch")
 
 // isSavedUUIDInOrder - validates if disk uuid is present and valid in all
 // available format config JBOD. This function also validates if the disk UUID
@@ -343,7 +344,7 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 	return newDisks, nil
 }
 
-// loadFormat - load format from disk.
+// loadFormat - loads format.json from disk.
 func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	var buffer []byte
 	buffer, err = readAll(disk, minioMetaBucket, formatConfigFile)
@@ -373,23 +374,43 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	return format, nil
 }
 
+// isFormatNotFound - returns true if all `format.json` are not
+// found on all disks.
+func isFormatNotFound(formats []*formatConfigV1) bool {
+	for _, format := range formats {
+		// One of the `format.json` is found.
+		if format != nil {
+			return false
+		}
+	}
+	// All format.json missing, success.
+	return true
+}
+
+// isFormatFound - returns true if all input formats are found on
+// all disks.
+func isFormatFound(formats []*formatConfigV1) bool {
+	for _, format := range formats {
+		// One of `format.json` is not found.
+		if format == nil {
+			return false
+		}
+	}
+	// All format.json present, success.
+	return true
+}
+
 // Heals any missing format.json on the drives. Returns error only for unexpected errors
 // as regular errors can be ignored since there might be enough quorum to be operational.
-func healFormatXL(bootstrapDisks []StorageAPI) error {
-	needHeal := make([]bool, len(bootstrapDisks)) // Slice indicating which drives needs healing.
-
-	formatConfigs := make([]*formatConfigV1, len(bootstrapDisks))
+func healFormatXL(storageDisks []StorageAPI) error {
+	formatConfigs := make([]*formatConfigV1, len(storageDisks))
 	var referenceConfig *formatConfigV1
-	successCount := 0        // Tracks if we have successfully loaded all `format.json` from all disks.
-	formatNotFoundCount := 0 // Tracks if we `format.json` is not found on all disks.
 	// Loads `format.json` from all disks.
-	for index, disk := range bootstrapDisks {
+	for index, disk := range storageDisks {
 		formatXL, err := loadFormat(disk)
 		if err != nil {
 			if err == errUnformattedDisk {
 				// format.json is missing, should be healed.
-				needHeal[index] = true
-				formatNotFoundCount++
 				continue
 			} else if err == errDiskNotFound { // Is a valid case we
 				// can proceed without healing.
@@ -399,16 +420,15 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 			return err
 		} // Success.
 		formatConfigs[index] = formatXL
-		successCount++
 	}
 	// All `format.json` has been read successfully, previously completed.
-	if successCount == len(bootstrapDisks) {
+	if isFormatFound(formatConfigs) {
 		// Return success.
 		return nil
 	}
 	// All disks are fresh, format.json will be written by initFormatXL()
-	if formatNotFoundCount == len(bootstrapDisks) {
-		return initFormatXL(bootstrapDisks)
+	if isFormatNotFound(formatConfigs) {
+		return initFormatXL(storageDisks)
 	}
 	// Validate format configs for consistency in JBOD and disks.
 	if err := checkFormatXL(formatConfigs); err != nil {
@@ -426,68 +446,40 @@ func healFormatXL(bootstrapDisks []StorageAPI) error {
 		}
 	}
 
-	uuidUsage := make([]struct {
-		uuid  string // Disk uuid
-		inUse bool   // indicates if the uuid is used by
-		// any disk
-	}, len(bootstrapDisks))
+	// Collect new format configs.
+	var newFormatConfigs = make([]*formatConfigV1, len(storageDisks))
 
-	// Returns any unused drive UUID.
-	getUnusedUUID := func() string {
-		for index := range uuidUsage {
-			if !uuidUsage[index].inUse {
-				uuidUsage[index].inUse = true
-				return uuidUsage[index].uuid
-			}
-		}
-		return ""
-	}
+	// Collect new JBOD.
+	newJBOD := referenceConfig.XL.JBOD
 
-	// From reference config update UUID's not be in use.
-	for index, diskUUID := range referenceConfig.XL.JBOD {
-		uuidUsage[index].uuid = diskUUID
-		uuidUsage[index].inUse = false
-	}
-
-	// For all config formats validate if they are in use and
-	// update the uuidUsage values.
-	for _, config := range formatConfigs {
-		if config == nil {
-			continue
-		}
-		for index := range uuidUsage {
-			if config.XL.Disk == uuidUsage[index].uuid {
-				uuidUsage[index].inUse = true
-				break
-			}
-		}
-	}
 	// This section heals the format.json and updates the fresh disks
 	// by apply a new UUID for all the fresh disks.
-	for index, heal := range needHeal {
-		if !heal {
+	for index, format := range formatConfigs {
+		if format == nil {
+			newJBOD[index] = getUUID()
+		}
+	}
+	// Collect new format configs that need to be written.
+	for index, format := range formatConfigs {
+		if format == nil {
+			config := &formatConfigV1{
+				Version: referenceConfig.Version,
+				Format:  referenceConfig.Format,
+				XL: &xlFormat{
+					Version: referenceConfig.XL.Version,
+					Disk:    newJBOD[index],
+					JBOD:    newJBOD,
+				},
+			}
+			newFormatConfigs[index] = config
 			continue
 		}
-		config := &formatConfigV1{}
-		*config = *referenceConfig
-		config.XL.Disk = getUnusedUUID()
-		if config.XL.Disk == "" {
-			// getUnusedUUID() should have
-			// returned an unused uuid, it
-			// is an unexpected error.
-			return errUnexpected
-		}
-
-		formatBytes, err := json.Marshal(config)
-		if err != nil {
-			return err
-		}
-		// Fresh disk without format.json
-		_ = bootstrapDisks[index].AppendFile(minioMetaBucket, formatConfigFile, formatBytes)
-		// Ignore any error from AppendFile() as
-		// quorum might still be there to be operational.
+		newFormatConfigs[index] = format
+		newFormatConfigs[index].XL.JBOD = newJBOD
+		newFormatConfigs[index].XL.Disk = newJBOD[index]
 	}
-	return nil
+	// Save new `format.json` across all disks.
+	return saveFormatXL(storageDisks, newFormatConfigs)
 }
 
 // loadFormatXL - loads XL `format.json` and returns back properly
@@ -561,53 +553,91 @@ func checkFormatXL(formatConfigs []*formatConfigV1) error {
 	return checkDisksConsistency(formatConfigs)
 }
 
-// initFormatXL - save XL format configuration on all disks.
-func initFormatXL(storageDisks []StorageAPI) (err error) {
-	var (
-		jbod             = make([]string, len(storageDisks))
-		formats          = make([]*formatConfigV1, len(storageDisks))
-		saveFormatErrCnt = 0
-	)
+// saveFormatXL - populates `format.json` on disks in its order.
+func saveFormatXL(storageDisks []StorageAPI, formats []*formatConfigV1) error {
+	var errs = make([]error, len(storageDisks))
+	var wg = &sync.WaitGroup{}
+	// Write `format.json` to all disks.
 	for index, disk := range storageDisks {
-		if err = disk.MakeVol(minioMetaBucket); err != nil {
-			if err != errVolumeExists {
-				saveFormatErrCnt++
-				// Check for write quorum.
-				if saveFormatErrCnt <= len(storageDisks)-(len(storageDisks)/2+3) {
-					continue
-				}
-				return errXLWriteQuorum
-			}
+		if disk == nil {
+			continue
 		}
-		var u *uuid.UUID
-		u, err = uuid.New()
-		if err != nil {
-			saveFormatErrCnt++
-			// Check for write quorum.
-			if saveFormatErrCnt <= len(storageDisks)-(len(storageDisks)/2+3) {
-				continue
+		wg.Add(1)
+		go func(index int, disk StorageAPI, format *formatConfigV1) {
+			defer wg.Done()
+
+			// Marshal and write to disk.
+			formatBytes, err := json.Marshal(format)
+			if err != nil {
+				errs[index] = err
+				return
 			}
+
+			// Purge any existing temporary file, okay to ignore errors here.
+			disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
+
+			// Append file `format.json.tmp`.
+			if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
+				errs[index] = err
+				return
+			}
+			// Rename file `format.json.tmp` --> `format.json`.
+			if err = disk.RenameFile(minioMetaBucket, formatConfigFileTmp, minioMetaBucket, formatConfigFile); err != nil {
+				errs[index] = err
+				return
+			}
+		}(index, disk, formats[index])
+	}
+
+	// Wait for the routines to finish.
+	wg.Wait()
+
+	// Validate if we encountered any errors, return quickly.
+	for _, err := range errs {
+		if err != nil {
+			// Failure.
 			return err
 		}
+	}
+
+	// Success.
+	return nil
+}
+
+// initFormatXL - save XL format configuration on all disks.
+func initFormatXL(storageDisks []StorageAPI) (err error) {
+	// Initialize jbods.
+	var jbod = make([]string, len(storageDisks))
+
+	// Initialize formats.
+	var formats = make([]*formatConfigV1, len(storageDisks))
+
+	// Initialize `format.json`.
+	for index, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		// Allocate format config.
 		formats[index] = &formatConfigV1{
 			Version: "1",
 			Format:  "xl",
 			XL: &xlFormat{
 				Version: "1",
-				Disk:    u.String(),
+				Disk:    getUUID(),
 			},
 		}
 		jbod[index] = formats[index].XL.Disk
 	}
+
+	// Update the jbod entries.
 	for index, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		// Save jbod.
 		formats[index].XL.JBOD = jbod
-		formatBytes, err := json.Marshal(formats[index])
-		if err != nil {
-			return err
-		}
-		if err = disk.AppendFile(minioMetaBucket, formatConfigFile, formatBytes); err != nil {
-			return err
-		}
 	}
-	return nil
+
+	// Save formats `format.json` across all disks.
+	return saveFormatXL(storageDisks, formats)
 }
