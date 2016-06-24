@@ -70,6 +70,8 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// List of some generic handlers which are applied for all
 	// incoming requests.
 	var handlerFns = []HandlerFunc{
+		// Limits the number of concurrent http requests.
+		setRateLimitHandler,
 		// Redirect some pre-defined browser request paths to a static
 		// location prefix.
 		setBrowserRedirectHandler,

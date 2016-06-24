@@ -133,6 +133,14 @@ func initServerConfig(c *cli.Context) {
 	err := serverConfig.Save()
 	fatalIf(err, "Unable to save config.")
 
+	// Fetch max conn limit from environment variable.
+	if maxConnStr := os.Getenv("MINIO_MAXCONN"); maxConnStr != "" {
+		// We need to parse to its integer value.
+		var err error
+		globalMaxConn, err = strconv.Atoi(maxConnStr)
+		fatalIf(err, "Unable to convert MINIO_MAXCONN=%s environment variable into its integer value.", maxConnStr)
+	}
+
 	// Fetch access keys from environment variables if any and update the config.
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
