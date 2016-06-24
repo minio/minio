@@ -204,8 +204,8 @@ func (s *posix) MakeVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	// Make a volume entry.
-	err = os.Mkdir(preparePath(volumeDir), 0700)
+	// Make a volume entry, with mode 0777 mkdir honors system umask.
+	err = os.Mkdir(preparePath(volumeDir), 0777)
 	if err != nil && os.IsExist(err) {
 		return errVolumeExists
 	}
@@ -472,10 +472,14 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		}
 	}
 	// Create top level directories if they don't exist.
-	if err = mkdirAll(filepath.Dir(filePath), 0700); err != nil {
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(filepath.Dir(filePath), 0777); err != nil {
 		return err
 	}
-	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+
+	// Creates the named file with mode 0666 (before umask), or starts appending
+	// to an existig file.
+	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
@@ -483,6 +487,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		}
 		return err
 	}
+
 	// Close upon return.
 	defer w.Close()
 
@@ -689,7 +694,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 		// Destination does not exist, hence proceed with the rename.
 	}
-	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0755); err != nil {
+	// Creates all the parent directories, with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
@@ -701,6 +707,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 		return err
 	}
+	// Finally attempt a rename.
 	err = os.Rename(preparePath(srcFilePath), preparePath(dstFilePath))
 	if err != nil {
 		if os.IsNotExist(err) {

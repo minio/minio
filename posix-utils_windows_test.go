@@ -108,7 +108,7 @@ func TestUNCPathDiskName(t *testing.T) {
 	var err error
 	// Instantiate posix object to manage a disk
 	longPathDisk := `\\?\c:\testdisk`
-	err = mkdirAll(longPathDisk, 0700)
+	err = mkdirAll(longPathDisk, 0777)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func Test32kUNCPath(t *testing.T) {
 		remaining := 32767 - 25 - len(longDiskName)
 		longDiskName = longDiskName + `\` + strings.Repeat("a", remaining)
 	}
-	err = mkdirAll(longDiskName, 0700)
+	err = mkdirAll(longDiskName, 0777)
 	if err != nil {
 		t.Fatal(err)
 	}
