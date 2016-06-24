@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"hash"
 	"io"
 
@@ -46,21 +47,17 @@ func newHash(algo string) hash.Hash {
 	}
 }
 
+// hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	startOffset := int64(0)
-	// Read until io.EOF.
-	for {
-		buf := make([]byte, blockSizeV1)
-		n, err := disk.ReadFile(volume, path, startOffset, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		writer.Write(buf[:n])
-		startOffset += n
+	// Allocate staging buffer of 128KiB for copyBuffer.
+	buf := make([]byte, 128*1024)
+
+	// Copy entire buffer to writer.
+	if err := copyBuffer(writer, disk, volume, path, buf); err != nil {
+		return nil, err
 	}
+
+	// Return the final hash sum.
 	return writer.Sum(nil), nil
 }
 
@@ -148,4 +145,87 @@ func getBlockInfo(offset, length, blockSize int64) (startBlock, endBlock, bytesT
 func getEncodedBlockLen(inputLen int64, dataBlocks int) (curEncBlockSize int64) {
 	curEncBlockSize = (inputLen + int64(dataBlocks) - 1) / int64(dataBlocks)
 	return curEncBlockSize
+}
+
+// copyN - copies from disk, volume, path to input writer until length
+// is reached at volume, path or an error occurs. A success copyN returns
+// err == nil, not err == EOF. Additionally offset can be provided to start
+// the read at. copyN returns io.EOF if there aren't enough data to be read.
+func copyN(writer io.Writer, disk StorageAPI, volume string, path string, offset int64, length int64) (err error) {
+	// Use 128KiB staging buffer to read upto length.
+	buf := make([]byte, 128*1024)
+
+	// Read into writer until length.
+	for length > 0 {
+		nr, er := disk.ReadFile(volume, path, offset, buf)
+		if nr > 0 {
+			nw, ew := writer.Write(buf[0:nr])
+			if nw > 0 {
+				// Decrement the length.
+				length -= int64(nw)
+
+				// Progress the offset.
+				offset += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != int64(nw) {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er == io.EOF || er == io.ErrUnexpectedEOF {
+			break
+		}
+		if er != nil {
+			err = er
+		}
+	}
+
+	// Success.
+	return err
+}
+
+// copyBuffer - copies from disk, volume, path to input writer until either EOF
+// is reached at volume, path or an error occurs. A success copyBuffer returns
+// err == nil, not err == EOF. Because copyBuffer is defined to read from path
+// until EOF. It does not treat an EOF from ReadFile an error to be reported.
+// Additionally copyBuffer stages through the provided buffer; otherwise if it
+// has zero length, returns error.
+func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, buf []byte) error {
+	// Error condition of zero length buffer.
+	if buf != nil && len(buf) == 0 {
+		return errors.New("empty buffer in readBuffer")
+	}
+
+	// Starting offset for Reading the file.
+	startOffset := int64(0)
+
+	// Read until io.EOF.
+	for {
+		n, err := disk.ReadFile(volume, path, startOffset, buf)
+		if n > 0 {
+			var m int
+			m, err = writer.Write(buf[:n])
+			if err != nil {
+				return err
+			}
+			if int64(m) != n {
+				return io.ErrShortWrite
+			}
+		}
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				break
+			}
+			return err
+		}
+		// Progress the offset.
+		startOffset += n
+	}
+
+	// Success.
+	return nil
 }

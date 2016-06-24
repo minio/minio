@@ -16,11 +16,7 @@
 
 package main
 
-import (
-	"encoding/json"
-	"path"
-	"sync"
-)
+import "sync"
 
 // Get the highest integer from a given integer slice.
 func highestInt(intSlice []int64, highestInt int64) (highestInteger int64) {
@@ -54,28 +50,23 @@ func listObjectVersions(partsMetadata []xlMetaV1, errs []error) (versions []int6
 func (xl xlObjects) readAllXLMetadata(bucket, object string) ([]xlMetaV1, []error) {
 	errs := make([]error, len(xl.storageDisks))
 	metadataArray := make([]xlMetaV1, len(xl.storageDisks))
-	xlMetaPath := path.Join(object, xlMetaJSONFile)
 	var wg = &sync.WaitGroup{}
+	// Read `xl.json` parallelly across disks.
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
 			errs[index] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)
+		// Read `xl.json` in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			buffer, err := readAll(disk, bucket, xlMetaPath)
+			var err error
+			metadataArray[index], err = readXLMeta(disk, bucket, object)
 			if err != nil {
 				errs[index] = err
 				return
 			}
-			err = json.Unmarshal(buffer, &metadataArray[index])
-			if err != nil {
-				// Unable to parse xl.json, set error.
-				errs[index] = err
-				return
-			}
-			errs[index] = nil
 		}(index, disk)
 	}
 
