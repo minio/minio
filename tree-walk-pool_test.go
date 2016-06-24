@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+// Test if tree walker go-routine is removed from the pool after timeout
+// and that is available in the pool before the timeout
 func TestTreeWalkPoolBasic(t *testing.T) {
 	// Create a treeWalkPool
 	tw := newTreeWalkPool(1 * time.Second)
@@ -55,6 +57,7 @@ func TestTreeWalkPoolBasic(t *testing.T) {
 	}
 }
 
+// Test if multiple tree walkers for the same listParams are managed as expected by the pool
 func TestManyWalksSameParam(t *testing.T) {
 	// Create a treeWalkPool
 	tw := newTreeWalkPool(5 * time.Second)
