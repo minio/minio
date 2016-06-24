@@ -39,7 +39,8 @@ func enableFileLogger() {
 		return
 	}
 
-	file, err := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	// Creates the named file with mode 0666, honors system umask.
+	file, err := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	fatalIf(err, "Unable to open log file.")
 
 	// Add a local file hook.
