@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
@@ -35,10 +34,11 @@ import (
 
 // fsObjects - Implements fs object layer.
 type fsObjects struct {
-	storage            StorageAPI
-	physicalDisk       string
-	listObjectMap      map[listParams][]*treeWalkerFS
-	listObjectMapMutex *sync.Mutex
+	storage      StorageAPI
+	physicalDisk string
+
+	// List pool management.
+	listPool *treeWalkPool
 }
 
 // creates format.json, the FS format info in minioMetaBucket.
@@ -117,10 +117,9 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return fsObjects{
-		storage:            storage,
-		physicalDisk:       disk,
-		listObjectMap:      make(map[listParams][]*treeWalkerFS),
-		listObjectMapMutex: &sync.Mutex{},
+		storage:      storage,
+		physicalDisk: disk,
+		listPool:     newTreeWalkPool(globalLookupTimeout),
 	}, nil
 }
 
@@ -443,17 +442,18 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		recursive = false
 	}
 
-	walker := fs.lookupTreeWalk(listParams{bucket, recursive, marker, prefix})
-	if walker == nil {
-		walker = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
+	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
+	if walkResultCh == nil {
+		endWalkCh = make(chan struct{})
+		walkResultCh = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
 			return !strings.HasSuffix(object, slashSeparator)
-		})
+		}, endWalkCh)
 	}
 	var fileInfos []FileInfo
 	var eof bool
 	var nextMarker string
 	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walker.ch
+		walkResult, ok := <-walkResultCh
 		if !ok {
 			// Closed channel.
 			eof = true
@@ -481,7 +481,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
-		fs.saveTreeWalk(params, walker)
+		fs.listPool.Set(params, walkResultCh, endWalkCh)
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}

@@ -67,14 +67,15 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		maxUploads = maxUploads - len(uploads)
 	}
 	if maxUploads > 0 {
-		walker := fs.lookupTreeWalk(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
-		if walker == nil {
-			walker = fs.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, func(bucket, object string) bool {
+		walkResultCh, endWalkCh := fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		if walkResultCh == nil {
+			endWalkCh = make(chan struct{})
+			walkResultCh = fs.startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, func(bucket, object string) bool {
 				return fs.isMultipartUpload(bucket, object)
-			})
+			}, endWalkCh)
 		}
 		for maxUploads > 0 {
-			walkResult, ok := <-walker.ch
+			walkResult, ok := <-walkResultCh
 			if !ok {
 				// Closed channel.
 				eof = true

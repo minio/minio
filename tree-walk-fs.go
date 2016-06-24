@@ -20,26 +20,10 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 )
 
-// Tree walk notify carries a channel which notifies tree walk
-// results, additionally it also carries information if treeWalk
-// should be timedOut.
-type treeWalkerFS struct {
-	ch       <-chan treeWalkResultFS
-	timedOut bool
-}
-
-// Tree walk result carries results of tree walking.
-type treeWalkResultFS struct {
-	entry string
-	err   error
-	end   bool
-}
-
 // treeWalk walks FS directory tree recursively pushing fileInfo into the channel as and when it encounters files.
-func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, send func(treeWalkResultFS) bool, count *int, isLeaf func(string, string) bool) bool {
+func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, isLeaf func(string, string) bool, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -56,8 +40,12 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 	}
 	entries, err := fs.storage.ListDir(bucket, prefixDir)
 	if err != nil {
-		send(treeWalkResultFS{err: err})
-		return false
+		select {
+		case <-endWalkCh:
+			return errWalkAbort
+		case resultCh <- treeWalkResult{err: err}:
+			return err
+		}
 	}
 
 	for i, entry := range entries {
@@ -77,7 +65,7 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		entries = entries[1:]
 	}
 	if len(entries) == 0 {
-		return true
+		return nil
 	}
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
@@ -86,12 +74,10 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 		return entries[i] >= markerDir
 	})
 	entries = entries[idx:]
-	*count += len(entries)
 	for i, entry := range entries {
 		if i == 0 && markerDir == entry {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
-				*count--
 				continue
 			}
 			if recursive && !strings.HasSuffix(entry, slashSeparator) {
@@ -100,7 +86,6 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 				// should not be skipped, instead it will need to be treeWalk()'ed into.
 
 				// Skip if it is a file though as it would be listed in previous listing.
-				*count--
 				continue
 			}
 		}
@@ -113,23 +98,27 @@ func (fs fsObjects) treeWalk(bucket, prefixDir, entryPrefixMatch, marker string,
 				// recursing into "four/"
 				markerArg = markerBase
 			}
-			*count--
 			prefixMatch := "" // Valid only for first level treeWalk and empty for subdirectories.
-			if !fs.treeWalk(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, send, count, isLeaf) {
-				return false
+			markIsEnd := i == len(entries)-1 && isEnd
+			if tErr := fs.treeWalk(bucket, path.Join(prefixDir, entry), prefixMatch, markerArg, recursive, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
+				return tErr
 			}
 			continue
 		}
-		*count--
-		if !send(treeWalkResultFS{entry: pathJoin(prefixDir, entry)}) {
-			return false
+		// EOF is set if we are at last entry and the caller indicated we at the end.
+		isEOF := ((i == len(entries)-1) && isEnd)
+		select {
+		case <-endWalkCh:
+			return errWalkAbort
+		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}
-	return true
+	// Everything is listed
+	return nil
 }
 
 // Initiate a new treeWalk in a goroutine.
-func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool) *treeWalkerFS {
+func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool, isLeaf func(string, string) bool, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -140,8 +129,7 @@ func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
 
-	ch := make(chan treeWalkResultFS, maxObjectList)
-	walkNotify := treeWalkerFS{ch: ch}
+	resultCh := make(chan treeWalkResult, maxObjectList)
 	entryPrefixMatch := prefix
 	prefixDir := ""
 	lastIndex := strings.LastIndex(prefix, slashSeparator)
@@ -149,58 +137,11 @@ func (fs fsObjects) startTreeWalk(bucket, prefix, marker string, recursive bool,
 		entryPrefixMatch = prefix[lastIndex+1:]
 		prefixDir = prefix[:lastIndex+1]
 	}
-	count := 0
 	marker = strings.TrimPrefix(marker, prefixDir)
 	go func() {
-		defer close(ch)
-		send := func(walkResult treeWalkResultFS) bool {
-			if count == 0 {
-				walkResult.end = true
-			}
-			timer := time.After(time.Second * 60)
-			select {
-			case ch <- walkResult:
-				return true
-			case <-timer:
-				walkNotify.timedOut = true
-				return false
-			}
-		}
-		fs.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, send, &count, isLeaf)
+		isEnd := true // Indication to start walking the tree with end as true.
+		fs.treeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, isLeaf, resultCh, endWalkCh, isEnd)
+		close(resultCh)
 	}()
-	return &walkNotify
-}
-
-// Save the goroutine reference in the map
-func (fs fsObjects) saveTreeWalk(params listParams, walker *treeWalkerFS) {
-	fs.listObjectMapMutex.Lock()
-	defer fs.listObjectMapMutex.Unlock()
-
-	walkers, _ := fs.listObjectMap[params]
-	walkers = append(walkers, walker)
-
-	fs.listObjectMap[params] = walkers
-}
-
-// Lookup the goroutine reference from map
-func (fs fsObjects) lookupTreeWalk(params listParams) *treeWalkerFS {
-	fs.listObjectMapMutex.Lock()
-	defer fs.listObjectMapMutex.Unlock()
-
-	if walkChs, ok := fs.listObjectMap[params]; ok {
-		for i, walkCh := range walkChs {
-			if !walkCh.timedOut {
-				newWalkChs := walkChs[i+1:]
-				if len(newWalkChs) > 0 {
-					fs.listObjectMap[params] = newWalkChs
-				} else {
-					delete(fs.listObjectMap, params)
-				}
-				return walkCh
-			}
-		}
-		// As all channels are timed out, delete the map entry
-		delete(fs.listObjectMap, params)
-	}
-	return nil
+	return resultCh
 }
