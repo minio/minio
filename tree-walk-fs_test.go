@@ -20,24 +20,24 @@ import (
 )
 
 // Test if tree walker returns entries matching prefix alone are received
-// when a non empty prefix is supplied
+// when a non empty prefix is supplied.
 func TestTreeWalkPrefix(t *testing.T) {
-	// Create a FS-backend
+	// Create a FS-backend.
 	objLayer, disks, err := getSingleNodeObjectLayer()
 	if err != nil {
 		t.Fatal(err)
 	}
 	fs := objLayer.(fsObjects)
-	// Cleanup temporary backend directory
+	// Cleanup temporary backend directory.
 	defer removeRoots([]string{disks})
 
-	// Make a bucket
+	// Make a bucket.
 	err = fs.MakeBucket("abc")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create objects
+	// Create objects.
 	for _, objName := range []string{"d/e", "d/f", "d/g/h", "i/j/k", "lmn"} {
 		_, err = fs.PutObject("abc", objName, int64(len("hello")),
 			bytes.NewReader([]byte("hello")), nil)
@@ -46,13 +46,13 @@ func TestTreeWalkPrefix(t *testing.T) {
 		}
 	}
 
-	// Start the tree walk go-routine
+	// Start the tree walk go-routine.
 	twResults := fs.startTreeWalk("abc", "d/", "", true, func(bucket, object string) bool {
 		return !strings.HasSuffix(object, slashSeparator)
 
 	})
 
-	// Check if all entries received on the channel match the prefix
+	// Check if all entries received on the channel match the prefix.
 	for res := range twResults.ch {
 		if !strings.HasPrefix(res.entry, "d/") {
 			t.Errorf("Entry %s doesn't match prefix d/", res.entry)
@@ -60,24 +60,24 @@ func TestTreeWalkPrefix(t *testing.T) {
 	}
 }
 
-// Test if entries received on tree walk's channel appear after the supplied marker
+// Test if entries received on tree walk's channel appear after the supplied marker.
 func TestTreeWalkMarker(t *testing.T) {
-	// Create a FS-backend
+	// Create a FS-backend.
 	objLayer, disks, err := getSingleNodeObjectLayer()
 	if err != nil {
 		t.Fatal(err)
 	}
 	fs := objLayer.(fsObjects)
-	// Cleanup temporary backend directory
+	// Cleanup temporary backend directory.
 	defer removeRoots([]string{disks})
 
-	// Make a bucket
+	// Make a bucket.
 	err = fs.MakeBucket("abc")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create objects
+	// Create objects.
 	for _, objName := range []string{"d/e", "d/f", "d/g/h", "i/j/k", "lmn"} {
 		_, err = fs.PutObject("abc", objName, int64(len("hello")),
 			bytes.NewReader([]byte("hello")), nil)
@@ -92,7 +92,7 @@ func TestTreeWalkMarker(t *testing.T) {
 
 	})
 
-	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel
+	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
 	actualCount := 0
 	for range twResults.ch {

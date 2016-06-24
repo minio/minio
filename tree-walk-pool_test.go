@@ -22,7 +22,7 @@ import (
 )
 
 // Test if tree walker go-routine is removed from the pool after timeout
-// and that is available in the pool before the timeout
+// and that is available in the pool before the timeout.
 func TestTreeWalkPoolBasic(t *testing.T) {
 	// Create a treeWalkPool
 	tw := newTreeWalkPool(1 * time.Second)
@@ -57,23 +57,23 @@ func TestTreeWalkPoolBasic(t *testing.T) {
 	}
 }
 
-// Test if multiple tree walkers for the same listParams are managed as expected by the pool
+// Test if multiple tree walkers for the same listParams are managed as expected by the pool.
 func TestManyWalksSameParam(t *testing.T) {
-	// Create a treeWalkPool
+	// Create a treeWalkPool.
 	tw := newTreeWalkPool(5 * time.Second)
 
-	// Create sample params
+	// Create sample params.
 	params := listParams{
 		bucket: "test-bucket",
 	}
 
 	select {
 	// This timeout is an upper-bound. This is started
-	// before the first treeWalk go-routine's timeout period starts
+	// before the first treeWalk go-routine's timeout period starts.
 	case <-time.After(5 * time.Second):
 		break
 	default:
-		// Create many treeWalk go-routines for the same params
+		// Create many treeWalk go-routines for the same params.
 		for i := 0; i < 10; i++ {
 			resultCh := make(chan treeWalkResult)
 			endWalkCh := make(chan struct{})
@@ -90,7 +90,7 @@ func TestManyWalksSameParam(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			tw.lock.Lock()
 			if walks, ok := tw.pool[params]; ok {
-				// Before ith Release we should have 10-i treeWalk go-routines
+				// Before ith Release we should have 10-i treeWalk go-routines.
 				if 10-i != len(walks) {
 					t.Error("There aren't as many walks as were Set")
 				}
