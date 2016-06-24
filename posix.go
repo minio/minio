@@ -140,8 +140,14 @@ func listVols(dirPath string) ([]VolInfo, error) {
 		return nil, err
 	}
 	entries, err := readDir(dirPath)
-	if err != nil {
-		return nil, errDiskNotFound
+	if err != nil && err != io.EOF { // Ignore io.EOF error.
+		// readDir returns errFileNotFound if dirPath
+		// doesn't exist we need to convert it to a meaningful
+		// error.
+		if err == errFileNotFound {
+			return nil, errDiskNotFound
+		}
+		return nil, err
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
@@ -349,7 +355,11 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		}
 		return nil, err
 	}
-	return readDir(pathJoin(volumeDir, dirPath))
+	entries, err = readDir(pathJoin(volumeDir, dirPath))
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return entries, nil
 }
 
 // ReadFile reads exactly len(buf) bytes into buf. It returns the

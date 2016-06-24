@@ -1,4 +1,4 @@
-// +build darwin linux
+// +build openbsd netbsd freebsd dragonfly
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -18,9 +18,15 @@
 
 package main
 
-import "syscall"
+import (
+	"syscall"
+	"unsafe"
+)
 
-// True if dirent is absent in directory.
-func isEmptyDirent(dirent *syscall.Dirent) bool {
-	return dirent.Ino == 0
+func direntIno(buf []byte) (uint64, bool) {
+	return readInt(buf, unsafe.Offsetof(syscall.Dirent{}.Fileno), unsafe.Sizeof(syscall.Dirent{}.Fileno))
+}
+
+func direntNamlen(buf []byte) (uint64, bool) {
+	return readInt(buf, unsafe.Offsetof(Dirent{}.Namlen), unsafe.Sizeof(Dirent{}.Namlen))
 }
