@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"path"
 	"sort"
@@ -70,21 +69,15 @@ func (u uploadsV1) Index(uploadID string) int {
 
 // readUploadsJSON - get all the saved uploads JSON.
 func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV1, err error) {
-	// Staging buffer of 128KiB kept for reading `uploads.json`.
-	var buf = make([]byte, 128*1024)
-
-	// Writer holding `uploads.json` content.
-	var buffer = new(bytes.Buffer)
-
 	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	// Reads entire `uploads.json`.
-	if err = copyBuffer(buffer, disk, minioMetaBucket, uploadJSONPath, buf); err != nil {
+	buf, err := disk.ReadAll(minioMetaBucket, uploadJSONPath)
+	if err != nil {
 		return uploadsV1{}, err
 	}
 
 	// Decode `uploads.json`.
-	d := json.NewDecoder(buffer)
-	if err = d.Decode(&uploadIDs); err != nil {
+	if err = json.Unmarshal(buf, &uploadIDs); err != nil {
 		return uploadsV1{}, err
 	}
 

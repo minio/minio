@@ -75,6 +75,16 @@ func (s *storageServer) ListDirHandler(arg *ListDirArgs, reply *[]string) error 
 	return nil
 }
 
+// ReadAllHandler - read all handler is rpc wrapper to read all storage API.
+func (s *storageServer) ReadAllHandler(arg *ReadFileArgs, reply *[]byte) error {
+	buf, err := s.storage.ReadAll(arg.Vol, arg.Path)
+	if err != nil {
+		return err
+	}
+	reply = &buf
+	return nil
+}
+
 // ReadFileHandler - read file handler is rpc wrapper to read file.
 func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *int64) error {
 	n, err := s.storage.ReadFile(arg.Vol, arg.Path, arg.Offset, arg.Buffer)

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -347,10 +346,8 @@ func reorderDisks(bootstrapDisks []StorageAPI, formatConfigs []*formatConfigV1) 
 
 // loadFormat - loads format.json from disk.
 func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
-	// Allocate staging buffer of 32KiB for copyBuffer.
-	buf := make([]byte, 32*1024)
-	var buffer = new(bytes.Buffer)
-	if err = copyBuffer(buffer, disk, minioMetaBucket, formatConfigFile, buf); err != nil {
+	buf, err := disk.ReadAll(minioMetaBucket, formatConfigFile)
+	if err != nil {
 		// 'file not found' and 'volume not found' as
 		// same. 'volume not found' usually means its a fresh disk.
 		if err == errFileNotFound || err == errVolumeNotFound {
@@ -371,8 +368,7 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 
 	// Try to decode format json into formatConfigV1 struct.
 	format = &formatConfigV1{}
-	d := json.NewDecoder(buffer)
-	if err = d.Decode(format); err != nil {
+	if err = json.Unmarshal(buf, format); err != nil {
 		return nil, err
 	}
 

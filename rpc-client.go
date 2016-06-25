@@ -168,6 +168,20 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 	return fileInfo, nil
 }
 
+// ReadAll - reads entire contents of the file at path until EOF, retuns the
+// contents in a byte slice. Returns buf == nil if err != nil.
+// This API is meant to be used on files which have small memory footprint, do
+// not use this on large files as it would cause server to crash.
+func (n networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
+	if err = n.rpcClient.Call("Storage.ReadAllHandler", ReadAllArgs{
+		Vol:  volume,
+		Path: path,
+	}, &buf); err != nil {
+		return nil, toStorageErr(err)
+	}
+	return buf, nil
+}
+
 // ReadFile - reads a file.
 func (n networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
 	if err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{

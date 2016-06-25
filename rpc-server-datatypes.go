@@ -28,6 +28,15 @@ type ListVolsReply struct {
 	Vols []VolInfo
 }
 
+// ReadAllArgs represents read all RPC arguments.
+type ReadAllArgs struct {
+	// Name of the volume.
+	Vol string
+
+	// Name of the path.
+	Path string
+}
+
 // ReadFileArgs represents read file RPC arguments.
 type ReadFileArgs struct {
 	// Name of the volume.

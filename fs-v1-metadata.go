@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"path"
 	"sort"
@@ -59,18 +58,14 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 
 // readFSMetadata - returns the object metadata `fs.json` content.
 func readFSMetadata(disk StorageAPI, bucket, object string) (fsMeta fsMetaV1, err error) {
-	// 32KiB staging buffer for copying `fs.json`.
-	var buf = make([]byte, 32*1024)
-
-	// `fs.json` writer.
-	var buffer = new(bytes.Buffer)
-	if err = copyBuffer(buffer, disk, bucket, path.Join(object, fsMetaJSONFile), buf); err != nil {
+	// Read all `fs.json`.
+	buf, err := disk.ReadAll(bucket, path.Join(object, fsMetaJSONFile))
+	if err != nil {
 		return fsMetaV1{}, err
 	}
 
-	//  Decode `fs.json` into fsMeta structure.
-	d := json.NewDecoder(buffer)
-	if err = d.Decode(&fsMeta); err != nil {
+	// Decode `fs.json` into fsMeta structure.
+	if err = json.Unmarshal(buf, &fsMeta); err != nil {
 		return fsMetaV1{}, err
 	}
 
