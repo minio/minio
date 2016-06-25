@@ -200,7 +200,7 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 /// Object Operations
 
 // GetObject - get an object.
-func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) error {
+func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -210,29 +210,44 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	var totalLeft = length
-	buf := make([]byte, 32*1024) // Allocate a 32KiB staging buffer.
+	buf := make([]byte, readSizeV1) // Allocate a 128KiB staging buffer.
 	for totalLeft > 0 {
 		// Figure out the right size for the buffer.
-		var curSize int64
-		if blockSizeV1 < totalLeft {
-			curSize = blockSizeV1
-		} else {
-			curSize = totalLeft
+		curLeft := int64(readSizeV1)
+		if totalLeft < readSizeV1 {
+			curLeft = totalLeft
 		}
 		// Reads the file at offset.
-		n, err := fs.storage.ReadFile(bucket, object, offset, buf[:curSize])
-		if err != nil {
-			return toObjectErr(err, bucket, object)
+		nr, er := fs.storage.ReadFile(bucket, object, offset, buf[:curLeft])
+		if nr > 0 {
+			// Write to response writer.
+			nw, ew := writer.Write(buf[0:nr])
+			if nw > 0 {
+				// Decrement whats left to write.
+				totalLeft -= int64(nw)
+
+				// Progress the offset
+				offset += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != int64(nw) {
+				err = io.ErrShortWrite
+				break
+			}
 		}
-		// Write to response writer.
-		m, err := writer.Write(buf[:n])
-		if err != nil {
-			return toObjectErr(err, bucket, object)
+		if er == io.EOF || er == io.ErrUnexpectedEOF {
+			break
 		}
-		totalLeft -= int64(m)
-		offset += int64(m)
-	} // Success.
-	return nil
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	// Returns any error.
+	return toObjectErr(err, bucket, object)
 }
 
 // GetObjectInfo - get object info.

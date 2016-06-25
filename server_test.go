@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
@@ -893,6 +895,259 @@ func (s *MyAPISuite) TestPutBucketErrors(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
+}
+
+func (s *MyAPISuite) TestGetObjectLarge10MiB(c *C) {
+	// Make bucket for this test.
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 10MiB content where each line contains 1024 characters.
+	for i := 0; i < 10*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent)
+}
+
+func (s *MyAPISuite) TestGetObjectLarge11MiB(c *C) {
+	// Make bucket for this test.
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 11MiB content where each line contains 1024 characters.
+	for i := 0; i < 11*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putMD5 := sumMD5(buffer.Bytes())
+
+	// Put object
+	buf := bytes.NewReader(buffer.Bytes())
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	getMD5 := sumMD5(getContent) // Get md5.
+
+	// Compare putContent and getContent
+	c.Assert(hex.EncodeToString(putMD5), Equals, hex.EncodeToString(getMD5))
+}
+
+// TestGetPartialObjectMisAligned - tests get object partially mis-aligned.
+func (s *MyAPISuite) TestGetPartialObjectMisAligned(c *C) {
+	// Make bucket for this test.
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-align",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	rand.Seed(time.Now().UTC().UnixNano())
+	// Create a misalgined data.
+	for i := 0; i < 13*rand.Intn(1<<16); i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line[:rand.Intn(1<<8)]))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-align/big-file-13",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Prepare request
+	var testCases = []struct {
+		byteRange      string
+		expectedString string
+	}{
+		{"10-11", putContent[10:12]},
+		{"1-", putContent[1:]},
+		{"6-", putContent[6:]},
+		{"-2", putContent[len(putContent)-2:]},
+		{"-7", putContent[len(putContent)-7:]},
+	}
+	for _, t := range testCases {
+		// Get object
+		request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-align/big-file-13",
+			0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+		c.Assert(err, IsNil)
+		// Get a different byte range.
+		request.Header.Add("Range", "bytes="+t.byteRange)
+
+		client = http.Client{}
+		response, err = client.Do(request)
+		c.Assert(err, IsNil)
+		c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+		getContent, err := ioutil.ReadAll(response.Body)
+		c.Assert(err, IsNil)
+
+		// Compare putContent and getContent
+		c.Assert(string(getContent), Equals, t.expectedString)
+	}
+}
+
+func (s *MyAPISuite) TestGetPartialObjectLarge11MiB(c *C) {
+	// Make bucket for this test.
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 11MiB content where each line contains 1024
+	// characters.
+	for i := 0; i < 11*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+	// This range spans into first two blocks.
+	request.Header.Add("Range", "bytes=10485750-10485769")
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent[10485750:10485770])
+}
+
+func (s *MyAPISuite) TestGetPartialObjectLarge10MiB(c *C) {
+	// Make bucket for this test.
+	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var buffer bytes.Buffer
+	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	// Create 10MiB content where each line contains 1024 characters.
+	for i := 0; i < 10*1024; i++ {
+		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
+	}
+	putContent := buffer.String()
+
+	// Put object
+	buf := bytes.NewReader([]byte(putContent))
+	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
+		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Get object
+	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
+		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	c.Assert(err, IsNil)
+	request.Header.Add("Range", "bytes=2048-2058")
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
+	// Compare putContent and getContent
+	c.Assert(string(getContent), Equals, putContent[2048:2059])
 }
 
 func (s *MyAPISuite) TestGetObjectErrors(c *C) {

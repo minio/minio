@@ -50,7 +50,7 @@ func newHash(algo string) hash.Hash {
 // hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
 	// Allocate staging buffer of 128KiB for copyBuffer.
-	buf := make([]byte, 128*1024)
+	buf := make([]byte, readSizeV1)
 
 	// Copy entire buffer to writer.
 	if err := copyBuffer(writer, disk, volume, path, buf); err != nil {
@@ -153,11 +153,15 @@ func getEncodedBlockLen(inputLen int64, dataBlocks int) (curEncBlockSize int64) 
 // the read at. copyN returns io.EOF if there aren't enough data to be read.
 func copyN(writer io.Writer, disk StorageAPI, volume string, path string, offset int64, length int64) (err error) {
 	// Use 128KiB staging buffer to read upto length.
-	buf := make([]byte, 128*1024)
+	buf := make([]byte, readSizeV1)
 
 	// Read into writer until length.
 	for length > 0 {
-		nr, er := disk.ReadFile(volume, path, offset, buf)
+		curLength := int64(readSizeV1)
+		if length < readSizeV1 {
+			curLength = length
+		}
+		nr, er := disk.ReadFile(volume, path, offset, buf[:curLength])
 		if nr > 0 {
 			nw, ew := writer.Write(buf[0:nr])
 			if nw > 0 {
@@ -181,6 +185,7 @@ func copyN(writer io.Writer, disk StorageAPI, volume string, path string, offset
 		}
 		if er != nil {
 			err = er
+			break
 		}
 	}
 
