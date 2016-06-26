@@ -86,7 +86,7 @@ func generateBytesData(size int) []byte {
 		b = letterBytes[rand.Intn(len(letterBytes))]
 		return []byte{b}
 	}
-	// repeat the random character chosen size.
+	// repeat the random character chosen size
 	return bytes.Repeat(getRandomByte(), size)
 }
 

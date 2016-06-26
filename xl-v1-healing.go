@@ -103,10 +103,6 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 // - error if any.
 func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, version int64, err error) {
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
-	// Do we have read Quorum?.
-	if !isQuorum(errs, xl.readQuorum) {
-		return nil, 0, errXLReadQuorum
-	}
 
 	// List all the file versions from partsMetadata list.
 	versions := listObjectVersions(partsMetadata, errs)
