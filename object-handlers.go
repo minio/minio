@@ -107,16 +107,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objInfo.ModTime
-	if checkLastModified(w, r, lastModified) {
-		return
-	}
-	// Verify 'If-Match' and 'If-None-Match'.
-	if checkETag(w, r) {
-		return
-	}
-
 	var hrange *httpRange
 	hrange, err = getRequestedRange(r.Header.Get("Range"), objInfo.Size)
 	if err != nil {
@@ -129,6 +119,16 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Set any additional requested response headers.
 	setGetRespHeaders(w, r.URL.Query())
+
+	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
+	lastModified := objInfo.ModTime
+	if checkLastModified(w, r, lastModified) {
+		return
+	}
+	// Verify 'If-Match' and 'If-None-Match'.
+	if checkETag(w, r) {
+		return
+	}
 
 	// Get the object.
 	startOffset := hrange.start
@@ -191,25 +191,40 @@ func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time
 	return false
 }
 
+// canonicalizeETag returns ETag with leading and trailing double-quotes removed,
+// if any present
+func canonicalizeETag(etag string) string {
+	canonicalETag := strings.TrimPrefix(etag, "\"")
+	return strings.TrimSuffix(canonicalETag, "\"")
+}
+
+// isETagEqual return true if the canonical representations of two ETag strings
+// are equal, false otherwise
+func isETagEqual(left, right string) bool {
+	return canonicalizeETag(left) == canonicalizeETag(right)
+}
+
 // checkETag implements If-None-Match and If-Match checks.
 //
 // The ETag must have been previously set in the ResponseWriter's
 // headers. The return value is whether this request is now considered
 // done.
 func checkETag(w http.ResponseWriter, r *http.Request) bool {
+	// writer always has quoted string
+	// transform reader's etag to
+	if r.Method != "GET" && r.Method != "HEAD" {
+		return false
+	}
 	etag := w.Header().Get("ETag")
 	// Must know ETag.
 	if etag == "" {
 		return false
 	}
-	if inm := r.Header.Get("If-None-Match"); inm != "" {
+	if inm := r.Header.Get("If-None-Match"); !isETagEqual(inm, "") {
 		// Return the object only if its entity tag (ETag) is
 		// different from the one specified; otherwise, return a 304
 		// (not modified).
-		if r.Method != "GET" && r.Method != "HEAD" {
-			return false
-		}
-		if inm == etag || inm == "*" {
+		if isETagEqual(inm, etag) || isETagEqual(inm, "*") {
 			h := w.Header()
 			// Remove following headers if already set.
 			delete(h, "Content-Type")
@@ -218,13 +233,10 @@ func checkETag(w http.ResponseWriter, r *http.Request) bool {
 			w.WriteHeader(http.StatusNotModified)
 			return true
 		}
-	} else if im := r.Header.Get("If-Match"); im != "" {
+	} else if im := r.Header.Get("If-Match"); !isETagEqual(im, "") {
 		// Return the object only if its entity tag (ETag) is the same
 		// as the one specified; otherwise, return a 412 (precondition failed).
-		if r.Method != "GET" && r.Method != "HEAD" {
-			return false
-		}
-		if im != etag {
+		if !isETagEqual(im, etag) {
 			h := w.Header()
 			// Remove following headers if already set.
 			delete(h, "Content-Type")
@@ -275,6 +287,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Set standard object headers.
+	setObjectHeaders(w, objInfo, nil)
+
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
 	lastModified := objInfo.ModTime
 	if checkLastModified(w, r, lastModified) {
@@ -285,9 +300,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	if checkETag(w, r) {
 		return
 	}
-
-	// Set standard object headers.
-	setObjectHeaders(w, objInfo, nil)
 
 	// Successfull response.
 	w.WriteHeader(http.StatusOK)
