@@ -111,7 +111,7 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	return fs, nil
 }
 
-// checkDiskFree verifies if disk path has sufficient minium free disk space.
+// checkDiskFree verifies if disk path has sufficient minimum free disk space.
 func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	if err = checkPathLength(diskPath); err != nil {
 		return err
