@@ -39,6 +39,11 @@ var (
 	globalQuiet = false // Quiet flag set via command line
 	globalTrace = false // Trace flag set via environment setting.
 	// Add new global flags here.
+
+	// Maximum connections handled per
+	// server, defaults to 0 (unlimited).
+	globalMaxConn = 0
+	// Add new variable global values here.
 )
 
 // global colors.
