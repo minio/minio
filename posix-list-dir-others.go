@@ -21,6 +21,7 @@ package main
 import (
 	"io"
 	"os"
+	"path"
 	"strings"
 )
 
@@ -42,6 +43,7 @@ func readDir(dirPath string) (entries []string, err error) {
 	defer d.Close()
 
 	for {
+		// Read 1000 entries.
 		fis, err := d.Readdir(1000)
 		if err != nil {
 			if err == io.EOF {
@@ -54,6 +56,22 @@ func readDir(dirPath string) (entries []string, err error) {
 			if hasPosixReservedPrefix(fi.Name()) {
 				continue
 			}
+			// Stat symbolic link and follow to get the final value.
+			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+				var st os.FileInfo
+				st, err = os.Stat(preparePath(path.Join(dirPath, fi.Name())))
+				if err != nil {
+					errorIf(err, "Unable to stat path %s", path.Join(dirPath, fi.Name()))
+					continue
+				}
+				// Append to entries if symbolic link exists and is valid.
+				if st.IsDir() {
+					entries = append(entries, fi.Name()+slashSeparator)
+				} else if st.Mode().IsRegular() {
+					entries = append(entries, fi.Name())
+				}
+				continue
+			}
 			if fi.Mode().IsDir() {
 				// Append "/" instead of "\" so that sorting is achieved as expected.
 				entries = append(entries, fi.Name()+slashSeparator)
@@ -62,5 +80,5 @@ func readDir(dirPath string) (entries []string, err error) {
 			}
 		}
 	}
-	return
+	return entries, nil
 }
