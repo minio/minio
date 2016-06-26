@@ -23,13 +23,17 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // The Argument to TestServer should satidy the interface.
@@ -48,6 +52,13 @@ const (
 	singleNodeTestStr string = "SingleNode"
 	// xLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
 	xLTestStr string = "XL"
+)
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
 // TestServer encapsulates an instantiation of a Minio instance with a temporary backend.
@@ -259,6 +270,172 @@ func makeTestBackend(instanceType string) ([]string, error) {
 		errMsg := "Invalid instance type, Only FS and XL are valid options"
 		return []string{}, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
 	}
+}
+
+var src = rand.NewSource(time.Now().UTC().UnixNano())
+
+// Function to generate random string for bucket/object names.
+func randString(n int) string {
+	b := make([]byte, n)
+	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+	return string(b)
+}
+
+// generate random bucket name.
+func getRandomBucketName() string {
+	return randString(60)
+
+}
+
+// queryEncode - encodes query values in their URL encoded form.
+func queryEncode(v url.Values) string {
+	if v == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vs := v[k]
+		prefix := urlEncodePath(k) + "="
+		for _, v := range vs {
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(prefix)
+			buf.WriteString(urlEncodePath(v))
+		}
+	}
+	return buf.String()
+}
+
+// urlEncodePath encode the strings from UTF-8 byte representations to HTML hex escape sequences
+//
+// This is necessary since regular url.Parse() and url.Encode() functions do not support UTF-8
+// non english characters cannot be parsed due to the nature in which url.Encode() is written
+//
+// This function on the other hand is a direct replacement for url.Encode() technique to support
+// pretty much every UTF-8 character.
+func urlEncodePath(pathName string) string {
+	// if object matches reserved string, no need to encode them
+	reservedNames := regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
+	if reservedNames.MatchString(pathName) {
+		return pathName
+	}
+	var encodedPathname string
+	for _, s := range pathName {
+		if 'A' <= s && s <= 'Z' || 'a' <= s && s <= 'z' || '0' <= s && s <= '9' { // §2.3 Unreserved characters (mark)
+			encodedPathname = encodedPathname + string(s)
+			continue
+		}
+		switch s {
+		case '-', '_', '.', '~', '/': // §2.3 Unreserved characters (mark)
+			encodedPathname = encodedPathname + string(s)
+			continue
+		default:
+			len := utf8.RuneLen(s)
+			if len < 0 {
+				// if utf8 cannot convert return the same string as is
+				return pathName
+			}
+			u := make([]byte, len)
+			utf8.EncodeRune(u, s)
+			for _, r := range u {
+				hex := hex.EncodeToString([]byte{r})
+				encodedPathname = encodedPathname + "%" + strings.ToUpper(hex)
+			}
+		}
+	}
+	return encodedPathname
+}
+
+// construct URL for http requests for bucket operations.
+func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.Values) string {
+	urlStr := endPoint + "/"
+	if bucketName != "" {
+		urlStr = urlStr + bucketName + "/"
+	}
+	if objectName != "" {
+		urlStr = urlStr + urlEncodePath(objectName)
+	}
+	if len(queryValues) > 0 {
+		urlStr = urlStr + "?" + queryEncode(queryValues)
+	}
+	return urlStr
+}
+
+// return URL for uploading object into the bucket.
+func getPutObjectURL(endPoint, bucketName, objectName string) string {
+	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
+}
+
+// return URL for fetching object from the bucket.
+func getGetObjectURL(endPoint, bucketName, objectName string) string {
+	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
+}
+
+// return URL for deleting the object from the bucket.
+func getDeleteObjectURL(endPoint, bucketName, objectName string) string {
+	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
+}
+
+// return URL for HEAD o nthe object.
+func getHeadObjectURL(endPoint, bucketName, objectName string) string {
+	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
+}
+
+// return URL for inserting bucket policy.
+func getPutPolicyURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("policy", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for fetching bucket policy.
+func getGetPolicyURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("policy", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for deleting bucket policy.
+func getDeletePolicyURL(endPoint, bucketName string) string {
+	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+}
+
+// return URL for creating the bucket.
+func getMakeBucketURL(endPoint, bucketName string) string {
+	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+}
+
+// return URL for listing buckets.
+func getListBucketURL(endPoint string) string {
+	return makeTestTargetURL(endPoint, "", "", url.Values{})
+}
+
+// return URL for HEAD on the bucket.
+func getHEADBucketURL(endPoint, bucketName string) string {
+	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+}
+
+// return URL for deleting the bucket.
+func getDeleteBucketURL(endPoint, bucketName string) string {
+	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+
 }
 
 // returns temp root directory. `

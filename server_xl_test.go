@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,9 @@ import (
 // API suite container.
 type MyAPIXLSuite struct {
 	testServer TestServer
+	endPoint   string
+	accessKey  string
+	secretKey  string
 }
 
 // Initializing the test suite.
@@ -46,6 +50,10 @@ var _ = Suite(&MyAPIXLSuite{})
 // Starting the Test server with temporary XL backend.
 func (s *MyAPIXLSuite) SetUpSuite(c *C) {
 	s.testServer = StartTestServer(c, "XL")
+	s.endPoint = s.testServer.Server.URL
+	s.accessKey = s.testServer.AccessKey
+	s.secretKey = s.testServer.SecretKey
+
 }
 
 // Called implicitly by "gopkg.in/check.v1" after all tests are run.
@@ -81,7 +89,7 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
                 ]
             },
             "Resource": [
-                "arn:aws:s3:::policybucket"
+                "arn:aws:s3:::%s"
             ]
         },
         {
@@ -95,25 +103,40 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
                 ]
             },
             "Resource": [
-                "arn:aws:s3:::policybucket/this*"
+                "arn:aws:s3:::%s/this*"
             ]
         }
     ]
 }`
-
-	// Put a new bucket policy.
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/policybucket?policy",
-		int64(len(bucketPolicyBuf)), bytes.NewReader([]byte(bucketPolicyBuf)), s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	bucketPolicyStr := fmt.Sprintf(bucketPolicyBuf, bucketName, bucketName)
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the request.
 	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Put a new bucket policy.
+	request, err = newTestRequest("PUT", getPutPolicyURL(s.endPoint, bucketName),
+		int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Fetch the uploaded policy.
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/policybucket?policy", 0, nil,
-		s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", getGetPolicyURL(s.endPoint, bucketName), 0, nil,
+		s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -124,11 +147,11 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	bucketPolicyReadBuf, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	// Verify if downloaded policy matches with previousy uploaded.
-	c.Assert(bytes.Equal([]byte(bucketPolicyBuf), bucketPolicyReadBuf), Equals, true)
+	c.Assert(bytes.Equal([]byte(bucketPolicyStr), bucketPolicyReadBuf), Equals, true)
 
 	// Delete policy.
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/policybucket?policy", 0, nil,
-		s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("DELETE", getDeletePolicyURL(s.endPoint, bucketName), 0, nil,
+		s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -137,8 +160,8 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Verify if the policy was indeed deleted.
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/policybucket?policy",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", getGetPolicyURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -147,50 +170,69 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
+// TestDeleteBucket - validates DELETE bucket operation.
 func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	bucketName := getRandomBucketName()
+
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// contruct request to delete the bucket.
+	request, err = newTestRequest("DELETE", getDeleteBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// Assert the response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
-func (s *MyAPIXLSuite) BenchMarkDeleteBucket(c *C) {
-
-}
+// TestDeleteBucketNotEmpty - Validates the operation during an attempt to delete a non-empty bucket.
 func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket-notempty",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/deletebucket-notempty/myobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate http request for an object upload.
+	// "myobject" is the object name.
+	objectName := "myobject"
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the request to complete object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the status code of the response.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucket-notempty",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// constructing http request to delete the bucket.
+	// making an attempt to delete an non-empty bucket.
+	// expected to fail.
+	request, err = newTestRequest("DELETE", getDeleteBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -199,109 +241,155 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusConflict)
 }
 
+// TestDeleteObject - Tests deleting of object.
 func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/deletebucketobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName := "prefix/myobject"
+	// obtain http request to upload object.
+	// object Name contains a prefix.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the status of http response.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
+	// object name was "prefix/myobject", an attempt to delelte "prefix"
 	// Should not delete "prefix/myobject"
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix"),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create http request to HEAD on the object.
+	// this helps to validate the existence of the bucket.
+	request, err = newTestRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// Assert the HTTP response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create HTTP request to delete the object.
+	request, err = newTestRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
+	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 
 	// Delete of non-existent data should return success.
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/deletebucketobject/prefix/myobject1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix/myobject1"),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
+	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status.
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
+// TestNonExistentBucket - Asserts response for HEAD on non-existent bucket.
 func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
-	request, err := newTestRequest("HEAD", s.testServer.Server.URL+"/nonexistentbucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// create request to HEAD on the bucket.
+	// HEAD on an bucket helps validate the existence of the bucket.
+	request, err := newTestRequest("HEAD", getHEADBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// Assert the response.
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
+// TestEmptyObject - Asserts the response for operation on a 0 byte object.
 func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/emptyobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make http request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/emptyobject/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName := "object"
+	// construct http request for uploading the object.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the upload request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/emptyobject/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to fetch the object.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the http request to fetch object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var buffer bytes.Buffer
+	// extract the body of the response.
 	responseBody, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
+	// assert the http response body content.
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 }
 
+// TestBucket - Asserts the response for HEAD on an existing bucket.
 func (s *MyAPIXLSuite) TestBucket(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -309,114 +397,155 @@ func (s *MyAPIXLSuite) TestBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/bucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generating HEAD http request on the bucket.
+	// this helps verify existence of the bucket.
+	request, err = newTestRequest("HEAD", getHEADBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
+	// execute the request.
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response http status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 }
 
-func (s *MyAPIXLSuite) TestObject(c *C) {
+// TestGetObject - Tests fetching of a small object after its insertion into the bucket.
+func (s *MyAPIXLSuite) TestGetObject(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
 	buffer := bytes.NewReader([]byte("hello world"))
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/testobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make http request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the make bucket http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response http status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/testobject/object",
-		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName := "testObject"
+	// create HTTP request to upload the object.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the HTTP response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/testobject/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create HTTP request to fetch the object.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the http request to fetch the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
+	// extract response body content.
 	responseBody, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
+	// assert the HTTP response body content with the expected content.
 	c.Assert(responseBody, DeepEquals, []byte("hello world"))
 
 }
 
+// TestMultipleObjects - Validates upload and fetching of multiple object into the bucket.
 func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create the bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// constructing HTTP request to fetch a non-existent object.
+	// expected to fail, error response asserted for expected error values later.
+	objectName := "testObject"
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// Asserting the error response with the expected values.
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
-	//// test object 1
-
-	// get object
+	objectName = "testObject1"
+	// content for the object to be uploaded.
 	buffer1 := bytes.NewReader([]byte("hello one"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create HTTP request for the object upload.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the returned values.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create HTTP request to fetch the object which was uploaded above.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert whether 200 OK response status is obtained.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// verify response data
+	// extract the response body.
 	responseBody, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
+	// assert the content body for the expected object data.
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello one")))
 
+	// data for new object to be uploaded.
 	buffer2 := bytes.NewReader([]byte("hello two"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName = "testObject2"
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response status code for expected value 200 OK.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object2",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// fetch the object which was uploaded above.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request to fetch the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// assert the response status code for expected value 200 OK.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// verify response data
@@ -424,18 +553,23 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello two")))
 
+	// data for new object to be uploaded.
 	buffer3 := bytes.NewReader([]byte("hello three"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/multipleobjects/object3",
-		int64(buffer3.Len()), buffer3, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName = "testObject3"
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer3.Len()), buffer3, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// verify the response code with the expected value of 200 OK.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/multipleobjects/object3",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// fetch the object which was uploaded above.
+	request, err = newTestRequest("GET", getPutObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -449,9 +583,12 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
 }
 
+// TestNotImplemented - Validates response for obtaining policy on an non-existent bucket and object.
 func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/bucket/object?policy",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	request, err := newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?policy",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -460,19 +597,26 @@ func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
 }
 
+// TestHeader - Validates the error response for an attempt to fetch non-existent object.
 func (s *MyAPIXLSuite) TestHeader(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/bucket/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// obtain HTTP request to fetch an object from non-existent bucket/object.
+	request, err := newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, "testObject"),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
-
-	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
+	// asserting for the expected error response.
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
+// TestPutBucket - Validating bucket creation.
 func (s *MyAPIXLSuite) TestPutBucket(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
 	// Block 1: Testing for racey access
 	// The assertion is removed from this block since the purpose of this block is to find races
 	// The purpose this block is not to check for correctness of functionality
@@ -482,8 +626,9 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-bucket",
-				0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+			// make HTTP request to create the bucket.
+			request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+				0, nil, s.accessKey, s.secretKey)
 			c.Assert(err, IsNil)
 
 			client := http.Client{}
@@ -493,9 +638,11 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 	}
 	wg.Wait()
 
+	bucketName = getRandomBucketName()
 	//Block 2: testing for correctness of the functionality
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-bucket-slash/",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -503,111 +650,146 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	response.Body.Close()
-
 }
 
-// Tests copy object.
+// TestCopyObject - Validates copy object.
+// The following is the test flow.
+// 1. Create bucket.
+// 2. Insert Object.
+// 3. Use "X-Amz-Copy-Source" header to copy the previously inserted object.
+// 4. Validate the content of copied object.
 func (s *MyAPIXLSuite) TestCopyObject(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
+	// content for the object to be inserted.
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy/object",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName := "testObject"
+	// create HTTP request for object upload.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Type", "application/json")
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-copy/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
-	request.Header.Set("X-Amz-Copy-Source", "/put-object-copy/object")
+	objectName2 := "testObject2"
+	// creating HTTP request for uploading the object.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName2),
+		0, nil, s.accessKey, s.secretKey)
+	// setting the "X-Amz-Copy-Source" to allow copying the content of
+	// previously uploaded object.
+	request.Header.Set("X-Amz-Copy-Source", "/"+bucketName+"/"+objectName)
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request.
+	// the content is expected to have the content of previous disk.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/put-object-copy/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// creating HTTP request to fetch the previously uploaded object.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName2),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
+	// executing the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
+	// validating the response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	// reading the response body.
+	// response body is expected to have the copied content of the first uploaded object.
 	object, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(string(object), Equals, "hello world")
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 }
 
-// Tests successful put object request.
+// TestPutObject -  Tests successful put object request.
 func (s *MyAPIXLSuite) TestPutObject(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
+	// content for new object upload.
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object/object",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	objectName := "testObject"
+	// creating HTTP request for object upload.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/put-object/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// fetch the object back and verify its contents.
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request to fetch the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(response.ContentLength, Equals, int64(len([]byte("hello world"))))
 	var buffer2 bytes.Buffer
+	// retrive the contents of response body.
 	n, err := io.Copy(&buffer2, response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(len([]byte("hello world"))))
+	// asserted the contents of the fetched object with the expected result.
 	c.Assert(true, Equals, bytes.Equal(buffer2.Bytes(), []byte("hello world")))
 }
 
-// Tests put object with long names.
+// TestPutObjectLongName - Tests put object with long object name names.
 func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
+	// content for the object to be uploaded.
 	buffer := bytes.NewReader([]byte("hello world"))
 	longObjName := fmt.Sprintf("%0255d/%0255d/%0255d", 1, 1, 1)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name/"+longObjName,
-		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create new HTTP request to insert the object.
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	longObjName = fmt.Sprintf("%0256d", 1)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/put-object-long-name/"+longObjName,
-		int64(buffer.Len()), buffer, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -615,26 +797,33 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
 }
 
+// TestListBuckets - Tests listing of buckets.
 func (s *MyAPIXLSuite) TestListBuckets(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// create HTTP request for listing buckets.
+	request, err := newTestRequest("GET", getListBucketURL(s.endPoint),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to list buckets.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var results ListBucketsResponse
+	// parse the list bucket response.
 	decoder := xml.NewDecoder(response.Body)
 	err = decoder.Decode(&results)
+	// validating that the xml-decoding/parsing was successfull.
 	c.Assert(err, IsNil)
 }
 
 func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/innonexistentbucket/object",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err := newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -643,27 +832,32 @@ func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
+// TestHeadOnObject - Asserts response for HEAD on an object.
 func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/headonobject",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/headonobject/object1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -674,35 +868,47 @@ func (s *MyAPIXLSuite) TestHeadOnObject(c *C) {
 	t, err := time.Parse(http.TimeFormat, lastModified)
 	c.Assert(err, IsNil)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Set("If-Modified-Since", t.Add(1*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonobject/object1",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Set("If-Unmodified-Since", t.Add(-1*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
+	dump, err := httputil.DumpResponse(response, true)
+	if err != nil {
+		panic(err)
+	}
+
+	c.Logf("%q", dump)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
+
 }
 
+// TestHeadOnBucket - Validates response for HEAD on the bucket.
 func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/headonbucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/headonbucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -711,8 +917,8 @@ func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestXMLNameNotInBucketListJson(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err := newTestRequest("GET", s.endPoint+"/",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -727,18 +933,22 @@ func (s *MyAPIXLSuite) TestXMLNameNotInBucketListJson(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/xmlnamenotinobjectlistjson",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/xmlnamenotinobjectlistjson",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Accept", "application/json")
 
@@ -754,18 +964,22 @@ func (s *MyAPIXLSuite) TestXMLNameNotInObjectListJson(c *C) {
 
 // Tests if content type persists.
 func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists/one",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/one",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Type", "application/zip")
 	c.Assert(err, IsNil)
 
@@ -774,16 +988,16 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/contenttype-persists/one",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", s.endPoint+"/"+bucketName+"/one",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/contenttype-persists/one",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/one",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -793,8 +1007,8 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/zip")
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/contenttype-persists/two",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/two",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	delete(request.Header, "Content-Type")
 	request.Header.Add("Content-Type", "application/json")
 	c.Assert(err, IsNil)
@@ -803,16 +1017,16 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/contenttype-persists/two",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", s.endPoint+"/"+bucketName+"/two",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.Header.Get("Content-Type"), Equals, "application/json")
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/contenttype-persists/two",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/two",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -821,8 +1035,10 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestPartialContent(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/partial-content",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -831,8 +1047,8 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/partial-content/bar",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/bar",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -841,19 +1057,17 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Prepare request
-	var testCases = []struct {
+	var table = []struct {
 		byteRange      string
 		expectedString string
 	}{
-		{"4-7", "o Wo"},
-		{"1-", "ello World"},
+		{"6-7", "Wo"},
 		{"6-", "World"},
-		{"-2", "ld"},
 		{"-7", "o World"},
 	}
-	for _, t := range testCases {
-		request, err = newTestRequest("GET", s.testServer.Server.URL+"/partial-content/bar",
-			0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	for _, t := range table {
+		request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/bar",
+			0, nil, s.accessKey, s.secretKey)
 		c.Assert(err, IsNil)
 		request.Header.Add("Range", "bytes="+t.byteRange)
 
@@ -868,8 +1082,10 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors-.",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	request, err := newTestRequest("GET", s.endPoint+"/"+bucketName+"objecthandlererrors-.",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -877,8 +1093,8 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -886,17 +1102,19 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objecthandlererrors",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to create the bucket.
+	request, err = newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objecthandlererrors?max-keys=-2",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"?max-keys=-2",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
 	response, err = client.Do(request)
@@ -905,34 +1123,39 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/putbucket-.",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	request, err := newTestRequest("PUT", s.endPoint+"/putbucket-.",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
-
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to create the bucket.
+	request, err = newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to createthe same bucket again.
+	// expected to fail with error message "BucketAlreadyOwnedByYou".
+	request, err = newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response, "BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it.", http.StatusConflict)
+	verifyError(c, response, "BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it.",
+		http.StatusConflict)
 
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/putbucket?acl",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"?acl",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -940,10 +1163,13 @@ func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
 	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
 }
 
+// TestGetObjectLarge10MiB - Tests validate fetching of an object of size 10MB.
 func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
-	// Make bucket for this test.
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to createthe same bucket again.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -952,7 +1178,15 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var buffer bytes.Buffer
-	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	line := `1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,123"`
 	// Create 10MiB content where each line contains 1024 characters.
 	for i := 0; i < 10*1024; i++ {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
@@ -961,8 +1195,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
-		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/big-file-10",
+		int64(buf.Len()), buf, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -971,8 +1205,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10/big-file-10",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/big-file-10",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -987,9 +1221,11 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
-	// Make bucket for this test.
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -998,7 +1234,16 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var buffer bytes.Buffer
-	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	line := `1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,123`
 	// Create 11MiB content where each line contains 1024 characters.
 	for i := 0; i < 11*1024; i++ {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
@@ -1007,8 +1252,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader(buffer.Bytes())
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
-		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/big-file-11",
+		int64(buf.Len()), buf, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1017,8 +1262,8 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11/big-file-11",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/big-file-11",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1098,9 +1343,11 @@ func (s *MyAPIXLSuite) TestGetPartialObjectMisAligned(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
 	// Make bucket for this test.
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1109,7 +1356,16 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var buffer bytes.Buffer
-	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	line := `234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,123`
 	// Create 11MiB content where each line contains 1024
 	// characters.
 	for i := 0; i < 11*1024; i++ {
@@ -1119,8 +1375,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
-		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/big-file-11",
+		int64(buf.Len()), buf, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1129,8 +1385,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-11p/big-file-11",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/big-file-11",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	// This range spans into first two blocks.
 	request.Header.Add("Range", "bytes=10485750-10485769")
@@ -1147,18 +1403,30 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
-	// Make bucket for this test.
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	var buffer bytes.Buffer
-	line := "1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,123"
+	line := `1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
+	1234567890,1234567890,1234567890,123`
 	// Create 10MiB content where each line contains 1024 characters.
 	for i := 0; i < 10*1024; i++ {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
@@ -1167,8 +1435,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 
 	// Put object
 	buf := bytes.NewReader([]byte(putContent))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
-		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/big-file-10",
+		int64(buf.Len()), buf, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1177,8 +1445,8 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Get object
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/test-bucket-10p/big-file-10",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/big-file-10",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Range", "bytes=2048-2058")
 
@@ -1194,17 +1462,19 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
-	request, err := newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	request, err := newTestRequest("GET", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
-
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/getobjecterrors",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// make HTTP request to create the bucket.
+	request, err = newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1212,8 +1482,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors/bar",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/bar",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1221,8 +1491,8 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjecterrors-./bar",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/getobjecterrors-./bar",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1232,18 +1502,22 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.
-		URL+"/getobjectrangeerrors", 0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/getobjectrangeerrors/bar",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/bar",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1251,8 +1525,8 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/getobjectrangeerrors/bar",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/bar",
+		0, nil, s.accessKey, s.secretKey)
 	request.Header.Add("Range", "bytes=7-6")
 	c.Assert(err, IsNil)
 
@@ -1263,17 +1537,21 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartabort/object?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1288,8 +1566,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1297,16 +1575,16 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID+"&partNumber=2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("DELETE", s.testServer.Server.URL+"/objectmultipartabort/object?uploadId="+uploadID,
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("DELETE", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID,
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -1315,8 +1593,11 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist", 0,
-		nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName), 0,
+		nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1324,10 +1605,10 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/bucketmultipartlist/object?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
+	// execute the HTTP request to create bucket.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -1341,8 +1622,8 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1350,16 +1631,16 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/bucketmultipartlist/object?uploadId="+uploadID+"&partNumber=2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/bucketmultipartlist?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
@@ -1405,35 +1686,43 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 	newResponse3 := &listMultipartUploadsResponse{}
 	err = decoder.Decode(newResponse3)
 	c.Assert(err, IsNil)
-	c.Assert(newResponse3.Bucket, Equals, "bucketmultipartlist")
+	c.Assert(newResponse3.Bucket, Equals, bucketName)
 }
 
 // TestMakeBucketLocation - tests make bucket location header response.
 func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/make-bucket-location",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 	// Validate location header value equals proper bucket name.
-	c.Assert(response.Header.Get("Location"), Equals, "/make-bucket-location")
+	c.Assert(response.Header.Get("Location"), Equals, "/"+bucketName)
 }
 
 func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist-uploadid",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartlist-uploadid/directory1/directory2/object?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/directory1/directory2/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1449,17 +1738,21 @@ func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
 }
 
 func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultipartlist/object?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1474,8 +1767,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 	uploadID := newResponse.UploadID
 
 	buffer1 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response1, err := client.Do(request)
@@ -1483,24 +1776,24 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 	c.Assert(response1.StatusCode, Equals, http.StatusOK)
 
 	buffer2 := bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID+"&partNumber=2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultipartlist/object?uploadId="+uploadID,
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID,
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response3, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response3.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultipartlist/object?max-parts=-2&uploadId="+uploadID,
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?max-parts=-2&uploadId="+uploadID,
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response4, err := client.Do(request)
@@ -1510,17 +1803,21 @@ func (s *MyAPIXLSuite) TestObjectMultipartList(c *C) {
 
 // Tests object multipart.
 func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts/object?uploads",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1544,8 +1841,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	md5Sum := hasher.Sum(nil)
 
 	buffer1 := bytes.NewReader(data)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1562,8 +1859,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	md5Sum = hasher.Sum(nil)
 
 	buffer2 := bytes.NewReader(data)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID+"&partNumber=2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1589,8 +1886,8 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, IsNil)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts/object?uploadId="+uploadID,
-		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID,
+		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1600,17 +1897,21 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 
 // Tests object multipart overwrite with single put object.
 func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
+	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, 200)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+
-		"/objectmultiparts-overwrite/object?uploads", 0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploads",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1634,8 +1935,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	md5Sum := hasher.Sum(nil)
 
 	buffer1 := bytes.NewReader(data)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=1",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1652,8 +1953,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	md5Sum = hasher.Sum(nil)
 
 	buffer2 := bytes.NewReader(data)
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID+"&partNumber=2",
-		int64(buffer2.Len()), buffer2, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID+"&partNumber=2",
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
@@ -1679,8 +1980,8 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, IsNil)
 
-	request, err = newTestRequest("POST", s.testServer.Server.URL+"/objectmultiparts-overwrite/object?uploadId="+uploadID,
-		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("POST", s.endPoint+"/"+bucketName+"/object?uploadId="+uploadID,
+		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
@@ -1688,16 +1989,16 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 = bytes.NewReader([]byte("hello world"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/objectmultiparts-overwrite/object",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/objectmultiparts-overwrite/object",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object",
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	response, err = client.Do(request)
