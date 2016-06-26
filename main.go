@@ -64,12 +64,6 @@ func init() {
 
 	// Set global trace flag.
 	globalTrace = os.Getenv("MINIO_TRACE") == "1"
-
-	// It is an unsafe practice to run network services as
-	// root. Containers are an exception.
-	if !isContainerized() && os.Geteuid() == 0 {
-		console.Fatalln("Please run ‘minio’ as a non-root user.")
-	}
 }
 
 func migrate() {

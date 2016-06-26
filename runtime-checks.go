@@ -18,37 +18,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"runtime"
-	"strings"
 
 	"github.com/hashicorp/go-version"
 	"github.com/minio/mc/pkg/console"
 )
-
-// isContainerized returns true if we are inside a containerized environment.
-func isContainerized() bool {
-	// Docker containers contain ".dockerenv" at their root path.
-	if _, e := os.Stat("/.dockerenv"); e == nil {
-		return true
-	}
-
-	// Check if cgroup policies for init process contains docker string.
-	if cgroupData, e := ioutil.ReadFile("/proc/1/cgroup"); e == nil {
-		if strings.Contains(string(cgroupData), "/docker-") {
-			return true
-		}
-	}
-
-	// Check if env var explicitly set
-	if allow := os.Getenv("ALLOW_CONTAINER_ROOT"); allow == "1" || strings.ToLower(allow) == "true" {
-		return true
-	}
-
-	/* Add checks for non-docker containers here. */
-	return false
-}
 
 // check if minimum Go version is met.
 func checkGoVersion() {
