@@ -78,15 +78,16 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
 	// create temporary backend for the test server.
-	erasureDisks, err := makeTestBackend(instanceType)
+	_, erasureDisks, err := makeTestBackend(instanceType)
+
 	if err != nil {
-		t.Fatalf("Failed obtaining Temp XL layer: <ERROR> %s", err)
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 	testServer.Disks = erasureDisks
 	// Obtain temp root.
 	root, err := getTestRoot()
 	if err != nil {
-		t.Fatalf("Failed obtaining Temp XL layer: <ERROR> %s", err)
+		t.Fatalf("Failed obtaining Temp Root for the backend Backend: <ERROR> %s", err)
 	}
 	testServer.Root = root
 	testServer.Disks = erasureDisks
@@ -251,24 +252,24 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 // if the option is
 // FS: Returns a temp single disk setup initializes FS Backend.
 // XL: Returns a 16 temp single disk setup and initializse XL Backend.
-func makeTestBackend(instanceType string) ([]string, error) {
+func makeTestBackend(instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
 	case "FS":
-		_, fsroot, err := getSingleNodeObjectLayer()
+		objLayer, fsroot, err := getSingleNodeObjectLayer()
 		if err != nil {
-			return []string{}, err
+			return nil, []string{}, err
 		}
-		return []string{fsroot}, err
+		return objLayer, []string{fsroot}, err
 
 	case "XL":
-		_, erasureDisks, err := getXLObjectLayer()
+		objectLayer, erasureDisks, err := getXLObjectLayer()
 		if err != nil {
-			return []string{}, err
+			return nil, []string{}, err
 		}
-		return erasureDisks, err
+		return objectLayer, erasureDisks, err
 	default:
 		errMsg := "Invalid instance type, Only FS and XL are valid options"
-		return []string{}, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
+		return nil, []string{}, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
 	}
 }
 
