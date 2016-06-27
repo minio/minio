@@ -99,6 +99,7 @@ func checkSufficientDisks(disks []string) error {
 		return errXLNumDisks
 	}
 
+	// Success.
 	return nil
 }
 
