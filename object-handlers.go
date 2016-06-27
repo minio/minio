@@ -242,7 +242,7 @@ func checkETag(w http.ResponseWriter, r *http.Request) bool {
 			delete(h, "Content-Type")
 			delete(h, "Content-Length")
 			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusPreconditionFailed)
+			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
 			return true
 		}
 	}

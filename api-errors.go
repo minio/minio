@@ -74,6 +74,7 @@ const (
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNotImplemented
+	ErrPreconditionFailed
 	ErrRequestTimeTooSkewed
 	ErrSignatureDoesNotMatch
 	ErrMethodNotAllowed
@@ -254,6 +255,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "NotImplemented",
 		Description:    "A header you provided implies functionality that is not implemented.",
 		HTTPStatusCode: http.StatusNotImplemented,
+	},
+	ErrPreconditionFailed: {
+		Code:           "PreconditionFailed",
+		Description:    "At least one of the preconditions you specified did not hold.",
+		HTTPStatusCode: http.StatusPreconditionFailed,
 	},
 	ErrRequestTimeTooSkewed: {
 		Code:           "RequestTimeTooSkewed",
