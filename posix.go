@@ -775,5 +775,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 		return err
 	}
-	return nil
+	srcParentDir := slashpath.Join(srcVolumeDir, slashpath.Dir(srcPath))
+	// Remove the parent directories of the source if they are empty.
+	return deleteFile(srcVolumeDir, srcParentDir)
 }
