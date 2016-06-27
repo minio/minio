@@ -79,7 +79,7 @@ func getOrderedDisks(distribution []int, disks []StorageAPI, blockCheckSums []ch
 	return orderedDisks, orderedBlockCheckSums
 }
 
-// Return readable disks slice from which we can read parallely.
+// Return readable disks slice from which we can read parallelly.
 func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDisks []StorageAPI, nextIndex int, err error) {
 	readDisks = make([]StorageAPI, len(orderedDisks))
 	dataDisks := 0
@@ -146,7 +146,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	bitRotVerify := func() func(diskIndex int) bool {
 		verified := make([]bool, len(orderedDisks))
 		// Return closure so that we have reference to []verified and
-		// not recalculate the hash on it everytime the function is
+		// not recalculate the hash on it every time the function is
 		// called for the same disk.
 		return func(diskIndex int) bool {
 			if verified[diskIndex] {

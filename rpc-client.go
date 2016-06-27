@@ -168,7 +168,7 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 	return fileInfo, nil
 }
 
-// ReadAll - reads entire contents of the file at path until EOF, retuns the
+// ReadAll - reads entire contents of the file at path until EOF, returns the
 // contents in a byte slice. Returns buf == nil if err != nil.
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
