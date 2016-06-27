@@ -316,6 +316,9 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
+	if !isQuorum(errs, xl.writeQuorum) {
+		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+	}
 
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
@@ -559,9 +562,9 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
-	// Do we have readQuorum?.
-	if !isQuorum(errs, xl.readQuorum) {
-		return "", toObjectErr(errXLReadQuorum, minioMetaBucket, uploadIDPath)
+	// Do we have writeQuorum?.
+	if !isQuorum(errs, xl.writeQuorum) {
+		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
 	// Calculate full object size.

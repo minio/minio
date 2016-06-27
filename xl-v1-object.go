@@ -54,6 +54,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := xl.readAllXLMetadata(bucket, object)
+	// Do we have read quorum?
+	if !isQuorum(errs, xl.readQuorum) {
+		return toObjectErr(errXLReadQuorum, bucket, object)
+	}
 
 	// List all online disks.
 	onlineDisks, highestVersion, err := xl.listOnlineDisks(metaArr, errs)
@@ -308,6 +312,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
+	// Do we have write quroum?.
+	if !isQuorum(errs, xl.writeQuorum) {
+		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+	}
 
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
