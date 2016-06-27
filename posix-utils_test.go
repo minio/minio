@@ -56,7 +56,7 @@ func TestIsValidVolname(t *testing.T) {
 		{"/", false},
 		{"a", false},
 		{"ab", false},
-		{"ab/", false},
+		{"ab/", true},
 		{"......", true},
 		{"lalalallalallalalalallalallalala-theString-size-is-greater-than-64", false},
 	}

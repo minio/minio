@@ -305,7 +305,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	uniqueID := getUUID()
 	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "part.1")
-	tempObj := path.Join(tmpMetaPrefix, uniqueID)
+	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
+	tempObj := uniqueID
 
 	// Initialize xl meta.
 	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
@@ -372,7 +373,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// MD5 mismatch, delete the temporary object.
-			xl.deleteObject(minioMetaBucket, tempObj)
+			xl.deleteObject(minioMetaTmpBucket, tempObj)
 			// Returns md5 mismatch.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
@@ -387,7 +388,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Rename if an object already exists to temporary location.
 	newUniqueID := getUUID()
 	if xl.isObject(bucket, object) {
-		err = xl.renameObject(bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
+		err = xl.renameObject(bucket, object, minioMetaTmpBucket, newUniqueID)
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
@@ -408,18 +409,18 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempObj, partsMetadata); err != nil {
+	if err = xl.writeUniqueXLMetadata(minioMetaTmpBucket, tempObj, partsMetadata); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Rename the successfully written temporary object to final location.
-	err = xl.renameObject(minioMetaBucket, tempObj, bucket, object)
+	err = xl.renameObject(minioMetaTmpBucket, tempObj, bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Delete the temporary object.
-	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, newUniqueID))
+	xl.deleteObject(minioMetaTmpBucket, newUniqueID)
 
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil

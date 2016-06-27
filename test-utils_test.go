@@ -592,3 +592,18 @@ func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundTy
 	objTest(objLayer, xLTestStr, fsDirs, t)
 	defer removeRoots(fsDirs)
 }
+
+// Special object test type for stale files situations.
+type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []string, t *testing.T)
+
+// ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
+// files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
+func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
+	objLayer, fsDirs, err := getXLObjectLayer()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+	}
+	// Executing the object layer tests for XL.
+	objTest(objLayer, xLTestStr, fsDirs, t)
+	defer removeRoots(fsDirs)
+}
