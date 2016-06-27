@@ -62,6 +62,11 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			var err error
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
+				// Ignore errFileNotFound
+				if err == errFileNotFound {
+					errorIf(err, "Unable to get object info", bucket, entry)
+					continue
+				}
 				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
 			}
 		}
