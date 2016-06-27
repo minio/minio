@@ -546,11 +546,13 @@ func removeRoots(roots []string) {
 	}
 }
 
-// removeRandomDisk - removes a count of random disks from a disk slice.
-func removeRandomDisk(disks []string, removeCount int) {
-	ints := randInts(len(disks))
-	for _, i := range ints[:removeCount] {
-		removeAll(disks[i-1])
+//removeDiskN - removes N disks from supplied disk slice.
+func removeDiskN(disks []string, n int) {
+	if n > len(disks) {
+		n = len(disks)
+	}
+	for _, disk := range disks[:n] {
+		removeAll(disk)
 	}
 }
 

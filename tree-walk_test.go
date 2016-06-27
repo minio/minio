@@ -21,10 +21,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
-// Helper function that invokes startTreeWalk depending on the type implementing objectLayer
+// Helper function that invokes startTreeWalk depending on the type implementing objectLayer.
 func startTreeWalk(obj ObjectLayer, bucket, prefix, marker string,
 	recursive bool, endWalkCh chan struct{}) chan treeWalkResult {
 	var twResultCh chan treeWalkResult
@@ -41,7 +40,7 @@ func startTreeWalk(obj ObjectLayer, bucket, prefix, marker string,
 	return twResultCh
 }
 
-// Helper function that creates a bucket, bucket and objects from objects []string
+// Helper function that creates a bucket, bucket and objects from objects []string.
 func createObjNamespace(obj ObjectLayer, bucket string, objects []string) error {
 	// Make a bucket.
 	var err error
@@ -139,7 +138,7 @@ func TestTreeWalkAbort(t *testing.T) {
 	ExecObjectLayerTest(t, testTreeWalkAbort)
 }
 
-// Test if errWalkAbort is returned if tree walk is aborted before compeletion
+// Test if tree walk go-routine exits cleanly if tree walk is aborted before compeletion.
 func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	bucket := "abc"
 
@@ -160,14 +159,14 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	endWalkCh := make(chan struct{})
 	twResultCh := startTreeWalk(obj, bucket, prefix, marker, recursive, endWalkCh)
 
-	// Pull one result entry from the tree walk result channel
+	// Pull one result entry from the tree walk result channel.
 	<-twResultCh
 
-	// Signal the tree-walk go-routine to abort
+	// Signal the tree-walk go-routine to abort.
 	endWalkCh <- struct{}{}
 
 	// Drain the buffered channel result channel of entries that were pushed before
-	// it was signalled to abort
+	// it was signalled to abort.
 	for {
 		if v := <-twResultCh; (v == treeWalkResult{}) {
 			break
@@ -178,33 +177,74 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	}
 }
 
-// Extend treeWalkPool type to allow setting (idle) timeout for tree walk go-routine
-func (t *treeWalkPool) SetTimeout(newTimeOut time.Duration) {
-	t.timeOut = newTimeOut
-}
-
-// Helper function to put back the tree walk go-routine into the pool
-func putbackTreeWalk(obj ObjectLayer, params listParams, resultCh chan treeWalkResult, endWalkCh chan struct{}) {
+// Helper function to get a slice of disks depending on the backend
+func getPhysicalDisks(obj ObjectLayer) []string {
 	switch typ := obj.(type) {
 	case fsObjects:
-		typ.listPool.Set(params, resultCh, endWalkCh)
+		return []string{typ.physicalDisk}
 	case xlObjects:
-		typ.listPool.Set(params, resultCh, endWalkCh)
+		return typ.physicalDisks
 	}
+	return []string{}
 }
 
-// Helper function to set tree walk (idle) timeout given an ObjectLayer instance
-// for both FS and XL backend
-func setTreeWalkTimeout(obj ObjectLayer, timeout time.Duration) {
-	switch typ := obj.(type) {
-	case fsObjects:
-		typ.listPool.SetTimeout(timeout)
-	case xlObjects:
-		typ.listPool.SetTimeout(timeout)
+// Wrapper for testTreeWalkFailedDisks to run the unit test for both FS and XL backend.
+func TestTreeWalkFailedDisks(t *testing.T) {
+	ExecObjectLayerTest(t, testTreeWalkFailedDisks)
+}
+
+// Test if tree walk go routine exits cleanly when more than quorum number of disks fail
+// in XL and the single disk in FS.
+func testTreeWalkFailedDisks(obj ObjectLayer, instanceType string, t *testing.T) {
+	bucket := "abc"
+	objects := []string{
+		"d/e",
+		"d/f",
+		"d/g/h",
+		"i/j/k",
+		"lmn",
 	}
+
+	err := createObjNamespace(obj, bucket, objects)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate disk failures by removing the directories backing them
+	disks := getPhysicalDisks(obj)
+	switch obj.(type) {
+	case fsObjects:
+		removeDiskN(disks, 1)
+	case xlObjects:
+		removeDiskN(disks, len(disks)/2+1)
+	}
+
+	// Start the tree walk go-routine.
+	prefix := ""
+	marker := ""
+	recursive := true
+	endWalkCh := make(chan struct{})
+	twResultCh := startTreeWalk(obj, bucket, prefix, marker, recursive, endWalkCh)
+
+	switch obj.(type) {
+	case fsObjects:
+		if res := <-twResultCh; res.err.Error() != "disk not found" {
+			t.Error("Expected disk not found error")
+		}
+	case xlObjects:
+		entryCount := 0
+		for range twResultCh {
+			entryCount++
+		}
+		if entryCount != len(objects) {
+			t.Error("Found fewer objects than expected")
+		}
+	}
+
 }
 
 // FIXME: Test the abort timeout when the tree-walk go routine is 'parked' in
-// the pool.  Currently, we need to create greater than maxObjectList (== 1000)
-// which increases time to run the test. If (and when) we decide to make maxObjectList
-// configurable at tree walk layer then we can reevaluate adding a unit test for this.
+// the pool.  Currently, we need to create objects greater than maxObjectList
+// (== 1000) which would increase time to run the test. If (and when) we decide
+// to make maxObjectList configurable we can re-evaluate adding a unit test for
+// this.

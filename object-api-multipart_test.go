@@ -1237,7 +1237,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	}
 
 	// Remove some random disk.
-	removeRandomDisk(disks, 1)
+	removeDiskN(disks, 1)
 
 	uploadIDs = append(uploadIDs, uploadID)
 
@@ -1270,8 +1270,8 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		}
 	}
 
-	// Remove one more random disk.
-	removeRandomDisk(disks, 1)
+	// Remove one disk.
+	removeDiskN(disks, 1)
 
 	partInfos := []ListPartsInfo{
 		// partinfos - 0.
