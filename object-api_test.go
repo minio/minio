@@ -16,9 +16,7 @@
 
 package main
 
-import (
-	. "gopkg.in/check.v1"
-)
+import . "gopkg.in/check.v1"
 
 type ObjectLayerAPISuite struct{}
 
@@ -28,6 +26,7 @@ var _ = Suite(&ObjectLayerAPISuite{})
 func (s *ObjectLayerAPISuite) TestFSAPISuite(c *C) {
 	// Initialize name space lock.
 	initNSLock()
+
 	// function which creates a temp FS backend and executes the object layer suite test.
 	execObjectLayerSuiteTestFS := func(objSuiteTest objSuiteTestType) {
 		// create temp object layer backend.
@@ -51,6 +50,7 @@ type objSuiteTestType func(c *C, obj ObjectLayer)
 func (s *ObjectLayerAPISuite) TestXLAPISuite(c *C) {
 	// Initialize name space lock.
 	initNSLock()
+
 	// function which creates a temp XL backend and executes the object layer suite test.
 	execObjectLayerSuiteTestXL := func(objSuiteTest objSuiteTestType) {
 		// create temp object layer backend.

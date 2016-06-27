@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/objcache"
 )
 
 /// Object Operations
@@ -92,6 +93,45 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		eInfos = append(eInfos, metaArr[index].Erasure)
 	}
 
+	// Save the writer.
+	mw := writer
+
+	// Object cache enabled block.
+	if xl.objCacheEnabled {
+		// Validate if we have previous cache.
+		cachedBuffer, err := xl.objCache.Open(path.Join(bucket, object))
+		if err == nil { // Cache hit.
+			// Advance the buffer to offset as if it was read.
+			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
+				return err
+			}
+			// Write the requested length.
+			if _, err = io.CopyN(writer, cachedBuffer, length); err != nil {
+				return err
+			}
+			return nil
+		} // Cache miss.
+
+		// For unknown error, return and error out.
+		if err != objcache.ErrKeyNotFoundInCache {
+			return err
+		} // Cache has not been found, fill the cache.
+
+		// Proceed to set the cache.
+		var newBuffer io.Writer
+		// Cache is only set if whole object is being read.
+		if startOffset == 0 && length == xlMeta.Stat.Size {
+			// Create a new entry in memory of length.
+			newBuffer, err = xl.objCache.Create(path.Join(bucket, object), length)
+			if err != nil {
+				// Perhaps cache is full, returns here.
+				return err
+			}
+			// Create a multi writer to write to both memory and client response.
+			mw = io.MultiWriter(newBuffer, writer)
+		}
+	}
+
 	totalBytesRead := int64(0)
 	// Read from all parts.
 	for ; partIndex <= lastPartIndex; partIndex++ {
@@ -109,7 +149,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 
 		// Start reading the part name.
-		n, err := erasureReadFile(writer, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
+		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
 		if err != nil {
 			return err
 		}

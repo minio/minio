@@ -17,11 +17,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/objcache"
 )
 
 // XL constants.
@@ -37,6 +37,15 @@ const (
 
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
+
+	// 8GiB cache by default.
+	maxCacheSize = 8 * 1024 * 1024 * 1024
+
+	// Maximum erasure blocks.
+	maxErasureBlocks = 16
+
+	// Minimum erasure blocks.
+	minErasureBlocks = 6
 )
 
 // xlObjects - Implements XL object layer.
@@ -48,34 +57,15 @@ type xlObjects struct {
 	readQuorum    int          // readQuorum minimum required disks to read data.
 	writeQuorum   int          // writeQuorum minimum required disks to write data.
 
-	// List pool management.
+	// ListObjects pool management.
 	listPool *treeWalkPool
+
+	// Object cache for caching objects.
+	objCache *objcache.Cache
+
+	// Object cache enabled.
+	objCacheEnabled bool
 }
-
-// errXLMaxDisks - returned for reached maximum of disks.
-var errXLMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
-
-// errXLMinDisks - returned for minimum number of disks.
-var errXLMinDisks = errors.New("Number of disks are smaller than supported minimum count '8'")
-
-// errXLNumDisks - returned for odd number of disks.
-var errXLNumDisks = errors.New("Number of disks should be multiples of '2'")
-
-// errXLReadQuorum - did not meet read quorum.
-var errXLReadQuorum = errors.New("I/O error.  did not meet read quorum.")
-
-// errXLWriteQuorum - did not meet write quorum.
-var errXLWriteQuorum = errors.New("I/O error.  did not meet write quorum.")
-
-// errXLDataCorrupt - err data corrupt.
-var errXLDataCorrupt = errors.New("data likely corrupted, all blocks are zero in length")
-
-const (
-	// Maximum erasure blocks.
-	maxErasureBlocks = 16
-	// Minimum erasure blocks.
-	minErasureBlocks = 6
-)
 
 // Validate if input disks are sufficient for initializing XL.
 func checkSufficientDisks(disks []string) error {
@@ -174,7 +164,11 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 		storageDisks:  newPosixDisks,
 		dataBlocks:    dataBlocks,
 		parityBlocks:  parityBlocks,
-		listPool:      newTreeWalkPool(globalLookupTimeout),
+		// Inititalize list pool.
+		listPool: newTreeWalkPool(globalLookupTimeout),
+		// Initialize object caching, FIXME: support auto cache expiration.
+		objCache:        objcache.New(globalMaxCacheSize, objcache.NoExpiration),
+		objCacheEnabled: globalMaxCacheSize > 0,
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
