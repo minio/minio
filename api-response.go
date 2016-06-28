@@ -506,7 +506,7 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIE
 }
 
 func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, error APIError, resource string) {
-	// generate error response
+	// Generate error response.
 	errorResponse := getAPIErrorResponse(error, resource)
 	encodedErrorResponse := encodeResponse(errorResponse)
 	// HEAD should have no body, do not attempt to write to it

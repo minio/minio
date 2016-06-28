@@ -251,8 +251,12 @@ func (e InvalidPartOrder) Error() string {
 }
 
 // PartTooSmall - error if part size is less than 5MB.
-type PartTooSmall struct{}
+type PartTooSmall struct {
+	PartSize   int64
+	PartNumber int
+	PartETag   string
+}
 
 func (e PartTooSmall) Error() string {
-	return "Part size should be atleast 5MB"
+	return fmt.Sprintf("Part size for %d should be atleast 5MB", e.PartNumber)
 }

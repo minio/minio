@@ -1841,7 +1841,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t *
 		// Test case with non existent object name (Test number 14).
 		{bucketNames[0], "my-object", uploadIDs[0], []completePart{{ETag: "abcd", PartNumber: 1}}, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
 		// Testing for Part being too small (Test number 15).
-		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[1].parts, "", PartTooSmall{}, false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[1].parts, "", PartTooSmall{PartNumber: 1}, false},
 		// TestCase with invalid Part Number (Test number 16).
 		// Should error with Invalid Part .
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[2].parts, "", InvalidPart{}, false},

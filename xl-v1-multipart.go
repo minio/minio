@@ -594,7 +594,11 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
-			return "", PartTooSmall{}
+			return "", PartTooSmall{
+				PartNumber: part.PartNumber,
+				PartSize:   currentXLMeta.Parts[partIdx].Size,
+				PartETag:   part.ETag,
+			}
 		}
 
 		// Last part could have been uploaded as 0bytes, do not need

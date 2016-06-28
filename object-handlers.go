@@ -986,7 +986,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
-		writeErrorResponseNoHeader(w, r, getAPIError(toAPIErrorCode(err)), r.URL.Path)
+		switch oErr := err.(type) {
+		case PartTooSmall:
+			// Write part too small error.
+			writePartSmallErrorResponse(w, r, oErr)
+		default:
+			// Handle all other generic issues.
+			writeErrorResponseNoHeader(w, r, getAPIError(toAPIErrorCode(err)), r.URL.Path)
+		}
 		return
 	}
 
