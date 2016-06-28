@@ -439,6 +439,60 @@ func getDeleteBucketURL(endPoint, bucketName string) string {
 
 }
 
+// return URL for listing the bucket.
+func getListObjectsURL(endPoint, bucketName string, maxKeys string) string {
+	queryValue := url.Values{}
+	if maxKeys != "" {
+		queryValue.Set("max-keys", maxKeys)
+	}
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for a new multipart upload.
+func getNewMultipartURL(endPoint, bucketName, objectName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("uploads", "")
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValue)
+}
+
+// return URL for a new multipart upload.
+func getPartUploadURL(endPoint, bucketName, objectName, uploadID, partNumber string) string {
+	queryValues := url.Values{}
+	queryValues.Set("uploadId", uploadID)
+	queryValues.Set("partNumber", partNumber)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
+}
+
+// return URL for aborting multipart upload.
+func getAbortMultipartUploadURL(endPoint, bucketName, objectName, uploadID string) string {
+	queryValue := url.Values{}
+	queryValue.Set("uploadId", uploadID)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValue)
+}
+
+// return URL for a new multipart upload.
+func getListMultipartURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("uploads", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for a new multipart upload.
+func getListMultipartURLWithParams(endPoint, bucketName, objectName, uploadID, maxParts string) string {
+	queryValues := url.Values{}
+	queryValues.Set("uploadId", uploadID)
+	queryValues.Set("max-parts", maxParts)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
+}
+
+// return URL for completing multipart upload.
+// complete multipart upload request is sent after all parts are uploaded.
+func getCompleteMultipartUploadURL(endPoint, bucketName, objectName, uploadID string) string {
+	queryValue := url.Values{}
+	queryValue.Set("uploadId", uploadID)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValue)
+}
+
 // returns temp root directory. `
 func getTestRoot() (string, error) {
 	return ioutil.TempDir(os.TempDir(), "api-")

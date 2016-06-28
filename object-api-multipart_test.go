@@ -1726,7 +1726,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t *
 	uploadIDs = append(uploadIDs, uploadID)
 	// Parts with size greater than 5 MB.
 	// Generating a 6MB byte array.
-	validPart := bytes.Repeat([]byte("0123456789abcdef"), 1024*1024)
+	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
 	validPartMD5 := findMD5(validPart)
 	// Create multipart parts.
 	// Need parts to be uploaded before CompleteMultiPartUpload can be called tested.
