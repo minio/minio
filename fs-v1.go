@@ -468,9 +468,10 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		walkResultCh = fs.startTreeWalk(bucket, prefix, marker, recursive, func(bucket, object string) bool {
+		listDir := listDirFactory(func(bucket, object string) bool {
 			return !strings.HasSuffix(object, slashSeparator)
-		}, endWalkCh)
+		}, fs.storage)
+		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 	var fileInfos []FileInfo
 	var eof bool
