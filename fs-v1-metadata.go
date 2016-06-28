@@ -76,7 +76,7 @@ func readFSMetadata(disk StorageAPI, bucket, object string) (fsMeta fsMetaV1, er
 // newFSMetaV1 - initializes new fsMetaV1.
 func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta = fsMetaV1{}
-	fsMeta.Version = "1"
+	fsMeta.Version = "1.0.0"
 	fsMeta.Format = "fs"
 	fsMeta.Minio.Release = minioReleaseTag
 	return fsMeta
