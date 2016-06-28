@@ -304,7 +304,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	defer nsMutex.Unlock(bucket, object)
 
 	uniqueID := getUUID()
-	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "object1")
+	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "part.1")
 	tempObj := path.Join(tmpMetaPrefix, uniqueID)
 
 	// Initialize xl meta.
@@ -342,7 +342,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Erasure code and write across all disks.
-	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "object1", teeReader, eInfos, xl.writeQuorum)
+	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "part.1", teeReader, eInfos, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
@@ -399,7 +399,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Stat.ModTime = modTime
 	xlMeta.Stat.Version = higherVersion
 	// Add the final part.
-	xlMeta.AddObjectPart(1, "object1", newMD5Hex, xlMeta.Stat.Size)
+	xlMeta.AddObjectPart(1, "part.1", newMD5Hex, xlMeta.Stat.Size)
 
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {

@@ -488,7 +488,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
-	tempObj := path.Join(tmpMetaPrefix, uploadID, "object1")
+	tempObj := path.Join(tmpMetaPrefix, uploadID, "part.1")
 
 	// Allocate 128KiB of staging buffer.
 	var buf = make([]byte, readSizeV1)
