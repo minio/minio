@@ -34,7 +34,7 @@ func mustEncodeData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 // Generates good encoded data with one parity block and data block missing.
 func getGoodEncodedData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 	encodedData := mustEncodeData(data, dataBlocks, parityBlocks)
-	encodedData[7] = nil
+	encodedData[3] = nil
 	encodedData[1] = nil
 	return encodedData
 }
@@ -42,7 +42,7 @@ func getGoodEncodedData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 // Generates bad encoded data with one parity block and data block with garbage data.
 func getBadEncodedData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 	encodedData := mustEncodeData(data, dataBlocks, parityBlocks)
-	encodedData[7] = []byte("garbage")
+	encodedData[3] = []byte("garbage")
 	encodedData[1] = []byte("garbage")
 	return encodedData
 }
@@ -71,6 +71,7 @@ type encodingMatrix struct {
 
 // List of encoding matrices the tests will run on.
 var encodingMatrices = []encodingMatrix{
+	{3, 3}, // 3 data, 3 parity blocks.
 	{4, 4}, // 4 data, 4 parity blocks.
 	{5, 5}, // 5 data, 5 parity blocks.
 	{6, 6}, // 6 data, 6 parity blocks.

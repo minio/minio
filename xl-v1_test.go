@@ -45,9 +45,9 @@ func TestCheckSufficientDisks(t *testing.T) {
 		disks       []string
 		expectedErr error
 	}{
-		// Even number of disks '8'.
+		// Even number of disks '6'.
 		{
-			disks[0:8],
+			disks[0:6],
 			nil,
 		},
 		// Even number of disks '12'.
@@ -66,9 +66,9 @@ func TestCheckSufficientDisks(t *testing.T) {
 			append(disks[0:16], "/mnt/unsupported"),
 			errXLMaxDisks,
 		},
-		// Lesser than minimum number of disks < 8.
+		// Lesser than minimum number of disks < 6.
 		{
-			disks[0:7],
+			disks[0:5],
 			errXLMinDisks,
 		},
 		// Odd number of disks, not divisible by '2'.
