@@ -876,6 +876,8 @@ func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
 		0, nil, s.accessKey, s.secretKey)
 	request.Header.Set("If-Match", etag)
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var body []byte
 	body, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
@@ -887,11 +889,7 @@ func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
 		0, nil, s.accessKey, s.secretKey)
 	request.Header.Set("If-Match", etag[1:])
 	response, err = client.Do(request)
-	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
-	errResponse := APIErrorResponse{}
-	err = xmlDecoder(response.Body, &errResponse)
-	c.Assert(err, IsNil)
-	c.Assert(errResponse.Code, Equals, "PreconditionFailed")
+	verifyError(c, response, "PreconditionFailed", "At least one of the preconditions you specified did not hold.", http.StatusPreconditionFailed)
 
 	// GetObject with If-None-Match sending mismatching etag in request headers
 	// is expected to return the object.
@@ -910,6 +908,7 @@ func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
 		0, nil, s.accessKey, s.secretKey)
 	request.Header.Set("If-None-Match", etag)
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
 }
 
