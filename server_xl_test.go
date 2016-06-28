@@ -841,6 +841,77 @@ func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
+// TestGetOnObject - Asserts properties for GET on an object.
+// GET requests on an object retrieves the object from server.
+// Tests behaviour when If-Match/If-None-Match headers are set on the request
+func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// make HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer1 := bytes.NewReader([]byte("hello world"))
+	request, err = newTestRequest("PUT", s.endPoint+"/"+bucketName+"/object1",
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// GetObject with If-Match sending correct etag in request headers
+	// is expected to return the object
+	md5Writer := md5.New()
+	md5Writer.Write([]byte("hello world"))
+	etag := hex.EncodeToString(md5Writer.Sum(nil))
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
+	request.Header.Set("If-Match", etag)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	var body []byte
+	body, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(body), Equals, "hello world")
+
+	// GetObject with If-Match sending mismatching etag in request headers
+	// is expected to return an error response with ErrPreconditionFailed.
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
+	request.Header.Set("If-Match", etag[1:])
+	response, err = client.Do(request)
+	verifyError(c, response, "PreconditionFailed", "At least one of the preconditions you specified did not hold.", http.StatusPreconditionFailed)
+
+	// GetObject with If-None-Match sending mismatching etag in request headers
+	// is expected to return the object.
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
+	request.Header.Set("If-None-Match", etag[1:])
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	body, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(body), Equals, "hello world")
+
+	// GetObject with If-None-Match sending matching etag in request headers
+	// is expected to return (304) Not-Modified.
+	request, err = newTestRequest("GET", s.endPoint+"/"+bucketName+"/object1",
+		0, nil, s.accessKey, s.secretKey)
+	request.Header.Set("If-None-Match", etag)
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
+}
+
 // TestHeadOnObjectLastModified - Asserts response for HEAD on an object.
 // HEAD requests on an object validates the existence of the object.
 // The responses for fetching the object when If-Modified-Since
