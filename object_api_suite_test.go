@@ -69,36 +69,39 @@ func (r *testOneByteReadNoEOF) Read(p []byte) (n int, err error) {
 }
 
 // APITestSuite - collection of API tests.
-func APITestSuite(c *check.C, create func() ObjectLayer) {
-	testMakeBucket(c, create)
-	testMultipleObjectCreation(c, create)
-	testPaging(c, create)
-	testObjectOverwriteWorks(c, create)
-	testNonExistantBucketOperations(c, create)
-	testBucketRecreateFails(c, create)
-	testPutObject(c, create)
-	testPutObjectInSubdir(c, create)
-	testListBuckets(c, create)
-	testListBucketsOrder(c, create)
-	testListObjectsTestsForNonExistantBucket(c, create)
-	testNonExistantObjectInBucket(c, create)
-	testGetDirectoryReturnsObjectNotFound(c, create)
-	testContentType(c, create)
-	testMultipartObjectCreation(c, create)
-	testMultipartObjectAbort(c, create)
+func APITestSuite(c *check.C, execObjLayerSuiteTest func(objSuiteTest objSuiteTestType)) {
+	// List containing collection of all tests.
+	testFuncList := []func(c *check.C, obj ObjectLayer){
+		testMakeBucket,
+		testMultipartObjectCreation,
+		testPaging,
+		testObjectOverwriteWorks,
+		testNonExistantBucketOperations,
+		testBucketRecreateFails,
+		testPutObject,
+		testPutObjectInSubdir,
+		testListBuckets,
+		testListBucketsOrder,
+		testListObjectsTestsForNonExistantBucket,
+		testNonExistantObjectInBucket,
+		testGetDirectoryReturnsObjectNotFound,
+		testContentType,
+		testMultipartObjectAbort,
+	}
+	// iterate over list of tests and execute them.
+	for _, testFunc := range testFuncList {
+		execObjLayerSuiteTest(testFunc)
+	}
 }
 
 // Tests validate bucket creation.
-func testMakeBucket(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testMakeBucket(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket-unknown")
 	c.Assert(err, check.IsNil)
-
 }
 
 // Tests validate creation of part files during Multipart operation.
-func testMultipartObjectCreation(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testMultipartObjectCreation(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
@@ -123,8 +126,7 @@ func testMultipartObjectCreation(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate abortion of Multipart operation.
-func testMultipartObjectAbort(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testMultipartObjectAbort(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
@@ -155,9 +157,8 @@ func testMultipartObjectAbort(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate object creation.
-func testMultipleObjectCreation(c *check.C, create func() ObjectLayer) {
+func testMultipleObjectCreation(c *check.C, obj ObjectLayer) {
 	objects := make(map[string][]byte)
-	obj := create()
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 	for i := 0; i < 10; i++ {
@@ -194,8 +195,7 @@ func testMultipleObjectCreation(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate creation of objects and the order of listing using various filters for ListObjects operation.
-func testPaging(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testPaging(c *check.C, obj ObjectLayer) {
 	obj.MakeBucket("bucket")
 	result, err := obj.ListObjects("bucket", "", "", "", 0)
 	c.Assert(err, check.IsNil)
@@ -298,8 +298,7 @@ func testPaging(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate overwriting of an existing object.
-func testObjectOverwriteWorks(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testObjectOverwriteWorks(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
@@ -317,16 +316,14 @@ func testObjectOverwriteWorks(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate that bucket operation on non-existent bucket fails.
-func testNonExistantBucketOperations(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testNonExistantBucketOperations(c *check.C, obj ObjectLayer) {
 	_, err := obj.PutObject("bucket1", "object", int64(len("one")), bytes.NewBufferString("one"), nil)
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(err.Error(), check.Equals, "Bucket not found: bucket1")
 }
 
 // Tests validate that recreation of the bucket fails.
-func testBucketRecreateFails(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testBucketRecreateFails(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("string")
 	c.Assert(err, check.IsNil)
 	err = obj.MakeBucket("string")
@@ -335,8 +332,7 @@ func testBucketRecreateFails(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate PutObject without prefix.
-func testPutObject(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testPutObject(c *check.C, obj ObjectLayer) {
 	content := []byte("testcontent")
 	length := int64(len(content))
 	readerEOF := newTestReaderEOF(content)
@@ -360,8 +356,7 @@ func testPutObject(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate PutObject with subdirectory prefix.
-func testPutObjectInSubdir(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testPutObjectInSubdir(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
@@ -376,9 +371,7 @@ func testPutObjectInSubdir(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate ListBuckets.
-func testListBuckets(c *check.C, create func() ObjectLayer) {
-	obj := create()
-
+func testListBuckets(c *check.C, obj ObjectLayer) {
 	// test empty list.
 	buckets, err := obj.ListBuckets()
 	c.Assert(err, check.IsNil)
@@ -409,27 +402,23 @@ func testListBuckets(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate the order of result of ListBuckets.
-func testListBucketsOrder(c *check.C, create func() ObjectLayer) {
+func testListBucketsOrder(c *check.C, obj ObjectLayer) {
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time.
-	for i := 0; i < 10; i++ {
-		obj := create()
-		// add one and test exists.
-		err := obj.MakeBucket("bucket1")
-		c.Assert(err, check.IsNil)
-		err = obj.MakeBucket("bucket2")
-		c.Assert(err, check.IsNil)
-		buckets, err := obj.ListBuckets()
-		c.Assert(err, check.IsNil)
-		c.Assert(len(buckets), check.Equals, 2)
-		c.Assert(buckets[0].Name, check.Equals, "bucket1")
-		c.Assert(buckets[1].Name, check.Equals, "bucket2")
-	}
+	// add one and test exists.
+	err := obj.MakeBucket("bucket1")
+	c.Assert(err, check.IsNil)
+	err = obj.MakeBucket("bucket2")
+	c.Assert(err, check.IsNil)
+	buckets, err := obj.ListBuckets()
+	c.Assert(err, check.IsNil)
+	c.Assert(len(buckets), check.Equals, 2)
+	c.Assert(buckets[0].Name, check.Equals, "bucket1")
+	c.Assert(buckets[1].Name, check.Equals, "bucket2")
 }
 
 // Tests validate that ListObjects operation on a non-existent bucket fails as expected.
-func testListObjectsTestsForNonExistantBucket(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testListObjectsTestsForNonExistantBucket(c *check.C, obj ObjectLayer) {
 	result, err := obj.ListObjects("bucket", "", "", "", 1000)
 	c.Assert(err, check.Not(check.IsNil))
 	c.Assert(result.IsTruncated, check.Equals, false)
@@ -438,8 +427,7 @@ func testListObjectsTestsForNonExistantBucket(c *check.C, create func() ObjectLa
 }
 
 // Tests validate that GetObject fails on a non-existent bucket as expected.
-func testNonExistantObjectInBucket(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testNonExistantObjectInBucket(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
@@ -454,8 +442,7 @@ func testNonExistantObjectInBucket(c *check.C, create func() ObjectLayer) {
 }
 
 // Tests validate that GetObject on an existing directory fails as expected.
-func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testGetDirectoryReturnsObjectNotFound(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 
@@ -484,8 +471,7 @@ func testGetDirectoryReturnsObjectNotFound(c *check.C, create func() ObjectLayer
 }
 
 // Test content-type
-func testContentType(c *check.C, create func() ObjectLayer) {
-	obj := create()
+func testContentType(c *check.C, obj ObjectLayer) {
 	err := obj.MakeBucket("bucket")
 	c.Assert(err, check.IsNil)
 

@@ -17,58 +17,53 @@
 package main
 
 import (
-	"io/ioutil"
-	"os"
-
 	. "gopkg.in/check.v1"
 )
 
-type MySuite struct{}
+type ObjectLayerAPISuite struct{}
 
-var _ = Suite(&MySuite{})
+var _ = Suite(&ObjectLayerAPISuite{})
 
-func (s *MySuite) TestFSAPISuite(c *C) {
-	var storageList []string
-
+// TestFSAPISuite - Calls object layer suite tests with FS backend.
+func (s *ObjectLayerAPISuite) TestFSAPISuite(c *C) {
 	// Initialize name space lock.
 	initNSLock()
-
-	create := func() ObjectLayer {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	// function which creates a temp FS backend and executes the object layer suite test.
+	execObjectLayerSuiteTestFS := func(objSuiteTest objSuiteTestType) {
+		// create temp object layer backend.
+		// returns the disk and FS object layer.
+		objLayer, fsDisk, err := makeTestBackend("FS")
 		c.Check(err, IsNil)
-		objAPI, err := newFSObjects(path)
-		c.Check(err, IsNil)
-		storageList = append(storageList, path)
-		return objAPI
+		// remove the disks.
+		defer removeRoots(fsDisk)
+		// execute the object layer suite tests.
+		objSuiteTest(c, objLayer)
 	}
-	APITestSuite(c, create)
-	defer removeRootsC(c, storageList)
+	// APITestSuite contains set of all object layer suite test.
+	// These set of test functions are called here.
+	APITestSuite(c, execObjectLayerSuiteTestFS)
 }
 
-func (s *MySuite) TestXLAPISuite(c *C) {
-	var storageList []string
+// type for object layer suites tests.
+type objSuiteTestType func(c *C, obj ObjectLayer)
 
+// TestXLAPISuite - Calls object layer suite tests with XL backend.
+func (s *ObjectLayerAPISuite) TestXLAPISuite(c *C) {
 	// Initialize name space lock.
 	initNSLock()
-
-	create := func() ObjectLayer {
-		var nDisks = 16 // Maximum disks.
-		var erasureDisks []string
-		for i := 0; i < nDisks; i++ {
-			path, err := ioutil.TempDir(os.TempDir(), "minio-")
-			c.Check(err, IsNil)
-			erasureDisks = append(erasureDisks, path)
-		}
-		objAPI, err := newXLObjects(erasureDisks)
+	// function which creates a temp XL backend and executes the object layer suite test.
+	execObjectLayerSuiteTestXL := func(objSuiteTest objSuiteTestType) {
+		// create temp object layer backend.
+		// returns the disk and XL object layer.
+		objLayer, erasureDisks, err := makeTestBackend("XL")
 		c.Check(err, IsNil)
-		return objAPI
+		// remove the disks.
+		defer removeRoots(erasureDisks)
+		// execute the object layer suite tests.
+		objSuiteTest(c, objLayer)
 	}
-	APITestSuite(c, create)
-	defer removeRootsC(c, storageList)
-}
+	// APITestSuite contains set of all object layer suite test.
+	// These set of test functions are called here.
+	APITestSuite(c, execObjectLayerSuiteTestXL)
 
-func removeRootsC(c *C, roots []string) {
-	for _, root := range roots {
-		removeAll(root)
-	}
 }
