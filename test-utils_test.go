@@ -30,7 +30,9 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -60,6 +62,32 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
+
+// Random number state.
+// We generate random temporary file names so that there's a good
+// chance the file doesn't exist yet.
+var randN uint32
+var randmu sync.Mutex
+
+// reseed - returns a new seed everytime the function is called.
+func reseed() uint32 {
+	return uint32(time.Now().UnixNano() + int64(os.Getpid()))
+}
+
+// nextSuffix - provides a new unique suffix everytime the function is called.
+func nextSuffix() string {
+	randmu.Lock()
+	r := randN
+	// Initial seed required, generate one.
+	if r == 0 {
+		r = reseed()
+	}
+	// constants from Numerical Recipes
+	r = r*1664525 + 1013904223
+	randN = r
+	randmu.Unlock()
+	return strconv.Itoa(int(1e9 + r%1e9))[1:]
+}
 
 // TestServer encapsulates an instantiation of a Minio instance with a temporary backend.
 // Example usage:

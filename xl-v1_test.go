@@ -16,7 +16,11 @@
 
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // Collection of disks verbatim used for tests.
 var disks = []string{
@@ -110,5 +114,25 @@ func TestStorageInfo(t *testing.T) {
 	}
 	if disks16Info.Total <= 0 {
 		t.Fatalf("Diskinfo total values should be greater 0")
+	}
+}
+
+// TestNewXL - tests initialization of all input disks
+// and constructs a valid `XL` object
+func TestNewXL(t *testing.T) {
+	var nDisks = 16 // Maximum disks.
+	var erasureDisks []string
+	for i := 0; i < nDisks; i++ {
+		// Do not attempt to create this path, the test validates
+		// so that newFSObjects initializes non existing paths
+		// and successfully returns initialized object layer.
+		disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+		erasureDisks = append(erasureDisks, disk)
+		defer removeAll(disk)
+	}
+	// Initializes all erasure disks
+	_, err := newXLObjects(erasureDisks)
+	if err != nil {
+		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 }
