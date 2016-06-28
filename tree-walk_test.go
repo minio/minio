@@ -213,7 +213,7 @@ func testTreeWalkFailedDisks(obj ObjectLayer, instanceType string, t *testing.T)
 	case fsObjects:
 		removeDiskN(disks, 1)
 	case xlObjects:
-		removeDiskN(disks, len(disks)/2+1)
+		removeDiskN(disks, len(disks))
 	}
 
 	// Start the tree walk go-routine.
@@ -223,19 +223,8 @@ func testTreeWalkFailedDisks(obj ObjectLayer, instanceType string, t *testing.T)
 	endWalkCh := make(chan struct{})
 	twResultCh := startTreeWalk(obj, bucket, prefix, marker, recursive, endWalkCh)
 
-	switch obj.(type) {
-	case fsObjects:
-		if res := <-twResultCh; res.err.Error() != "disk not found" {
-			t.Error("Expected disk not found error")
-		}
-	case xlObjects:
-		entryCount := 0
-		for range twResultCh {
-			entryCount++
-		}
-		if entryCount != len(objects) {
-			t.Error("Found fewer objects than expected")
-		}
+	if res := <-twResultCh; res.err.Error() != "disk not found" {
+		t.Error("Expected disk not found error")
 	}
 
 }
