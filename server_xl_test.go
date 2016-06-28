@@ -2002,6 +2002,114 @@ func (s *MyAPIXLSuite) TestObjectMultipartListError(c *C) {
 	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000.", http.StatusBadRequest)
 }
 
+// TestMultipartErrorEntityTooSmall - initiates a new multipart upload,
+// uploads 2 parts of size less than 5MB, upon complete multipart upload
+// validates EntityTooSmall error returned by the operation.
+func (s *MyAPIXLSuite) TestMultipartErrorEntityTooSmall(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, 200)
+
+	objectName := "test-multipart-object"
+	// construct HTTP request to initiate a NewMultipart upload.
+	request, err = newTestRequest("POST", getNewMultipartURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request initiating the new multipart upload.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// expecting the response status code to be http.StatusOK(200 OK).
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	// parse the response body and obtain the new upload ID.
+	decoder := xml.NewDecoder(response.Body)
+	newResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+	// uploadID to be used for rest of the multipart operations on the object.
+	uploadID := newResponse.UploadID
+
+	// content for the part to be uploaded.
+	// Create a byte array of 4MB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 4*1024*1024/16)
+	// calculate md5Sum of the data.
+	hasher := md5.New()
+	hasher.Write(data)
+	md5Sum := hasher.Sum(nil)
+
+	buffer1 := bytes.NewReader(data)
+	// HTTP request for the part to be uploaded.
+	request, err = newTestRequest("PUT", getPartUploadURL(s.endPoint, bucketName, objectName, uploadID, "1"),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
+	// set the Content-Md5 header to the base64 encoding the md5Sum of the content.
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to upload the first part.
+	response1, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response1.StatusCode, Equals, http.StatusOK)
+
+	// content for the second part to be uploaded will be same as first part.
+	hasher = md5.New()
+	hasher.Write(data)
+	// calculate md5Sum of the data.
+	md5Sum = hasher.Sum(nil)
+
+	buffer2 := bytes.NewReader(data)
+	// HTTP request for the second part to be uploaded.
+	request, err = newTestRequest("PUT", getPartUploadURL(s.endPoint, bucketName, objectName, uploadID, "2"),
+		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
+	// set the Content-Md5 header to the base64 encoding the md5Sum of the content.
+	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to upload the second part.
+	response2, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	// Complete multipart upload
+	completeUploads := &completeMultipartUpload{
+		Parts: []completePart{
+			{
+				PartNumber: 1,
+				ETag:       response1.Header.Get("ETag"),
+			},
+			{
+				PartNumber: 2,
+				ETag:       response2.Header.Get("ETag"),
+			},
+		},
+	}
+
+	completeBytes, err := xml.Marshal(completeUploads)
+	c.Assert(err, IsNil)
+	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	request, err = newTestRequest("POST", getCompleteMultipartUploadURL(s.endPoint, bucketName, objectName, uploadID), int64(len(completeBytes)), bytes.NewReader(completeBytes), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	// Execute the complete multipart request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// verify whether complete multipart was successfull.
+	verifyError(c, response, "EntityTooSmall", "Your proposed upload is smaller than the minimum allowed object size.", http.StatusOK)
+}
+
 // TestObjectMultipart - Initiates a NewMultipart upload, uploads 2 parts,
 // completes the multipart upload and validates the status of the operation.
 func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {

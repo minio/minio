@@ -504,7 +504,11 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-			return "", PartTooSmall{}
+			return "", PartTooSmall{
+				PartNumber: part.PartNumber,
+				PartSize:   fsMeta.Parts[partIdx].Size,
+				PartETag:   part.ETag,
+			}
 		}
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
