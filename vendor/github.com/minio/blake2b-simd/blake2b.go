@@ -143,6 +143,7 @@ func (d *digest) initialize(c *Config) {
 		p[2] = 1
 		p[3] = 1
 	}
+
 	// Initialize.
 	d.size = c.Size
 	for i := 0; i < 8; i++ {
@@ -151,6 +152,7 @@ func (d *digest) initialize(c *Config) {
 	if c.Tree != nil && c.Tree.IsLastNode {
 		d.isLastNode = true
 	}
+
 	// Process key.
 	if c.Key != nil {
 		copy(d.paddedKey[:], c.Key)
@@ -213,7 +215,7 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 		// Process buffer.
 		copy(d.x[d.nx:], p[:left])
 		p = p[left:]
-		blocks(d, d.x[:])
+		compress(d, d.x[:])
 		d.nx = 0
 	}
 	// Process full blocks except for the last one.
@@ -222,7 +224,7 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 		if n == len(p) {
 			n -= BlockSize
 		}
-		blocks(d, p[:n])
+		compress(d, p[:n])
 		p = p[n:]
 	}
 	// Fill buffer.
@@ -231,11 +233,11 @@ func (d *digest) Write(p []byte) (nn int, err error) {
 }
 
 // Sum returns the calculated checksum.
-func (d0 *digest) Sum(in []byte) []byte {
-	// Make a copy of d0 so that caller can keep writing and summing.
-	d := *d0
-	hash := d.checkSum()
-	return append(in, hash[:d.size]...)
+func (d *digest) Sum(in []byte) []byte {
+	// Make a copy of d so that caller can keep writing and summing.
+	d0 := *d
+	hash := d0.checkSum()
+	return append(in, hash[:d0.size]...)
 }
 
 func (d *digest) checkSum() [Size]byte {
@@ -262,7 +264,7 @@ func (d *digest) checkSum() [Size]byte {
 		d.f[1] = 0xffffffffffffffff
 	}
 	// Compress last block.
-	blocks(d, d.x[:])
+	compress(d, d.x[:])
 
 	var out [Size]byte
 	j := 0

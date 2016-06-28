@@ -13,11 +13,6 @@
 			"revisionTime": "2016-05-20T13:10:51+03:00"
 		},
 		{
-			"path": "github.com/dchest/blake2b",
-			"revision": "3c8c640cd7bea3ca78209d812b5854442ab92fed",
-			"revisionTime": "2015-10-22T12:35:02+02:00"
-		},
-		{
 			"path": "github.com/dgrijalva/jwt-go",
 			"revision": "afef698c326bfd906b11659432544e5aae441d44",
 			"revisionTime": "2015-12-30T10:00:00-08:00"
@@ -86,6 +81,11 @@
 			"path": "github.com/mattn/go-isatty",
 			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
 			"revisionTime": "2015-08-14T09:26:29+09:00"
+		},
+		{
+			"path": "github.com/minio/blake2b-simd",
+			"revision": "0b3e695ecc77a334fafe30ee36de504c41ec4d6a",
+			"revisionTime": "2016-06-28T02:55:56-07:00"
 		},
 		{
 			"path": "github.com/minio/cli",
