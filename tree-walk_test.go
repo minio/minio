@@ -167,10 +167,7 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 
 	// Drain the buffered channel result channel of entries that were pushed before
 	// it was signalled to abort.
-	for {
-		if v := <-twResultCh; (v == treeWalkResult{}) {
-			break
-		}
+	for range twResultCh {
 	}
 	if _, open := <-twResultCh; open {
 		t.Error("Expected tree walk result channel to be closed, found to be open")
