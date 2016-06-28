@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Helper function that invokes startTreeWalk depending on the type implementing objectLayer.
@@ -138,6 +139,33 @@ func TestTreeWalkAbort(t *testing.T) {
 	ExecObjectLayerTest(t, testTreeWalkAbort)
 }
 
+// Extend treeWalk type to provide a method to reset timeout
+func (t *treeWalkPool) setTimeout(newTimeout time.Duration) {
+	t.timeOut = newTimeout
+}
+
+// Helper function to set treewalk (idle) timeout
+func setTimeout(obj ObjectLayer, newTimeout time.Duration) {
+	switch typ := obj.(type) {
+	case fsObjects:
+		typ.listPool.setTimeout(newTimeout)
+	case xlObjects:
+		typ.listPool.setTimeout(newTimeout)
+
+	}
+}
+
+// Helper function to put the tree walk go-routine into the pool
+func putbackTreeWalk(obj ObjectLayer, params listParams, resultCh chan treeWalkResult, endWalkCh chan struct{}) {
+	switch typ := obj.(type) {
+	case fsObjects:
+		typ.listPool.Set(params, resultCh, endWalkCh)
+	case xlObjects:
+		typ.listPool.Set(params, resultCh, endWalkCh)
+
+	}
+}
+
 // Test if tree walk go-routine exits cleanly if tree walk is aborted before compeletion.
 func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	bucket := "abc"
@@ -152,6 +180,9 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Set treewalk pool timeout to be test friendly
+	setTimeout(obj, 2*time.Second)
+
 	// Start the tree walk go-routine.
 	prefix := ""
 	marker := ""
@@ -161,6 +192,9 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 
 	// Pull one result entry from the tree walk result channel.
 	<-twResultCh
+
+	// Put the treewalk go-routine into tree walk pool
+	putbackTreeWalk(obj, listParams{bucket, recursive, marker, prefix}, twResultCh, endWalkCh)
 
 	// Signal the tree-walk go-routine to abort.
 	endWalkCh <- struct{}{}
