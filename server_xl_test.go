@@ -34,7 +34,7 @@ import (
 )
 
 // API suite container.
-type MyAPIXLSuite struct {
+type TestSuiteXL struct {
 	testServer TestServer
 	endPoint   string
 	accessKey  string
@@ -42,11 +42,11 @@ type MyAPIXLSuite struct {
 }
 
 // Initializing the test suite.
-var _ = Suite(&MyAPIXLSuite{})
+var _ = Suite(&TestSuiteXL{})
 
 // Setting up the test suite.
 // Starting the Test server with temporary XL backend.
-func (s *MyAPIXLSuite) SetUpSuite(c *C) {
+func (s *TestSuiteXL) SetUpSuite(c *C) {
 	s.testServer = StartTestServer(c, "XL")
 	s.endPoint = s.testServer.Server.URL
 	s.accessKey = s.testServer.AccessKey
@@ -55,11 +55,11 @@ func (s *MyAPIXLSuite) SetUpSuite(c *C) {
 }
 
 // Called implicitly by "gopkg.in/check.v1" after all tests are run.
-func (s *MyAPIXLSuite) TearDownSuite(c *C) {
+func (s *TestSuiteXL) TearDownSuite(c *C) {
 	s.testServer.Stop()
 }
 
-func (s *MyAPIXLSuite) TestAuth(c *C) {
+func (s *TestSuiteXL) TestAuth(c *C) {
 	secretID, err := genSecretAccessKey()
 	c.Assert(err, IsNil)
 
@@ -70,7 +70,9 @@ func (s *MyAPIXLSuite) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
-func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
+// TestBucketPolicy - Inserts the bucket policy and verifies it by fetching the policy back.
+// Deletes the policy and verifies the deletion by fetching it back.
+func (s *TestSuiteXL) TestBucketPolicy(c *C) {
 	// Sample bucket policy.
 	bucketPolicyBuf := `{
     "Version": "2012-10-17",
@@ -108,8 +110,9 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 }`
 	// generate a random bucket Name.
 	bucketName := getRandomBucketName()
-	// HTTP request to create the bucket.
+	// create the policy statement string with the randomly generated bucket name.
 	bucketPolicyStr := fmt.Sprintf(bucketPolicyBuf, bucketName, bucketName)
+	// HTTP request to create the bucket.
 	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
@@ -169,7 +172,7 @@ func (s *MyAPIXLSuite) TestBucketPolicy(c *C) {
 }
 
 // TestDeleteBucket - validates DELETE bucket operation.
-func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
+func (s *TestSuiteXL) TestDeleteBucket(c *C) {
 	bucketName := getRandomBucketName()
 
 	// HTTP request to create the bucket.
@@ -196,7 +199,7 @@ func (s *MyAPIXLSuite) TestDeleteBucket(c *C) {
 }
 
 // TestDeleteBucketNotEmpty - Validates the operation during an attempt to delete a non-empty bucket.
-func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
+func (s *TestSuiteXL) TestDeleteBucketNotEmpty(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 
@@ -213,8 +216,8 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// generate http request for an object upload.
-	// "myobject" is the object name.
-	objectName := "myobject"
+	// "test-object" is the object name.
+	objectName := "test-object"
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
@@ -239,8 +242,8 @@ func (s *MyAPIXLSuite) TestDeleteBucketNotEmpty(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusConflict)
 }
 
-// TestDeleteObject - Tests deleting of object.
-func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
+// TestDeleteObject - uploads the object first.
+func (s *TestSuiteXL) TestDeleteObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -315,7 +318,7 @@ func (s *MyAPIXLSuite) TestDeleteObject(c *C) {
 }
 
 // TestNonExistentBucket - Asserts response for HEAD on non-existent bucket.
-func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
+func (s *TestSuiteXL) TestNonExistentBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// create request to HEAD on the bucket.
@@ -333,7 +336,7 @@ func (s *MyAPIXLSuite) TestNonExistentBucket(c *C) {
 }
 
 // TestEmptyObject - Asserts the response for operation on a 0 byte object.
-func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
+func (s *TestSuiteXL) TestEmptyObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -348,7 +351,7 @@ func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
 	// assert the http response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	objectName := "object"
+	objectName := "test-object"
 	// construct http request for uploading the object.
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
@@ -382,7 +385,7 @@ func (s *MyAPIXLSuite) TestEmptyObject(c *C) {
 }
 
 // TestBucket - Asserts the response for HEAD on an existing bucket.
-func (s *MyAPIXLSuite) TestBucket(c *C) {
+func (s *TestSuiteXL) TestBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -410,7 +413,7 @@ func (s *MyAPIXLSuite) TestBucket(c *C) {
 }
 
 // TestGetObject - Tests fetching of a small object after its insertion into the bucket.
-func (s *MyAPIXLSuite) TestGetObject(c *C) {
+func (s *TestSuiteXL) TestGetObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	buffer := bytes.NewReader([]byte("hello world"))
@@ -460,7 +463,7 @@ func (s *MyAPIXLSuite) TestGetObject(c *C) {
 }
 
 // TestMultipleObjects - Validates upload and fetching of multiple object into the bucket.
-func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
+func (s *TestSuiteXL) TestMultipleObjects(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -575,14 +578,14 @@ func (s *MyAPIXLSuite) TestMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// verify object
+	// verify object.
 	responseBody, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
 }
 
 // TestNotImplemented - Validates response for obtaining policy on an non-existent bucket and object.
-func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
+func (s *TestSuiteXL) TestNotImplemented(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	request, err := newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?policy",
@@ -596,7 +599,7 @@ func (s *MyAPIXLSuite) TestNotImplemented(c *C) {
 }
 
 // TestHeader - Validates the error response for an attempt to fetch non-existent object.
-func (s *MyAPIXLSuite) TestHeader(c *C) {
+func (s *TestSuiteXL) TestHeader(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// obtain HTTP request to fetch an object from non-existent bucket/object.
@@ -612,7 +615,7 @@ func (s *MyAPIXLSuite) TestHeader(c *C) {
 }
 
 // TestPutBucket - Validating bucket creation.
-func (s *MyAPIXLSuite) TestPutBucket(c *C) {
+func (s *TestSuiteXL) TestPutBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// Block 1: Testing for racey access
@@ -656,7 +659,7 @@ func (s *MyAPIXLSuite) TestPutBucket(c *C) {
 // 2. Insert Object.
 // 3. Use "X-Amz-Copy-Source" header to copy the previously inserted object.
 // 4. Validate the content of copied object.
-func (s *MyAPIXLSuite) TestCopyObject(c *C) {
+func (s *TestSuiteXL) TestCopyObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -715,7 +718,7 @@ func (s *MyAPIXLSuite) TestCopyObject(c *C) {
 }
 
 // TestPutObject -  Tests successful put object request.
-func (s *MyAPIXLSuite) TestPutObject(c *C) {
+func (s *TestSuiteXL) TestPutObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -760,7 +763,7 @@ func (s *MyAPIXLSuite) TestPutObject(c *C) {
 }
 
 // TestPutObjectLongName - Long Object name strings are created and uploaded, validated for success.
-func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
+func (s *TestSuiteXL) TestPutObjectLongName(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -799,7 +802,7 @@ func (s *MyAPIXLSuite) TestPutObjectLongName(c *C) {
 // TestListBuckets - Make request for listing of all buckets.
 // XML response is parsed.
 // Its success verifies the format of the response.
-func (s *MyAPIXLSuite) TestListBuckets(c *C) {
+func (s *TestSuiteXL) TestListBuckets(c *C) {
 	// create HTTP request for listing buckets.
 	request, err := newTestRequest("GET", getListBucketURL(s.endPoint),
 		0, nil, s.accessKey, s.secretKey)
@@ -821,7 +824,7 @@ func (s *MyAPIXLSuite) TestListBuckets(c *C) {
 
 // TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
 // on an attempt to upload an object into a non-existent bucket.
-func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
+func (s *TestSuiteXL) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// content of the object to be uploaded.
@@ -843,8 +846,8 @@ func (s *MyAPIXLSuite) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 
 // TestGetOnObject - Asserts properties for GET on an object.
 // GET requests on an object retrieves the object from server.
-// Tests behaviour when If-Match/If-None-Match headers are set on the request
-func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
+// Tests behaviour when If-Match/If-None-Match headers are set on the request.
+func (s *TestSuiteXL) TestGetOnObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// make HTTP request to create the bucket.
@@ -918,7 +921,7 @@ func (s *MyAPIXLSuite) TestGetOnObject(c *C) {
 // and If-Unmodified-Since headers set are validated.
 // If-Modified-Since - Return the object only if it has been modified since the specified time, else return a 304 (not modified).
 // If-Unmodified-Since - Return the object only if it has not been modified since the specified time, else return a 412 (precondition failed).
-func (s *MyAPIXLSuite) TestHeadOnObjectLastModified(c *C) {
+func (s *TestSuiteXL) TestHeadOnObjectLastModified(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -984,12 +987,11 @@ func (s *MyAPIXLSuite) TestHeadOnObjectLastModified(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
-
 }
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.
 // HEAD request on the bucket validates the existence of the bucket.
-func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
+func (s *TestSuiteXL) TestHeadOnBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1015,7 +1017,7 @@ func (s *MyAPIXLSuite) TestHeadOnBucket(c *C) {
 
 // TestContentTypePersists - Object upload with different Content-type is first done.
 // And then a HEAD and GET request on these objects are done to validate if the same Content-Type set during upload persists.
-func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
+func (s *TestSuiteXL) TestContentTypePersists(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1112,7 +1114,7 @@ func (s *MyAPIXLSuite) TestContentTypePersists(c *C) {
 // TestPartialContent - Validating for GetObject with partial content request.
 // By setting the Range header, A request to send specific bytes range of data from an
 // already uploaded object can be done.
-func (s *MyAPIXLSuite) TestPartialContent(c *C) {
+func (s *TestSuiteXL) TestPartialContent(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP Request to create the bucket.
@@ -1178,7 +1180,7 @@ func (s *MyAPIXLSuite) TestPartialContent(c *C) {
 
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
 // and then asserting the error response with the expected one.
-func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
+func (s *TestSuiteXL) TestListObjectsHandlerErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1207,7 +1209,7 @@ func (s *MyAPIXLSuite) TestListObjectsHandlerErrors(c *C) {
 
 // TestPutBucketErrors - request for non valid bucket operation
 // and validate it with expected error result.
-func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
+func (s *TestSuiteXL) TestPutBucketErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// generating a HTTP request to create bucket.
@@ -1254,7 +1256,7 @@ func (s *MyAPIXLSuite) TestPutBucketErrors(c *C) {
 }
 
 // TestGetObjectLarge10MiB - Tests validate fetching of an object of size 10MB.
-func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
+func (s *TestSuiteXL) TestGetObjectLarge10MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// form HTTP reqest to create the bucket.
@@ -1313,12 +1315,12 @@ func (s *MyAPIXLSuite) TestGetObjectLarge10MiB(c *C) {
 	getContent, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, IsNil)
 
-	// Compare putContent and getContent
+	// Compare putContent and getContent.
 	c.Assert(string(getContent), Equals, putContent)
 }
 
 // TestGetObjectLarge11MiB - Tests validate fetching of an object of size 10MB.
-func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
+func (s *TestSuiteXL) TestGetObjectLarge11MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1387,7 +1389,7 @@ func (s *MyAPIXLSuite) TestGetObjectLarge11MiB(c *C) {
 // TestGetPartialObjectMisAligned - tests get object partially mis-aligned.
 // create a large buffer of mis-aligned data and upload it.
 // then make partial range requests to while fetching it back and assert the response content.
-func (s *MyAPIXLSuite) TestGetPartialObjectMisAligned(c *C) {
+func (s *TestSuiteXL) TestGetPartialObjectMisAligned(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1475,7 +1477,7 @@ func (s *MyAPIXLSuite) TestGetPartialObjectMisAligned(c *C) {
 }
 
 // TestGetPartialObjectLarge11MiB - Test validates partial content request for a 11MiB object.
-func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
+func (s *TestSuiteXL) TestGetPartialObjectLarge11MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1543,7 +1545,7 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge11MiB(c *C) {
 }
 
 // TestGetPartialObjectLarge11MiB - Test validates partial content request for a 10MiB object.
-func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
+func (s *TestSuiteXL) TestGetPartialObjectLarge10MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1613,7 +1615,7 @@ func (s *MyAPIXLSuite) TestGetPartialObjectLarge10MiB(c *C) {
 }
 
 // TestGetObjectErrors - Tests validate error response for invalid object operations.
-func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
+func (s *TestSuiteXL) TestGetObjectErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 
@@ -1654,7 +1656,7 @@ func (s *MyAPIXLSuite) TestGetObjectErrors(c *C) {
 }
 
 // TestGetObjectRangeErrors - Validate error response when object is fetched with incorrect byte range value.
-func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
+func (s *TestSuiteXL) TestGetObjectRangeErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1700,7 +1702,7 @@ func (s *MyAPIXLSuite) TestGetObjectRangeErrors(c *C) {
 }
 
 // TestObjectMultipartAbort - Test validates abortion of a multipart upload after uploading 2 parts.
-func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
+func (s *TestSuiteXL) TestObjectMultipartAbort(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1768,7 +1770,7 @@ func (s *MyAPIXLSuite) TestObjectMultipartAbort(c *C) {
 }
 
 // TestBucketMultipartList - Initiates a NewMultipart upload, uploads parts and validates listing of the parts.
-func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
+func (s *TestSuiteXL) TestBucketMultipartList(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1881,7 +1883,7 @@ func (s *MyAPIXLSuite) TestBucketMultipartList(c *C) {
 }
 
 // TestMakeBucketLocation - tests make bucket location header response.
-func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
+func (s *TestSuiteXL) TestMakeBucketLocation(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1899,7 +1901,7 @@ func (s *MyAPIXLSuite) TestMakeBucketLocation(c *C) {
 }
 
 // TestValidateObjectMultipartUploadID - Test Initiates a new multipart upload and validates the uploadID.
-func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
+func (s *TestSuiteXL) TestValidateObjectMultipartUploadID(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1935,7 +1937,7 @@ func (s *MyAPIXLSuite) TestValidateObjectMultipartUploadID(c *C) {
 
 // TestObjectMultipartListError - Initiates a NewMultipart upload, uploads parts and validates
 // error response for an incorrect max-parts parameter .
-func (s *MyAPIXLSuite) TestObjectMultipartListError(c *C) {
+func (s *TestSuiteXL) TestObjectMultipartListError(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -2005,7 +2007,7 @@ func (s *MyAPIXLSuite) TestObjectMultipartListError(c *C) {
 // TestMultipartErrorEntityTooSmall - initiates a new multipart upload,
 // uploads 2 parts of size less than 5MB, upon complete multipart upload
 // validates EntityTooSmall error returned by the operation.
-func (s *MyAPIXLSuite) TestMultipartErrorEntityTooSmall(c *C) {
+func (s *TestSuiteXL) TestMultipartErrorEntityTooSmall(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -2112,7 +2114,7 @@ func (s *MyAPIXLSuite) TestMultipartErrorEntityTooSmall(c *C) {
 
 // TestObjectMultipart - Initiates a NewMultipart upload, uploads 2 parts,
 // completes the multipart upload and validates the status of the operation.
-func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
+func (s *TestSuiteXL) TestObjectMultipart(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -2224,7 +2226,7 @@ func (s *MyAPIXLSuite) TestObjectMultipart(c *C) {
 // completes the multipart upload and validates the status of the operation.
 // then, after PutObject with same object name on the bucket,
 // test validates for successful overwrite.
-func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
+func (s *TestSuiteXL) TestObjectMultipartOverwriteSinglePut(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -2343,7 +2345,7 @@ func (s *MyAPIXLSuite) TestObjectMultipartOverwriteSinglePut(c *C) {
 	// verify whether upload was successfull.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	// HTTP request for downloading the object.
-	request, err = newTestRequest("GET", getPutObjectURL(s.endPoint, bucketName, objectName),
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	// execute the HTTP request to download the object.
