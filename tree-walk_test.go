@@ -171,7 +171,7 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	bucket := "abc"
 
 	var objects []string
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 1001; i++ {
 		objects = append(objects, "obj"+strconv.Itoa(i))
 	}
 
@@ -196,8 +196,10 @@ func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
 	// Put the treewalk go-routine into tree walk pool
 	putbackTreeWalk(obj, listParams{bucket, recursive, marker, prefix}, twResultCh, endWalkCh)
 
-	// Signal the tree-walk go-routine to abort.
-	endWalkCh <- struct{}{}
+	// Confirm that endWalkCh is closed on tree walk pool timer expiry
+	if _, open := <-endWalkCh; open {
+		t.Error("Expected tree walk endWalk channel to be closed, found to be open")
+	}
 
 	// Drain the buffered channel result channel of entries that were pushed before
 	// it was signalled to abort.
