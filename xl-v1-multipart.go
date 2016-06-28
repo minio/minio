@@ -334,7 +334,7 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	// Pick one from the first valid metadata.
 	xlMeta := pickValidXLMeta(partsMetadata)
 
-	partSuffix := fmt.Sprintf("object%d", partID)
+	partSuffix := fmt.Sprintf("part.%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
 
 	// Initialize md5 writer.
@@ -612,7 +612,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			Number: part.PartNumber,
 			ETag:   part.ETag,
 			Size:   currentXLMeta.Parts[partIdx].Size,
-			Name:   fmt.Sprintf("object%d", part.PartNumber),
+			Name:   fmt.Sprintf("part.%d", part.PartNumber),
 		}
 	}
 

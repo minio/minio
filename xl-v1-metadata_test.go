@@ -31,11 +31,11 @@ func TestXLMetaV1(t *testing.T) {
 		size     int64
 		index    int
 	}{
-		{5, "object5", "etag5", fiveMB + 5, 3},
-		{4, "object4", "etag4", fiveMB + 4, 2},
-		{7, "object7", "etag7", fiveMB + 7, 4},
-		{2, "object2", "etag2", fiveMB + 2, 1},
-		{1, "object1", "etag1", fiveMB + 1, 0},
+		{5, "part.5", "etag5", fiveMB + 5, 3},
+		{4, "part.4", "etag4", fiveMB + 4, 2},
+		{7, "part.7", "etag7", fiveMB + 7, 4},
+		{2, "part.2", "etag2", fiveMB + 2, 1},
+		{1, "part.1", "etag1", fiveMB + 1, 0},
 	}
 
 	// Create a XLMetaV1 structure to test on.

@@ -1,5 +1,5 @@
 {
-    "version": "1",
+    "version": "1.0.0",
     "format": "fs",
     "minio": {
         "release": "DEVELOPMENT.GOGET"
@@ -7,7 +7,7 @@
     "parts": [
         {
             "number": 1,
-            "name": "object1",
+            "name": "part.1",
             "size": 29,
             "eTag": "",
         },
