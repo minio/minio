@@ -48,6 +48,11 @@ var errFaultyDisk = errors.New("Faulty disk")
 
 // checkPathLength - returns error if given path name length more than 255
 func checkPathLength(pathName string) error {
+	// Apple OS X path length is limited to 1016
+	if runtime.GOOS == "darwin" && len(pathName) > 1016 {
+		return errFileNameTooLong
+	}
+
 	// Check each path segment length is > 255
 	for len(pathName) > 0 && pathName != "." && pathName != "/" {
 		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
@@ -551,6 +556,12 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(filepath.Dir(filePath), 0777); err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileAccessDenied
+		} else if runtime.GOOS == "windows" && strings.Contains(err.Error(), "system cannot find the path specified") {
+			return errFileAccessDenied
+		}
 		return err
 	}
 

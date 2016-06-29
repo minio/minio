@@ -97,9 +97,8 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	// Try to create a file that includes a file in its path components.
 	// In *nix, this returns syscall.ENOTDIR while in windows we receive the following error.
 	err = fs.AppendFile("voldir", "/file/obj1", []byte("hello"))
-	winErr := "The system cannot find the path specified."
-	if !strings.Contains(err.Error(), winErr) {
-		t.Errorf("expected to recieve %s, but received %s", winErr, err.Error())
+	if err != errFileAccessDenied {
+		t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 	}
 }
 
