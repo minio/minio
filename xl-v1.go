@@ -74,7 +74,7 @@ const (
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
 	// Minimum erasure blocks.
-	minErasureBlocks = 8
+	minErasureBlocks = 6
 )
 
 // Validate if input disks are sufficient for initializing XL.
@@ -94,7 +94,7 @@ func checkSufficientDisks(disks []string) error {
 	}
 
 	// Verify if we have even number of disks.
-	// only combination of 8, 12, 16 are supported.
+	// only combination of 6, 8, 10, 12, 14, 16 are supported.
 	if !isEven(totalDisks) {
 		return errXLNumDisks
 	}
