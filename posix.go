@@ -115,16 +115,23 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	return fs, nil
 }
 
+// getDiskInfo returns given disk information.
+func getDiskInfo(diskPath string) (di disk.Info, err error) {
+	if err = checkPathLength(diskPath); err == nil {
+		di, err = disk.GetInfo(diskPath)
+	}
+
+	if os.IsNotExist(err) {
+		err = errDiskNotFound
+	}
+
+	return di, err
+}
+
 // checkDiskFree verifies if disk path has sufficient minimum free disk space.
 func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
-	if err = checkPathLength(diskPath); err != nil {
-		return err
-	}
-	di, err := disk.GetInfo(diskPath)
+	di, err := getDiskInfo(diskPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return errDiskNotFound
-		}
 		return err
 	}
 
@@ -256,8 +263,8 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 		return VolInfo{}, errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return VolInfo{}, err
 	}
 
@@ -296,8 +303,8 @@ func (s *posix) DeleteVol(volume string) (err error) {
 		return errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return err
 	}
 
@@ -336,8 +343,8 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		return nil, errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return nil, err
 	}
 
@@ -373,8 +380,9 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 	if s.ioErrCount > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return nil, err
 	}
 
@@ -434,8 +442,8 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		return 0, errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return 0, err
 	}
 
@@ -572,8 +580,8 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return FileInfo{}, err
 	}
 
@@ -664,8 +672,8 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
 		return err
 	}
 
