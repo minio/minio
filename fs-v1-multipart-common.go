@@ -17,8 +17,10 @@
 package main
 
 import (
+	"encoding/json"
 	"path"
 	"strings"
+	"time"
 )
 
 // Returns if the prefix is a multipart upload.
@@ -67,4 +69,59 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 		return false
 	}
 	return true
+}
+
+// writeUploadJSON - create `uploads.json` or update it with new uploadID.
+func (fs fsObjects) writeUploadJSON(bucket, object, uploadID string, initiated time.Time) (err error) {
+	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	uniqueID := getUUID()
+	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
+	var uploadsJSON uploadsV1
+	uploadsJSON, err = readUploadsJSON(bucket, object, fs.storage)
+	if err != nil {
+		// For any other errors.
+		if err != errFileNotFound {
+			return err
+		}
+		// Set uploads format to `fs`.
+		uploadsJSON = newUploadsV1("fs")
+	}
+	// Add a new upload id.
+	uploadsJSON.AddUploadID(uploadID, initiated)
+
+	// Update `uploads.json` on all disks.
+	uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
+	if wErr != nil {
+		return wErr
+	}
+	// Write `uploads.json` to disk.
+	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
+		return wErr
+	}
+	wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
+	if wErr != nil {
+		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
+			return dErr
+		}
+		return wErr
+	}
+	return nil
+}
+
+// updateUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
+func (fs fsObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1) (err error) {
+	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	uniqueID := getUUID()
+	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
+	uploadsBytes, wErr := json.Marshal(uploadsJSON)
+	if wErr != nil {
+		return wErr
+	}
+	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
+		return wErr
+	}
+	if wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
+		return wErr
+	}
+	return nil
 }

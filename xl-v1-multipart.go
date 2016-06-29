@@ -259,7 +259,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
 	// Create 'uploads.json'
-	if err = writeUploadJSON(bucket, object, uploadID, initiated, xl.storageDisks...); err != nil {
+	if err = xl.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -713,7 +713,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
 	}
 	if len(uploadsJSON.Uploads) > 0 {
-		if err = updateUploadsJSON(bucket, object, uploadsJSON, xl.storageDisks...); err != nil {
+		if err = xl.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
 			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 		}
 		// Return success.
@@ -764,7 +764,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	if len(uploadsJSON.Uploads) > 0 {
 		// There are pending uploads for the same object, preserve
 		// them update 'uploads.json' in-place.
-		err = updateUploadsJSON(bucket, object, uploadsJSON, xl.storageDisks...)
+		err = xl.updateUploadsJSON(bucket, object, uploadsJSON)
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}

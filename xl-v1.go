@@ -171,16 +171,9 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
-	// Read quorum should be always N/2 + 1 (due to Vandermonde matrix
-	// erasure requirements)
+	// READ and WRITE quorum is always set to (N/2 + 1) number of disks.
 	xl.readQuorum = len(xl.storageDisks)/2 + 1
-
-	// Write quorum is assumed if we have total disks + 2
-	// parity.
-	xl.writeQuorum = len(xl.storageDisks)/2 + 2
-	if xl.writeQuorum > len(xl.storageDisks) {
-		xl.writeQuorum = len(xl.storageDisks)
-	}
+	xl.writeQuorum = len(xl.storageDisks)/2 + 1
 
 	// Return successfully initialized object layer.
 	return xl, nil

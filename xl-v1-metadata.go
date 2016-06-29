@@ -111,7 +111,7 @@ type xlMetaV1 struct {
 // fresh erasure info.
 func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta = xlMetaV1{}
-	xlMeta.Version = "1"
+	xlMeta.Version = "1.0.0"
 	xlMeta.Format = "xl"
 	xlMeta.Minio.Release = minioReleaseTag
 	xlMeta.Erasure = erasureInfo{
@@ -127,7 +127,7 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 // IsValid - tells if the format is sane by validating the version
 // string and format style.
 func (m xlMetaV1) IsValid() bool {
-	return m.Version == "1" && m.Format == "xl"
+	return m.Version == "1.0.0" && m.Format == "xl"
 }
 
 // ObjectPartIndex - returns the index of matching object part number.

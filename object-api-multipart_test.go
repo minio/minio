@@ -129,7 +129,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 
 	// Remove some random disk.
-	for _, disk := range disks[:6] {
+	for _, disk := range disks[:7] {
 		removeAll(disk)
 	}
 
