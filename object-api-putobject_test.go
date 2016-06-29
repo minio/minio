@@ -18,7 +18,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
 )
 
@@ -226,6 +231,117 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 	if actualErr != nil && !testCase.shouldPass {
 		if testCase.expectedError.Error() != actualErr.Error() {
 			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", len(testCases)+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
+		}
+	}
+}
+
+// Wrapper for calling PutObject tests for both XL multiple disks and single node setup.
+func TestObjectAPIPutObjectStaleFiles(t *testing.T) {
+	ExecObjectLayerStaleFilesTest(t, testObjectAPIPutObjectStaleFiles)
+}
+
+// Tests validate correctness of PutObject.
+func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
+	// Generating cases for which the PutObject fails.
+	bucket := "minio-bucket"
+	object := "minio-object"
+
+	// Create bucket.
+	err := obj.MakeBucket(bucket)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	data := []byte("hello, world")
+	// Create object.
+	_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil)
+	if err != nil {
+		// Failed to create object, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	for _, disk := range disks {
+		tmpMetaDir := path.Join(disk, minioMetaBucket, tmpMetaPrefix)
+		if !isDirEmpty(tmpMetaDir) {
+			t.Fatalf("%s: expected: empty, got: non-empty", tmpMetaDir)
+		}
+	}
+}
+
+// Wrapper for calling Multipart PutObject tests for both XL multiple disks and single node setup.
+func TestObjectAPIMultipartPutObjectStaleFiles(t *testing.T) {
+	ExecObjectLayerStaleFilesTest(t, testObjectAPIMultipartPutObjectStaleFiles)
+}
+
+// Tests validate correctness of PutObject.
+func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
+	// Generating cases for which the PutObject fails.
+	bucket := "minio-bucket"
+	object := "minio-object"
+
+	// Create bucket.
+	err := obj.MakeBucket(bucket)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Initiate Multipart Upload on the above created bucket.
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
+	if err != nil {
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Upload part1.
+	fiveMBBytes := bytes.Repeat([]byte("a"), 5*1024*1024)
+	md5Writer := md5.New()
+	md5Writer.Write(fiveMBBytes)
+	etag1 := hex.EncodeToString(md5Writer.Sum(nil))
+	_, err = obj.PutObjectPart(bucket, object, uploadID, 1, int64(len(fiveMBBytes)), bytes.NewReader(fiveMBBytes), etag1)
+	if err != nil {
+		// Failed to upload object part, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Upload part2.
+	data := []byte("hello, world")
+	md5Writer = md5.New()
+	md5Writer.Write(data)
+	etag2 := hex.EncodeToString(md5Writer.Sum(nil))
+	_, err = obj.PutObjectPart(bucket, object, uploadID, 2, int64(len(data)), bytes.NewReader(data), etag2)
+	if err != nil {
+		// Failed to upload object part, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Complete multipart.
+	parts := []completePart{
+		{ETag: etag1, PartNumber: 1},
+		{ETag: etag2, PartNumber: 2},
+	}
+	_, err = obj.CompleteMultipartUpload(bucket, object, uploadID, parts)
+	if err != nil {
+		// Failed to complete multipart upload, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	for _, disk := range disks {
+		tmpMetaDir := path.Join(disk, minioMetaBucket, tmpMetaPrefix)
+		files, err := ioutil.ReadDir(tmpMetaDir)
+		if err != nil {
+			// Its OK to have non-existen tmpMetaDir.
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			// Print the error
+			t.Errorf("%s", err)
+		}
+
+		if len(files) != 0 {
+			t.Fatalf("%s: expected: empty, got: non-empty. content: %s", tmpMetaDir, files)
 		}
 	}
 }

@@ -33,7 +33,7 @@ func isValidVolname(volname string) bool {
 		return false
 	}
 	// Volname shouldn't have reserved characters on windows in it.
-	return !strings.ContainsAny(volname, "/\\:*?\"<>|")
+	return !strings.ContainsAny(volname, `\:*?\"<>|`)
 }
 
 // mkdirAll creates a directory named path,
