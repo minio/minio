@@ -22,6 +22,30 @@ import (
 	"testing"
 )
 
+// Tests posix.getDiskInfo()
+func TestGetDiskInfo(t *testing.T) {
+	path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create a temporary directory, %s", err)
+	}
+	defer removeAll(path)
+
+	testCases := []struct {
+		diskPath    string
+		expectedErr error
+	}{
+		{path, nil},
+		{"/nonexistent-dir", errDiskNotFound},
+	}
+
+	// Check test cases.
+	for _, testCase := range testCases {
+		if _, err := getDiskInfo(testCase.diskPath); err != testCase.expectedErr {
+			t.Fatalf("expected: %s, got: %s", testCase.expectedErr, err)
+		}
+	}
+}
+
 // Tests the functionality implemented by ReadAll storage API.
 func TestReadAll(t *testing.T) {
 	path, err := ioutil.TempDir(os.TempDir(), "minio-")
