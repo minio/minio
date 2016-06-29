@@ -105,6 +105,131 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t *testing.T) {
 	}
 }
 
+// Benchmarks for ObjectLayer.PutObject().
+// The intent is to benchamrk PutObject for various sizes ranging from few bytes to 100MB.
+// Also each of these Benchmarks are run both XL and FS backends.
+
+// BenchmarkPutObjectVerySmallFS - Benchmark FS.PutObject() for object size of 10 bytes.
+func BenchmarkPutObjectVerySmallFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(10))
+}
+
+// BenchmarkPutObjectVerySmallXL - Benchmark XL.PutObject() for object size of 10 bytes.
+func BenchmarkPutObjectVerySmallXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(10))
+}
+
+// BenchmarkPutObject10KbFS - Benchmark FS.PutObject() for object size of 10KB.
+func BenchmarkPutObject10KbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(10*1024))
+}
+
+// BenchmarkPutObject10KbXL - Benchmark XL.PutObject() for object size of 10KB.
+func BenchmarkPutObject10KbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(10*1024))
+}
+
+// BenchmarkPutObject100KbFS - Benchmark FS.PutObject() for object size of 100KB.
+func BenchmarkPutObject100KbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(100*1024))
+}
+
+// BenchmarkPutObject100KbXL - Benchmark XL.PutObject() for object size of 100KB.
+func BenchmarkPutObject100KbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(100*1024))
+}
+
+// BenchmarkPutObject1MbFS - Benchmark FS.PutObject() for object size of 1MB.
+func BenchmarkPutObject1MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(1024*1024))
+}
+
+// BenchmarkPutObject1MbXL - Benchmark XL.PutObject() for object size of 1MB.
+func BenchmarkPutObject1MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(1024*1024))
+}
+
+// BenchmarkPutObject5MbFS - Benchmark FS.PutObject() for object size of 5MB.
+func BenchmarkPutObject5MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(5*1024*1024))
+}
+
+// BenchmarkPutObject5MbXL - Benchmark XL.PutObject() for object size of 5MB.
+func BenchmarkPutObject5MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(5*1024*1024))
+}
+
+// BenchmarkPutObject10MbFS - Benchmark FS.PutObject() for object size of 10MB.
+func BenchmarkPutObject10MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(10*1024*1024))
+}
+
+// BenchmarkPutObject10MbXL - Benchmark XL.PutObject() for object size of 10MB.
+func BenchmarkPutObject10MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(10*1024*1024))
+}
+
+// BenchmarkPutObject25MbFS - Benchmark FS.PutObject() for object size of 25MB.
+func BenchmarkPutObject25MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(25*1024*1024))
+
+}
+
+// BenchmarkPutObject25MbXL - Benchmark XL.PutObject() for object size of 25MB.
+func BenchmarkPutObject25MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(25*1024*1024))
+}
+
+// BenchmarkPutObject50MbFS - Benchmark FS.PutObject() for object size of 50MB.
+func BenchmarkPutObject50MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(50*1024*1024))
+}
+
+// BenchmarkPutObject50MbXL - Benchmark XL.PutObject() for object size of 50MB.
+func BenchmarkPutObject50MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(50*1024*1024))
+}
+
+// BenchmarkPutObject100MbFS - Benchmark FS.PutObject() for object size of 100MB.
+func BenchmarkPutObject100MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(100*1024*1024))
+}
+
+// BenchmarkPutObject100MbXL - Benchmark XL.PutObject() for object size of 100MB.
+func BenchmarkPutObject100MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(100*1024*1024))
+}
+
+// BenchmarkPutObject200MbFS - Benchmark FS.PutObject() for object size of 200MB.
+func BenchmarkPutObject200MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(200*1024*1024))
+}
+
+// BenchmarkPutObject200MbXL - Benchmark XL.PutObject() for object size of 200MB.
+func BenchmarkPutObject200MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(200*1024*1024))
+}
+
+// BenchmarkPutObject500MbFS - Benchmark FS.PutObject() for object size of 500MB.
+func BenchmarkPutObject500MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(500*1024*1024))
+}
+
+// BenchmarkPutObject500MbXL - Benchmark XL.PutObject() for object size of 500MB.
+func BenchmarkPutObject500MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(500*1024*1024))
+}
+
+// BenchmarkPutObject1GbFS - Benchmark FS.PutObject() for object size of 1GB.
+func BenchmarkPutObject1GbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmark(1024*1024*1024))
+}
+
+// BenchmarkPutObjectGbXL - Benchmark XL.PutObject() for object size of 1GB.
+func BenchmarkPutObject1GbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(1024*1024*1024))
+}
+
 // Benchmarks for ObjectLayer.GetObject().
 // The intent is to benchamrk GetObject for various sizes ranging from few bytes to 100MB.
 // Also each of these Benchmarks are run both XL and FS backends.
