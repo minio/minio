@@ -69,60 +69,89 @@ var (
 	}
 )
 
-// Obtain statements for read-write BucketPolicy.
-func setReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
-	bucketResourceStatement := policyStatement{}
+// Obtain bucket statement for read-write BucketPolicy.
+func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
-	statements := []policyStatement{}
-
-	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = []string{"*"}
-	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
-	bucketResourceStatement.Actions = readWriteBucketActions
 	objectResourceStatement.Effect = "Allow"
 	objectResourceStatement.Principal.AWS = []string{"*"}
 	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
 	objectResourceStatement.Actions = readWriteObjectActions
+	return objectResourceStatement
+}
+
+// Obtain object statement for read-write BucketPolicy.
+func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatement {
+	bucketResourceStatement := policyStatement{}
+	bucketResourceStatement.Effect = "Allow"
+	bucketResourceStatement.Principal.AWS = []string{"*"}
+	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
+	bucketResourceStatement.Actions = readWriteBucketActions
+	return bucketResourceStatement
+}
+
+// Obtain statements for read-write BucketPolicy.
+func getReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
+	statements := []policyStatement{}
 	// Save the read write policy.
-	statements = append(statements, bucketResourceStatement, objectResourceStatement)
+	statements = append(statements, getReadWriteBucketStatement(bucketName, objectPrefix), getReadWriteObjectStatement(bucketName, objectPrefix))
 	return statements
 }
 
-// Obtain statements for read only BucketPolicy.
-func setReadOnlyStatement(bucketName, objectPrefix string) []policyStatement {
+// Obtain bucket statement for read only BucketPolicy.
+func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
-	objectResourceStatement := policyStatement{}
-	statements := []policyStatement{}
-
 	bucketResourceStatement.Effect = "Allow"
 	bucketResourceStatement.Principal.AWS = []string{"*"}
 	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
 	bucketResourceStatement.Actions = readOnlyBucketActions
+	return bucketResourceStatement
+}
+
+// Obtain object statement for read only BucketPolicy.
+func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
+	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
 	objectResourceStatement.Principal.AWS = []string{"*"}
 	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
 	objectResourceStatement.Actions = readOnlyObjectActions
+	return objectResourceStatement
+}
+
+// Obtain statements for read only BucketPolicy.
+func getReadOnlyStatement(bucketName, objectPrefix string) []policyStatement {
+	statements := []policyStatement{}
 	// Save the read only policy.
-	statements = append(statements, bucketResourceStatement, objectResourceStatement)
+	statements = append(statements, getReadOnlyBucketStatement(bucketName, objectPrefix), getReadOnlyObjectStatement(bucketName, objectPrefix))
 	return statements
 }
 
-// Obtain statements for write only BucketPolicy.
-func setWriteOnlyStatement(bucketName, objectPrefix string) []policyStatement {
+// Obtain bucket statements for write only BucketPolicy.
+func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
+
 	bucketResourceStatement := policyStatement{}
-	objectResourceStatement := policyStatement{}
-	statements := []policyStatement{}
-	// Write only policy.
 	bucketResourceStatement.Effect = "Allow"
 	bucketResourceStatement.Principal.AWS = []string{"*"}
 	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
 	bucketResourceStatement.Actions = writeOnlyBucketActions
+	return bucketResourceStatement
+}
+
+// Obtain object statements for write only BucketPolicy.
+func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
+	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
 	objectResourceStatement.Principal.AWS = []string{"*"}
 	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
 	objectResourceStatement.Actions = writeOnlyObjectActions
+	return objectResourceStatement
+}
+
+// Obtain statements for write only BucketPolicy.
+func getWriteOnlyStatement(bucketName, objectPrefix string) []policyStatement {
+	statements := []policyStatement{}
+	// Write only policy.
 	// Save the write only policy.
-	statements = append(statements, bucketResourceStatement, objectResourceStatement)
+	statements = append(statements, getWriteOnlyBucketStatement(bucketName, objectPrefix), getWriteOnlyBucketStatement(bucketName, objectPrefix))
 	return statements
 }
 
@@ -145,11 +174,13 @@ func TestIsValidActions(t *testing.T) {
 		{[]string{}, errors.New("Action list cannot be empty."), false},
 		// Test case - 3.
 		// "s3:DeleteEverything"" is an invalid Action.
-		{[]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"}, errors.New("Unsupported action found: ‘s3:DeleteEverything’, please validate your policy document."), false},
+		{[]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"},
+			errors.New("Unsupported action found: ‘s3:DeleteEverything’, please validate your policy document."), false},
 
 		// Inputs with valid Action.
 		// Test Case - 4.
-		{[]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts"}, nil, true},
+		{[]string{"s3:*", "*", "s3:GetObject", "s3:ListBucket",
+			"s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts"}, nil, true},
 	}
 	for i, testCase := range testCases {
 		err := isValidActions(testCase.actions)
@@ -464,31 +495,31 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 	bucketAccessPolicies := []BucketPolicy{
 		// BucketPolicy - 1.
 		// Contains valid read only policy statement.
-		{Version: "1.0", Statements: setReadOnlyStatement("minio-bucket", "")},
+		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket", "")},
 		// BucketPolicy - 2.
 		// Contains valid read-write only policy statement.
-		{Version: "1.0", Statements: setReadWriteStatement("minio-bucket", "Asia/")},
+		{Version: "1.0", Statements: getReadWriteStatement("minio-bucket", "Asia/")},
 		// BucketPolicy - 3.
 		// Contains valid write only policy statement.
-		{Version: "1.0", Statements: setWriteOnlyStatement("minio-bucket", "Asia/India/")},
+		{Version: "1.0", Statements: getWriteOnlyStatement("minio-bucket", "Asia/India/")},
 		// BucketPolicy - 4.
 		// Contains invalidPrefixActions.
 		// Since resourcePrefix is not to the bucket-name, it return ErrMalformedPolicy.
-		{Version: "1.0", Statements: setReadOnlyStatement("minio-bucket-fail", "Asia/India/")},
+		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket-fail", "Asia/India/")},
 		// BucketPolicy - 5.
 		// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
 		// but bucket part of the resource is not equal to the bucket name.
 		// this results in return of ErrMalformedPolicy.
-		{Version: "1.0", Statements: setValidPrefixActions(setWriteOnlyStatement("minio-bucket-fail", "Asia/India/"))},
+		{Version: "1.0", Statements: setValidPrefixActions(getWriteOnlyStatement("minio-bucket-fail", "Asia/India/"))},
 		// BucketPolicy - 6.
 		// contructing policy statement with recursive resources.
 		// should result in ErrMalformedPolicy
-		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "")))},
+		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(getWriteOnlyStatement("minio-bucket", "")))},
 		// BucketPolciy - 7.
 		// constructing policy statement with non recursive but
 		// lexically close resources.
 		// should result in ErrNone.
-		{Version: "1.0", Statements: setResourceLexical(setValidPrefixActions(setWriteOnlyStatement("minio-bucket", "oo")))},
+		{Version: "1.0", Statements: setResourceLexical(setValidPrefixActions(getWriteOnlyStatement("minio-bucket", "oo")))},
 	}
 
 	testCases := []struct {
@@ -575,25 +606,25 @@ func TestParseBucketPolicy(t *testing.T) {
 		{Version: "", Statements: []policyStatement{}},
 		// BucketPolicy - 2.
 		// Readonly BucketPolicy.
-		{Version: "1.0", Statements: setReadOnlyStatement("minio-bucket", "")},
+		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket", "")},
 		// BucketPolicy - 3.
 		// Read-Write bucket policy.
-		{Version: "1.0", Statements: setReadWriteStatement("minio-bucket", "Asia/")},
+		{Version: "1.0", Statements: getReadWriteStatement("minio-bucket", "Asia/")},
 		// BucketPolicy - 4.
 		// Write only bucket policy.
-		{Version: "1.0", Statements: setWriteOnlyStatement("minio-bucket", "Asia/India/")},
+		{Version: "1.0", Statements: getWriteOnlyStatement("minio-bucket", "Asia/India/")},
 		// BucketPolicy - 5.
 		// BucketPolicy statement contains unsupported action.
-		{Version: "1.0", Statements: setUnsupportedActions(setReadOnlyStatement("minio-bucket", ""))},
+		{Version: "1.0", Statements: setUnsupportedActions(getReadOnlyStatement("minio-bucket", ""))},
 		// BucketPolicy - 6.
 		// BucketPolicy statement contains unsupported Effect.
-		{Version: "1.0", Statements: setUnsupportedEffect(setReadWriteStatement("minio-bucket", "Asia/"))},
+		{Version: "1.0", Statements: setUnsupportedEffect(getReadWriteStatement("minio-bucket", "Asia/"))},
 		// BucketPolicy - 7.
 		// BucketPolicy statement contains unsupported Principal.
-		{Version: "1.0", Statements: setUnsupportedPrincipals(setWriteOnlyStatement("minio-bucket", "Asia/India/"))},
+		{Version: "1.0", Statements: setUnsupportedPrincipals(getWriteOnlyStatement("minio-bucket", "Asia/India/"))},
 		// BucketPolicy - 8.
 		// BucketPolicy statement contains unsupported Resource.
-		{Version: "1.0", Statements: setUnsupportedResources(setWriteOnlyStatement("minio-bucket", "Asia/India/"))},
+		{Version: "1.0", Statements: setUnsupportedResources(getWriteOnlyStatement("minio-bucket", "Asia/India/"))},
 	}
 
 	testCases := []struct {

@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"regexp"
 	"strings"
 
 	mux "github.com/gorilla/mux"
@@ -65,41 +64,48 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 // Verify if given action matches with policy statement.
 func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	for _, policyAction := range statement.Actions {
-		// Policy action can be a regex, validate the action with matching string.
-		matched, err := regexp.MatchString(policyAction, action)
-		fatalIf(err, "Invalid action \"%s\" in bucket policy.", action)
-		if matched {
+		if matched := actionMatch(policyAction, action); matched {
 			return true
 		}
 	}
 	return false
 }
 
-// Match function matches wild cards in 'pattern' for resource.
-func resourceMatch(pattern, resource string) bool {
+// Match function matches wild cards in 'pattern' for 'text'.
+func wildCardMatch(pattern, text string) bool {
 	if pattern == "" {
-		return resource == pattern
+		return text == pattern
 	}
 	if pattern == "*" {
 		return true
 	}
 	parts := strings.Split(pattern, "*")
 	if len(parts) == 1 {
-		return resource == pattern
+		return text == pattern
 	}
 	tGlob := strings.HasSuffix(pattern, "*")
 	end := len(parts) - 1
-	if !strings.HasPrefix(resource, parts[0]) {
+	if !strings.HasPrefix(text, parts[0]) {
 		return false
 	}
 	for i := 1; i < end; i++ {
-		if !strings.Contains(resource, parts[i]) {
+		if !strings.Contains(text, parts[i]) {
 			return false
 		}
-		idx := strings.Index(resource, parts[i]) + len(parts[i])
-		resource = resource[idx:]
+		idx := strings.Index(text, parts[i]) + len(parts[i])
+		text = text[idx:]
 	}
-	return tGlob || strings.HasSuffix(resource, parts[end])
+	return tGlob || strings.HasSuffix(text, parts[end])
+}
+
+// Match function matches wild cards in 'pattern' for resource.
+func resourceMatch(pattern, resource string) bool {
+	return wildCardMatch(pattern, resource)
+}
+
+// Match function matches wild cards in 'pattern' for action.
+func actionMatch(pattern, action string) bool {
+	return wildCardMatch(pattern, action)
 }
 
 // Verify if given resource matches with policy statement.
@@ -109,11 +115,11 @@ func bucketPolicyResourceMatch(resource string, statement policyStatement) bool 
 		// the requested object can be given access based on the already set bucket policy if
 		// the match is successful.
 		// More info: http://docs.aws.amazon.com/AmazonS3/latest/dev/s3-arn-format.html .
-		if matched := resourceMatch(resourcep, resource); !matched {
-			return false
+		if matched := resourceMatch(resourcep, resource); matched {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // Verify if given condition matches with policy statement.
