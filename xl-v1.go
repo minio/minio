@@ -128,7 +128,9 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)
 
-	// Generic format check validates all necessary cases.
+	// Generic format check validates
+	// if (no quorum) return error
+	// if (disks not recognized) // Always error.
 	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
 		return nil, err
 	}

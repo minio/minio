@@ -101,7 +101,11 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fs, errDiskNotFound
+			// Disk not found create it.
+			if err = os.MkdirAll(diskPath, 0777); err != nil {
+				return fs, err
+			}
+			return fs, nil
 		}
 		return fs, err
 	}

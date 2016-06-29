@@ -81,7 +81,7 @@ func shutdownFS(storage StorageAPI) {
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(disk string) (ObjectLayer, error) {
 	storage, err := newStorageAPI(disk)
-	if err != nil {
+	if err != nil && err != errDiskNotFound {
 		return nil, err
 	}
 
