@@ -22,8 +22,8 @@ import (
 	"hash"
 	"io"
 
-	"github.com/dchest/blake2b"
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/blake2b-simd"
 )
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
