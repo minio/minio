@@ -46,7 +46,7 @@ var serverCmd = cli.Command{
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [OPTIONS] PATH
+  minio {{.Name}} [OPTIONS] PATH [PATH...]
 
 OPTIONS:
   {{range .Flags}}{{.}}
