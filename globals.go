@@ -33,6 +33,7 @@ const (
 	globalMinioConfigFile    = "config.json"
 	globalMinioProfilePath   = "profile"
 	// Add new global values here.
+	globalMinioCertsDirname = "certs"
 )
 
 var (
