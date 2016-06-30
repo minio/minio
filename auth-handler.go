@@ -27,6 +27,15 @@ import (
 	"strings"
 )
 
+// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// client did not calculate sha256 of the payload.
+const unsignedPayload = "UNSIGNED-PAYLOAD"
+
+// Verify if the request http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD"
+func isRequestUnsignedPayload(r *http.Request) bool {
+	return r.Header.Get("x-amz-content-sha256") == unsignedPayload
+}
+
 // Verify if request has JWT.
 func isRequestJWT(r *http.Request) bool {
 	if _, ok := r.Header["Authorization"]; ok {
@@ -126,10 +135,16 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	validateRegion := true // Validate region.
+	var sha256sum string
+	if skipSHA256Calculation(r) {
+		sha256sum = unsignedPayload
+	} else {
+		sha256sum = hex.EncodeToString(sum256(payload))
+	}
 	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
+		return doesSignatureMatch(sha256sum, r, validateRegion)
 	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
+		return doesPresignedSignatureMatch(sha256sum, r, validateRegion)
 	}
 	return ErrAccessDenied
 }
