@@ -37,7 +37,7 @@ func getCertsPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	certsPath = filepath.Join(configDir, globalMinioCertsDirname)
+	certsPath = filepath.Join(configDir, globalMinioCertsDir)
 	return certsPath, nil
 }
 

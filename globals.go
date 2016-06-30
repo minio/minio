@@ -27,13 +27,12 @@ const (
 const (
 	globalMinioConfigVersion = "4"
 	globalMinioConfigDir     = ".minio"
-	globalMinioCertsDir      = ".minio/certs"
+	globalMinioCertsDir      = "certs"
 	globalMinioCertFile      = "public.crt"
 	globalMinioKeyFile       = "private.key"
 	globalMinioConfigFile    = "config.json"
 	globalMinioProfilePath   = "profile"
 	// Add new global values here.
-	globalMinioCertsDirname = "certs"
 )
 
 var (
