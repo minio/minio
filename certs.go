@@ -19,8 +19,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/minio/go-homedir"
 )
 
 // createCertsPath create certs path.
@@ -34,11 +32,12 @@ func createCertsPath() error {
 
 // getCertsPath get certs path.
 func getCertsPath() (string, error) {
-	homeDir, err := homedir.Dir()
+	var certsPath string
+	configDir, err := getConfigPath()
 	if err != nil {
 		return "", err
 	}
-	certsPath := filepath.Join(homeDir, globalMinioCertsDir)
+	certsPath = filepath.Join(configDir, globalMinioCertsDir)
 	return certsPath, nil
 }
 
