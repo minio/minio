@@ -393,14 +393,15 @@ func (xl xlObjects) putObjectPart(bucket string, object string, uploadID string,
 	}
 
 	// Write all the checksum metadata.
-	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
+	newUUID := getUUID()
+	tempXLMetaPath := path.Join(tmpMetaPrefix, newUUID)
 
 	// Writes a unique `xl.json` each disk carrying new checksum
 	// related information.
-	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempXLMetaPath, partsMetadata); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempXLMetaPath)
 	}
-	rErr := xl.commitXLMetadata(tempUploadIDPath, uploadIDPath)
+	rErr := xl.commitXLMetadata(tempXLMetaPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
