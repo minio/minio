@@ -279,16 +279,13 @@ func (xl xlObjects) commitXLMetadata(srcPrefix, dstPrefix string) error {
 		// Rename `xl.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
+			// Delete any dangling directories.
+			defer disk.DeleteFile(minioMetaBucket, srcPrefix)
+
 			// Renames `xl.json` from source prefix to destination prefix.
 			rErr := disk.RenameFile(minioMetaBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
 			if rErr != nil {
 				mErrs[index] = rErr
-				return
-			}
-			// Delete any dangling directories.
-			dErr := disk.DeleteFile(minioMetaBucket, srcPrefix)
-			if dErr != nil {
-				mErrs[index] = dErr
 				return
 			}
 			mErrs[index] = nil
