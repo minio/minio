@@ -19,7 +19,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"fmt"
 )
 
 // createCertsPath create certs path.
@@ -39,7 +38,6 @@ func getCertsPath() (string, error) {
 		return "", err
 	}
 	certsPath = filepath.Join(configDir, globalMinioCertsDirname)
-	fmt.Printf("%s", certsPath)
 	return certsPath, nil
 }
 
