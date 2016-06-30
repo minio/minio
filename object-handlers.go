@@ -982,6 +982,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		doneCh <- struct{}{}
 	}(doneCh)
 
+	_, err = w.Write([]byte(xml.Header))
+	if err != nil {
+		errorIf(err, "Unable to write XML header for complete multipart upload")
+		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
 	sendWhiteSpaceChars(w, doneCh)
 
 	if err != nil {
@@ -992,7 +998,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writePartSmallErrorResponse(w, r, oErr)
 		default:
 			// Handle all other generic issues.
-			writeErrorResponseNoHeader(w, r, getAPIError(toAPIErrorCode(err)), r.URL.Path)
+			writeErrorResponseNoHeader(w, r, toAPIErrorCode(err), r.URL.Path)
 		}
 		return
 	}
@@ -1001,7 +1007,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	location := getLocation(r)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, md5Sum)
-	encodedSuccessResponse := encodeResponse(response)
+	encodedSuccessResponse, err := xml.Marshal(response)
+	if err != nil {
+		errorIf(err, "Unable to parse CompleteMultipartUpload response")
+		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
 	// write success response.
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()

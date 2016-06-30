@@ -502,10 +502,11 @@ func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIE
 	setCommonHeaders(w)
 	// write Header
 	w.WriteHeader(error.HTTPStatusCode)
-	writeErrorResponseNoHeader(w, req, error, resource)
+	writeErrorResponseNoHeader(w, req, errorCode, resource)
 }
 
-func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, error APIError, resource string) {
+func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
+	error := getAPIError(errorCode)
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(error, resource)
 	encodedErrorResponse := encodeResponse(errorResponse)
