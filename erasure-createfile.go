@@ -38,39 +38,42 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 
 	// Read until io.EOF, erasure codes data and writes to all disks.
 	for {
-		var n int
 		var blocks [][]byte
-		n, err = io.ReadFull(data, buf)
-		if err == io.EOF {
+		n, rErr := io.ReadFull(data, buf)
+		// FIXME: this is a bug in Golang, n == 0 and err ==
+		// io.ErrUnexpectedEOF for io.ReadFull function.
+		if n == 0 && rErr == io.ErrUnexpectedEOF {
+			return nil, 0, rErr
+		}
+		if rErr == io.EOF {
 			// We have reached EOF on the first byte read, io.Reader
 			// must be 0bytes, we don't need to erasure code
 			// data. Will create a 0byte file instead.
 			if size == 0 {
 				blocks = make([][]byte, len(disks))
-				err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum)
-				if err != nil {
-					return nil, 0, err
+				rErr = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum)
+				if rErr != nil {
+					return nil, 0, rErr
 				}
 			} // else we have reached EOF after few reads, no need to
 			// add an additional 0bytes at the end.
 			break
 		}
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return nil, 0, err
+		if rErr != nil && rErr != io.ErrUnexpectedEOF {
+			return nil, 0, rErr
 		}
-		size += int64(n)
 		// Returns encoded blocks.
 		var enErr error
-		blocks, enErr = encodeData(buf[:n], eInfo.DataBlocks, eInfo.ParityBlocks)
+		blocks, enErr = encodeData(buf[0:n], eInfo.DataBlocks, eInfo.ParityBlocks)
 		if enErr != nil {
 			return nil, 0, enErr
 		}
 
 		// Write to all disks.
-		err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum)
-		if err != nil {
+		if err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum); err != nil {
 			return nil, 0, err
 		}
+		size += int64(n)
 	}
 
 	// Save the checksums.
