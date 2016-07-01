@@ -42,8 +42,9 @@ func isValidVolname(volname string) bool {
 // for all directories that mkdirAll creates. If path is already
 // a directory, mkdirAll does nothing and returns nil.
 func mkdirAll(path string, perm os.FileMode) error {
+	path = preparePath(path)
 	// Fast path: if we can tell whether path is a directory or file, stop with success or error.
-	dir, err := os.Stat(preparePath(path))
+	dir, err := os.Stat(path)
 	if err == nil {
 		if dir.IsDir() {
 			return nil
@@ -78,11 +79,11 @@ func mkdirAll(path string, perm os.FileMode) error {
 	}
 
 	// Parent now exists; invoke Mkdir and use its result.
-	err = os.Mkdir(preparePath(path), perm)
+	err = os.Mkdir(path, perm)
 	if err != nil {
 		// Handle arguments like "foo/." by
 		// double-checking that directory doesn't exist.
-		dir, err1 := os.Lstat(preparePath(path))
+		dir, err1 := os.Lstat(path)
 		if err1 == nil && dir.IsDir() {
 			return nil
 		}
@@ -96,14 +97,15 @@ func mkdirAll(path string, perm os.FileMode) error {
 // it encounters.  If the path does not exist, RemoveAll
 // returns nil (no error).
 func removeAll(path string) error {
+	path = preparePath(path)
 	// Simple case: if Remove works, we're done.
-	err := os.Remove(preparePath(path))
+	err := os.Remove(path)
 	if err == nil || os.IsNotExist(err) {
 		return nil
 	}
 
 	// Otherwise, is this a directory we need to recurse into?
-	dir, serr := os.Lstat(preparePath(path))
+	dir, serr := os.Lstat(path)
 	if serr != nil {
 		if serr, ok := serr.(*os.PathError); ok && (os.IsNotExist(serr.Err) || serr.Err == syscall.ENOTDIR) {
 			return nil
@@ -116,7 +118,7 @@ func removeAll(path string) error {
 	}
 
 	// Directory.
-	fd, err := os.Open(preparePath(path))
+	fd, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Race. It was deleted between the Lstat and Open.
@@ -152,7 +154,7 @@ func removeAll(path string) error {
 	fd.Close()
 
 	// Remove directory.
-	err1 := os.Remove(preparePath(path))
+	err1 := os.Remove(path)
 	if err1 == nil || os.IsNotExist(err1) {
 		return nil
 	}
