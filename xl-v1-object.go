@@ -332,6 +332,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
+	// Limit the reader to its provided size if specified.
+	if size > 0 {
+		// This is done so that we can avoid erroneous clients sending
+		// more data than the set content size.
+		data = io.LimitReader(data, size+1)
+	} // else we read till EOF.
+
 	// Tee reader combines incoming data stream and md5, data read
 	// from input stream is written to md5.
 	teeReader := io.TeeReader(data, md5Writer)
@@ -343,13 +350,17 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Erasure code and write across all disks.
-	newEInfos, n, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "part.1", teeReader, eInfos, xl.writeQuorum)
+	newEInfos, sizeWritten, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "part.1", teeReader, eInfos, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
+
+	// For size == -1, perhaps client is sending in chunked encoding
+	// set the size as size that was actually written.
 	if size == -1 {
-		size = n
+		size = sizeWritten
 	}
+
 	// Save additional erasureMetadata.
 	modTime := time.Now().UTC()
 
