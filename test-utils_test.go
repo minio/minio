@@ -69,12 +69,12 @@ const (
 var randN uint32
 var randmu sync.Mutex
 
-// reseed - returns a new seed everytime the function is called.
+// reseed - returns a new seed every time the function is called.
 func reseed() uint32 {
 	return uint32(time.Now().UnixNano() + int64(os.Getpid()))
 }
 
-// nextSuffix - provides a new unique suffix everytime the function is called.
+// nextSuffix - provides a new unique suffix every time the function is called.
 func nextSuffix() string {
 	randmu.Lock()
 	r := randN

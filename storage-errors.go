@@ -33,6 +33,9 @@ var errDiskFull = errors.New("disk path full")
 // errDiskNotFount - cannot find the underlying configured disk anymore.
 var errDiskNotFound = errors.New("disk not found")
 
+// errDiskAccessDenied - we don't have write permissions on disk.
+var errDiskAccessDenied = errors.New("disk access denied")
+
 // errFileNotFound - cannot find the file.
 var errFileNotFound = errors.New("file not found")
 

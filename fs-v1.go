@@ -85,8 +85,21 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		return nil, err
 	}
 
+	// Attempt to create `.minio`.
+	err = storage.MakeVol(minioMetaBucket)
+	if err != nil {
+		switch err {
+		// Ignore the errors.
+		case errVolumeExists, errDiskNotFound, errFaultyDisk:
+		default:
+			return nil, toObjectErr(err, minioMetaBucket)
+		}
+	}
+
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
-	fsHouseKeeping(storage)
+	if err = fsHouseKeeping(storage); err != nil {
+		return nil, err
+	}
 
 	// loading format.json from minioMetaBucket.
 	// Note: The format.json content is ignored, reserved for future use.

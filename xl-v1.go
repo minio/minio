@@ -122,9 +122,6 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 		}
 	}
 
-	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
-	xlHouseKeeping(storageDisks)
-
 	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)
 
@@ -138,6 +135,9 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Handles different cases properly.
 	switch reduceFormatErrs(sErrs, len(storageDisks)) {
 	case errUnformattedDisk:
+		if err := initMetaVolume(storageDisks); err != nil {
+			return nil, fmt.Errorf("Unable to initialize '.minio' meta volume, %s", err)
+		}
 		// All drives online but fresh, initialize format.
 		if err := initFormatXL(storageDisks); err != nil {
 			return nil, fmt.Errorf("Unable to initialize format, %s", err)
@@ -151,6 +151,11 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	case errSomeDiskOffline:
 		// Some disks offline but some report missing format.json.
 		// FIXME.
+	}
+
+	// Runs house keeping code, like t, cleaning up tmp files etc.
+	if err := xlHouseKeeping(storageDisks); err != nil {
+		return nil, err
 	}
 
 	// Load saved XL format.json and validate.
