@@ -163,7 +163,6 @@ func bucketPolicyConditionMatch(conditions map[string]string, statement policySt
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
