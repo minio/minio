@@ -34,6 +34,8 @@ const (
 
 // supportedActionMap - lists all the actions supported by minio.
 var supportedActionMap = map[string]struct{}{
+	"*":                             {},
+	"s3:*":                          {},
 	"s3:GetObject":                  {},
 	"s3:ListBucket":                 {},
 	"s3:PutObject":                  {},
