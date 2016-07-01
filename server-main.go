@@ -257,6 +257,9 @@ func serverMain(c *cli.Context) {
 	// Initialize server config.
 	initServerConfig(c)
 
+	// If https.
+	tls := isSSL()
+
 	// Server address.
 	serverAddress := c.String("address")
 
@@ -265,7 +268,7 @@ func serverMain(c *cli.Context) {
 	if port == "" {
 		port = "80"
 		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
+		if tls {
 			port = "443"
 		}
 	}
@@ -292,7 +295,6 @@ func serverMain(c *cli.Context) {
 	console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
 
 	hosts, port := getListenIPs(apiServer) // get listen ips and port.
-	tls := apiServer.TLSConfig != nil      // 'true' if TLS is enabled.
 
 	console.Println("\nMinio Object Storage:")
 	// Print api listen ips.
