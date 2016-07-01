@@ -116,7 +116,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	credentials, root, err := initTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatalf("%s", err)
 	}
 	testServer.Root = root
 	testServer.Disks = erasureDisks
@@ -604,14 +604,14 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for single node setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, singleNodeTestStr, t)
 
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, t)
@@ -623,7 +623,7 @@ func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
 func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundType) {
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, fsDirs, t)
@@ -638,7 +638,7 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, fsDirs, t)

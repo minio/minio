@@ -316,7 +316,7 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t *testing.T) {
-	// get random bucket name. x
+	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
 	err := obj.MakeBucket(bucketName)
