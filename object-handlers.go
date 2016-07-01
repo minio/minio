@@ -51,6 +51,14 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	}
 }
 
+// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// client did not calculate sha256 of the payload. Hence we skip calculating sha256.
+// We also skip calculating sha256 for presigned requests without "x-amz-content-sha256" header.
+func skipSHA256Calculation(r *http.Request) bool {
+	shaHeader := r.Header.Get("X-Amz-Content-Sha256")
+	return isRequestUnsignedPayload(r) || (isRequestPresignedSignatureV4(r) && shaHeader == "")
+}
+
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
 // this is in keeping with the permissions sections of the docs of both:
 //   HEAD Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
@@ -594,51 +602,73 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Create anonymous object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
 	case authTypePresigned, authTypeSigned:
-		// Initialize a pipe for data pipe line.
-		reader, writer := io.Pipe()
-		var wg = &sync.WaitGroup{}
-		// Start writing in a routine.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			shaWriter := sha256.New()
-			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
-				// Pipe closed.
-				if wErr == io.ErrClosedPipe {
-					return
-				}
-				errorIf(wErr, "Unable to read from HTTP body.")
-				writer.CloseWithError(wErr)
-				return
-			}
-			shaPayload := shaWriter.Sum(nil)
-			validateRegion := true // Validate region.
+		validateRegion := true // Validate region.
+
+		if skipSHA256Calculation(r) {
+			// Either sha256-header is "UNSIGNED-PAYLOAD" or this is a presigned PUT
+			// request without sha256-header.
 			var s3Error APIErrorCode
 			if isRequestSignatureV4(r) {
-				s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				s3Error = doesSignatureMatch(unsignedPayload, r, validateRegion)
 			} else if isRequestPresignedSignatureV4(r) {
-				s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				s3Error = doesPresignedSignatureMatch(unsignedPayload, r, validateRegion)
 			}
-			var sErr error
 			if s3Error != ErrNone {
 				if s3Error == ErrSignatureDoesNotMatch {
-					sErr = errSignatureMismatch
+					err = errSignatureMismatch
 				} else {
-					sErr = fmt.Errorf("%v", getAPIError(s3Error))
+					err = fmt.Errorf("%v", getAPIError(s3Error))
 				}
-				writer.CloseWithError(sErr)
-				return
+			} else {
+				md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
 			}
-			writer.Close()
-		}()
+		} else {
+			// Sha256 of payload has to be calculated and matched with what was sent in the header.
+			// Initialize a pipe for data pipe line.
+			reader, writer := io.Pipe()
+			var wg = &sync.WaitGroup{}
+			// Start writing in a routine.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				shaWriter := sha256.New()
+				multiWriter := io.MultiWriter(shaWriter, writer)
+				if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
+					// Pipe closed.
+					if wErr == io.ErrClosedPipe {
+						return
+					}
+					errorIf(wErr, "Unable to read from HTTP body.")
+					writer.CloseWithError(wErr)
+					return
+				}
+				shaPayload := shaWriter.Sum(nil)
+				var s3Error APIErrorCode
+				if isRequestSignatureV4(r) {
+					s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				} else if isRequestPresignedSignatureV4(r) {
+					s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				}
+				var sErr error
+				if s3Error != ErrNone {
+					if s3Error == ErrSignatureDoesNotMatch {
+						sErr = errSignatureMismatch
+					} else {
+						sErr = fmt.Errorf("%v", getAPIError(s3Error))
+					}
+					writer.CloseWithError(sErr)
+					return
+				}
+				writer.Close()
+			}()
 
-		// Create object.
-		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
-		// Close the pipe.
-		reader.Close()
-		// Wait for all the routines to finish.
-		wg.Wait()
+			// Create object.
+			md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+			// Close the pipe.
+			reader.Close()
+			// Wait for all the routines to finish.
+			wg.Wait()
+		}
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
@@ -765,31 +795,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		hexMD5 := hex.EncodeToString(md5Bytes)
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, hexMD5)
 	case authTypePresigned, authTypeSigned:
-		// Initialize a pipe for data pipe line.
-		reader, writer := io.Pipe()
-		var wg = &sync.WaitGroup{}
-		// Start writing in a routine.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			shaWriter := sha256.New()
-			multiWriter := io.MultiWriter(shaWriter, writer)
-			if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
-				// Pipe closed, just ignore it.
-				if wErr == io.ErrClosedPipe {
-					return
-				}
-				errorIf(wErr, "Unable to read from HTTP request body.")
-				writer.CloseWithError(wErr)
-				return
-			}
-			shaPayload := shaWriter.Sum(nil)
-			validateRegion := true // Validate region.
+		validateRegion := true // Validate region.
+
+		if skipSHA256Calculation(r) {
+			// Either sha256-header is "UNSIGNED-PAYLOAD" or this is a presigned
+			// request without sha256-header.
 			var s3Error APIErrorCode
 			if isRequestSignatureV4(r) {
-				s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				s3Error = doesSignatureMatch(unsignedPayload, r, validateRegion)
 			} else if isRequestPresignedSignatureV4(r) {
-				s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				s3Error = doesPresignedSignatureMatch(unsignedPayload, r, validateRegion)
 			}
 			if s3Error != ErrNone {
 				if s3Error == ErrSignatureDoesNotMatch {
@@ -797,18 +812,55 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 				} else {
 					err = fmt.Errorf("%v", getAPIError(s3Error))
 				}
-				writer.CloseWithError(err)
-				return
+			} else {
+				md5SumHex := hex.EncodeToString(md5Bytes)
+				partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, md5SumHex)
 			}
-			// Close the writer.
-			writer.Close()
-		}()
-		md5SumHex := hex.EncodeToString(md5Bytes)
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, md5SumHex)
-		// Close the pipe.
-		reader.Close()
-		// Wait for all the routines to finish.
-		wg.Wait()
+		} else {
+			// Initialize a pipe for data pipe line.
+			reader, writer := io.Pipe()
+			var wg = &sync.WaitGroup{}
+			// Start writing in a routine.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				shaWriter := sha256.New()
+				multiWriter := io.MultiWriter(shaWriter, writer)
+				if _, wErr := io.CopyN(multiWriter, r.Body, size); wErr != nil {
+					// Pipe closed, just ignore it.
+					if wErr == io.ErrClosedPipe {
+						return
+					}
+					errorIf(wErr, "Unable to read from HTTP request body.")
+					writer.CloseWithError(wErr)
+					return
+				}
+				shaPayload := shaWriter.Sum(nil)
+				var s3Error APIErrorCode
+				if isRequestSignatureV4(r) {
+					s3Error = doesSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				} else if isRequestPresignedSignatureV4(r) {
+					s3Error = doesPresignedSignatureMatch(hex.EncodeToString(shaPayload), r, validateRegion)
+				}
+				if s3Error != ErrNone {
+					if s3Error == ErrSignatureDoesNotMatch {
+						err = errSignatureMismatch
+					} else {
+						err = fmt.Errorf("%v", getAPIError(s3Error))
+					}
+					writer.CloseWithError(err)
+					return
+				}
+				// Close the writer.
+				writer.Close()
+			}()
+			md5SumHex := hex.EncodeToString(md5Bytes)
+			partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, md5SumHex)
+			// Close the pipe.
+			reader.Close()
+			// Wait for all the routines to finish.
+			wg.Wait()
+		}
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
