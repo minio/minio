@@ -974,6 +974,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Send 200 OK
 	setCommonHeaders(w)
 	w.WriteHeader(http.StatusOK)
+	// Xml headers need to be sent before we possibly send whitespace characters
+	// to the client.
+	_, err = w.Write([]byte(xml.Header))
+	if err != nil {
+		errorIf(err, "Unable to write XML header for complete multipart upload")
+		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
 
 	doneCh := make(chan struct{})
 	// Signal that completeMultipartUpload is over via doneCh
@@ -982,12 +990,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		doneCh <- struct{}{}
 	}(doneCh)
 
-	_, err = w.Write([]byte(xml.Header))
-	if err != nil {
-		errorIf(err, "Unable to write XML header for complete multipart upload")
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	sendWhiteSpaceChars(w, doneCh)
 
 	if err != nil {
