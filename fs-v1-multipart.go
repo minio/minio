@@ -294,10 +294,22 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
-	// Allocate 32KiB buffer for staging buffer.
+	// Limit the reader to its provided size if specified.
+	var limitDataReader io.Reader
+	if size > 0 {
+		// This is done so that we can avoid erroneous clients sending more data than the set content size.
+		limitDataReader = io.LimitReader(data, size)
+	} else {
+		// else we read till EOF.
+		limitDataReader = data
+	}
+
+	// Allocate 128KiB buffer for staging buffer.
 	var buf = make([]byte, readSizeV1)
+
+	// Read till io.EOF.
 	for {
-		n, err := io.ReadFull(data, buf)
+		n, err := io.ReadFull(limitDataReader, buf)
 		if err == io.EOF {
 			break
 		}
@@ -311,9 +323,22 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
+	// Validate if payload is valid.
+	if isSignVerify(data) {
+		if err := data.(*signVerifyReader).Verify(); err != nil {
+			// Incoming payload wrong, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+			// Error return.
+			return "", toObjectErr(err, bucket, object)
+		}
+	}
+
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
+			// MD5 mismatch, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+			// Returns md5 mismatch.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}

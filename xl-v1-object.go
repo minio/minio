@@ -117,18 +117,20 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			return err
 		} // Cache has not been found, fill the cache.
 
-		// Proceed to set the cache.
-		var newBuffer io.Writer
 		// Cache is only set if whole object is being read.
 		if startOffset == 0 && length == xlMeta.Stat.Size {
+			// Proceed to set the cache.
+			var newBuffer io.Writer
 			// Create a new entry in memory of length.
 			newBuffer, err = xl.objCache.Create(path.Join(bucket, object), length)
-			if err != nil {
+			if err == nil {
+				// Create a multi writer to write to both memory and client response.
+				mw = io.MultiWriter(newBuffer, writer)
+			}
+			if err != nil && err != objcache.ErrCacheFull {
 				// Perhaps cache is full, returns here.
 				return err
 			}
-			// Create a multi writer to write to both memory and client response.
-			mw = io.MultiWriter(newBuffer, writer)
 		}
 	}
 
@@ -373,15 +375,18 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	md5Writer := md5.New()
 
 	// Limit the reader to its provided size if specified.
+	var limitDataReader io.Reader
 	if size > 0 {
 		// This is done so that we can avoid erroneous clients sending
 		// more data than the set content size.
-		data = io.LimitReader(data, size+1)
-	} // else we read till EOF.
+		limitDataReader = io.LimitReader(data, size)
+	} else {
+		// else we read till EOF.
+		limitDataReader = data
+	}
 
-	// Tee reader combines incoming data stream and md5, data read
-	// from input stream is written to md5.
-	teeReader := io.TeeReader(data, md5Writer)
+	// Tee reader combines incoming data stream and md5, data read from input stream is written to md5.
+	teeReader := io.TeeReader(limitDataReader, md5Writer)
 
 	// Collect all the previous erasure infos across the disk.
 	var eInfos []erasureInfo
@@ -416,6 +421,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
 				metadata["content-type"] = content.ContentType
 			}
+		}
+	}
+
+	// Validate if payload is valid.
+	if isSignVerify(data) {
+		if vErr := data.(*signVerifyReader).Verify(); vErr != nil {
+			// Incoming payload wrong, delete the temporary object.
+			xl.deleteObject(minioMetaTmpBucket, tempObj)
+			// Error return.
+			return "", toObjectErr(vErr, bucket, object)
 		}
 	}
 

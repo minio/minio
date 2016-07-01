@@ -27,10 +27,6 @@ import (
 	"strings"
 )
 
-// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
-// client did not calculate sha256 of the payload.
-const unsignedPayload = "UNSIGNED-PAYLOAD"
-
 // Verify if the request http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD"
 func isRequestUnsignedPayload(r *http.Request) bool {
 	return r.Header.Get("x-amz-content-sha256") == unsignedPayload
@@ -136,7 +132,9 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	validateRegion := true // Validate region.
 	var sha256sum string
-	if skipSHA256Calculation(r) {
+	// Skips calculating sha256 on the payload on server,
+	// if client requested for it.
+	if skipContentSha256Cksum(r) {
 		sha256sum = unsignedPayload
 	} else {
 		sha256sum = hex.EncodeToString(sum256(payload))

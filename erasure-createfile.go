@@ -62,18 +62,20 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 		if rErr != nil && rErr != io.ErrUnexpectedEOF {
 			return nil, 0, rErr
 		}
-		// Returns encoded blocks.
-		var enErr error
-		blocks, enErr = encodeData(buf[0:n], eInfo.DataBlocks, eInfo.ParityBlocks)
-		if enErr != nil {
-			return nil, 0, enErr
-		}
+		if n > 0 {
+			// Returns encoded blocks.
+			var enErr error
+			blocks, enErr = encodeData(buf[0:n], eInfo.DataBlocks, eInfo.ParityBlocks)
+			if enErr != nil {
+				return nil, 0, enErr
+			}
 
-		// Write to all disks.
-		if err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum); err != nil {
-			return nil, 0, err
+			// Write to all disks.
+			if err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum); err != nil {
+				return nil, 0, err
+			}
+			size += int64(n)
 		}
-		size += int64(n)
 	}
 
 	// Save the checksums.

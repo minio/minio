@@ -20,6 +20,7 @@ package objcache
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -85,9 +86,20 @@ func (c *Cache) Size(key string) int64 {
 }
 
 // Create validates and returns an in memory writer referencing entry.
-func (c *Cache) Create(key string, size int64) (io.Writer, error) {
+func (c *Cache) Create(key string, size int64) (writer io.Writer, err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	// Recovers any panic generated and return errors appropriately.
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("objcache: %v", r)
+			}
+		}
+	}() // Do not crash the server.
 
 	valueLen := uint64(size)
 	if c.maxSize > 0 {
@@ -105,8 +117,8 @@ func (c *Cache) Create(key string, size int64) (io.Writer, error) {
 	return c.entries[key], nil
 }
 
-// Open - open the in-memory file, returns an memory reader.
-// returns error ErrNotFoundInCache if fsPath does not exist.
+// Open - open the in-memory file, returns an in memory read seeker.
+// returns an error ErrNotFoundInCache, if the key does not exist.
 func (c *Cache) Open(key string) (io.ReadSeeker, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

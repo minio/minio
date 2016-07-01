@@ -158,8 +158,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize,
-			bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -270,7 +269,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing
 		// Test case - 14.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") - 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated e2fc714c4727ee9395f324cd2e7f331f")},
+			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated 900150983cd24fb0d6963f7d28e17f72")},
 		// Test case - 15-18.
 		// Validating for success cases.
 		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), true, "", nil},
@@ -292,8 +291,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
 			if testCase.expectedError.Error() != actualErr.Error() {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1,
-					instanceType, testCase.expectedError.Error(), actualErr.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
 			}
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
@@ -415,8 +413,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize,
-			bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1263,8 +1260,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize,
-			bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1503,8 +1499,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t *testing.T) {
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize,
-			bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1751,8 +1746,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t *
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
-			bytes.NewBufferString(part.inputReaderData), part.inputMd5)
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}

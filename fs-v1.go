@@ -315,6 +315,16 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
+	// Limit the reader to its provided size if specified.
+	var limitDataReader io.Reader
+	if size > 0 {
+		// This is done so that we can avoid erroneous clients sending more data than the set content size.
+		limitDataReader = io.LimitReader(data, size)
+	} else {
+		// else we read till EOF.
+		limitDataReader = data
+	}
+
 	if size == 0 {
 		// For size 0 we write a 0byte file.
 		err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
@@ -324,17 +334,17 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	} else {
 		// Allocate a buffer to Read() the object upload stream.
 		buf := make([]byte, readSizeV1)
-		// Read the buffer till io.EOF and append the read data to
-		// the temporary file.
+
+		// Read the buffer till io.EOF and append the read data to the temporary file.
 		for {
-			n, rErr := data.Read(buf)
+			n, rErr := limitDataReader.Read(buf)
 			if rErr != nil && rErr != io.EOF {
 				return "", toObjectErr(rErr, bucket, object)
 			}
 			if n > 0 {
 				// Update md5 writer.
-				md5Writer.Write(buf[:n])
-				wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n])
+				md5Writer.Write(buf[0:n])
+				wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[0:n])
 				if wErr != nil {
 					return "", toObjectErr(wErr, bucket, object)
 				}
@@ -351,14 +361,27 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if len(metadata) != 0 {
 		md5Hex = metadata["md5Sum"]
 	}
+
+	// Validate if payload is valid.
+	if isSignVerify(data) {
+		if vErr := data.(*signVerifyReader).Verify(); vErr != nil {
+			// Incoming payload wrong, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			// Error return.
+			return "", toObjectErr(vErr, bucket, object)
+		}
+	}
+
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
+			// MD5 mismatch, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			// Returns md5 mismatch.
 			return "", BadDigest{md5Hex, newMD5Hex}
 		}
 	}
 
-	// Entire object was written to the temp location, now it's safe to rename it
-	// to the actual location.
+	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)

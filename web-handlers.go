@@ -356,6 +356,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+	// FIXME: Allow file upload handler to set content-type, content-encoding.
 	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, nil); err != nil {
 		writeWebErrorResponse(w, err)
 	}
