@@ -144,7 +144,7 @@ func Test32kUNCPath(t *testing.T) {
 		// The following calculation was derived empirically. It is not exactly MAX_PATH - len(longDiskName)
 		// possibly due to expansion rules as mentioned here -
 		// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx#maxpath
-		remaining := 32767 - 25 - len(longDiskName)
+		remaining := 32767 - 25 - len(longDiskName) - 10
 		longDiskName = longDiskName + `\` + strings.Repeat("a", remaining)
 	}
 	err = mkdirAll(longDiskName, 0777)

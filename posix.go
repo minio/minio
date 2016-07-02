@@ -218,8 +218,13 @@ func (s *posix) MakeVol(volume string) (err error) {
 	}
 	// Make a volume entry, with mode 0777 mkdir honors system umask.
 	err = os.Mkdir(preparePath(volumeDir), 0777)
-	if err != nil && os.IsExist(err) {
-		return errVolumeExists
+	if err != nil {
+		if os.IsExist(err) {
+			return errVolumeExists
+		} else if os.IsPermission(err) {
+			return errDiskAccessDenied
+		}
+		return err
 	}
 	// Success
 	return nil

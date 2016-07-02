@@ -1912,7 +1912,7 @@ func (s *TestSuiteFS) TestObjectValidMD5(c *C) {
 	client = http.Client{}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	// exepcting a successfull upload.
+	// exepcting a successful upload.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	objectName = "test-2-object"
 	buffer1 = bytes.NewReader(data)

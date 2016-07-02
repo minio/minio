@@ -45,17 +45,10 @@ func registerShutdown(callback func()) {
 
 // House keeping code needed for FS.
 func fsHouseKeeping(storageDisk StorageAPI) error {
-	// Attempt to create `.minio`.
-	err := storageDisk.MakeVol(minioMetaBucket)
-	if err != nil {
-		if err != errVolumeExists && err != errDiskNotFound && err != errFaultyDisk {
-			return err
-		}
-	}
 	// Cleanup all temp entries upon start.
-	err = cleanupDir(storageDisk, minioMetaBucket, tmpMetaPrefix)
+	err := cleanupDir(storageDisk, minioMetaBucket, tmpMetaPrefix)
 	if err != nil {
-		return err
+		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
 	}
 	return nil
 }
@@ -70,8 +63,8 @@ func newStorageAPI(disk string) (storage StorageAPI, err error) {
 	return newRPCClient(disk)
 }
 
-// House keeping code needed for XL.
-func xlHouseKeeping(storageDisks []StorageAPI) error {
+// Initializes meta volume on all input storage disks.
+func initMetaVolume(storageDisks []StorageAPI) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
@@ -93,17 +86,58 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 			// Attempt to create `.minio`.
 			err := disk.MakeVol(minioMetaBucket)
-			if err != nil && err != errVolumeExists && err != errDiskNotFound && err != errFaultyDisk {
-				errs[index] = err
-				return
+			if err != nil {
+				switch err {
+				// Ignored errors.
+				case errVolumeExists, errDiskNotFound, errFaultyDisk:
+				default:
+					errs[index] = err
+				}
 			}
+		}(index, disk)
+	}
+
+	// Wait for all cleanup to finish.
+	wg.Wait()
+
+	// Return upon first error.
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		return toObjectErr(err, minioMetaBucket)
+	}
+
+	// Return success here.
+	return nil
+}
+
+// House keeping code needed for XL.
+func xlHouseKeeping(storageDisks []StorageAPI) error {
+	// This happens for the first time, but keep this here since this
+	// is the only place where it can be made expensive optimizing all
+	// other calls. Create metavolume.
+	var wg = &sync.WaitGroup{}
+
+	// Initialize errs to collect errors inside go-routine.
+	var errs = make([]error, len(storageDisks))
+
+	// Initialize all disks in parallel.
+	for index, disk := range storageDisks {
+		if disk == nil {
+			errs[index] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			// Indicate this wait group is done.
+			defer wg.Done()
+
 			// Cleanup all temp entries upon start.
-			err = cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
+			err := cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
 			if err != nil {
 				errs[index] = err
-				return
 			}
-			errs[index] = nil
 		}(index, disk)
 	}
 

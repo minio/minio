@@ -19,6 +19,7 @@ package main
 import (
 	"io/ioutil"
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -111,6 +112,49 @@ func TestReadAll(t *testing.T) {
 		_, err = posix.ReadAll(testCase.volume, testCase.path)
 		if err != testCase.err {
 			t.Errorf("Test %d expected err %s, got err %s", i+1, testCase.err, err)
+		}
+	}
+}
+
+// TestNewPosix all the cases handled in posix storage layer initialization.
+func TestNewPosix(t *testing.T) {
+	// Temporary dir name.
+	tmpDirName := os.TempDir() + "/" + "minio-" + nextSuffix()
+	// Temporary file name.
+	tmpFileName := os.TempDir() + "/" + "minio-" + nextSuffix()
+	f, _ := os.Create(tmpFileName)
+	f.Close()
+	defer os.Remove(tmpFileName)
+
+	// List of all tests for posix initialization.
+	testCases := []struct {
+		diskPath string
+		err      error
+	}{
+		// Validates input argument cannot be empty.
+		{
+			"",
+			errInvalidArgument,
+		},
+		// Validates if the directory does not exist and
+		// gets automatically created.
+		{
+			tmpDirName,
+			nil,
+		},
+		// Validates if the disk exists as file and returns error
+		// not a directory.
+		{
+			tmpFileName,
+			syscall.ENOTDIR,
+		},
+	}
+
+	// Validate all test cases.
+	for i, testCase := range testCases {
+		_, err := newPosix(testCase.diskPath)
+		if err != testCase.err {
+			t.Fatalf("Test %d failed wanted: %s, got: %s", i+1, err, testCase.err)
 		}
 	}
 }
