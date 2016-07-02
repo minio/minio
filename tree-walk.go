@@ -29,22 +29,20 @@ type treeWalkResult struct {
 }
 
 // "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
-type listDirFunc func(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error)
+type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, err error)
 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
 func listDirFactory(isLeaf func(string, string) bool, disks ...StorageAPI) listDirFunc {
-	// listDir - lists all the entries at a given prefix, takes additional filter function as parameter.
-	// filter function is used for filtering entries matching a given prefix.
+	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	// isLeaf is used to detect if an entry is a leaf entry. There are four scenarios where isLeaf
 	// should behave differently:
 	// 1. FS backend object listing - isLeaf is true if the entry has a trailing "/"
 	// 2. FS backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
 	// 3. XL backend object listing - isLeaf is true if the entry is a directory and contains xl.json
 	// 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
-	listDir := func(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
-		// return func(bucket, prefixDir string, filter func(entry string) bool) (entries []string, err error) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, err error) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
@@ -58,9 +56,9 @@ func listDirFactory(isLeaf func(string, string) bool, disks ...StorageAPI) listD
 				}
 				break
 			}
-			// Skip the entries which do not match the filter.
+			// Skip the entries which do not match the prefixEntry.
 			for i, entry := range entries {
-				if !filter(entry) {
+				if !strings.HasPrefix(entry, prefixEntry) {
 					entries[i] = ""
 					continue
 				}
@@ -98,9 +96,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, err := listDir(bucket, prefixDir, func(entry string) bool {
-		return strings.HasPrefix(entry, entryPrefixMatch)
-	})
+	entries, err := listDir(bucket, prefixDir, entryPrefixMatch)
 	if err != nil {
 		select {
 		case <-endWalkCh:
