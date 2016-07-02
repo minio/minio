@@ -141,7 +141,6 @@ func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
 // Supported Amz date headers.
 var amzDateHeaders = []string{
 	"x-amz-date",
-	"x-minio-date",
 	"date",
 }
 
