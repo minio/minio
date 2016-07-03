@@ -43,6 +43,8 @@ var (
 	// Maximum connections handled per
 	// server, defaults to 0 (unlimited).
 	globalMaxConn = 0
+	// Maximum cache size.
+	globalMaxCacheSize = uint64(maxCacheSize)
 	// Add new variable global values here.
 )
 

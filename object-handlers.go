@@ -115,6 +115,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Caculate the http Range.
 	var hrange *httpRange
 	hrange, err = getRequestedRange(r.Header.Get("Range"), objInfo.Size)
 	if err != nil {
@@ -144,14 +145,15 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	if length == 0 {
 		length = objInfo.Size - startOffset
 	}
+
+	// Reads the object at startOffset and writes to mw.
 	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, w); err != nil {
-		errorIf(err, "Writing to client failed.")
+		errorIf(err, "Unable to write to client.")
 		// Do not send error response here, client would have already died.
 		return
 	}
+	// Success.
 }
-
-var unixEpochTime = time.Unix(0, 0)
 
 // checkLastModified implements If-Modified-Since and
 // If-Unmodified-Since checks.
@@ -159,7 +161,7 @@ var unixEpochTime = time.Unix(0, 0)
 // modtime is the modification time of the resource to be served, or
 // IsZero(). return value is whether this request is now complete.
 func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
-	if modtime.IsZero() || modtime.Equal(unixEpochTime) {
+	if modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
 		// If the object doesn't have a modtime (IsZero), or the modtime
 		// is obviously garbage (Unix time == 0), then ignore modtimes
 		// and don't process the If-Modified-Since header.
@@ -452,7 +454,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 // modtime is the modification time of the resource to be served, or
 // IsZero(). return value is whether this request is now complete.
 func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
-	if modtime.IsZero() || modtime.Equal(unixEpochTime) {
+	if modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
 		// If the object doesn't have a modtime (IsZero), or the modtime
 		// is obviously garbage (Unix time == 0), then ignore modtimes
 		// and don't process the If-Modified-Since header.

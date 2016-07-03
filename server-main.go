@@ -141,6 +141,14 @@ func initServerConfig(c *cli.Context) {
 		fatalIf(err, "Unable to convert MINIO_MAXCONN=%s environment variable into its integer value.", maxConnStr)
 	}
 
+	// Fetch max cache size from environment variable.
+	if maxCacheSizeStr := os.Getenv("MINIO_CACHE_SIZE"); maxCacheSizeStr != "" {
+		// We need to parse cache size to its integer value.
+		var err error
+		globalMaxCacheSize, err = strconvBytes(maxCacheSizeStr)
+		fatalIf(err, "Unable to convert MINIO_CACHE_SIZE=%s environment variable into its integer value.", maxCacheSizeStr)
+	}
+
 	// Fetch access keys from environment variables if any and update the config.
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
