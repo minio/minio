@@ -36,6 +36,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	router "github.com/gorilla/mux"
 )
 
 // The Argument to TestServer should satidy the interface.
@@ -111,34 +113,41 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
-	testServer.Disks = erasureDisks
-	// Obtain temp root.
-	root, err := getTestRoot()
+
+	credentials, root, err := initTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf("Failed obtaining Temp Root for the backend Backend: <ERROR> %s", err)
+		t.Fatalf("%s", err)
 	}
 	testServer.Root = root
 	testServer.Disks = erasureDisks
-	// Initialize server config.
-	initConfig()
-	// Get credential.
-	credentials := serverConfig.GetCredential()
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
-	// Set a default region.
-	serverConfig.SetRegion("us-east-1")
-
-	// Do this only once here.
-	setGlobalConfigPath(root)
-
-	err = serverConfig.Save()
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
 	// Run TestServer.
 	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{exportPaths: erasureDisks}))
 
 	return testServer
+}
+
+// Configure the server for the test run.
+func initTestConfig(bucketLocation string) (credential, string, error) {
+	// Initialize server config.
+	initConfig()
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+	// Set a default region.
+	serverConfig.SetRegion(bucketLocation)
+	rootPath, err := getTestRoot()
+	if err != nil {
+		return credential{}, "", err
+	}
+	// Do this only once here.
+	setGlobalConfigPath(rootPath)
+
+	err = serverConfig.Save()
+	if err != nil {
+		return credential{}, "", err
+	}
+	return credentials, rootPath, nil
 }
 
 // Deleting the temporary backend and stopping the server.
@@ -595,14 +604,14 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for single node setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, singleNodeTestStr, t)
 
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, t)
@@ -614,7 +623,7 @@ func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
 func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundType) {
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, fsDirs, t)
@@ -629,9 +638,54 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
 	objLayer, fsDirs, err := getXLObjectLayer()
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err.Error())
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, xLTestStr, fsDirs, t)
 	defer removeRoots(fsDirs)
+}
+
+// Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
+// Need isolated registration of API end points while writing unit tests for end points.
+// All the API end points are registered only for the default case.
+func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
+	// initialize a new mux router.
+	// goriilla/mux is the library used to register all the routes and handle them.
+	muxRouter := router.NewRouter()
+	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
+	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
+	api := objectAPIHandlers{
+		ObjectAPI: objLayer,
+	}
+	// API Router.
+	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
+	// Bucket router.
+	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
+	// Iterate the list of API functions requested for and register them in mux HTTP handler.
+	for _, apiFunction := range apiFunctions {
+		switch apiFunction {
+		// Register PutBucket Policy handler.
+		case "PutBucketPolicy":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
+
+			// Register Delete bucket HTTP policy handler.
+		case "DeleteBucketPolicy":
+			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
+
+			// Register Get Bucket policy HTTP Handler.
+		case "GetBucketPolicy":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+
+			// Register Post Bucket policy function.
+		case "PostBucketPolicy":
+			bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(api.PostPolicyBucketHandler)
+
+			// Register all api endpoints by default.
+		default:
+			registerAPIRouter(muxRouter, api)
+			// No need to register any more end points, all the end points are registered.
+			break
+		}
+	}
+	return muxRouter
 }

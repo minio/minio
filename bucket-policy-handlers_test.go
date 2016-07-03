@@ -17,7 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -82,7 +85,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 // This test preserves the allowed actions for all 3 sets of policies, that is read-write,read-only, write-only.
 // The intention of the test is to catch any changes made to allowed action for on eof the above 3 major policy groups mentioned.
 func TestBucketPolicyActionMatch(t *testing.T) {
-	bucketName := "test-bucket"
+	bucketName := getRandomBucketName()
 	objectPrefix := "test-object"
 
 	testCases := []struct {
@@ -231,5 +234,171 @@ func TestBucketPolicyActionMatch(t *testing.T) {
 			t.Errorf("Test %d: Expected the result to be `%v`, but instead found it to be `%v`", i+1, testCase.expectedResult, actualResult)
 		}
 	}
+}
 
+// TestWildCardMatch - Tests validate the logic of wild card matching.
+// Its used to match the action and resources of the policy statement and the request.
+func TestWildCardMatch(t *testing.T) {
+	testCases := []struct {
+		pattern        string
+		text           string
+		expectedResult bool
+	}{
+		// Test case - 1.
+		// Test case with pattern "*". Expected to match any text.
+		{"*", "s3:GetObject", true},
+		// Test case - 2.
+		// Test case with empty pattern. This only matches empty string.
+		{"", "s3:GetObject", false},
+		// Test case - 3.
+		// Test case with empty pattern. This only matches empty string.
+		{"", "", true},
+		// Test case - 4.
+		// Test case with single "*" at the end.
+		{"s3:*", "s3:ListMultipartUploadParts", true},
+		// Test case - 5.
+		// Test case with a no "*". In this case the pattern and text should be the same.
+		{"s3:ListBucketMultipartUploads", "s3:ListBucket", false},
+		// Test case - 6.
+		// Test case with a no "*". In this case the pattern and text should be the same.
+		{"s3:ListBucket", "s3:ListBucket", true},
+		// Test case - 7.
+		// Test case with a no "*". In this case the pattern and text should be the same.
+		{"s3:ListBucketMultipartUploads", "s3:ListBucketMultipartUploads", true},
+		// Test case - 8.
+		// Test case with pattern containing key name with a prefix. Should accept the same text without a "*".
+		{"my-bucket/oo*", "my-bucket/oo", true},
+		// Test case - 9.
+		// Test case with "*" at the end of the pattern.
+		{"my-bucket/In*", "my-bucket/India/Karnataka/", true},
+		// Test case - 10.
+		// Test case with prefixes shuffled.
+		// This should fail.
+		{"my-bucket/In*", "my-bucket/Karnataka/India/", false},
+		// Test case - 11.
+		// Test case with text expanded to the wildcards in the pattern.
+		{"my-bucket/In*/Ka*/Ban", "my-bucket/India/Karnataka/Ban", true},
+		// Test case - 12.
+		// Test case with the  keyname part is repeated as prefix several times.
+		// This is valid.
+		{"my-bucket/In*/Ka*/Ban", "my-bucket/India/Karnataka/Ban/Ban/Ban/Ban/Ban", true},
+		// Test case - 13.
+		// Test case to validate that `*` can be expanded into multiple prefixes.
+		{"my-bucket/In*/Ka*/Ban", "my-bucket/India/Karnataka/Area1/Area2/Area3/Ban", true},
+		// Test case to validate that `*` can be expanded into multiple prefixes.
+		{"my-bucket/In*/Ka*/Ban", "my-bucket/India/State1/State2/Karnataka/Area1/Area2/Area3/Ban", true},
+		// Test case - 14.
+		// Test case where the keyname part of the pattern is expanded in the text.
+		{"my-bucket/In*/Ka*/Ban", "my-bucket/India/Karnataka/Bangalore", false},
+		// Test case - 15.
+		// Test case with prefixes and wildcard expanded for all "*".
+		{"my-bucket/In*/Ka*/Ban*", "my-bucket/India/Karnataka/Bangalore", true},
+		// Test case - 16.
+		// Test case with keyname part being a wildcard in the pattern.
+		{"my-bucket/*", "my-bucket/India", true},
+		// Test case - 17.
+		{"my-bucket/oo*", "my-bucket/odo", false},
+	}
+	// Iterating over the test cases, call the function under test and asert the output.
+	for i, testCase := range testCases {
+		actualResult := wildCardMatch(testCase.pattern, testCase.text)
+		if testCase.expectedResult != actualResult {
+			t.Errorf("Test %d: Expected the result to be `%v`, but instead found it to be `%v`", i+1, testCase.expectedResult, actualResult)
+		}
+	}
+}
+
+// Wrapper for calling Put Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
+func TestPutBucketPolicyHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testPutBucketPolicyHandler)
+}
+
+// testPutBucketPolicyHandler - Test for Bucket policy end point.
+// TODO: Add exhaustive cases with various combination of statement fields.
+func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t *testing.T) {
+	// get random bucket name.
+	bucketName := getRandomBucketName()
+	// Create bucket.
+	err := obj.MakeBucket(bucketName)
+	if err != nil {
+		// failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy"})
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	credentials, rootPath, err := initTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	// template for constructing HTTP request body for PUT bucket policy.
+	bucketPolicyTemplate := `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:GetBucketLocation",
+                "s3:ListBucket"
+            ],
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "*"
+                ]
+            },
+            "Resource": [
+                "arn:aws:s3:::%s"
+            ]
+        },
+        {
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "*"
+                ]
+            },
+            "Resource": [
+                "arn:aws:s3:::%s/this*"
+            ]
+        }
+    ]
+}`
+
+	// test cases with sample input and expected output.
+	testCases := []struct {
+		bucketName string
+		accessKey  string
+		secretKey  string
+		// expected Response.
+		expectedRespStatus int
+	}{
+		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, http.StatusNoContent},
+	}
+
+	// Iterating over the test cases, calling the function under test and asserting the response.
+	for i, testCase := range testCases {
+		// obtain the put bucket policy request body.
+		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testCase.bucketName, testCase.bucketName)
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		req, err := newTestRequest("PUT", getPutPolicyURL("", testCase.bucketName),
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		}
+	}
 }
