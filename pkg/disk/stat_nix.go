@@ -32,6 +32,8 @@ func GetInfo(path string) (info Info, err error) {
 	info = Info{}
 	info.Total = int64(s.Bsize) * int64(s.Blocks)
 	info.Free = int64(s.Bsize) * int64(s.Bfree)
+	info.Files = int64(s.Files)
+	info.Ffree = int64(s.Ffree)
 	info.FSType, err = getFSType(path)
 	if err != nil {
 		return Info{}, err

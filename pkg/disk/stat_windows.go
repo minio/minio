@@ -60,5 +60,33 @@ func GetInfo(path string) (info Info, err error) {
 	info.Total = int64(lpTotalNumberOfBytes)
 	info.Free = int64(lpFreeBytesAvailable)
 	info.FSType = getFSType(path)
+
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa364935(v=vs.85).aspx
+	// Retrieves information about the specified disk, including the amount of free space on the disk.
+	GetDiskFreeSpace := dll.MustFindProc("GetDiskFreeSpaceW")
+
+	// Return values of GetDiskFreeSpace()
+	lpSectorsPerCluster := uint32(0)
+	lpBytesPerSector := uint32(0)
+	lpNumberOfFreeClusters := uint32(0)
+	lpTotalNumberOfClusters := uint32(0)
+
+	// Extract values safely
+	// BOOL WINAPI GetDiskFreeSpace(
+	//   _In_  LPCTSTR lpRootPathName,
+	//   _Out_ LPDWORD lpSectorsPerCluster,
+	//   _Out_ LPDWORD lpBytesPerSector,
+	//   _Out_ LPDWORD lpNumberOfFreeClusters,
+	//   _Out_ LPDWORD lpTotalNumberOfClusters
+	// );
+	_, _, _ = GetDiskFreeSpace.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(path))),
+		uintptr(unsafe.Pointer(&lpSectorsPerCluster)),
+		uintptr(unsafe.Pointer(&lpBytesPerSector)),
+		uintptr(unsafe.Pointer(&lpNumberOfFreeClusters)),
+		uintptr(unsafe.Pointer(&lpTotalNumberOfClusters)))
+
+	info.Files = int64(lpTotalNumberOfClusters)
+	info.Ffree = int64(lpNumberOfFreeClusters)
+
 	return info, nil
 }
