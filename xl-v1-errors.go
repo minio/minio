@@ -32,6 +32,3 @@ var errXLReadQuorum = errors.New("Read failed. Insufficient number of disks onli
 
 // errXLWriteQuorum - did not meet write quorum.
 var errXLWriteQuorum = errors.New("Write failed. Insufficient number of disks online")
-
-// errXLDataCorrupt - err data corrupt.
-var errXLDataCorrupt = errors.New("Data likely corrupted, read failed.")

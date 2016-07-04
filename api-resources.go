@@ -50,23 +50,6 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	return
 }
 
-// Parse bucket url queries
-func getBucketResources(values url.Values) (listType int, prefix, marker, delimiter string, maxkeys int, encodingType string) {
-	if values.Get("list-type") != "" {
-		listType, _ = strconv.Atoi(values.Get("list-type"))
-	}
-	prefix = values.Get("prefix")
-	marker = values.Get("marker")
-	delimiter = values.Get("delimiter")
-	if values.Get("max-keys") != "" {
-		maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
-	} else {
-		maxkeys = maxObjectList
-	}
-	encodingType = values.Get("encoding-type")
-	return
-}
-
 // Parse bucket url queries for ?uploads
 func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int, encodingType string) {
 	prefix = values.Get("prefix")
