@@ -17,43 +17,34 @@
 package main
 
 import (
-	"bytes"
-	"strconv"
+	"fmt"
+	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
 )
 
-// Helper function that invokes startTreeWalk depending on the type implementing objectLayer.
-func startTreeWalk(obj ObjectLayer, bucket, prefix, marker string,
-	recursive bool, endWalkCh chan struct{}) chan treeWalkResult {
-	var twResultCh chan treeWalkResult
-	switch typ := obj.(type) {
-	case fsObjects:
-		twResultCh = typ.startTreeWalk(bucket, prefix, marker, true,
-			func(bucket, object string) bool {
-				return !strings.HasSuffix(object, slashSeparator)
-			}, endWalkCh)
-	case xlObjects:
-		twResultCh = typ.startTreeWalk(bucket, prefix, marker, true,
-			typ.isObject, endWalkCh)
-	}
-	return twResultCh
+// Sample entries for the namespace.
+var volume = "testvolume"
+var files = []string{
+	"d/e",
+	"d/f",
+	"d/g/h",
+	"i/j/k",
+	"lmn",
 }
 
-// Helper function that creates a bucket, bucket and objects from objects []string.
-func createObjNamespace(obj ObjectLayer, bucket string, objects []string) error {
-	// Make a bucket.
-	var err error
-	err = obj.MakeBucket(bucket)
+// Helper function that creates a volume and files in it.
+func createNamespace(disk StorageAPI, volume string, files []string) error {
+	// Make a volume.
+	err := disk.MakeVol(volume)
 	if err != nil {
 		return err
 	}
 
-	// Create objects.
-	for _, object := range objects {
-		_, err = obj.PutObject(bucket, object, int64(len("hello")),
-			bytes.NewReader([]byte("hello")), nil)
+	// Create files.
+	for _, file := range files {
+		err = disk.AppendFile(volume, file, []byte{})
 		if err != nil {
 			return err
 		}
@@ -61,32 +52,13 @@ func createObjNamespace(obj ObjectLayer, bucket string, objects []string) error 
 	return err
 }
 
-// Wrapper for testTreeWalkPrefix to run the unit test for both FS and XL backend.
-func TestTreeWalkPrefix(t *testing.T) {
-	ExecObjectLayerTest(t, testTreeWalkPrefix)
-}
-
 // Test if tree walker returns entries matching prefix alone are received
 // when a non empty prefix is supplied.
-func testTreeWalkPrefix(obj ObjectLayer, instanceType string, t *testing.T) {
-	bucket := "abc"
-	objects := []string{
-		"d/e",
-		"d/f",
-		"d/g/h",
-		"i/j/k",
-		"lmn",
-	}
-
-	err := createObjNamespace(obj, bucket, objects)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func testTreeWalkPrefix(t *testing.T, listDir listDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := "d/"
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(obj, bucket, prefix, "", true, endWalkCh)
+	twResultCh := startTreeWalk(volume, prefix, "", true, listDir, endWalkCh)
 
 	// Check if all entries received on the channel match the prefix.
 	for res := range twResultCh {
@@ -96,31 +68,12 @@ func testTreeWalkPrefix(obj ObjectLayer, instanceType string, t *testing.T) {
 	}
 }
 
-// Wrapper for testTreeWalkMarker to run the unit test for both FS and XL backend.
-func TestTreeWalkMarker(t *testing.T) {
-	ExecObjectLayerTest(t, testTreeWalkMarker)
-}
-
 // Test if entries received on tree walk's channel appear after the supplied marker.
-func testTreeWalkMarker(obj ObjectLayer, instanceType string, t *testing.T) {
-	bucket := "abc"
-	objects := []string{
-		"d/e",
-		"d/f",
-		"d/g/h",
-		"i/j/k",
-		"lmn",
-	}
-
-	err := createObjNamespace(obj, bucket, objects)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func testTreeWalkMarker(t *testing.T, listDir listDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := ""
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(obj, bucket, prefix, "d/g", true, endWalkCh)
+	twResultCh := startTreeWalk(volume, prefix, "d/g", true, listDir, endWalkCh)
 
 	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
@@ -131,142 +84,178 @@ func testTreeWalkMarker(obj ObjectLayer, instanceType string, t *testing.T) {
 	if expectedCount != actualCount {
 		t.Errorf("Expected %d entries, actual no. of entries were %d", expectedCount, actualCount)
 	}
-
 }
 
-// Wrapper for testTreeWalkAbort to run the unit test for both FS and XL backend.
-func TestTreeWalkAbort(t *testing.T) {
-	ExecObjectLayerTest(t, testTreeWalkAbort)
-}
-
-// Extend treeWalk type to provide a method to reset timeout
-func (t *treeWalkPool) setTimeout(newTimeout time.Duration) {
-	t.timeOut = newTimeout
-}
-
-// Helper function to set treewalk (idle) timeout
-func setTimeout(obj ObjectLayer, newTimeout time.Duration) {
-	switch typ := obj.(type) {
-	case fsObjects:
-		typ.listPool.setTimeout(newTimeout)
-	case xlObjects:
-		typ.listPool.setTimeout(newTimeout)
-
+// Test tree-walk.
+func TestTreeWalk(t *testing.T) {
+	fsDir, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
 	}
-}
-
-// Helper function to put the tree walk go-routine into the pool
-func putbackTreeWalk(obj ObjectLayer, params listParams, resultCh chan treeWalkResult, endWalkCh chan struct{}) {
-	switch typ := obj.(type) {
-	case fsObjects:
-		typ.listPool.Set(params, resultCh, endWalkCh)
-	case xlObjects:
-		typ.listPool.Set(params, resultCh, endWalkCh)
-
-	}
-}
-
-// Test if tree walk go-routine exits cleanly if tree walk is aborted before compeletion.
-func testTreeWalkAbort(obj ObjectLayer, instanceType string, t *testing.T) {
-	bucket := "abc"
-
-	var objects []string
-	for i := 0; i < 1001; i++ {
-		objects = append(objects, "obj"+strconv.Itoa(i))
+	disk, err := newStorageAPI(fsDir)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
 
-	err := createObjNamespace(obj, bucket, objects)
+	err = createNamespace(disk, volume, files)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set treewalk pool timeout to be test friendly
-	setTimeout(obj, 2*time.Second)
-
-	// Start the tree walk go-routine.
-	prefix := ""
-	marker := ""
-	recursive := true
-	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(obj, bucket, prefix, marker, recursive, endWalkCh)
-
-	// Pull one result entry from the tree walk result channel.
-	<-twResultCh
-
-	// Put the treewalk go-routine into tree walk pool
-	putbackTreeWalk(obj, listParams{bucket, recursive, marker, prefix}, twResultCh, endWalkCh)
-
-	// Confirm that endWalkCh is closed on tree walk pool timer expiry
-	if _, open := <-endWalkCh; open {
-		t.Error("Expected tree walk endWalk channel to be closed, found to be open")
-	}
-
-	// Drain the buffered channel result channel of entries that were pushed before
-	// it was signalled to abort.
-	for range twResultCh {
-	}
-	if _, open := <-twResultCh; open {
-		t.Error("Expected tree walk result channel to be closed, found to be open")
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk)
+	// Simple test for prefix based walk.
+	testTreeWalkPrefix(t, listDir)
+	// Simple test when marker is set.
+	testTreeWalkMarker(t, listDir)
+	err = removeAll(fsDir)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
-// Helper function to get a slice of disks depending on the backend
-func getPhysicalDisks(obj ObjectLayer) []string {
-	switch typ := obj.(type) {
-	case fsObjects:
-		return []string{typ.physicalDisk}
-	case xlObjects:
-		return typ.physicalDisks
+// Test if tree walk go-routine exits cleanly if tree walk is aborted because of timeout.
+func TestTreeWalkTimeout(t *testing.T) {
+	fsDir, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
 	}
-	return []string{}
-}
-
-// Wrapper for testTreeWalkFailedDisks to run the unit test for both FS and XL backend.
-func TestTreeWalkFailedDisks(t *testing.T) {
-	ExecObjectLayerTest(t, testTreeWalkFailedDisks)
-}
-
-// Test if tree walk go routine exits cleanly when more than quorum number of disks fail
-// in XL and the single disk in FS.
-func testTreeWalkFailedDisks(obj ObjectLayer, instanceType string, t *testing.T) {
-	bucket := "abc"
-	objects := []string{
-		"d/e",
-		"d/f",
-		"d/g/h",
-		"i/j/k",
-		"lmn",
+	disk, err := newStorageAPI(fsDir)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
-
-	err := createObjNamespace(obj, bucket, objects)
+	var files []string
+	// Create maxObjectsList+1 number of entries.
+	for i := 0; i < maxObjectList+1; i++ {
+		files = append(files, fmt.Sprintf("file.%d", i))
+	}
+	err = createNamespace(disk, volume, files)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Simulate disk failures by removing the directories backing them
-	disks := getPhysicalDisks(obj)
-	switch obj.(type) {
-	case fsObjects:
-		removeDiskN(disks, 1)
-	case xlObjects:
-		removeDiskN(disks, len(disks))
-	}
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk)
 
-	// Start the tree walk go-routine.
+	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
+	pool := newTreeWalkPool(2 * time.Second)
+
+	endWalkCh := make(chan struct{})
 	prefix := ""
 	marker := ""
 	recursive := true
-	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(obj, bucket, prefix, marker, recursive, endWalkCh)
+	resultCh := startTreeWalk(volume, prefix, marker, recursive, listDir, endWalkCh)
 
-	if res := <-twResultCh; res.err.Error() != "disk not found" {
-		t.Error("Expected disk not found error")
+	params := listParams{
+		bucket:    volume,
+		recursive: recursive,
+	}
+	// Add Treewalk to the pool.
+	pool.Set(params, resultCh, endWalkCh)
+
+	// Wait for the Treewalk to timeout.
+	<-time.After(3 * time.Second)
+
+	// Read maxObjectList number of entries from the channel.
+	// maxObjectsList number of entries would have been filled into the resultCh
+	// buffered channel. After the timeout resultCh would get closed and hence the
+	// maxObjectsList+1 entry would not be sent in the channel.
+	i := 0
+	for range resultCh {
+		i++
+		if i == maxObjectList {
+			break
+		}
 	}
 
+	// The last entry will not be received as the Treewalk goroutine would have exited.
+	_, ok := <-resultCh
+	if ok {
+		t.Error("Tree-walk go routine has not exited after timeout.")
+	}
+	err = removeAll(fsDir)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
-// FIXME: Test the abort timeout when the tree-walk go routine is 'parked' in
-// the pool.  Currently, we need to create objects greater than maxObjectList
-// (== 1000) which would increase time to run the test. If (and when) we decide
-// to make maxObjectList configurable we can re-evaluate adding a unit test for
-// this.
+// Test ListDir - listDir should list entries from the first disk, if the first disk is down,
+// it should list from the next disk.
+func TestListDir(t *testing.T) {
+	file1 := "file1"
+	file2 := "file2"
+	// Create two backend directories fsDir1 and fsDir2.
+	fsDir1, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
+	}
+	fsDir2, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
+	}
+
+	// Create two StorageAPIs disk1 and disk2.
+	disk1, err := newStorageAPI(fsDir1)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
+	}
+	disk2, err := newStorageAPI(fsDir2)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
+	}
+
+	// create listDir function.
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk1, disk2)
+
+	// Create file1 in fsDir1 and file2 in fsDir2.
+	disks := []StorageAPI{disk1, disk2}
+	for i, disk := range disks {
+		err = createNamespace(disk, volume, []string{fmt.Sprintf("file%d", i+1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Should list "file1" from fsDir1.
+	entries, err := listDir(volume, "", "")
+	if err != nil {
+		t.Error(err)
+	}
+	if len(entries) != 1 {
+		t.Fatal("Expected the number of entries to be 1")
+	}
+	if entries[0] != file1 {
+		t.Fatal("Expected the entry to be file1")
+	}
+
+	// Remove fsDir1 to test failover.
+	err = removeAll(fsDir1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Should list "file2" from fsDir2.
+	entries, err = listDir(volume, "", "")
+	if err != nil {
+		t.Error(err)
+	}
+	if len(entries) != 1 {
+		t.Fatal("Expected the number of entries to be 1")
+	}
+	if entries[0] != file2 {
+		t.Fatal("Expected the entry to be file2")
+	}
+	err = removeAll(fsDir2)
+	if err != nil {
+		t.Error(err)
+	}
+	// None of the disks are available, should get errDiskNotFound.
+	entries, err = listDir(volume, "", "")
+	if err != errDiskNotFound {
+		t.Error("expected errDiskNotFound error.")
+	}
+}
