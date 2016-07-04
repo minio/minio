@@ -34,15 +34,15 @@ var files = []string{
 	"lmn",
 }
 
-// Helper function that creates a bucket, bucket and objects from objects []string.
+// Helper function that creates a volume and files in it.
 func createNamespace(disk StorageAPI, volume string, files []string) error {
-	// Make a bucket.
+	// Make a volume.
 	err := disk.MakeVol(volume)
 	if err != nil {
 		return err
 	}
 
-	// Create objects.
+	// Create files.
 	for _, file := range files {
 		err = disk.AppendFile(volume, file, []byte{})
 		if err != nil {
