@@ -103,7 +103,7 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 
 	// loading format.json from minioMetaBucket.
 	// Note: The format.json content is ignored, reserved for future use.
-	_, err = loadFormatFS(storage)
+	format, err := loadFormatFS(storage)
 	if err != nil {
 		if err == errFileNotFound {
 			// format.json doesn't exist, create it inside minioMetaBucket.
@@ -114,6 +114,8 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		} else {
 			return nil, err
 		}
+	} else if !isFSFormat(format) {
+		return nil, errFSDiskFormat
 	}
 
 	// Register the callback that should be called when the process shuts down.
