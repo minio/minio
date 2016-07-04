@@ -133,7 +133,7 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 	return di, err
 }
 
-// checkDiskFree verifies if disk path has sufficient minimum free disk space.
+// checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
 func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	di, err := getDiskInfo(diskPath)
 	if err != nil {
@@ -143,7 +143,8 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	// Remove 5% from total space for cumulative disk
 	// space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= minFreeDisk {
+	availableFiles := (float64(di.Ffree) / (float64(di.Files) - (0.05 * float64(di.Files)))) * 100
+	if int64(availableDiskSpace) <= minFreeDisk || int64(availableFiles) <= minFreeDisk {
 		return errDiskFull
 	}
 

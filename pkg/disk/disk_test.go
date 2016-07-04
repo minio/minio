@@ -41,5 +41,7 @@ func (s *MySuite) TestFree(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(di.Total, Not(Equals), 0)
 	c.Assert(di.Free, Not(Equals), 0)
+	c.Assert(di.Files, Not(Equals), 0)
+	c.Assert(di.Ffree, Not(Equals), 0)
 	c.Assert(di.FSType, Not(Equals), "UNKNOWN")
 }

@@ -23,5 +23,7 @@ package disk
 type Info struct {
 	Total  int64
 	Free   int64
+	Files  int64
+	Ffree  int64
 	FSType string
 }
