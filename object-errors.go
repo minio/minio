@@ -197,15 +197,6 @@ func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
 }
 
-// UnExpectedDataSize - Reader contains more/less data than specified.
-type UnExpectedDataSize struct {
-	Size int
-}
-
-func (e UnExpectedDataSize) Error() string {
-	return fmt.Sprintf("Contains more data than specified size of %d bytes.", e.Size)
-}
-
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
 type IncompleteBody GenericError
 
@@ -239,15 +230,6 @@ type InvalidPart struct{}
 
 func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found"
-}
-
-// InvalidPartOrder parts are not ordered as Requested
-type InvalidPartOrder struct {
-	UploadID string
-}
-
-func (e InvalidPartOrder) Error() string {
-	return "Invalid part order sent for " + e.UploadID
 }
 
 // PartTooSmall - error if part size is less than 5MB.

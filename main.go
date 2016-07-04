@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/minio/cli"
@@ -139,11 +138,6 @@ func checkMainSyntax(c *cli.Context) {
 	if configPath == "" {
 		console.Fatalln("Config folder cannot be empty, please specify --config-dir <foldername>.")
 	}
-}
-
-// mustGetProfilePath must get location that the profile will be written to.
-func mustGetProfilePath() string {
-	return filepath.Join(mustGetConfigPath(), globalMinioProfilePath)
 }
 
 func main() {

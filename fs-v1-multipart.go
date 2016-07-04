@@ -206,11 +206,6 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 // all the disks. `uploads.json` carries metadata regarding on going
 // multipart operation on the object.
 func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
-	// No metadata is set, allocate a new one.
-	if meta == nil {
-		meta = make(map[string]string)
-	}
-
 	// Initialize `fs.json` values.
 	fsMeta := newFSMetaV1()
 
