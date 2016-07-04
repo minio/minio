@@ -33,32 +33,36 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-// API suite container.
-type TestSuiteFS struct {
+// API suite container common to both FS and XL.
+type TestSuiteCommon struct {
+	serverType string
 	testServer TestServer
 	endPoint   string
 	accessKey  string
 	secretKey  string
 }
 
-// Initializing the test suite.
-var _ = Suite(&TestSuiteFS{})
+// Init and run test on FS backend.
+var _ = Suite(&TestSuiteCommon{serverType: "FS"})
+
+// Init and run test on XL backend.
+var _ = Suite(&TestSuiteCommon{serverType: "XL"})
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
-func (s *TestSuiteFS) SetUpSuite(c *C) {
-	s.testServer = StartTestServer(c, "FS")
+func (s *TestSuiteCommon) SetUpSuite(c *C) {
+	s.testServer = StartTestServer(c, s.serverType)
 	s.endPoint = s.testServer.Server.URL
 	s.accessKey = s.testServer.AccessKey
 	s.secretKey = s.testServer.SecretKey
 }
 
 // Called implicitly by "gopkg.in/check.v1" after all tests are run.
-func (s *TestSuiteFS) TearDownSuite(c *C) {
+func (s *TestSuiteCommon) TearDownSuite(c *C) {
 	s.testServer.Stop()
 }
 
-func (s *TestSuiteFS) TestAuth(c *C) {
+func (s *TestSuiteCommon) TestAuth(c *C) {
 	secretID, err := genSecretAccessKey()
 	c.Assert(err, IsNil)
 
@@ -71,7 +75,7 @@ func (s *TestSuiteFS) TestAuth(c *C) {
 
 // TestBucketPolicy - Inserts the bucket policy and verifies it by fetching the policy back.
 // Deletes the policy and verifies the deletion by fetching it back.
-func (s *TestSuiteFS) TestBucketPolicy(c *C) {
+func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 	// Sample bucket policy.
 	bucketPolicyBuf := `{
     "Version": "2012-10-17",
@@ -172,7 +176,7 @@ func (s *TestSuiteFS) TestBucketPolicy(c *C) {
 }
 
 // TestDeleteBucket - validates DELETE bucket operation.
-func (s *TestSuiteFS) TestDeleteBucket(c *C) {
+func (s *TestSuiteCommon) TestDeleteBucket(c *C) {
 	bucketName := getRandomBucketName()
 
 	// HTTP request to create the bucket.
@@ -199,7 +203,7 @@ func (s *TestSuiteFS) TestDeleteBucket(c *C) {
 }
 
 // TestDeleteBucketNotEmpty - Validates the operation during an attempt to delete a non-empty bucket.
-func (s *TestSuiteFS) TestDeleteBucketNotEmpty(c *C) {
+func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 
@@ -244,7 +248,7 @@ func (s *TestSuiteFS) TestDeleteBucketNotEmpty(c *C) {
 }
 
 // Tests delete object responses and success.
-func (s *TestSuiteFS) TestDeleteObject(c *C) {
+func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -319,7 +323,7 @@ func (s *TestSuiteFS) TestDeleteObject(c *C) {
 }
 
 // TestNonExistentBucket - Asserts response for HEAD on non-existent bucket.
-func (s *TestSuiteFS) TestNonExistentBucket(c *C) {
+func (s *TestSuiteCommon) TestNonExistentBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// create request to HEAD on the bucket.
@@ -337,7 +341,7 @@ func (s *TestSuiteFS) TestNonExistentBucket(c *C) {
 }
 
 // TestEmptyObject - Asserts the response for operation on a 0 byte object.
-func (s *TestSuiteFS) TestEmptyObject(c *C) {
+func (s *TestSuiteCommon) TestEmptyObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -385,7 +389,7 @@ func (s *TestSuiteFS) TestEmptyObject(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, buffer.Bytes()))
 }
 
-func (s *TestSuiteFS) TestBucket(c *C) {
+func (s *TestSuiteCommon) TestBucket(c *C) {
 	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucket",
 		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
@@ -406,7 +410,7 @@ func (s *TestSuiteFS) TestBucket(c *C) {
 }
 
 // TestGetObject - Tests fetching of a small object after its insertion into the bucket.
-func (s *TestSuiteFS) TestObjectGet(c *C) {
+func (s *TestSuiteCommon) TestObjectGet(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	buffer := bytes.NewReader([]byte("hello world"))
@@ -455,7 +459,7 @@ func (s *TestSuiteFS) TestObjectGet(c *C) {
 }
 
 // TestMultipleObjects - Validates upload and fetching of multiple object into the bucket.
-func (s *TestSuiteFS) TestMultipleObjects(c *C) {
+func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -577,7 +581,7 @@ func (s *TestSuiteFS) TestMultipleObjects(c *C) {
 }
 
 // TestNotImplemented - Validates response for obtaining policy on an non-existent bucket and object.
-func (s *TestSuiteFS) TestNotImplemented(c *C) {
+func (s *TestSuiteCommon) TestNotImplemented(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	request, err := newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?policy",
@@ -591,7 +595,7 @@ func (s *TestSuiteFS) TestNotImplemented(c *C) {
 }
 
 // TestHeader - Validates the error response for an attempt to fetch non-existent object.
-func (s *TestSuiteFS) TestHeader(c *C) {
+func (s *TestSuiteCommon) TestHeader(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// obtain HTTP request to fetch an object from non-existent bucket/object.
@@ -606,7 +610,7 @@ func (s *TestSuiteFS) TestHeader(c *C) {
 	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
 }
 
-func (s *TestSuiteFS) TestPutBucket(c *C) {
+func (s *TestSuiteCommon) TestPutBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// Block 1: Testing for racey access
@@ -650,7 +654,7 @@ func (s *TestSuiteFS) TestPutBucket(c *C) {
 // 2. Insert Object.
 // 3. Use "X-Amz-Copy-Source" header to copy the previously inserted object.
 // 4. Validate the content of copied object.
-func (s *TestSuiteFS) TestCopyObject(c *C) {
+func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -708,7 +712,7 @@ func (s *TestSuiteFS) TestCopyObject(c *C) {
 }
 
 // TestPutObject -  Tests successful put object request.
-func (s *TestSuiteFS) TestPutObject(c *C) {
+func (s *TestSuiteCommon) TestPutObject(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -755,7 +759,7 @@ func (s *TestSuiteFS) TestPutObject(c *C) {
 // TestListBuckets - Make request for listing of all buckets.
 // XML response is parsed.
 // Its success verifies the format of the response.
-func (s *TestSuiteFS) TestListBuckets(c *C) {
+func (s *TestSuiteCommon) TestListBuckets(c *C) {
 	// create HTTP request for listing buckets.
 	request, err := newTestRequest("GET", getListBucketURL(s.endPoint),
 		0, nil, s.accessKey, s.secretKey)
@@ -777,7 +781,7 @@ func (s *TestSuiteFS) TestListBuckets(c *C) {
 
 // TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
 // on an attempt to upload an object into a non-existent bucket.
-func (s *TestSuiteFS) TestPutObjectLongName(c *C) {
+func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -815,7 +819,7 @@ func (s *TestSuiteFS) TestPutObjectLongName(c *C) {
 
 // TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
 // on an attempt to upload an object into a non-existent bucket.
-func (s *TestSuiteFS) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
+func (s *TestSuiteCommon) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// content of the object to be uploaded.
@@ -841,7 +845,7 @@ func (s *TestSuiteFS) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 // and If-Unmodified-Since headers set are validated.
 // If-Modified-Since - Return the object only if it has been modified since the specified time, else return a 304 (not modified).
 // If-Unmodified-Since - Return the object only if it has not been modified since the specified time, else return a 412 (precondition failed).
-func (s *TestSuiteFS) TestHeadOnObjectLastModified(c *C) {
+func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -911,7 +915,7 @@ func (s *TestSuiteFS) TestHeadOnObjectLastModified(c *C) {
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.
 // HEAD request on the bucket validates the existence of the bucket.
-func (s *TestSuiteFS) TestHeadOnBucket(c *C) {
+func (s *TestSuiteCommon) TestHeadOnBucket(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -937,7 +941,7 @@ func (s *TestSuiteFS) TestHeadOnBucket(c *C) {
 
 // TestContentTypePersists - Object upload with different Content-type is first done.
 // And then a HEAD and GET request on these objects are done to validate if the same Content-Type set during upload persists.
-func (s *TestSuiteFS) TestContentTypePersists(c *C) {
+func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1034,7 +1038,7 @@ func (s *TestSuiteFS) TestContentTypePersists(c *C) {
 // TestPartialContent - Validating for GetObject with partial content request.
 // By setting the Range header, A request to send specific bytes range of data from an
 // already uploaded object can be done.
-func (s *TestSuiteFS) TestPartialContent(c *C) {
+func (s *TestSuiteCommon) TestPartialContent(c *C) {
 	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/partial-content",
 		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
 	c.Assert(err, IsNil)
@@ -1072,7 +1076,7 @@ func (s *TestSuiteFS) TestPartialContent(c *C) {
 
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
 // and then asserting the error response with the expected one.
-func (s *TestSuiteFS) TestListObjectsHandlerErrors(c *C) {
+func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1101,7 +1105,7 @@ func (s *TestSuiteFS) TestListObjectsHandlerErrors(c *C) {
 
 // TestPutBucketErrors - request for non valid bucket operation
 // and validate it with expected error result.
-func (s *TestSuiteFS) TestPutBucketErrors(c *C) {
+func (s *TestSuiteCommon) TestPutBucketErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// generating a HTTP request to create bucket.
@@ -1147,7 +1151,7 @@ func (s *TestSuiteFS) TestPutBucketErrors(c *C) {
 	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
 }
 
-func (s *TestSuiteFS) TestGetObjectLarge10MiB(c *C) {
+func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// form HTTP reqest to create the bucket.
@@ -1211,7 +1215,7 @@ func (s *TestSuiteFS) TestGetObjectLarge10MiB(c *C) {
 }
 
 // TestGetObjectLarge11MiB - Tests validate fetching of an object of size 11MB.
-func (s *TestSuiteFS) TestGetObjectLarge11MiB(c *C) {
+func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1280,7 +1284,7 @@ func (s *TestSuiteFS) TestGetObjectLarge11MiB(c *C) {
 // TestGetPartialObjectMisAligned - tests get object partially mis-aligned.
 // create a large buffer of mis-aligned data and upload it.
 // then make partial range requests to while fetching it back and assert the response content.
-func (s *TestSuiteFS) TestGetPartialObjectMisAligned(c *C) {
+func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1368,7 +1372,7 @@ func (s *TestSuiteFS) TestGetPartialObjectMisAligned(c *C) {
 }
 
 // TestGetPartialObjectLarge11MiB - Test validates partial content request for a 11MiB object.
-func (s *TestSuiteFS) TestGetPartialObjectLarge11MiB(c *C) {
+func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1436,7 +1440,7 @@ func (s *TestSuiteFS) TestGetPartialObjectLarge11MiB(c *C) {
 }
 
 // TestGetPartialObjectLarge11MiB - Test validates partial content request for a 10MiB object.
-func (s *TestSuiteFS) TestGetPartialObjectLarge10MiB(c *C) {
+func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1506,7 +1510,7 @@ func (s *TestSuiteFS) TestGetPartialObjectLarge10MiB(c *C) {
 }
 
 // TestGetObjectErrors - Tests validate error response for invalid object operations.
-func (s *TestSuiteFS) TestGetObjectErrors(c *C) {
+func (s *TestSuiteCommon) TestGetObjectErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 
@@ -1547,7 +1551,7 @@ func (s *TestSuiteFS) TestGetObjectErrors(c *C) {
 }
 
 // TestGetObjectRangeErrors - Validate error response when object is fetched with incorrect byte range value.
-func (s *TestSuiteFS) TestGetObjectRangeErrors(c *C) {
+func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1593,7 +1597,7 @@ func (s *TestSuiteFS) TestGetObjectRangeErrors(c *C) {
 }
 
 // TestObjectMultipartAbort - Test validates abortion of a multipart upload after uploading 2 parts.
-func (s *TestSuiteFS) TestObjectMultipartAbort(c *C) {
+func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1661,7 +1665,7 @@ func (s *TestSuiteFS) TestObjectMultipartAbort(c *C) {
 }
 
 // TestBucketMultipartList - Initiates a NewMultipart upload, uploads parts and validates listing of the parts.
-func (s *TestSuiteFS) TestBucketMultipartList(c *C) {
+func (s *TestSuiteCommon) TestBucketMultipartList(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1774,7 +1778,7 @@ func (s *TestSuiteFS) TestBucketMultipartList(c *C) {
 }
 
 // TestValidateObjectMultipartUploadID - Test Initiates a new multipart upload and validates the uploadID.
-func (s *TestSuiteFS) TestValidateObjectMultipartUploadID(c *C) {
+func (s *TestSuiteCommon) TestValidateObjectMultipartUploadID(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1810,7 +1814,7 @@ func (s *TestSuiteFS) TestValidateObjectMultipartUploadID(c *C) {
 
 // TestObjectMultipartListError - Initiates a NewMultipart upload, uploads parts and validates
 // error response for an incorrect max-parts parameter .
-func (s *TestSuiteFS) TestObjectMultipartListError(c *C) {
+func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1879,7 +1883,7 @@ func (s *TestSuiteFS) TestObjectMultipartListError(c *C) {
 
 // TestObjectValidMD5 - First uploads an object with a valid Content-Md5 header and verifies the status,
 // then upload an object in a wrong Content-Md5 and validate the error response.
-func (s *TestSuiteFS) TestObjectValidMD5(c *C) {
+func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -1931,7 +1935,7 @@ func (s *TestSuiteFS) TestObjectValidMD5(c *C) {
 
 // TestObjectMultipart - Initiates a NewMultipart upload, uploads 2 parts,
 // completes the multipart upload and validates the status of the operation.
-func (s *TestSuiteFS) TestObjectMultipart(c *C) {
+func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
