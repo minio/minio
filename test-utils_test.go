@@ -197,6 +197,11 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 		body.Seek(0, 0)
 		// Add body
 		req.Body = ioutil.NopCloser(body)
+	} else {
+		// this is added to avoid panic during ioutil.ReadAll(req.Body).
+		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
+		// This is very similar to https://github.com/golang/go/issues/7527.
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
 	}
 
 	var headers []string
@@ -452,7 +457,9 @@ func getGetPolicyURL(endPoint, bucketName string) string {
 
 // return URL for deleting bucket policy.
 func getDeletePolicyURL(endPoint, bucketName string) string {
-	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+	queryValue := url.Values{}
+	queryValue.Set("policy", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
 // return URL for creating the bucket.
