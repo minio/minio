@@ -18,12 +18,15 @@
 package blake2b
 
 func cpuid(op uint32) (eax, ebx, ecx, edx uint32)
+func cpuidex(op, op2 uint32) (eax, ebx, ecx, edx uint32)
 func xgetbv(index uint32) (eax, edx uint32)
 
 // True when SIMD instructions are available.
+var avx2 = haveAVX2()
 var avx = haveAVX()
+var ssse3 = haveSSSE3()
 
-// haveSSE returns true if we have streaming SIMD instructions.
+// haveAVX returns true when there is AVX support
 func haveAVX() bool {
 	_, _, c, _ := cpuid(1)
 
@@ -34,4 +37,24 @@ func haveAVX() bool {
 		return (eax & 0x6) == 0x6
 	}
 	return false
+}
+
+// haveAVX2 returns true when there is AVX2 support
+func haveAVX2() bool {
+	mfi, _, _, _ := cpuid(0)
+
+	// Check AVX2, AVX2 requires OS support, but BMI1/2 don't.
+	if mfi >= 7 && haveAVX() {
+		_, ebx, _, _ := cpuidex(7, 0)
+		return (ebx & 0x00000020) != 0
+	}
+	return false
+}
+
+// haveSSSE3 returns true when there is SSSE3 support
+func haveSSSE3() bool {
+
+	_, _, c, _ := cpuid(1)
+
+	return (c & 0x00000200) != 0
 }
