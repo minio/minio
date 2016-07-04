@@ -31,9 +31,31 @@ func TestNewFS(t *testing.T) {
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
 
-	// Initializes single disk, validate if there is no error.
-	_, err := newFSObjects(disk)
+	// Setup to test errFSDiskFormat.
+	disks := []string{}
+	for i := 0; i < 6; i++ {
+		xlDisk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+		defer removeAll(xlDisk)
+		disks = append(disks, xlDisk)
+	}
+
+	// Initializes all disks with XL
+	_, err := newXLObjects(disks)
 	if err != nil {
-		t.Fatalf("Unable to initialize erasure, %s", err)
+		t.Fatalf("Unable to initialize XL object, %s", err)
+	}
+
+	testCases := []struct {
+		disk        string
+		expectedErr error
+	}{
+		{disk, nil},
+		{disks[0], errFSDiskFormat},
+	}
+
+	for _, testCase := range testCases {
+		if _, err := newFSObjects(testCase.disk); err != testCase.expectedErr {
+			t.Fatalf("expected: %s, got: %s", testCase.expectedErr, err)
+		}
 	}
 }
