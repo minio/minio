@@ -390,8 +390,11 @@ func (s *TestSuiteCommon) TestEmptyObject(c *C) {
 }
 
 func (s *TestSuiteCommon) TestBucket(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/bucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -399,8 +402,8 @@ func (s *TestSuiteCommon) TestBucket(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	request, err = newTestRequest("HEAD", s.testServer.Server.URL+"/bucket",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("HEAD", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -580,9 +583,9 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 	c.Assert(true, Equals, bytes.Equal(responseBody, []byte("hello three")))
 }
 
-// TestNotImplemented - Validates response for obtaining policy on an non-existent bucket and object.
+// TestNotImplemented - validates if object policy is implemented, should return 'NotImplemented'.
 func (s *TestSuiteCommon) TestNotImplemented(c *C) {
-	// generate a random bucket name.
+	// Generate a random bucket name.
 	bucketName := getRandomBucketName()
 	request, err := newTestRequest("GET", s.endPoint+"/"+bucketName+"/object?policy",
 		0, nil, s.accessKey, s.secretKey)
@@ -607,7 +610,7 @@ func (s *TestSuiteCommon) TestHeader(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	// asserting for the expected error response.
-	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist", http.StatusNotFound)
 }
 
 func (s *TestSuiteCommon) TestPutBucket(c *C) {
@@ -685,8 +688,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	// creating HTTP request for uploading the object.
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName2),
 		0, nil, s.accessKey, s.secretKey)
-	// setting the "X-Amz-Copy-Source" to allow copying the content of
-	// previously uploaded object.
+	// setting the "X-Amz-Copy-Source" to allow copying the content of previously uploaded object.
 	request.Header.Set("X-Amz-Copy-Source", "/"+bucketName+"/"+objectName)
 	c.Assert(err, IsNil)
 	// execute the HTTP request.
@@ -875,7 +877,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
+	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented", http.StatusNotImplemented)
 }
 
 // TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
@@ -897,7 +899,7 @@ func (s *TestSuiteCommon) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	// Assert the response error message.
-	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist.", http.StatusNotFound)
+	verifyError(c, response, "NoSuchBucket", "The specified bucket does not exist", http.StatusNotFound)
 }
 
 // TestHeadOnObjectLastModified - Asserts response for HEAD on an object.
@@ -950,16 +952,16 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	c.Assert(err, IsNil)
 
 	// make HTTP request to obtain object info.
-	// But this time set the "If-Modified-Since" header to be a minute more than the actual
+	// But this time set the "If-Modified-Since" header to be 10 minute more than the actual
 	// last modified time of the object.
 	request, err = newTestRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-	request.Header.Set("If-Modified-Since", t.Add(1*time.Minute).UTC().Format(http.TimeFormat))
+	request.Header.Set("If-Modified-Since", t.Add(10*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	// Since the "If-Modified-Since" header was ahead in time compared to the actual modified time of the object
-	// expecting the response status to be http.StatusNotModified.
+	// Since the "If-Modified-Since" header was ahead in time compared to the actual
+	// modified time of the object expecting the response status to be http.StatusNotModified.
 	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
 
 	// Again, obtain the object info.
@@ -968,7 +970,7 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	request, err = newTestRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-	request.Header.Set("If-Unmodified-Since", t.Add(-1*time.Minute).UTC().Format(http.TimeFormat))
+	request.Header.Set("If-Unmodified-Since", t.Add(-10*time.Minute).UTC().Format(http.TimeFormat))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
@@ -1016,7 +1018,7 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// Uploading a new object with Content-Type  "application/zip".
+	// Uploading a new object with Content-Type "image/png".
 	// content for the object to be uploaded.
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	objectName := "test-object.png"
@@ -1024,8 +1026,7 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
-
-	delete(request.Header, "Content-Type")
+	request.Header.Set("Content-Type", "image/png")
 
 	client = http.Client{}
 	// execute the HTTP request for object upload.
@@ -1062,12 +1063,9 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 	buffer2 := bytes.NewReader([]byte("hello world"))
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
 		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey)
-	// deleting the old header value.
-	delete(request.Header, "Content-Type")
-	// setting the request header to be application/json.
-	request.Header.Add("Content-Type", "application/json")
-
 	c.Assert(err, IsNil)
+	// setting the request header to be application/json.
+	request.Header.Set("Content-Type", "application/json")
 
 	// Execute the HTTP request to upload the object.
 	response, err = client.Do(request)
@@ -1100,8 +1098,10 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 // By setting the Range header, A request to send specific bytes range of data from an
 // already uploaded object can be done.
 func (s *TestSuiteCommon) TestPartialContent(c *C) {
-	request, err := newTestRequest("PUT", s.testServer.Server.URL+"/partial-content",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	bucketName := getRandomBucketName()
+
+	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1110,8 +1110,8 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = newTestRequest("PUT", s.testServer.Server.URL+"/partial-content/bar",
-		int64(buffer1.Len()), buffer1, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, "bar"),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1120,8 +1120,8 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// Prepare request
-	request, err = newTestRequest("GET", s.testServer.Server.URL+"/partial-content/bar",
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, "bar"),
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	request.Header.Add("Range", "bytes=6-7")
 
@@ -1161,7 +1161,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// validating the error response.
-	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647.", http.StatusBadRequest)
+	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 }
 
 // TestPutBucketErrors - request for non valid bucket operation
@@ -1209,7 +1209,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented.", http.StatusNotImplemented)
+	verifyError(c, response, "NotImplemented", "A header you provided implies functionality that is not implemented", http.StatusNotImplemented)
 }
 
 func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *C) {
@@ -1350,7 +1350,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
 	request, err := newTestRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
-		0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client := http.Client{}
@@ -1382,7 +1382,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 	objectName := "test-big-file"
 	// HTTP request to upload the object.
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
-		int64(buf.Len()), buf, s.testServer.AccessKey, s.testServer.SecretKey)
+		int64(buf.Len()), buf, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1412,7 +1412,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 	for _, t := range testCases {
 		// HTTP request to download the object.
 		request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
-			0, nil, s.testServer.AccessKey, s.testServer.SecretKey)
+			0, nil, s.accessKey, s.secretKey)
 		c.Assert(err, IsNil)
 		// Get partial content based on the byte range set.
 		request.Header.Add("Range", "bytes="+t.byteRange)
@@ -1645,8 +1645,8 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	// HTTP request to download the object.
 	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
-	// invalid byte range set.
-	request.Header.Add("Range", "bytes=7-6")
+	// Invalid byte range set.
+	request.Header.Add("Range", "bytes=13-")
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
@@ -1654,7 +1654,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// expected to fail with "InvalidRange" error message.
-	verifyError(c, response, "InvalidRange", "The requested range cannot be satisfied.", http.StatusRequestedRangeNotSatisfiable)
+	verifyError(c, response, "InvalidRange", "The requested range is not satisfiable", http.StatusRequestedRangeNotSatisfiable)
 }
 
 // TestObjectMultipartAbort - Test validates abortion of a multipart upload after uploading 2 parts.
@@ -1939,7 +1939,7 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	c.Assert(err, IsNil)
 	// Since max-keys parameter in the ListMultipart request set to invalid value of -2,
 	// its expected to fail with error message "InvalidArgument".
-	verifyError(c, response4, "InvalidArgument", "Argument maxParts must be an integer between 1 and 10000.", http.StatusBadRequest)
+	verifyError(c, response4, "InvalidArgument", "Argument max-parts must be an integer between 0 and 2147483647", http.StatusBadRequest)
 }
 
 // TestObjectValidMD5 - First uploads an object with a valid Content-Md5 header and verifies the status,
