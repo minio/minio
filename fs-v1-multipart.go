@@ -295,7 +295,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	md5Writer := md5.New()
 
 	// Allocate 32KiB buffer for staging buffer.
-	var buf = make([]byte, 128*1024)
+	var buf = make([]byte, readSizeV1)
 	for {
 		n, err := io.ReadFull(data, buf)
 		if err == io.EOF {

@@ -27,7 +27,7 @@ import (
 )
 
 // maximum supported access policy size.
-const maxAccessPolicySize = 20 * 1024 * 1024 // 20KiB.
+const maxAccessPolicySize = 20 * 1024 // 20KiB.
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.
