@@ -153,6 +153,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Start reading the part name.
 		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
 		if err != nil {
+			// Purge the partial object upon any error.
+			xl.objCache.Delete(path.Join(bucket, object))
 			return err
 		}
 
