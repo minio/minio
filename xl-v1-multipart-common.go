@@ -261,16 +261,16 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 	return FileInfo{}, err
 }
 
-// commitXLMetadata - commit `xl.json` from source prefix to destination prefix.
-func (xl xlObjects) commitXLMetadata(srcPrefix, dstPrefix string) error {
+// commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
+func (xl xlObjects) commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string) error {
 	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(xl.storageDisks))
+	var mErrs = make([]error, len(disks))
 
 	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
 	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
 
 	// Rename `xl.json` to all disks in parallel.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range disks {
 		if disk == nil {
 			mErrs[index] = errDiskNotFound
 			continue

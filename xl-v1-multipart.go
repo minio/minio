@@ -282,7 +282,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	// Write updated `xl.json` to all disks.
-	if err = xl.writeSameXLMetadata(minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
+	if err = xl.writeSameXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, xlMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
 	rErr := xl.renameObject(minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath)
@@ -345,7 +345,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
+	partsMetadata, errs := xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket, uploadIDPath)
 	if !isQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
@@ -449,10 +449,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Writes a unique `xl.json` each disk carrying new checksum
 	// related information.
-	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempXLMetaPath, partsMetadata); err != nil {
+	if err = xl.writeUniqueXLMetadata(xl.storageDisks, minioMetaBucket, tempXLMetaPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempXLMetaPath)
 	}
-	rErr := xl.commitXLMetadata(tempXLMetaPath, uploadIDPath)
+	rErr := xl.commitXLMetadata(xl.storageDisks, tempXLMetaPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -593,7 +593,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
 
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := xl.readAllXLMetadata(minioMetaBucket, uploadIDPath)
+	partsMetadata, errs := xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket, uploadIDPath)
 	// Do we have writeQuorum?.
 	if !isQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
@@ -675,10 +675,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = xl.writeUniqueXLMetadata(minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
+	if err = xl.writeUniqueXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := xl.commitXLMetadata(tempUploadIDPath, uploadIDPath)
+	rErr := xl.commitXLMetadata(xl.storageDisks, tempUploadIDPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
