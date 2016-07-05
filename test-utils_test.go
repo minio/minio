@@ -187,8 +187,8 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 			return nil, e
 		}
 		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
-		md5base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
-		req.Header.Set("Content-Md5", md5base64)
+		md5Base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
+		req.Header.Set("Content-Md5", md5Base64)
 	}
 	req.Header.Set("x-amz-content-sha256", hashedPayload)
 

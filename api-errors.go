@@ -133,17 +133,17 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidMaxUploads: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxUploads must be an integer between 0 and 2147483647.",
+		Description:    "Argument max-uploads must be an integer between 0 and 2147483647",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidMaxKeys: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxKeys must be an integer between 0 and 2147483647.",
+		Description:    "Argument maxKeys must be an integer between 0 and 2147483647",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidMaxParts: {
 		Code:           "InvalidArgument",
-		Description:    "Argument maxParts must be an integer between 1 and 10000.",
+		Description:    "Argument max-parts must be an integer between 0 and 2147483647",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPartNumberMarker: {
@@ -208,7 +208,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidRange: {
 		Code:           "InvalidRange",
-		Description:    "The requested range cannot be satisfied.",
+		Description:    "The requested range is not satisfiable",
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	},
 	ErrMalformedXML: {
@@ -233,7 +233,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrNoSuchBucket: {
 		Code:           "NoSuchBucket",
-		Description:    "The specified bucket does not exist.",
+		Description:    "The specified bucket does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchBucketPolicy: {
@@ -253,7 +253,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrNotImplemented: {
 		Code:           "NotImplemented",
-		Description:    "A header you provided implies functionality that is not implemented.",
+		Description:    "A header you provided implies functionality that is not implemented",
 		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	ErrPreconditionFailed: {
@@ -461,7 +461,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case ObjectNotFound:
 		apiErr = ErrNoSuchKey
 	case ObjectNameInvalid:
-		apiErr = ErrNoSuchKey
+		apiErr = ErrNotImplemented
 	case InvalidUploadID:
 		apiErr = ErrNoSuchUpload
 	case InvalidPart:
