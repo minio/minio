@@ -152,13 +152,17 @@ func getEncodedBlockLen(inputLen int64, dataBlocks int) (curEncBlockSize int64) 
 // err == nil, not err == EOF. Additionally offset can be provided to start
 // the read at. copyN returns io.EOF if there aren't enough data to be read.
 func copyN(writer io.Writer, disk StorageAPI, volume string, path string, offset int64, length int64) (err error) {
-	// Use 128KiB staging buffer to read up to length.
-	buf := make([]byte, readSizeV1)
+	// Use staging buffer to read up to length.
+	bufSize := int64(readSizeV1)
+	if length > 0 && bufSize > length {
+		bufSize = length
+	}
+	buf := make([]byte, int(bufSize))
 
 	// Read into writer until length.
 	for length > 0 {
-		curLength := int64(readSizeV1)
-		if length < readSizeV1 {
+		curLength := bufSize
+		if length < bufSize {
 			curLength = length
 		}
 		nr, er := disk.ReadFile(volume, path, offset, buf[:curLength])

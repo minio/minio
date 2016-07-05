@@ -304,10 +304,15 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		limitDataReader = data
 	}
 
-	// Allocate 128KiB buffer for staging buffer.
-	var buf = make([]byte, readSizeV1)
+	// Allocate buffer for staging buffer.
+	bufSize := int64(readSizeV1)
+	if size > 0 && bufSize > size {
+		bufSize = size
+	}
+	var buf = make([]byte, int(bufSize))
 
-	// Read till io.EOF.
+	// Read up to required size
+	totalLeft := size
 	for {
 		n, err := io.ReadFull(limitDataReader, buf)
 		if err == io.EOF {
@@ -320,6 +325,10 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		md5Writer.Write(buf[:n])
 		if err = fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n]); err != nil {
 			return "", toObjectErr(err, bucket, object)
+		}
+
+		if totalLeft -= int64(n); size >= 0 && totalLeft <= 0 {
+			break
 		}
 	}
 
@@ -509,7 +518,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	tempObj := path.Join(tmpMetaPrefix, uploadID, "part.1")
 
-	// Allocate 128KiB of staging buffer.
+	// Allocate staging buffer.
 	var buf = make([]byte, readSizeV1)
 
 	// Loop through all parts, validate them and then commit to disk.
