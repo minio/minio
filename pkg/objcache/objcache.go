@@ -19,8 +19,8 @@
 package objcache
 
 import (
+	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -48,8 +48,8 @@ type Cache struct {
 	// totalEvicted counter to keep track of total expirations
 	totalEvicted int
 
-	// Represents in memory file system.
-	entries map[string]*Buffer
+	// map of objectName and its contents
+	entries map[string][]byte
 
 	// Expiration in time duration.
 	expiry time.Duration
@@ -63,7 +63,7 @@ func New(maxSize uint64, expiry time.Duration) *Cache {
 	return &Cache{
 		mutex:   &sync.RWMutex{},
 		maxSize: maxSize,
-		entries: make(map[string]*Buffer),
+		entries: make(map[string][]byte),
 		expiry:  expiry,
 	}
 }
@@ -74,32 +74,20 @@ var ErrKeyNotFoundInCache = errors.New("Key not found in cache")
 // ErrCacheFull - cache is full.
 var ErrCacheFull = errors.New("Not enough space in cache")
 
-// Size returns length of the value of a given key, returns -1 if key doesn't exist
-func (c *Cache) Size(key string) int64 {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	_, ok := c.entries[key]
-	if ok {
-		return c.entries[key].Size()
-	}
-	return -1
+// Used for adding entry to the object cache. Implements io.Closer
+type addToCache func() error
+
+func (add addToCache) Close() error {
+	return add()
 }
 
-// Create validates and returns an in memory writer referencing entry.
-func (c *Cache) Create(key string, size int64) (writer io.Writer, err error) {
+// Create - validates if object size fits with in cache size limit and returns a io.WriteCloser
+// to which object contents can be written and finally Close()'d. During Close() we
+// checks if the amount of data written is equal to the size of the object, in which
+// case it saves the contents to object cache.
+func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-
-	// Recovers any panic generated and return errors appropriately.
-	defer func() {
-		if r := recover(); r != nil {
-			var ok bool
-			err, ok = r.(error)
-			if !ok {
-				err = fmt.Errorf("objcache: %v", r)
-			}
-		}
-	}() // Do not crash the server.
 
 	valueLen := uint64(size)
 	if c.maxSize > 0 {
@@ -112,9 +100,32 @@ func (c *Cache) Create(key string, size int64) (writer io.Writer, err error) {
 			return nil, ErrCacheFull
 		}
 	}
-	c.entries[key] = NewBuffer(make([]byte, 0, int(size)))
-	c.currentSize += valueLen
-	return c.entries[key], nil
+
+	// Will hold the object contents.
+	buf := bytes.NewBuffer(make([]byte, 0, size))
+	// Account for the memory allocated above.
+	c.currentSize += uint64(size)
+	// Implements io.WriteCloser
+	return struct {
+		io.Writer
+		io.Closer
+	}{
+		// Implements io.Writer
+		buf,
+		// Implements io.Closer
+		addToCache(func() error {
+			c.mutex.Lock()
+			defer c.mutex.Unlock()
+			if buf.Len() != int(size) {
+				// Full object not available hence do not save buf to object cache.
+				c.currentSize -= uint64(size)
+				return nil
+			}
+			// Full object available in buf, save it to cache.
+			c.entries[key] = buf.Bytes()
+			return nil
+		}),
+	}, nil
 }
 
 // Open - open the in-memory file, returns an in memory read seeker.
@@ -128,7 +139,7 @@ func (c *Cache) Open(key string) (io.ReadSeeker, error) {
 	if !ok {
 		return nil, ErrKeyNotFoundInCache
 	}
-	return buffer, nil
+	return bytes.NewReader(buffer), nil
 }
 
 // Delete - delete deletes an entry from in-memory fs.
@@ -139,8 +150,7 @@ func (c *Cache) Delete(key string) {
 	// Delete an entry.
 	buffer, ok := c.entries[key]
 	if ok {
-		size := buffer.Size()
-		c.deleteEntry(key, size)
+		c.deleteEntry(key, int64(len(buffer)))
 	}
 }
 
