@@ -105,12 +105,19 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	// Add new error codes here.
 
+	// S3 extended errors.
+	ErrContentSHA256Mismatch
+	// Add new extended error codes here.
+
 	// Minio extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
 	ErrStorageFull
 	ErrObjectExistsAsDirectory
 	ErrPolicyNesting
+	// Add new extended error codes here.
+	// Please open a https://github.com/minio/minio/issues before adding
+	// new error codes here.
 )
 
 // error code to APIError structure, these fields carry respective
@@ -401,6 +408,14 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
 		HTTPStatusCode: http.StatusConflict,
 	},
+
+	/// S3 extensions.
+	ErrContentSHA256Mismatch: {
+		Code:           "XAmzContentSHA256Mismatch",
+		Description:    "The provided 'x-amz-content-sha256' header does not match what was computed.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	/// Minio extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
@@ -438,8 +453,15 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		return ErrNone
 	}
 	// Verify if the underlying error is signature mismatch.
-	if err == errSignatureMismatch {
-		return ErrSignatureDoesNotMatch
+	switch err {
+	case errSignatureMismatch:
+		apiErr = ErrSignatureDoesNotMatch
+	case errContentSHA256Mismatch:
+		apiErr = ErrContentSHA256Mismatch
+	}
+	if apiErr != ErrNone {
+		// If there was a match in the above switch case.
+		return apiErr
 	}
 	switch err.(type) {
 	case StorageFull:

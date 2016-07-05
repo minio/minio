@@ -88,7 +88,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t *testing.T) 
 		// Test case - 9.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, "abcd", map[string]string{"md5Sum": "a35"}, int64(len("abcd") - 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated e2fc714c4727ee9395f324cd2e7f331f")},
+			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated 900150983cd24fb0d6963f7d28e17f72")},
 		// Test case - 10-13.
 		// Validating for success cases.
 		{bucket, object, "abcd", map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
@@ -110,8 +110,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t *testing.T) 
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
 			if testCase.expectedError.Error() != actualErr.Error() {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1,
-					instanceType, testCase.expectedError.Error(), actualErr.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
 			}
 		}
 		// Test passes as expected, but the output values are verified for correctness here.

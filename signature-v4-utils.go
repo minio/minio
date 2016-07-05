@@ -26,6 +26,18 @@ import (
 	"unicode/utf8"
 )
 
+// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// client did not calculate sha256 of the payload.
+const unsignedPayload = "UNSIGNED-PAYLOAD"
+
+// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// client did not calculate sha256 of the payload. Hence we skip calculating sha256.
+// We also skip calculating sha256 for presigned requests without "x-amz-content-sha256" header.
+func skipContentSha256Cksum(r *http.Request) bool {
+	contentSha256 := r.Header.Get("X-Amz-Content-Sha256")
+	return isRequestUnsignedPayload(r) || (isRequestPresignedSignatureV4(r) && contentSha256 == "")
+}
+
 // isValidRegion - verify if incoming region value is valid with configured Region.
 func isValidRegion(reqRegion string, confRegion string) bool {
 	if confRegion == "" || confRegion == "US" {
