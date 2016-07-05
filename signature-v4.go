@@ -217,7 +217,8 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 	}
 
 	// Hashed payload mismatch, return content sha256 mismatch.
-	if hashedPayload != req.URL.Query().Get("X-Amz-Content-Sha256") {
+	contentSha256 := req.URL.Query().Get("X-Amz-Content-Sha256")
+	if contentSha256 != "" && hashedPayload != contentSha256 {
 		return ErrContentSHA256Mismatch
 	}
 
@@ -238,7 +239,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 
 	// Construct new query.
 	query := make(url.Values)
-	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
+	if contentSha256 != "" {
 		query.Set("X-Amz-Content-Sha256", hashedPayload)
 	}
 
