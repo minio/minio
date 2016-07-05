@@ -323,7 +323,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	} else {
 		// Allocate a buffer to Read() the object upload stream.
-		buf := make([]byte, 32*1024)
+		buf := make([]byte, readSizeV1)
 		// Read the buffer till io.EOF and append the read data to
 		// the temporary file.
 		for {
