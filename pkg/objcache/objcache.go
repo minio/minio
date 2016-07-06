@@ -74,11 +74,15 @@ var ErrKeyNotFoundInCache = errors.New("Key not found in cache")
 // ErrCacheFull - cache is full.
 var ErrCacheFull = errors.New("Not enough space in cache")
 
-// Used for adding entry to the object cache. Implements io.Closer
-type addToCache func() error
+// Used for adding entry to the object cache. Implements io.WriteCloser
+type cacheBuffer struct {
+	*bytes.Buffer // Implements io.Writer
+	onClose       func()
+}
 
-func (add addToCache) Close() error {
-	return add()
+func (c cacheBuffer) Close() error {
+	c.onClose()
+	return nil
 }
 
 // Create - validates if object size fits with in cache size limit and returns a io.WriteCloser
@@ -105,26 +109,21 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, size))
 	// Account for the memory allocated above.
 	c.currentSize += uint64(size)
-	// Implements io.WriteCloser
-	return struct {
-		io.Writer
-		io.Closer
-	}{
-		// Implements io.Writer
+
+	return cacheBuffer{
 		buf,
-		// Implements io.Closer
-		addToCache(func() error {
+		func() {
 			c.mutex.Lock()
 			defer c.mutex.Unlock()
 			if buf.Len() != int(size) {
 				// Full object not available hence do not save buf to object cache.
 				c.currentSize -= uint64(size)
-				return nil
+				return
 			}
 			// Full object available in buf, save it to cache.
 			c.entries[key] = buf.Bytes()
-			return nil
-		}),
+			return
+		},
 	}, nil
 }
 
