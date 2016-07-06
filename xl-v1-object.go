@@ -520,6 +520,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		newBuffer.Close()
 	}
 
+	// Notification event
+	nsMutex.Unlock(bucket, object)
+	notificationEvent, err := NewNotificationEvent(xl, ObjectCreatedPut, bucket, object, newMD5Hex)
+	nsMutex.Lock(bucket, object)
+	if err == nil {
+		if serverConfig != nil {
+			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
+		}
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -580,6 +590,12 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return ObjectNotFound{bucket, object}
 	} // else proceed to delete the object.
 
+	// Notification event, need to do it before deleting the object
+	// because otherwise it won't be found
+	nsMutex.Unlock(bucket, object)
+	notificationEvent, errN := NewNotificationEvent(xl, ObjectRemovedDelete, bucket, object, "")
+	nsMutex.Lock(bucket, object)
+
 	// Delete the object on all disks.
 	err = xl.deleteObject(bucket, object)
 	if err != nil {
@@ -588,6 +604,12 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Delete from the cache.
 	xl.objCache.Delete(pathJoin(bucket, object))
+
+	if errN == nil {
+		if serverConfig != nil {
+			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
+		}
+	}
 
 	// Success.
 	return nil

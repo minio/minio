@@ -791,6 +791,16 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
+	// Notification event
+	nsMutex.Unlock(bucket, object)
+	notificationEvent, err := NewNotificationEvent(xl, ObjectCreatedCompleteMultipartUpload, bucket, object, s3MD5)
+	nsMutex.Lock(bucket, object)
+	if err == nil {
+		if serverConfig != nil {
+			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
+		}
+	}
+
 	// Return md5sum.
 	return s3MD5, nil
 }

@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"sync"
 	"time"
@@ -48,6 +49,26 @@ var _ = Suite(&TestSuiteCommon{serverType: "FS"})
 
 // Init and run test on XL backend.
 var _ = Suite(&TestSuiteCommon{serverType: "XL"})
+
+var testAPIFSCacheServer *httptest.Server
+
+type TestQueue struct {
+	messages []interface{}
+}
+
+func (q *TestQueue) Post(message interface{}) {
+	q.messages = append(q.messages, message)
+}
+
+func clearQueues() {
+	queues := make([]Queue, 1)
+	queues[0] = &TestQueue{}
+	serverConfig.SetQueues(Queues{queues})
+}
+
+func queueMessages() []interface{} {
+	return serverConfig.Queues.Queues[0].(*TestQueue).messages
+}
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
@@ -278,6 +299,8 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	// assert the status of http response.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
+	clearQueues()
+
 	// object name was "prefix/myobject", an attempt to delelte "prefix"
 	// Should not delete "prefix/myobject"
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix"),
@@ -321,6 +344,16 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	c.Assert(err, IsNil)
 	// assert the http response status.
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
+
+	// Notification
+	c.Assert(len(queueMessages()), Equals, 1)
+	record := queueMessages()[0].(NotificationRecords).Records[0]
+	c.Assert(record.EventName.String(), Equals, "s3:ObjectRemoved:Delete")
+	c.Assert(record.S3.Bucket.Name, Equals, bucketName)
+	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html:
+	// The s3 key provides information about the bucket and object involved in the event.
+	// Note that the object keyname value is URL encoded. For example "red flower.jpg" becomes "red+flower.jpg".
+	c.Assert(record.S3.Object.Key, Equals, url.QueryEscape(objectName))
 }
 
 // TestNonExistentBucket - Asserts response for HEAD on non-existent bucket.
@@ -717,6 +750,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 
 // TestPutObject -  Tests successful put object request.
 func (s *TestSuiteCommon) TestPutObject(c *C) {
+	clearQueues()
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -758,6 +792,16 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 	c.Assert(n, Equals, int64(len([]byte("hello world"))))
 	// asserted the contents of the fetched object with the expected result.
 	c.Assert(true, Equals, bytes.Equal(buffer2.Bytes(), []byte("hello world")))
+
+	// Notification
+	c.Assert(len(queueMessages()), Equals, 1)
+	record := queueMessages()[0].(NotificationRecords).Records[0]
+	c.Assert(record.EventName.String(), Equals, "s3:ObjectCreated:Put")
+	c.Assert(record.S3.Bucket.Name, Equals, bucketName)
+	c.Assert(record.S3.Object.Key, Equals, objectName)
+	c.Assert(record.S3.Object.Size, Equals, int64(len([]byte("hello world"))))
+	c.Assert(record.S3.Object.Sequencer, NotNil)
+	c.Assert(record.S3.Object.ETag, NotNil)
 }
 
 // TestListBuckets - Make request for listing of all buckets.
@@ -2011,6 +2055,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 // TestObjectMultipart - Initiates a NewMultipart upload, uploads 2 parts,
 // completes the multipart upload and validates the status of the operation.
 func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
+	clearQueues()
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
 	// HTTP request to create the bucket.
@@ -2116,4 +2161,14 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	// verify whether complete multipart was successfull.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Notification
+	c.Assert(len(queueMessages()), Equals, 1)
+	record := queueMessages()[0].(NotificationRecords).Records[0]
+	c.Assert(record.EventName.String(), Equals, "s3:ObjectCreated:CompleteMultipartUpload")
+	c.Assert(record.S3.Bucket.Name, Equals, bucketName)
+	c.Assert(record.S3.Object.Key, Equals, objectName)
+	c.Assert(record.S3.Object.Size, Equals, int64(5*1024*1024+1))
+	c.Assert(record.S3.Object.Sequencer, NotNil)
+	c.Assert(record.S3.Object.ETag, NotNil)
 }
