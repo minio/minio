@@ -218,11 +218,16 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	var totalLeft = length
-	buf := make([]byte, readSizeV1) // Allocate a 128KiB staging buffer.
+	bufSize := int64(readSizeV1)
+	if length > 0 && bufSize > length {
+		bufSize = length
+	}
+	// Allocate a staging buffer.
+	buf := make([]byte, int(bufSize))
 	for totalLeft > 0 {
 		// Figure out the right size for the buffer.
-		curLeft := int64(readSizeV1)
-		if totalLeft < readSizeV1 {
+		curLeft := bufSize
+		if totalLeft < bufSize {
 			curLeft = totalLeft
 		}
 		// Reads the file at offset.
@@ -333,7 +338,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	} else {
 		// Allocate a buffer to Read() the object upload stream.
-		buf := make([]byte, readSizeV1)
+		bufSize := int64(readSizeV1)
+		if size > 0 && bufSize > size {
+			bufSize = size
+		}
+		buf := make([]byte, int(bufSize))
 
 		// Read the buffer till io.EOF and append the read data to the temporary file.
 		for {
