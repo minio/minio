@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"path"
 	"path/filepath"
 	"strings"
@@ -683,7 +684,19 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 	// Hold write lock on the destination before rename.
 	nsMutex.Lock(bucket, object)
-	defer nsMutex.Unlock(bucket, object)
+	defer func() {
+		// A new complete multipart upload invalidates any
+		// previously cached object in memory.
+		xl.objCache.Delete(path.Join(bucket, object))
+
+		// This lock also protects the cache namespace.
+		nsMutex.Unlock(bucket, object)
+
+		// Prefetch the object from disk by triggerring a fake GetObject call
+		// Unlike a regular single PutObject,  multipart PutObject is comes in
+		// stages and it is harder to cache.
+		go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+	}()
 
 	// Rename if an object already exists to temporary location.
 	uniqueID := getUUID()

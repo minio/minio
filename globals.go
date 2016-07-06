@@ -16,7 +16,10 @@
 
 package main
 
-import "github.com/fatih/color"
+import (
+	"github.com/fatih/color"
+	"github.com/minio/minio/pkg/objcache"
+)
 
 // Global constants for Minio.
 const (
@@ -45,6 +48,8 @@ var (
 	globalMaxConn = 0
 	// Maximum cache size.
 	globalMaxCacheSize = uint64(maxCacheSize)
+	// Cache expiry.
+	globalCacheExpiry = objcache.DefaultExpiry
 	// Add new variable global values here.
 )
 
