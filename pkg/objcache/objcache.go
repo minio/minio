@@ -80,6 +80,8 @@ type cacheBuffer struct {
 	onClose       func()
 }
 
+// On close, onClose() is called which checks if all object contents
+// have been written so that it can save the buffer to the cache.
 func (c cacheBuffer) Close() error {
 	c.onClose()
 	return nil
@@ -110,20 +112,26 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	// Account for the memory allocated above.
 	c.currentSize += uint64(size)
 
+	// Function called on close which saves the object contents
+	// to the object cache.
+	onClose := func() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		if buf.Len() != int(size) {
+			// Full object not available hence do not save buf to object cache.
+			c.currentSize -= uint64(size)
+			return
+		}
+		// Full object available in buf, save it to cache.
+		c.entries[key] = buf.Bytes()
+		return
+	}
+
+	// Object contents that is written - cacheBuffer.Write(data)
+	// will be accumulated in buf which implements io.Writer.
 	return cacheBuffer{
 		buf,
-		func() {
-			c.mutex.Lock()
-			defer c.mutex.Unlock()
-			if buf.Len() != int(size) {
-				// Full object not available hence do not save buf to object cache.
-				c.currentSize -= uint64(size)
-				return
-			}
-			// Full object available in buf, save it to cache.
-			c.entries[key] = buf.Bytes()
-			return
-		},
+		onClose,
 	}, nil
 }
 
