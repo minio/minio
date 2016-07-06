@@ -74,12 +74,10 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
 
 	// for providing ranged content
-	if contentRange != nil {
-		if contentRange.start > 0 || contentRange.length > 0 {
-			// override content-length
-			w.Header().Set("Content-Length", strconv.FormatInt(contentRange.length, 10))
-			w.Header().Set("Content-Range", contentRange.String())
-			w.WriteHeader(http.StatusPartialContent)
-		}
+	if contentRange != nil && contentRange.firstBytePos > -1 {
+		// override content-length
+		w.Header().Set("Content-Length", strconv.FormatInt(contentRange.getLength(), 10))
+		w.Header().Set("Content-Range", contentRange.String())
+		w.WriteHeader(http.StatusPartialContent)
 	}
 }

@@ -1646,7 +1646,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	request, err = newTestRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
 	// Invalid byte range set.
-	request.Header.Add("Range", "bytes=13-")
+	request.Header.Add("Range", "bytes=-0")
 	c.Assert(err, IsNil)
 
 	client = http.Client{}

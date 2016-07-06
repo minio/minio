@@ -104,12 +104,18 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Caculate the http Range.
+	// Get request range.
 	var hrange *httpRange
-	hrange, err = getRequestedRange(r.Header.Get("Range"), objInfo.Size)
-	if err != nil {
-		writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
-		return
+	if hrange, err = parseRequestRange(r.Header.Get("Range"), objInfo.Size); err != nil {
+		// Handle only errInvalidRange
+		// Ignore other parse error and treat it as regular Get request like Amazon S3.
+		if err == errInvalidRange {
+			writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
+			return
+		}
+
+		// log the error.
+		errorIf(err, "Invalid request range")
 	}
 
 	// Set standard object headers.
@@ -129,12 +135,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get the object.
-	startOffset := hrange.start
-	length := hrange.length
-	if length == 0 {
-		length = objInfo.Size - startOffset
+	startOffset := int64(0)
+	length := objInfo.Size
+	if hrange != nil {
+		startOffset = hrange.firstBytePos
+		length = hrange.getLength()
 	}
-
 	// Reads the object at startOffset and writes to mw.
 	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, w); err != nil {
 		errorIf(err, "Unable to write to client.")
