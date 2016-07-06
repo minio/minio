@@ -554,6 +554,9 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return toObjectErr(err, bucket, object)
 	}
 
+	// Delete from the cache.
+	xl.objCache.Delete(pathJoin(bucket, object))
+
 	// Success.
 	return nil
 }
