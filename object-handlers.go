@@ -337,11 +337,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// TODO: Reject requests where body/payload is present, for now we
-	// don't even read it.
+	// TODO: Reject requests where body/payload is present, for now we don't even read it.
 
 	// objectSource
-	objectSource := r.Header.Get("X-Amz-Copy-Source")
+	objectSource, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
+	if err != nil {
+		// Save unescaped string as is.
+		objectSource = r.Header.Get("X-Amz-Copy-Source")
+	}
 
 	// Skip the first element if it is '/', split the rest.
 	if strings.HasPrefix(objectSource, "/") {

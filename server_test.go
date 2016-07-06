@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -689,7 +690,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName2),
 		0, nil, s.accessKey, s.secretKey)
 	// setting the "X-Amz-Copy-Source" to allow copying the content of previously uploaded object.
-	request.Header.Set("X-Amz-Copy-Source", "/"+bucketName+"/"+objectName)
+	request.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+bucketName+"/"+objectName))
 	c.Assert(err, IsNil)
 	// execute the HTTP request.
 	// the content is expected to have the content of previous disk.
