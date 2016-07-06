@@ -111,7 +111,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			}
 			return nil
 		} // Cache miss.
-
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
 			return err
@@ -120,12 +119,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Cache is only set if whole object is being read.
 		if startOffset == 0 && length == xlMeta.Stat.Size {
 			// Proceed to set the cache.
-			var newBuffer io.Writer
+			var newBuffer io.WriteCloser
 			// Create a new entry in memory of length.
 			newBuffer, err = xl.objCache.Create(path.Join(bucket, object), length)
 			if err == nil {
 				// Create a multi writer to write to both memory and client response.
 				mw = io.MultiWriter(newBuffer, writer)
+				defer newBuffer.Close()
 			}
 			if err != nil && err != objcache.ErrCacheFull {
 				// Perhaps cache is full, returns here.
@@ -153,8 +153,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Start reading the part name.
 		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
 		if err != nil {
-			// Purge the partial object upon any error.
-			xl.objCache.Delete(path.Join(bucket, object))
 			return err
 		}
 
