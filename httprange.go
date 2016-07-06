@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,13 @@ import (
 )
 
 const (
-	b = "bytes="
+	byteRangePrefix = "bytes="
 )
 
-// InvalidRange - invalid range
+// errInvalidRange - returned when given range value is not valid.
+var errInvalidRange = errors.New("Invalid range")
+
+// InvalidRange - invalid range typed error.
 type InvalidRange struct{}
 
 func (e InvalidRange) Error() string {
@@ -36,93 +39,77 @@ func (e InvalidRange) Error() string {
 
 // HttpRange specifies the byte range to be sent to the client.
 type httpRange struct {
-	start, length, size int64
+	firstBytePos int64
+	lastBytePos  int64
+	size         int64
 }
 
 // String populate range stringer interface
-func (r *httpRange) String() string {
-	return fmt.Sprintf("bytes %d-%d/%d", r.start, r.start+r.length-1, r.size)
+func (hrange httpRange) String() string {
+	return fmt.Sprintf("bytes %d-%d/%d", hrange.firstBytePos, hrange.lastBytePos, hrange.size)
 }
 
-// Grab new range from request header
-func getRequestedRange(hrange string, size int64) (*httpRange, error) {
-	r := &httpRange{
-		start:  0,
-		length: 0,
-		size:   0,
-	}
-	r.size = size
-	if hrange != "" {
-		err := r.parseRange(hrange)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return r, nil
+// getLength - get length from the range.
+func (hrange httpRange) getLength() int64 {
+	return 1 + hrange.lastBytePos - hrange.firstBytePos
 }
 
-func (r *httpRange) parse(ra string) error {
-	i := strings.Index(ra, "-")
-	if i < 0 {
-		return InvalidRange{}
-	}
-	start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
-	if start == "" {
-		// If no start is specified, end specifies the
-		// range start relative to the end of the file.
-		i, err := strconv.ParseInt(end, 10, 64)
-		if err != nil {
-			return InvalidRange{}
-		}
-		if i > r.size {
-			i = r.size
-		}
-		r.start = r.size - i
-		r.length = r.size - r.start
-	} else {
-		i, err := strconv.ParseInt(start, 10, 64)
-		if err != nil || i > r.size || i < 0 {
-			return InvalidRange{}
-		}
-		r.start = i
-		if end == "" {
-			// If no end is specified, range extends to end of the file.
-			r.length = r.size - r.start
-		} else {
-			i, err := strconv.ParseInt(end, 10, 64)
-			if err != nil || r.start > i {
-				return InvalidRange{}
-			}
-			if i >= r.size {
-				i = r.size - 1
-			}
-			r.length = i - r.start + 1
-		}
-	}
-	return nil
-}
-
-// parseRange parses a Range header string as per RFC 2616.
-func (r *httpRange) parseRange(s string) error {
-	if s == "" {
-		return errors.New("header not present")
-	}
-	if !strings.HasPrefix(s, b) {
-		return InvalidRange{}
+func parseRequestRange(rangeString string, size int64) (hrange *httpRange, err error) {
+	// Return error if given range string doesn't start with byte range prefix.
+	if !strings.HasPrefix(rangeString, byteRangePrefix) {
+		return nil, fmt.Errorf("'%s' does not start with '%s'", rangeString, byteRangePrefix)
 	}
 
-	ras := strings.Split(s[len(b):], ",")
-	if len(ras) == 0 {
-		return errors.New("invalid request")
-	}
-	// Just pick the first one and ignore the rest, we only support one range per object
-	if len(ras) > 1 {
-		return errors.New("multiple ranges specified")
+	// Trim byte range prefix.
+	byteRangeString := strings.TrimPrefix(rangeString, byteRangePrefix)
+
+	// Check if range string contains delimiter '-', else return error.
+	sepIndex := strings.Index(byteRangeString, "-")
+	if sepIndex == -1 {
+		return nil, fmt.Errorf("invalid range string '%s'", rangeString)
 	}
 
-	ra := strings.TrimSpace(ras[0])
-	if ra == "" {
-		return InvalidRange{}
+	firstBytePosString := byteRangeString[:sepIndex]
+	lastBytePosString := byteRangeString[sepIndex+1:]
+
+	firstBytePos := int64(-1)
+	lastBytePos := int64(-1)
+
+	// Convert firstBytePosString only if its not empty.
+	if len(firstBytePosString) > 0 {
+		if firstBytePos, err = strconv.ParseInt(firstBytePosString, 10, 64); err != nil {
+			return nil, fmt.Errorf("'%s' does not have valid first byte position value", rangeString)
+		}
 	}
-	return r.parse(ra)
+
+	// Convert lastBytePosString only if its not empty.
+	if len(lastBytePosString) > 0 {
+		if lastBytePos, err = strconv.ParseInt(lastBytePosString, 10, 64); err != nil {
+			return nil, fmt.Errorf("'%s' does not have valid last byte position value", rangeString)
+		}
+	}
+
+	// Return error if firstBytePosString and lastBytePosString are empty.
+	if firstBytePos == -1 && lastBytePos == -1 {
+		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
+	}
+
+	if firstBytePos == -1 {
+		// Return error if lastBytePos is zero and firstBytePos is not given eg. "bytes=-0"
+		if lastBytePos == 0 {
+			return nil, errInvalidRange
+		}
+		firstBytePos = size - lastBytePos
+		lastBytePos = size - 1
+	} else if lastBytePos == -1 {
+		lastBytePos = size - 1
+	} else if firstBytePos > lastBytePos {
+		// Return error if firstBytePos is greater than lastBytePos
+		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
+	} else if lastBytePos >= size {
+		// Set lastBytePos is out of size range.
+		lastBytePos = size - 1
+	}
+
+	return &httpRange{firstBytePos, lastBytePos, size}, nil
 }
