@@ -8,6 +8,12 @@
 			"revisionTime": "2015-09-08T20:46:18Z"
 		},
 		{
+			"checksumSHA1": "o0lrEad2lwXQgjYvLKb9aE0tIJg=",
+			"path": "github.com/campoy/jsonenums",
+			"revision": "ff3de3c0ddce76fd05063b1aeecd4decaa5176ae",
+			"revisionTime": "2016-05-27T23:16:08Z"
+		},
+		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "c1f48d5ce4f292dfb775ef52aaedd15be323510d",
 			"revisionTime": "2016-05-20T13:10:51+03:00"
@@ -127,6 +133,12 @@
 			"path": "github.com/skyrings/skyring-common/tools/uuid",
 			"revision": "762fd2bfc12e766d90478d638255981ab1966a3d",
 			"revisionTime": "2016-03-24T19:44:43+05:30"
+		},
+		{
+			"checksumSHA1": "rKV8YLkXpeNG1Oix8hlYqVsEFb4=",
+			"path": "github.com/streadway/amqp",
+			"revision": "2e25825abdbd7752ff08b270d313b93519a0a232",
+			"revisionTime": "2016-03-11T21:55:03Z"
 		},
 		{
 			"path": "golang.org/x/crypto/bcrypt",

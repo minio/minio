@@ -423,6 +423,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// Notification event
+	notificationEvent, err := NewNotificationEvent(fs, ObjectCreatedPut, bucket, object, newMD5Hex)
+	if err == nil {
+		if serverConfig != nil {
+			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
+		}
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -435,9 +443,21 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+
+	// Notification event, need to do it before deleting the object
+	// because otherwise it won't be found
+	notificationEvent, errN := NewNotificationEvent(fs, ObjectRemovedDelete, bucket, object, "")
+
 	if err := fs.storage.DeleteFile(bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+
+	if errN == nil {
+		if serverConfig != nil {
+			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
+		}
+	}
+
 	return nil
 }
 
