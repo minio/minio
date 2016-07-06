@@ -89,8 +89,8 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
-			listDir := listDirFactory(xl.isMultipartUpload, xl.getLoadBalancedQuorumDisks()...)
-			walkerCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, walkerDoneCh)
+			listDir := listDirFactory(xl.getLoadBalancedQuorumDisks()...)
+			walkerCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, walkerDoneCh, xl.isMultipartUpload)
 		}
 		// Collect uploads until we have reached maxUploads count to 0.
 		for maxUploads > 0 {
