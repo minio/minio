@@ -341,7 +341,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// don't even read it.
 
 	// objectSource
-	objectSource := r.Header.Get("X-Amz-Copy-Source")
+	objectSource, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
+	if err != nil {
+		writeErrorResponse(w, r, ErrCouldntDecodeCopySource, r.URL.Path)
+		return
+	}
+	log.Errorf("source %q\n", objectSource)
 
 	// Skip the first element if it is '/', split the rest.
 	if strings.HasPrefix(objectSource, "/") {

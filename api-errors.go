@@ -62,6 +62,7 @@ const (
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
 	ErrInvalidRequestBody
+	ErrCouldntDecodeCopySource
 	ErrInvalidCopySource
 	ErrInvalidCopyDest
 	ErrInvalidPolicyDocument
@@ -126,6 +127,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
 		Description:    "This copy request is illegal because it is trying to copy an object to itself.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCouldntDecodeCopySource: {
+		Code:           "InvalidArgument",
+		Description:    "Couldn't URL decode the copy source.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopySource: {
