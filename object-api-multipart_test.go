@@ -31,7 +31,7 @@ func TestObjectNewMultipartUpload(t *testing.T) {
 }
 
 // Tests validate creation of new multipart upload instance.
-func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t *testing.T) {
+func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	bucket := "minio-bucket"
 	object := "minio-object"
@@ -75,7 +75,7 @@ func TestObjectAPIIsUploadIDExists(t *testing.T) {
 }
 
 // Tests validates the validator for existence of uploadID.
-func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t *testing.T) {
+func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bucket := "minio-bucket"
 	object := "minio-object"
 
@@ -185,7 +185,7 @@ func TestObjectAPIPutObjectPart(t *testing.T) {
 }
 
 // Tests validate correctness of PutObjectPart.
-func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t *testing.T) {
+func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Generating cases for which the PutObjectPart fails.
 	bucket := "minio-bucket"
 	object := "minio-object"
@@ -310,7 +310,7 @@ func TestListMultipartUploads(t *testing.T) {
 }
 
 // testListMultipartUploads - Tests validate listing of multipart uploads.
-func testListMultipartUploads(obj ObjectLayer, instanceType string, t *testing.T) {
+func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	bucketNames := []string{"minio-bucket", "minio-2-bucket", "minio-3-bucket"}
 	objectNames := []string{"minio-object-1.txt", "minio-object.txt", "neymar-1.jpeg", "neymar.jpeg", "parrot-1.png", "parrot.png"}
@@ -1453,7 +1453,7 @@ func TestListObjectParts(t *testing.T) {
 }
 
 // testListMultipartUploads - Tests validate listing of multipart uploads.
-func testListObjectParts(obj ObjectLayer, instanceType string, t *testing.T) {
+func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
 	objectNames := []string{"minio-object-1.txt"}
@@ -1689,7 +1689,7 @@ func TestObjectCompleteMultipartUpload(t *testing.T) {
 }
 
 // Tests validate CompleteMultipart functionality.
-func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t *testing.T) {
+func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Calculates MD5 sum of the given byte array.
 	findMD5 := func(toBeHashed []byte) string {
 		hasher := md5.New()

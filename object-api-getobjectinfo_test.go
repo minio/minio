@@ -27,7 +27,7 @@ func TestGetObjectInfo(t *testing.T) {
 }
 
 // Testing GetObjectInfo().
-func testGetObjectInfo(obj ObjectLayer, instanceType string, t *testing.T) {
+func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// This bucket is used for testing getObjectInfo operations.
 	err := obj.MakeBucket("test-getobjectinfo")
 	if err != nil {
