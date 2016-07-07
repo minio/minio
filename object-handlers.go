@@ -65,6 +65,13 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	return ErrNoSuchKey
 }
 
+// Simple way to convert a func to io.Writer type.
+type funcToWriter func([]byte) (int, error)
+
+func (f funcToWriter) Write(p []byte) (int, error) {
+	return f(p)
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -106,23 +113,21 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Get request range.
 	var hrange *httpRange
-	if hrange, err = parseRequestRange(r.Header.Get("Range"), objInfo.Size); err != nil {
-		// Handle only errInvalidRange
-		// Ignore other parse error and treat it as regular Get request like Amazon S3.
-		if err == errInvalidRange {
-			writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
-			return
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
+			// Handle only errInvalidRange
+			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
+				return
+			}
+
+			// log the error.
+			errorIf(err, "Invalid request range")
 		}
 
-		// log the error.
-		errorIf(err, "Invalid request range")
 	}
-
-	// Set standard object headers.
-	setObjectHeaders(w, objInfo, hrange)
-
-	// Set any additional requested response headers.
-	setGetRespHeaders(w, r.URL.Query())
 
 	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
 	lastModified := objInfo.ModTime
@@ -141,13 +146,44 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
+	// Indicates if any data was written to the http.ResponseWriter
+	dataWritten := false
+	// io.Writer type which keeps track if any data was written.
+	writer := funcToWriter(func(p []byte) (int, error) {
+		if !dataWritten {
+			// Set headers on the first write.
+			// Set standard object headers.
+			setObjectHeaders(w, objInfo, hrange)
+
+			// Set any additional requested response headers.
+			setGetRespHeaders(w, r.URL.Query())
+
+			dataWritten = true
+		}
+		return w.Write(p)
+	})
 	// Reads the object at startOffset and writes to mw.
-	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, w); err != nil {
+	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
-		// Do not send error response here, client would have already died.
+		if !dataWritten {
+			// Error response only if no data has been written. i.e if
+			// partial data has already been written before an error
+			// occoured then no point in setting StatusCode and
+			// sending error XML.
+			apiErr := toAPIErrorCode(err)
+			writeErrorResponse(w, r, apiErr, r.URL.Path)
+		}
 		return
 	}
-	// Success.
+	if !dataWritten {
+		// If ObjectAPI.GetObject did not return error and no data has
+		// been written it would mean that it is a 0-byte object.
+		// Appropriate headers need to be set.
+		setObjectHeaders(w, objInfo, hrange)
+
+		// Set any additional requested response headers.
+		setGetRespHeaders(w, r.URL.Query())
+	}
 }
 
 // checkLastModified implements If-Modified-Since and

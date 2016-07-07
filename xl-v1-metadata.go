@@ -166,6 +166,10 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
 func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset int64, err error) {
+	if offset == 0 {
+		// Special case - if offset is 0, then partIndex and partOffset are always 0.
+		return 0, 0, nil
+	}
 	partOffset = offset
 	// Seek until object offset maps to a particular part offset.
 	for i, part := range m.Parts {
