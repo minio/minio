@@ -428,6 +428,12 @@ func healFormatXL(storageDisks []StorageAPI) error {
 		// Return success.
 		return nil
 	}
+
+	// Init meta volume.
+	if err := initMetaVolume(storageDisks); err != nil {
+		return err
+	}
+
 	// All disks are fresh, format.json will be written by initFormatXL()
 	if isFormatNotFound(formatConfigs) {
 		return initFormatXL(storageDisks)
