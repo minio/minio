@@ -84,8 +84,8 @@
 		},
 		{
 			"path": "github.com/minio/blake2b-simd",
-			"revision": "0b3e695ecc77a334fafe30ee36de504c41ec4d6a",
-			"revisionTime": "2016-06-28T02:55:56-07:00"
+			"revision": "25efc542f2c5064cf312cdca043790a7af861c4c",
+			"revisionTime": "2016-07-06T10:29:24+02:00"
 		},
 		{
 			"path": "github.com/minio/cli",

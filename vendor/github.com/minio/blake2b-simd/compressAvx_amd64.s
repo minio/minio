@@ -119,10 +119,12 @@
     MOVQ   shffle+120(FP), SI \ // SI: &shuffle
     MOVOU  0(SI), X12           // X12 = 03040506 07000102 0b0c0d0e 0f08090a
 
-
-// func blockAVX(p []uint8, in, iv, t, f, shffle, out []uint64)
-TEXT ·blockAVX(SB), 7, $0
+// func blockAVXLoop(p []uint8, in, iv, t, f, shffle, out []uint64)
+TEXT ·blockAVXLoop(SB), 7, $0
     // REGISTER USE
+    //        R8: loop counter
+    //        DX: message pointer
+    //        SI: temp pointer for loading
     //  X0 -  X7: v0 - v15
     //  X8 - X11: m[0] - m[7]
     //       X12: shuffle value
@@ -135,16 +137,43 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU  32(SI), X2         // X2 = in[4]+in[5]      /* row2l = LOAD( &S->h[4] ); */
     MOVOU  48(SI), X3         // X3 = in[6]+in[7]      /* row2h = LOAD( &S->h[6] ); */
 
-    // Load initialization vector
-    MOVQ iv+48(FP), DX        // DX: &iv
-    MOVOU   0(DX), X4         // X4 = iv[0]+iv[1]      /* row3l = LOAD( &blake2b_IV[0] ); */
-    MOVOU  16(DX), X5         // X5 = iv[2]+iv[3]      /* row3h = LOAD( &blake2b_IV[2] ); */
+    // Already store digest into &out (so we can reload it later generically)
+    MOVQ  out+144(FP), SI     // SI: &out
+    MOVOU  X0,  0(SI)         // out[0]+out[1] = X0
+    MOVOU  X1, 16(SI)         // out[2]+out[3] = X1
+    MOVOU  X2, 32(SI)         // out[4]+out[5] = X2
+    MOVOU  X3, 48(SI)         // out[6]+out[7] = X3
+
+    // Initialize message pointer and loop counter
+    MOVQ   message+0(FP), DX  // DX: &p (message)
+    MOVQ   message_len+8(FP), R8 // R8: len(message)
+    SHRQ   $7, R8             // len(message) / 128
+    CMPQ   R8, $0
+    JEQ    complete
+
+loop:
+    // Increment counter
     MOVQ t+72(FP), SI         // SI: &t
-    MOVOU  32(DX), X6         // X6 = iv[4]+iv[5]      /*                        LOAD( &blake2b_IV[4] )                      */
-    MOVOU   0(SI), X7         // X7 = t[0]+t[1]        /*                                                LOAD( &S->t[0] )    */
-    PXOR       X7, X6         // X6 = X6 ^ X7          /* row4l = _mm_xor_si128(                       ,                  ); */
+    MOVQ   0(SI), R9          //
+    ADDQ   $128, R9           //                       /* d.t[0] += BlockSize */
+    MOVQ   R9, 0(SI)          //
+    CMPQ   R9, $128           //                       /* if d.t[0] < BlockSize { */
+    JGE    noincr             //
+    MOVQ   8(SI), R9          //
+    ADDQ   $1, R9             //                       /*     d.t[1]++ */
+    MOVQ   R9, 8(SI)          //
+noincr:                       //                       /* } */
+
+    // Load initialization vector
+    MOVQ iv+48(FP), SI        // SI: &iv
+    MOVOU   0(SI), X4         // X4 = iv[0]+iv[1]      /* row3l = LOAD( &blake2b_IV[0] ); */
+    MOVOU  16(SI), X5         // X5 = iv[2]+iv[3]      /* row3h = LOAD( &blake2b_IV[2] ); */
+    MOVOU  32(SI), X6         // X6 = iv[4]+iv[5]      /*                        LOAD( &blake2b_IV[4] )                      */
+    MOVOU  48(SI), X7         // X7 = iv[6]+iv[7]      /*                        LOAD( &blake2b_IV[6] )                      */
+    MOVQ t+72(FP), SI         // SI: &t
+    MOVOU   0(SI), X8         // X8 = t[0]+t[1]        /*                                                LOAD( &S->t[0] )    */
+    PXOR       X8, X6         // X6 = X6 ^ X8          /* row4l = _mm_xor_si128(                       ,                  ); */
     MOVQ t+96(FP), SI         // SI: &f
-    MOVOU  48(DX), X7         // X7 = iv[6]+iv[7]      /*                        LOAD( &blake2b_IV[6] )                      */
     MOVOU   0(SI), X8         // X8 = f[0]+f[1]        /*                                                LOAD( &S->f[0] )    */
     PXOR       X8, X7         // X7 = X7 ^ X8          /* row4h = _mm_xor_si128(                       ,                  ); */
 
@@ -155,7 +184,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 = m[0]+m[1]
     MOVOU  16(DX), X13        // X13 = m[2]+m[3]
     MOVOU  32(DX), X14        // X14 = m[4]+m[5]
@@ -175,7 +203,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  64(DX), X12        // X12 =  m[8]+ m[9]
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
@@ -199,7 +226,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU 112(DX), X12        // X12 = m[14]+m[15]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -209,7 +235,8 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
     MOVOU  48(DX), X15        // X15 =  m[6]+ m[7]
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6c; BYTE $0xd6   // VPUNPCKLQDQ XMM10, XMM13, XMM14  /* m[10],  m[8] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xdc; BYTE $0x08// VPALIGNR    XMM11, XMM15, XMM12, 0x8  /* m[15],  m[6] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xdc   // VPALIGNR    XMM11, XMM15, XMM12, 0x8  /* m[15],  m[6] */
+                BYTE $0x08
 
     LOAD_SHUFFLE
 
@@ -221,11 +248,11 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xc4; BYTE $0x08 // VPALIGNR     XMM8, XMM12, XMM12, 0x8  /*  m[1],  m[0] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xc4   // VPALIGNR     XMM8, XMM12, XMM12, 0x8  /*  m[1],  m[0] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x09; BYTE $0x6d; BYTE $0xcd   // VPUNPCKHQDQ  XMM9, XMM14, XMM13  /* m[11], m[5] */
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
@@ -247,12 +274,12 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  32(DX), X12        // X12 =  m[4]+ m[5]
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
     MOVOU 112(DX), X15        // X15 = m[14]+m[15]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xc5; BYTE $0x08// VPALIGNR     XMM8, XMM14, XMM13, 0x8  /* m[11],  m[12] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xc5   // VPALIGNR     XMM8, XMM14, XMM13, 0x8  /* m[11],  m[12] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x19; BYTE $0x6d; BYTE $0xcf   // VPUNPCKHQDQ  XMM9, XMM12, XMM15  /*  m[5], m[15] */
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  16(DX), X13        // X13 =  m[2]+ m[3]
@@ -271,7 +298,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -283,7 +309,8 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU  32(DX), X14        // X14 =  m[4]+ m[5]
     MOVOU 112(DX), X15        // X15 = m[14]+m[15]
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6c; BYTE $0xd5   // VPUNPCKLQDQ XMM10, XMM15, XMM13  /* m[14], m[6] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xdc; BYTE $0x08// VPALIGNR    XMM11, XMM14, XMM12, 0x8  /*  m[1],  m[4] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xdc   // VPALIGNR    XMM11, XMM14, XMM12, 0x8  /*  m[1],  m[4] */
+                BYTE $0x08
 
     LOAD_SHUFFLE
 
@@ -299,7 +326,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
@@ -322,7 +348,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
@@ -351,7 +376,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -376,7 +400,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
@@ -388,7 +411,8 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  64(DX), X13        // X13 =  m[8]+ m[9]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xd4; BYTE $0x08// VPALIGNR    XMM10, XMM14, XMM12, 0x8  /*  m[1], m[12] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xd4   // VPALIGNR    XMM10, XMM14, XMM12, 0x8  /*  m[1], m[12] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x09; BYTE $0x6d; BYTE $0xde   // VPUNPCKHQDQ XMM11, XMM14, XMM14  /*   ___, m[13] */
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6c; BYTE $0xdb   // VPUNPCKLQDQ XMM11, XMM13, XMM11  /*  m[8],  ____ */
 
@@ -406,7 +430,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  16(DX), X13        // X13 =  m[2]+ m[3]
     MOVOU  48(DX), X14        // X14 =  m[6]+ m[7]
@@ -428,7 +451,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  48(DX), X14        // X14 =  m[6]+ m[7]
@@ -456,7 +478,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
@@ -466,7 +487,8 @@ TEXT ·blockAVX(SB), 7, $0
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6c; BYTE $0xcd   // VPUNPCKLQDQ  XMM9, XMM15, XMM13  /* m[14],  m[4] */
     MOVOU  80(DX), X12        // X12 = m[10]+m[11]
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6d; BYTE $0xd7   // VPUNPCKHQDQ XMM10, XMM13, XMM15  /*  m[5], m[15] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xde; BYTE $0x08// VPALIGNR    XMM11, XMM12, XMM14, 0x8  /* m[13], m[10] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xde   // VPALIGNR    XMM11, XMM12, XMM14, 0x8  /* m[13], m[10] */
+                BYTE $0x08
 
     LOAD_SHUFFLE
 
@@ -478,13 +500,13 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
     MOVOU  80(DX), X15        // X15 = m[10]+m[11]
     BYTE $0xc4; BYTE $0x41; BYTE $0x19; BYTE $0x6c; BYTE $0xc5   // VPUNPCKLQDQ  XMM8, XMM12, XMM13  /*  m[0],  m[6] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xce; BYTE $0x08// VPALIGNR     XMM9, XMM14, XMM14, 0x8  /*  m[9],  m[8] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xce   // VPALIGNR     XMM9, XMM14, XMM14, 0x8  /*  m[9],  m[8] */
+                BYTE $0x08
     MOVOU  16(DX), X14        // X14 =  m[2]+ m[3]
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6d; BYTE $0xd6   // VPUNPCKHQDQ XMM10, XMM13, XMM14  /*  m[7],  m[3] */
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6d; BYTE $0xdf   // VPUNPCKHQDQ XMM11, XMM15, XMM15  /*   ___, m[11] */
@@ -504,7 +526,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
@@ -515,7 +536,8 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  64(DX), X13        // X13 =  m[8]+ m[9]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xd6; BYTE $0x08// VPALIGNR    XMM10, XMM15, XMM14, 0x8  /* m[11], m[14] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xd6   // VPALIGNR    XMM10, XMM15, XMM14, 0x8  /* m[11], m[14] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x19; BYTE $0x6d; BYTE $0xdd   // VPUNPCKHQDQ XMM11, XMM12, XMM13  /*  m[1],  m[9] */
 
     LOAD_SHUFFLE
@@ -528,7 +550,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -555,17 +576,18 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
     MOVOU 112(DX), X15        // X15 = m[14]+m[15]
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6c; BYTE $0xc7   // VPUNPCKLQDQ  XMM8, XMM13, XMM15  /*  m[6], m[14] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xce; BYTE $0x08// VPALIGNR     XMM9, XMM12, XMM14, 0x8  /* m[11],  m[0] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xce   // VPALIGNR     XMM9, XMM12, XMM14, 0x8  /* m[11],  m[0] */
+                BYTE $0x08
     MOVOU  16(DX), X13        // X13 =  m[2]+ m[3]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6d; BYTE $0xd6   // VPUNPCKHQDQ XMM10, XMM15, XMM14  /* m[15],  m[9] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xdd; BYTE $0x08// VPALIGNR    XMM11, XMM14, XMM13, 0x8  /*  m[3],  m[8] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xdd   // VPALIGNR    XMM11, XMM14, XMM13, 0x8  /*  m[3],  m[8] */
+                BYTE $0x08
 
     LOAD_SHUFFLE
 
@@ -577,14 +599,14 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  16(DX), X13        // X13 =  m[2]+ m[3]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
     MOVOU  96(DX), X15        // X15 = m[12]+m[13]
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6d; BYTE $0xc7   // VPUNPCKHQDQ  XMM8, XMM15, XMM15  /*   ___, m[13] */
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6c; BYTE $0xc0   // VPUNPCKLQDQ  XMM8, XMM15,  XMM8  /* m[12],  ____ */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xcc; BYTE $0x08// VPALIGNR     XMM9, XMM14, XMM12, 0x8  /*  m[1], m[10] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x09; BYTE $0x0f; BYTE $0xcc   // VPALIGNR     XMM9, XMM14, XMM12, 0x8  /*  m[1], m[10] */
+                BYTE $0x08
     MOVOU  32(DX), X12        // X12 =  m[4]+ m[5]
     MOVOU  48(DX), X15        // X15 =  m[6]+ m[7]
     BYTE $0xc4; BYTE $0x41; BYTE $0x01; BYTE $0x6d; BYTE $0xd7   // VPUNPCKHQDQ XMM10, XMM15, XMM15  /*   ___,  m[7] */
@@ -606,7 +628,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -629,7 +650,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  64(DX), X13        // X13 =  m[8]+ m[9]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
@@ -638,7 +658,8 @@ TEXT ·blockAVX(SB), 7, $0
     BYTE $0xc4; BYTE $0x41; BYTE $0x19; BYTE $0x6d; BYTE $0xce   // VPUNPCKHQDQ  XMM9, XMM12, XMM14  /*  m[3], m[13] */
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xd5; BYTE $0x08// VPALIGNR    XMM10, XMM15, XMM13, 0x8  /* m[11], m[14] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xd5   // VPALIGNR    XMM10, XMM15, XMM13, 0x8  /* m[11], m[14] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x09; BYTE $0x6c; BYTE $0xdc   // VPUNPCKLQDQ XMM11, XMM14, XMM12  /* m[12],  m[0] */
 
     LOAD_SHUFFLE
@@ -655,7 +676,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 = m[0]+m[1]
     MOVOU  16(DX), X13        // X13 = m[2]+m[3]
     MOVOU  32(DX), X14        // X14 = m[4]+m[5]
@@ -675,7 +695,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU  64(DX), X12        // X12 =  m[8]+ m[9]
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
     MOVOU  96(DX), X14        // X14 = m[12]+m[13]
@@ -699,7 +718,6 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_1(b0, b1);
     // LOAD_MSG_ ##r ##_2(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU 112(DX), X12        // X12 = m[14]+m[15]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  64(DX), X14        // X14 =  m[8]+ m[9]
@@ -709,7 +727,8 @@ TEXT ·blockAVX(SB), 7, $0
     MOVOU  80(DX), X13        // X13 = m[10]+m[11]
     MOVOU  48(DX), X15        // X15 =  m[6]+ m[7]
     BYTE $0xc4; BYTE $0x41; BYTE $0x11; BYTE $0x6c; BYTE $0xd6   // VPUNPCKLQDQ XMM10, XMM13, XMM14  /* m[10],  m[8] */
-    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xdc; BYTE $0x08// VPALIGNR    XMM11, XMM15, XMM12, 0x8  /* m[15],  m[6] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x01; BYTE $0x0f; BYTE $0xdc   // VPALIGNR    XMM11, XMM15, XMM12, 0x8  /* m[15],  m[6] */
+                BYTE $0x08
 
     LOAD_SHUFFLE
 
@@ -721,11 +740,11 @@ TEXT ·blockAVX(SB), 7, $0
     // LOAD_MSG_ ##r ##_3(b0, b1);
     // LOAD_MSG_ ##r ##_4(b0, b1);
     //   (X12 used as additional temp register)
-    MOVQ   message+0(FP), DX  // DX: &p (message)
     MOVOU   0(DX), X12        // X12 =  m[0]+ m[1]
     MOVOU  32(DX), X13        // X13 =  m[4]+ m[5]
     MOVOU  80(DX), X14        // X14 = m[10]+m[11]
-    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xc4; BYTE $0x08 // VPALIGNR     XMM8, XMM12, XMM12, 0x8  /*  m[1],  m[0] */
+    BYTE $0xc4; BYTE $0x43; BYTE $0x19; BYTE $0x0f; BYTE $0xc4   // VPALIGNR     XMM8, XMM12, XMM12, 0x8  /*  m[1],  m[0] */
+                BYTE $0x08
     BYTE $0xc4; BYTE $0x41; BYTE $0x09; BYTE $0x6d; BYTE $0xcd   // VPUNPCKHQDQ  XMM9, XMM14, XMM13  /* m[11], m[5] */
     MOVOU  16(DX), X12        // X12 =  m[2]+ m[3]
     MOVOU  48(DX), X13        // X13 =  m[6]+ m[7]
@@ -740,8 +759,8 @@ TEXT ·blockAVX(SB), 7, $0
 
     UNDIAGONALIZE
 
-    // Reload digest
-    MOVQ   in+24(FP),  SI     // SI: &in
+    // Reload digest (most current value store in &out)
+    MOVQ   out+144(FP),  SI     // SI: &in
     MOVOU   0(SI), X12        // X12 = in[0]+in[1]      /* row1l = LOAD( &S->h[0] ); */
     MOVOU  16(SI), X13        // X13 = in[2]+in[3]      /* row1h = LOAD( &S->h[2] ); */
     MOVOU  32(SI), X14        // X14 = in[4]+in[5]      /* row2l = LOAD( &S->h[4] ); */
@@ -757,12 +776,17 @@ TEXT ·blockAVX(SB), 7, $0
     PXOR   X14, X2           // X2 = X2 ^ X14         /*  STORE( &S->h[4], _mm_xor_si128( LOAD( &S->h[4] ), row2l ) ); */
     PXOR   X15, X3           // X3 = X3 ^ X15         /*  STORE( &S->h[6], _mm_xor_si128( LOAD( &S->h[6] ), row2h ) ); */
 
-    // Store digest
-    MOVQ  out+144(FP), DX     // DX: &out
-    MOVOU  X0,  0(DX)         // out[0]+out[1] = X0
-    MOVOU  X1, 16(DX)         // out[2]+out[3] = X1
-    MOVOU  X2, 32(DX)         // out[4]+out[5] = X2
-    MOVOU  X3, 48(DX)         // out[6]+out[7] = X3
+    // Store digest into &out
+    MOVQ  out+144(FP), SI     // SI: &out
+    MOVOU  X0,  0(SI)         // out[0]+out[1] = X0
+    MOVOU  X1, 16(SI)         // out[2]+out[3] = X1
+    MOVOU  X2, 32(SI)         // out[4]+out[5] = X2
+    MOVOU  X3, 48(SI)         // out[6]+out[7] = X3
 
+    // Increment message pointer and check if there's more to do
+    ADDQ   $128, DX           // message += 128
+    SUBQ   $1, R8
+    JNZ    loop
+
+complete:
     RET
-
