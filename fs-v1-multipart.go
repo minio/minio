@@ -85,7 +85,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if walkResult.err == errFileNotFound || walkResult.err == errDiskNotFound || walkResult.err == errFaultyDisk {
+				if isErrIgnored(walkResult.err, walkResultIgnoredErrs) {
 					eof = true
 					break
 				}

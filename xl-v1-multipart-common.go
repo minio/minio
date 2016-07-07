@@ -178,16 +178,16 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 			continue
 		}
 		_, err := disk.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
-		if err != nil {
-			// For any reason disk was deleted or goes offline, continue
-			if err == errDiskNotFound || err == errFaultyDisk {
-				continue
-			}
-			return false
+		if err == nil {
+			return true
+		}
+		// For any reason disk was deleted or goes offline, continue
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
 		}
 		break
 	}
-	return true
+	return false
 }
 
 // listUploadsInfo - list all uploads info.
@@ -199,20 +199,20 @@ func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo
 		splitPrefixes := strings.SplitN(prefixPath, "/", 3)
 		var uploadsJSON uploadsV1
 		uploadsJSON, err = readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
-		if err != nil {
-			// For any reason disk was deleted or goes offline, continue
-			if err == errDiskNotFound || err == errFaultyDisk {
-				continue
-			}
-			if err == errFileNotFound {
-				return []uploadInfo{}, nil
-			}
-			return nil, err
+		if err == nil {
+			uploadsInfo = uploadsJSON.Uploads
+			return uploadsInfo, nil
 		}
-		uploadsInfo = uploadsJSON.Uploads
+		if err == errFileNotFound {
+			return []uploadInfo{}, nil
+		}
+		// For any reason disk was deleted or goes offline, continue
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
+		}
 		break
 	}
-	return uploadsInfo, nil
+	return []uploadInfo{}, err
 }
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
@@ -249,16 +249,16 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 			continue
 		}
 		fileInfo, err = disk.StatFile(minioMetaBucket, partNamePath)
-		if err != nil {
-			// For any reason disk was deleted or goes offline, continue
-			if err == errDiskNotFound {
-				continue
-			}
-			return FileInfo{}, err
+		if err == nil {
+			return fileInfo, nil
+		}
+		// For any reason disk was deleted or goes offline, continue
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
 		}
 		break
 	}
-	return fileInfo, nil
+	return FileInfo{}, err
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix.

@@ -43,6 +43,16 @@ func registerShutdown(callback func()) {
 	}()
 }
 
+// isErrIgnored should we ignore this error?, takes a list of errors which can be ignored.
+func isErrIgnored(err error, ignoredErrs []error) bool {
+	for _, ignoredErr := range ignoredErrs {
+		if ignoredErr == err {
+			return true
+		}
+	}
+	return false
+}
+
 // House keeping code needed for FS.
 func fsHouseKeeping(storageDisk StorageAPI) error {
 	// Cleanup all temp entries upon start.

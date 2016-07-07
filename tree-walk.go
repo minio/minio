@@ -21,6 +21,15 @@ import (
 	"strings"
 )
 
+// list of all errors that can be ignored in tree walk operation.
+var walkResultIgnoredErrs = []error{
+	errFileNotFound,
+	errVolumeNotFound,
+	errDiskNotFound,
+	errDiskAccessDenied,
+	errFaultyDisk,
+}
+
 // Tree walk result carries results of tree walking.
 type treeWalkResult struct {
 	entry string
@@ -48,32 +57,31 @@ func listDirFactory(isLeaf func(string, string) bool, disks ...StorageAPI) listD
 				continue
 			}
 			entries, err = disk.ListDir(bucket, prefixDir)
-			if err != nil {
-				// For any reason disk was deleted or goes offline, continue
-				// and list from other disks if possible.
-				if err == errDiskNotFound || err == errFaultyDisk {
-					continue
+			if err == nil {
+				// Skip the entries which do not match the prefixEntry.
+				for i, entry := range entries {
+					if !strings.HasPrefix(entry, prefixEntry) {
+						entries[i] = ""
+						continue
+					}
+					if isLeaf(bucket, pathJoin(prefixDir, entry)) {
+						entries[i] = strings.TrimSuffix(entry, slashSeparator)
+					}
 				}
-				break
-			}
-			// Skip the entries which do not match the prefixEntry.
-			for i, entry := range entries {
-				if !strings.HasPrefix(entry, prefixEntry) {
-					entries[i] = ""
-					continue
+				sort.Strings(entries)
+				// Skip the empty strings
+				for len(entries) > 0 && entries[0] == "" {
+					entries = entries[1:]
 				}
-				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
+				return entries, nil
 			}
-			sort.Strings(entries)
-			// Skip the empty strings
-			for len(entries) > 0 && entries[0] == "" {
-				entries = entries[1:]
+			// For any reason disk was deleted or goes offline, continue
+			// and list from other disks if possible.
+			if isErrIgnored(err, walkResultIgnoredErrs) {
+				continue
 			}
-			return entries, nil
+			break
 		}
-
 		// Return error at the end.
 		return nil, err
 	}
