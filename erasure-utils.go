@@ -74,6 +74,11 @@ func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 // Writes all the data blocks from encoded blocks until requested
 // outSize length. Provides a way to skip bytes until the offset.
 func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, outOffset int64, outSize int64) (int64, error) {
+	// Offset and out size cannot be negative.
+	if outOffset < 0 || outSize < 0 {
+		return 0, errUnexpected
+	}
+
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
 		return 0, reedsolomon.ErrTooFewShards

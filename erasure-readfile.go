@@ -175,6 +175,11 @@ func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []St
 // then written to given writer. This function also supports bit-rot detection by
 // verifying checksum of individual block's checksum.
 func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, partName string, eInfos []erasureInfo, offset int64, length int64, totalLength int64) (int64, error) {
+	// Offset and length cannot be negative.
+	if offset < 0 || length < 0 {
+		return 0, errUnexpected
+	}
+
 	// Pick one erasure info.
 	eInfo := pickValidErasureInfo(eInfos)
 

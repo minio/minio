@@ -217,6 +217,10 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+	// Offset and length cannot be negative.
+	if offset < 0 || length < 0 {
+		return toObjectErr(errUnexpected, bucket, object)
+	}
 	var totalLeft = length
 	bufSize := int64(readSizeV1)
 	if length > 0 && bufSize > length {
