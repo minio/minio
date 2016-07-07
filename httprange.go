@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -36,6 +37,9 @@ type InvalidRange struct{}
 func (e InvalidRange) Error() string {
 	return "The requested range is not satisfiable"
 }
+
+// Valid byte position regexp
+var validBytePos = regexp.MustCompile(`^[0-9]+$`)
 
 // HttpRange specifies the byte range to be sent to the client.
 type httpRange struct {
@@ -63,52 +67,78 @@ func parseRequestRange(rangeString string, size int64) (hrange *httpRange, err e
 	// Trim byte range prefix.
 	byteRangeString := strings.TrimPrefix(rangeString, byteRangePrefix)
 
-	// Check if range string contains delimiter '-', else return error.
+	// Check if range string contains delimiter '-', else return error. eg. "bytes=8"
 	sepIndex := strings.Index(byteRangeString, "-")
 	if sepIndex == -1 {
-		return nil, fmt.Errorf("invalid range string '%s'", rangeString)
+		return nil, fmt.Errorf("'%s' does not have a valid range value", rangeString)
 	}
 
 	firstBytePosString := byteRangeString[:sepIndex]
-	lastBytePosString := byteRangeString[sepIndex+1:]
-
 	firstBytePos := int64(-1)
-	lastBytePos := int64(-1)
-
 	// Convert firstBytePosString only if its not empty.
 	if len(firstBytePosString) > 0 {
+		if !validBytePos.MatchString(firstBytePosString) {
+			return nil, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
+		}
+
 		if firstBytePos, err = strconv.ParseInt(firstBytePosString, 10, 64); err != nil {
-			return nil, fmt.Errorf("'%s' does not have valid first byte position value", rangeString)
+			return nil, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
 		}
 	}
 
+	lastBytePosString := byteRangeString[sepIndex+1:]
+	lastBytePos := int64(-1)
 	// Convert lastBytePosString only if its not empty.
 	if len(lastBytePosString) > 0 {
+		if !validBytePos.MatchString(lastBytePosString) {
+			return nil, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
+		}
+
 		if lastBytePos, err = strconv.ParseInt(lastBytePosString, 10, 64); err != nil {
-			return nil, fmt.Errorf("'%s' does not have valid last byte position value", rangeString)
+			return nil, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
 		}
 	}
 
-	// Return error if firstBytePosString and lastBytePosString are empty.
-	if firstBytePos == -1 && lastBytePos == -1 {
-		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
-	}
+	// rangeString contains first and last byte positions. eg. "bytes=2-5"
+	if firstBytePos > -1 && lastBytePos > -1 {
+		if firstBytePos > lastBytePos {
+			// Last byte position is not greater than first byte position. eg. "bytes=5-2"
+			return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
+		}
 
-	if firstBytePos == -1 {
-		// Return error if lastBytePos is zero and firstBytePos is not given eg. "bytes=-0"
-		if lastBytePos == 0 {
+		// First and last byte positions should not be >= size.
+		if firstBytePos >= size {
 			return nil, errInvalidRange
 		}
-		firstBytePos = size - lastBytePos
+
+		if lastBytePos >= size {
+			lastBytePos = size - 1
+		}
+	} else if firstBytePos > -1 {
+		// rangeString contains only first byte position. eg. "bytes=8-"
+		if firstBytePos >= size {
+			// First byte position should not be >= size.
+			return nil, errInvalidRange
+		}
+
 		lastBytePos = size - 1
-	} else if lastBytePos == -1 {
+	} else if lastBytePos > -1 {
+		// rangeString contains only last byte position. eg. "bytes=-3"
+		if lastBytePos == 0 {
+			// Last byte position should not be zero eg. "bytes=-0"
+			return nil, errInvalidRange
+		}
+
+		if lastBytePos >= size {
+			firstBytePos = 0
+		} else {
+			firstBytePos = size - lastBytePos
+		}
+
 		lastBytePos = size - 1
-	} else if firstBytePos > lastBytePos {
-		// Return error if firstBytePos is greater than lastBytePos
+	} else {
+		// rangeString contains first and last byte positions missing. eg. "bytes=-"
 		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
-	} else if lastBytePos >= size {
-		// Set lastBytePos is out of size range.
-		lastBytePos = size - 1
 	}
 
 	return &httpRange{firstBytePos, lastBytePos, size}, nil

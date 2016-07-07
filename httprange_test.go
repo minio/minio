@@ -29,8 +29,11 @@ func TestParseRequestRange(t *testing.T) {
 	}{
 		{"bytes=2-5", 2, 5, 4},
 		{"bytes=2-20", 2, 9, 8},
+		{"bytes=2-2", 2, 2, 1},
+		{"bytes=0000-0006", 0, 6, 7},
 		{"bytes=2-", 2, 9, 8},
 		{"bytes=-4", 6, 9, 4},
+		{"bytes=-20", 0, 9, 10},
 	}
 
 	for _, successCase := range successCases {
@@ -52,7 +55,20 @@ func TestParseRequestRange(t *testing.T) {
 	}
 
 	// Test invalid range strings.
-	invalidRangeStrings := []string{"", "2-5", "bytes= 2-5", "bytes=2 - 5", "bytes=0-0,-1", "bytes=5-2", "bytes=2-5 ", "bytes=2--5"}
+	invalidRangeStrings := []string{
+		"bytes=8",
+		"bytes=5-2",
+		"bytes=+2-5",
+		"bytes=2-+5",
+		"bytes=2--5",
+		"bytes=-",
+		"",
+		"2-5",
+		"bytes = 2-5",
+		"bytes=2 - 5",
+		"bytes=0-0,-1",
+		"bytes=2-5 ",
+	}
 	for _, rangeString := range invalidRangeStrings {
 		if _, err := parseRequestRange(rangeString, 10); err == nil {
 			t.Fatalf("expected: an error, got: <nil>")
@@ -60,8 +76,15 @@ func TestParseRequestRange(t *testing.T) {
 	}
 
 	// Test error range strings.
-	errorRangeString := "bytes=-0"
-	if _, err := parseRequestRange(errorRangeString, 10); err != errInvalidRange {
-		t.Fatalf("expected: %s, got: %s", errInvalidRange, err)
+	errorRangeString := []string{
+		"bytes=10-10",
+		"bytes=20-30",
+		"bytes=20-",
+		"bytes=-0",
+	}
+	for _, rangeString := range errorRangeString {
+		if _, err := parseRequestRange(rangeString, 10); err != errInvalidRange {
+			t.Fatalf("expected: %s, got: %s", errInvalidRange, err)
+		}
 	}
 }
