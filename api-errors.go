@@ -115,6 +115,7 @@ const (
 	ErrStorageFull
 	ErrObjectExistsAsDirectory
 	ErrPolicyNesting
+	ErrInvalidObjectName
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -442,6 +443,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Policy nesting conflict has occurred.",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrInvalidObjectName: {
+		Code:           "XMinioInvalidObjectName",
+		Description:    "Object name contains unsupported characters. Unsupported characters are `^*|\\\"",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -483,7 +489,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case ObjectNotFound:
 		apiErr = ErrNoSuchKey
 	case ObjectNameInvalid:
-		apiErr = ErrNotImplemented
+		apiErr = ErrInvalidObjectName
 	case InvalidUploadID:
 		apiErr = ErrNoSuchUpload
 	case InvalidPart:
