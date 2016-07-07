@@ -59,7 +59,7 @@ type TestErrHandler interface {
 
 const (
 	// singleNodeTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
-	singleNodeTestStr string = "SingleNode"
+	singleNodeTestStr string = "FS"
 	// xLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
 	xLTestStr string = "XL"
 )
@@ -351,6 +351,35 @@ func getRandomObjectName() string {
 func getRandomBucketName() string {
 	return randString(60)
 
+}
+
+// NewEOFWriter returns a Writer that writes to w,
+// but returns EOF error after writing n bytes.
+func NewEOFWriter(w io.Writer, n int64) io.Writer {
+	return &EOFWriter{w, n}
+}
+
+type EOFWriter struct {
+	w io.Writer
+	n int64
+}
+
+// io.Writer implementation desgined to error out with io.EOF after reading
+func (t *EOFWriter) Write(p []byte) (n int, err error) {
+	if t.n <= 0 {
+		return -1, io.EOF
+	}
+	// real write
+	n = len(p)
+	if int64(n) > t.n {
+		n = int(t.n)
+	}
+	n, err = t.w.Write(p[0:n])
+	t.n -= int64(n)
+	if err == nil {
+		n = len(p)
+	}
+	return
 }
 
 // queryEncode - encodes query values in their URL encoded form.
