@@ -48,7 +48,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-
+	// Start offset and length cannot be negative.
+	if startOffset < 0 || length < 0 {
+		return toObjectErr(errUnexpected, bucket, object)
+	}
 	// Lock the object before reading.
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
