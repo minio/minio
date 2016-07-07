@@ -67,6 +67,11 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return toObjectErr(errXLReadQuorum, bucket, object)
 	}
 
+	// If all the disks returned error, we return error.
+	if err := reduceErrs(errs); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
 	// List all online disks.
 	onlineDisks, highestVersion, err := xl.listOnlineDisks(metaArr, errs)
 	if err != nil {
