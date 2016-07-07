@@ -79,9 +79,11 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		}
 		maxUploads = maxUploads - len(uploads)
 	}
+	var walkerCh chan treeWalkResult
+	var walkerDoneCh chan struct{}
 	// Validate if we need to list further depending on maxUploads.
 	if maxUploads > 0 {
-		walkerCh, walkerDoneCh := xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
+		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
 			listDir := listDirFactory(xl.isMultipartUpload, xl.getLoadBalancedQuorumDisks()...)
@@ -165,6 +167,13 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		result.NextKeyMarker = objectName
 		result.NextUploadIDMarker = uploadID
 	}
+
+	if !eof {
+		// Save the go-routine state in the pool so that it can continue from where it left off on
+		// the next request.
+		xl.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix}, walkerCh, walkerDoneCh)
+	}
+
 	result.IsTruncated = !eof
 	// Result is not truncated, reset the markers.
 	if !result.IsTruncated {
