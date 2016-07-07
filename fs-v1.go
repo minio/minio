@@ -221,6 +221,16 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if offset < 0 || length < 0 {
 		return toObjectErr(errUnexpected, bucket, object)
 	}
+
+	fi, err := fs.storage.StatFile(bucket, object)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	if offset > fi.Size {
+		return InvalidRange{}
+	}
+
 	var totalLeft = length
 	bufSize := int64(readSizeV1)
 	if length > 0 && bufSize > length {
