@@ -33,7 +33,7 @@ func TestObjectAPIPutObject(t *testing.T) {
 }
 
 // Tests validate correctness of PutObject.
-func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t *testing.T) {
+func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Generating cases for which the PutObject fails.
 	bucket := "minio-bucket"
 	object := "minio-object"

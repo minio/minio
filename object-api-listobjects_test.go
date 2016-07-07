@@ -32,7 +32,7 @@ func TestListObjects(t *testing.T) {
 }
 
 // Unit test for ListObjects in general.
-func testListObjects(obj ObjectLayer, instanceType string, t *testing.T) {
+func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// This bucket is used for testing ListObject operations.
 	err := obj.MakeBucket("test-bucket-list-object")

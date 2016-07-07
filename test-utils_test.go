@@ -601,14 +601,14 @@ func removeDiskN(disks []string, n int) {
 }
 
 // Regular object test type.
-type objTestType func(obj ObjectLayer, instanceType string, t *testing.T)
+type objTestType func(obj ObjectLayer, instanceType string, t TestErrHandler)
 
 // Special object test type for disk not found situations.
 type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []string, t *testing.T)
 
 // ExecObjectLayerTest - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
-func ExecObjectLayerTest(t *testing.T, objTest objTestType) {
+func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
