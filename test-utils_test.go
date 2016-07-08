@@ -341,6 +341,12 @@ func randString(n int) string {
 	return string(b)
 }
 
+// generate random object name.
+func getRandomObjectName() string {
+	return randString(16)
+
+}
+
 // generate random bucket name.
 func getRandomBucketName() string {
 	return randString(60)
