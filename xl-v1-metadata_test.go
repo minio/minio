@@ -39,7 +39,7 @@ func TestXLMetaV1(t *testing.T) {
 	}
 
 	// Create a XLMetaV1 structure to test on.
-	meta := newXLMetaV1(8, 8)
+	meta := newXLMetaV1("minio", 8, 8)
 
 	// Add 5 parts.
 	for _, test := range testCases {

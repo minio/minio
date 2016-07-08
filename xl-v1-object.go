@@ -368,7 +368,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	tempObj := uniqueID
 
 	// Initialize xl meta.
-	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
+	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
