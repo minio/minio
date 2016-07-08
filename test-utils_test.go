@@ -40,6 +40,12 @@ import (
 	router "github.com/gorilla/mux"
 )
 
+// Tests should initNSLock only once.
+func init() {
+	// Initialize name space lock.
+	initNSLock()
+}
+
 // The Argument to TestServer should satidy the interface.
 // Golang Testing.T and Testing.B, and gocheck.C satisfy the interface.
 // This makes it easy to run the TestServer from any of the tests.
@@ -554,9 +560,6 @@ func getXLObjectLayer() (ObjectLayer, []string, error) {
 		erasureDisks = append(erasureDisks, path)
 	}
 
-	// Initialize name space lock.
-	initNSLock()
-
 	objLayer, err := newXLObjects(erasureDisks)
 	if err != nil {
 		return nil, nil, err
@@ -571,9 +574,6 @@ func getSingleNodeObjectLayer() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-
-	// Initialize name space lock.
-	initNSLock()
 
 	// Create the obj.
 	objLayer, err := newFSObjects(fsDir)
