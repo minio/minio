@@ -22,10 +22,10 @@ import "testing"
 func TestParseRequestRange(t *testing.T) {
 	// Test success cases.
 	successCases := []struct {
-		rangeString  string
-		firstBytePos int64
-		lastBytePos  int64
-		length       int64
+		rangeString string
+		offsetBegin int64
+		offsetEnd   int64
+		length      int64
 	}{
 		{"bytes=2-5", 2, 5, 4},
 		{"bytes=2-20", 2, 9, 8},
@@ -42,12 +42,12 @@ func TestParseRequestRange(t *testing.T) {
 			t.Fatalf("expected: <nil>, got: %s", err)
 		}
 
-		if hrange.firstBytePos != successCase.firstBytePos {
-			t.Fatalf("expected: %d, got: %d", successCase.firstBytePos, hrange.firstBytePos)
+		if hrange.offsetBegin != successCase.offsetBegin {
+			t.Fatalf("expected: %d, got: %d", successCase.offsetBegin, hrange.offsetBegin)
 		}
 
-		if hrange.lastBytePos != successCase.lastBytePos {
-			t.Fatalf("expected: %d, got: %d", successCase.lastBytePos, hrange.lastBytePos)
+		if hrange.offsetEnd != successCase.offsetEnd {
+			t.Fatalf("expected: %d, got: %d", successCase.offsetEnd, hrange.offsetEnd)
 		}
 		if hrange.getLength() != successCase.length {
 			t.Fatalf("expected: %d, got: %d", successCase.length, hrange.getLength())

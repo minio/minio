@@ -138,7 +138,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	startOffset := int64(0)
 	length := objInfo.Size
 	if hrange != nil {
-		startOffset = hrange.firstBytePos
+		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
 	// Reads the object at startOffset and writes to mw.

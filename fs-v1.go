@@ -221,14 +221,24 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if offset < 0 || length < 0 {
 		return toObjectErr(errUnexpected, bucket, object)
 	}
+	// Writer cannot be nil.
+	if writer == nil {
+		return toObjectErr(errUnexpected, bucket, object)
+	}
 
+	// Stat the file to get file size.
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
-	if offset > fi.Size {
-		return InvalidRange{}
+	// Reply back invalid range if the input offset and length fall out of range.
+	if offset > fi.Size || length > fi.Size {
+		return InvalidRange{offset, length, fi.Size}
+	}
+	// Reply if we have inputs with offset and length falling out of file size range.
+	if offset+length > fi.Size {
+		return InvalidRange{offset, length, fi.Size}
 	}
 
 	var totalLeft = length
