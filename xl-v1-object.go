@@ -52,6 +52,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if startOffset < 0 || length < 0 {
 		return toObjectErr(errUnexpected, bucket, object)
 	}
+	// Writer cannot be nil.
+	if writer == nil {
+		return toObjectErr(errUnexpected, bucket, object)
+	}
 	// Lock the object before reading.
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
@@ -76,6 +80,16 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			xlMeta = meta
 			break
 		}
+	}
+
+	// Reply back invalid range if the input offset and length fall out of range.
+	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
+		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+	}
+
+	// Reply if we have inputs with offset and length.
+	if startOffset+length > xlMeta.Stat.Size {
+		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
 	// Get start part index and offset.
