@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -27,20 +26,6 @@ import (
 const (
 	byteRangePrefix = "bytes="
 )
-
-// errInvalidRange - returned when given range value is not valid.
-var errInvalidRange = errors.New("Invalid range")
-
-// InvalidRange - invalid range typed error.
-type InvalidRange struct {
-	offsetBegin  int64
-	offsetEnd    int64
-	resourceSize int64
-}
-
-func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.offsetBegin, e.offsetEnd, e.resourceSize)
-}
 
 // Valid byte position regexp
 var validBytePos = regexp.MustCompile(`^[0-9]+$`)
