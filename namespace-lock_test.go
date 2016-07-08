@@ -20,9 +20,6 @@ import "testing"
 
 // Tests functionality provided by namespace lock.
 func TestNamespaceLockTest(t *testing.T) {
-	// Initialize name space lock.
-	initNSLock()
-
 	// List of test cases.
 	testCases := []struct {
 		lk               func(s1, s2 string)

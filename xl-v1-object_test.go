@@ -23,60 +23,6 @@ import (
 	"testing"
 )
 
-func failDisks(xl xlObjects, n int) (removedDisks []StorageAPI) {
-	removedDisks = make([]StorageAPI, 8)
-	copy(removedDisks, xl.storageDisks[8:])
-	xl.storageDisks = xl.storageDisks[:8]
-	for i := 0; i < n; i++ {
-		xl.storageDisks = append(xl.storageDisks, nil)
-	}
-	return removedDisks
-}
-
-func TestRenameObjectWriteQuorum(t *testing.T) {
-	var objLayer ObjectLayer
-	var disks []string
-	var err error
-
-	objLayer, disks, err = getXLObjectLayer()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// cleaning up of temporary test directories
-	defer removeRoots(disks)
-
-	err = objLayer.MakeBucket("bucket1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	data := bytes.NewReader([]byte("hello"))
-	_, err = objLayer.PutObject("bucket1", "obj1", 5, data, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Simulate failure of disks
-	xl := objLayer.(xlObjects)
-	removedDisks := failDisks(xl, 8)
-	if err = xl.renameObject("bucket1", "obj1", ".minio", "obj1"); err != errXLWriteQuorum {
-		t.Fatal(err)
-	}
-
-	// Restoring the failed disks back
-	xl.storageDisks = append(xl.storageDisks[:4], removedDisks...)
-
-	// With all disks back online, renameObject should succeed.
-	if err = xl.renameObject("bucket1", "obj1", ".minio", "obj1"); err != nil {
-		t.Fatal(err)
-	}
-
-	// ... so should renaming back (succeed).
-	if err = xl.renameObject(".minio", "obj1", "bucket1", "obj1"); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRepeatPutObjectPart(t *testing.T) {
 	var objLayer ObjectLayer
 	var disks []string
