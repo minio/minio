@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"math"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -65,6 +66,90 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	}
 	// Benchmark ends here. Stop timer.
 	b.StopTimer()
+}
+
+// Benchmark utility functions for ObjectLayer.PutObjectPart().
+// Creates Object layer setup ( MakeBucket ) and then runs the PutObjectPart benchmark.
+func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
+	var err error
+	// obtains random bucket name.
+	bucket := getRandomBucketName()
+	object := getRandomObjectName()
+
+	// create bucket.
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	objSize := 128 * 1024 * 1024
+
+	// PutObjectPart returns md5Sum of the object inserted.
+	// md5Sum variable is assigned with that value.
+	var md5Sum, uploadID string
+	// get text data generated for number of bytes equal to object size.
+	textData := generateBytesData(objSize)
+	// generate md5sum for the generated data.
+	// md5sum of the data to written is required as input for NewMultipartUpload.
+	hasher := md5.New()
+	hasher.Write([]byte(textData))
+	metadata := make(map[string]string)
+	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	uploadID, err = obj.NewMultipartUpload(bucket, object, metadata)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var textPartData []byte
+	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
+	b.ReportAllocs()
+	// the actual benchmark for PutObjectPart starts here. Reset the benchmark timer.
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// insert the object.
+		totalPartsNR := int(math.Ceil(float64(objSize) / float64(partSize)))
+		for j := 0; j < totalPartsNR; j++ {
+			hasher.Reset()
+			if j < totalPartsNR-1 {
+				textPartData = textData[j*partSize : (j+1)*partSize-1]
+			} else {
+				textPartData = textData[j*partSize:]
+			}
+			hasher.Write([]byte(textPartData))
+			metadata := make(map[string]string)
+			metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+			md5Sum, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"])
+			if err != nil {
+				b.Fatal(err)
+			}
+			if md5Sum != metadata["md5Sum"] {
+				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+			}
+		}
+	}
+	// Benchmark ends here. Stop timer.
+	b.StopTimer()
+}
+
+// creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
+func benchmarkPutObjectPart(b *testing.B, instanceType string, runBenchMark func(b *testing.B, obj ObjectLayer)) {
+	// create a temp XL/FS backend.
+	objLayer, disks, err := makeTestBackend(instanceType)
+	if err != nil {
+		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+	// cleaning up the backend by removing all the directories and files created on function return.
+	defer removeRoots(disks)
+	// calling runPutObjectBenchmark which uses *testing.B and the object Layer to run the benchmark.
+	runBenchMark(b, objLayer)
+}
+
+// closure for returning the put object benchmark executor for given object size in bytes.
+func returnPutObjectPartBenchmark(objSize int) func(*testing.B, ObjectLayer) {
+	// FIXME: Avoid closure.
+	return func(b *testing.B, obj ObjectLayer) {
+		runPutObjectPartBenchmark(b, obj, objSize)
+	}
 }
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
