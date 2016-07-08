@@ -252,7 +252,7 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 // all the disks. `uploads.json` carries metadata regarding on going
 // multipart operation on the object.
 func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
-	xlMeta := newXLMetaV1(xl.dataBlocks, xl.parityBlocks)
+	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
 		contentType := "application/octet-stream"

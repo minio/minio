@@ -107,9 +107,8 @@ type xlMetaV1 struct {
 	Parts []objectPartInfo `json:"parts,omitempty"`
 }
 
-// newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a
-// fresh erasure info.
-func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
+// newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a fresh erasure info.
+func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta = xlMetaV1{}
 	xlMeta.Version = "1.0.0"
 	xlMeta.Format = "xl"
@@ -119,7 +118,7 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 		DataBlocks:   dataBlocks,
 		ParityBlocks: parityBlocks,
 		BlockSize:    blockSizeV1,
-		Distribution: hashOrder(time.Now().UTC().String(), dataBlocks+parityBlocks),
+		Distribution: hashOrder(object, dataBlocks+parityBlocks),
 	}
 	return xlMeta
 }
