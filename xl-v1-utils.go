@@ -18,9 +18,8 @@ package main
 
 import (
 	"encoding/json"
-	"math/rand"
+	"hash/crc32"
 	"path"
-	"time"
 )
 
 // Validates if we have quorum based on the errors with errDiskNotFound.
@@ -48,19 +47,16 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-// randInts - uses Knuth Fisher-Yates shuffle algorithm for generating uniform shuffling.
-func randInts(count int) []int {
-	rand.Seed(time.Now().UTC().UnixNano()) // Seed with current time.
-	ints := make([]int, count)
-	for i := 0; i < count; i++ {
-		ints[i] = i + 1
+// hashOrder returns hashed integers.
+func hashOrder(token string, count int) []int {
+	hTok := crc32.Checksum([]byte(token), crc32.IEEETable)
+	nums := make([]int, count)
+
+	start := int(uint32(hTok)%uint32(count)) | 1
+	for i := 1; i <= count; i++ {
+		nums[i-1] = 1 + ((start + i) % count)
 	}
-	for i := 0; i < count; i++ {
-		// Choose index uniformly in [i, count-1]
-		r := i + rand.Intn(count-i)
-		ints[r], ints[i] = ints[i], ints[r]
-	}
-	return ints
+	return nums
 }
 
 // readXLMeta reads `xl.json` and returns back XL metadata structure.

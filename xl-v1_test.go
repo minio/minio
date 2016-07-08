@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -134,5 +135,30 @@ func TestNewXL(t *testing.T) {
 	_, err := newXLObjects(erasureDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
+	}
+}
+
+// TestHashOrder - test order of ints in array
+func TestHashOrder(t *testing.T) {
+
+	v12 := "[7 8 9 10 11 12 1 2 3 4 5 6]"
+	t12 := hashOrder("minio", 12)
+
+	if v12 != fmt.Sprintf("%v", t12) {
+		t.Errorf(": \nexpected %s\ngot      %v", v12, t12)
+	}
+
+	v16 := "[5 6 7 8 9 10 11 12 13 14 15 16 1 2 3 4]"
+	t16 := hashOrder("xl", 16)
+
+	if v16 != fmt.Sprintf("%v", t16) {
+		t.Errorf(": \nexpected %s\ngot      %v", v16, t16)
+	}
+
+	v6 := "[5 6 1 2 3 4]"
+	t6 := hashOrder("minio-fs", 6)
+
+	if v6 != fmt.Sprintf("%v", t6) {
+		t.Errorf(": \nexpected %s\ngot      %v", v6, t6)
 	}
 }
