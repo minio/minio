@@ -16,7 +16,10 @@
 
 package main
 
-import "path"
+import (
+	"path"
+	"time"
+)
 
 // getLoadBalancedQuorumDisks - fetches load balanced sufficiently
 // randomized quorum disk slice.
@@ -29,7 +32,7 @@ func (xl xlObjects) getLoadBalancedQuorumDisks() (disks []StorageAPI) {
 // randomized) disk slice.
 func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 	// Based on the random shuffling return back randomized disks.
-	for _, i := range randInts(len(xl.storageDisks)) {
+	for _, i := range hashOrder(time.Now().UTC().String(), len(xl.storageDisks)) {
 		disks = append(disks, xl.storageDisks[i-1])
 	}
 	return disks

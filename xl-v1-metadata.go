@@ -119,7 +119,7 @@ func newXLMetaV1(dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 		DataBlocks:   dataBlocks,
 		ParityBlocks: parityBlocks,
 		BlockSize:    blockSizeV1,
-		Distribution: randInts(dataBlocks + parityBlocks),
+		Distribution: hashOrder(time.Now().UTC().String(), dataBlocks+parityBlocks),
 	}
 	return xlMeta
 }
