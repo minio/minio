@@ -335,20 +335,26 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if !IsValidObjectName(object) {
 		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	// Hold the lock and start the operation.
+
+	var partsMetadata []xlMetaV1
+	var errs []error
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
-	nsMutex.Lock(minioMetaBucket, uploadIDPath)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
-
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+	nsMutex.RLock(minioMetaBucket, uploadIDPath)
+	{
+		// Validates if upload ID exists again.
+		if !xl.isUploadIDExists(bucket, object, uploadID) {
+			nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+			return "", InvalidUploadID{UploadID: uploadID}
+		}
+		// Read metadata associated with the object from all disks.
+		partsMetadata, errs = xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket,
+			uploadIDPath)
+		if !isQuorum(errs, xl.writeQuorum) {
+			nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+			return "", toObjectErr(errXLWriteQuorum, bucket, object)
+		}
 	}
-
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket, uploadIDPath)
-	if !isQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(errXLWriteQuorum, bucket, object)
-	}
+	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 
 	// List all online disks.
 	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
@@ -364,8 +370,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Pick one from the first valid metadata.
 	xlMeta := pickValidXLMeta(partsMetadata)
 
+	// Need a unique name for the part being written in minioMetaBucket to
+	// accommodate concurrent PutObjectPart requests
 	partSuffix := fmt.Sprintf("part.%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
+	tmpSuffix := getUUID()
+	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, tmpSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -419,6 +428,9 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
+	nsMutex.Lock(minioMetaBucket, uploadIDPath)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
+
 	// Validates if upload ID exists again.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
@@ -449,10 +461,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Writes a unique `xl.json` each disk carrying new checksum
 	// related information.
-	if err = xl.writeUniqueXLMetadata(xl.storageDisks, minioMetaBucket, tempXLMetaPath, partsMetadata); err != nil {
+	if err = xl.writeUniqueXLMetadata(onlineDisks, minioMetaBucket, tempXLMetaPath, partsMetadata); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempXLMetaPath)
 	}
-	rErr := xl.commitXLMetadata(xl.storageDisks, tempXLMetaPath, uploadIDPath)
+	rErr := xl.commitXLMetadata(onlineDisks, tempXLMetaPath, uploadIDPath)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
