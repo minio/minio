@@ -102,6 +102,13 @@ func (xl xlObjects) undoMakeBucket(bucket string) {
 	wg.Wait()
 }
 
+// list all errors that can be ignored in a bucket metadata operation.
+var bucketMetadataOpIgnoredErrs = []error{
+	errDiskNotFound,
+	errDiskAccessDenied,
+	errFaultyDisk,
+}
+
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
 	for _, disk := range xl.getLoadBalancedQuorumDisks() {
@@ -110,20 +117,20 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 		}
 		var volInfo VolInfo
 		volInfo, err = disk.StatVol(bucketName)
-		if err != nil {
-			// For any reason disk went offline continue and pick the next one.
-			if err == errDiskNotFound || err == errFaultyDisk {
-				continue
+		if err == nil {
+			bucketInfo = BucketInfo{
+				Name:    volInfo.Name,
+				Created: volInfo.Created,
 			}
-			return BucketInfo{}, err
+			return bucketInfo, nil
 		}
-		bucketInfo = BucketInfo{
-			Name:    volInfo.Name,
-			Created: volInfo.Created,
+		// For any reason disk went offline continue and pick the next one.
+		if isErrIgnored(err, bucketMetadataOpIgnoredErrs) {
+			continue
 		}
 		break
 	}
-	return bucketInfo, nil
+	return BucketInfo{}, err
 }
 
 // Checks whether bucket exists.
@@ -166,10 +173,6 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 		}
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
-		// Ignore any disks not found.
-		if err == errDiskNotFound || err == errFaultyDisk {
-			continue
-		}
 		if err == nil {
 			// NOTE: The assumption here is that volumes across all disks in
 			// readQuorum have consistent view i.e they all have same number
@@ -188,6 +191,10 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 				})
 			}
 			return bucketsInfo, nil
+		}
+		// Ignore any disks not found.
+		if isErrIgnored(err, bucketMetadataOpIgnoredErrs) {
+			continue
 		}
 		break
 	}
@@ -245,8 +252,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// an unknown error.
 	for _, err := range dErrs {
 		if err != nil {
-			// We ignore error if errVolumeNotFound, errDiskNotFound or errFaultyDisk
-			if err == errVolumeNotFound || err == errDiskNotFound || err == errFaultyDisk {
+			if isErrIgnored(err, objMetadataOpIgnoredErrs) {
 				volumeNotFoundErrCnt++
 				continue
 			}

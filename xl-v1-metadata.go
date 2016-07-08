@@ -194,6 +194,14 @@ func pickValidXLMeta(xlMetas []xlMetaV1) xlMetaV1 {
 	panic("Unable to look for valid XL metadata content")
 }
 
+// list of all errors that can be ignored in a metadata operation.
+var objMetadataOpIgnoredErrs = []error{
+	errDiskNotFound,
+	errDiskAccessDenied,
+	errFaultyDisk,
+	errVolumeNotFound,
+}
+
 // readXLMetadata - returns the object metadata `xl.json` content from
 // one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
@@ -202,16 +210,18 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 			continue
 		}
 		xlMeta, err = readXLMeta(disk, bucket, object)
-		if err != nil {
-			// For any reason disk is not available continue and read from other disks.
-			if err == errDiskNotFound || err == errFaultyDisk {
-				continue
-			}
-			return xlMetaV1{}, err
+		if err == nil {
+			return xlMeta, nil
+		}
+		// For any reason disk or bucket is not available continue
+		// and read from other disks.
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
 		}
 		break
 	}
-	return xlMeta, nil
+	// Return error here.
+	return xlMetaV1{}, err
 }
 
 // Undo rename xl metadata, renames successfully renamed `xl.json` back to source location.
