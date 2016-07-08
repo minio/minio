@@ -146,8 +146,8 @@ func TestIsSuccessBlocks(t *testing.T) {
 		{
 			// When all data and partity blocks are available.
 			[][]byte{
-				[]byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
-				[]byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
+				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
+				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
 			},
 			true,
 			true,
@@ -155,8 +155,8 @@ func TestIsSuccessBlocks(t *testing.T) {
 		{
 			// When one data block is not available.
 			[][]byte{
-				nil, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
-				[]byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
+				nil, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
+				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
 			},
 			false,
 			true,
@@ -164,8 +164,8 @@ func TestIsSuccessBlocks(t *testing.T) {
 		{
 			// When one data and all parity are available, enough for reedsolomon.Reconstruct()
 			[][]byte{
-				nil, nil, nil, nil, nil, nil, nil, []byte{'a'},
-				[]byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
+				nil, nil, nil, nil, nil, nil, nil, {'a'},
+				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
 			},
 			false,
 			true,
@@ -174,7 +174,7 @@ func TestIsSuccessBlocks(t *testing.T) {
 			// Not enough disks for reedsolomon.Reconstruct()
 			[][]byte{
 				nil, nil, nil, nil, nil, nil, nil, nil,
-				[]byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'}, []byte{'a'},
+				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
 			},
 			false,
 			false,
