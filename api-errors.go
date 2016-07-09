@@ -265,7 +265,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrPreconditionFailed: {
 		Code:           "PreconditionFailed",
-		Description:    "At least one of the preconditions you specified did not hold.",
+		Description:    "At least one of the pre-conditions you specified did not hold",
 		HTTPStatusCode: http.StatusPreconditionFailed,
 	},
 	ErrRequestTimeTooSkewed: {
