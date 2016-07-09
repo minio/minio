@@ -1871,3 +1871,58 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		}
 	}
 }
+
+// Benchmarks for ObjectLayer.PutObjectPart().
+// The intent is to benchamrk PutObjectPart for various sizes ranging from few bytes to 100MB.
+// Also each of these Benchmarks are run both XL and FS backends.
+
+// BenchmarkPutObjectPart5MbFS - Benchmark FS.PutObjectPart() for object size of 5MB.
+func BenchmarkPutObjectPart5MbFS(b *testing.B) {
+	benchmarkPutObjectPart(b, "FS", returnPutObjectPartBenchmark(5*1024*1024))
+}
+
+// BenchmarkPutObjectPart5MbXL - Benchmark XL.PutObjectPart() for object size of 5MB.
+func BenchmarkPutObjectPart5MbXL(b *testing.B) {
+	benchmarkPutObjectPart(b, "XL", returnPutObjectPartBenchmark(5*1024*1024))
+}
+
+// BenchmarkPutObjectPart10MbFS - Benchmark FS.PutObjectPart() for object size of 10MB.
+func BenchmarkPutObjectPart10MbFS(b *testing.B) {
+	benchmarkPutObjectPart(b, "FS", returnPutObjectPartBenchmark(10*1024*1024))
+}
+
+// BenchmarkPutObjectPart10MbXL - Benchmark XL.PutObjectPart() for object size of 10MB.
+func BenchmarkPutObjectPart10MbXL(b *testing.B) {
+	benchmarkPutObjectPart(b, "XL", returnPutObjectPartBenchmark(10*1024*1024))
+}
+
+// BenchmarkPutObjectPart25MbFS - Benchmark FS.PutObjectPart() for object size of 25MB.
+func BenchmarkPutObjectPart25MbFS(b *testing.B) {
+	benchmarkPutObjectPart(b, "FS", returnPutObjectPartBenchmark(25*1024*1024))
+
+}
+
+// BenchmarkPutObjectPart25MbXL - Benchmark XL.PutObjectPart() for object size of 25MB.
+func BenchmarkPutObjectPart25MbXL(b *testing.B) {
+	benchmarkPutObjectPart(b, "XL", returnPutObjectPartBenchmark(25*1024*1024))
+}
+
+// BenchmarkPutObjectPart50MbFS - Benchmark FS.PutObjectPart() for object size of 50MB.
+func BenchmarkPutObjectPart50MbFS(b *testing.B) {
+	benchmarkPutObjectPart(b, "FS", returnPutObjectPartBenchmark(50*1024*1024))
+}
+
+// BenchmarkPutObjectPart50MbXL - Benchmark XL.PutObjectPart() for object size of 50MB.
+func BenchmarkPutObjectPart50MbXL(b *testing.B) {
+	benchmarkPutObjectPart(b, "XL", returnPutObjectPartBenchmark(50*1024*1024))
+}
+
+// BenchmarkPutObjectPart100MbFS - Benchmark FS.PutObjectPart() for object size of 100MB.
+func BenchmarkPutObjectPart100MbFS(b *testing.B) {
+	benchmarkPutObjectPart(b, "FS", returnPutObjectPartBenchmark(100*1024*1024))
+}
+
+// BenchmarkPutObjectPart100MbXL - Benchmark XL.PutObjectPart() for object size of 100MB.
+func BenchmarkPutObjectPart100MbXL(b *testing.B) {
+	benchmarkPutObjectPart(b, "XL", returnPutObjectPartBenchmark(100*1024*1024))
+}
