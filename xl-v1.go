@@ -158,16 +158,20 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Calculate data and parity blocks.
 	dataBlocks, parityBlocks := len(newPosixDisks)/2, len(newPosixDisks)/2
 
+	// Initialize object cache.
+	objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
+
+	// Initialize list pool.
+	listPool := newTreeWalkPool(globalLookupTimeout)
+
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks: disks,
-		storageDisks:  newPosixDisks,
-		dataBlocks:    dataBlocks,
-		parityBlocks:  parityBlocks,
-		// Inititalize list pool.
-		listPool: newTreeWalkPool(globalLookupTimeout),
-		// Initialize object caching, FIXME: support auto cache expiration.
-		objCache:        objcache.New(globalMaxCacheSize, objcache.NoExpiration),
+		physicalDisks:   disks,
+		storageDisks:    newPosixDisks,
+		dataBlocks:      dataBlocks,
+		parityBlocks:    parityBlocks,
+		listPool:        listPool,
+		objCache:        objCache,
 		objCacheEnabled: globalMaxCacheSize > 0,
 	}
 

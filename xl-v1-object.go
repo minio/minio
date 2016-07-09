@@ -114,7 +114,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	mw := writer
 
 	// Object cache enabled block.
-	if xl.objCacheEnabled {
+	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
 		// Validate if we have previous cache.
 		cachedBuffer, err := xl.objCache.Open(path.Join(bucket, object))
 		if err == nil { // Cache hit.
@@ -144,9 +144,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 				mw = io.MultiWriter(newBuffer, writer)
 				defer newBuffer.Close()
 			}
+			// Ignore error if cache is full, proceed to write the object.
 			if err != nil && err != objcache.ErrCacheFull {
-				// Perhaps cache is full, returns here.
-				return err
+				// For any other error return here.
+				return toObjectErr(err, bucket, object)
 			}
 		}
 	}
@@ -170,7 +171,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Start reading the part name.
 		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
 		if err != nil {
-			return err
+			return toObjectErr(err, bucket, object)
 		}
 
 		totalBytesRead += n
@@ -340,7 +341,7 @@ func (xl xlObjects) renameObject(srcBucket, srcObject, dstBucket, dstObject stri
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
+func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (md5Sum string, err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}
@@ -359,13 +360,14 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
-	nsMutex.Lock(bucket, object)
-	defer nsMutex.Unlock(bucket, object)
-
 	uniqueID := getUUID()
 	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "part.1")
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
 	tempObj := uniqueID
+
+	// Lock the object.
+	nsMutex.Lock(bucket, object)
+	defer nsMutex.Unlock(bucket, object)
 
 	// Initialize xl meta.
 	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
@@ -388,8 +390,32 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		higherVersion++
 	}
 
+	var mw io.Writer
 	// Initialize md5 writer.
 	md5Writer := md5.New()
+
+	// Proceed to set the cache.
+	var newBuffer io.WriteCloser
+
+	// If caching is enabled, proceed to set the cache.
+	if size > 0 && xl.objCacheEnabled {
+		// PutObject invalidates any previously cached object in memory.
+		xl.objCache.Delete(path.Join(bucket, object))
+
+		// Create a new entry in memory of size.
+		newBuffer, err = xl.objCache.Create(path.Join(bucket, object), size)
+		if err == nil {
+			// Create a multi writer to write to both memory and client response.
+			mw = io.MultiWriter(newBuffer, md5Writer)
+		}
+		// Ignore error if cache is full, proceed to write the object.
+		if err != nil && err != objcache.ErrCacheFull {
+			// For any other error return here.
+			return "", toObjectErr(err, bucket, object)
+		}
+	} else {
+		mw = md5Writer
+	}
 
 	// Limit the reader to its provided size if specified.
 	var limitDataReader io.Reader
@@ -403,7 +429,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Tee reader combines incoming data stream and md5, data read from input stream is written to md5.
-	teeReader := io.TeeReader(limitDataReader, md5Writer)
+	teeReader := io.TeeReader(limitDataReader, mw)
 
 	// Collect all the previous erasure infos across the disk.
 	var eInfos []erasureInfo
@@ -504,6 +530,12 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Delete the temporary object.
 	xl.deleteObject(minioMetaTmpBucket, newUniqueID)
+
+	// Once we have successfully renamed the object, Close the buffer which would
+	// save the object on cache.
+	if size > 0 && xl.objCacheEnabled && newBuffer != nil {
+		newBuffer.Close()
+	}
 
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil

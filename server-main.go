@@ -149,6 +149,14 @@ func initServerConfig(c *cli.Context) {
 		fatalIf(err, "Unable to convert MINIO_CACHE_SIZE=%s environment variable into its integer value.", maxCacheSizeStr)
 	}
 
+	// Fetch cache expiry from environment variable.
+	if cacheExpiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); cacheExpiryStr != "" {
+		// We need to parse cache expiry to its time.Duration value.
+		var err error
+		globalCacheExpiry, err = time.ParseDuration(cacheExpiryStr)
+		fatalIf(err, "Unable to convert MINIO_CACHE_EXPIRY=%s environment variable into its time.Duration value.", cacheExpiryStr)
+	}
+
 	// Fetch access keys from environment variables if any and update the config.
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")

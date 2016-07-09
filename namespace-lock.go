@@ -29,7 +29,7 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	*sync.RWMutex
+	sync.RWMutex
 	ref uint
 }
 
@@ -37,7 +37,7 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	lockMap map[nsParam]*nsLock
-	mutex   *sync.Mutex
+	mutex   sync.Mutex
 }
 
 // Global name space lock.
@@ -47,7 +47,6 @@ var nsMutex *nsLockMap
 func initNSLock() {
 	nsMutex = &nsLockMap{
 		lockMap: make(map[nsParam]*nsLock),
-		mutex:   &sync.Mutex{},
 	}
 }
 
@@ -59,8 +58,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			RWMutex: &sync.RWMutex{},
-			ref:     0,
+			ref: 0,
 		}
 		n.lockMap[param] = nsLk
 	}
