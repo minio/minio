@@ -364,7 +364,7 @@ type EOFWriter struct {
 	n int64
 }
 
-// io.Writer implementation desgined to error out with io.EOF after reading `n` bytes.
+// io.Writer implementation designed to error out with io.EOF after reading `n` bytes.
 func (t *EOFWriter) Write(p []byte) (n int, err error) {
 	if t.n <= 0 {
 		return -1, io.EOF
