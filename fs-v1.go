@@ -248,7 +248,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	}
 	// Allocate a staging buffer.
 	buf := make([]byte, int(bufSize))
-	for totalLeft > 0 {
+	for {
 		// Figure out the right size for the buffer.
 		curLeft := bufSize
 		if totalLeft < bufSize {
@@ -280,6 +280,9 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		}
 		if er != nil {
 			err = er
+			break
+		}
+		if totalLeft == 0 {
 			break
 		}
 	}
