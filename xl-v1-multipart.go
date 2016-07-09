@@ -449,6 +449,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
+	// Read metadata (again) associated with the object from all disks.
+	partsMetadata, errs = xl.readAllXLMetadata(onlineDisks, minioMetaBucket,
+		uploadIDPath)
+	if !isQuorum(errs, xl.writeQuorum) {
+		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+	}
+
 	// Update `xl.json` content for each disks.
 	for index := range partsMetadata {
 		partsMetadata[index].Parts = xlMeta.Parts
