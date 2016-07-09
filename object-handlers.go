@@ -188,7 +188,7 @@ func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time
 			delete(h, "Content-Type")
 			delete(h, "Content-Length")
 			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusPreconditionFailed)
+			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
 			return true
 		}
 	}
@@ -376,6 +376,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
 		return
 	}
+
 	// Verify before writing.
 
 	// Verify x-amz-copy-source-if-modified-since and
@@ -385,8 +386,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Verify x-amz-copy-source-if-match and
-	// x-amz-copy-source-if-none-match.
+	if objInfo.MD5Sum != "" {
+		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	}
+
+	// Verify x-amz-copy-source-if-match and x-amz-copy-source-if-none-match.
 	if checkCopySourceETag(w, r) {
 		return
 	}
@@ -452,6 +456,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 // modtime is the modification time of the resource to be served, or
 // IsZero(). return value is whether this request is now complete.
 func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
+	// writer always has quoted string
+	// transform reader's etag to
+	if r.Method != "PUT" {
+		return false
+	}
 	if modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
 		// If the object doesn't have a modtime (IsZero), or the modtime
 		// is obviously garbage (Unix time == 0), then ignore modtimes
@@ -483,7 +492,7 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 			delete(h, "Content-Type")
 			delete(h, "Content-Length")
 			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusPreconditionFailed)
+			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
 			return true
 		}
 	}
@@ -498,18 +507,21 @@ func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime
 // headers. The return value is whether this request is now considered
 // complete.
 func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
+	// writer always has quoted string
+	// transform reader's etag to
+	if r.Method != "PUT" {
+		return false
+	}
 	etag := w.Header().Get("ETag")
 	// Tag must be provided...
 	if etag == "" {
 		return false
 	}
 	if inm := r.Header.Get("x-amz-copy-source-if-none-match"); inm != "" {
-		// Return the object only if its entity tag (ETag) is different
-		// from the one specified; otherwise, return a 304 (not modified).
-		if r.Method != "PUT" {
-			return false
-		}
-		if inm == etag || inm == "*" {
+		// Return the object only if its entity tag (ETag) is
+		// different from the one specified; otherwise, return a 304
+		// (not modified).
+		if isETagEqual(inm, etag) || isETagEqual(inm, "*") {
 			h := w.Header()
 			// Remove Content headers if set
 			delete(h, "Content-Type")
@@ -518,19 +530,16 @@ func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
 			w.WriteHeader(http.StatusNotModified)
 			return true
 		}
-	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); inm != "" {
+	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); !isETagEqual(inm, "") {
 		// Return the object only if its entity tag (ETag) is the same
 		// as the one specified; otherwise, return a 412 (precondition failed).
-		if r.Method != "PUT" {
-			return false
-		}
-		if inm != etag {
+		if !isETagEqual(inm, etag) {
 			h := w.Header()
 			// Remove Content headers if set
 			delete(h, "Content-Type")
 			delete(h, "Content-Length")
 			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusPreconditionFailed)
+			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
 			return true
 		}
 	}
