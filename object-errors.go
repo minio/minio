@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -203,6 +204,20 @@ type IncompleteBody GenericError
 // Return string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
+}
+
+// errInvalidRange - returned when given range value is not valid.
+var errInvalidRange = errors.New("Invalid range")
+
+// InvalidRange - invalid range typed error.
+type InvalidRange struct {
+	offsetBegin  int64
+	offsetEnd    int64
+	resourceSize int64
+}
+
+func (e InvalidRange) Error() string {
+	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.offsetBegin, e.offsetEnd, e.resourceSize)
 }
 
 /// Multipart related errors.
