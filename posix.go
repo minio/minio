@@ -424,11 +424,14 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
 		} else if pathErr, ok := err.(*os.PathError); ok {
-			if pathErr.Err == syscall.EISDIR {
+			switch pathErr.Err {
+			case syscall.ENOTDIR, syscall.EISDIR:
 				return nil, errFileNotFound
-			} else if strings.Contains(pathErr.Err.Error(), "The handle is invalid") {
-				// This case is special and needs to be handled for windows.
-				return nil, errFileNotFound
+			default:
+				if strings.Contains(pathErr.Err.Error(), "The handle is invalid") {
+					// This case is special and needs to be handled for windows.
+					return nil, errFileNotFound
+				}
 			}
 			return nil, pathErr
 		}

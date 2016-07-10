@@ -203,6 +203,7 @@ var objMetadataOpIgnoredErrs = []error{
 	errDiskAccessDenied,
 	errFaultyDisk,
 	errVolumeNotFound,
+	errFileAccessDenied,
 }
 
 // readXLMetadata - returns the object metadata `xl.json` content from
