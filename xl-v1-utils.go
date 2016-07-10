@@ -24,13 +24,13 @@ import (
 )
 
 // Returns nil even if one of the slice elements is nil.
-// Else returns the error which occours the most.
+// Else returns the error which occurs the most.
 func reduceErrs(errs []error) error {
 	// In case the error type is not in the known error list.
 	var unknownErr = errors.New("unknown error")
 	var errTypes = []struct {
 		err   error // error type
-		count int   // occurance count
+		count int   // occurrence count
 	}{
 		// List of known error types. Any new type that can be returned from StorageAPI should
 		// be added to this list. Most common errors are listed here.
@@ -40,7 +40,7 @@ func reduceErrs(errs []error) error {
 		// unknownErr count - count of the number of unknown errors.
 		{unknownErr, 0},
 	}
-	// In case unknownErr count occours maximum number of times, unknownErrType is used to
+	// In case unknownErr count occurs maximum number of times, unknownErrType is used to
 	// to store it so that it can be used for the return error type.
 	var unknownErrType error
 
