@@ -58,6 +58,9 @@ func sumHMAC(key []byte, data []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// Reserved string regexp.
+var reservedNames = regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
+
 // getURLEncodedName encode the strings from UTF-8 byte representations to HTML hex escape sequences
 //
 // This is necessary since regular url.Parse() and url.Encode() functions do not support UTF-8
@@ -67,7 +70,6 @@ func sumHMAC(key []byte, data []byte) []byte {
 // pretty much every UTF-8 character.
 func getURLEncodedName(name string) string {
 	// if object matches reserved string, no need to encode them
-	reservedNames := regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
 	if reservedNames.MatchString(name) {
 		return name
 	}

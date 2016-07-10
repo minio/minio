@@ -99,8 +99,6 @@ func getSignedHeaders(signedHeaders http.Header) string {
 func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method, host string) string {
 	rawQuery := strings.Replace(queryStr, "+", "%20", -1)
 	encodedPath := getURLEncodedName(urlPath)
-	// Convert any space strings back to "+".
-	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
 		method,
 		encodedPath,

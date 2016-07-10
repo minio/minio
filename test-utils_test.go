@@ -165,19 +165,124 @@ func (testServer TestServer) Stop() {
 	testServer.Server.Close()
 }
 
-// used to formulate HTTP v4 signed HTTP request.
-func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+// Sign given request using Signature V4.
+func signRequest(req *http.Request, accessKey, secretKey string) error {
+	// Get hashed payload.
+	hashedPayload := req.Header.Get("x-amz-content-sha256")
+	if hashedPayload == "" {
+		return fmt.Errorf("Invalid hashed payload.")
+	}
+
+	currTime := time.Now().UTC()
+
+	// Set x-amz-date.
+	req.Header.Set("x-amz-date", currTime.Format(iso8601Format))
+
+	// Get header map.
+	headerMap := make(map[string][]string)
+	for k, vv := range req.Header {
+		// If request header key is not in ignored headers, then add it.
+		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; !ok {
+			headerMap[strings.ToLower(k)] = vv
+		}
+	}
+
+	// Get header keys.
+	headers := []string{"host"}
+	for k := range headerMap {
+		headers = append(headers, k)
+	}
+	sort.Strings(headers)
+
+	// Get canonical headers.
+	var buf bytes.Buffer
+	for _, k := range headers {
+		buf.WriteString(k)
+		buf.WriteByte(':')
+		switch {
+		case k == "host":
+			buf.WriteString(req.URL.Host)
+			fallthrough
+		default:
+			for idx, v := range headerMap[k] {
+				if idx > 0 {
+					buf.WriteByte(',')
+				}
+				buf.WriteString(v)
+			}
+			buf.WriteByte('\n')
+		}
+	}
+	canonicalHeaders := buf.String()
+
+	// Get signed headers.
+	signedHeaders := strings.Join(headers, ";")
+
+	// Get canonical query string.
+	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
+
+	// Get canonical URI.
+	canonicalURI := getURLEncodedName(req.URL.Path)
+
+	// Get canonical request.
+	// canonicalRequest =
+	//  <HTTPMethod>\n
+	//  <CanonicalURI>\n
+	//  <CanonicalQueryString>\n
+	//  <CanonicalHeaders>\n
+	//  <SignedHeaders>\n
+	//  <HashedPayload>
+	//
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		canonicalURI,
+		req.URL.RawQuery,
+		canonicalHeaders,
+		signedHeaders,
+		hashedPayload,
+	}, "\n")
+
+	// Get scope.
+	scope := strings.Join([]string{
+		currTime.Format(yyyymmdd),
+		"us-east-1",
+		"s3",
+		"aws4_request",
+	}, "/")
+
+	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
+	stringToSign = stringToSign + scope + "\n"
+	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+
+	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
+	region := sumHMAC(date, []byte("us-east-1"))
+	service := sumHMAC(region, []byte("s3"))
+	signingKey := sumHMAC(service, []byte("aws4_request"))
+
+	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
+
+	// final Authorization header
+	parts := []string{
+		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + "/" + scope,
+		"SignedHeaders=" + signedHeaders,
+		"Signature=" + signature,
+	}
+	auth := strings.Join(parts, ", ")
+	req.Header.Set("Authorization", auth)
+
+	return nil
+}
+
+// Returns new HTTP request object.
+func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
 	if method == "" {
 		method = "POST"
 	}
-	t := time.Now().UTC()
 
 	req, err := http.NewRequest(method, urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("x-amz-date", t.Format(iso8601Format))
 
 	// Add Content-Length
 	req.ContentLength = contentLength
@@ -210,88 +315,20 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
 	}
 
-	var headers []string
-	vals := make(map[string][]string)
-	for k, vv := range req.Header {
-		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
-			continue // ignored header
-		}
-		headers = append(headers, strings.ToLower(k))
-		vals[strings.ToLower(k)] = vv
-	}
-	headers = append(headers, "host")
-	sort.Strings(headers)
+	return req, nil
+}
 
-	var canonicalHeaders bytes.Buffer
-	for _, k := range headers {
-		canonicalHeaders.WriteString(k)
-		canonicalHeaders.WriteByte(':')
-		switch {
-		case k == "host":
-			canonicalHeaders.WriteString(req.URL.Host)
-			fallthrough
-		default:
-			for idx, v := range vals[k] {
-				if idx > 0 {
-					canonicalHeaders.WriteByte(',')
-				}
-				canonicalHeaders.WriteString(v)
-			}
-			canonicalHeaders.WriteByte('\n')
-		}
+// Returns new HTTP request object signed with signature v4.
+func newTestSignedRequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
 	}
 
-	signedHeaders := strings.Join(headers, ";")
-
-	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
-	encodedPath := getURLEncodedName(req.URL.Path)
-	// convert any space strings back to "+"
-	encodedPath = strings.Replace(encodedPath, "+", "%20", -1)
-
-	//
-	// canonicalRequest =
-	//  <HTTPMethod>\n
-	//  <CanonicalURI>\n
-	//  <CanonicalQueryString>\n
-	//  <CanonicalHeaders>\n
-	//  <SignedHeaders>\n
-	//  <HashedPayload>
-	//
-	canonicalRequest := strings.Join([]string{
-		req.Method,
-		encodedPath,
-		req.URL.RawQuery,
-		canonicalHeaders.String(),
-		signedHeaders,
-		hashedPayload,
-	}, "\n")
-
-	scope := strings.Join([]string{
-		t.Format(yyyymmdd),
-		"us-east-1",
-		"s3",
-		"aws4_request",
-	}, "/")
-
-	stringToSign := "AWS4-HMAC-SHA256" + "\n" + t.Format(iso8601Format) + "\n"
-	stringToSign = stringToSign + scope + "\n"
-	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
-
-	date := sumHMAC([]byte("AWS4"+secretKey), []byte(t.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
-	service := sumHMAC(region, []byte("s3"))
-	signingKey := sumHMAC(service, []byte("aws4_request"))
-
-	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
-
-	// final Authorization header
-	parts := []string{
-		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + "/" + scope,
-		"SignedHeaders=" + signedHeaders,
-		"Signature=" + signature,
+	err = signRequest(req, accessKey, secretKey)
+	if err != nil {
+		return nil, err
 	}
-	auth := strings.Join(parts, ", ")
-	req.Header.Set("Authorization", auth)
 
 	return req, nil
 }
