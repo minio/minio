@@ -34,6 +34,10 @@ var files = []string{
 	"lmn",
 }
 
+func isLeaf(bucket, object string) bool {
+	return !strings.HasSuffix(object, slashSeparator)
+}
+
 // Helper function that creates a volume and files in it.
 func createNamespace(disk StorageAPI, volume string, files []string) error {
 	// Make a volume.
@@ -58,7 +62,7 @@ func testTreeWalkPrefix(t *testing.T, listDir listDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := "d/"
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(volume, prefix, "", true, listDir, endWalkCh)
+	twResultCh := startTreeWalk(volume, prefix, "", true, listDir, endWalkCh, isLeaf)
 
 	// Check if all entries received on the channel match the prefix.
 	for res := range twResultCh {
@@ -73,7 +77,7 @@ func testTreeWalkMarker(t *testing.T, listDir listDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := ""
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(volume, prefix, "d/g", true, listDir, endWalkCh)
+	twResultCh := startTreeWalk(volume, prefix, "d/g", true, listDir, endWalkCh, isLeaf)
 
 	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
@@ -102,9 +106,7 @@ func TestTreeWalk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	listDir := listDirFactory(func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
-	}, disk)
+	listDir := listDirFactory(disk)
 	// Simple test for prefix based walk.
 	testTreeWalkPrefix(t, listDir)
 	// Simple test when marker is set.
@@ -135,9 +137,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	listDir := listDirFactory(func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
-	}, disk)
+	listDir := listDirFactory(disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
 	pool := newTreeWalkPool(2 * time.Second)
@@ -146,7 +146,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	prefix := ""
 	marker := ""
 	recursive := true
-	resultCh := startTreeWalk(volume, prefix, marker, recursive, listDir, endWalkCh)
+	resultCh := startTreeWalk(volume, prefix, marker, recursive, listDir, endWalkCh, isLeaf)
 
 	params := listParams{
 		bucket:    volume,
@@ -207,9 +207,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// create listDir function.
-	listDir := listDirFactory(func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
-	}, disk1, disk2)
+	listDir := listDirFactory(disk1, disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
 	disks := []StorageAPI{disk1, disk2}
