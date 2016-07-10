@@ -37,43 +37,108 @@ type treeWalkResult struct {
 	end   bool
 }
 
+// posix.ListDir returns entries with trailing "/" for directories. At the object layer
+// we need to remove this trailing "/" for objects and retain "/" for prefixes before
+// sorting because the trailing "/" can affect the sorting results for certain cases.
+// Ex. lets say entries = ["a-b/", "a/"] and both are objects.
+//     sorting with out trailing "/" = ["a", "a-b"]
+//     sorting with trailing "/"     = ["a-b/", "a/"]
+// Hence if entries[] does not have a case like the above example then isLeaf() check
+// can be delayed till the entry is pushed into the treeWalkResult channel.
+// delayIsLeafCheck() returns true if isLeaf can be delayed or false if
+// isLeaf should be done in listDir()
+func delayIsLeafCheck(entries []string) bool {
+	for i, entry := range entries {
+		if i == len(entries)-1 {
+			break
+		}
+		// If any byte in the "entry" string is less than '/' then the
+		// next "entry" should not contain '/' at the same same byte position.
+		for j := 0; j < len(entry); j++ {
+			if entry[j] < '/' {
+				if len(entries[i+1]) > j {
+					if entries[i+1][j] == '/' {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+// Return entries that have prefix prefixEntry.
+// Note: input entries are expected to be sorted.
+func filterMatchingPrefix(entries []string, prefixEntry string) []string {
+	start := 0
+	end := len(entries)
+	for {
+		if start == end {
+			break
+		}
+		if strings.HasPrefix(entries[start], prefixEntry) {
+			break
+		}
+		start++
+	}
+	for {
+		if start == end {
+			break
+		}
+		if strings.HasPrefix(entries[end-1], prefixEntry) {
+			break
+		}
+		end--
+	}
+	return entries[start:end]
+}
+
 // "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
-type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, err error)
+type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error)
+
+// A function isLeaf of type isLeafFunc is used to detect if an entry is a leaf entry. There are four scenarios
+// where isLeaf should behave differently:
+// 1. FS backend object listing - isLeaf is true if the entry has a trailing "/"
+// 2. FS backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
+// 3. XL backend object listing - isLeaf is true if the entry is a directory and contains xl.json
+// 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
+type isLeafFunc func(string, string) bool
 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
-func listDirFactory(isLeaf func(string, string) bool, disks ...StorageAPI) listDirFunc {
+func listDirFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	// isLeaf is used to detect if an entry is a leaf entry. There are four scenarios where isLeaf
-	// should behave differently:
-	// 1. FS backend object listing - isLeaf is true if the entry has a trailing "/"
-	// 2. FS backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
-	// 3. XL backend object listing - isLeaf is true if the entry is a directory and contains xl.json
-	// 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, err error) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
 			}
 			entries, err = disk.ListDir(bucket, prefixDir)
 			if err == nil {
-				// Skip the entries which do not match the prefixEntry.
+				// Listing needs to be sorted.
+				sort.Strings(entries)
+
+				// Filter entries that have the prefix prefixEntry.
+				entries = filterMatchingPrefix(entries, prefixEntry)
+
+				// Can isLeaf() check be delayed till when it has to be sent down the
+				// treeWalkResult channel?
+				delayIsLeaf = delayIsLeafCheck(entries)
+				if delayIsLeaf {
+					return entries, delayIsLeaf, nil
+				}
+
+				// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
 				for i, entry := range entries {
-					if !strings.HasPrefix(entry, prefixEntry) {
-						entries[i] = ""
-						continue
-					}
 					if isLeaf(bucket, pathJoin(prefixDir, entry)) {
 						entries[i] = strings.TrimSuffix(entry, slashSeparator)
 					}
 				}
+				// Sort again after removing trailing "/" for objects as the previous sort
+				// does not hold good anymore.
 				sort.Strings(entries)
-				// Skip the empty strings
-				for len(entries) > 0 && entries[0] == "" {
-					entries = entries[1:]
-				}
-				return entries, nil
+				return entries, delayIsLeaf, nil
 			}
 			// For any reason disk was deleted or goes offline, continue
 			// and list from other disks if possible.
@@ -83,13 +148,13 @@ func listDirFactory(isLeaf func(string, string) bool, disks ...StorageAPI) listD
 			break
 		}
 		// Return error at the end.
-		return nil, err
+		return nil, false, err
 	}
 	return listDir
 }
 
 // treeWalk walks directory tree recursively pushing treeWalkResult into the channel as and when it encounters files.
-func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
+func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -104,7 +169,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, err := listDir(bucket, prefixDir, entryPrefixMatch)
+	entries, delayIsLeaf, err := listDir(bucket, prefixDir, entryPrefixMatch)
 	if err != nil {
 		select {
 		case <-endWalkCh:
@@ -130,6 +195,11 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 		return nil
 	}
 	for i, entry := range entries {
+		// Decision to do isLeaf check was pushed from listDir() to here.
+		if delayIsLeaf && isLeaf(bucket, pathJoin(prefixDir, entry)) {
+			entry = strings.TrimSuffix(entry, slashSeparator)
+		}
+
 		if i == 0 && markerDir == entry {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
@@ -156,7 +226,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
-			if tErr := doTreeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, resultCh, endWalkCh, markIsEnd); tErr != nil {
+			if tErr := doTreeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
 				return tErr
 			}
 			continue
@@ -175,7 +245,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(bucket, prefix, marker string, recursive bool, listDir listDirFunc, endWalkCh chan struct{}) chan treeWalkResult {
+func startTreeWalk(bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -197,7 +267,7 @@ func startTreeWalk(bucket, prefix, marker string, recursive bool, listDir listDi
 	marker = strings.TrimPrefix(marker, prefixDir)
 	go func() {
 		isEnd := true // Indication to start walking the tree with end as true.
-		doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, resultCh, endWalkCh, isEnd)
+		doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, isLeaf, resultCh, endWalkCh, isEnd)
 		close(resultCh)
 	}()
 	return resultCh
