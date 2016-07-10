@@ -340,24 +340,22 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	var errs []error
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
 	nsMutex.RLock(minioMetaBucket, uploadIDPath)
-	{
-		// Validates if upload ID exists again.
-		if !xl.isUploadIDExists(bucket, object, uploadID) {
-			nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
-			return "", InvalidUploadID{UploadID: uploadID}
-		}
-		// Read metadata associated with the object from all disks.
-		partsMetadata, errs = xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket,
-			uploadIDPath)
-		if !isQuorum(errs, xl.writeQuorum) {
-			nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
-			return "", toObjectErr(errXLWriteQuorum, bucket, object)
-		}
+	// Validates if upload ID exists.
+	if !xl.isUploadIDExists(bucket, object, uploadID) {
+		nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+		return "", InvalidUploadID{UploadID: uploadID}
+	}
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs = xl.readAllXLMetadata(xl.storageDisks, minioMetaBucket,
+		uploadIDPath)
+	if !isQuorum(errs, xl.writeQuorum) {
+		nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 
 	// List all online disks.
-	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
+	onlineDisks, _, err := xl.listOnlineDisks(partsMetadata, errs)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -442,25 +440,44 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
-	updatedEInfos := make([]erasureInfo, len(onlineDisks))
+	var updatedEInfos []erasureInfo
 	for index := range partsMetadata {
-		updatedEInfos[index] = partsMetadata[index].Erasure
+		updatedEInfos = append(updatedEInfos, partsMetadata[index].Erasure)
 	}
 
+	var checksums []checkSumInfo
 	for index, eInfo := range newEInfos {
 		if eInfo.IsValid() {
-			updatedEInfos[index] = eInfo
-			for j := range updatedEInfos[index].Checksum {
-				updatedEInfos[index].Checksum[j] = eInfo.Checksum[j]
+
+			// Use a map to find union of checksums of parts that
+			// we concurrently written and committed before this
+			// part. N B For a different, concurrent upload of the
+			// same part, the last written content remains.
+			checksumSet := make(map[string]checkSumInfo)
+			checksums = updatedEInfos[index].Checksum
+			for _, cksum := range checksums {
+				checksumSet[cksum.Name] = cksum
 			}
+			checksums = newEInfos[index].Checksum
+			for _, cksum := range checksums {
+				checksumSet[cksum.Name] = cksum
+			}
+			// Form the checksumInfo to be committed in xl.json
+			// from the map.
+			var finalChecksums []checkSumInfo
+			for _, cksum := range checksumSet {
+				finalChecksums = append(finalChecksums, cksum)
+			}
+			updatedEInfos[index] = eInfo
+			updatedEInfos[index].Checksum = finalChecksums
 		}
 	}
 
 	// Pick one from the first valid metadata.
 	xlMeta := pickValidXLMeta(partsMetadata)
 
-	// Re-read higherVersio
-	_, higherVersion, err = xl.listOnlineDisks(partsMetadata, errs)
+	// Get current highest version based on re-read partsMetadata.
+	_, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
