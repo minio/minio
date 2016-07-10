@@ -86,7 +86,7 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 	// Initialize all disks in parallel.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			errs[index] = errDiskNotFound
+			// Ignore create meta volume on disks which are not found.
 			continue
 		}
 		wg.Add(1)
@@ -135,7 +135,6 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 	// Initialize all disks in parallel.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			errs[index] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)

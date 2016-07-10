@@ -23,16 +23,15 @@ import (
 	router "github.com/gorilla/mux"
 )
 
-// newObjectLayer - initialize any object layer depending on the
-// number of export paths.
-func newObjectLayer(exportPaths []string) (ObjectLayer, error) {
-	if len(exportPaths) == 1 {
-		exportPath := exportPaths[0]
+// newObjectLayer - initialize any object layer depending on the number of disks.
+func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
+	if len(disks) == 1 {
+		exportPath := disks[0]
 		// Initialize FS object layer.
 		return newFSObjects(exportPath)
 	}
 	// Initialize XL object layer.
-	objAPI, err := newXLObjects(exportPaths)
+	objAPI, err := newXLObjects(disks, ignoredDisks)
 	if err == errXLWriteQuorum {
 		return objAPI, errors.New("Disks are different with last minio server run.")
 	}
@@ -41,11 +40,11 @@ func newObjectLayer(exportPaths []string) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	objAPI, err := newObjectLayer(srvCmdConfig.exportPaths)
+	objAPI, err := newObjectLayer(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	fatalIf(err, "Unable to intialize object layer.")
 
 	// Initialize storage rpc server.
-	storageRPC, err := newRPCServer(srvCmdConfig.exportPaths[0]) // FIXME: should only have one path.
+	storageRPC, err := newRPCServer(srvCmdConfig.disks[0]) // FIXME: should only have one path.
 	fatalIf(err, "Unable to initialize storage RPC server.")
 
 	// Initialize API.

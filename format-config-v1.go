@@ -115,27 +115,31 @@ var errSomeDiskOffline = errors.New("some disks are offline")
 var errDiskOrderMismatch = errors.New("disk order mismatch")
 
 // Returns error slice into understandable errors.
-func reduceFormatErrs(errs []error, diskCount int) error {
+func reduceFormatErrs(errs []error, diskCount int) (err error) {
 	var errUnformattedDiskCount = 0
 	var errDiskNotFoundCount = 0
-	for _, err := range errs {
-		if err == errUnformattedDisk {
+	for _, dErr := range errs {
+		if dErr == errUnformattedDisk {
 			errUnformattedDiskCount++
-		} else if err == errDiskNotFound {
+		} else if dErr == errDiskNotFound {
 			errDiskNotFoundCount++
 		}
 	}
-	// Returns errUnformattedDisk if all disks report unFormattedDisk.
-	if errUnformattedDiskCount == diskCount {
+	// Unformatted disks found, we need to figure out if any disks are offline.
+	if errUnformattedDiskCount > 0 {
+		// Returns errUnformattedDisk if all disks report unFormattedDisk.
+		if errUnformattedDiskCount < diskCount {
+			if errDiskNotFoundCount > 0 {
+				// Only some disks are fresh but some disks are offline as well.
+				return errSomeDiskOffline
+			}
+			// Some disks are fresh disks an unformatted, not disks are offline.
+			return errSomeDiskUnformatted
+		}
+		// All disks returned unformatted, all disks must be fresh.
 		return errUnformattedDisk
-	} else if errUnformattedDiskCount < diskCount && errDiskNotFoundCount == 0 {
-		// Only some disks return unFormattedDisk and all disks are online.
-		return errSomeDiskUnformatted
-	} else if errUnformattedDiskCount < diskCount && errDiskNotFoundCount > 0 {
-		// Only some disks return unFormattedDisk and some disks are
-		// offline as well.
-		return errSomeDiskOffline
 	}
+	// No unformatted disks found no need to handle disk not found case, return success here.
 	return nil
 }
 
@@ -152,6 +156,10 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range bootstrapDisks {
+		if disk == nil {
+			sErrs[index] = errDiskNotFound
+			continue
+		}
 		wg.Add(1)
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
@@ -409,6 +417,11 @@ func healFormatXL(storageDisks []StorageAPI) error {
 	var referenceConfig *formatConfigV1
 	// Loads `format.json` from all disks.
 	for index, disk := range storageDisks {
+		// Disk not found or ignored is a valid case.
+		if disk == nil {
+			// Proceed without healing.
+			return nil
+		}
 		formatXL, err := loadFormat(disk)
 		if err != nil {
 			if err == errUnformattedDisk {
@@ -427,11 +440,6 @@ func healFormatXL(storageDisks []StorageAPI) error {
 	if isFormatFound(formatConfigs) {
 		// Return success.
 		return nil
-	}
-
-	// Init meta volume.
-	if err := initMetaVolume(storageDisks); err != nil {
-		return err
 	}
 
 	// All disks are fresh, format.json will be written by initFormatXL()
@@ -499,6 +507,10 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 
 	// Try to load `format.json` bootstrap disks.
 	for index, disk := range bootstrapDisks {
+		if disk == nil {
+			diskNotFoundCount++
+			continue
+		}
 		var formatXL *formatConfigV1
 		formatXL, err = loadFormat(disk)
 		if err != nil {
@@ -515,15 +527,12 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 		formatConfigs[index] = formatXL
 	}
 
-	// If all disks indicate that 'format.json' is not available
-	// return 'errUnformattedDisk'.
-	if unformattedDisksFoundCnt == len(bootstrapDisks) {
+	// If all disks indicate that 'format.json' is not available return 'errUnformattedDisk'.
+	if unformattedDisksFoundCnt > len(bootstrapDisks)-(len(bootstrapDisks)/2+1) {
 		return nil, errUnformattedDisk
 	} else if diskNotFoundCount == len(bootstrapDisks) {
 		return nil, errDiskNotFound
 	} else if diskNotFoundCount > len(bootstrapDisks)-(len(bootstrapDisks)/2+1) {
-		return nil, errXLReadQuorum
-	} else if unformattedDisksFoundCnt > len(bootstrapDisks)-(len(bootstrapDisks)/2+1) {
 		return nil, errXLReadQuorum
 	}
 

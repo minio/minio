@@ -93,8 +93,19 @@ func checkSufficientDisks(disks []string) error {
 	return nil
 }
 
+// isDiskFound - validates if the disk is found in a list of input disks.
+func isDiskFound(disk string, disks []string) bool {
+	for _, d := range disks {
+		// Disk found return
+		if disk == d {
+			return true
+		}
+	}
+	return false
+}
+
 // newXLObjects - initialize new xl object layer.
-func newXLObjects(disks []string) (ObjectLayer, error) {
+func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 	// Validate if input disks are sufficient.
 	if err := checkSufficientDisks(disks); err != nil {
 		return nil, err
@@ -103,9 +114,14 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
+		// Check if disk is ignored.
+		if isDiskFound(disk, ignoredDisks) {
+			storageDisks[index] = nil
+			continue
+		}
 		var err error
-		// Intentionally ignore disk not found errors. XL will
-		// manage such errors internally.
+		// Intentionally ignore disk not found errors. XL is designed
+		// to handle these errors internally.
 		storageDisks[index], err = newStorageAPI(disk)
 		if err != nil && err != errDiskNotFound {
 			return nil, err
@@ -122,12 +138,14 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 		return nil, err
 	}
 
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(storageDisks); err != nil {
+		return nil, fmt.Errorf("Unable to initialize '.minio' meta volume, %s", err)
+	}
+
 	// Handles different cases properly.
 	switch reduceFormatErrs(sErrs, len(storageDisks)) {
 	case errUnformattedDisk:
-		if err := initMetaVolume(storageDisks); err != nil {
-			return nil, fmt.Errorf("Unable to initialize '.minio' meta volume, %s", err)
-		}
 		// All drives online but fresh, initialize format.
 		if err := initFormatXL(storageDisks); err != nil {
 			return nil, fmt.Errorf("Unable to initialize format, %s", err)
@@ -139,8 +157,8 @@ func newXLObjects(disks []string) (ObjectLayer, error) {
 			return nil, fmt.Errorf("Unable to heal backend %s", err)
 		}
 	case errSomeDiskOffline:
-		// Some disks offline but some report missing format.json.
-		// FIXME.
+		// FIXME: in future.
+		return nil, fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
 	}
 
 	// Runs house keeping code, like t, cleaning up tmp files etc.
