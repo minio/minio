@@ -362,14 +362,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Increment version only if we have online disks less than configured storage disks.
-	if diskCount(onlineDisks) < len(xl.storageDisks) {
-		higherVersion++
-	}
-
-	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata)
-
 	// Need a unique name for the part being written in minioMetaBucket to
 	// accommodate concurrent PutObjectPart requests
 	partSuffix := fmt.Sprintf("part.%d", partID)
@@ -443,12 +435,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
 
-	// Once part is successfully committed, proceed with updating XL metadata.
-	xlMeta.Stat.Version = higherVersion
-
-	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
-
 	// Read metadata (again) associated with the object from all disks.
 	partsMetadata, errs = xl.readAllXLMetadata(onlineDisks, minioMetaBucket,
 		uploadIDPath)
@@ -456,10 +442,44 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
+	updatedEInfos := make([]erasureInfo, len(onlineDisks))
+	for index := range partsMetadata {
+		updatedEInfos[index] = partsMetadata[index].Erasure
+	}
+
+	for index, eInfo := range newEInfos {
+		if eInfo.IsValid() {
+			updatedEInfos[index] = eInfo
+			for j := range updatedEInfos[index].Checksum {
+				updatedEInfos[index].Checksum[j] = eInfo.Checksum[j]
+			}
+		}
+	}
+
+	// Pick one from the first valid metadata.
+	xlMeta := pickValidXLMeta(partsMetadata)
+
+	// Re-read higherVersio
+	_, higherVersion, err = xl.listOnlineDisks(partsMetadata, errs)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
+	// Increment version only if we have online disks less than configured storage disks.
+	if diskCount(onlineDisks) < len(xl.storageDisks) {
+		higherVersion++
+	}
+
+	// Once part is successfully committed, proceed with updating XL metadata.
+	xlMeta.Stat.Version = higherVersion
+
+	// Add the current part.
+	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
+
 	// Update `xl.json` content for each disks.
 	for index := range partsMetadata {
 		partsMetadata[index].Parts = xlMeta.Parts
-		partsMetadata[index].Erasure = newEInfos[index]
+		partsMetadata[index].Erasure = updatedEInfos[index]
 	}
 
 	// Write all the checksum metadata.
