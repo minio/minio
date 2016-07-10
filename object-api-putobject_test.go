@@ -469,3 +469,123 @@ func BenchmarkPutObject1GbFS(b *testing.B) {
 func BenchmarkPutObject1GbXL(b *testing.B) {
 	benchmarkPutObject(b, "XL", returnPutObjectBenchmark(1024*1024*1024))
 }
+
+func BenchmarkParallelPutObjectVerySmallFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(10))
+}
+
+// BenchmarkParallelPutObjectVerySmallXL - BenchmarkParallel XL.PutObject() for object size of 10 bytes.
+func BenchmarkParallelPutObjectVerySmallXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(10))
+}
+
+// BenchmarkParallelPutObject10KbFS - BenchmarkParallel FS.PutObject() for object size of 10KB.
+func BenchmarkParallelPutObject10KbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(10*1024))
+}
+
+// BenchmarkParallelPutObject10KbXL - BenchmarkParallel XL.PutObject() for object size of 10KB.
+func BenchmarkParallelPutObject10KbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(10*1024))
+}
+
+// BenchmarkParallelPutObject100KbFS - BenchmarkParallel FS.PutObject() for object size of 100KB.
+func BenchmarkParallelPutObject100KbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(100*1024))
+}
+
+// BenchmarkParallelPutObject100KbXL - BenchmarkParallel XL.PutObject() for object size of 100KB.
+func BenchmarkParallelPutObject100KbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(100*1024))
+}
+
+// BenchmarkParallelPutObject1MbFS - BenchmarkParallel FS.PutObject() for object size of 1MB.
+func BenchmarkParallelPutObject1MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(1024*1024))
+}
+
+// BenchmarkParallelPutObject1MbXL - BenchmarkParallel XL.PutObject() for object size of 1MB.
+func BenchmarkParallelPutObject1MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(1024*1024))
+}
+
+// BenchmarkParallelPutObject5MbFS - BenchmarkParallel FS.PutObject() for object size of 5MB.
+func BenchmarkParallelPutObject5MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(5*1024*1024))
+}
+
+// BenchmarkParallelPutObject5MbXL - BenchmarkParallel XL.PutObject() for object size of 5MB.
+func BenchmarkParallelPutObject5MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(5*1024*1024))
+}
+
+// BenchmarkParallelPutObject10MbFS - BenchmarkParallel FS.PutObject() for object size of 10MB.
+func BenchmarkParallelPutObject10MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(10*1024*1024))
+}
+
+// BenchmarkParallelPutObject10MbXL - BenchmarkParallel XL.PutObject() for object size of 10MB.
+func BenchmarkParallelPutObject10MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(10*1024*1024))
+}
+
+// BenchmarkParallelPutObject25MbFS - BenchmarkParallel FS.PutObject() for object size of 25MB.
+func BenchmarkParallelPutObject25MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(25*1024*1024))
+
+}
+
+// BenchmarkParallelPutObject25MbXL - BenchmarkParallel XL.PutObject() for object size of 25MB.
+func BenchmarkParallelPutObject25MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(25*1024*1024))
+}
+
+// BenchmarkParallelPutObject50MbFS - BenchmarkParallel FS.PutObject() for object size of 50MB.
+func BenchmarkParallelPutObject50MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(50*1024*1024))
+}
+
+// BenchmarkParallelPutObject50MbXL - BenchmarkParallel XL.PutObject() for object size of 50MB.
+func BenchmarkParallelPutObject50MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(50*1024*1024))
+}
+
+// BenchmarkParallelPutObject100MbFS - BenchmarkParallel FS.PutObject() for object size of 100MB.
+func BenchmarkParallelPutObject100MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(100*1024*1024))
+}
+
+// BenchmarkParallelPutObject100MbXL - BenchmarkParallel XL.PutObject() for object size of 100MB.
+func BenchmarkParallelPutObject100MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(100*1024*1024))
+}
+
+// BenchmarkParallelPutObject200MbFS - BenchmarkParallel FS.PutObject() for object size of 200MB.
+func BenchmarkParallelPutObject200MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(200*1024*1024))
+}
+
+// BenchmarkParallelPutObject200MbXL - BenchmarkParallel XL.PutObject() for object size of 200MB.
+func BenchmarkParallelPutObject200MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(200*1024*1024))
+}
+
+// BenchmarkParallelPutObject500MbFS - BenchmarkParallel FS.PutObject() for object size of 500MB.
+func BenchmarkParallelPutObject500MbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(500*1024*1024))
+}
+
+// BenchmarkParallelPutObject500MbXL - BenchmarkParallel XL.PutObject() for object size of 500MB.
+func BenchmarkParallelPutObject500MbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(500*1024*1024))
+}
+
+// BenchmarkParallelPutObject1GbFS - BenchmarkParallel FS.PutObject() for object size of 1GB.
+func BenchmarkParallelPutObject1GbFS(b *testing.B) {
+	benchmarkPutObject(b, "FS", returnPutObjectBenchmarkParallel(1024*1024*1024))
+}
+
+// BenchmarkParallelPutObjectGbXL - BenchmarkParallel XL.PutObject() for object size of 1GB.
+func BenchmarkParallelPutObject1GbXL(b *testing.B) {
+	benchmarkPutObject(b, "XL", returnPutObjectBenchmarkParallel(1024*1024*1024))
+}
