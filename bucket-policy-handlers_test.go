@@ -390,7 +390,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestRequest("PUT", getPutPolicyURL("", testCase.bucketName),
+		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testCase.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
@@ -487,7 +487,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
+		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
@@ -518,7 +518,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestRequest("GET", getGetPolicyURL("", testCase.bucketName),
+		req, err := newTestSignedRequest("GET", getGetPolicyURL("", testCase.bucketName),
 			0, nil, testCase.accessKey, testCase.secretKey)
 
 		if err != nil {
@@ -626,7 +626,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
+		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
@@ -653,7 +653,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Delete bucket policy endpoint.
-		req, err := newTestRequest("DELETE", getDeletePolicyURL("", testCase.bucketName),
+		req, err := newTestSignedRequest("DELETE", getDeletePolicyURL("", testCase.bucketName),
 			0, nil, testCase.accessKey, testCase.secretKey)
 
 		if err != nil {
