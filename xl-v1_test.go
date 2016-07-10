@@ -132,7 +132,7 @@ func TestNewXL(t *testing.T) {
 		defer removeAll(disk)
 	}
 	// Initializes all erasure disks
-	_, err := newXLObjects(erasureDisks)
+	_, err := newXLObjects(erasureDisks, nil)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}

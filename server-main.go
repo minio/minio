@@ -39,6 +39,11 @@ var serverCmd = cli.Command{
 		cli.StringFlag{
 			Name:  "address",
 			Value: ":9000",
+			Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
+		},
+		cli.StringFlag{
+			Name:  "ignore-disks",
+			Usage: "Specify comma separated list of disks that are offline.",
 		},
 	},
 	Action: serverMain,
@@ -52,8 +57,13 @@ OPTIONS:
   {{range .Flags}}{{.}}
   {{end}}
 ENVIRONMENT VARIABLES:
-  MINIO_ACCESS_KEY: Access key string of 5 to 20 characters in length.
-  MINIO_SECRET_KEY: Secret key string of 8 to 40 characters in length.
+  ACCESS:
+     MINIO_ACCESS_KEY: Access key string of 5 to 20 characters in length.
+     MINIO_SECRET_KEY: Secret key string of 8 to 40 characters in length.
+
+  CACHING:
+     MINIO_CACHE_SIZE: Set total cache size in NN[GB|MB|KB]. Defaults to 8GB.
+     MINIO_CACHE_EXPIRY: Set cache expiration duration in NN[h|m|s]. Defaults to 72 hours.
 
 EXAMPLES:
   1. Start minio server.
@@ -65,16 +75,23 @@ EXAMPLES:
   3. Start minio server on Windows.
       $ minio {{.Name}} C:\MyShare
 
-  4. Start minio server 12 disks to enable erasure coded layer with 6 data and 6 parity.
+  4. Start minio server on 12 disks to enable erasure coded layer with 6 data and 6 parity.
       $ minio {{.Name}} /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend \
           /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend \
           /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+
+  5. Start minio server on 12 disks while ignoring two disks for initialization.
+      $ minio {{.Name}} --ignore-disks=/mnt/export1/backend,/mnt/export2/backend /mnt/export1/backend \
+          /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend \
+          /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend \
+          /mnt/export12/backend
 `,
 }
 
 type serverCmdConfig struct {
-	serverAddr  string
-	exportPaths []string
+	serverAddr   string
+	disks        []string
+	ignoredDisks []string
 }
 
 // configureServer configure a new server instance
@@ -292,13 +309,17 @@ func serverMain(c *cli.Context) {
 	// Check if requested port is available.
 	checkPortAvailability(getPort(net.JoinHostPort(host, port)))
 
-	// Save all command line args as export paths.
-	exportPaths := c.Args()
+	// Disks to be ignored in server init, to skip format healing.
+	ignoredDisks := strings.Split(c.String("ignore-disks"), ",")
+
+	// Disks to be used in server init.
+	disks := c.Args()
 
 	// Configure server.
 	apiServer := configureServer(serverCmdConfig{
-		serverAddr:  serverAddress,
-		exportPaths: exportPaths,
+		serverAddr:   serverAddress,
+		disks:        disks,
+		ignoredDisks: ignoredDisks,
 	})
 
 	// Credential.

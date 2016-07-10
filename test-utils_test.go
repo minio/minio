@@ -129,7 +129,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
 	// Run TestServer.
-	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{exportPaths: erasureDisks}))
+	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{disks: erasureDisks}))
 
 	return testServer
 }
@@ -632,7 +632,7 @@ func getXLObjectLayer() (ObjectLayer, []string, error) {
 		erasureDisks = append(erasureDisks, path)
 	}
 
-	objLayer, err := newXLObjects(erasureDisks)
+	objLayer, err := newXLObjects(erasureDisks, nil)
 	if err != nil {
 		return nil, nil, err
 	}

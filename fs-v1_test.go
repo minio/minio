@@ -40,7 +40,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	// Initializes all disks with XL
-	_, err := newXLObjects(disks)
+	_, err := newXLObjects(disks, nil)
 	if err != nil {
 		t.Fatalf("Unable to initialize XL object, %s", err)
 	}
