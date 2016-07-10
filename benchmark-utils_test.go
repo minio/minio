@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"strconv"
@@ -259,5 +260,125 @@ func benchmarkGetObject(b *testing.B, instanceType string, runBenchMark func(b *
 func returnGetObjectBenchmark(objSize int) func(*testing.B, ObjectLayer) {
 	return func(b *testing.B, obj ObjectLayer) {
 		runGetObjectBenchmark(b, obj, objSize)
+	}
+}
+
+// Parallel benchmark utility functions for ObjectLayer.PutObject().
+// Creates Object layer setup ( MakeBucket ) and then runs the PutObject benchmark.
+func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
+	var err error
+	// obtains random bucket name.
+	bucket := getRandomBucketName()
+	// create bucket.
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// PutObject returns md5Sum of the object inserted.
+	// md5Sum variable is assigned with that value.
+	var md5Sum string
+	// get text data generated for number of bytes equal to object size.
+	textData := generateBytesData(objSize)
+	// generate md5sum for the generated data.
+	// md5sum of the data to written is required as input for PutObject.
+	hasher := md5.New()
+	hasher.Write([]byte(textData))
+	metadata := make(map[string]string)
+	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
+	b.ReportAllocs()
+	// the actual benchmark for PutObject starts here. Reset the benchmark timer.
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			// insert the object.
+			md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if md5Sum != metadata["md5Sum"] {
+				b.Fatalf("Write no: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", md5Sum, metadata["md5Sum"])
+			}
+			i++
+		}
+	})
+
+	// Benchmark ends here. Stop timer.
+	b.StopTimer()
+}
+
+// closure for returning the put object benchmark executor for given object size in bytes.
+func returnPutObjectBenchmarkParallel(objSize int) func(*testing.B, ObjectLayer) {
+	// FIXME: Avoid closure.
+	return func(b *testing.B, obj ObjectLayer) {
+		runPutObjectBenchmarkParallel(b, obj, objSize)
+	}
+}
+
+// Parallel benchmark utility functions for ObjectLayer.GetObject().
+// Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
+func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
+	var err error
+	// obtains random bucket name.
+	bucket := getRandomBucketName()
+	// create bucket.
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// PutObject returns md5Sum of the object inserted.
+	// md5Sum variable is assigned with that value.
+	var md5Sum string
+	for i := 0; i < 10; i++ {
+		// get text data generated for number of bytes equal to object size.
+		textData := generateBytesData(objSize)
+		// generate md5sum for the generated data.
+		// md5sum of the data to written is required as input for PutObject.
+		// PutObject is the functions which writes the data onto the FS/XL backend.
+		hasher := md5.New()
+		hasher.Write([]byte(textData))
+		metadata := make(map[string]string)
+		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+		// insert the object.
+		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if md5Sum != metadata["md5Sum"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+		}
+	}
+
+	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
+	b.ReportAllocs()
+	// the actual benchmark for GetObject starts here. Reset the benchmark timer.
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			err = obj.GetObject(bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard)
+			if err != nil {
+				b.Error(err)
+			}
+			i++
+			if i == 10 {
+				i = 0
+			}
+		}
+	})
+	// Benchmark ends here. Stop timer.
+	b.StopTimer()
+
+}
+
+// closure for returning the get object benchmark executor for given object size in bytes.
+// FIXME: Avoid closure.
+func returnGetObjectBenchmarkParallel(objSize int) func(*testing.B, ObjectLayer) {
+	return func(b *testing.B, obj ObjectLayer) {
+		runGetObjectBenchmarkParallel(b, obj, objSize)
 	}
 }
