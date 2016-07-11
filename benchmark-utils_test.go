@@ -21,8 +21,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io/ioutil"
-	"math"
 	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -40,24 +40,23 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
-	// get text data generated for number of bytes equal to object size.
-	textData := generateBytesData(objSize)
-	// generate md5sum for the generated data.
-	// md5sum of the data to written is required as input for PutObject.
-	hasher := md5.New()
-	hasher.Write([]byte(textData))
+	// Get file and md5sum.
+	file, md5Sum := mustGetRandomReader(objSize)
+	defer file.Close()
+
 	metadata := make(map[string]string)
-	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	metadata["md5Sum"] = md5Sum
+
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObject starts here. Reset the benchmark timer.
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		// Move the file pointer to beginning of the file
+		file.Seek(0, 0)
+
 		// insert the object.
-		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(objSize), file, metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -83,48 +82,31 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 		b.Fatal(err)
 	}
 
-	objSize := 128 * 1024 * 1024
+	// Get part file and md5sum.
+	file, expectedMD5Sum := mustGetRandomReader(partSize)
+	defer file.Close()
 
-	// PutObjectPart returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum, uploadID string
-	// get text data generated for number of bytes equal to object size.
-	textData := generateBytesData(objSize)
-	// generate md5sum for the generated data.
-	// md5sum of the data to written is required as input for NewMultipartUpload.
-	hasher := md5.New()
-	hasher.Write([]byte(textData))
-	metadata := make(map[string]string)
-	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
-	uploadID, err = obj.NewMultipartUpload(bucket, object, metadata)
+	// Initialize new multipart upload.
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	var textPartData []byte
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObjectPart starts here. Reset the benchmark timer.
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// insert the object.
-		totalPartsNR := int(math.Ceil(float64(objSize) / float64(partSize)))
-		for j := 0; j < totalPartsNR; j++ {
-			hasher.Reset()
-			if j < totalPartsNR-1 {
-				textPartData = textData[j*partSize : (j+1)*partSize-1]
-			} else {
-				textPartData = textData[j*partSize:]
-			}
-			hasher.Write([]byte(textPartData))
-			metadata := make(map[string]string)
-			metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
-			md5Sum, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"])
+		for partNumber := 1; partNumber <= 10; partNumber++ {
+			// Move the file pointer to beginning of the file
+			file.Seek(0, 0)
+
+			md5Sum, err := obj.PutObjectPart(bucket, object, uploadID, partNumber, int64(partSize), file, expectedMD5Sum)
 			if err != nil {
 				b.Fatal(err)
 			}
-			if md5Sum != metadata["md5Sum"] {
-				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+			if md5Sum != expectedMD5Sum {
+				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, expectedMD5Sum, md5Sum)
 			}
 		}
 	}
@@ -186,21 +168,16 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
 	for i := 0; i < 10; i++ {
-		// get text data generated for number of bytes equal to object size.
-		textData := generateBytesData(objSize)
-		// generate md5sum for the generated data.
-		// md5sum of the data to written is required as input for PutObject.
-		// PutObject is the functions which writes the data onto the FS/XL backend.
-		hasher := md5.New()
-		hasher.Write([]byte(textData))
+		// Get file and md5sum.
+		file, md5Sum := mustGetRandomReader(objSize)
 		metadata := make(map[string]string)
-		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+		metadata["md5Sum"] = md5Sum
+
 		// insert the object.
-		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(objSize), file, metadata)
+		file.Close()
+
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -214,8 +191,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// the actual benchmark for GetObject starts here. Reset the benchmark timer.
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		var buffer = new(bytes.Buffer)
-		err = obj.GetObject(bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer)
+		err = obj.GetObject(bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), ioutil.Discard)
 		if err != nil {
 			b.Error(err)
 		}
@@ -225,21 +201,62 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 
 }
 
-// randomly picks a character and returns its equivalent byte array.
-func getRandomByte() []byte {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	// seeding the random number generator.
-	rand.Seed(time.Now().UnixNano())
-	var b byte
-	// pick a character randomly.
-	b = letterBytes[rand.Intn(len(letterBytes))]
-	return []byte{b}
+const alphabets = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// Returns random character as byte from letterBytes.
+func getRandByte() byte {
+	return alphabets[rand.Intn(len(alphabets))]
 }
 
-// picks a random byte and repeats it to size bytes.
-func generateBytesData(size int) []byte {
-	// repeat the random character chosen size
-	return bytes.Repeat(getRandomByte(), size)
+// Returns os.File and MD5 hash string of required size of random bytes.
+func mustGetRandomReader(size int) (file *os.File, hash string) {
+	rand.Seed(time.Now().UnixNano())
+	hasher := md5.New()
+
+	// Create temporary file.
+	tmpfile, err := ioutil.TempFile("", "minio-bench")
+	if err != nil {
+		panic(err)
+	}
+	defer os.Remove(tmpfile.Name())
+
+	var buf []byte
+	if size < readSizeV1 {
+		buf = bytes.Repeat([]byte{getRandByte()}, size)
+	} else {
+		buf = bytes.Repeat([]byte{getRandByte()}, readSizeV1)
+	}
+
+	// Write to the temporary file.
+	bytesLeft := size
+	n := 0
+	for bytesLeft > 0 {
+		if bytesLeft > readSizeV1 {
+			n = readSizeV1
+		} else {
+			n = bytesLeft
+		}
+
+		if _, err = tmpfile.Write(buf[:n]); err != nil {
+			panic(err)
+		}
+
+		hasher.Write(buf)
+
+		bytesLeft -= n
+	}
+
+	if err = tmpfile.Close(); err != nil {
+		panic(err)
+	}
+
+	// Open the temporary file for reading.
+	f, err := os.Open(tmpfile.Name())
+	if err != nil {
+		panic(err)
+	}
+
+	return f, hex.EncodeToString(hasher.Sum(nil))
 }
 
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.

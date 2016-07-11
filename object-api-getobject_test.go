@@ -48,7 +48,8 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bytesData := []struct {
 		byteData []byte
 	}{
-		{generateBytesData(6 * 1024 * 1024)},
+		// 6MiB byte data.
+		{bytes.Repeat([]byte{getRandByte()}, 6*1024*1024)},
 	}
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
