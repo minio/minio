@@ -47,7 +47,7 @@ func listObjectVersions(partsMetadata []xlMetaV1, errs []error) (versions []int6
 
 // Reads all `xl.json` metadata as a xlMetaV1 slice.
 // Returns error slice indicating the failed metadata reads.
-func (xl xlObjects) readAllXLMetadata(disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
+func readAllXLMetadata(disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
 	errs := make([]error, len(disks))
 	metadataArray := make([]xlMetaV1, len(disks))
 	var wg = &sync.WaitGroup{}

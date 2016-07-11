@@ -262,7 +262,7 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
-func (xl xlObjects) commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string) error {
+func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, writeQuorum int) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -295,7 +295,7 @@ func (xl xlObjects) commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix st
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isQuorum(mErrs, xl.writeQuorum) {
+	if !isQuorum(mErrs, writeQuorum) {
 		return errXLWriteQuorum
 	}
 	// For all other errors return.
