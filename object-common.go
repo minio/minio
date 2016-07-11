@@ -171,22 +171,22 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
 		if !strings.HasSuffix(entryPath, slashSeparator) {
-			// No trailing "/" means that this is a file which can be deleted.
+			// Delete the file entry.
 			return storage.DeleteFile(volume, entryPath)
 		}
+
 		// If it's a directory, list and call delFunc() for each entry.
 		entries, err := storage.ListDir(volume, entryPath)
-		if err != nil {
-			if err == errFileNotFound {
-				// if dirPath prefix never existed.
-				return nil
-			}
+		// If entryPath prefix never existed, safe to ignore.
+		if err == errFileNotFound {
+			return nil
+		} else if err != nil { // For any other errors fail.
 			return err
-		}
-		for _, entry := range entries {
-			err = delFunc(pathJoin(entryPath, entry))
+		} // else on success..
 
-			if err != nil {
+		// Recurse and delete all other entries.
+		for _, entry := range entries {
+			if err = delFunc(pathJoin(entryPath, entry)); err != nil {
 				return err
 			}
 		}

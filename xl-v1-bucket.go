@@ -17,6 +17,7 @@
 package main
 
 import (
+	"path"
 	"sort"
 	"sync"
 )
@@ -238,7 +239,14 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		// Delete volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
+			// Attempt to delete bucket.
 			err := disk.DeleteVol(bucket)
+			if err != nil {
+				dErrs[index] = err
+				return
+			}
+			// Cleanup all the previously incomplete multiparts.
+			err = cleanupDir(disk, path.Join(minioMetaBucket, mpartMetaPrefix), bucket)
 			if err != nil {
 				dErrs[index] = err
 			}
@@ -248,8 +256,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Wait for all the delete vols to finish.
 	wg.Wait()
 
-	// Count the errors for known errors, return quickly if we found
-	// an unknown error.
+	// Count the errors for known errors, return quickly if we found an unknown error.
 	for _, err := range dErrs {
 		if err != nil {
 			if isErrIgnored(err, objMetadataOpIgnoredErrs) {
