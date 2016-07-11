@@ -454,11 +454,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// part. N B For a different, concurrent upload of the
 			// same part, the last written content remains.
 			checksumSet := make(map[string]checkSumInfo)
-			checksums = updatedEInfos[index].Checksum
+			checksums = newEInfos[index].Checksum
 			for _, cksum := range checksums {
 				checksumSet[cksum.Name] = cksum
 			}
-			checksums = newEInfos[index].Checksum
+			checksums = updatedEInfos[index].Checksum
 			for _, cksum := range checksums {
 				checksumSet[cksum.Name] = cksum
 			}
