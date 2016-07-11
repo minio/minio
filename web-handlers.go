@@ -36,7 +36,12 @@ import (
 // isJWTReqAuthenticated validates if any incoming request to be a
 // valid JWT authenticated request.
 func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt := initJWT()
+	jwt, err := newJWT()
+	if err != nil {
+		errorIf(err, "unable to initialize a new JWT")
+		return false
+	}
+
 	token, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
@@ -44,6 +49,7 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 		return []byte(jwt.SecretAccessKey), nil
 	})
 	if e != nil {
+		errorIf(e, "token parsing failed")
 		return false
 	}
 	return token.Valid
@@ -255,17 +261,22 @@ type LoginRep struct {
 
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt := initJWT()
-	if jwt.Authenticate(args.Username, args.Password) {
-		token, err := jwt.GenerateToken(args.Username)
-		if err != nil {
-			return &json2.Error{Message: err.Error()}
-		}
-		reply.Token = token
-		reply.UIVersion = miniobrowser.UIVersion
-		return nil
+	jwt, err := newJWT()
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
-	return &json2.Error{Message: "Invalid credentials"}
+
+	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	token, err := jwt.GenerateToken(args.Username)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+	reply.Token = token
+	reply.UIVersion = miniobrowser.UIVersion
+	return nil
 }
 
 // GenerateAuthReply - reply for GenerateAuth
@@ -315,9 +326,13 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return &json2.Error{Message: err.Error()}
 	}
 
-	jwt := initJWT()
-	if !jwt.Authenticate(args.AccessKey, args.SecretKey) {
-		return &json2.Error{Message: "Invalid credentials"}
+	jwt, err := newJWT()
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
 	token, err := jwt.GenerateToken(args.AccessKey)
 	if err != nil {
@@ -369,7 +384,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	token := r.URL.Query().Get("token")
 
-	jwt := initJWT()
+	jwt, err := newJWT()
+	if err != nil {
+		errorIf(err, "error in getting new JWT")
+		return
+	}
+
 	jwttoken, e := jwtgo.Parse(token, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
