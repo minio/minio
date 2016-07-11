@@ -163,7 +163,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
 			// partial data has already been written before an error
-			// occured then no point in setting StatusCode and
+			// occurred then no point in setting StatusCode and
 			// sending error XML.
 			apiErr := toAPIErrorCode(err)
 			writeErrorResponse(w, r, apiErr, r.URL.Path)
@@ -176,96 +176,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		// call wrter.Write(nil) to set appropriate headers.
 		writer.Write(nil)
 	}
-}
-
-// Validates the preconditions. Returns true if object content need not be written to http.ResponseWriter.
-func checkPreconditions(r *http.Request, w http.ResponseWriter, objInfo ObjectInfo) bool {
-	// Headers to be set of object content is not going to be written to the client.
-	writeHeaders := func() {
-		// set common headers
-		setCommonHeaders(w)
-
-		// set object-related metadata headers
-		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
-
-		if objInfo.MD5Sum != "" {
-			w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
-		}
-	}
-	// If-Modified-Since : Return the object only if it has been modified since the specified time,
-	// otherwise return a 304 (not modified).
-	ifModifiedSinceHeader := r.Header.Get("If-Modified-Since")
-	if ifModifiedSinceHeader != "" {
-		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
-			// If the object is not modified since the specified time.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	}
-
-	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
-	// time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get("If-Unmodified-Since")
-	if ifUnmodifiedSinceHeader != "" {
-		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
-			// If the object is modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
-			return true
-		}
-	}
-
-	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
-	// otherwise return a 412 (precondition failed).
-	ifMatchETagHeader := r.Header.Get("If-Match")
-	if ifMatchETagHeader != "" {
-		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
-			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
-			return true
-		}
-	}
-
-	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
-	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get("If-None-Match")
-	if ifNoneMatchETagHeader != "" {
-		if isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
-			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	}
-	// Object content should be written to http.ResponseWriter
-	return false
-}
-
-// returns true if object was modified after givenTime.
-func ifModifiedSince(objTime time.Time, givenTimeStr string) bool {
-	givenTime, err := time.Parse(http.TimeFormat, givenTimeStr)
-	if err != nil {
-		return true
-	}
-	if objTime.After(givenTime) {
-		return true
-	}
-	return false
-}
-
-// canonicalizeETag returns ETag with leading and trailing double-quotes removed,
-// if any present
-func canonicalizeETag(etag string) string {
-	canonicalETag := strings.TrimPrefix(etag, "\"")
-	return strings.TrimSuffix(canonicalETag, "\"")
-}
-
-// isETagEqual return true if the canonical representations of two ETag strings
-// are equal, false otherwise
-func isETagEqual(left, right string) bool {
-	return canonicalizeETag(left) == canonicalizeETag(right)
 }
 
 // HeadObjectHandler - HEAD Object
@@ -456,103 +366,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponse(w, encodedSuccessResponse)
 	// Explicitly close the reader, to avoid fd leaks.
 	pipeReader.Close()
-}
-
-// checkCopySource implements x-amz-copy-source-if-modified-since and
-// x-amz-copy-source-if-unmodified-since checks.
-//
-// modtime is the modification time of the resource to be served, or
-// IsZero(). return value is whether this request is now complete.
-func checkCopySourceLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
-	// writer always has quoted string
-	// transform reader's etag to
-	if r.Method != "PUT" {
-		return false
-	}
-	if modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
-		// If the object doesn't have a modtime (IsZero), or the modtime
-		// is obviously garbage (Unix time == 0), then ignore modtimes
-		// and don't process the If-Modified-Since header.
-		return false
-	}
-	// The Date-Modified header truncates sub-second precision, so
-	// use mtime < t+1s instead of mtime <= t to check for unmodified.
-	if _, ok := r.Header["x-amz-copy-source-if-modified-since"]; ok {
-		// Return the object only if it has been modified since the
-		// specified time, otherwise return a 304 error (not modified).
-		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-modified-since"))
-		if err == nil && modtime.Before(t.Add(1*time.Second)) {
-			h := w.Header()
-			// Remove Content headers if set
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	} else if _, ok := r.Header["x-amz-copy-source-if-unmodified-since"]; ok {
-		// Return the object only if it has not been modified since the
-		// specified time, otherwise return a 412 error (precondition failed).
-		t, err := time.Parse(http.TimeFormat, r.Header.Get("x-amz-copy-source-if-unmodified-since"))
-		if err == nil && modtime.After(t.Add(1*time.Second)) {
-			h := w.Header()
-			// Remove Content headers if set
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
-			return true
-		}
-	}
-	w.Header().Set("Last-Modified", modtime.UTC().Format(http.TimeFormat))
-	return false
-}
-
-// checkCopySourceETag implements x-amz-copy-source-if-match and
-// x-amz-copy-source-if-none-match checks.
-//
-// The ETag must have been previously set in the ResponseWriter's
-// headers. The return value is whether this request is now considered
-// complete.
-func checkCopySourceETag(w http.ResponseWriter, r *http.Request) bool {
-	// writer always has quoted string
-	// transform reader's etag to
-	if r.Method != "PUT" {
-		return false
-	}
-	etag := w.Header().Get("ETag")
-	// Tag must be provided...
-	if etag == "" {
-		return false
-	}
-	if inm := r.Header.Get("x-amz-copy-source-if-none-match"); inm != "" {
-		// Return the object only if its entity tag (ETag) is
-		// different from the one specified; otherwise, return a 304
-		// (not modified).
-		if isETagEqual(inm, etag) || isETagEqual(inm, "*") {
-			h := w.Header()
-			// Remove Content headers if set
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	} else if inm := r.Header.Get("x-amz-copy-source-if-match"); !isETagEqual(inm, "") {
-		// Return the object only if its entity tag (ETag) is the same
-		// as the one specified; otherwise, return a 412 (precondition failed).
-		if !isETagEqual(inm, etag) {
-			h := w.Header()
-			// Remove Content headers if set
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
-			return true
-		}
-	}
-	return false
-
 }
 
 // PutObjectHandler - PUT Object
