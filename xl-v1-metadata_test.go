@@ -17,70 +17,133 @@
 package main
 
 import (
+	"strconv"
 	"testing"
 )
 
-// Test cases for xlMetaV1{}
-func TestXLMetaV1(t *testing.T) {
-	fiveMB := int64(5 * 1024 * 1024)
+const MiB = 1024 * 1024
+
+// Test xlMetaV1.AddObjectPart()
+func TestAddObjectPart(t *testing.T) {
+	testCases := []struct {
+		partNum       int
+		expectedIndex int
+	}{
+		{1, 0},
+		{2, 1},
+		{4, 2},
+		{5, 3},
+		{7, 4},
+		// Insert part.
+		{3, 2},
+		// Replace existing part.
+		{4, 3},
+		// Missing part.
+		{6, -1},
+	}
+
+	// Setup.
+	xlMeta := newXLMetaV1("test-object", 8, 8)
+	if !xlMeta.IsValid() {
+		t.Fatalf("unable to get xl meta")
+	}
+
+	// Test them.
+	for _, testCase := range testCases {
+		if testCase.expectedIndex > -1 {
+			partNumString := strconv.Itoa(testCase.partNum)
+			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+MiB))
+		}
+
+		if index := xlMeta.ObjectPartIndex(testCase.partNum); index != testCase.expectedIndex {
+			t.Fatalf("%+v: expected = %d, got: %d", testCase, testCase.expectedIndex, index)
+		}
+	}
+}
+
+// Test xlMetaV1.ObjectPartIndex()
+func TestObjectPartIndex(t *testing.T) {
+	testCases := []struct {
+		partNum       int
+		expectedIndex int
+	}{
+		{2, 1},
+		{1, 0},
+		{5, 3},
+		{4, 2},
+		{7, 4},
+	}
+
+	// Setup.
+	xlMeta := newXLMetaV1("test-object", 8, 8)
+	if !xlMeta.IsValid() {
+		t.Fatalf("unable to get xl meta")
+	}
+
+	// Add some parts for testing.
+	for _, testCase := range testCases {
+		partNumString := strconv.Itoa(testCase.partNum)
+		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+MiB))
+	}
+
+	// Add failure test case.
+	testCases = append(testCases, struct {
+		partNum       int
+		expectedIndex int
+	}{6, -1})
+
+	// Test them.
+	for _, testCase := range testCases {
+		if index := xlMeta.ObjectPartIndex(testCase.partNum); index != testCase.expectedIndex {
+			t.Fatalf("%+v: expected = %d, got: %d", testCase, testCase.expectedIndex, index)
+		}
+	}
+}
+
+// Test xlMetaV1.ObjectToPartOffset().
+func TestObjectToPartOffset(t *testing.T) {
+	// Setup.
+	xlMeta := newXLMetaV1("test-object", 8, 8)
+	if !xlMeta.IsValid() {
+		t.Fatalf("unable to get xl meta")
+	}
+
+	// Add some parts for testing.
+	// Total size of all parts is 5,242,899 bytes.
+	for _, partNum := range []int{1, 2, 4, 5, 7} {
+		partNumString := strconv.Itoa(partNum)
+		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+MiB))
+	}
 
 	testCases := []struct {
-		partNum  int
-		partName string
-		etag     string
-		size     int64
-		index    int
+		offset         int64
+		expectedIndex  int
+		expectedOffset int64
+		expectedErr    error
 	}{
-		{5, "part.5", "etag5", fiveMB + 5, 3},
-		{4, "part.4", "etag4", fiveMB + 4, 2},
-		{7, "part.7", "etag7", fiveMB + 7, 4},
-		{2, "part.2", "etag2", fiveMB + 2, 1},
-		{1, "part.1", "etag1", fiveMB + 1, 0},
+		{0, 0, 0, nil},
+		{MiB, 0, MiB, nil},
+		{1 + MiB, 1, 0, nil},
+		{2 + MiB, 1, 1, nil},
+		// Its valid for zero sized object.
+		{-1, 0, -1, nil},
+		// Max fffset is always (size - 1).
+		{(1 + 2 + 4 + 5 + 7) + (5 * MiB) - 1, 4, 1048582, nil},
+		// Error if offset is size.
+		{(1 + 2 + 4 + 5 + 7) + (5 * MiB), 0, 0, InvalidRange{}},
 	}
 
-	// Create a XLMetaV1 structure to test on.
-	meta := newXLMetaV1("minio", 8, 8)
-
-	// Add 5 parts.
-	for _, test := range testCases {
-		meta.AddObjectPart(test.partNum, test.partName, test.etag, test.size)
-	}
-
-	// Test for ObjectPartIndex()
-	for i, test := range testCases {
-		expected := test.index
-		got := meta.ObjectPartIndex(test.partNum)
-		if expected != got {
-			t.Errorf("Test %d: Expected %d, obtained %d", i+1, expected, got)
+	// Test them.
+	for _, testCase := range testCases {
+		index, offset, err := xlMeta.ObjectToPartOffset(testCase.offset)
+		if err != testCase.expectedErr {
+			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
 		}
-	}
-
-	offsetCases := []struct {
-		offset     int64
-		partIndex  int
-		partOffset int64
-	}{
-		{4 * 1024 * 1024, 0, 4 * 1024 * 1024},
-		{8 * 1024 * 1024, 1, 3145727},
-		{12 * 1024 * 1024, 2, 2097149},
-		{16 * 1024 * 1024, 3, 1048569},
-		{20 * 1024 * 1024, 3, 5242873},
-		{24 * 1024 * 1024, 4, 4194292},
-	}
-
-	// Test for ObjectToPartOffset()
-	for i, test := range offsetCases {
-		expectedIndex := test.partIndex
-		expectedOffset := test.partOffset
-		gotIndex, gotOffset, err := meta.ObjectToPartOffset(test.offset)
-		if err != nil {
-			t.Errorf("Test %d: %s", i+1, err)
+		if index != testCase.expectedIndex {
+			t.Fatalf("%+v: index: expected = %d, got: %d", testCase, testCase.expectedIndex, index)
 		}
-		if gotIndex != expectedIndex {
-			t.Errorf("Test %d: Expected %v got %v", i+1, expectedIndex, gotIndex)
-		}
-		if gotOffset != expectedOffset {
-			t.Errorf("Test %d: Expected %v got %v", i+1, expectedOffset, gotOffset)
+		if offset != testCase.expectedOffset {
+			t.Fatalf("%+v: offset: expected = %d, got: %d", testCase, testCase.expectedOffset, offset)
 		}
 	}
 }
