@@ -1,0 +1,50 @@
+[Unit]
+Description=Minio
+Documentation=http://minio.io
+Wants=network-online.target
+After=network-online.target
+AssertPathExists=/etc/minio/
+AssertFileIsExecutable=/usr/share/minio/bin/minio
+
+[Service]
+WorkingDirectory=/usr/share/minio/
+
+User=minio
+Group=minio
+
+PermissionsStartOnly=true
+    
+EnvironmentFile=-/etc/default/minio
+ExecStartPre=/bin/bash -c "[ -n \"${MINIO_VOLUMES}\" ] || echo \"Variable MINIO_VOLUMES not set in /etc/defaults/minio\""
+ExecStartPre=/bin/bash -c "(for i in $MINIO_VOLUMES; do if [ ! -d $i ]; then echo \"Directory $i of variable MINIO_VOLUMES isn't an existing directory\" && false; exit; fi; done)"
+
+ExecStartPre=-/bin/chown -R root:minio /etc/minio/
+ExecStartPre=-/bin/chmod -R 660 /etc/minio/
+ExecStartPre=-/bin/chmod -R ug+X /etc/minio/
+
+ExecStart=/usr/share/minio/bin/minio \
+                --config-dir "/etc/minio/" \
+                server \
+                $MINIO_OPTS \
+                $MINIO_VOLUMES
+
+StandardOutput=journal
+StandardError=inherit
+
+# Specifies the maximum file descriptor number that can be opened by this process
+LimitNOFILE=65536
+
+# Disable timeout logic and wait until process is stopped
+TimeoutStopSec=0
+
+# SIGTERM signal is used to stop Minio
+KillSignal=SIGTERM
+
+SendSIGKILL=no
+
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target
+
+# Built for ${project.name}-${project.version} (${project.name})
