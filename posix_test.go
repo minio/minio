@@ -73,6 +73,9 @@ func TestReadAll(t *testing.T) {
 	if err = posix.AppendFile("exists", "as-file", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-file\", %s", err)
 	}
+	if err = posix.AppendFile("exists", "as-file-parent", []byte("Hello, World")); err != nil {
+		t.Fatalf("Unable to create a file \"as-file-parent\", %s", err)
+	}
 
 	// Testcases to validate different conditions for ReadAll API.
 	testCases := []struct {
@@ -99,8 +102,12 @@ func TestReadAll(t *testing.T) {
 			"as-directory",
 			errFileNotFound,
 		},
-		// Validate the good condition file exists and we are able to
-		// read it.
+		{
+			"exists",
+			"as-file-parent/as-file",
+			errFileNotFound,
+		},
+		// Validate the good condition file exists and we are able to read it.
 		{
 			"exists",
 			"as-file",
