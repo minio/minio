@@ -155,9 +155,9 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 		Version:  minioVersion,
 	}
 
-	// Instantiate a new client with 1 sec timeout.
+	// Instantiate a new client with 3 sec timeout.
 	client := &http.Client{
-		Timeout: 1 * time.Millisecond,
+		Timeout: 3 * time.Second,
 	}
 
 	// Fetch new update.
