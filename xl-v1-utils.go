@@ -78,14 +78,14 @@ func reduceErrs(errs []error) error {
 
 // Validates if we have quorum based on the errors with errDiskNotFound.
 func isQuorum(errs []error, minQuorumCount int) bool {
-	var diskFoundCount int
+	var errCount int
 	for _, err := range errs {
-		if err == errDiskNotFound {
+		if err == errDiskNotFound || err == errFaultyDisk || err == errDiskAccessDenied {
 			continue
 		}
-		diskFoundCount++
+		errCount++
 	}
-	return diskFoundCount >= minQuorumCount
+	return errCount >= minQuorumCount
 }
 
 // Similar to 'len(slice)' but returns  the actual elements count

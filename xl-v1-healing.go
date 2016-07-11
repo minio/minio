@@ -16,33 +16,65 @@
 
 package main
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
-// Get the highest integer from a given integer slice.
-func highestInt(intSlice []int64, highestInt int64) (highestInteger int64) {
-	highestInteger = highestInt
-	for _, integer := range intSlice {
-		if highestInteger < integer {
-			highestInteger = integer
-			break
+// commonTime returns a maximally occurring time from a list of time.
+func commonTime(modTimes []time.Time) (modTime time.Time) {
+	var maxima int // Counter for remembering max occurrence of elements.
+	timeOccurenceMap := make(map[time.Time]int)
+	// Ignore the uuid sentinel and count the rest.
+	for _, time := range modTimes {
+		if time == timeSentinel {
+			continue
+		}
+		timeOccurenceMap[time]++
+	}
+	// Find the common cardinality from previously collected
+	// occurrences of elements.
+	for time, count := range timeOccurenceMap {
+		if count > maxima {
+			maxima = count
+			modTime = time
 		}
 	}
-	return highestInteger
+	// Return the collected common uuid.
+	return modTime
 }
 
-// Extracts objects versions from xlMetaV1 slice and returns version slice.
-func listObjectVersions(partsMetadata []xlMetaV1, errs []error) (versions []int64) {
-	versions = make([]int64, len(partsMetadata))
+var timeSentinel = time.Unix(0, 0).UTC()
+
+// Boot uuids upto disk count, setting the value to UUID sentinel.
+func bootModtimes(diskCount int) []time.Time {
+	modTimes := make([]time.Time, diskCount)
+	// Boots up all the uuids.
+	for i := range modTimes {
+		modTimes[i] = timeSentinel
+	}
+	return modTimes
+}
+
+// Extracts list of times from xlMetaV1 slice and returns, skips
+// slice elements which have errors. As a special error
+// errFileNotFound is treated as a initial good condition.
+func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time.Time) {
+	modTimes = bootModtimes(len(partsMetadata))
+	// Set a new time value, specifically set when
+	// error == errFileNotFound (this is needed when this is a
+	// fresh PutObject).
+	timeNow := time.Now().UTC()
 	for index, metadata := range partsMetadata {
 		if errs[index] == nil {
-			versions[index] = metadata.Stat.Version
+			// Once the file is found, save the uuid saved on disk.
+			modTimes[index] = metadata.Stat.ModTime
 		} else if errs[index] == errFileNotFound {
-			versions[index] = 1
-		} else {
-			versions[index] = -1
+			// Once the file is not found then the epoch is current time.
+			modTimes[index] = timeNow
 		}
 	}
-	return versions
+	return modTimes
 }
 
 // Reads all `xl.json` metadata as a xlMetaV1 slice.
@@ -100,23 +132,22 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 // - slice returing readable disks.
 // - xlMetaV1
 // - bool value indicating if healing is needed.
-// - error if any.
-func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, version int64, err error) {
+func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
 	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
 
-	// List all the file versions from partsMetadata list.
-	versions := listObjectVersions(partsMetadata, errs)
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	// Get highest object version.
-	highestVersion := highestInt(versions, int64(1))
+	// Reduce list of UUIDs to a single common value.
+	modTime = commonTime(modTimes)
 
-	// Pick online disks with version set to highestVersion.
-	for index, version := range versions {
-		if version == highestVersion {
+	// Create a new online disks slice, which have common uuid.
+	for index, t := range modTimes {
+		if t == modTime {
 			onlineDisks[index] = xl.storageDisks[index]
 		} else {
 			onlineDisks[index] = nil
 		}
 	}
-	return onlineDisks, highestVersion, nil
+	return onlineDisks, modTime
 }

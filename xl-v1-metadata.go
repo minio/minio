@@ -87,7 +87,6 @@ func pickValidErasureInfo(eInfos []erasureInfo) erasureInfo {
 type statInfo struct {
 	Size    int64     `json:"size"`    // Size of the object `xl.json`.
 	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.json`.
-	Version int64     `json:"version"` // Version of the object `xl.json`, useful to calculate quorum.
 }
 
 // A xlMetaV1 represents `xl.json` metadata header.
