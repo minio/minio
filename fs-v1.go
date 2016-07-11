@@ -96,6 +96,17 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		}
 	}
 
+	// Attempt to create `.metadata`.
+	err = storage.MakeVol(metadataBucket)
+	if err != nil {
+		switch err {
+		// Ignore the errors.
+		case errVolumeExists, errDiskNotFound, errFaultyDisk:
+		default:
+			return nil, toObjectErr(err, metadataBucket)
+		}
+	}
+
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
 	if err = fsHouseKeeping(storage); err != nil {
 		return nil, err
@@ -423,6 +434,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	err = PutObjectMetadata(fs.storage, bucket, object, metadata)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -590,4 +606,8 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 // ListObjects - list all objects.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
+}
+
+func (fs fsObjects) GetObjectMetadata(bucket, object string) (map[string]string, error) {
+	return GetObjectMetadata(fs.storage, bucket, object)
 }

@@ -123,6 +123,74 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 }
 
+// Wrapper for calling PutObject tests for both XL multiple disks and single node setup.
+func TestObjectAPIPutObjectMetadata(t *testing.T) {
+	ExecObjectLayerTest(t, testObjectAPIPutObjectMetadata)
+}
+
+// Tests validate correctness of PutObject handling of metadata
+func testObjectAPIPutObjectMetadata(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Generating cases for which the PutObject fails.
+	bucket := "minio-bucket"
+	object := "minio-object"
+
+	// Create bucket.
+	err := obj.MakeBucket(bucket)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Creating a dummy bucket for tests.
+	err = obj.MakeBucket("unused-bucket")
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	inputMetadata := map[string]string{
+		"x-amz-meta-test":             "1",
+		"x-amz-meta-test-same-name":   "1",
+		"x-amz-meta-test-Same-name":   "2",
+		"x-minio-meta-test":           "1",
+		"x-minio-meta-test-same-name": "1",
+		"x-minio-meta-test-Same-name": "2",
+	}
+
+	metadata := make(map[string]string)
+	for key, value := range inputMetadata {
+		k, v := handleMetadataHeader(metadata, key, value)
+		metadata[k] = v
+	}
+
+	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewBufferString("abcd"),
+		metadata)
+
+	if err != nil {
+		t.Errorf("%s: Failed with: <ERROR> %s.", instanceType, err.Error())
+	}
+
+	readMetadata, err := obj.GetObjectMetadata(bucket, object)
+
+	if err != nil {
+		t.Errorf("%s: Failed with: <ERROR> %s.", instanceType, err.Error())
+	}
+
+	expected := map[string]string{
+		"X-Amz-Meta-Test":             "1",
+		"X-Amz-Meta-Test-Same-Name":   "1,2",
+		"X-Minio-Meta-Test":           "1",
+		"X-Minio-Meta-Test-Same-Name": "1,2",
+	}
+
+	for key, value := range expected {
+		if readMetadata[key] != value {
+			t.Errorf("%s: Expected header %s to be %s, got %s", instanceType, key, value, readMetadata[key])
+		}
+	}
+
+}
+
 // Wrapper for calling PutObject tests for both XL multiple disks case
 // when quorum is not available.
 func TestObjectAPIPutObjectDiskNotFound(t *testing.T) {
