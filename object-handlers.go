@@ -65,6 +65,13 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	return ErrNoSuchKey
 }
 
+// Simple way to convert a func to io.Writer type.
+type funcToWriter func([]byte) (int, error)
+
+func (f funcToWriter) Write(p []byte) (int, error) {
+	return f(p)
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -106,31 +113,24 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Get request range.
 	var hrange *httpRange
-	if hrange, err = parseRequestRange(r.Header.Get("Range"), objInfo.Size); err != nil {
-		// Handle only errInvalidRange
-		// Ignore other parse error and treat it as regular Get request like Amazon S3.
-		if err == errInvalidRange {
-			writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
-			return
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
+			// Handle only errInvalidRange
+			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
+				return
+			}
+
+			// log the error.
+			errorIf(err, "Invalid request range")
 		}
 
-		// log the error.
-		errorIf(err, "Invalid request range")
 	}
 
-	// Set standard object headers.
-	setObjectHeaders(w, objInfo, hrange)
-
-	// Set any additional requested response headers.
-	setGetRespHeaders(w, r.URL.Query())
-
-	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objInfo.ModTime
-	if checkLastModified(w, r, lastModified) {
-		return
-	}
-	// Verify 'If-Match' and 'If-None-Match'.
-	if checkETag(w, r) {
+	// Validate pre-conditions if any.
+	if checkPreconditions(r, w, objInfo) {
 		return
 	}
 
@@ -141,58 +141,117 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
+	// Indicates if any data was written to the http.ResponseWriter
+	dataWritten := false
+	// io.Writer type which keeps track if any data was written.
+	writer := funcToWriter(func(p []byte) (int, error) {
+		if !dataWritten {
+			// Set headers on the first write.
+			// Set standard object headers.
+			setObjectHeaders(w, objInfo, hrange)
+
+			// Set any additional requested response headers.
+			setGetRespHeaders(w, r.URL.Query())
+
+			dataWritten = true
+		}
+		return w.Write(p)
+	})
 	// Reads the object at startOffset and writes to mw.
-	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, w); err != nil {
+	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
-		// Do not send error response here, client would have already died.
+		if !dataWritten {
+			// Error response only if no data has been written to client yet. i.e if
+			// partial data has already been written before an error
+			// occured then no point in setting StatusCode and
+			// sending error XML.
+			apiErr := toAPIErrorCode(err)
+			writeErrorResponse(w, r, apiErr, r.URL.Path)
+		}
 		return
 	}
-	// Success.
+	if !dataWritten {
+		// If ObjectAPI.GetObject did not return error and no data has
+		// been written it would mean that it is a 0-byte object.
+		// call wrter.Write(nil) to set appropriate headers.
+		writer.Write(nil)
+	}
 }
 
-// checkLastModified implements If-Modified-Since and
-// If-Unmodified-Since checks.
-//
-// modtime is the modification time of the resource to be served, or
-// IsZero(). return value is whether this request is now complete.
-func checkLastModified(w http.ResponseWriter, r *http.Request, modtime time.Time) bool {
-	if modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
-		// If the object doesn't have a modtime (IsZero), or the modtime
-		// is obviously garbage (Unix time == 0), then ignore modtimes
-		// and don't process the If-Modified-Since header.
-		return false
-	}
+// Validates the preconditions. Returns true if object content need not be written to http.ResponseWriter.
+func checkPreconditions(r *http.Request, w http.ResponseWriter, objInfo ObjectInfo) bool {
+	// Headers to be set of object content is not going to be written to the client.
+	writeHeaders := func() {
+		// set common headers
+		setCommonHeaders(w)
 
-	// The Date-Modified header truncates sub-second precision, so
-	// use mtime < t+1s instead of mtime <= t to check for unmodified.
-	if _, ok := r.Header["If-Modified-Since"]; ok {
-		// Return the object only if it has been modified since the
-		// specified time, otherwise return a 304 (not modified).
-		t, err := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since"))
-		if err == nil && modtime.Before(t.Add(1*time.Second)) {
-			h := w.Header()
-			// Remove following headers if already set.
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
+		// set object-related metadata headers
+		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
+
+		if objInfo.MD5Sum != "" {
+			w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+		}
+	}
+	// If-Modified-Since : Return the object only if it has been modified since the specified time,
+	// otherwise return a 304 (not modified).
+	ifModifiedSinceHeader := r.Header.Get("If-Modified-Since")
+	if ifModifiedSinceHeader != "" {
+		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
+			// If the object is not modified since the specified time.
+			writeHeaders()
 			w.WriteHeader(http.StatusNotModified)
 			return true
 		}
-	} else if _, ok := r.Header["If-Unmodified-Since"]; ok {
-		// Return the object only if it has not been modified since
-		// the specified time, otherwise return a 412 (precondition failed).
-		t, err := time.Parse(http.TimeFormat, r.Header.Get("If-Unmodified-Since"))
-		if err == nil && modtime.After(t.Add(1*time.Second)) {
-			h := w.Header()
-			// Remove following headers if already set.
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
+	}
+
+	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
+	// time, otherwise return a 412 (precondition failed).
+	ifUnmodifiedSinceHeader := r.Header.Get("If-Unmodified-Since")
+	if ifUnmodifiedSinceHeader != "" {
+		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
+			// If the object is modified since the specified time.
+			writeHeaders()
 			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
 			return true
 		}
 	}
-	w.Header().Set("Last-Modified", modtime.UTC().Format(http.TimeFormat))
+
+	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
+	// otherwise return a 412 (precondition failed).
+	ifMatchETagHeader := r.Header.Get("If-Match")
+	if ifMatchETagHeader != "" {
+		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
+			// If the object ETag does not match with the specified ETag.
+			writeHeaders()
+			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			return true
+		}
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := r.Header.Get("If-None-Match")
+	if ifNoneMatchETagHeader != "" {
+		if isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
+			// If the object ETag matches with the specified ETag.
+			writeHeaders()
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	}
+	// Object content should be written to http.ResponseWriter
+	return false
+}
+
+// returns true if object was modified after givenTime.
+func ifModifiedSince(objTime time.Time, givenTimeStr string) bool {
+	givenTime, err := time.Parse(http.TimeFormat, givenTimeStr)
+	if err != nil {
+		return true
+	}
+	if objTime.After(givenTime) {
+		return true
+	}
 	return false
 }
 
@@ -207,51 +266,6 @@ func canonicalizeETag(etag string) string {
 // are equal, false otherwise
 func isETagEqual(left, right string) bool {
 	return canonicalizeETag(left) == canonicalizeETag(right)
-}
-
-// checkETag implements If-None-Match and If-Match checks.
-//
-// The ETag must have been previously set in the ResponseWriter's
-// headers. The return value is whether this request is now considered
-// done.
-func checkETag(w http.ResponseWriter, r *http.Request) bool {
-	// writer always has quoted string
-	// transform reader's etag to
-	if r.Method != "GET" && r.Method != "HEAD" {
-		return false
-	}
-	etag := w.Header().Get("ETag")
-	// Must know ETag.
-	if etag == "" {
-		return false
-	}
-	if inm := r.Header.Get("If-None-Match"); !isETagEqual(inm, "") {
-		// Return the object only if its entity tag (ETag) is
-		// different from the one specified; otherwise, return a 304
-		// (not modified).
-		if isETagEqual(inm, etag) || isETagEqual(inm, "*") {
-			h := w.Header()
-			// Remove following headers if already set.
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	} else if im := r.Header.Get("If-Match"); !isETagEqual(im, "") {
-		// Return the object only if its entity tag (ETag) is the same
-		// as the one specified; otherwise, return a 412 (precondition failed).
-		if !isETagEqual(im, etag) {
-			h := w.Header()
-			// Remove following headers if already set.
-			delete(h, "Content-Type")
-			delete(h, "Content-Length")
-			delete(h, "Content-Range")
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
-			return true
-		}
-	}
-	return false
 }
 
 // HeadObjectHandler - HEAD Object
@@ -292,19 +306,13 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Validate pre-conditions if any.
+	if checkPreconditions(r, w, objInfo) {
+		return
+	}
+
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
-
-	// Verify 'If-Modified-Since' and 'If-Unmodified-Since'.
-	lastModified := objInfo.ModTime
-	if checkLastModified(w, r, lastModified) {
-		return
-	}
-
-	// Verify 'If-Match' and 'If-None-Match'.
-	if checkETag(w, r) {
-		return
-	}
 
 	// Successfull response.
 	w.WriteHeader(http.StatusOK)
