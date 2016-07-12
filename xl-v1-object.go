@@ -61,7 +61,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	defer nsMutex.RUnlock(bucket, object)
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := xl.readAllXLMetadata(bucket, object)
+	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have read quorum?
 	if !isQuorum(errs, xl.readQuorum) {
 		return toObjectErr(errXLReadQuorum, bucket, object)
@@ -378,7 +378,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
+	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have write quroum?.
 	if !isQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
@@ -523,7 +523,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = xl.writeUniqueXLMetadata(minioMetaTmpBucket, tempObj, partsMetadata); err != nil {
+	if err = writeUniqueXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum, xl.readQuorum); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 

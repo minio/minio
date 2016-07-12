@@ -272,10 +272,10 @@ func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) er
 }
 
 // deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.
-func (xl xlObjects) deleteAllXLMetadata(bucket, prefix string, errs []error) {
+func deleteAllXLMetadata(disks []StorageAPI, bucket, prefix string, errs []error) {
 	var wg = &sync.WaitGroup{}
 	// Delete all the `xl.json` left over.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range disks {
 		if disk == nil {
 			continue
 		}
@@ -293,12 +293,12 @@ func (xl xlObjects) deleteAllXLMetadata(bucket, prefix string, errs []error) {
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
-func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMetaV1) error {
+func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, writeQuorum, readQuorum int) error {
 	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(xl.storageDisks))
+	var mErrs = make([]error, len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range disks {
 		if disk == nil {
 			mErrs[index] = errDiskNotFound
 			continue
@@ -323,14 +323,14 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isQuorum(mErrs, xl.writeQuorum) {
+	if !isQuorum(mErrs, writeQuorum) {
 		// Validate if we have read quorum.
-		if isQuorum(mErrs, xl.readQuorum) {
+		if isQuorum(mErrs, readQuorum) {
 			// Return success.
 			return nil
 		}
 		// Delete all `xl.json` successfully renamed.
-		xl.deleteAllXLMetadata(bucket, prefix, mErrs)
+		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
 
@@ -346,12 +346,12 @@ func (xl xlObjects) writeUniqueXLMetadata(bucket, prefix string, xlMetas []xlMet
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
-func (xl xlObjects) writeSameXLMetadata(bucket, prefix string, xlMeta xlMetaV1) error {
+func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum, readQuorum int) error {
 	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(xl.storageDisks))
+	var mErrs = make([]error, len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range disks {
 		if disk == nil {
 			mErrs[index] = errDiskNotFound
 			continue
@@ -376,14 +376,14 @@ func (xl xlObjects) writeSameXLMetadata(bucket, prefix string, xlMeta xlMetaV1) 
 	wg.Wait()
 
 	// Do we have write Quorum?.
-	if !isQuorum(mErrs, xl.writeQuorum) {
+	if !isQuorum(mErrs, writeQuorum) {
 		// Do we have readQuorum?.
-		if isQuorum(mErrs, xl.readQuorum) {
+		if isQuorum(mErrs, readQuorum) {
 			// Return success.
 			return nil
 		}
 		// Delete all `xl.json` successfully renamed.
-		xl.deleteAllXLMetadata(bucket, prefix, mErrs)
+		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
 
