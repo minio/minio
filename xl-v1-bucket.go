@@ -247,7 +247,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 			}
 			// Cleanup all the previously incomplete multiparts.
 			err = cleanupDir(disk, path.Join(minioMetaBucket, mpartMetaPrefix), bucket)
-			if err != nil {
+			if err != nil && err != errVolumeNotFound {
 				dErrs[index] = err
 			}
 		}(index, disk)
