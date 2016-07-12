@@ -73,15 +73,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// List all online disks.
-	onlineDisks, highestVersion, err := xl.listOnlineDisks(metaArr, errs)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
+	onlineDisks, modTime := xl.listOnlineDisks(metaArr, errs)
 
 	// Pick latest valid metadata.
 	var xlMeta xlMetaV1
 	for _, meta := range metaArr {
-		if meta.IsValid() && meta.Stat.Version == highestVersion {
+		if meta.IsValid() && meta.Stat.ModTime == modTime {
 			xlMeta = meta
 			break
 		}
@@ -386,15 +383,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// List all online disks.
-	onlineDisks, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Increment version only if we have online disks less than configured storage disks.
-	if diskCount(onlineDisks) < len(xl.storageDisks) {
-		higherVersion++
-	}
+	onlineDisks, _ := xl.listOnlineDisks(partsMetadata, errs)
 
 	var mw io.Writer
 	// Initialize md5 writer.
@@ -513,7 +502,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	xlMeta.Meta = metadata
 	xlMeta.Stat.Size = size
 	xlMeta.Stat.ModTime = modTime
-	xlMeta.Stat.Version = higherVersion
+
 	// Add the final part.
 	xlMeta.AddObjectPart(1, "part.1", newMD5Hex, xlMeta.Stat.Size)
 

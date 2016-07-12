@@ -266,7 +266,6 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 		meta["content-type"] = contentType
 	}
 	xlMeta.Stat.ModTime = time.Now().UTC()
-	xlMeta.Stat.Version = 1
 	xlMeta.Meta = meta
 
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
@@ -355,13 +354,14 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 
 	// List all online disks.
-	onlineDisks, _, err := xl.listOnlineDisks(partsMetadata, errs)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
+	onlineDisks, _ := xl.listOnlineDisks(partsMetadata, errs)
+
+	// Pick one from the first valid metadata.
+	xlMeta := pickValidXLMeta(partsMetadata)
 
 	// Need a unique name for the part being written in minioMetaBucket to
 	// accommodate concurrent PutObjectPart requests
+
 	partSuffix := fmt.Sprintf("part.%d", partID)
 	tmpSuffix := getUUID()
 	tmpPartPath := path.Join(tmpMetaPrefix, tmpSuffix)
@@ -434,8 +434,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Read metadata (again) associated with the object from all disks.
-	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaBucket,
-		uploadIDPath)
+	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaBucket, uploadIDPath)
 	if !isQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
@@ -448,7 +447,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	var checksums []checkSumInfo
 	for index, eInfo := range newEInfos {
 		if eInfo.IsValid() {
-
 			// Use a map to find union of checksums of parts that
 			// we concurrently written and committed before this
 			// part. N B For a different, concurrent upload of the
@@ -474,21 +472,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata)
+	xlMeta = pickValidXLMeta(partsMetadata)
 
 	// Get current highest version based on re-read partsMetadata.
-	_, higherVersion, err := xl.listOnlineDisks(partsMetadata, errs)
-	if err != nil {
-		return "", toObjectErr(err, bucket, object)
-	}
-
-	// Increment version only if we have online disks less than configured storage disks.
-	if diskCount(onlineDisks) < len(xl.storageDisks) {
-		higherVersion++
-	}
+	onlineDisks, _ = xl.listOnlineDisks(partsMetadata, errs)
 
 	// Once part is successfully committed, proceed with updating XL metadata.
-	xlMeta.Stat.Version = higherVersion
+	xlMeta.Stat.ModTime = time.Now().UTC()
 
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
