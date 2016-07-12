@@ -199,7 +199,12 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
+	// Attempt to delete regular bucket.
 	if err := fs.storage.DeleteVol(bucket); err != nil {
+		return toObjectErr(err, bucket)
+	}
+	// Cleanup all the previously incomplete multiparts.
+	if err := cleanupDir(fs.storage, path.Join(minioMetaBucket, mpartMetaPrefix), bucket); err != nil {
 		return toObjectErr(err, bucket)
 	}
 	return nil
