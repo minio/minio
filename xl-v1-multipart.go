@@ -458,8 +458,16 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			}
 			checksums = updatedEInfos[index].Checksum
 			for _, cksum := range checksums {
+				// skip updating checksum of the part that is
+				// written in this request because the checksum
+				// from newEInfos, corresponding to this part,
+				// should remain.
+				if cksum.Name == partSuffix {
+					continue
+				}
 				checksumSet[cksum.Name] = cksum
 			}
+
 			// Form the checksumInfo to be committed in xl.json
 			// from the map.
 			var finalChecksums []checkSumInfo
