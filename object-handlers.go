@@ -130,7 +130,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(r, w, objInfo) {
+	if checkPreconditions(w, r, objInfo) {
 		return
 	}
 
@@ -217,7 +217,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(r, w, objInfo) {
+	if checkPreconditions(w, r, objInfo) {
 		return
 	}
 
@@ -295,21 +295,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Verify before writing.
-
-	// Verify x-amz-copy-source-if-modified-since and
-	// x-amz-copy-source-if-unmodified-since.
-	lastModified := objInfo.ModTime
-	if checkCopySourceLastModified(w, r, lastModified) {
-		return
-	}
-
-	if objInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
-	}
-
-	// Verify x-amz-copy-source-if-match and x-amz-copy-source-if-none-match.
-	if checkCopySourceETag(w, r) {
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if checkCopyObjectPreconditions(w, r, objInfo) {
 		return
 	}
 
