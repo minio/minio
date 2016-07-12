@@ -112,12 +112,12 @@ func writeFSFormatData(storage StorageAPI, fsFormat formatConfigV1) error {
 }
 
 // writeFSMetadata - writes `fs.json` metadata.
-func (fs fsObjects) writeFSMetadata(bucket, prefix string, fsMeta fsMetaV1) error {
+func (fs fsObjects) writeTempFSMetadata(bucket, path string, fsMeta fsMetaV1) error {
 	metadataBytes, err := json.Marshal(fsMeta)
 	if err != nil {
 		return err
 	}
-	if err = fs.storage.AppendFile(bucket, path.Join(prefix, fsMetaJSONFile), metadataBytes); err != nil {
+	if err = fs.storage.AppendFile(bucket, path, metadataBytes); err != nil {
 		return err
 	}
 	return nil
