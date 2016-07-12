@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,34 +37,63 @@ const (
 	tokenExpires time.Duration = 10
 )
 
-// initJWT - initialize.
-func initJWT() *JWT {
-	jwt := &JWT{}
+// newJWT - returns new JWT object.
+func newJWT() (*JWT, error) {
+	if serverConfig == nil {
+		return nil, fmt.Errorf("server not initialzed")
+	}
 
 	// Save access, secret keys.
-	jwt.credential = serverConfig.GetCredential()
+	cred := serverConfig.GetCredential()
+	if !isValidAccessKey.MatchString(cred.AccessKeyID) {
+		return nil, fmt.Errorf("Invalid access key")
+	}
+	if !isValidSecretKey.MatchString(cred.SecretAccessKey) {
+		return nil, fmt.Errorf("Invalid secret key")
+	}
 
-	// Return.
-	return jwt
+	return &JWT{cred}, nil
 }
 
-// GenerateToken - generates a new Json Web Token based on the incoming user id.
-func (jwt *JWT) GenerateToken(userName string) (string, error) {
+// GenerateToken - generates a new Json Web Token based on the incoming access key.
+func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
+	// Trim spaces.
+	accessKey = strings.TrimSpace(accessKey)
+
+	if !isValidAccessKey.MatchString(accessKey) {
+		return "", fmt.Errorf("Invalid access key")
+	}
+
 	token := jwtgo.New(jwtgo.SigningMethodHS512)
 	// Token expires in 10hrs.
 	token.Claims["exp"] = time.Now().Add(time.Hour * tokenExpires).Unix()
 	token.Claims["iat"] = time.Now().Unix()
-	token.Claims["sub"] = userName
+	token.Claims["sub"] = accessKey
 	return token.SignedString([]byte(jwt.SecretAccessKey))
 }
 
-// Authenticate - authenticates incoming username and password.
-func (jwt *JWT) Authenticate(userName, password string) bool {
-	userName = strings.TrimSpace(userName)
-	password = strings.TrimSpace(password)
-	if userName != jwt.AccessKeyID {
-		return false
+// Authenticate - authenticates incoming access key and secret key.
+func (jwt *JWT) Authenticate(accessKey, secretKey string) error {
+	// Trim spaces.
+	accessKey = strings.TrimSpace(accessKey)
+
+	if !isValidAccessKey.MatchString(accessKey) {
+		return fmt.Errorf("Invalid access key")
 	}
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
-	return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
+	if !isValidSecretKey.MatchString(secretKey) {
+		return fmt.Errorf("Invalid secret key")
+	}
+
+	if accessKey != jwt.AccessKeyID {
+		return fmt.Errorf("Access key does not match")
+	}
+
+	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
+
+	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
+		return fmt.Errorf("Authentication failed")
+	}
+
+	// Success.
+	return nil
 }
