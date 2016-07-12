@@ -187,10 +187,11 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
 // slice of xlmeta content. If no value is found this function panics
 // and dies.
-func pickValidXLMeta(xlMetas []xlMetaV1) xlMetaV1 {
-	for _, xlMeta := range xlMetas {
-		if xlMeta.IsValid() {
-			return xlMeta
+func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) xlMetaV1 {
+	// Pick latest valid metadata.
+	for _, meta := range metaArr {
+		if meta.IsValid() && meta.Stat.ModTime == modTime {
+			return meta
 		}
 	}
 	panic("Unable to look for valid XL metadata content")

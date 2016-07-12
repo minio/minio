@@ -76,7 +76,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := xl.listOnlineDisks(metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
 	var xlMeta xlMetaV1
@@ -381,28 +381,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
 	tempObj := uniqueID
 
-	nsMutex.RLock(bucket, object)
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
-	nsMutex.RUnlock(bucket, object)
-
-	// Do we have write quroum?.
-	if !isDiskQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(errXLWriteQuorum, bucket, object)
-	}
-
-	// errFileNotFound is handled specially since it's OK for the object to
-	// not exists in the namespace yet.
-	if errCount, reducedErr := reduceErrs(errs); reducedErr != nil && reducedErr != errFileNotFound {
-		if errCount < xl.writeQuorum {
-			return "", toObjectErr(errXLWriteQuorum, bucket, object)
-		}
-		return "", toObjectErr(reducedErr, bucket, object)
-	}
-
-	// List all online disks.
-	onlineDisks, _ := xl.listOnlineDisks(partsMetadata, errs)
-
 	var mw io.Writer
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -447,14 +425,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize xl meta.
 	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 
-	// Collect all the previous erasure infos across the disk.
-	var eInfos []erasureInfo
-	for range onlineDisks {
-		eInfos = append(eInfos, xlMeta.Erasure)
-	}
+	onlineDisks := getOrderedDisks(xlMeta.Erasure.Distribution, xl.storageDisks)
 
-	// Erasure code and write across all disks.
-	newEInfos, sizeWritten, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, "part.1", teeReader, eInfos, xl.writeQuorum)
+	// Erasure code data and write across all disks.
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
@@ -531,10 +505,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Add the final part.
 	xlMeta.AddObjectPart(1, "part.1", newMD5Hex, xlMeta.Stat.Size)
 
+	partsMetadata := make([]xlMetaV1, len(xl.storageDisks))
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
 		partsMetadata[index] = xlMeta
-		partsMetadata[index].Erasure = newEInfos[index]
+		partsMetadata[index].Erasure.Checksum = []checkSumInfo{{"part.1", "blake2b", checkSums[index]}}
 	}
 
 	// Write unique `xl.json` for each disk.

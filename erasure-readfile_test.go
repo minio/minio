@@ -109,9 +109,8 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 // actual distribution.
 func testGetOrderedDisks(t *testing.T, xl xlObjects) {
 	disks := xl.storageDisks
-	blockCheckSums := make([]checkSumInfo, len(disks))
 	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
-	orderedDisks, _ := getOrderedDisks(distribution, disks, blockCheckSums)
+	orderedDisks := getOrderedDisks(distribution, disks)
 	// From the "distribution" above you can notice that:
 	// 1st data block is in the 9th disk (i.e distribution index 8)
 	// 2nd data block is in the 8th disk (i.e distribution index 7) and so on.

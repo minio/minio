@@ -354,10 +354,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 
 	// List all online disks.
-	onlineDisks, _ := xl.listOnlineDisks(partsMetadata, errs)
+	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata)
+	xlMeta := pickValidXLMeta(partsMetadata, modTime)
+
+	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	partsMetadata = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
 
 	// Need a unique name for the part being written in minioMetaBucket to
 	// accommodate concurrent PutObjectPart requests
@@ -379,17 +382,8 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Construct a tee reader for md5sum.
 	teeReader := io.TeeReader(data, md5Writer)
 
-	// Collect all the previous erasure infos across the disk.
-	var eInfos []erasureInfo
-	for index := range onlineDisks {
-		eInfos = append(eInfos, partsMetadata[index].Erasure)
-	}
-
 	// Erasure code data and write across all disks.
-	newEInfos, sizeWritten, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, partSuffix, teeReader, eInfos, xl.writeQuorum)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
-	}
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, xl.writeQuorum)
 
 	// For size == -1, perhaps client is sending in chunked encoding
 	// set the size as size that was actually written.
@@ -421,7 +415,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	nsMutex.Lock(minioMetaBucket, uploadIDPath)
 	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
 
-	// Validates if upload ID exists again.
+	// Validate again if upload ID still exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
@@ -433,34 +427,17 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
 
-	// Read metadata (again) associated with the object from all disks.
+	// Read metadata again because it might be updated with parallel upload of another part.
 	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaBucket, uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
-	var updatedEInfos []erasureInfo
-	for index := range partsMetadata {
-		updatedEInfos = append(updatedEInfos, partsMetadata[index].Erasure)
-	}
-
-	for index, eInfo := range newEInfos {
-		if eInfo.IsValid() {
-			// Use a map to find union of checksums of parts that
-			// we concurrently written and committed before this
-			// part. N B For a different, concurrent upload of the
-			// same part, the last written content remains.
-			finalChecksums := unionChecksumInfos(newEInfos[index].Checksum, updatedEInfos[index].Checksum, partSuffix)
-			updatedEInfos[index] = eInfo
-			updatedEInfos[index].Checksum = finalChecksums
-		}
-	}
+	// Get current highest version based on re-read partsMetadata.
+	onlineDisks, modTime = listOnlineDisks(onlineDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	xlMeta = pickValidXLMeta(partsMetadata)
-
-	// Get current highest version based on re-read partsMetadata.
-	onlineDisks, _ = xl.listOnlineDisks(partsMetadata, errs)
+	xlMeta = pickValidXLMeta(partsMetadata, modTime)
 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = time.Now().UTC()
@@ -468,10 +445,25 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
-	// Update `xl.json` content for each disks.
-	for index := range partsMetadata {
+	for index, disk := range onlineDisks {
+		if disk == nil {
+			continue
+		}
 		partsMetadata[index].Parts = xlMeta.Parts
-		partsMetadata[index].Erasure = updatedEInfos[index]
+		for i, sum := range partsMetadata[index].Erasure.Checksum {
+			if sum.Name == partSuffix {
+				// If the part was previously uploaded, remove entry.
+				Checksum := partsMetadata[index].Erasure.Checksum
+				Checksum = append(Checksum[:i], Checksum[i+1:]...)
+				partsMetadata[index].Erasure.Checksum = Checksum
+				break
+			}
+		}
+		partsMetadata[index].Erasure.Checksum = append(partsMetadata[index].Erasure.Checksum, checkSumInfo{
+			partSuffix,
+			"blake2b",
+			checkSums[index],
+		})
 	}
 
 	// Write all the checksum metadata.
@@ -630,11 +622,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
+	_, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
+
 	// Calculate full object size.
 	var objectSize int64
 
 	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata)
+	xlMeta := pickValidXLMeta(partsMetadata, modTime)
 
 	// Save current xl meta for validation.
 	var currentXLMeta = xlMeta
