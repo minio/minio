@@ -35,6 +35,7 @@ type ObjectLayer interface {
 	GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 	PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string) (md5 string, err error)
 	DeleteObject(bucket, object string) error
+	GetObjectMetadata(bucket, object string) (metadata map[string]string, err error)
 
 	// Multipart operations.
 	ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)

@@ -144,9 +144,18 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Indicates if any data was written to the http.ResponseWriter
 	dataWritten := false
 	// io.Writer type which keeps track if any data was written.
+	metadata, err := api.ObjectAPI.GetObjectMetadata(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+
 	writer := funcToWriter(func(p []byte) (int, error) {
 		if !dataWritten {
 			// Set headers on the first write.
+			for key, value := range metadata {
+				w.Header().Set(key, value)
+			}
 			// Set standard object headers.
 			setObjectHeaders(w, objInfo, hrange)
 
@@ -323,12 +332,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	size := objInfo.Size
 
 	// Save metadata.
-	metadata := make(map[string]string)
-	// Save other metadata if available.
-	metadata["content-type"] = objInfo.ContentType
-	metadata["content-encoding"] = objInfo.ContentEncoding
-	// Do not set `md5sum` as CopyObject will not keep the
-	// same md5sum as the source.
+	metadata := ExtractMetadata(r)
 
 	// Create the object.
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, pipeReader, metadata)
@@ -389,20 +393,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Save metadata.
-	metadata := make(map[string]string)
+	metadata := ExtractMetadata(r)
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
-	// Save other metadata if available.
-	metadata["content-type"] = r.Header.Get("Content-Type")
-	metadata["content-encoding"] = r.Header.Get("Content-Encoding")
-	for key := range r.Header {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "x-amz-meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		} else if strings.HasPrefix(key, "x-minio-meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		}
-	}
 
 	var md5Sum string
 	switch getRequestAuthType(r) {
@@ -463,18 +456,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// Save metadata.
-	metadata := make(map[string]string)
-	// Save other metadata if available.
-	metadata["content-type"] = r.Header.Get("Content-Type")
-	metadata["content-encoding"] = r.Header.Get("Content-Encoding")
-	for key := range r.Header {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "x-amz-meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		} else if strings.HasPrefix(key, "x-minio-meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		}
-	}
+	metadata := ExtractMetadata(r)
 
 	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {

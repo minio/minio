@@ -240,6 +240,12 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		}
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
+
+	err = PutObjectMetadata(fs.storage, bucket, object, meta)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+
 	// Return success.
 	return uploadID, nil
 }
@@ -250,7 +256,6 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 //
 // Implements S3 compatible initiate multipart API.
 func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
-	meta = make(map[string]string) // Reset the meta value, we are not going to save headers for fs.
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
 		return "", BucketNameInvalid{Bucket: bucket}

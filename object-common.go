@@ -104,6 +104,16 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 					errs[index] = err
 				}
 			}
+			// Attempt to create `.metdata`.
+			err = disk.MakeVol(metadataBucket)
+			if err != nil {
+				switch err {
+				// Ignored errors.
+				case errVolumeExists, errDiskNotFound, errFaultyDisk:
+				default:
+					errs[index] = err
+				}
+			}
 		}(index, disk)
 	}
 

@@ -287,6 +287,15 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	}
 	rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum, xl.readQuorum)
 	if rErr == nil {
+		for _, storage := range xl.storageDisks {
+			if storage == nil {
+				continue
+			}
+			err = PutObjectMetadata(storage, bucket, object, meta)
+			if err != nil && err != errDiskNotFound {
+				return "", toObjectErr(err, bucket, object)
+			}
+		}
 		// Return success.
 		return uploadID, nil
 	}

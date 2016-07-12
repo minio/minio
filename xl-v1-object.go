@@ -542,6 +542,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		newBuffer.Close()
 	}
 
+	for _, storage := range xl.storageDisks {
+		if storage == nil {
+			continue
+		}
+		err = PutObjectMetadata(storage, bucket, object, metadata)
+		if err != nil && err != errDiskNotFound {
+			return "", toObjectErr(err, bucket, object)
+		}
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -613,4 +623,14 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Success.
 	return nil
+}
+
+func (xl xlObjects) GetObjectMetadata(bucket, object string) (map[string]string, error) {
+	for _, storage := range xl.storageDisks {
+		if storage == nil {
+			continue
+		}
+		return GetObjectMetadata(storage, bucket, object)
+	}
+	return make(map[string]string), nil
 }
