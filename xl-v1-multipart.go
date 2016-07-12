@@ -364,7 +364,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// accommodate concurrent PutObjectPart requests
 	partSuffix := fmt.Sprintf("part.%d", partID)
 	tmpSuffix := getUUID()
-	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, tmpSuffix)
+	tmpPartPath := path.Join(tmpMetaPrefix, tmpSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()

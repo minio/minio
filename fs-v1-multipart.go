@@ -229,14 +229,14 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		return "", err
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
-	if err = fs.writeFSMetadata(minioMetaBucket, tempUploadIDPath, fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	tempFSMetadataPath := path.Join(tmpMetaPrefix, getUUID()+"-"+fsMetaJSONFile)
+	if err = fs.writeTempFSMetadata(minioMetaBucket, tempFSMetadataPath, fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempFSMetadataPath)
 	}
-	err = fs.storage.RenameFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile), minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
+	err = fs.storage.RenameFile(minioMetaBucket, tempFSMetadataPath, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
 	if err != nil {
-		if dErr := fs.storage.DeleteFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile)); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempUploadIDPath)
+		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempFSMetadataPath); dErr != nil {
+			return "", toObjectErr(dErr, minioMetaBucket, tempFSMetadataPath)
 		}
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -298,7 +298,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
 
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, uploadID, partSuffix)
+	tmpPartPath := path.Join(tmpMetaPrefix, uploadID+"-"+partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -385,14 +385,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
-	if err = fs.writeFSMetadata(minioMetaBucket, tempUploadIDPath, fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	tempFSMetadataPath := path.Join(tmpMetaPrefix, getUUID()+"-"+fsMetaJSONFile)
+	if err = fs.writeTempFSMetadata(minioMetaBucket, tempFSMetadataPath, fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tempFSMetadataPath)
 	}
-	err = fs.storage.RenameFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile), minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
+	err = fs.storage.RenameFile(minioMetaBucket, tempFSMetadataPath, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
 	if err != nil {
-		if dErr := fs.storage.DeleteFile(minioMetaBucket, path.Join(tempUploadIDPath, fsMetaJSONFile)); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempUploadIDPath)
+		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempFSMetadataPath); dErr != nil {
+			return "", toObjectErr(dErr, minioMetaBucket, tempFSMetadataPath)
 		}
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -525,7 +525,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
-	tempObj := path.Join(tmpMetaPrefix, uploadID, "part.1")
+	tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
 
 	// Allocate staging buffer.
 	var buf = make([]byte, readSizeV1)
