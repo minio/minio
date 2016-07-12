@@ -30,7 +30,7 @@ import (
 
 const (
 	// Minio meta bucket.
-	minioMetaBucket = ".minio"
+	minioMetaBucket = ".minio.sys"
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
 	// Tmp meta prefix.
