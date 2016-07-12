@@ -397,9 +397,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	metadata["content-encoding"] = r.Header.Get("Content-Encoding")
 	for key := range r.Header {
 		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "x-amz-meta-") {
+		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
 			metadata[cKey] = r.Header.Get(cKey)
-		} else if strings.HasPrefix(key, "x-minio-meta-") {
+		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
 			metadata[cKey] = r.Header.Get(cKey)
 		}
 	}

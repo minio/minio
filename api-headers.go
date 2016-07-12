@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 //// helpers
@@ -72,6 +73,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	}
 
 	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
+	for k, v := range objInfo.UserDefined {
+		if strings.HasPrefix(k, "X-Amz-Meta-") {
+			w.Header().Set(k, v)
+		}
+	}
 
 	// for providing ranged content
 	if contentRange != nil && contentRange.offsetBegin > -1 {

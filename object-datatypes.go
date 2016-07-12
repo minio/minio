@@ -62,6 +62,9 @@ type ObjectInfo struct {
 	// what decoding mechanisms must be applied to obtain the object referenced
 	// by the Content-Type header field.
 	ContentEncoding string
+
+	// User-Defined metadata
+	UserDefined map[string]string
 }
 
 // ListPartsInfo - represents list of all parts.
