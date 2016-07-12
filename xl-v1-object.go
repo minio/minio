@@ -226,6 +226,7 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		MD5Sum:          xlMeta.Meta["md5Sum"],
 		ContentType:     xlMeta.Meta["content-type"],
 		ContentEncoding: xlMeta.Meta["content-encoding"],
+		UserDefined:     xlMeta.Meta,
 	}
 	return objInfo, nil
 }
