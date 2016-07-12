@@ -132,3 +132,41 @@ func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1,
 	// Return structured `xl.json`.
 	return xlMeta, nil
 }
+
+// Uses a map to find union of checksums of parts that were concurrently written
+// but committed before this part. N B For a different, concurrent upload of
+// the same part, the ongoing request's data/metadata prevails.
+// cur     - corresponds to parts written to disk before the ongoing putObjectPart request
+// updated - corresponds to parts written to disk while the ongoing putObjectPart is in progress
+// curPartName - name of the part that is being written
+// returns []checkSumInfo containing the set union of checksums of parts that
+// have been written so far incl. the part being written.
+func unionChecksumInfos(cur []checkSumInfo, updated []checkSumInfo, curPartName string) []checkSumInfo {
+	checksumSet := make(map[string]checkSumInfo)
+	var checksums []checkSumInfo
+
+	checksums = cur
+	for _, cksum := range checksums {
+		checksumSet[cksum.Name] = cksum
+	}
+
+	checksums = updated
+	for _, cksum := range checksums {
+		// skip updating checksum of the part that is
+		// written in this request because the checksum
+		// from cur, corresponding to this part,
+		// should remain.
+		if cksum.Name == curPartName {
+			continue
+		}
+		checksumSet[cksum.Name] = cksum
+	}
+
+	// Form the checksumInfo to be committed in xl.json
+	// from the map.
+	var finalChecksums []checkSumInfo
+	for _, cksum := range checksumSet {
+		finalChecksums = append(finalChecksums, cksum)
+	}
+	return finalChecksums
+}
