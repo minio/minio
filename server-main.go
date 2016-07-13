@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -140,13 +139,14 @@ func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
 		scheme = "https"
 	}
 
+	ips := getIPsFromHosts(hosts)
+
 	// Construct proper endpoints.
-	for _, host := range hosts {
-		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, host, port))
+	for _, ip := range ips {
+		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, ip.String(), port))
 	}
 
 	// Success.
-	sort.Strings(endPoints)
 	return endPoints
 }
 
