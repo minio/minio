@@ -98,20 +98,22 @@ Start minio server.
 ~~~
 $ minio server ~/Photos
 
-AccessKey: WLGDGYAQYIGI833EV05A  SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF  Region: us-east-1
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
+Region:    us-east-1
 
-Minio Object Storage:
-    http://127.0.0.1:9000
-    http://10.1.10.177:9000
+Browser Access:
+   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Minio Browser:
-    http://127.0.0.1:9000
-    http://10.1.10.177:9000
+Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+   $ ./mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-To configure Minio Client:
-    $ wget https://dl.minio.io/client/mc/release/darwin-amd64/mc
-    $ chmod 755 mc
-    $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
+Object API (Amazon S3 compatible):
+   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 ~~~
 
 #### How to use AWS CLI with Minio?
@@ -206,7 +208,7 @@ Bucket 's3://mybucket/' created
 To copy an object to bucket.
 ```
 $ s3cmd put newfile s3://testbucket
-upload: 'newfile' -> 's3://testbucket/newfile'  
+upload: 'newfile' -> 's3://testbucket/newfile'
 ```
 
 To copy an object to local system.

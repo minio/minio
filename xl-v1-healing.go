@@ -44,12 +44,13 @@ func commonTime(modTimes []time.Time) (modTime time.Time) {
 	return modTime
 }
 
+// Beginning of unix time is treated as sentinel value here.
 var timeSentinel = time.Unix(0, 0).UTC()
 
-// Boot uuids upto disk count, setting the value to UUID sentinel.
+// Boot modTimes up to disk count, setting the value to time sentinel.
 func bootModtimes(diskCount int) []time.Time {
 	modTimes := make([]time.Time, diskCount)
-	// Boots up all the uuids.
+	// Boots up all the modtimes.
 	for i := range modTimes {
 		modTimes[i] = timeSentinel
 	}
