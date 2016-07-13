@@ -347,7 +347,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, minioMetaBucket,
 		uploadIDPath)
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
@@ -435,7 +435,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Read metadata (again) associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaBucket, uploadIDPath)
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
@@ -626,7 +626,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, minioMetaBucket, uploadIDPath)
 	// Do we have writeQuorum?.
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 

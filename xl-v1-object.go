@@ -63,7 +63,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have read quorum?
-	if !isQuorum(errs, xl.readQuorum) {
+	if !isDiskQuorum(errs, xl.readQuorum) {
 		return toObjectErr(errXLReadQuorum, bucket, object)
 	}
 
@@ -302,9 +302,9 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 
 	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 	// otherwise return failure. Cleanup successful renames.
-	if !isQuorum(errs, writeQuorum) {
+	if !isDiskQuorum(errs, writeQuorum) {
 		// Check we have successful read quorum.
-		if isQuorum(errs, readQuorum) {
+		if isDiskQuorum(errs, readQuorum) {
 			return nil // Return success.
 		} // else - failed to acquire read quorum.
 		// Undo all the partial rename operations.
@@ -378,7 +378,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have write quroum?.
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
 
@@ -564,9 +564,9 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Wait for all routines to finish.
 	wg.Wait()
 
-	if !isQuorum(dErrs, xl.writeQuorum) {
-		// Return errXLWriteQuorum if errors were more than
-		// allowed write quorum.
+	// Do we have write quorum?
+	if !isDiskQuorum(dErrs, xl.writeQuorum) {
+		// Return errXLWriteQuorum if errors were more than allowed write quorum.
 		return errXLWriteQuorum
 	}
 

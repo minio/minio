@@ -62,7 +62,7 @@ func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 	wg.Wait()
 
 	// Count all the errors and validate if we have write quorum.
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		// Rename `uploads.json` left over back to tmp location.
 		for index, disk := range xl.storageDisks {
 			if disk == nil {
@@ -149,7 +149,7 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	wg.Wait()
 
 	// Count all the errors and validate if we have write quorum.
-	if !isQuorum(errs, xl.writeQuorum) {
+	if !isDiskQuorum(errs, xl.writeQuorum) {
 		// Rename `uploads.json` left over back to tmp location.
 		for index, disk := range xl.storageDisks {
 			if disk == nil {
@@ -295,9 +295,10 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, writeQuor
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isQuorum(mErrs, writeQuorum) {
+	if !isDiskQuorum(mErrs, writeQuorum) {
 		return errXLWriteQuorum
 	}
+
 	// For all other errors return.
 	for _, err := range mErrs {
 		if err != nil && err != errDiskNotFound {
