@@ -61,7 +61,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isQuorum(dErrs, xl.writeQuorum) {
+	if !isDiskQuorum(dErrs, xl.writeQuorum) {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		xl.undoMakeBucket(bucket)
 		return toObjectErr(errXLWriteQuorum, bucket)

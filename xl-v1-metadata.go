@@ -322,9 +322,9 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isQuorum(mErrs, writeQuorum) {
+	if !isDiskQuorum(mErrs, writeQuorum) {
 		// Validate if we have read quorum.
-		if isQuorum(mErrs, readQuorum) {
+		if isDiskQuorum(mErrs, readQuorum) {
 			// Return success.
 			return nil
 		}
@@ -375,9 +375,9 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 	wg.Wait()
 
 	// Do we have write Quorum?.
-	if !isQuorum(mErrs, writeQuorum) {
+	if !isDiskQuorum(mErrs, writeQuorum) {
 		// Do we have readQuorum?.
-		if isQuorum(mErrs, readQuorum) {
+		if isDiskQuorum(mErrs, readQuorum) {
 			// Return success.
 			return nil
 		}
