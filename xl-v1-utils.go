@@ -25,11 +25,11 @@ import (
 
 // Returns number of errors that occurred the most (incl. nil) and the
 // corresponding error value. N B when there is more than one error value that
-// occurs equal and maximum number of times, the error value returned depends
-// on how golang's map datastructure arranges its keys. This doesn't affect
-// correctness as long as quorum value is greater than or equal to simple
-// majority, since none of the equally maximal values would not occur quorum or
-// more number of times.
+// occurs maximum number of times, the error value returned depends on how
+// golang's map orders keys. This doesn't affect correctness as long as quorum
+// value is greater than or equal to simple majority, since none of the equally
+// maximal values would occur quorum or more number of times.
+
 func reduceErrs(errs []error) (int, error) {
 	errorCounts := make(map[error]int)
 	for _, err := range errs {

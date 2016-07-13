@@ -71,9 +71,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if errCount, err := reduceErrs(errs); err != nil {
 		if errCount < xl.readQuorum {
 			return toObjectErr(errXLReadQuorum, bucket, object)
-		} else {
-			return toObjectErr(err, bucket, object)
 		}
+		return toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
@@ -372,11 +371,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
 	tempObj := uniqueID
 
-	var partsMetadata []xlMetaV1
-	var errs []error
 	nsMutex.RLock(bucket, object)
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, bucket, object)
+	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	nsMutex.RUnlock(bucket, object)
 
 	// Do we have write quroum?.
@@ -386,12 +383,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// errFileNotFound is handled specially since it's OK for the object to
 	// not exists in the namespace yet.
-	if errCount, err := reduceErrs(errs); err != nil && err != errFileNotFound {
+	if errCount, reducedErr := reduceErrs(errs); reducedErr != nil && reducedErr != errFileNotFound {
 		if errCount < xl.writeQuorum {
 			return "", toObjectErr(errXLWriteQuorum, bucket, object)
-		} else {
-			return "", toObjectErr(err, bucket, object)
 		}
+		return "", toObjectErr(reducedErr, bucket, object)
 	}
 
 	// List all online disks.
