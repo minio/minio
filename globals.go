@@ -58,4 +58,5 @@ var (
 	colorWhite     = color.New(color.FgWhite).SprintfFunc()
 	colorWhiteBold = color.New(color.FgWhite, color.Bold).SprintfFunc()
 	colorBlue      = color.New(color.FgBlue).SprintfFunc()
+	colorBold      = color.New(color.Bold).SprintFunc()
 )
