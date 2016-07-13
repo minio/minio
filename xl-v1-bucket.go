@@ -108,6 +108,7 @@ var bucketMetadataOpIgnoredErrs = []error{
 	errDiskNotFound,
 	errDiskAccessDenied,
 	errFaultyDisk,
+	errVolumeNotFound,
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.

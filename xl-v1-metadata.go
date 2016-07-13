@@ -333,11 +333,23 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 		return errXLWriteQuorum
 	}
 
-	// For all other errors return.
-	for _, err := range mErrs {
-		if err != nil && err != errDiskNotFound {
-			return err
+	// Reduce errors and verify quourm and return.
+	if errCount, reducedErr := reduceErrs(mErrs); reducedErr != nil {
+		if errCount < writeQuorum {
+			// Delete all `xl.json` successfully renamed.
+			deleteAllXLMetadata(disks, bucket, prefix, mErrs)
+			return errXLWriteQuorum
 		}
+		if isErrIgnored(reducedErr, []error{
+			errDiskNotFound,
+			errDiskAccessDenied,
+			errFaultyDisk,
+			errVolumeNotFound,
+		}) {
+			// Success.
+			return nil
+		}
+		return reducedErr
 	}
 
 	// Success.
@@ -386,11 +398,24 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 		return errXLWriteQuorum
 	}
 
-	// For any other errors delete `xl.json` as well.
-	for _, err := range mErrs {
-		if err != nil && err != errDiskNotFound {
-			return err
+	// Reduce errors and verify quourm and return.
+	if errCount, reducedErr := reduceErrs(mErrs); reducedErr != nil {
+		if errCount < writeQuorum {
+			// Delete all `xl.json` successfully renamed.
+			deleteAllXLMetadata(disks, bucket, prefix, mErrs)
+			return errXLWriteQuorum
 		}
+		// Ignore specific errors if we are under write quorum.
+		if isErrIgnored(reducedErr, []error{
+			errDiskNotFound,
+			errDiskAccessDenied,
+			errFaultyDisk,
+			errVolumeNotFound,
+		}) {
+			// Success.
+			return nil
+		}
+		return reducedErr
 	}
 
 	// Success.
