@@ -444,28 +444,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		updatedEInfos = append(updatedEInfos, partsMetadata[index].Erasure)
 	}
 
-	var checksums []checkSumInfo
 	for index, eInfo := range newEInfos {
 		if eInfo.IsValid() {
 			// Use a map to find union of checksums of parts that
 			// we concurrently written and committed before this
 			// part. N B For a different, concurrent upload of the
 			// same part, the last written content remains.
-			checksumSet := make(map[string]checkSumInfo)
-			checksums = newEInfos[index].Checksum
-			for _, cksum := range checksums {
-				checksumSet[cksum.Name] = cksum
-			}
-			checksums = updatedEInfos[index].Checksum
-			for _, cksum := range checksums {
-				checksumSet[cksum.Name] = cksum
-			}
-			// Form the checksumInfo to be committed in xl.json
-			// from the map.
-			var finalChecksums []checkSumInfo
-			for _, cksum := range checksumSet {
-				finalChecksums = append(finalChecksums, cksum)
-			}
+			finalChecksums := unionChecksumInfos(newEInfos[index].Checksum, updatedEInfos[index].Checksum, partSuffix)
 			updatedEInfos[index] = eInfo
 			updatedEInfos[index].Checksum = finalChecksums
 		}

@@ -41,3 +41,49 @@ func TestReduceErrs(t *testing.T) {
 		}
 	}
 }
+
+// Test for unionChecksums
+func TestUnionChecksumInfos(t *testing.T) {
+	cur := []checkSumInfo{
+		{"part.1", "dummy", "cur-hash.1"},
+		{"part.2", "dummy", "cur-hash.2"},
+		{"part.3", "dummy", "cur-hash.3"},
+		{"part.4", "dummy", "cur-hash.4"},
+		{"part.5", "dummy", "cur-hash.5"},
+	}
+	updated := []checkSumInfo{
+		{"part.1", "dummy", "updated-hash.1"},
+		{"part.2", "dummy", "updated-hash.2"},
+		{"part.3", "dummy", "updated-hash.3"},
+	}
+	curPartcksum := cur[0] // part.1 is the current part being written
+
+	// Verify that hash of current part being written must be from cur []checkSumInfo
+	finalChecksums := unionChecksumInfos(cur, updated, curPartcksum.Name)
+	for _, cksum := range finalChecksums {
+		if cksum.Name == curPartcksum.Name && cksum.Hash != curPartcksum.Hash {
+			t.Errorf("expected Hash = %s but received Hash = %s\n", curPartcksum.Hash, cksum.Hash)
+		}
+	}
+
+	// Verify that all part checksums are present in the union and nothing more.
+	// Map to store all unique part names
+	allPartNames := make(map[string]struct{})
+	// Insert part names from cur and updated []checkSumInfo
+	for _, cksum := range cur {
+		allPartNames[cksum.Name] = struct{}{}
+	}
+	for _, cksum := range updated {
+		allPartNames[cksum.Name] = struct{}{}
+	}
+	// All parts must have an entry in the []checkSumInfo returned from unionChecksums
+	for _, finalcksum := range finalChecksums {
+		if _, ok := allPartNames[finalcksum.Name]; !ok {
+			t.Errorf("expected to find %s but not present in the union, where current part is %s\n",
+				finalcksum.Name, curPartcksum.Name)
+		}
+	}
+	if len(finalChecksums) != len(allPartNames) {
+		t.Error("Union of Checksums doesn't have same number of elements as unique parts in total")
+	}
+}
