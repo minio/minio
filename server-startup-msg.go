@@ -56,13 +56,13 @@ func printServerCommonMsg(endPoints []string) {
 
 	endPointStr := strings.Join(endPoints, "  ")
 	// Colorize the message and print.
-	console.Println(colorMagenta("\nEndpoint: ") + colorGreen(fmt.Sprintf(getFormatStr(len(endPointStr), 1), endPointStr)))
-	console.Println(colorMagenta("AccessKey: ") + colorWhite(fmt.Sprintf("%s ", cred.AccessKeyID)))
-	console.Println(colorMagenta("SecretKey: ") + colorWhite(fmt.Sprintf("%s ", cred.SecretAccessKey)))
-	console.Println(colorMagenta("Region: ") + colorWhite(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	console.Println(colorBlue("\nEndpoint: ") + colorWhiteBold(fmt.Sprintf(getFormatStr(len(endPointStr), 1), endPointStr)))
+	console.Println(colorBlue("AccessKey: ") + colorWhiteBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
+	console.Println(colorBlue("SecretKey: ") + colorWhiteBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
+	console.Println(colorBlue("Region: ") + colorWhiteBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
 
-	console.Println(colorMagenta("\nBrowser Access:"))
-	console.Println(colorGreen(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr)))
+	console.Println(colorBlue("\nBrowser Access:"))
+	console.Println(colorWhite(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr)))
 }
 
 // Prints startup message for command line access. Prints link to our documentation
@@ -72,21 +72,21 @@ func printCLIAccessMsg(endPoint string) {
 	cred := serverConfig.GetCredential()
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	console.Println(colorMagenta("\nCommand-line Access: ") + colorWhite(mcQuickStartGuide))
+	console.Println(colorBlue("\nCommand-line Access: ") + colorWhite(mcQuickStartGuide))
 	if runtime.GOOS == "windows" {
 		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		console.Println(colorWhite(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage)))
 	} else {
-		mcMessage := fmt.Sprintf("$ ./mc config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
+		console.Println(colorWhite(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage)))
 	}
 }
 
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	console.Println("\nObject API (Amazon S3 compatible):")
-	console.Println("   Go: " + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
-	console.Println("   Java: " + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
-	console.Println("   Python: " + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
-	console.Println("   JavaScript: " + jsQuickStartGuide)
+	console.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
+	console.Println(colorBlue("   Go: ") + colorWhite(fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide)))
+	console.Println(colorBlue("   Java: ") + colorWhite(fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide)))
+	console.Println(colorBlue("   Python: ") + colorWhite(fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide)))
+	console.Println(colorBlue("   JavaScript: ") + colorWhite(jsQuickStartGuide))
 }

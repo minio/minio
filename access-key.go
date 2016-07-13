@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"regexp"
 )
 
@@ -27,13 +26,6 @@ import (
 type credential struct {
 	AccessKeyID     string `json:"accessKey"`
 	SecretAccessKey string `json:"secretKey"`
-}
-
-// stringer colorized access keys.
-func (a credential) String() string {
-	accessStr := colorMagenta("AccessKey: ") + colorWhite(a.AccessKeyID)
-	secretStr := colorMagenta("SecretKey: ") + colorWhite(a.SecretAccessKey)
-	return fmt.Sprint(accessStr + "  " + secretStr)
 }
 
 const (
