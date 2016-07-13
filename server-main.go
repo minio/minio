@@ -17,19 +17,16 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
-	"runtime"
+	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
 )
 
 var serverCmd = cli.Command{
@@ -113,35 +110,44 @@ func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
 // getListenIPs - gets all the ips to listen on.
 func getListenIPs(httpServerConf *http.Server) (hosts []string, port string) {
 	host, port, err := net.SplitHostPort(httpServerConf.Addr)
-	fatalIf(err, "Unable to parse host port.")
+	fatalIf(err, "Unable to parse host address.", httpServerConf.Addr)
 
-	switch {
-	case host != "":
+	if host != "" {
 		hosts = append(hosts, host)
-	default:
-		addrs, err := net.InterfaceAddrs()
-		fatalIf(err, "Unable to determine network interface address.")
-		for _, addr := range addrs {
-			if addr.Network() == "ip+net" {
-				host := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(host); ip.To4() != nil {
-					hosts = append(hosts, host)
-				}
+		return hosts, port
+	}
+	addrs, err := net.InterfaceAddrs()
+	fatalIf(err, "Unable to determine network interface address.")
+	for _, addr := range addrs {
+		if addr.Network() == "ip+net" {
+			host := strings.Split(addr.String(), "/")[0]
+			if ip := net.ParseIP(host); ip.To4() != nil {
+				hosts = append(hosts, host)
 			}
 		}
 	}
 	return hosts, port
 }
 
-// Print listen ips.
-func printListenIPs(tls bool, hosts []string, port string) {
-	for _, host := range hosts {
-		if tls {
-			console.Printf("    https://%s:%s\n", host, port)
-		} else {
-			console.Printf("    http://%s:%s\n", host, port)
-		}
+// Finalizes the endpoints based on the host list and port.
+func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
+	// Get list of listen ips and port.
+	hosts, port := getListenIPs(apiServer)
+
+	// Verify current scheme.
+	scheme := "http"
+	if tls {
+		scheme = "https"
 	}
+
+	// Construct proper endpoints.
+	for _, host := range hosts {
+		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, host, port))
+	}
+
+	// Success.
+	sort.Strings(endPoints)
+	return endPoints
 }
 
 // initServerConfig initialize server config.
@@ -207,84 +213,25 @@ func checkServerSyntax(c *cli.Context) {
 
 // Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
-	_, portStr, err := net.SplitHostPort(address)
-	fatalIf(err, "Unable to parse host port.")
+	_, portStr, _ := net.SplitHostPort(address)
+	// If port empty, default to port '80'
+	if portStr == "" {
+		portStr = "80"
+		// if SSL is enabled, choose port as "443" instead.
+		if isSSL() {
+			portStr = "443"
+		}
+	}
+
+	// Return converted port number.
 	portInt, err := strconv.Atoi(portStr)
 	fatalIf(err, "Invalid port number.")
 	return portInt
 }
 
-// Make sure that none of the other processes are listening on the
-// specified port on any of the interfaces.
-//
-// On linux if a process is listening on 127.0.0.1:9000 then Listen()
-// on ":9000" fails with the error "port already in use".
-// However on Mac OSX Listen() on ":9000" falls back to the IPv6 address.
-// This causes confusion on Mac OSX that minio server is not reachable
-// on 127.0.0.1 even though minio server is running. So before we start
-// the minio server we make sure that the port is free on all the IPs.
-func checkPortAvailability(port int) {
-	isAddrInUse := func(err error) bool {
-		// Check if the syscall error is EADDRINUSE.
-		// EADDRINUSE is the system call error if another process is
-		// already listening at the specified port.
-		neterr, ok := err.(*net.OpError)
-		if !ok {
-			return false
-		}
-		osErr, ok := neterr.Err.(*os.SyscallError)
-		if !ok {
-			return false
-		}
-		sysErr, ok := osErr.Err.(syscall.Errno)
-		if !ok {
-			return false
-		}
-		if sysErr != syscall.EADDRINUSE {
-			return false
-		}
-		return true
-	}
-	ifcs, err := net.Interfaces()
-	if err != nil {
-		fatalIf(err, "Unable to list interfaces.")
-	}
-	for _, ifc := range ifcs {
-		addrs, err := ifc.Addrs()
-		if err != nil {
-			fatalIf(err, "Unable to list addresses on interface %s.", ifc.Name)
-		}
-		for _, addr := range addrs {
-			ipnet, ok := addr.(*net.IPNet)
-			if !ok {
-				errorIf(errors.New(""), "Failed to assert type on (*net.IPNet) interface.")
-				continue
-			}
-			ip := ipnet.IP
-			network := "tcp4"
-			if ip.To4() == nil {
-				network = "tcp6"
-			}
-			tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
-			l, err := net.ListenTCP(network, &tcpAddr)
-			if err != nil {
-				if isAddrInUse(err) {
-					// Fail if port is already in use.
-					fatalIf(err, "Unable to listen on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
-				} else {
-					// Ignore other errors.
-					continue
-				}
-			}
-			if err = l.Close(); err != nil {
-				fatalIf(err, "Unable to close listener on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
-			}
-		}
-	}
-}
-
+// serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
-	// check 'server' cli arguments.
+	// Check 'server' cli arguments.
 	checkServerSyntax(c)
 
 	// Initialize server config.
@@ -296,18 +243,8 @@ func serverMain(c *cli.Context) {
 	// Server address.
 	serverAddress := c.String("address")
 
-	host, port, _ := net.SplitHostPort(serverAddress)
-	// If port empty, default to port '80'
-	if port == "" {
-		port = "80"
-		// if SSL is enabled, choose port as "443" instead.
-		if tls {
-			port = "443"
-		}
-	}
-
 	// Check if requested port is available.
-	checkPortAvailability(getPort(net.JoinHostPort(host, port)))
+	checkPortAvailability(getPort(serverAddress))
 
 	// Disks to be ignored in server init, to skip format healing.
 	ignoredDisks := strings.Split(c.String("ignore-disks"), ",")
@@ -322,47 +259,16 @@ func serverMain(c *cli.Context) {
 		ignoredDisks: ignoredDisks,
 	})
 
-	// Credential.
-	cred := serverConfig.GetCredential()
+	// Fetch endpoints which we are going to serve from.
+	endPoints := finalizeEndpoints(tls, apiServer)
 
-	// Region.
-	region := serverConfig.GetRegion()
-
-	// Print credentials and region.
-	console.Println("\n" + cred.String() + "  " + colorMagenta("Region: ") + colorWhite(region))
-
-	hosts, port := getListenIPs(apiServer) // get listen ips and port.
-
-	console.Println("\nMinio Object Storage:")
-	// Print api listen ips.
-	printListenIPs(tls, hosts, port)
-
-	console.Println("\nMinio Browser:")
-	// Print browser listen ips.
-	printListenIPs(tls, hosts, port)
-
-	console.Println("\nTo configure Minio Client:")
-
-	// Figure out right endpoint for 'mc'.
-	endpoint := fmt.Sprintf("http://%s:%s", hosts[0], port)
-	if tls {
-		endpoint = fmt.Sprintf("https://%s:%s", hosts[0], port)
-	}
-
-	// Download 'mc' info.
-	if runtime.GOOS == "windows" {
-		console.Printf("    Download 'mc' from https://dl.minio.io/client/mc/release/%s-%s/mc.exe\n", runtime.GOOS, runtime.GOARCH)
-		console.Printf("    $ mc.exe config host add myminio %s %s %s\n", endpoint, cred.AccessKeyID, cred.SecretAccessKey)
-	} else {
-		console.Printf("    $ wget https://dl.minio.io/client/mc/release/%s-%s/mc\n", runtime.GOOS, runtime.GOARCH)
-		console.Printf("    $ chmod 755 mc\n")
-		console.Printf("    $ ./mc config host add myminio %s %s %s\n", endpoint, cred.AccessKeyID, cred.SecretAccessKey)
-	}
+	// Prints the formatted startup message.
+	printStartupMessage(endPoints)
 
 	// Start server.
 	var err error
 	// Configure TLS if certs are available.
-	if isSSL() {
+	if tls {
 		err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
 	} else {
 		// Fallback to http.
