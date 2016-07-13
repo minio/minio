@@ -68,7 +68,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// If all the disks returned error, we return error.
-	if err := reduceErrs(errs); err != nil {
+	if errCount, err := reduceErrs(errs); err != nil {
+		if errCount < xl.readQuorum {
+			return toObjectErr(errXLReadQuorum, bucket, object)
+		}
 		return toObjectErr(err, bucket, object)
 	}
 
@@ -368,18 +371,23 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
 	tempObj := uniqueID
 
-	// Lock the object.
-	nsMutex.Lock(bucket, object)
-	defer nsMutex.Unlock(bucket, object)
-
-	// Initialize xl meta.
-	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
-
+	nsMutex.RLock(bucket, object)
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
+	nsMutex.RUnlock(bucket, object)
+
 	// Do we have write quroum?.
 	if !isDiskQuorum(errs, xl.writeQuorum) {
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+	}
+
+	// errFileNotFound is handled specially since it's OK for the object to
+	// not exists in the namespace yet.
+	if errCount, reducedErr := reduceErrs(errs); reducedErr != nil && reducedErr != errFileNotFound {
+		if errCount < xl.writeQuorum {
+			return "", toObjectErr(errXLWriteQuorum, bucket, object)
+		}
+		return "", toObjectErr(reducedErr, bucket, object)
 	}
 
 	// List all online disks.
@@ -425,6 +433,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Tee reader combines incoming data stream and md5, data read from input stream is written to md5.
 	teeReader := io.TeeReader(limitDataReader, mw)
+
+	// Initialize xl meta.
+	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 
 	// Collect all the previous erasure infos across the disk.
 	var eInfos []erasureInfo
@@ -483,6 +494,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
+	// Lock the object.
+	nsMutex.Lock(bucket, object)
+	defer nsMutex.Unlock(bucket, object)
+
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
@@ -513,12 +528,12 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = writeUniqueXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum, xl.readQuorum); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Rename the successfully written temporary object to final location.
-	err = renameObject(xl.storageDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum, xl.readQuorum)
+	err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum, xl.readQuorum)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}

@@ -17,27 +17,25 @@
 package main
 
 import "testing"
-import "syscall"
 
 // Test for reduceErrs.
 func TestReduceErrs(t *testing.T) {
 	testCases := []struct {
-		errs []error
-		err  error
+		errs  []error
+		err   error
+		count int
 	}{
-		{[]error{errDiskNotFound, errDiskNotFound, errDiskFull}, errDiskNotFound},
-		{[]error{errDiskNotFound, errDiskFull, errDiskFull}, errDiskFull},
-		{[]error{errDiskFull, errDiskNotFound, errDiskFull}, errDiskFull},
-		// A case for error not in the known errors list (refer to func reduceErrs)
-		{[]error{errDiskFull, syscall.EEXIST, syscall.EEXIST}, syscall.EEXIST},
-		{[]error{errDiskNotFound, errDiskNotFound, nil}, nil},
-		{[]error{nil, nil, nil}, nil},
+		{[]error{errDiskNotFound, errDiskNotFound, errDiskFull}, errDiskNotFound, 2},
+		{[]error{errDiskFull, errDiskNotFound, nil, nil}, nil, 2},
+		{[]error{}, nil, 0},
 	}
 	for i, testCase := range testCases {
-		expected := testCase.err
-		got := reduceErrs(testCase.errs)
-		if expected != got {
-			t.Errorf("Test %d : expected %s, got %s", i+1, expected, got)
+		gotMax, gotErr := reduceErrs(testCase.errs)
+		if testCase.err != gotErr {
+			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
+		}
+		if testCase.count != gotMax {
+			t.Errorf("Test %d : expected %d, got %d", i+1, testCase.count, gotMax)
 		}
 	}
 }

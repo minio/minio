@@ -23,57 +23,27 @@ import (
 	"path"
 )
 
-// Returns nil even if one of the slice elements is nil.
-// Else returns the error which occurs the most.
-func reduceErrs(errs []error) error {
-	// In case the error type is not in the known error list.
-	var unknownErr = errors.New("unknown error")
-	var errTypes = []struct {
-		err   error // error type
-		count int   // occurrence count
-	}{
-		// List of known error types. Any new type that can be returned from StorageAPI should
-		// be added to this list. Most common errors are listed here.
-		{errDiskNotFound, 0}, {errFaultyDisk, 0}, {errFileAccessDenied, 0},
-		{errFileNotFound, 0}, {errFileNameTooLong, 0}, {errVolumeNotFound, 0},
-		{errDiskFull, 0},
-		// unknownErr count - count of the number of unknown errors.
-		{unknownErr, 0},
-	}
-	// In case unknownErr count occurs maximum number of times, unknownErrType is used to
-	// to store it so that it can be used for the return error type.
-	var unknownErrType error
+// Returns number of errors that occurred the most (incl. nil) and the
+// corresponding error value. N B when there is more than one error value that
+// occurs maximum number of times, the error value returned depends on how
+// golang's map orders keys. This doesn't affect correctness as long as quorum
+// value is greater than or equal to simple majority, since none of the equally
+// maximal values would occur quorum or more number of times.
 
-	// For each err in []errs increment the corresponding count value.
+func reduceErrs(errs []error) (int, error) {
+	errorCounts := make(map[error]int)
 	for _, err := range errs {
-		if err == nil {
-			// Return nil even if one of the elements is nil.
-			return nil
-		}
-		for i := range errTypes {
-			if errTypes[i].err == err {
-				errTypes[i].count++
-				break
-			}
-			if errTypes[i].err == unknownErr {
-				errTypes[i].count++
-				unknownErrType = err
-				break
-			}
-		}
+		errorCounts[err]++
 	}
 	max := 0
-	// Get the error type which has the maximum count.
-	for i, errType := range errTypes {
-		if errType.count > errTypes[max].count {
-			max = i
+	var errMax error
+	for err, count := range errorCounts {
+		if max < count {
+			max = count
+			errMax = err
 		}
 	}
-	if errTypes[max].err == unknownErr {
-		// Return the unknown error.
-		return unknownErrType
-	}
-	return errTypes[max].err
+	return max, errMax
 }
 
 // Validates if we have quorum based on the errors related to disk only.
