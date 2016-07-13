@@ -315,12 +315,22 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 		return errXLWriteQuorum
 	}
 	// Return on first error, also undo any partially successful rename operations.
-	for _, err := range errs {
-		if err != nil && err != errDiskNotFound {
+	if errCount, reducedErr := reduceErrs(errs); reducedErr != nil {
+		if errCount < writeQuorum {
 			// Undo all the partial rename operations.
 			undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs, writeQuorum, readQuorum)
-			return err
+			return errXLWriteQuorum
 		}
+		if isErrIgnored(reducedErr, []error{
+			errDiskNotFound,
+			errDiskAccessDenied,
+			errFaultyDisk,
+			errVolumeNotFound,
+		}) {
+			// Return success.
+			return nil
+		}
+		return reducedErr
 	}
 	return nil
 }
