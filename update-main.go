@@ -70,8 +70,8 @@ EXAMPLES:
 
 // update URL endpoints.
 const (
-	minioUpdateStableURL       = "https://dl.minio.io/server/minio/release/"
-	minioUpdateExperimentalURL = "https://dl.minio.io/server/minio/experimental/"
+	minioUpdateStableURL       = "https://dl.minio.io/server/minio/release"
+	minioUpdateExperimentalURL = "https://dl.minio.io/server/minio/experimental"
 )
 
 // updateMessage container to hold update messages.
