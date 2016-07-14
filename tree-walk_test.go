@@ -433,13 +433,14 @@ func TestSortedness(t *testing.T) {
 		}
 	}
 
+	// Remove directory created for testing
 	err = removeAll(fsDir1)
 	if err != nil {
 		t.Error(err)
 	}
 }
 
-func TestEof(t *testing.T) {
+func TestTreeWalkIsEnd(t *testing.T) {
 	// Create a backend directories fsDir1.
 	fsDir1, err := ioutil.TempDir("", "minio-")
 	if err != nil {
@@ -506,6 +507,7 @@ func TestEof(t *testing.T) {
 		}
 	}
 
+	// Remove directory created for testing
 	err = removeAll(fsDir1)
 	if err != nil {
 		t.Error(err)
