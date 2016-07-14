@@ -25,15 +25,8 @@ import (
 	"time"
 )
 
-// Sample entries for the namespace.
-var volume = "testvolume"
-var files = []string{
-	"d/e",
-	"d/f",
-	"d/g/h",
-	"i/j/k",
-	"lmn",
-}
+// Fixed volume name that could be used across tests
+const volume = "testvolume"
 
 // Helper function that creates a volume and files in it.
 func createNamespace(disk StorageAPI, volume string, files []string) error {
@@ -98,6 +91,13 @@ func TestTreeWalk(t *testing.T) {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
 
+	var files = []string{
+		"d/e",
+		"d/f",
+		"d/g/h",
+		"i/j/k",
+		"lmn",
+	}
 	err = createNamespace(disk, volume, files)
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	var myfiles []string
 	// Create maxObjectsList+1 number of entries.
 	for i := 0; i < maxObjectList+1; i++ {
-		files = append(myfiles, fmt.Sprintf("file.%d", i))
+		myfiles = append(myfiles, fmt.Sprintf("file.%d", i))
 	}
 	err = createNamespace(disk, volume, myfiles)
 	if err != nil {
@@ -282,6 +282,13 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}, disk1)
 
 	// Create the namespace.
+	var files = []string{
+		"d/e",
+		"d/f",
+		"d/g/h",
+		"i/j/k",
+		"lmn",
+	}
 	err = createNamespace(disk1, volume, files)
 	if err != nil {
 		t.Fatal(err)
@@ -379,6 +386,13 @@ func TestSortedness(t *testing.T) {
 	}, disk1)
 
 	// Create the namespace.
+	var files = []string{
+		"d/e",
+		"d/f",
+		"d/g/h",
+		"i/j/k",
+		"lmn",
+	}
 	err = createNamespace(disk1, volume, files)
 	if err != nil {
 		t.Fatal(err)
@@ -443,6 +457,13 @@ func TestEof(t *testing.T) {
 	}, disk1)
 
 	// Create the namespace.
+	var files = []string{
+		"d/e",
+		"d/f",
+		"d/g/h",
+		"i/j/k",
+		"lmn",
+	}
 	err = createNamespace(disk1, volume, files)
 	if err != nil {
 		t.Fatal(err)
