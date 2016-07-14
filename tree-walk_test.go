@@ -418,4 +418,69 @@ func TestSortedness(t *testing.T) {
 			t.Error(i+1, "Expected entries to be sort, but it wasn't")
 		}
 	}
+
+	//for entry := range startTreeWalk(volume, "", "", true, listDir, endWalkCh) {
+	//	fmt.Println(entry)
+	//}
+}
+
+func TestEof(t *testing.T) {
+	// Create a backend directories fsDir1.
+	fsDir1, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
+	}
+
+	// Create two StorageAPIs disk1.
+	disk1, err := newStorageAPI(fsDir1)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
+	}
+
+	// Create listDir function.
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk1)
+
+	// Create the namespace.
+	err = createNamespace(disk1, volume, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endWalkCh := make(chan struct{})
+	testCases := []struct {
+		prefix        string
+		marker        string
+		recursive     bool
+		expectedEntry string
+	}{
+		// with no prefix, no marker and no recursive traversal
+		{"", "", false, "lmn"},
+		// with no prefix, no marker and recursive traversal
+		{"", "", true, "lmn"},
+		// with no prefix, marker and no recursive traversal
+		{"", "d/e", false, "lmn"},
+		// with no prefix, marker and recursive traversal
+		{"", "d/e", true, "lmn"},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", false, "d/g/"},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", true, "d/g/h"},
+		// with prefix, marker and no recursive traversal
+		{"d/", "d/e", false, "d/g/"},
+		// with prefix, marker and recursive traversal
+		{"d/", "d/e", true, "d/g/h"},
+	}
+	for i, test := range testCases {
+		var entry treeWalkResult
+		for entry = range startTreeWalk(volume, test.prefix, test.marker, test.recursive, listDir, endWalkCh) {
+		}
+		if entry.entry != test.expectedEntry {
+			t.Errorf("Test %d: Expected entry %s, but received %s with the EOF marker", i, test.expectedEntry, entry.entry)
+		}
+		if !entry.end {
+			t.Errorf("Test %d: Last entry %s, doesn't have EOF marker set", i, entry.entry)
+		}
+	}
 }
