@@ -126,12 +126,12 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
-	var files []string
+	var myfiles []string
 	// Create maxObjectsList+1 number of entries.
 	for i := 0; i < maxObjectList+1; i++ {
-		files = append(files, fmt.Sprintf("file.%d", i))
+		files = append(myfiles, fmt.Sprintf("file.%d", i))
 	}
-	err = createNamespace(disk, volume, files)
+	err = createNamespace(disk, volume, myfiles)
 	if err != nil {
 		t.Fatal(err)
 	}
