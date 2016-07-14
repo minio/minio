@@ -86,6 +86,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			break
 		}
 	}
+	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
@@ -107,12 +109,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(startOffset + length - 1)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
-	}
-
-	// Collect all the previous erasure infos across the disk.
-	var eInfos []erasureInfo
-	for index := range onlineDisks {
-		eInfos = append(eInfos, metaArr[index].Erasure)
 	}
 
 	// Save the writer.
@@ -173,8 +169,17 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			readSize = length - totalBytesRead
 		}
 
+		// Get the checksums of the current part.
+		checkSums := make([]string, len(onlineDisks))
+		for index := range onlineDisks {
+			checkSums[index], _, err = metaArr[index].GetCheckSum(partName)
+			if err != nil {
+				return toObjectErr(err, bucket, object)
+			}
+		}
+
 		// Start reading the part name.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partName, eInfos, partOffset, readSize, partSize)
+		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, checkSums)
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
