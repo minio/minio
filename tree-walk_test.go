@@ -433,9 +433,10 @@ func TestSortedness(t *testing.T) {
 		}
 	}
 
-	//for entry := range startTreeWalk(volume, "", "", true, listDir, endWalkCh) {
-	//	fmt.Println(entry)
-	//}
+	err = removeAll(fsDir1)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func TestEof(t *testing.T) {
@@ -503,5 +504,10 @@ func TestEof(t *testing.T) {
 		if !entry.end {
 			t.Errorf("Test %d: Last entry %s, doesn't have EOF marker set", i, entry.entry)
 		}
+	}
+
+	err = removeAll(fsDir1)
+	if err != nil {
+		t.Error(err)
 	}
 }
