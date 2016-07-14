@@ -450,20 +450,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			continue
 		}
 		partsMetadata[index].Parts = xlMeta.Parts
-		for i, sum := range partsMetadata[index].Erasure.Checksum {
-			if sum.Name == partSuffix {
-				// If the part was previously uploaded, remove entry.
-				Checksum := partsMetadata[index].Erasure.Checksum
-				Checksum = append(Checksum[:i], Checksum[i+1:]...)
-				partsMetadata[index].Erasure.Checksum = Checksum
-				break
-			}
-		}
-		partsMetadata[index].Erasure.Checksum = append(partsMetadata[index].Erasure.Checksum, checkSumInfo{
-			partSuffix,
-			"blake2b",
-			checkSums[index],
-		})
+		partsMetadata[index].AddCheckSum(partSuffix, "blake2b", checkSums[index])
 	}
 
 	// Write all the checksum metadata.

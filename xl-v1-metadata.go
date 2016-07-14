@@ -163,6 +163,27 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	sort.Sort(byObjectPartNumber(m.Parts))
 }
 
+// AddCheckSum - add checksum of a part.
+func (m *xlMetaV1) AddCheckSum(partName, algorithm, checkSum string) {
+	for i, sum := range m.Erasure.Checksum {
+		if sum.Name == partName {
+			m.Erasure.Checksum[i] = checkSumInfo{partName, "blake2b", checkSum}
+			return
+		}
+	}
+	m.Erasure.Checksum = append(m.Erasure.Checksum, checkSumInfo{partName, "blake2b", checkSum})
+}
+
+// GetCheckSum - get checksum of a part.
+func (m *xlMetaV1) GetCheckSum(partName string) (checkSum, algorithm string, err error) {
+	for _, sum := range m.Erasure.Checksum {
+		if sum.Name == partName {
+			return sum.Hash, sum.Algorithm, nil
+		}
+	}
+	return "", "", errUnexpected
+}
+
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
 func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset int64, err error) {
 	if offset == 0 {

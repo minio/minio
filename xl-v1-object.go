@@ -509,7 +509,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
 		partsMetadata[index] = xlMeta
-		partsMetadata[index].Erasure.Checksum = []checkSumInfo{{"part.1", "blake2b", checkSums[index]}}
+		partsMetadata[index].AddCheckSum("part.1", "blake2b", checkSums[index])
 	}
 
 	// Write unique `xl.json` for each disk.
