@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -356,5 +357,65 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	err = removeAll(fsDir1)
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestSortedness(t *testing.T) {
+	// Create a backend directories fsDir1.
+	fsDir1, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
+	}
+
+	// Create two StorageAPIs disk1.
+	disk1, err := newStorageAPI(fsDir1)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
+	}
+
+	// Create listDir function.
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk1)
+
+	// Create the namespace.
+	err = createNamespace(disk1, volume, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endWalkCh := make(chan struct{})
+	testCases := []struct {
+		prefix    string
+		marker    string
+		recursive bool
+	}{
+		// with no prefix, no marker and no recursive traversal
+		{"", "", false},
+		// with no prefix, no marker and recursive traversal
+		{"", "", true},
+		// with no prefix, marker and no recursive traversal
+		{"", "d/e", false},
+		// with no prefix, marker and recursive traversal
+		{"", "d/e", true},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", false},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", true},
+		// with prefix, marker and no recursive traversal
+		{"d/", "d/e", false},
+		// with prefix, marker and recursive traversal
+		{"d/", "d/e", true},
+	}
+	for i, test := range testCases {
+		var actualEntries []string
+		for entry := range startTreeWalk(volume,
+			test.prefix, test.marker, test.recursive,
+			listDir, endWalkCh) {
+			actualEntries = append(actualEntries, entry.entry)
+		}
+		if !sort.IsSorted(sort.StringSlice(actualEntries)) {
+			t.Error(i+1, "Expected entries to be sort, but it wasn't")
+		}
 	}
 }
