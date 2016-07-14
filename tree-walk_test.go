@@ -259,3 +259,102 @@ func TestListDir(t *testing.T) {
 		t.Error("expected errDiskNotFound error.")
 	}
 }
+
+// TestRecursiveWalk - tests if treeWalk returns entries correctly with and
+// without recursively traversing prefixes.
+func TestRecursiveTreeWalk(t *testing.T) {
+	// Create a backend directories fsDir1.
+	fsDir1, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Errorf("Unable to create tmp directory: %s", err)
+	}
+
+	// Create two StorageAPIs disk1.
+	disk1, err := newStorageAPI(fsDir1)
+	if err != nil {
+		t.Errorf("Unable to create StorageAPI: %s", err)
+	}
+
+	// Create listDir function.
+	listDir := listDirFactory(func(volume, prefix string) bool {
+		return !strings.HasSuffix(prefix, slashSeparator)
+	}, disk1)
+
+	// Create the namespace.
+	err = createNamespace(disk1, volume, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endWalkCh := make(chan struct{})
+	testCases := []struct {
+		prefix    string
+		marker    string
+		recursive bool
+		expected  map[string]struct{}
+	}{
+		// with no prefix, no marker and no recursive traversal
+		{"", "", false, map[string]struct{}{
+			"d/":  {},
+			"i/":  {},
+			"lmn": {},
+		}},
+		// with no prefix, no marker and recursive traversal
+		{"", "", true, map[string]struct{}{
+			"d/f":   {},
+			"d/g/h": {},
+			"d/e":   {},
+			"i/j/k": {},
+			"lmn":   {},
+		}},
+		// with no prefix, marker and no recursive traversal
+		{"", "d/e", false, map[string]struct{}{
+			"d/f":  {},
+			"d/g/": {},
+			"i/":   {},
+			"lmn":  {},
+		}},
+		// with no prefix, marker and recursive traversal
+		{"", "d/e", true, map[string]struct{}{
+			"d/f":   {},
+			"d/g/h": {},
+			"i/j/k": {},
+			"lmn":   {},
+		}},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", false, map[string]struct{}{
+			"d/e":  {},
+			"d/f":  {},
+			"d/g/": {},
+		}},
+		// with prefix, no marker and no recursive traversal
+		{"d/", "", true, map[string]struct{}{
+			"d/e":   {},
+			"d/f":   {},
+			"d/g/h": {},
+		}},
+		// with prefix, marker and no recursive traversal
+		{"d/", "d/e", false, map[string]struct{}{
+			"d/f":  {},
+			"d/g/": {},
+		}},
+		// with prefix, marker and recursive traversal
+		{"d/", "d/e", true, map[string]struct{}{
+			"d/f":   {},
+			"d/g/h": {},
+		}},
+	}
+	for i, testCase := range testCases {
+		for entry := range startTreeWalk(volume,
+			testCase.prefix, testCase.marker, testCase.recursive,
+			listDir, endWalkCh) {
+			if _, found := testCase.expected[entry.entry]; !found {
+				t.Errorf("Test %d: Expected %s, but couldn't find", i+1, entry.entry)
+			}
+		}
+	}
+	err = removeAll(fsDir1)
+	if err != nil {
+		t.Error(err)
+	}
+}
