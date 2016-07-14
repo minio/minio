@@ -76,7 +76,6 @@ func RelTime(a, b time.Time, albl, blbl string) string {
 	for _, ch := range mag.format {
 		if escaped {
 			switch ch {
-			case '%':
 			case 's':
 				args = append(args, lbl)
 			case 'd':

@@ -39,7 +39,7 @@ func Comma(v int64) string {
 // Commaf produces a string form of the given number in base 10 with
 // commas after every three orders of magnitude.
 //
-// e.g. Comma(834142.32) -> 834,142.32
+// e.g. Commaf(834142.32) -> 834,142.32
 func Commaf(v float64) string {
 	buf := &bytes.Buffer{}
 	if v < 0 {

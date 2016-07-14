@@ -26,6 +26,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/rs/xhandler"
+	"golang.org/x/net/context"
 )
 
 // Options is a configuration container to setup the CORS middleware.
@@ -68,7 +71,7 @@ type Options struct {
 // Cors http handler
 type Cors struct {
 	// Debug logger
-	log *log.Logger
+	Log *log.Logger
 	// Set to true when allowed origins contains a "*"
 	allowedOriginsAll bool
 	// Normalized list of plain allowed origins
@@ -100,7 +103,7 @@ func New(options Options) *Cors {
 		optionPassthrough: options.OptionsPassthrough,
 	}
 	if options.Debug {
-		c.log = log.New(os.Stdout, "[cors] ", log.LstdFlags)
+		c.Log = log.New(os.Stdout, "[cors] ", log.LstdFlags)
 	}
 
 	// Normalize options
@@ -178,11 +181,36 @@ func (c *Cors) Handler(h http.Handler) http.Handler {
 			// headers (see #1)
 			if c.optionPassthrough {
 				h.ServeHTTP(w, r)
+			} else {
+				w.WriteHeader(http.StatusOK)
 			}
 		} else {
 			c.logf("Handler: Actual request")
 			c.handleActualRequest(w, r)
 			h.ServeHTTP(w, r)
+		}
+	})
+}
+
+// HandlerC is net/context aware handler
+func (c *Cors) HandlerC(h xhandler.HandlerC) xhandler.HandlerC {
+	return xhandler.HandlerFuncC(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			c.logf("Handler: Preflight request")
+			c.handlePreflight(w, r)
+			// Preflight requests are standalone and should stop the chain as some other
+			// middleware may not handle OPTIONS requests correctly. One typical example
+			// is authentication middleware ; OPTIONS requests won't carry authentication
+			// headers (see #1)
+			if c.optionPassthrough {
+				h.ServeHTTPC(ctx, w, r)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+		} else {
+			c.logf("Handler: Actual request")
+			c.handleActualRequest(w, r)
+			h.ServeHTTPC(ctx, w, r)
 		}
 	})
 }
@@ -209,6 +237,8 @@ func (c *Cors) ServeHTTP(w http.ResponseWriter, r *http.Request, next http.Handl
 		// headers (see #1)
 		if c.optionPassthrough {
 			next(w, r)
+		} else {
+			w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		c.logf("ServeHTTP: Actual request")
@@ -296,10 +326,7 @@ func (c *Cors) handleActualRequest(w http.ResponseWriter, r *http.Request) {
 	// spec doesn't instruct to check the allowed methods for simple cross-origin requests.
 	// We think it's a nice feature to be able to have control on those methods though.
 	if !c.isMethodAllowed(r.Method) {
-		if c.log != nil {
-			c.logf("  Actual request no headers added: method '%s' not allowed",
-				r.Method)
-		}
+		c.logf("  Actual request no headers added: method '%s' not allowed", r.Method)
 
 		return
 	}
@@ -315,8 +342,8 @@ func (c *Cors) handleActualRequest(w http.ResponseWriter, r *http.Request) {
 
 // convenience method. checks if debugging is turned on before printing
 func (c *Cors) logf(format string, a ...interface{}) {
-	if c.log != nil {
-		c.log.Printf(format, a...)
+	if c.Log != nil {
+		c.Log.Printf(format, a...)
 	}
 }
 

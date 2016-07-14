@@ -15,3 +15,11 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	r.bar.Add(n)
 	return
 }
+
+// Close the reader when it implements io.Closer
+func (r *Reader) Close() (err error) {
+	if closer, ok := r.Reader.(io.Closer); ok {
+		return closer.Close()
+	}
+	return
+}

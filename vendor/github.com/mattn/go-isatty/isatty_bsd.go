@@ -1,4 +1,5 @@
 // +build darwin freebsd openbsd netbsd
+// +build !appengine
 
 package isatty
 

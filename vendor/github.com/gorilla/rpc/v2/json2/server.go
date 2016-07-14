@@ -123,15 +123,28 @@ func (c *CodecRequest) Method() (string, error) {
 	return "", c.err
 }
 
-// ReadRe<quest fills the request object for the RPC method.
+// ReadRequest fills the request object for the RPC method.
+//
+// ReadRequest parses request parameters in two supported forms in
+// accordance with http://www.jsonrpc.org/specification#parameter_structures
+//
+// by-position: params MUST be an Array, containing the
+// values in the Server expected order.
+//
+// by-name: params MUST be an Object, with member names
+// that match the Server expected parameter names. The
+// absence of expected names MAY result in an error being
+// generated. The names MUST match exactly, including
+// case, to the method's expected parameters.
 func (c *CodecRequest) ReadRequest(args interface{}) error {
 	if c.err == nil && c.request.Params != nil {
 		// Note: if c.request.Params is nil it's not an error, it's an optional member.
 		// JSON params structured object. Unmarshal to the args object.
 		if err := json.Unmarshal(*c.request.Params, args); err != nil {
-			// Structed unmarshalling failed, attempt JSON params as
-			// array value. Unmarshal into array containing the
-			// request struct.
+			// Clearly JSON params is not a structured object,
+			// fallback and attempt an unmarshal with JSON params as
+			// array value and RPC params is struct. Unmarshal into
+			// array containing the request struct.
 			params := [1]interface{}{args}
 			if err = json.Unmarshal(*c.request.Params, &params); err != nil {
 				c.err = &Error{

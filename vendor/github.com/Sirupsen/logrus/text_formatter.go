@@ -84,7 +84,9 @@ func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 			f.appendKeyValue(b, "time", entry.Time.Format(timestampFormat))
 		}
 		f.appendKeyValue(b, "level", entry.Level.String())
-		f.appendKeyValue(b, "msg", entry.Message)
+		if entry.Message != "" {
+			f.appendKeyValue(b, "msg", entry.Message)
+		}
 		for _, key := range keys {
 			f.appendKeyValue(b, key, entry.Data[key])
 		}
@@ -126,10 +128,10 @@ func needsQuoting(text string) bool {
 			(ch >= 'A' && ch <= 'Z') ||
 			(ch >= '0' && ch <= '9') ||
 			ch == '-' || ch == '.') {
-			return false
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interface{}) {
@@ -139,14 +141,14 @@ func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interf
 
 	switch value := value.(type) {
 	case string:
-		if needsQuoting(value) {
+		if !needsQuoting(value) {
 			b.WriteString(value)
 		} else {
 			fmt.Fprintf(b, "%q", value)
 		}
 	case error:
 		errmsg := value.Error()
-		if needsQuoting(errmsg) {
+		if !needsQuoting(errmsg) {
 			b.WriteString(errmsg)
 		} else {
 			fmt.Fprintf(b, "%q", value)
