@@ -65,38 +65,6 @@ func isSuccessDataBlocks(enBlocks [][]byte, dataBlocks int) bool {
 	return successDataBlocksCount >= dataBlocks
 }
 
-// Return ordered partsMetadata depeinding on distribution.
-func getOrderedPartsMetadata(distribution []int, partsMetadata []xlMetaV1) (orderedPartsMetadata []xlMetaV1) {
-	orderedPartsMetadata = make([]xlMetaV1, len(partsMetadata))
-	for index := range partsMetadata {
-		blockIndex := distribution[index]
-		orderedPartsMetadata[blockIndex-1] = partsMetadata[index]
-	}
-	return orderedPartsMetadata
-}
-
-// getOrderedDisks - get ordered disks from erasure distribution.
-// returns ordered slice of disks from their actual distribution.
-func getOrderedDisks(distribution []int, disks []StorageAPI) (orderedDisks []StorageAPI) {
-	orderedDisks = make([]StorageAPI, len(disks))
-	// From disks gets ordered disks.
-	for index := range disks {
-		blockIndex := distribution[index]
-		orderedDisks[blockIndex-1] = disks[index]
-	}
-	return orderedDisks
-}
-
-// Return ordered CheckSums depending on the distribution.
-func getOrderedCheckSums(distribution []int, blockCheckSums []checkSumInfo) (orderedBlockCheckSums []checkSumInfo) {
-	orderedBlockCheckSums = make([]checkSumInfo, len(blockCheckSums))
-	for index := range blockCheckSums {
-		blockIndex := distribution[index]
-		orderedBlockCheckSums[blockIndex-1] = blockCheckSums[index]
-	}
-	return orderedBlockCheckSums
-}
-
 // Return readable disks slice from which we can read parallelly.
 func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDisks []StorageAPI, nextIndex int, err error) {
 	readDisks = make([]StorageAPI, len(orderedDisks))
