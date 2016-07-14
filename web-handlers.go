@@ -27,6 +27,7 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	jwtreq "github.com/dgrijalva/jwt-go/request"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
@@ -42,14 +43,16 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 		return false
 	}
 
-	token, e := jwtgo.ParseFromRequest(req, func(token *jwtgo.Token) (interface{}, error) {
+	var reqCallback jwtgo.Keyfunc
+	reqCallback = func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(jwt.SecretAccessKey), nil
-	})
-	if e != nil {
-		errorIf(e, "token parsing failed")
+	}
+	token, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, reqCallback)
+	if err != nil {
+		errorIf(err, "token parsing failed")
 		return false
 	}
 	return token.Valid
@@ -382,7 +385,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	token := r.URL.Query().Get("token")
+	tokenStr := r.URL.Query().Get("token")
 
 	jwt, err := newJWT()
 	if err != nil {
@@ -390,13 +393,13 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jwttoken, e := jwtgo.Parse(token, func(token *jwtgo.Token) (interface{}, error) {
+	token, e := jwtgo.Parse(tokenStr, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(jwt.SecretAccessKey), nil
 	})
-	if e != nil || !jwttoken.Valid {
+	if e != nil || !token.Valid {
 		writeWebErrorResponse(w, errInvalidToken)
 		return
 	}

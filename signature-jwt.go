@@ -64,11 +64,13 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 		return "", fmt.Errorf("Invalid access key")
 	}
 
-	token := jwtgo.New(jwtgo.SigningMethodHS512)
-	// Token expires in 10hrs.
-	token.Claims["exp"] = time.Now().Add(time.Hour * tokenExpires).Unix()
-	token.Claims["iat"] = time.Now().Unix()
-	token.Claims["sub"] = accessKey
+	tUTCNow := time.Now().UTC()
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims{
+		// Token expires in 10hrs.
+		"exp": tUTCNow.Add(time.Hour * tokenExpires).Unix(),
+		"iat": tUTCNow.Unix(),
+		"sub": accessKey,
+	})
 	return token.SignedString([]byte(jwt.SecretAccessKey))
 }
 

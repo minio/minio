@@ -13,7 +13,7 @@ import (
 )
 
 // Current version
-const Version = "1.0.2"
+const Version = "1.0.4"
 
 const (
 	// Default refresh rate - 200ms
@@ -81,6 +81,7 @@ type ProgressBar struct {
 	Width                            int
 	ForceWidth                       bool
 	ManualUpdate                     bool
+	AutoStat                         bool
 
 	// Default width for the time box.
 	UnitsWidth   int
@@ -115,6 +116,7 @@ func (pb *ProgressBar) Start() *ProgressBar {
 	if pb.Total == 0 {
 		pb.ShowTimeLeft = false
 		pb.ShowPercent = false
+		pb.AutoStat = false
 	}
 	if !pb.ManualUpdate {
 		pb.Update() // Initial printing of the bar before running the bar refresher.
@@ -126,6 +128,12 @@ func (pb *ProgressBar) Start() *ProgressBar {
 // Increment current value
 func (pb *ProgressBar) Increment() int {
 	return pb.Add(1)
+}
+
+// Get current value
+func (pb *ProgressBar) Get() int64 {
+	c := atomic.LoadInt64(&pb.current)
+	return c
 }
 
 // Set current value
@@ -242,6 +250,7 @@ func (pb *ProgressBar) Read(p []byte) (n int, err error) {
 }
 
 // Create new proxy reader over bar
+// Takes io.Reader or io.ReadCloser
 func (pb *ProgressBar) NewProxyReader(r io.Reader) *Reader {
 	return &Reader{r, pb}
 }
@@ -397,6 +406,14 @@ func (pb *ProgressBar) Update() {
 	if pb.AlwaysUpdate || c != pb.currentValue {
 		pb.write(c)
 		pb.currentValue = c
+	}
+	if pb.AutoStat {
+		if c == 0 {
+			pb.startTime = time.Now()
+			pb.startValue = 0
+		} else if c >= pb.Total && pb.isFinish != true {
+			pb.Finish()
+		}
 	}
 }
 

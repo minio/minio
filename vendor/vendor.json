@@ -4,23 +4,28 @@
 	"package": [
 		{
 			"path": "github.com/Sirupsen/logrus",
-			"revision": "418b41d23a1bf978c06faea5313ba194650ac088",
-			"revisionTime": "2015-09-08T20:46:18Z"
+			"revision": "32055c351ea8b00b96d70f28db48d9840feaf0ec",
+			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
 			"path": "github.com/cheggaaa/pb",
-			"revision": "c1f48d5ce4f292dfb775ef52aaedd15be323510d",
-			"revisionTime": "2016-05-20T13:10:51+03:00"
+			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
+			"revisionTime": "2016-07-13T13:44:25+03:00"
 		},
 		{
 			"path": "github.com/dgrijalva/jwt-go",
-			"revision": "afef698c326bfd906b11659432544e5aae441d44",
-			"revisionTime": "2015-12-30T10:00:00-08:00"
+			"revision": "01aeca54ebda6e0fbfafd0a524d234159c05ec20",
+			"revisionTime": "2016-07-05T13:30:06-07:00"
+		},
+		{
+			"path": "github.com/dgrijalva/jwt-go/request",
+			"revision": "01aeca54ebda6e0fbfafd0a524d234159c05ec20",
+			"revisionTime": "2016-07-05T13:30:06-07:00"
 		},
 		{
 			"path": "github.com/dustin/go-humanize",
-			"revision": "c20a8bde38c8f5ba06f6600edf473705c96829d1",
-			"revisionTime": "2015-08-24T01:38:10-07:00"
+			"revision": "fef948f2d241bd1fd0631108ecc2c9553bae60bf",
+			"revisionTime": "2016-06-23T09:40:21+08:00"
 		},
 		{
 			"path": "github.com/elazarl/go-bindata-assetfs",
@@ -29,33 +34,33 @@
 		},
 		{
 			"path": "github.com/fatih/color",
-			"revision": "7a5857db0b2752a436d8461d88c42dea0ee191c0",
-			"revisionTime": "2016-02-12T11:24:09+02:00"
+			"revision": "87d4004f2ab62d0d255e0a38f1680aa534549fe3",
+			"revisionTime": "2016-06-10T14:06:02+03:00"
 		},
 		{
 			"path": "github.com/gorilla/context",
-			"revision": "1c83b3eabd45b6d76072b66b746c20815fb2872d",
-			"revisionTime": "2015-08-19T22:12:45-07:00"
+			"revision": "aed02d124ae4a0e94fea4541c8effd05bf0c8296",
+			"revisionTime": "2016-05-25T13:33:19-07:00"
 		},
 		{
 			"path": "github.com/gorilla/handlers",
-			"revision": "ee54c7b44cab12289237fb8631314790076e728b",
-			"revisionTime": "2016-02-28T09:16:04-08:00"
+			"revision": "66e6c6f01d8da976ee113437745ca029c2b585a6",
+			"revisionTime": "2016-04-10T11:53:17-07:00"
 		},
 		{
 			"path": "github.com/gorilla/mux",
-			"revision": "ee1815431e497d3850809578c93ab6705f1a19f7",
-			"revisionTime": "2015-08-19T22:15:06-07:00"
+			"revision": "9fa818a44c2bf1396a17f9d5a3c0f6dd39d2ff8e",
+			"revisionTime": "2016-06-05T16:35:21-07:00"
 		},
 		{
 			"path": "github.com/gorilla/rpc/v2",
-			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
-			"revisionTime": "2015-11-05T07:45:51+08:00"
+			"revision": "bd3317b8f6704b1b40e4e705ec9e987a535cd5d3",
+			"revisionTime": "2016-05-16T23:23:31-07:00"
 		},
 		{
 			"path": "github.com/gorilla/rpc/v2/json2",
-			"revision": "64e20900b8aa38bb0771dec71ba3bcc2b07fc8ec",
-			"revisionTime": "2015-11-05T07:45:51+08:00"
+			"revision": "bd3317b8f6704b1b40e4e705ec9e987a535cd5d3",
+			"revisionTime": "2016-05-16T23:23:31-07:00"
 		},
 		{
 			"path": "github.com/hashicorp/go-version",
@@ -69,18 +74,18 @@
 		},
 		{
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "2fde63d2889a399426862a16611c489b1fed87bc",
-			"revisionTime": "2016-06-04T08:05:20+02:00"
+			"revision": "467733eb9c209042fb37d2074a5b6be33a529be0",
+			"revisionTime": "2016-07-06T21:06:00+02:00"
 		},
 		{
 			"path": "github.com/mattn/go-colorable",
-			"revision": "9cbef7c35391cca05f15f8181dc0b18bc9736dbb",
-			"revisionTime": "2016-02-20T16:59:35+09:00"
+			"revision": "9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59",
+			"revisionTime": "2016-06-03T00:08:27+09:00"
 		},
 		{
 			"path": "github.com/mattn/go-isatty",
-			"revision": "7fcbc72f853b92b5720db4a6b8482be612daef24",
-			"revisionTime": "2015-08-14T09:26:29+09:00"
+			"revision": "56b76bdf51f7708750eac80fa38b952bb9f32639",
+			"revisionTime": "2015-12-11T09:06:21+09:00"
 		},
 		{
 			"path": "github.com/minio/blake2b-simd",
@@ -119,8 +124,13 @@
 		},
 		{
 			"path": "github.com/rs/cors",
-			"revision": "eb527c8097e0f19a3ff7b253a3fe70545070f420",
-			"revisionTime": "2015-08-29T22:34:20-07:00"
+			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
+			"revisionTime": "2016-06-18T04:49:35+05:30"
+		},
+		{
+			"path": "github.com/rs/xhandler",
+			"revision": "ed27b6fd65218132ee50cd95f38474a3d8a2cd12",
+			"revisionTime": "2016-06-18T12:32:21-07:00"
 		},
 		{
 			"checksumSHA1": "u0hXGADM3JDza8YjgiyNJpAJk8g=",
@@ -137,6 +147,11 @@
 			"path": "golang.org/x/crypto/blowfish",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"
+		},
+		{
+			"path": "golang.org/x/net/context",
+			"revision": "a728288923b47049b2ce791836767ffbe964a5bd",
+			"revisionTime": "2016-07-07T15:24:52-07:00"
 		},
 		{
 			"path": "gopkg.in/check.v1",

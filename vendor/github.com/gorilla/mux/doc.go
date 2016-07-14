@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/mux implements a request router and dispatcher.
+Package mux implements a request router and dispatcher.
 
 The name mux stands for "HTTP request multiplexer". Like the standard
 http.ServeMux, mux.Router matches incoming requests against a list of

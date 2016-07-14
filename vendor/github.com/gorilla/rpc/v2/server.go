@@ -102,8 +102,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if idx != -1 {
 		contentType = contentType[:idx]
 	}
-	codec := s.codecs[strings.ToLower(contentType)]
-	if codec == nil {
+	var codec Codec
+	if contentType == "" && len(s.codecs) == 1 {
+		// If Content-Type is not set and only one codec has been registered,
+		// then default to that codec.
+		for _, c := range s.codecs {
+			codec = c
+		}
+	} else if codec = s.codecs[strings.ToLower(contentType)]; codec == nil {
 		WriteError(w, 415, "rpc: unrecognized Content-Type: "+contentType)
 		return
 	}
