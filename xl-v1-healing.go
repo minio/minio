@@ -131,10 +131,9 @@ func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
 
 // Returns slice of online disks needed.
 // - slice returing readable disks.
-// - xlMetaV1
-// - bool value indicating if healing is needed.
-func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
-	onlineDisks = make([]StorageAPI, len(xl.storageDisks))
+// - modTime of the Object
+func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
+	onlineDisks = make([]StorageAPI, len(disks))
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
@@ -145,7 +144,7 @@ func (xl xlObjects) listOnlineDisks(partsMetadata []xlMetaV1, errs []error) (onl
 	// Create a new online disks slice, which have common uuid.
 	for index, t := range modTimes {
 		if t == modTime {
-			onlineDisks[index] = xl.storageDisks[index]
+			onlineDisks[index] = disks[index]
 		} else {
 			onlineDisks[index] = nil
 		}

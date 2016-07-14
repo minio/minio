@@ -18,6 +18,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -181,5 +184,72 @@ func TestErasureDecode(t *testing.T) {
 				t.Errorf("Test %d: Expected to pass by failed instead %s", i+1, err)
 			}
 		}
+	}
+}
+
+// Simulates a faulty disk for AppendFile()
+type AppendDiskDown struct {
+	*posix
+}
+
+func (a AppendDiskDown) AppendFile(volume string, path string, buf []byte) error {
+	return errFaultyDisk
+}
+
+// Test erasureCreateFile()
+// TODO:
+// * check when more disks are down.
+// * verify written content by using erasureReadFile.
+func TestErasureCreateFile(t *testing.T) {
+	// Initialize environment needed for the test.
+	dataBlocks := 7
+	parityBlocks := 7
+	blockSize := int64(blockSizeV1)
+	diskPaths := make([]string, dataBlocks+parityBlocks)
+	disks := make([]StorageAPI, len(diskPaths))
+
+	for i := range diskPaths {
+		var err error
+		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
+		if err != nil {
+			t.Fatal("Unable to create tmp dir", err)
+		}
+		defer removeAll(diskPaths[i])
+		disks[i], err = newPosix(diskPaths[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = disks[i].MakeVol("testbucket")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Prepare a slice of 1MB with random data.
+	data := make([]byte, 1*1024*1024)
+	_, err := rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test when all disks are up.
+	size, _, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != int64(len(data)) {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, len(data))
+	}
+
+	// Two disks down.
+	disks[4] = AppendDiskDown{disks[4].(*posix)}
+	disks[5] = AppendDiskDown{disks[5].(*posix)}
+
+	// Test when two disks are down.
+	size, _, err = erasureCreateFile(disks, "testbucket", "testobject2", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != int64(len(data)) {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, len(data))
 	}
 }

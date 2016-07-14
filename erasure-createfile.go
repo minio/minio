@@ -28,22 +28,20 @@ import (
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume string, path string, partName string, data io.Reader, eInfos []erasureInfo, writeQuorum int) (newEInfos []erasureInfo, size int64, err error) {
-	// Just pick one eInfo.
-	eInfo := pickValidErasureInfo(eInfos)
-
+func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, blockSize int64, dataBlocks int, parityBlocks int, writeQuorum int) (size int64, checkSums []string, err error) {
 	// Allocated blockSized buffer for reading.
-	buf := make([]byte, eInfo.BlockSize)
+	buf := make([]byte, blockSize)
+
 	hashWriters := newHashWriters(len(disks))
 
 	// Read until io.EOF, erasure codes data and writes to all disks.
 	for {
 		var blocks [][]byte
-		n, rErr := io.ReadFull(data, buf)
+		n, rErr := io.ReadFull(reader, buf)
 		// FIXME: this is a bug in Golang, n == 0 and err ==
 		// io.ErrUnexpectedEOF for io.ReadFull function.
 		if n == 0 && rErr == io.ErrUnexpectedEOF {
-			return nil, 0, rErr
+			return 0, nil, rErr
 		}
 		if rErr == io.EOF {
 			// We have reached EOF on the first byte read, io.Reader
@@ -51,56 +49,38 @@ func erasureCreateFile(disks []StorageAPI, volume string, path string, partName 
 			// data. Will create a 0byte file instead.
 			if size == 0 {
 				blocks = make([][]byte, len(disks))
-				rErr = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum)
+				rErr = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum)
 				if rErr != nil {
-					return nil, 0, rErr
+					return 0, nil, rErr
 				}
 			} // else we have reached EOF after few reads, no need to
 			// add an additional 0bytes at the end.
 			break
 		}
 		if rErr != nil && rErr != io.ErrUnexpectedEOF {
-			return nil, 0, rErr
+			return 0, nil, rErr
 		}
 		if n > 0 {
 			// Returns encoded blocks.
 			var enErr error
-			blocks, enErr = encodeData(buf[0:n], eInfo.DataBlocks, eInfo.ParityBlocks)
+			blocks, enErr = encodeData(buf[0:n], dataBlocks, parityBlocks)
 			if enErr != nil {
-				return nil, 0, enErr
+				return 0, nil, enErr
 			}
 
 			// Write to all disks.
-			if err = appendFile(disks, volume, path, blocks, eInfo.Distribution, hashWriters, writeQuorum); err != nil {
-				return nil, 0, err
+			if err = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum); err != nil {
+				return 0, nil, err
 			}
 			size += int64(n)
 		}
 	}
 
-	// Save the checksums.
-	checkSums := make([]checkSumInfo, len(disks))
-	for index := range disks {
-		blockIndex := eInfo.Distribution[index] - 1
-		checkSums[blockIndex] = checkSumInfo{
-			Name:      partName,
-			Algorithm: "blake2b",
-			Hash:      hex.EncodeToString(hashWriters[blockIndex].Sum(nil)),
-		}
+	checkSums = make([]string, len(disks))
+	for i := range checkSums {
+		checkSums[i] = hex.EncodeToString(hashWriters[i].Sum(nil))
 	}
-
-	// Erasure info update for checksum for each disks.
-	newEInfos = make([]erasureInfo, len(disks))
-	for index, eInfo := range eInfos {
-		if eInfo.IsValid() {
-			blockIndex := eInfo.Distribution[index] - 1
-			newEInfos[index] = eInfo
-			newEInfos[index].Checksum = append(newEInfos[index].Checksum, checkSums[blockIndex])
-		}
-	}
-
-	// Return newEInfos.
-	return newEInfos, size, nil
+	return size, checkSums, nil
 }
 
 // encodeData - encodes incoming data buffer into
@@ -128,7 +108,7 @@ func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, erro
 }
 
 // appendFile - append data buffer at path.
-func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, distribution []int, hashWriters []hash.Hash, writeQuorum int) (err error) {
+func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []hash.Hash, writeQuorum int) (err error) {
 	var wg = &sync.WaitGroup{}
 	var wErrs = make([]error, len(disks))
 	// Write encoded data to quorum disks in parallel.
@@ -140,16 +120,14 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, dist
 		// Write encoded data in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			// Pick the block from the distribution.
-			blockIndex := distribution[index] - 1
-			wErr := disk.AppendFile(volume, path, enBlocks[blockIndex])
+			wErr := disk.AppendFile(volume, path, enBlocks[index])
 			if wErr != nil {
 				wErrs[index] = wErr
 				return
 			}
 
 			// Calculate hash for each blocks.
-			hashWriters[blockIndex].Write(enBlocks[blockIndex])
+			hashWriters[index].Write(enBlocks[index])
 
 			// Successfully wrote.
 			wErrs[index] = nil
