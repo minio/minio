@@ -18,7 +18,7 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 ### Install from Source 
 
-Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](/docs/how-to-install-golang).
+Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
 ```sh
 $ go get -d github.com/minio/minio
@@ -27,7 +27,7 @@ $ make
 ```
 ## 2.  Run Minio Server
  
- `` 1. GNU/Linux``
+### 1. GNU/Linux
 
  ```sh
 $ chmod +x minio
@@ -52,7 +52,7 @@ Object API (Amazon S3 compatible):
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 ```
 
- ``2. OS X``
+### 2. OS X
 
  ```sh
 $ chmod 755 minio
@@ -77,7 +77,7 @@ Object API (Amazon S3 compatible):
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 ```
 
-``3.Microsoft Windows``
+### 3.Microsoft Windows
 
 ```sh
 C:\Users\Username\Downloads> minio.exe --help
@@ -102,13 +102,14 @@ Object API (Amazon S3 compatible):
 
 ```
 
-``4. Docker Container``
+### 4. Docker Container
 
 ```sh
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio
 ```
-``5. FreeBSD``
+
+### 5. FreeBSD
 
 ```sh
 $ chmod 755 minio
@@ -153,15 +154,15 @@ $ mc ls myminio/
 [2016-01-20 16:07:41 IST]     0B my.minio.io/
 ```
 
-For more examples please navigate to [Minio Client Complete Guide](/docs/minio-client-complete-guide).
+For more examples please navigate to [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide).
 
 ## 5. Explore Further
-- [Minio Erasure Code QuickStart Guide](docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Minio Docker Quickstart Guide](docs.minio.io/docs/minio-docker-container)
-- [Use `mc` with Minio Server](docs.minio.io/docs/minio-client-quick-start-guide) 
-- [Use `aws-cli` with Minio Server](docs.minio.io/docs/how-to-use-aws-cli-with-minio) 
-- [Use `s3cmd` with Minio Server](docs.minio.io/docs/s3cmd-with-minio-server) 
-- [Use `minio-go` SDK with Minio Server](/docs/golang-client-quickstart-guide) 
+- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-container)
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quick-start-guide) 
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/how-to-use-aws-cli-with-minio) 
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio-server) 
+- [Use `minio-go` SDK with Minio Server](https://docs/golang-client-quickstart-guide) 
  
  
 ## 6. Contribute to Minio Project
