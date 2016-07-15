@@ -1,7 +1,9 @@
-# Minio Quickstart Guide
+# Minio Quickstart Guide [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Minio is an object storage server released under Apache License v2.0. It is compatible with Amazon S3 cloud storage service. It is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. Size of an object can range from a few KBs to a maximum of 5TB.
 
 ##  1. Download
+
 Minio server is light enough to be bundled with the application stack, similar to NodeJS, Redis and MySQL.
 
 | Platform| Architecture | URL|
@@ -14,9 +16,7 @@ Minio server is light enough to be bundled with the application stack, similar t
 ||32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe|
 |FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio|
 
-
-
-### Install from Source 
+### Install from Source
 
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
@@ -25,8 +25,9 @@ $ go get -d github.com/minio/minio
 $ cd $GOPATH/src/github.com/minio/minio
 $ make
 ```
-## 2.  Run Minio Server
- 
+
+## 2. Run Minio Server
+
 ### 1. GNU/Linux
 
  ```sh
@@ -35,8 +36,8 @@ $ ./minio --help
 $ ./minio server ~/Photos
 
 Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE 
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 Region:    us-east-1
 
 Browser Access:
@@ -60,8 +61,8 @@ $ ./minio --help
 $ ./minio server ~/Photos
 
 Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE 
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 Region:    us-east-1
 
 Browser Access:
@@ -84,8 +85,8 @@ C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
 
 Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE 
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 Region:    us-east-1
 
 Browser Access:
@@ -117,8 +118,8 @@ $ ./minio --help
 $ ./minio server ~/Photos
 
 Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE 
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 Region:    us-east-1
 
 Browser Access:
@@ -140,11 +141,10 @@ Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on
 
 ![Screenshot](./Minio_Browser.png)
 
- 
 ## 4. Test Minio Server using `mc`
 
 Install mc  from [here](https://docs.minio.io/docs/minio-client-quick-start-guide).  Use `mc ls` command to list all the buckets on your minio server.
- 
+
 ```sh
 $ mc ls myminio/
 [2015-08-05 08:13:22 IST]     0B andoria/
@@ -156,16 +156,16 @@ $ mc ls myminio/
 
 For more examples please navigate to [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide).
 
+
 ## 5. Explore Further
+
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-container)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quick-start-guide) 
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/how-to-use-aws-cli-with-minio) 
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio-server) 
-- [Use `minio-go` SDK with Minio Server](https://docs/golang-client-quickstart-guide) 
- 
- 
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quick-start-guide)
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/how-to-use-aws-cli-with-minio)
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio-server)
+- [Use `minio-go` SDK with Minio Server](https://docs/golang-client-quickstart-guide)
+
+
 ## 6. Contribute to Minio Project
 Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
- 
- 
