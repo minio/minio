@@ -25,74 +25,115 @@ $ go get -d github.com/minio/minio
 $ cd $GOPATH/src/github.com/minio/minio
 $ make
 ```
- ## 2.  Run Minio Server
+## 2.  Run Minio Server
  
  `` 1. GNU/Linux``
+
  ```sh
- $ chmod +x minio
+$ chmod +x minio
 $ ./minio --help
 $ ./minio server ~/Photos
 
-AccessKey: WLGDGYAQYIGI833EV05A  SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF Region: us-east-1
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE 
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+Region:    us-east-1
 
-Minio Object Storage:
-     http://127.0.0.1:9000
-     http://10.0.0.3:9000
+Browser Access:
+   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Minio Browser:
-     http://127.0.0.1:9000
-     http://10.0.0.3:9000
+Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-To configure Minio Client:
-    $ wget https://dl.minio.io/client/mc/release/linux-amd64/mc
-    $ chmod 755 mc
-    $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
- ```
+Object API (Amazon S3 compatible):
+   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+```
+
  ``2. OS X``
+
  ```sh
- $ chmod 755 minio
+$ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
 
-AccessKey: WLGDGYAQYIGI833EV05A  SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF Region: us-east-1
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE 
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+Region:    us-east-1
 
-Minio Object Storage:
-     http://127.0.0.1:9000
-     http://10.0.0.3:9000
+Browser Access:
+   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Minio Browser:
-     http://127.0.0.1:9000
-     http://10.0.0.3:9000
+Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-To configure Minio Client:
-    $ wget https://dl.minio.io/client/mc/release/darwin-amd64/mc
-    $ chmod 755 mc
-    $ ./mc config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
- ```
+Object API (Amazon S3 compatible):
+   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+```
+
 ``3.Microsoft Windows``
+
 ```sh
 C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
 
-AccessKey: WLGDGYAQYIGI833EV05A SecretKey: BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF Region: us-east-1
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE 
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+Region:    us-east-1
 
-Minio Object Storage: 
-     http://127.0.0.1:9000 
-     http://10.0.0.3:9000
+Browser Access:
+   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Minio Browser: 
-     http://127.0.0.1:9000 
-     http://10.0.0.3:9000
+Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+   $ mc.exe config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-To configure Minio Client: 
-    Download "mc" from https://dl.minio.io/client/mc/release/windows-amd64/mc 
-    > mc.exe config host add myminio http://localhost:9000 WLGDGYAQYIGI833EV05A BYvgJM101sHngl2uzjXS/OBF/aMxAN06JrJ3qJlF
+Object API (Amazon S3 compatible):
+   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+
 ```
+
 ``4. Docker Container``
+
 ```sh
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio
 ```
+``5. FreeBSD``
+
+```sh
+$ chmod 755 minio
+$ ./minio --help
+$ ./minio server ~/Photos
+
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE 
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03 
+Region:    us-east-1
+
+Browser Access:
+   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+
+Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
+
+Object API (Amazon S3 compatible):
+   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+
+```
+
 ## 3. Test Minio Server using Minio Browser
 Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on minio server.
 
@@ -100,6 +141,7 @@ Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on
 
  
 ## 4. Test Minio Server using `mc`
+
 Install mc  from [here](https://docs.minio.io/docs/minio-client-quick-start-guide).  Use `mc ls` command to list all the buckets on your minio server.
  
 ```sh
