@@ -8,7 +8,7 @@ RUN go-wrapper download
 RUN go-wrapper install
 
 ENV ALLOW_CONTAINER_ROOT=1
-RUN mkdir -p /export/docker && cp /go/src/app/Docker.md /export/docker/
+RUN mkdir -p /export/docker && cp /go/src/app/docs/Docker.md /export/docker/
 
 EXPOSE 9000
 ENTRYPOINT ["go-wrapper", "run", "server"]
