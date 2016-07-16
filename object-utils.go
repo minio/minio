@@ -39,6 +39,7 @@ const (
 
 // validBucket regexp.
 var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
+var isIPAddress = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 
 // IsValidBucketName verifies a bucket name in accordance with Amazon's
 // requirements. It must be 3-63 characters long, can contain dashes
@@ -51,7 +52,9 @@ func IsValidBucketName(bucket string) bool {
 	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
 		return false
 	}
-	return validBucket.MatchString(bucket)
+	return (validBucket.MatchString(bucket) &&
+		!isIPAddress.MatchString(bucket) &&
+		!strings.Contains(bucket, ".."))
 }
 
 // IsValidObjectName verifies an object name in accordance with Amazon's

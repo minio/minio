@@ -42,6 +42,8 @@ func TestIsValidBucketName(t *testing.T) {
 		// cases for which test should fail.
 		// passing invalid bucket names.
 		{"------", false},
+		{"my..bucket", false},
+		{"192.168.1.1", false},
 		{"$this-is-not-valid-too", false},
 		{"contains-$-dollar", false},
 		{"contains-^-carrot", false},
