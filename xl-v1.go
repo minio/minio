@@ -196,7 +196,7 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 	// Figure out read and write quorum based on number of storage disks.
 	// READ and WRITE quorum is always set to (N/2) number of disks.
 	xl.readQuorum = len(xl.storageDisks) / 2
-	xl.writeQuorum = len(xl.storageDisks) / 2
+	xl.writeQuorum = len(xl.storageDisks)/2 + 1
 
 	// Return successfully initialized object layer.
 	return xl, nil

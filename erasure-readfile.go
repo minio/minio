@@ -159,7 +159,7 @@ func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []St
 // are decoded into a data block. Data block is trimmed for given offset and length,
 // then written to given writer. This function also supports bit-rot detection by
 // verifying checksum of individual block's checksum.
-func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, offset int64, length int64, totalLength int64, blockSize int64, dataBlocks int, parityBlocks int, checkSums []string, pool *bpool.BytePool) (int64, error) {
+func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, offset int64, length int64, totalLength int64, blockSize int64, dataBlocks int, parityBlocks int, checkSums []string, algo string, pool *bpool.BytePool) (int64, error) {
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
 		return 0, errUnexpected
@@ -186,7 +186,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 				return true
 			}
 			// Is this a valid block?
-			isValid := isValidBlock(disks[diskIndex], volume, path, checkSums[diskIndex])
+			isValid := isValidBlock(disks[diskIndex], volume, path, checkSums[diskIndex], algo)
 			verified[diskIndex] = isValid
 			return isValid
 		}
@@ -300,31 +300,25 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	return bytesWritten, nil
 }
 
-// PartObjectChecksum - returns the checksum for the part name from the checksum slice.
-func (e erasureInfo) PartObjectChecksum(partName string) checkSumInfo {
-	for _, checksum := range e.Checksum {
-		if checksum.Name == partName {
-			return checksum
-		}
-	}
-	return checkSumInfo{}
-}
-
 // isValidBlock - calculates the checksum hash for the block and
 // validates if its correct returns true for valid cases, false otherwise.
-func isValidBlock(disk StorageAPI, volume, path string, checksum string) (ok bool) {
+func isValidBlock(disk StorageAPI, volume, path, checkSum, checkSumAlgo string) (ok bool) {
 	// Disk is not available, not a valid block.
 	if disk == nil {
 		return false
 	}
+	// Checksum not available, not a valid block.
+	if checkSum == "" {
+		return false
+	}
 	// Read everything for a given block and calculate hash.
-	hashWriter := newHash("blake2b")
+	hashWriter := newHash(checkSumAlgo)
 	hashBytes, err := hashSum(disk, volume, path, hashWriter)
 	if err != nil {
 		errorIf(err, "Unable to calculate checksum %s/%s", volume, path)
 		return false
 	}
-	return hex.EncodeToString(hashBytes) == checksum
+	return hex.EncodeToString(hashBytes) == checkSum
 }
 
 // decodeData - decode encoded blocks.

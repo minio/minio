@@ -27,10 +27,10 @@ import (
 )
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
-func newHashWriters(diskCount int) []hash.Hash {
+func newHashWriters(diskCount int, algo string) []hash.Hash {
 	hashWriters := make([]hash.Hash, diskCount)
 	for index := range hashWriters {
-		hashWriters[index] = newHash("blake2b")
+		hashWriters[index] = newHash(algo)
 	}
 	return hashWriters
 }

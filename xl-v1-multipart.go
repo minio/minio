@@ -384,7 +384,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	teeReader := io.TeeReader(data, md5Writer)
 
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, xl.writeQuorum)
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -459,7 +459,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			continue
 		}
 		partsMetadata[index].Parts = xlMeta.Parts
-		partsMetadata[index].AddCheckSum(partSuffix, "blake2b", checkSums[index])
+		partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
+			Name:      partSuffix,
+			Hash:      checkSums[index],
+			Algorithm: bitRotAlgo,
+		})
 	}
 
 	// Write all the checksum metadata.
