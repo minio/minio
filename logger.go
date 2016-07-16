@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"os"
-	"reflect"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -40,11 +39,15 @@ var log = logrus.New() // Default console logger.
 //   - console [default]
 //   - file
 //   - syslog
+//   - amqp
+//   - elasticsearch
 //
 type logger struct {
-	Console consoleLogger `json:"console"`
-	File    fileLogger    `json:"file"`
-	Syslog  syslogLogger  `json:"syslog"`
+	Console       consoleLogger       `json:"console"`
+	File          fileLogger          `json:"file"`
+	Syslog        syslogLogger        `json:"syslog"`
+	AMQP          amqpLogger          `json:"amqp"`
+	ElasticSearch elasticSearchLogger `json:"elasticsearch"`
 	// Add new loggers here.
 }
 
@@ -91,11 +94,8 @@ func errorIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	sysInfo := sysInfo()
 	fields := logrus.Fields{
-		"cause":   err.Error(),
-		"type":    reflect.TypeOf(err),
-		"sysInfo": sysInfo,
+		"cause": err.Error(),
 	}
 	if globalTrace {
 		fields["stack"] = "\n" + stackInfo()
@@ -108,11 +108,8 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
-	sysInfo := sysInfo()
 	fields := logrus.Fields{
-		"cause":   err.Error(),
-		"type":    reflect.TypeOf(err),
-		"sysInfo": sysInfo,
+		"cause": err.Error(),
 	}
 	if globalTrace {
 		fields["stack"] = "\n" + stackInfo()

@@ -145,3 +145,53 @@ func loadConfigV3() (*configV3, error) {
 	}
 	return c, nil
 }
+
+type loggerV4 struct {
+	Console struct {
+		Enable bool   `json:"enable"`
+		Level  string `json:"level"`
+	} `json:"console"`
+	File struct {
+		Enable   bool   `json:"enable"`
+		Filename string `json:"fileName"`
+		Level    string `json:"level"`
+	} `json:"file"`
+	Syslog struct {
+		Enable bool   `json:"enable"`
+		Addr   string `json:"address"`
+		Level  string `json:"level"`
+	} `json:"syslog"`
+}
+
+// configV4 server configuration version '4'.
+type configV4 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger loggerV4 `json:"logger"`
+}
+
+// loadConfigV4 load config version '4'.
+func loadConfigV4() (*configV4, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	c := &configV4{}
+	c.Version = "4"
+	qc, err := quick.New(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return c, nil
+}

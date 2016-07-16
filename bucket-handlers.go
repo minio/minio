@@ -23,7 +23,6 @@ import (
 	"encoding/xml"
 	"io"
 	"io/ioutil"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -319,9 +318,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// requests which do not follow valid region requirements.
 	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
-		return
 	}
-	// Make bucket.
+
+	// Proceed to creating a bucket.
 	err := api.ObjectAPI.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err, "Unable to create a bucket.")
@@ -331,32 +330,6 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// Make sure to add Location information here only for bucket
 	w.Header().Set("Location", getLocation(r))
 	writeSuccessResponse(w, nil)
-}
-
-func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, error) {
-	/// HTML Form values
-	formValues := make(map[string]string)
-	filePart := new(bytes.Buffer)
-	var err error
-	for err == nil {
-		var part *multipart.Part
-		part, err = reader.NextPart()
-		if part != nil {
-			if part.FileName() == "" {
-				var buffer []byte
-				buffer, err = ioutil.ReadAll(part)
-				if err != nil {
-					return nil, nil, err
-				}
-				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
-			} else {
-				if _, err = io.Copy(filePart, part); err != nil {
-					return nil, nil, err
-				}
-			}
-		}
-	}
-	return filePart, formValues, nil
 }
 
 // PostPolicyBucketHandler - POST policy
@@ -415,6 +388,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	})
 	setCommonHeaders(w)
 	writeSuccessResponse(w, encodedSuccessResponse)
+
+	// Load notification config if any.
+	nConfig, err := api.loadNotificationConfig(bucket)
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	size := int64(0) // FIXME: support notify size.
+	// Notify event.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedPost, bucket, object, md5Sum, size)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -464,6 +448,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	// Attempt to delete bucket.
 	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
 		errorIf(err, "Unable to delete a bucket.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
