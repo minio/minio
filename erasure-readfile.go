@@ -234,10 +234,12 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			// readDisks - disks from which we need to read in parallel.
 			var readDisks []StorageAPI
 			var err error
+			// get readable disks slice from which we can read parallelly.
 			readDisks, nextIndex, err = getReadDisks(disks, nextIndex, dataBlocks)
 			if err != nil {
 				return bytesWritten, err
 			}
+			// Issue a parallel read across the disks specified in readDisks.
 			parallelRead(volume, path, readDisks, disks, enBlocks, blockOffset, curChunkSize, bitRotVerify)
 			if isSuccessDecodeBlocks(enBlocks, dataBlocks) {
 				// If enough blocks are available to do rs.Reconstruct()
@@ -247,6 +249,8 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 				// No more disks to read from.
 				return bytesWritten, errXLReadQuorum
 			}
+			// We do not have enough enough data blocks to reconstruct the data
+			// hence continue the for-loop till we have enough data blocks.
 		}
 
 		// If we have all the data blocks no need to decode, continue to write.
