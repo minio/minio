@@ -64,17 +64,29 @@ func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
 
 // Should be called when process shuts down.
 func shutdownFS(storage StorageAPI) {
+	// List if there are any multipart entries.
 	_, err := storage.ListDir(minioMetaBucket, mpartMetaPrefix)
 	if err != errFileNotFound {
-		// Multipart directory is not empty hence do not remove .minio volume.
+		// Multipart directory is not empty hence do not remove '.minio.sys' volume.
 		os.Exit(0)
 	}
+	// List if there are any bucket configuration entries.
+	_, err = storage.ListDir(minioMetaBucket, bucketConfigPrefix)
+	if err != errFileNotFound {
+		// Bucket config directory is not empty hence do not remove '.minio.sys' volume.
+		os.Exit(0)
+	}
+	// Cleanup everything else.
 	prefix := ""
-	if err := cleanupDir(storage, minioMetaBucket, prefix); err != nil {
-		os.Exit(0)
-		return
+	if err = cleanupDir(storage, minioMetaBucket, prefix); err != nil {
+		errorIf(err, "Unable to cleanup minio meta bucket")
+		os.Exit(1)
 	}
-	storage.DeleteVol(minioMetaBucket)
+	if err = storage.DeleteVol(minioMetaBucket); err != nil {
+		errorIf(err, "Unable to delete minio meta bucket", minioMetaBucket)
+		os.Exit(1)
+	}
+	// Successful exit.
 	os.Exit(0)
 }
 
@@ -182,6 +194,10 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		// StorageAPI can send volume names which are incompatible
 		// with buckets, handle it and skip them.
 		if !IsValidBucketName(vol.Name) {
+			continue
+		}
+		// Ignore the volume special bucket.
+		if vol.Name == minioMetaBucket {
 			continue
 		}
 		bucketInfos = append(bucketInfos, BucketInfo{
@@ -422,14 +438,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// Notification event
-	notificationEvent, err := NewNotificationEvent(fs, ObjectCreatedPut, bucket, object, newMD5Hex)
-	if err == nil {
-		if serverConfig != nil {
-			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
-		}
-	}
-
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
@@ -443,20 +451,9 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
-	// Notification event, need to do it before deleting the object
-	// because otherwise it won't be found
-	notificationEvent, errN := NewNotificationEvent(fs, ObjectRemovedDelete, bucket, object, "")
-
 	if err := fs.storage.DeleteFile(bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
-
-	if errN == nil {
-		if serverConfig != nil {
-			serverConfig.Queues.Post(NotificationRecords{[]*NotificationEvent{notificationEvent}})
-		}
-	}
-
 	return nil
 }
 

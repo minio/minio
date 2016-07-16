@@ -8,12 +8,6 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
-			"checksumSHA1": "o0lrEad2lwXQgjYvLKb9aE0tIJg=",
-			"path": "github.com/campoy/jsonenums",
-			"revision": "ff3de3c0ddce76fd05063b1aeecd4decaa5176ae",
-			"revisionTime": "2016-05-27T23:16:08Z"
-		},
-		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"
@@ -119,11 +113,6 @@
 			"revisionTime": "2016-07-02T02:15:29-07:00"
 		},
 		{
-			"path": "github.com/mitchellh/go-homedir",
-			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
-			"revisionTime": "2015-10-24T22:24:27-07:00"
-		},
-		{
 			"path": "github.com/pkg/profile",
 			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
 			"revisionTime": "2016-05-18T16:56:57+10:00"
@@ -169,6 +158,24 @@
 			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
+		},
+		{
+			"checksumSHA1": "eC4OV7g1tug838fPWrwflstr/TM=",
+			"path": "gopkg.in/olivere/elastic.v3",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
+			"path": "gopkg.in/olivere/elastic.v3/backoff",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "XQg6xG6l15Ke43KolthYYnVDCYo=",
+			"path": "gopkg.in/olivere/elastic.v3/uritemplates",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
 		}
 	],
 	"rootPath": "github.com/minio/minio"

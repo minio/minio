@@ -31,7 +31,6 @@ type serverConfigV4 struct {
 	Credential credential `json:"credential"`
 	Region     string     `json:"region"`
 
-	Queues Queues `json:"queues"`
 	// Additional error logging configuration.
 	Logger logger `json:"logger"`
 
@@ -147,11 +146,6 @@ func (s *serverConfigV4) GetSyslogLogger() syslogLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Syslog
-}
-
-// SetQueues set new queues.
-func (s *serverConfigV4) SetQueues(queues Queues) {
-	s.Queues = queues
 }
 
 // SetRegion set new region.

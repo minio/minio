@@ -46,6 +46,10 @@ var isIPAddress = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 // and periods, but must begin and end with a lowercase letter or a number.
 // See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 func IsValidBucketName(bucket string) bool {
+	// Special case when bucket is equal to 'metaBucket'.
+	if bucket == minioMetaBucket {
+		return true
+	}
 	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
 	}

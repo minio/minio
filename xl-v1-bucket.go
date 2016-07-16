@@ -187,6 +187,10 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 				if !IsValidBucketName(volInfo.Name) {
 					continue
 				}
+				// Ignore the volume special bucket.
+				if volInfo.Name == minioMetaBucket {
+					continue
+				}
 				bucketsInfo = append(bucketsInfo, BucketInfo{
 					Name:    volInfo.Name,
 					Created: volInfo.Created,
