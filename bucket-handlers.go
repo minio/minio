@@ -198,53 +198,26 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	// List buckets does not support bucket policies.
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+	// List buckets does not support bucket policies, no need to enforce it.
+	if s3Error := checkAuth(w, r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
-	case authTypeSigned, authTypePresigned:
-		payload, e := ioutil.ReadAll(r.Body)
-		if e != nil {
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		// Verify Content-Md5, if payload is set.
-		if r.Header.Get("Content-Md5") != "" {
-			if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
-				writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-				return
-			}
-		}
-		// Populate back the payload.
-		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-		var s3Error APIErrorCode // API error code.
-		validateRegion := false  // Validate region.
-		if isRequestSignatureV4(r) {
-			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
-		} else if isRequestPresignedSignatureV4(r) {
-			s3Error = doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
-		}
-		if s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
 	}
 
 	bucketsInfo, err := api.ObjectAPI.ListBuckets()
-	if err == nil {
-		// generate response
-		response := generateListBucketsResponse(bucketsInfo)
-		encodedSuccessResponse := encodeResponse(response)
-		// write headers
-		setCommonHeaders(w)
-		// write response
-		writeSuccessResponse(w, encodedSuccessResponse)
+	if err != nil {
+		errorIf(err, "Unable to list buckets.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	errorIf(err, "Unable to list buckets.")
-	writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+
+	// Generate response.
+	response := generateListBucketsResponse(bucketsInfo)
+	encodedSuccessResponse := encodeResponse(response)
+	// Write headers.
+	setCommonHeaders(w)
+	// Write response.
+	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
