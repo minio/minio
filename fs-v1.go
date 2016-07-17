@@ -532,10 +532,14 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		listDir := listDirFactory(func(bucket, object string) bool {
+		isLeaf := func(bucket, object string) bool {
+			// bucket argument is unused as we don't need to StatFile
+			// to figure if it's a file, just need to check that the
+			// object string does not end with "/".
 			return !strings.HasSuffix(object, slashSeparator)
-		}, fs.storage)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, endWalkCh)
+		}
+		listDir := listDirFactory(isLeaf, fs.storage)
+		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 	var fileInfos []FileInfo
 	var eof bool

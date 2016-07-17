@@ -72,8 +72,9 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath})
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
-			listDir := listDirFactory(fs.isMultipartUpload, fs.storage)
-			walkResultCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, endWalkCh)
+			isLeaf := fs.isMultipartUpload
+			listDir := listDirFactory(isLeaf, fs.storage)
+			walkResultCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, endWalkCh)
 		}
 		for maxUploads > 0 {
 			walkResult, ok := <-walkResultCh

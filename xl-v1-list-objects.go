@@ -29,8 +29,9 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		listDir := listDirFactory(xl.isObject, xl.getLoadBalancedQuorumDisks()...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, endWalkCh)
+		isLeaf := xl.isObject
+		listDir := listDirFactory(isLeaf, xl.getLoadBalancedQuorumDisks()...)
+		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
