@@ -147,8 +147,23 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	return ErrAccessDenied
 }
 
-// authHandler - handles all the incoming authorization headers and
-// validates them if possible.
+// checkAuth - checks for conditions satisfying the authorization of
+// the incoming request. Request should be either Presigned or Signed
+// in accordance with AWS S3 Signature V4 requirements. ErrAccessDenied
+// is returned for unhandled auth type. Once the auth type is indentified
+// request headers and body are used to calculate the signature validating
+// the client signature present in request.
+func checkAuth(w http.ResponseWriter, r *http.Request) APIErrorCode {
+	authType := getRequestAuthType(r)
+	if authType != authTypePresigned && authType != authTypeSigned {
+		// For all unhandled auth types return error AccessDenied.
+		return ErrAccessDenied
+	}
+	// Validates the request for both Presigned and Signed.
+	return isReqAuthenticated(r)
+}
+
+// authHandler - handles all the incoming authorization headers and validates them if possible.
 type authHandler struct {
 	handler http.Handler
 }
