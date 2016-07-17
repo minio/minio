@@ -561,9 +561,19 @@ func getDeleteBucketURL(endPoint, bucketName string) string {
 
 }
 
-// return URL for listing the bucket.
-func getListObjectsURL(endPoint, bucketName string, maxKeys string) string {
+// return URL for listing objects in the bucket with V1 legacy API.
+func getListObjectsV1URL(endPoint, bucketName string, maxKeys string) string {
 	queryValue := url.Values{}
+	if maxKeys != "" {
+		queryValue.Set("max-keys", maxKeys)
+	}
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for listing objects in the bucket with V2 API.
+func getListObjectsV2URL(endPoint, bucketName string, maxKeys string) string {
+	queryValue := url.Values{}
+	queryValue.Set("list-type", "2") // Enables list objects V2 URL.
 	if maxKeys != "" {
 		queryValue.Set("max-keys", maxKeys)
 	}

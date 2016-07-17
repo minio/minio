@@ -1153,9 +1153,8 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// create HTTP request with invalid value of max-keys parameter.
-	// max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsURL(s.endPoint, bucketName, "-2"),
+	// create listObjectsV1 request with invalid value of max-keys parameter. max-keys is set to -2.
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "-2"),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
@@ -1164,6 +1163,18 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	c.Assert(err, IsNil)
 	// validating the error response.
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
+
+	// create listObjectsV2 request with invalid value of max-keys parameter. max-keys is set to -2.
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// validating the error response.
+	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
+
 }
 
 // TestPutBucketErrors - request for non valid bucket operation
