@@ -262,14 +262,17 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 		}
 
 		var outSize, outOffset int64
-		// If this is start block, skip unwanted bytes.
-		if block == startBlock {
-			outOffset = bytesToSkip
-		}
 
 		// Total data to be read.
 		outSize = blockSize
-		if length-bytesWritten < blockSize {
+
+		// If this is start block, skip unwanted bytes.
+		if block == startBlock {
+			outOffset = bytesToSkip
+			outSize -= bytesToSkip
+		}
+
+		if length-bytesWritten < outSize {
 			// We should not send more data than what was requested.
 			outSize = length - bytesWritten
 		}
