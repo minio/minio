@@ -314,37 +314,11 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		limitDataReader = data
 	}
 
-	// Allocate buffer for staging buffer.
-	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
+	cErr := fs.createFile(limitDataReader, md5Writer, size, minioMetaBucket, tmpPartPath)
+	if cErr != nil {
+		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		return "", toObjectErr(cErr, minioMetaBucket, tmpPartPath)
 	}
-	var buf = make([]byte, int(bufSize))
-
-	bytesWritten := int64(0)
-	// Read the buffer till io.EOF and append the read data to the temporary file.
-	for {
-		n, rErr := limitDataReader.Read(buf)
-		if rErr != nil && rErr != io.EOF {
-			return "", toObjectErr(rErr, bucket, object)
-		}
-		bytesWritten += int64(n)
-		if n > 0 {
-			// Update md5 writer.
-			md5Writer.Write(buf[:n])
-			wErr := fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
-			if wErr != nil {
-				return "", toObjectErr(wErr, bucket, object)
-			}
-		}
-		if rErr == io.EOF {
-			if bytesWritten < size {
-				return "", toObjectErr(io.ErrShortWrite, bucket, object)
-			}
-			break
-		}
-	}
-
 	// Validate if payload is valid.
 	if isSignVerify(data) {
 		if err := data.(*signVerifyReader).Verify(); err != nil {

@@ -369,35 +369,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		// Allocate a buffer to Read() the object upload stream.
-		bufSize := int64(readSizeV1)
-		if size > 0 && bufSize > size {
-			bufSize = size
-		}
-		buf := make([]byte, int(bufSize))
-
-		bytesWritten := int64(0)
-		// Read the buffer till io.EOF and append the read data to the temporary file.
-		for {
-			n, rErr := limitDataReader.Read(buf)
-			if rErr != nil && rErr != io.EOF {
-				return "", toObjectErr(rErr, bucket, object)
-			}
-			bytesWritten += int64(n)
-			if n > 0 {
-				// Update md5 writer.
-				md5Writer.Write(buf[0:n])
-				wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[0:n])
-				if wErr != nil {
-					return "", toObjectErr(wErr, bucket, object)
-				}
-			}
-			if rErr == io.EOF {
-				if bytesWritten < size {
-					return "", toObjectErr(io.ErrShortWrite, bucket, object)
-				}
-				break
-			}
+		err := fs.createFile(limitDataReader, md5Writer, size, minioMetaBucket, tempObj)
+		if err != nil {
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			return "", toObjectErr(err, bucket, object)
 		}
 	}
 
