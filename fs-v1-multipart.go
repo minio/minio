@@ -314,11 +314,24 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		limitDataReader = data
 	}
 
-	cErr := fs.createFile(limitDataReader, md5Writer, size, minioMetaBucket, tmpPartPath)
+	teeReader := io.TeeReader(limitDataReader, md5Writer)
+	bufSize := int64(readSizeV1)
+	if size > 0 && bufSize > size {
+		bufSize = size
+	}
+	buf := make([]byte, int(bufSize))
+	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tmpPartPath)
 	if cErr != nil {
 		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 		return "", toObjectErr(cErr, minioMetaBucket, tmpPartPath)
 	}
+	// Should return IncompleteBody{} error when reader has fewer
+	// bytes than specified in request header.
+	if bytesWritten < size {
+		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		return "", IncompleteBody{}
+	}
+
 	// Validate if payload is valid.
 	if isSignVerify(data) {
 		if err := data.(*signVerifyReader).Verify(); err != nil {

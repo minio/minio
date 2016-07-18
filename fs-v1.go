@@ -369,10 +369,24 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		err := fs.createFile(limitDataReader, md5Writer, size, minioMetaBucket, tempObj)
+		// Allocate a buffer to Read() from request body
+		bufSize := int64(readSizeV1)
+		if size > 0 && bufSize > size {
+			bufSize = size
+		}
+		buf := make([]byte, int(bufSize))
+		teeReader := io.TeeReader(limitDataReader, md5Writer)
+		bytesWritten, err := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			return "", toObjectErr(err, bucket, object)
+		}
+
+		// Should return IncompleteBody{} error when reader has fewer
+		// bytes than specified in request header.
+		if bytesWritten < size {
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			return "", IncompleteBody{}
 		}
 	}
 
