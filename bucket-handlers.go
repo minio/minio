@@ -322,10 +322,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// the location value in the request body should match the Region in serverConfig.
-	// other values of location are not accepted.
-	// make bucket fails in such cases.
-	errCode := isValidLocationContraint(r.Body, serverConfig.GetRegion())
+	// Validate if incoming location constraint is valid, reject
+	// requests which do not follow valid region requirements.
+	errCode := isValidLocationConstraint(r)
 	if errCode != ErrNone {
 		writeErrorResponse(w, r, errCode, r.URL.Path)
 		return

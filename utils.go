@@ -24,8 +24,14 @@ import (
 )
 
 // xmlDecoder provide decoded value in xml.
-func xmlDecoder(body io.Reader, v interface{}) error {
-	d := xml.NewDecoder(body)
+func xmlDecoder(body io.Reader, v interface{}, size int64) error {
+	var lbody io.Reader
+	if size > 0 {
+		lbody = io.LimitReader(body, size)
+	} else {
+		lbody = body
+	}
+	d := xml.NewDecoder(lbody)
 	return d.Decode(v)
 }
 
