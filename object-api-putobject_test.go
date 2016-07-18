@@ -26,6 +26,18 @@ import (
 	"testing"
 )
 
+// md5Hex ignores error from Write method since it never returns one. Check
+// crypto/md5 doc for more details.
+func md5Hex(b []byte) string {
+	md5Writer := md5.New()
+	md5Writer.Write(b)
+	return hex.EncodeToString(md5Writer.Sum(nil))
+}
+
+func md5Header(data []byte) map[string]string {
+	return map[string]string{"md5Sum": md5Hex([]byte(data))}
+}
+
 // Wrapper for calling PutObject tests for both XL multiple disks and single node setup.
 func TestObjectAPIPutObject(t *testing.T) {
 	ExecObjectLayerTest(t, testObjectAPIPutObject)
@@ -51,7 +63,15 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	failCases := []struct {
+	var (
+		nilBytes    []byte
+		data        = []byte("hello")
+		fiveMBBytes = bytes.Repeat([]byte("a"), 5*1024*124)
+	)
+	invalidMD5 := md5Hex([]byte("meh"))
+	invalidMD5Header := md5Header([]byte("meh"))
+
+	testCases := []struct {
 		bucketName     string
 		objName        string
 		inputData      []byte
@@ -100,9 +120,39 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
 		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
 		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
+
+		// Test case 14-16.
+		// With no metadata
+		{bucket, object, data, nil, int64(len(data)), true, md5Hex(data), nil},
+		{bucket, object, nilBytes, nil, int64(len(nilBytes)), true, md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, nil, int64(len(fiveMBBytes)), true, md5Hex(fiveMBBytes), nil},
+
+		// Test case 17-19.
+		// With arbitrary metadata
+		{bucket, object, data, map[string]string{"answer": "42"}, int64(len(data)), true, md5Hex(data), nil},
+		{bucket, object, nilBytes, map[string]string{"answer": "42"}, int64(len(nilBytes)), true, md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, map[string]string{"answer": "42"}, int64(len(fiveMBBytes)), true, md5Hex(fiveMBBytes), nil},
+
+		// Test case 20-22.
+		// With valid md5sum in header
+		{bucket, object, data, md5Header(data), int64(len(data)), true, md5Hex(data), nil},
+		{bucket, object, nilBytes, md5Header(nilBytes), int64(len(nilBytes)), true, md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, md5Header(fiveMBBytes), int64(len(fiveMBBytes)), true, md5Hex(fiveMBBytes), nil},
+
+		// Test case 23-25.
+		// data with invalid md5sum in header
+		{bucket, object, data, invalidMD5Header, int64(len(data)), false, md5Hex(data), BadDigest{invalidMD5, md5Hex(data)}},
+		{bucket, object, nilBytes, invalidMD5Header, int64(len(nilBytes)), false, md5Hex(nilBytes), BadDigest{invalidMD5, md5Hex(nilBytes)}},
+		{bucket, object, fiveMBBytes, invalidMD5Header, int64(len(fiveMBBytes)), false, md5Hex(fiveMBBytes), BadDigest{invalidMD5, md5Hex(fiveMBBytes)}},
+
+		// Test case 26-28.
+		// data with size different from the actual number of bytes available in the reader
+		{bucket, object, data, nil, int64(len(data) - 1), true, md5Hex(data[:len(data)-1]), nil},
+		{bucket, object, nilBytes, nil, int64(len(nilBytes) + 1), false, md5Hex(nilBytes), IncompleteBody{}},
+		{bucket, object, fiveMBBytes, nil, int64(0), true, md5Hex(fiveMBBytes), nil},
 	}
 
-	for i, testCase := range failCases {
+	for i, testCase := range testCases {
 		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
 		// All are test cases above are expected to fail.
 
@@ -121,7 +171,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil && testCase.shouldPass {
 			// Asserting whether the md5 output is correct.
-			if testCase.inputMeta["md5Sum"] != actualMd5Hex {
+			if expectedMD5, ok := testCase.inputMeta["md5Sum"]; ok && expectedMD5 != actualMd5Hex {
 				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualMd5Hex)
 			}
 		}
