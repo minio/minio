@@ -232,7 +232,7 @@ func TestErasureCreateFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Test when all disks are up.
-	size, _, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), int64(len(data)), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	size, _, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestErasureCreateFile(t *testing.T) {
 	disks[5] = AppendDiskDown{disks[5].(*posix)}
 
 	// Test when two disks are down.
-	size, _, err = erasureCreateFile(disks, "testbucket", "testobject2", bytes.NewReader(data), int64(len(data)), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	size, _, err = erasureCreateFile(disks, "testbucket", "testobject2", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
 	if err != nil {
 		t.Fatal(err)
 	}
