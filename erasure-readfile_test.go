@@ -219,7 +219,7 @@ func (r ReadDiskDown) ReadFile(volume string, path string, offset int64, buf []b
 	return 0, errFaultyDisk
 }
 
-func TestErasureReadFile(t *testing.T) {
+func TestErasureReadFileDiskFail(t *testing.T) {
 	// Initialize environment needed for the test.
 	dataBlocks := 7
 	parityBlocks := 7
@@ -303,5 +303,77 @@ func TestErasureReadFile(t *testing.T) {
 	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
 	if err != errXLReadQuorum {
 		t.Fatal("expected errXLReadQuorum error")
+	}
+}
+
+func TestErasureReadFileOffsetLength(t *testing.T) {
+	// Initialize environment needed for the test.
+	dataBlocks := 7
+	parityBlocks := 7
+	blockSize := int64(1 * 1024 * 1024)
+	diskPaths := make([]string, dataBlocks+parityBlocks)
+	disks := make([]StorageAPI, len(diskPaths))
+
+	for i := range diskPaths {
+		var err error
+		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
+		if err != nil {
+			t.Fatal("Unable to create tmp dir", err)
+		}
+		defer removeAll(diskPaths[i])
+		disks[i], err = newPosix(diskPaths[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = disks[i].MakeVol("testbucket")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Prepare a slice of 1MB with random data.
+	data := make([]byte, 5*1024*1024)
+	length := int64(len(data))
+	_, err := rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a test file to read from.
+	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != length {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
+	}
+
+	testCases := []struct {
+		offset, length int64
+	}{
+		// Full file.
+		{0, length},
+		// 2nd block.
+		{blockSize, blockSize},
+		// Test cases for unusual offsets and lengths.
+		{blockSize - 1, 2},
+		{blockSize - 1, blockSize + 1},
+		{blockSize + 1, blockSize - 1},
+		{blockSize + 1, blockSize},
+		{blockSize + 1, blockSize + 1},
+		{blockSize*2 - 1, blockSize*3 + 1},
+	}
+	for i, testCase := range testCases {
+		expected := data[testCase.offset:(testCase.offset + testCase.length)]
+		buf := &bytes.Buffer{}
+		size, err = erasureReadFile(buf, disks, "testbucket", "testobject", testCase.offset, testCase.length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		got := buf.Bytes()
+		if bytes.Compare(expected, got) != 0 {
+			t.Errorf("Test %d : read data is different from what was expected", i+1)
+		}
 	}
 }
