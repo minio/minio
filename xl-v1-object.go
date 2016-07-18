@@ -117,7 +117,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Object cache enabled block.
 	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
 		// Validate if we have previous cache.
-		cachedBuffer, err := xl.objCache.Open(path.Join(bucket, object))
+		var cachedBuffer io.ReadSeeker
+		cachedBuffer, err = xl.objCache.Open(path.Join(bucket, object))
 		if err == nil { // Cache hit.
 			// Advance the buffer to offset as if it was read.
 			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
