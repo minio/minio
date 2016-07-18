@@ -376,12 +376,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 		buf := make([]byte, int(bufSize))
 
+		bytesWritten := int64(0)
 		// Read the buffer till io.EOF and append the read data to the temporary file.
 		for {
 			n, rErr := limitDataReader.Read(buf)
 			if rErr != nil && rErr != io.EOF {
 				return "", toObjectErr(rErr, bucket, object)
 			}
+			bytesWritten += int64(n)
 			if n > 0 {
 				// Update md5 writer.
 				md5Writer.Write(buf[0:n])
@@ -391,6 +393,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 				}
 			}
 			if rErr == io.EOF {
+				if bytesWritten < size {
+					return "", toObjectErr(io.ErrShortWrite, bucket, object)
+				}
 				break
 			}
 		}

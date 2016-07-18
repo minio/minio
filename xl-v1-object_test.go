@@ -45,7 +45,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fiveMBBytes := bytes.Repeat([]byte("a"), 5*1024*124)
+	fiveMBBytes := bytes.Repeat([]byte("a"), 5*1024*1024)
 	md5Writer := md5.New()
 	md5Writer.Write(fiveMBBytes)
 	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))

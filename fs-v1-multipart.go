@@ -321,23 +321,26 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 	var buf = make([]byte, int(bufSize))
 
-	// Read up to required size
-	totalLeft := size
+	bytesWritten := int64(0)
+	// Read the buffer till io.EOF and append the read data to the temporary file.
 	for {
-		n, err := io.ReadFull(limitDataReader, buf)
-		if err == io.EOF {
-			break
+		n, rErr := limitDataReader.Read(buf)
+		if rErr != nil && rErr != io.EOF {
+			return "", toObjectErr(rErr, bucket, object)
 		}
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return "", toObjectErr(err, bucket, object)
+		bytesWritten += int64(n)
+		if n > 0 {
+			// Update md5 writer.
+			md5Writer.Write(buf[:n])
+			wErr := fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n])
+			if wErr != nil {
+				return "", toObjectErr(wErr, bucket, object)
+			}
 		}
-		// Update md5 writer.
-		md5Writer.Write(buf[:n])
-		if err = fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n]); err != nil {
-			return "", toObjectErr(err, bucket, object)
-		}
-
-		if totalLeft -= int64(n); size >= 0 && totalLeft <= 0 {
+		if rErr == io.EOF {
+			if bytesWritten < size {
+				return "", toObjectErr(io.ErrShortWrite, bucket, object)
+			}
 			break
 		}
 	}

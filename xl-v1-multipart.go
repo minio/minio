@@ -384,8 +384,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	teeReader := io.TeeReader(data, md5Writer)
 
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, xl.writeQuorum)
-
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, size, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, xl.writeQuorum)
+	if err != nil {
+		return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
+	}
 	// For size == -1, perhaps client is sending in chunked encoding
 	// set the size as size that was actually written.
 	if size == -1 {
