@@ -19,8 +19,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"io/ioutil"
-	"os"
 	"testing"
 )
 import "reflect"
@@ -224,30 +222,19 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	dataBlocks := 7
 	parityBlocks := 7
 	blockSize := int64(blockSizeV1)
-	diskPaths := make([]string, dataBlocks+parityBlocks)
-	disks := make([]StorageAPI, len(diskPaths))
-
-	for i := range diskPaths {
-		var err error
-		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
-		if err != nil {
-			t.Fatal("Unable to create tmp dir", err)
-		}
-		defer removeAll(diskPaths[i])
-		disks[i], err = newPosix(diskPaths[i])
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = disks[i].MakeVol("testbucket")
-		if err != nil {
-			t.Fatal(err)
-		}
+	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	if err != nil {
+		t.Error(err)
+		return
 	}
+	defer setup.Remove()
+
+	disks := setup.disks
 
 	// Prepare a slice of 1MB with random data.
 	data := make([]byte, 1*1024*1024)
 	length := int64(len(data))
-	_, err := rand.Read(data)
+	_, err = rand.Read(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,30 +298,19 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 	dataBlocks := 7
 	parityBlocks := 7
 	blockSize := int64(1 * 1024 * 1024)
-	diskPaths := make([]string, dataBlocks+parityBlocks)
-	disks := make([]StorageAPI, len(diskPaths))
-
-	for i := range diskPaths {
-		var err error
-		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
-		if err != nil {
-			t.Fatal("Unable to create tmp dir", err)
-		}
-		defer removeAll(diskPaths[i])
-		disks[i], err = newPosix(diskPaths[i])
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = disks[i].MakeVol("testbucket")
-		if err != nil {
-			t.Fatal(err)
-		}
+	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	if err != nil {
+		t.Error(err)
+		return
 	}
+	defer setup.Remove()
+
+	disks := setup.disks
 
 	// Prepare a slice of 1MB with random data.
 	data := make([]byte, 5*1024*1024)
 	length := int64(len(data))
-	_, err := rand.Read(data)
+	_, err = rand.Read(data)
 	if err != nil {
 		t.Fatal(err)
 	}

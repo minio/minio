@@ -18,6 +18,8 @@ package main
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -182,4 +184,43 @@ func TestErasureDecode(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Setup for erasureCreateFile and erasureReadFile tests.
+type erasureTestSetup struct {
+	dataBlocks   int
+	parityBlocks int
+	blockSize    int64
+	diskPaths    []string
+	disks        []StorageAPI
+}
+
+// Removes the temporary disk directories.
+func (e erasureTestSetup) Remove() {
+	for _, path := range e.diskPaths {
+		removeAll(path)
+	}
+}
+
+// Returns an initialized setup for erasure tests.
+func newErasureTestSetup(dataBlocks int, parityBlocks int, blockSize int64) (*erasureTestSetup, error) {
+	diskPaths := make([]string, dataBlocks+parityBlocks)
+	disks := make([]StorageAPI, len(diskPaths))
+
+	for i := range diskPaths {
+		var err error
+		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
+		if err != nil {
+			return nil, err
+		}
+		disks[i], err = newPosix(diskPaths[i])
+		if err != nil {
+			return nil, err
+		}
+		err = disks[i].MakeVol("testbucket")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &erasureTestSetup{dataBlocks, parityBlocks, blockSize, diskPaths, disks}, nil
 }
