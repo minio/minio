@@ -199,7 +199,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	// List buckets does not support bucket policies, no need to enforce it.
-	if s3Error := checkAuth(w, r); s3Error != ErrNone {
+	if s3Error := checkAuth(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -306,27 +306,19 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+	// PutBucket does not support policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Set http request for signature.
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
-
 	// Validate if incoming location constraint is valid, reject
 	// requests which do not follow valid region requirements.
-	errCode := isValidLocationConstraint(r)
-	if errCode != ErrNone {
-		writeErrorResponse(w, r, errCode, r.URL.Path)
+	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
 	// Make bucket.
@@ -463,20 +455,14 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
+	// DeleteBucket does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
 		errorIf(err, "Unable to delete a bucket.")

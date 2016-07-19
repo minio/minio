@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 // is returned for unhandled auth type. Once the auth type is indentified
 // request headers and body are used to calculate the signature validating
 // the client signature present in request.
-func checkAuth(w http.ResponseWriter, r *http.Request) APIErrorCode {
+func checkAuth(r *http.Request) APIErrorCode {
 	authType := getRequestAuthType(r)
 	if authType != authTypePresigned && authType != authTypeSigned {
 		// For all unhandled auth types return error AccessDenied.
