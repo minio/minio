@@ -26,6 +26,24 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationContraint(t *testing.T) {
+	savedServerConfig := serverConfig
+	defer func() {
+		serverConfig = savedServerConfig
+	}()
+	serverConfig = nil
+
+	// Test initialized config file.
+	path, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create a temporary directory, %s", err)
+	}
+	defer removeAll(path)
+
+	setGlobalConfigPath(path)
+	if err := initConfig(); err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+
 	// generates the input request with XML bucket configuration set to the request body.
 	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
 		createBucketConfig := createBucketLocationConfiguration{}
@@ -37,6 +55,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 		}
 		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
 		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
+		req.ContentLength = int64(createBucketConfigBuffer.Len())
 		return req, nil
 	}
 
@@ -58,7 +77,8 @@ func TestIsValidLocationContraint(t *testing.T) {
 		if e != nil {
 			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
 		}
-		actualCode := isValidLocationContraint(inputRequest.Body, testCase.serverConfigRegion)
+		serverConfig.SetRegion(testCase.serverConfigRegion)
+		actualCode := isValidLocationConstraint(inputRequest)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
 		}

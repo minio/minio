@@ -18,37 +18,43 @@ package main
 
 import (
 	"io"
+	"net/http"
 )
 
-// validates location constraint from the request body.
-// the location value in the request body should match the Region in serverConfig.
-// other values of location are not accepted.
-// make bucket fails in such cases.
-func isValidLocationContraint(reqBody io.Reader, serverRegion string) APIErrorCode {
-	var locationContraint createBucketLocationConfiguration
-	var errCode APIErrorCode
-	errCode = ErrNone
-	e := xmlDecoder(reqBody, &locationContraint)
-	if e != nil {
-		if e == io.EOF {
-			// Do nothing.
-			// failed due to empty body. The location will be set to default value from the serverConfig.
-			// this is valid.
-			errCode = ErrNone
-		} else {
-			// Failed due to malformed configuration.
-			errCode = ErrMalformedXML
-			//writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
-		}
-	} else {
-		// Region obtained from the body.
-		// It should be equal to Region in serverConfig.
-		// Else ErrInvalidRegion returned.
-		// For empty value location will be to set to  default value from the serverConfig.
-		if locationContraint.Location != "" && serverRegion != locationContraint.Location {
-			//writeErrorResponse(w, r, ErrInvalidRegion, r.URL.Path)
-			errCode = ErrInvalidRegion
-		}
+// Validates location constraint in PutBucket request body.
+// The location value in the request body should match the
+// region configured at serverConfig, otherwise error is returned.
+func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
+	serverRegion := serverConfig.GetRegion()
+	// If the request has no body with content-length set to 0,
+	// we do not have to validate location constraint. Bucket will
+	// be created at default region.
+	if r.ContentLength == 0 {
+		return ErrNone
 	}
-	return errCode
+	locationConstraint := createBucketLocationConfiguration{}
+	if err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength); err != nil {
+		if err == io.EOF && r.ContentLength == -1 {
+			// EOF is a valid condition here when ContentLength is -1.
+			return ErrNone
+		}
+		errorIf(err, "Unable to xml decode location constraint")
+		// Treat all other failures as XML parsing errors.
+		return ErrMalformedXML
+	} // Successfully decoded, proceed to verify the region.
+
+	// Once region has been obtained we proceed to verify it.
+	incomingRegion := locationConstraint.Location
+	if incomingRegion == "" {
+		// Location constraint is empty for region "us-east-1",
+		// in accordance with protocol.
+		incomingRegion = "us-east-1"
+	}
+	// Return errInvalidRegion if location constraint does not match
+	// with configured region.
+	s3Error = ErrNone
+	if serverRegion != incomingRegion {
+		s3Error = ErrInvalidRegion
+	}
+	return s3Error
 }
