@@ -28,7 +28,7 @@ import (
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, blockSize int64, dataBlocks int, parityBlocks int, writeQuorum int) (size int64, checkSums []string, err error) {
+func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, blockSize int64, dataBlocks int, parityBlocks int, writeQuorum int) (bytesWritten int64, checkSums []string, err error) {
 	// Allocated blockSized buffer for reading.
 	buf := make([]byte, blockSize)
 
@@ -47,7 +47,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 			// We have reached EOF on the first byte read, io.Reader
 			// must be 0bytes, we don't need to erasure code
 			// data. Will create a 0byte file instead.
-			if size == 0 {
+			if bytesWritten == 0 {
 				blocks = make([][]byte, len(disks))
 				rErr = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum)
 				if rErr != nil {
@@ -72,7 +72,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 			if err = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum); err != nil {
 				return 0, nil, err
 			}
-			size += int64(n)
+			bytesWritten += int64(n)
 		}
 	}
 
@@ -80,7 +80,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 	for i := range checkSums {
 		checkSums[i] = hex.EncodeToString(hashWriters[i].Sum(nil))
 	}
-	return size, checkSums, nil
+	return bytesWritten, checkSums, nil
 }
 
 // encodeData - encodes incoming data buffer into

@@ -314,32 +314,22 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		limitDataReader = data
 	}
 
-	// Allocate buffer for staging buffer.
+	teeReader := io.TeeReader(limitDataReader, md5Writer)
 	bufSize := int64(readSizeV1)
 	if size > 0 && bufSize > size {
 		bufSize = size
 	}
-	var buf = make([]byte, int(bufSize))
-
-	// Read up to required size
-	totalLeft := size
-	for {
-		n, err := io.ReadFull(limitDataReader, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return "", toObjectErr(err, bucket, object)
-		}
-		// Update md5 writer.
-		md5Writer.Write(buf[:n])
-		if err = fs.storage.AppendFile(minioMetaBucket, tmpPartPath, buf[:n]); err != nil {
-			return "", toObjectErr(err, bucket, object)
-		}
-
-		if totalLeft -= int64(n); size >= 0 && totalLeft <= 0 {
-			break
-		}
+	buf := make([]byte, int(bufSize))
+	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tmpPartPath)
+	if cErr != nil {
+		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		return "", toObjectErr(cErr, minioMetaBucket, tmpPartPath)
+	}
+	// Should return IncompleteBody{} error when reader has fewer
+	// bytes than specified in request header.
+	if bytesWritten < size {
+		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		return "", IncompleteBody{}
 	}
 
 	// Validate if payload is valid.

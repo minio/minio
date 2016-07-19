@@ -265,7 +265,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Test case - 13.
 		// Input with size more than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") + 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated e2fc714c4727ee9395f324cd2e7f331f")},
+			IncompleteBody{}},
 		// Test case - 14.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") - 1), false, "",

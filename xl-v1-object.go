@@ -117,7 +117,8 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Object cache enabled block.
 	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
 		// Validate if we have previous cache.
-		cachedBuffer, err := xl.objCache.Open(path.Join(bucket, object))
+		var cachedBuffer io.ReadSeeker
+		cachedBuffer, err = xl.objCache.Open(path.Join(bucket, object))
 		if err == nil { // Cache hit.
 			// Advance the buffer to offset as if it was read.
 			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
@@ -435,7 +436,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xl.writeQuorum)
 	if err != nil {
+		// Create file failed, delete temporary object.
+		xl.deleteObject(minioMetaTmpBucket, tempObj)
 		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
+	}
+	// Should return IncompleteBody{} error when reader has fewer bytes
+	// than specified in request header.
+	if sizeWritten < size {
+		// Short write, delete temporary object.
+		xl.deleteObject(minioMetaTmpBucket, tempObj)
+		return "", IncompleteBody{}
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -490,6 +500,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
+		// Parent (in the namespace) is an object, delete temporary object.
+		xl.deleteObject(minioMetaTmpBucket, tempObj)
 		return "", toObjectErr(errFileAccessDenied, bucket, object)
 	}
 

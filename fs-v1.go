@@ -369,30 +369,24 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return "", toObjectErr(err, bucket, object)
 		}
 	} else {
-		// Allocate a buffer to Read() the object upload stream.
+		// Allocate a buffer to Read() from request body
 		bufSize := int64(readSizeV1)
 		if size > 0 && bufSize > size {
 			bufSize = size
 		}
 		buf := make([]byte, int(bufSize))
+		teeReader := io.TeeReader(limitDataReader, md5Writer)
+		bytesWritten, err := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
+		if err != nil {
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			return "", toObjectErr(err, bucket, object)
+		}
 
-		// Read the buffer till io.EOF and append the read data to the temporary file.
-		for {
-			n, rErr := limitDataReader.Read(buf)
-			if rErr != nil && rErr != io.EOF {
-				return "", toObjectErr(rErr, bucket, object)
-			}
-			if n > 0 {
-				// Update md5 writer.
-				md5Writer.Write(buf[0:n])
-				wErr := fs.storage.AppendFile(minioMetaBucket, tempObj, buf[0:n])
-				if wErr != nil {
-					return "", toObjectErr(wErr, bucket, object)
-				}
-			}
-			if rErr == io.EOF {
-				break
-			}
+		// Should return IncompleteBody{} error when reader has fewer
+		// bytes than specified in request header.
+		if bytesWritten < size {
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			return "", IncompleteBody{}
 		}
 	}
 
