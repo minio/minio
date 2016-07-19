@@ -253,11 +253,11 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if bytes.Compare(buf.Bytes(), data) != 0 {
-		t.Error("Contents of the erasure coded file differs", bytes.Compare(buf.Bytes(), data))
+	if !bytes.Equal(buf.Bytes(), data) {
+		t.Error("Contents of the erasure coded file differs")
 	}
 
-	// 2 disks down.
+	// 2 disks down. Read should succeed.
 	disks[4] = ReadDiskDown{disks[4].(*posix)}
 	disks[5] = ReadDiskDown{disks[5].(*posix)}
 
@@ -266,11 +266,11 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if bytes.Compare(buf.Bytes(), data) != 0 {
+	if !bytes.Equal(buf.Bytes(), data) {
 		t.Error("Contents of the erasure coded file differs")
 	}
 
-	// 4 more disks down. 6 disks down in total.
+	// 4 more disks down. 6 disks down in total. Read should succeed.
 	disks[6] = ReadDiskDown{disks[6].(*posix)}
 	disks[8] = ReadDiskDown{disks[8].(*posix)}
 	disks[9] = ReadDiskDown{disks[9].(*posix)}
@@ -281,10 +281,11 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if bytes.Compare(buf.Bytes(), data) != 0 {
+	if !bytes.Equal(buf.Bytes(), data) {
 		t.Error("Contents of the erasure coded file differs")
 	}
 
+	// 1 more disk down. 7 disks down in total. Read should fail.
 	disks[12] = ReadDiskDown{disks[12].(*posix)}
 	buf.Reset()
 	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
@@ -331,14 +332,19 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 		{0, length},
 		// 2nd block.
 		{blockSize, blockSize},
-		// Test cases for unusual offsets and lengths.
+		// Test cases for random offsets and lengths.
 		{blockSize - 1, 2},
 		{blockSize - 1, blockSize + 1},
 		{blockSize + 1, blockSize - 1},
 		{blockSize + 1, blockSize},
 		{blockSize + 1, blockSize + 1},
 		{blockSize*2 - 1, blockSize*3 + 1},
+		{length - 1, 1},
+		{length - blockSize, blockSize},
+		{length - blockSize - 1, blockSize},
+		{length - blockSize - 1, blockSize + 1},
 	}
+	// Compare the data read from file with "data" byte array.
 	for i, testCase := range testCases {
 		expected := data[testCase.offset:(testCase.offset + testCase.length)]
 		buf := &bytes.Buffer{}
@@ -348,7 +354,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 			continue
 		}
 		got := buf.Bytes()
-		if bytes.Compare(expected, got) != 0 {
+		if !bytes.Equal(expected, got) {
 			t.Errorf("Test %d : read data is different from what was expected", i+1)
 		}
 	}
