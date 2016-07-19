@@ -285,7 +285,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	if err = writeSameXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum, xl.readQuorum)
+	rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum)
 	if rErr == nil {
 		// Return success.
 		return uploadID, nil
@@ -431,7 +431,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Rename temporary part file to its final location.
 	partPath := path.Join(uploadIDPath, partSuffix)
-	err = renamePart(onlineDisks, minioMetaBucket, tmpPartPath, minioMetaBucket, partPath, xl.writeQuorum, xl.readQuorum)
+	err = renamePart(onlineDisks, minioMetaBucket, tmpPartPath, minioMetaBucket, partPath, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
@@ -466,12 +466,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	newUUID := getUUID()
 	tempXLMetaPath := path.Join(tmpMetaPrefix, newUUID)
 
-	// Writes a unique `xl.json` each disk carrying new checksum
-	// related information.
-	if err = writeUniqueXLMetadata(onlineDisks, minioMetaBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum, xl.readQuorum); err != nil {
+	// Writes a unique `xl.json` each disk carrying new checksum related information.
+	if err = writeUniqueXLMetadata(onlineDisks, minioMetaBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempXLMetaPath)
 	}
-	rErr := commitXLMetadata(onlineDisks, tempXLMetaPath, uploadIDPath, xl.writeQuorum, xl.readQuorum)
+	rErr := commitXLMetadata(onlineDisks, tempXLMetaPath, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -696,10 +695,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = writeUniqueXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = writeUniqueXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := commitXLMetadata(xl.storageDisks, tempUploadIDPath, uploadIDPath, xl.writeQuorum, xl.readQuorum)
+	rErr := commitXLMetadata(xl.storageDisks, tempUploadIDPath, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -722,7 +721,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Rename if an object already exists to temporary location.
 	uniqueID := getUUID()
 	if xl.isObject(bucket, object) {
-		err = renameObject(xl.storageDisks, bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID), xl.writeQuorum, xl.readQuorum)
+		err = renameObject(xl.storageDisks, bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID), xl.writeQuorum)
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
@@ -742,7 +741,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Rename the multipart object to final location.
-	if err = renameObject(xl.storageDisks, minioMetaBucket, uploadIDPath, bucket, object, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = renameObject(xl.storageDisks, minioMetaBucket, uploadIDPath, bucket, object, xl.writeQuorum); err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
 

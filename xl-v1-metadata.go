@@ -314,7 +314,7 @@ func deleteAllXLMetadata(disks []StorageAPI, bucket, prefix string, errs []error
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
-func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, writeQuorum, readQuorum int) error {
+func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -344,38 +344,17 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 	wg.Wait()
 
 	// Do we have write quorum?.
-	if !isDiskQuorum(mErrs, writeQuorum) {
-		// Validate if we have read quorum.
-		if isDiskQuorum(mErrs, readQuorum) {
-			// Return success.
-			return nil
-		}
+	if !isDiskQuorum(mErrs, quorum) {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
 
-	// Reduce errors and verify quourm and return.
-	if errCount, reducedErr := reduceErrs(mErrs); reducedErr != nil {
-		if errCount < writeQuorum {
-			// Delete all `xl.json` successfully renamed.
-			deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-			return errXLWriteQuorum
-		}
-		if isErrIgnored(reducedErr, []error{
-			errDiskNotFound,
-			errDiskAccessDenied,
-			errFaultyDisk,
-			errVolumeNotFound,
-		}) {
-			// Success.
-			return nil
-		}
-		return reducedErr
-	}
-
-	// Success.
-	return nil
+	return reduceErrs(mErrs, []error{
+		errDiskNotFound,
+		errFaultyDisk,
+		errDiskAccessDenied,
+	})
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
@@ -410,36 +389,14 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 
 	// Do we have write Quorum?.
 	if !isDiskQuorum(mErrs, writeQuorum) {
-		// Do we have readQuorum?.
-		if isDiskQuorum(mErrs, readQuorum) {
-			// Return success.
-			return nil
-		}
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return errXLWriteQuorum
 	}
 
-	// Reduce errors and verify quourm and return.
-	if errCount, reducedErr := reduceErrs(mErrs); reducedErr != nil {
-		if errCount < writeQuorum {
-			// Delete all `xl.json` successfully renamed.
-			deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-			return errXLWriteQuorum
-		}
-		// Ignore specific errors if we are under write quorum.
-		if isErrIgnored(reducedErr, []error{
-			errDiskNotFound,
-			errDiskAccessDenied,
-			errFaultyDisk,
-			errVolumeNotFound,
-		}) {
-			// Success.
-			return nil
-		}
-		return reducedErr
-	}
-
-	// Success.
-	return nil
+	return reduceErrs(mErrs, []error{
+		errDiskNotFound,
+		errFaultyDisk,
+		errDiskAccessDenied,
+	})
 }

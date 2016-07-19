@@ -20,22 +20,39 @@ import "testing"
 
 // Test for reduceErrs.
 func TestReduceErrs(t *testing.T) {
+	// List all of all test cases to validate various cases of reduce errors.
 	testCases := []struct {
-		errs  []error
-		err   error
-		count int
+		errs        []error
+		ignoredErrs []error
+		err         error
 	}{
-		{[]error{errDiskNotFound, errDiskNotFound, errDiskFull}, errDiskNotFound, 2},
-		{[]error{errDiskFull, errDiskNotFound, nil, nil}, nil, 2},
-		{[]error{}, nil, 0},
+		// Validate if have reduced properly.
+		{[]error{
+			errDiskNotFound,
+			errDiskNotFound,
+			errDiskFull,
+		}, []error{}, errDiskNotFound},
+		// Validate if have no consensus.
+		{[]error{
+			errDiskFull,
+			errDiskNotFound,
+			nil, nil,
+		}, []error{}, nil},
+		// Validate if have consensus and errors ignored.
+		{[]error{
+			errVolumeNotFound,
+			errVolumeNotFound,
+			errVolumeNotFound,
+			errDiskNotFound,
+			errDiskNotFound,
+		}, []error{errDiskNotFound}, errVolumeNotFound},
+		{[]error{}, []error{}, nil},
 	}
+	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
-		gotMax, gotErr := reduceErrs(testCase.errs)
+		gotErr := reduceErrs(testCase.errs, testCase.ignoredErrs)
 		if testCase.err != gotErr {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
-		}
-		if testCase.count != gotMax {
-			t.Errorf("Test %d : expected %d, got %d", i+1, testCase.count, gotMax)
 		}
 	}
 }

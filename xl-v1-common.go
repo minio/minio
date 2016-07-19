@@ -25,7 +25,7 @@ import (
 // randomized quorum disk slice.
 func (xl xlObjects) getLoadBalancedQuorumDisks() (disks []StorageAPI) {
 	// It is okay to have readQuorum disks.
-	return xl.getLoadBalancedDisks()[:xl.readQuorum-1]
+	return xl.getLoadBalancedDisks()[0 : xl.readQuorum-1]
 }
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently
