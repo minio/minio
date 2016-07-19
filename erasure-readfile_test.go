@@ -16,7 +16,11 @@
 
 package main
 
-import "testing"
+import (
+	"bytes"
+	"crypto/rand"
+	"testing"
+)
 import "reflect"
 
 // Tests getReadDisks which returns readable disks slice from which we can
@@ -193,7 +197,7 @@ func TestIsSuccessBlocks(t *testing.T) {
 }
 
 // Wrapper function for testGetReadDisks, testGetOrderedDisks.
-func TestErasureReadFile(t *testing.T) {
+func TestErasureReadUtils(t *testing.T) {
 	objLayer, dirs, err := getXLObjectLayer()
 	if err != nil {
 		t.Fatal(err)
@@ -202,4 +206,156 @@ func TestErasureReadFile(t *testing.T) {
 	xl := objLayer.(xlObjects)
 	testGetReadDisks(t, xl)
 	testGetOrderedDisks(t, xl)
+}
+
+// Simulates a faulty disk for ReadFile()
+type ReadDiskDown struct {
+	*posix
+}
+
+func (r ReadDiskDown) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+	return 0, errFaultyDisk
+}
+
+func TestErasureReadFileDiskFail(t *testing.T) {
+	// Initialize environment needed for the test.
+	dataBlocks := 7
+	parityBlocks := 7
+	blockSize := int64(blockSizeV1)
+	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer setup.Remove()
+
+	disks := setup.disks
+
+	// Prepare a slice of 1MB with random data.
+	data := make([]byte, 1*1024*1024)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a test file to read from.
+	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != length {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
+	}
+
+	buf := &bytes.Buffer{}
+	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+	if err != nil {
+		t.Error(err)
+	}
+	if !bytes.Equal(buf.Bytes(), data) {
+		t.Error("Contents of the erasure coded file differs")
+	}
+
+	// 2 disks down. Read should succeed.
+	disks[4] = ReadDiskDown{disks[4].(*posix)}
+	disks[5] = ReadDiskDown{disks[5].(*posix)}
+
+	buf.Reset()
+	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+	if err != nil {
+		t.Error(err)
+	}
+	if !bytes.Equal(buf.Bytes(), data) {
+		t.Error("Contents of the erasure coded file differs")
+	}
+
+	// 4 more disks down. 6 disks down in total. Read should succeed.
+	disks[6] = ReadDiskDown{disks[6].(*posix)}
+	disks[8] = ReadDiskDown{disks[8].(*posix)}
+	disks[9] = ReadDiskDown{disks[9].(*posix)}
+	disks[11] = ReadDiskDown{disks[11].(*posix)}
+
+	buf.Reset()
+	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+	if err != nil {
+		t.Error(err)
+	}
+	if !bytes.Equal(buf.Bytes(), data) {
+		t.Error("Contents of the erasure coded file differs")
+	}
+
+	// 1 more disk down. 7 disks down in total. Read should fail.
+	disks[12] = ReadDiskDown{disks[12].(*posix)}
+	buf.Reset()
+	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+	if err != errXLReadQuorum {
+		t.Fatal("expected errXLReadQuorum error")
+	}
+}
+
+func TestErasureReadFileOffsetLength(t *testing.T) {
+	// Initialize environment needed for the test.
+	dataBlocks := 7
+	parityBlocks := 7
+	blockSize := int64(1 * 1024 * 1024)
+	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer setup.Remove()
+
+	disks := setup.disks
+
+	// Prepare a slice of 1MB with random data.
+	data := make([]byte, 5*1024*1024)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a test file to read from.
+	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != length {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
+	}
+
+	testCases := []struct {
+		offset, length int64
+	}{
+		// Full file.
+		{0, length},
+		// 2nd block.
+		{blockSize, blockSize},
+		// Test cases for random offsets and lengths.
+		{blockSize - 1, 2},
+		{blockSize - 1, blockSize + 1},
+		{blockSize + 1, blockSize - 1},
+		{blockSize + 1, blockSize},
+		{blockSize + 1, blockSize + 1},
+		{blockSize*2 - 1, blockSize*3 + 1},
+		{length - 1, 1},
+		{length - blockSize, blockSize},
+		{length - blockSize - 1, blockSize},
+		{length - blockSize - 1, blockSize + 1},
+	}
+	// Compare the data read from file with "data" byte array.
+	for i, testCase := range testCases {
+		expected := data[testCase.offset:(testCase.offset + testCase.length)]
+		buf := &bytes.Buffer{}
+		size, err = erasureReadFile(buf, disks, "testbucket", "testobject", testCase.offset, testCase.length, length, blockSize, dataBlocks, parityBlocks, checkSums)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		got := buf.Bytes()
+		if !bytes.Equal(expected, got) {
+			t.Errorf("Test %d : read data is different from what was expected", i+1)
+		}
+	}
 }

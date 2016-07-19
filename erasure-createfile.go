@@ -139,7 +139,7 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 
 	// Do we have write quorum?.
 	if !isDiskQuorum(wErrs, writeQuorum) {
-		return toObjectErr(errXLWriteQuorum, volume, path)
+		return errXLWriteQuorum
 	}
 	return nil
 }
