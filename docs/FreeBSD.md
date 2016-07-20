@@ -7,11 +7,13 @@ This example assumes that you have a FreeBSD 10.x running
 #### Step *1* 
 
 As root on the FreeBSD edit `/etc/rc.conf`
+
 ```
 zfs_enable="YES"
 ```
 
 Start ZFS service
+
 ```
 # service zfs start
 ```
@@ -21,11 +23,13 @@ Start ZFS service
 ```
 
 Configure a loopback device on the `/zfs` file. 
+
 ```
 # mdconfig -a -t vnode -f /zfs
 ```
 
 Create zfs pool
+
 ```
 # zpool create minio-example /dev/md0
 ```
@@ -37,6 +41,7 @@ minio-example    7872440   38 7872402     0%    /minio-example
 ```
 
 Verify if it is writable
+
 ```
 # touch /minio-example/testfile
 # ls -l /minio-example/testfile
