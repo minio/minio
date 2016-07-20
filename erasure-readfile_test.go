@@ -391,7 +391,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 
 	// 10000 iterations with random offsets and lengths.
-	iterations := 1000
+	iterations := 10000
 
 	// Create a test file to read from.
 	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
@@ -407,6 +407,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
+	// Verify erasureReadFile() for random offsets and lengths.
 	for i := 0; i < iterations; i++ {
 		offset := r.Int63n(length)
 		readLen := r.Int63n(length - offset)

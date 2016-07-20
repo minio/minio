@@ -42,6 +42,7 @@ func TestGetChunkSize(t *testing.T) {
 			2,
 		},
 	}
+	// Verify getChunkSize() for the test cases.
 	for i, test := range testCases {
 		expected := test.chunkSize
 		got := getChunkSize(test.blockSize, test.dataBlocks)
