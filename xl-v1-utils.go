@@ -30,9 +30,12 @@ import (
 // value is greater than or equal to simple majority, since none of the equally
 // maximal values would occur quorum or more number of times.
 
-func reduceErrs(errs []error) (int, error) {
+func reduceErrs(errs []error, ignoredErrs []error) error {
 	errorCounts := make(map[error]int)
 	for _, err := range errs {
+		if isErrIgnored(err, ignoredErrs) {
+			continue
+		}
 		errorCounts[err]++
 	}
 	max := 0
@@ -43,7 +46,7 @@ func reduceErrs(errs []error) (int, error) {
 			errMax = err
 		}
 	}
-	return max, errMax
+	return errMax
 }
 
 // Validates if we have quorum based on the errors related to disk only.

@@ -45,7 +45,7 @@ const (
 	maxErasureBlocks = 16
 
 	// Minimum erasure blocks.
-	minErasureBlocks = 6
+	minErasureBlocks = 4
 )
 
 // xlObjects - Implements XL object layer.
@@ -84,7 +84,7 @@ func checkSufficientDisks(disks []string) error {
 	}
 
 	// Verify if we have even number of disks.
-	// only combination of 6, 8, 10, 12, 14, 16 are supported.
+	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
 	if !isEven(totalDisks) {
 		return errXLNumDisks
 	}
@@ -194,9 +194,9 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
-	// READ and WRITE quorum is always set to (N/2 + 1) number of disks.
-	xl.readQuorum = len(xl.storageDisks)/2 + 1
-	xl.writeQuorum = len(xl.storageDisks)/2 + 1
+	// READ and WRITE quorum is always set to (N/2) number of disks.
+	xl.readQuorum = len(xl.storageDisks) / 2
+	xl.writeQuorum = len(xl.storageDisks) / 2
 
 	// Return successfully initialized object layer.
 	return xl, nil

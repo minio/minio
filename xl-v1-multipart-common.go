@@ -270,7 +270,7 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
-func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, writeQuorum, readQuorum int) error {
+func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum int) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -303,35 +303,16 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, writeQuor
 	wg.Wait()
 
 	// Do we have write Quorum?.
-	if !isDiskQuorum(mErrs, writeQuorum) {
-		// Do we have readQuorum?.
-		if isDiskQuorum(mErrs, readQuorum) {
-			// Return success.
-			return nil
-		}
+	if !isDiskQuorum(mErrs, quorum) {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, minioMetaBucket, dstPrefix, mErrs)
 		return errXLWriteQuorum
 	}
 
-	// Reduce errors and verify quourm and return.
-	if errCount, reducedErr := reduceErrs(mErrs); reducedErr != nil {
-		if errCount < writeQuorum {
-			// Delete all `xl.json` successfully renamed.
-			deleteAllXLMetadata(disks, minioMetaBucket, dstPrefix, mErrs)
-			return errXLWriteQuorum
-		}
-		if isErrIgnored(reducedErr, []error{
-			errDiskNotFound,
-			errDiskAccessDenied,
-			errFaultyDisk,
-			errVolumeNotFound,
-		}) {
-			return nil
-		}
-		return reducedErr
-	}
-
-	// Success.
-	return nil
+	return reduceErrs(mErrs, []error{
+		errDiskNotFound,
+		errDiskAccessDenied,
+		errFaultyDisk,
+		errVolumeNotFound,
+	})
 }
