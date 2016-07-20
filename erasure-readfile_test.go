@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,9 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
+	"math/rand"
 	"testing"
+	"time"
 )
 import "reflect"
 
@@ -308,7 +309,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
+	// Prepare a slice of 5MB with random data.
 	data := make([]byte, 5*1024*1024)
 	length := int64(len(data))
 	_, err = rand.Read(data)
@@ -330,6 +331,8 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 	}{
 		// Full file.
 		{0, length},
+		// Read nothing.
+		{length, 0},
 		// 2nd block.
 		{blockSize, blockSize},
 		// Test cases for random offsets and lengths.
@@ -338,7 +341,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 		{blockSize + 1, blockSize - 1},
 		{blockSize + 1, blockSize},
 		{blockSize + 1, blockSize + 1},
-		{blockSize*2 - 1, blockSize*3 + 1},
+		{blockSize*2 - 1, blockSize + 1},
 		{length - 1, 1},
 		{length - blockSize, blockSize},
 		{length - blockSize - 1, blockSize},
@@ -357,5 +360,68 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 		if !bytes.Equal(expected, got) {
 			t.Errorf("Test %d : read data is different from what was expected", i+1)
 		}
+	}
+}
+
+// Test erasureReadFile with random offset and lengths.
+// This test is t.Skip()ed as it a long time to run, hence should be run
+// explicitly after commenting out t.Skip()
+func TestErasureReadFileRandomOffsetLength(t *testing.T) {
+	// Comment the following line to run this test.
+	t.SkipNow()
+	// Initialize environment needed for the test.
+	dataBlocks := 7
+	parityBlocks := 7
+	blockSize := int64(1 * 1024 * 1024)
+	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer setup.Remove()
+
+	disks := setup.disks
+
+	// Prepare a slice of 5MB with random data.
+	data := make([]byte, 5*1024*1024)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 10000 iterations with random offsets and lengths.
+	iterations := 10000
+
+	// Create a test file to read from.
+	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != length {
+		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
+	}
+
+	// To generate random offset/length.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	buf := &bytes.Buffer{}
+
+	// Verify erasureReadFile() for random offsets and lengths.
+	for i := 0; i < iterations; i++ {
+		offset := r.Int63n(length)
+		readLen := r.Int63n(length - offset)
+
+		expected := data[offset : offset+readLen]
+
+		size, err = erasureReadFile(buf, disks, "testbucket", "testobject", offset, readLen, length, blockSize, dataBlocks, parityBlocks, checkSums)
+		if err != nil {
+			t.Fatal(err, offset, readLen)
+		}
+		got := buf.Bytes()
+		if !bytes.Equal(expected, got) {
+			t.Fatalf("read data is different from what was expected, offset=%d length=%d", offset, readLen)
+		}
+		buf.Reset()
 	}
 }

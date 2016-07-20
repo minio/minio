@@ -166,6 +166,11 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 		return 0, errUnexpected
 	}
 
+	// Can't request more data than what is available.
+	if offset+length > totalLength {
+		return 0, errUnexpected
+	}
+
 	// bitRotVerify verifies if the file on a particular disk doesn't have bitrot
 	// by verifying the hash of the contents of the file.
 	bitRotVerify := func() func(diskIndex int) bool {
@@ -188,39 +193,33 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	// Total bytes written to writer
 	bytesWritten := int64(0)
 
-	// chunkSize is roughly BlockSize/DataBlocks.
-	// chunkSize is calculated such that chunkSize*DataBlocks accommodates BlockSize bytes.
-	// So chunkSize*DataBlocks can be slightly larger than BlockSize if BlockSize is not divisible by
-	// DataBlocks. The extra space will have 0-padding.
-	chunkSize := getEncodedBlockLen(blockSize, dataBlocks)
+	// chunkSize is the amount of data that needs to be read from each disk at a time.
+	chunkSize := getChunkSize(blockSize, dataBlocks)
 
-	// Get start and end block, also bytes to be skipped based on the input offset.
-	startBlock, endBlock, bytesToSkip := getBlockInfo(offset, totalLength, blockSize)
+	startBlock := offset / blockSize
+	endBlock := (offset + length) / blockSize
+
+	// curChunkSize = chunk size for the current block in the for loop below.
+	// curBlockSize = block size for the current block in the for loop below.
+	// curChunkSize and curBlockSize can change for the last block if totalLength%blockSize != 0
+	curChunkSize := chunkSize
+	curBlockSize := blockSize
 
 	// For each block, read chunk from each disk. If we are able to read all the data disks then we don't
 	// need to read parity disks. If one of the data disk is missing we need to read DataBlocks+1 number
 	// of disks. Once read, we Reconstruct() missing data if needed and write it to the given writer.
-	for block := startBlock; bytesWritten < length; block++ {
+	for block := startBlock; block <= endBlock; block++ {
 		// Each element of enBlocks holds curChunkSize'd amount of data read from its corresponding disk.
 		enBlocks := make([][]byte, len(disks))
 
-		// enBlocks data can have 0-padding hence we need to figure the exact number
-		// of bytes we want to read from enBlocks.
-		blockSize := blockSize
-
-		// curChunkSize is chunkSize until end block.
-		curChunkSize := chunkSize
-
-		// We have endBlock, verify if we need to have padding.
-		if block == endBlock && (totalLength%blockSize != 0) {
-			// If this is the last block and size of the block is < BlockSize.
-			curChunkSize = getEncodedBlockLen(totalLength%blockSize, dataBlocks)
-
-			// For the last block, the block size can be less than BlockSize.
-			blockSize = totalLength % blockSize
+		if ((offset + bytesWritten) / blockSize) == (totalLength / blockSize) {
+			// This is the last block for which curBlockSize and curChunkSize can change.
+			// For ex. if totalLength is 15M and blockSize is 10MB, curBlockSize for
+			// the last block should be 5MB.
+			curBlockSize = totalLength % blockSize
+			curChunkSize = getChunkSize(curBlockSize, dataBlocks)
 		}
 
-		// Block offset.
 		// NOTE: That for the offset calculation we have to use chunkSize and
 		// not curChunkSize. If we use curChunkSize for offset calculation
 		// then it can result in wrong offset for the last block.
@@ -261,30 +260,37 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			}
 		}
 
-		var outSize, outOffset int64
+		// Offset in enBlocks from where data should be read from.
+		enBlocksOffset := int64(0)
 
-		// Total data to be read.
-		outSize = blockSize
+		// Total data to be read from enBlocks.
+		enBlocksLength := curBlockSize
 
-		// If this is start block, skip unwanted bytes.
+		// If this is the start block then enBlocksOffset might not be 0.
 		if block == startBlock {
-			outOffset = bytesToSkip
-			outSize -= bytesToSkip
+			enBlocksOffset = offset % blockSize
+			enBlocksLength -= enBlocksOffset
 		}
 
-		if length-bytesWritten < outSize {
+		remaining := length - bytesWritten
+		if remaining < enBlocksLength {
 			// We should not send more data than what was requested.
-			outSize = length - bytesWritten
+			enBlocksLength = remaining
 		}
 
 		// Write data blocks.
-		n, err := writeDataBlocks(writer, enBlocks, dataBlocks, outOffset, outSize)
+		n, err := writeDataBlocks(writer, enBlocks, dataBlocks, enBlocksOffset, enBlocksLength)
 		if err != nil {
 			return bytesWritten, err
 		}
 
 		// Update total bytes written.
 		bytesWritten += n
+
+		if bytesWritten == length {
+			// Done writing all the requested data.
+			break
+		}
 	}
 
 	// Success.
