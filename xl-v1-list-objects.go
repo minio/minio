@@ -97,6 +97,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			Name:    objInfo.Name,
 			ModTime: objInfo.ModTime,
 			Size:    objInfo.Size,
+			MD5Sum:  objInfo.MD5Sum,
 			IsDir:   false,
 		})
 	}

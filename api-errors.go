@@ -107,6 +107,7 @@ const (
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
+
 	// Add new extended error codes here.
 
 	// Minio extended errors.
