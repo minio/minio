@@ -139,7 +139,7 @@ Object API (Amazon S3 compatible):
 ## 3. Test Minio Server using Minio Browser
 Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on minio server.
 
-![Screenshot](https://raw.githubusercontent.com/minio/minio/master/Minio_Browser.png)
+![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/Minio_Browser.jpg?raw=true)
 
 ## 4. Test Minio Server using `mc`
 
