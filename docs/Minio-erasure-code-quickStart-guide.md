@@ -1,12 +1,12 @@
 # Minio Erasure Code Quickstart Guide [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose roughly half the number ((N/2)-1) of drives and still be able to recover the data.
+Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose  half the number (N/2) of drives and still be able to recover the data.
 
 ## 1. Prerequisites:
 Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio)
 
 ## What is Erasure Code?
-Erasure code is a mathematical algorithm to reconstruct missing or corrupted data. Minio uses Reed-Solomon code to shard objects into N/2 data and N/2 parity blocks. This means that in a 12 drive setup, an object is sharded across as 6 data and 6 parity blocks. You can lose as many as 5 drives (be it parity or data) and still reconstruct the data reliably from the remaining drives. 
+Erasure code is a mathematical algorithm to reconstruct missing or corrupted data. Minio uses Reed-Solomon code to shard objects into N/2 data and N/2 parity blocks. This means that in a 12 drive setup, an object is sharded across as 6 data and 6 parity blocks. You can lose as many as 6 drives (be it parity or data) and still reconstruct the data reliably from the remaining drives. 
 
 ## Why is Erasure Code useful?
 Erasure code protects data from multiple drives failure unlike RAID or replication. Minio encodes each object individually with a high parity count. Storage servers once deployed should not require drive replacement or healing for the lifetime of the server. Minio's erasure coded backend is designed for operational efficiency and takes full advantage of hardware acceleration whenever available.
