@@ -91,15 +91,17 @@ type serverCmdConfig struct {
 }
 
 // configureServer configure a new server instance
-func configureServer(srvCmdConfig serverCmdConfig) *http.Server {
+func configureServer(srvCmdConfig serverCmdConfig) *MuxServer {
 	// Minio server config
-	apiServer := &http.Server{
-		Addr: srvCmdConfig.serverAddr,
-		// Adding timeout of 10 minutes for unresponsive client connections.
-		ReadTimeout:    10 * time.Minute,
-		WriteTimeout:   10 * time.Minute,
-		Handler:        configureServerHandler(srvCmdConfig),
-		MaxHeaderBytes: 1 << 20,
+	apiServer := &MuxServer{
+		Server: http.Server{
+			Addr: srvCmdConfig.serverAddr,
+			// Adding timeout of 10 minutes for unresponsive client connections.
+			ReadTimeout:    10 * time.Minute,
+			WriteTimeout:   10 * time.Minute,
+			Handler:        configureServerHandler(srvCmdConfig),
+			MaxHeaderBytes: 1 << 20,
+		},
 	}
 
 	// Returns configured HTTP server.
@@ -260,7 +262,7 @@ func serverMain(c *cli.Context) {
 	})
 
 	// Fetch endpoints which we are going to serve from.
-	endPoints := finalizeEndpoints(tls, apiServer)
+	endPoints := finalizeEndpoints(tls, &apiServer.Server)
 
 	// Prints the formatted startup message.
 	printStartupMessage(endPoints)
