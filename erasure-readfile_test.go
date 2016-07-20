@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -309,7 +309,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
+	// Prepare a slice of 5MB with random data.
 	data := make([]byte, 5*1024*1024)
 	length := int64(len(data))
 	_, err = rand.Read(data)
@@ -382,7 +382,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
+	// Prepare a slice of 5MB with random data.
 	data := make([]byte, 5*1024*1024)
 	length := int64(len(data))
 	_, err = rand.Read(data)

@@ -213,7 +213,9 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 		enBlocks := make([][]byte, len(disks))
 
 		if ((offset + bytesWritten) / blockSize) == (totalLength / blockSize) {
-			// This is the last block.
+			// This is the last block for which curBlockSize and curChunkSize can change.
+			// For ex. if totalLength is 15M and blockSize is 10MB, curBlockSize for
+			// the last block should be 5MB.
 			curBlockSize = totalLength % blockSize
 			curChunkSize = getChunkSize(curBlockSize, dataBlocks)
 		}
