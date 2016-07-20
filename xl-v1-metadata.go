@@ -83,7 +83,7 @@ type xlMetaV1 struct {
 		Release string `json:"release"`
 	} `json:"minio"`
 	// Metadata map for current object `xl.json`.
-	Meta map[string]string `json:"meta"`
+	Meta map[string]string `json:"meta,omitempty"`
 	// Captures all the individual object `xl.json`.
 	Parts []objectPartInfo `json:"parts,omitempty"`
 }

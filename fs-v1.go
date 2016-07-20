@@ -309,23 +309,32 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object))
+	if err != nil && err != errFileNotFound {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
 
 	// Guess content-type from the extension if possible.
-	contentType := ""
-	if objectExt := filepath.Ext(object); objectExt != "" {
-		if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-			contentType = content.ContentType
+	contentType := fsMeta.Meta["content-type"]
+	if contentType == "" {
+		if objectExt := filepath.Ext(object); objectExt != "" {
+			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
+				contentType = content.ContentType
+			}
 		}
 	}
 
+	// Guess content-type from the extension if possible.
 	return ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ModTime:     fi.ModTime,
-		Size:        fi.Size,
-		IsDir:       fi.Mode.IsDir(),
-		ContentType: contentType,
-		MD5Sum:      "", // Read from metadata.
+		Bucket:          bucket,
+		Name:            object,
+		ModTime:         fi.ModTime,
+		Size:            fi.Size,
+		IsDir:           fi.Mode.IsDir(),
+		MD5Sum:          fsMeta.Meta["md5Sum"],
+		ContentType:     contentType,
+		ContentEncoding: fsMeta.Meta["content-encoding"],
+		UserDefined:     fsMeta.Meta,
 	}, nil
 }
 
@@ -422,10 +431,24 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
+	if hasExtendedHeader(metadata) {
+		// Initialize `fs.json` values.
+		fsMeta := newFSMetaV1()
+		fsMeta.Meta = metadata
+
+		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
+	}
+
 	// Return md5sum, successfully wrote object.
 	return newMD5Hex, nil
 }
 
+// DeleteObject - deletes an object from a bucket, this operation is destructive
+// and there are no rollbacks supported.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -434,7 +457,11 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if err := fs.storage.DeleteFile(bucket, object); err != nil {
+	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object))
+	if err != nil && err != errFileNotFound {
+		return toObjectErr(err, bucket, object)
+	}
+	if err = fs.storage.DeleteFile(bucket, object); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 	return nil
