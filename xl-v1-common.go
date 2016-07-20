@@ -21,15 +21,7 @@ import (
 	"time"
 )
 
-// getLoadBalancedQuorumDisks - fetches load balanced sufficiently
-// randomized quorum disk slice.
-func (xl xlObjects) getLoadBalancedQuorumDisks() (disks []StorageAPI) {
-	// It is okay to have readQuorum disks.
-	return xl.getLoadBalancedDisks()[0 : xl.readQuorum-1]
-}
-
-// getLoadBalancedDisks - fetches load balanced (sufficiently
-// randomized) disk slice.
+// getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(time.Now().UTC().String(), len(xl.storageDisks)) {
@@ -60,7 +52,7 @@ func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}

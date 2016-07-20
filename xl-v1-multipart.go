@@ -64,7 +64,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	// uploadIDMarker first.
 	if uploadIDMarker != "" {
 		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
-		for _, disk := range xl.getLoadBalancedQuorumDisks() {
+		for _, disk := range xl.getLoadBalancedDisks() {
 			if disk == nil {
 				continue
 			}
@@ -91,7 +91,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
 			isLeaf := xl.isMultipartUpload
-			listDir := listDirFactory(isLeaf, xl.getLoadBalancedQuorumDisks()...)
+			listDir := listDirFactory(isLeaf, xl.getLoadBalancedDisks()...)
 			walkerCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, walkerDoneCh)
 		}
 		// Collect uploads until we have reached maxUploads count to 0.
@@ -130,7 +130,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For the new object entry we get all its pending uploadIDs.
 			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
 			var disk StorageAPI
-			for _, disk = range xl.getLoadBalancedQuorumDisks() {
+			for _, disk = range xl.getLoadBalancedDisks() {
 				if disk == nil {
 					continue
 				}
@@ -757,7 +757,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var disk StorageAPI
 	var uploadsJSON uploadsV1
-	for _, disk = range xl.getLoadBalancedQuorumDisks() {
+	for _, disk = range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -811,7 +811,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	var disk StorageAPI
 	var uploadsJSON uploadsV1
-	for _, disk = range xl.getLoadBalancedQuorumDisks() {
+	for _, disk = range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}

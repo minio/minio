@@ -230,7 +230,7 @@ var objMetadataOpIgnoredErrs = []error{
 // readXLMetadata - returns the object metadata `xl.json` content from
 // one of the disks picked at random.
 func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
