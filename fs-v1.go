@@ -584,6 +584,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			Name:    fileInfo.Name,
 			ModTime: fileInfo.ModTime,
 			Size:    fileInfo.Size,
+			MD5Sum:  fileInfo.MD5Sum,
 			IsDir:   false,
 		})
 	}

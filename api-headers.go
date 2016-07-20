@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-	"strings"
 )
 
 //// helpers
@@ -67,16 +66,18 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
 	w.Header().Set("Last-Modified", lastModified)
 
-	w.Header().Set("Content-Type", objInfo.ContentType)
+	if objInfo.ContentType != "" {
+		w.Header().Set("Content-Type", objInfo.ContentType)
+	}
 	if objInfo.MD5Sum != "" {
 		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
-
+	if objInfo.ContentEncoding != "" {
+		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
+	}
 	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
 	for k, v := range objInfo.UserDefined {
-		if strings.HasPrefix(k, "X-Amz-Meta-") {
-			w.Header().Set(k, v)
-		}
+		w.Header().Set(k, v)
 	}
 
 	// for providing ranged content
