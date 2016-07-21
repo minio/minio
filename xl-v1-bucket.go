@@ -30,6 +30,10 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify if bucket is found.
+	if xl.isBucketExist(bucket) {
+		return toObjectErr(errVolumeExists, bucket)
+	}
 
 	nsMutex.Lock(bucket, "")
 	defer nsMutex.Unlock(bucket, "")
@@ -68,18 +72,34 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	}
 
 	// Verify we have any other errors which should undo make bucket.
-	for _, err := range dErrs {
-		// Bucket already exists, return BucketExists error.
-		if err == errVolumeExists {
-			return toObjectErr(errVolumeExists, bucket)
-		}
-		// Undo make bucket for any other errors.
-		if err != nil && err != errDiskNotFound {
-			xl.undoMakeBucket(bucket)
-			return toObjectErr(err, bucket)
-		}
+	if reducedErr := reduceErrs(dErrs, []error{
+		errDiskNotFound,
+		errFaultyDisk,
+		errDiskAccessDenied,
+	}); reducedErr != nil {
+		return toObjectErr(reducedErr, bucket)
 	}
 	return nil
+}
+
+func (xl xlObjects) undoDeleteBucket(bucket string) {
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+	// Undo previous make bucket entry on all underlying storage disks.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
+		wg.Add(1)
+		// Delete a bucket inside a go-routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			_ = disk.MakeVol(bucket)
+		}(index, disk)
+	}
+
+	// Wait for all make vol to finish.
+	wg.Wait()
 }
 
 // undo make bucket operation upon quorum failure.
@@ -113,7 +133,7 @@ var bucketMetadataOpIgnoredErrs = []error{
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -169,7 +189,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 
 // listBuckets - returns list of all buckets from a disk picked at random.
 func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -220,13 +240,15 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
+	// Verify if bucket is found.
+	if !xl.isBucketExist(bucket) {
+		return BucketNotFound{Bucket: bucket}
+	}
 
 	nsMutex.Lock(bucket, "")
 	defer nsMutex.Unlock(bucket, "")
 
 	// Collect if all disks report volume not found.
-	var volumeNotFoundErrCnt int
-
 	var wg = &sync.WaitGroup{}
 	var dErrs = make([]error, len(xl.storageDisks))
 
@@ -257,21 +279,17 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Wait for all the delete vols to finish.
 	wg.Wait()
 
-	// Count the errors for known errors, return quickly if we found an unknown error.
-	for _, err := range dErrs {
-		if err != nil {
-			if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-				volumeNotFoundErrCnt++
-				continue
-			}
-			return toObjectErr(err, bucket)
-		}
+	if !isDiskQuorum(dErrs, xl.writeQuorum) {
+		xl.undoDeleteBucket(bucket)
+		return toObjectErr(errXLWriteQuorum, bucket)
 	}
 
-	// Return errVolumeNotFound if all disks report volume not found.
-	if volumeNotFoundErrCnt == len(xl.storageDisks) {
-		return toObjectErr(errVolumeNotFound, bucket)
+	if reducedErr := reduceErrs(dErrs, []error{
+		errFaultyDisk,
+		errDiskNotFound,
+		errDiskAccessDenied,
+	}); reducedErr != nil {
+		return toObjectErr(reducedErr, bucket)
 	}
-
 	return nil
 }

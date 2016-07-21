@@ -30,7 +30,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := xl.isObject
-		listDir := listDirFactory(isLeaf, xl.getLoadBalancedQuorumDisks()...)
+		listDir := listDirFactory(isLeaf, xl.getLoadBalancedDisks()...)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 

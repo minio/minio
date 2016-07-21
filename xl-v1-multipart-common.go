@@ -181,7 +181,7 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 
 // Returns if the prefix is a multipart upload.
 func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -200,7 +200,7 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 
 // listUploadsInfo - list all uploads info.
 func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo, err error) {
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -252,7 +252,7 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 // statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
 	partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partName)
-	for _, disk := range xl.getLoadBalancedQuorumDisks() {
+	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
