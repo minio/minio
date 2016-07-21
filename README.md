@@ -20,17 +20,22 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
+
 ```sh
+
 $ go get -d github.com/minio/minio
 $ cd $GOPATH/src/github.com/minio/minio
 $ make
+
 ```
 
 ## 2. Run Minio Server
 
-### 1. GNU/Linux
+
+### GNU/Linux
 
  ```sh
+
 $ chmod +x minio
 $ ./minio --help
 $ ./minio server ~/Photos
@@ -51,11 +56,14 @@ Object API (Amazon S3 compatible):
    Java:       https://docs.minio.io/docs/java-client-quickstart-guide
    Python:     https://docs.minio.io/docs/python-client-quickstart-guide
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+
 ```
 
-### 2. OS X
+### OS X
+
 
  ```sh
+
 $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
@@ -76,11 +84,13 @@ Object API (Amazon S3 compatible):
    Java:       https://docs.minio.io/docs/java-client-quickstart-guide
    Python:     https://docs.minio.io/docs/python-client-quickstart-guide
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+
 ```
 
-### 3.Microsoft Windows
+### Microsoft Windows
 
 ```sh
+
 C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
 
@@ -101,18 +111,22 @@ Object API (Amazon S3 compatible):
    Python:     https://docs.minio.io/docs/python-client-quickstart-guide
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 
+
 ```
 
-### 4. Docker Container
+### Docker Container
 
 ```sh
+
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio
+
 ```
 
-### 5. FreeBSD
+### FreeBSD
 
 ```sh
+
 $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
@@ -134,24 +148,30 @@ Object API (Amazon S3 compatible):
    Python:     https://docs.minio.io/docs/python-client-quickstart-guide
    JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 
+
 ```
 
 ## 3. Test Minio Server using Minio Browser
+
 Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on minio server.
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/Minio_Browser.jpg?raw=true)
 
+
 ## 4. Test Minio Server using `mc`
+
 
 Install mc  from [here](https://docs.minio.io/docs/minio-client-quick-start-guide).  Use `mc ls` command to list all the buckets on your minio server.
 
 ```sh
+
 $ mc ls myminio/
 [2015-08-05 08:13:22 IST]     0B andoria/
 [2015-08-05 06:14:26 IST]     0B deflector/
 [2015-08-05 08:13:11 IST]     0B ferenginar/
 [2016-03-08 14:56:35 IST]     0B jarjarbing/
 [2016-01-20 16:07:41 IST]     0B my.minio.io/
+
 ```
 
 For more examples please navigate to [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide).
@@ -168,4 +188,4 @@ For more examples please navigate to [Minio Client Complete Guide](https://docs.
 
 
 ## 6. Contribute to Minio Project
-Please follow Minio [Contributor's Guide](./CONTRIBUTING.md)
+Please follow Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
