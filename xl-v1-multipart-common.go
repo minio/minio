@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"path"
-	"strings"
 	"sync"
 	"time"
 )
@@ -196,31 +195,6 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 		break
 	}
 	return false
-}
-
-// listUploadsInfo - list all uploads info.
-func (xl xlObjects) listUploadsInfo(prefixPath string) (uploadsInfo []uploadInfo, err error) {
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-		var uploadsJSON uploadsV1
-		uploadsJSON, err = readUploadsJSON(splitPrefixes[1], splitPrefixes[2], disk)
-		if err == nil {
-			uploadsInfo = uploadsJSON.Uploads
-			return uploadsInfo, nil
-		}
-		if err == errFileNotFound {
-			return []uploadInfo{}, nil
-		}
-		// For any reason disk was deleted or goes offline, continue
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-			continue
-		}
-		break
-	}
-	return []uploadInfo{}, err
 }
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.

@@ -1686,6 +1686,14 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	objectName := "test-multipart-object"
+
+	// 1. Initiate 2 uploads for the same object
+	// 2. Upload 2 parts for the second upload
+	// 3. Abort the second upload.
+	// 4. Abort the first upload.
+	// This will test abort upload when there are more than one upload IDs
+	// and the case where there is only one upload ID.
+
 	// construct HTTP request to initiate a NewMultipart upload.
 	request, err = newTestSignedRequest("POST", getNewMultipartURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey)
@@ -1698,6 +1706,23 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 	// parse the response body and obtain the new upload ID.
 	decoder := xml.NewDecoder(response.Body)
 	newResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(newResponse)
+	c.Assert(err, IsNil)
+	c.Assert(len(newResponse.UploadID) > 0, Equals, true)
+
+	// construct HTTP request to initiate a NewMultipart upload.
+	request, err = newTestSignedRequest("POST", getNewMultipartURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	// execute the HTTP request initiating the new multipart upload.
+	response, err = client.Do(request)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// parse the response body and obtain the new upload ID.
+	decoder = xml.NewDecoder(response.Body)
+	newResponse = &InitiateMultipartUploadResponse{}
 
 	err = decoder.Decode(newResponse)
 	c.Assert(err, IsNil)

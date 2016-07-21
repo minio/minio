@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"path"
-	"strings"
 	"time"
 )
 
@@ -27,20 +26,6 @@ import (
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	_, err := fs.storage.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
 	return err == nil
-}
-
-// listUploadsInfo - list all uploads info.
-func (fs fsObjects) listUploadsInfo(prefixPath string) (uploads []uploadInfo, err error) {
-	splitPrefixes := strings.SplitN(prefixPath, "/", 3)
-	uploadIDs, err := readUploadsJSON(splitPrefixes[1], splitPrefixes[2], fs.storage)
-	if err != nil {
-		if err == errFileNotFound {
-			return []uploadInfo{}, nil
-		}
-		return nil, err
-	}
-	uploads = uploadIDs.Uploads
-	return uploads, nil
 }
 
 // Checks whether bucket exists.
