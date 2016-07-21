@@ -34,7 +34,6 @@ const (
 	globalMinioCertFile      = "public.crt"
 	globalMinioKeyFile       = "private.key"
 	globalMinioConfigFile    = "config.json"
-	globalMinioProfilePath   = "profile"
 	// Add new global values here.
 )
 
@@ -55,8 +54,6 @@ var (
 
 // global colors.
 var (
-	colorWhite     = color.New(color.FgWhite).SprintfFunc()
-	colorWhiteBold = color.New(color.FgWhite, color.Bold).SprintfFunc()
-	colorBlue      = color.New(color.FgBlue).SprintfFunc()
-	colorBold      = color.New(color.Bold).SprintFunc()
+	colorBlue = color.New(color.FgBlue).SprintfFunc()
+	colorBold = color.New(color.Bold).SprintFunc()
 )

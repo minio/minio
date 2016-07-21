@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"hash/crc32"
 	"path"
 )
@@ -76,17 +75,22 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-// hashOrder - returns consistent hashed integers of count slice, based on the input token.
-func hashOrder(token string, count int) []int {
-	if count < 0 {
-		panic(errors.New("hashOrder count cannot be negative"))
+// hashOrder - hashes input key to return returns consistent
+// hashed integer slice. Returned integer order is salted
+// with an input key. This results in consistent order.
+// NOTE: collisions are fine, we are not looking for uniqueness
+// in the slices returned.
+func hashOrder(key string, cardinality int) []int {
+	if cardinality < 0 {
+		// Returns an empty int slice for negative cardinality.
+		return nil
 	}
-	nums := make([]int, count)
-	tokenCrc := crc32.Checksum([]byte(token), crc32.IEEETable)
+	nums := make([]int, cardinality)
+	keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
 
-	start := int(uint32(tokenCrc)%uint32(count)) | 1
-	for i := 1; i <= count; i++ {
-		nums[i-1] = 1 + ((start + i) % count)
+	start := int(uint32(keyCrc)%uint32(cardinality)) | 1
+	for i := 1; i <= cardinality; i++ {
+		nums[i-1] = 1 + ((start + i) % cardinality)
 	}
 	return nums
 }
@@ -106,44 +110,6 @@ func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1,
 
 	// Return structured `xl.json`.
 	return xlMeta, nil
-}
-
-// Uses a map to find union of checksums of parts that were concurrently written
-// but committed before this part. N B For a different, concurrent upload of
-// the same part, the ongoing request's data/metadata prevails.
-// cur     - corresponds to parts written to disk before the ongoing putObjectPart request
-// updated - corresponds to parts written to disk while the ongoing putObjectPart is in progress
-// curPartName - name of the part that is being written
-// returns []checkSumInfo containing the set union of checksums of parts that
-// have been written so far incl. the part being written.
-func unionChecksumInfos(cur []checkSumInfo, updated []checkSumInfo, curPartName string) []checkSumInfo {
-	checksumSet := make(map[string]checkSumInfo)
-	var checksums []checkSumInfo
-
-	checksums = cur
-	for _, cksum := range checksums {
-		checksumSet[cksum.Name] = cksum
-	}
-
-	checksums = updated
-	for _, cksum := range checksums {
-		// skip updating checksum of the part that is
-		// written in this request because the checksum
-		// from cur, corresponding to this part,
-		// should remain.
-		if cksum.Name == curPartName {
-			continue
-		}
-		checksumSet[cksum.Name] = cksum
-	}
-
-	// Form the checksumInfo to be committed in xl.json
-	// from the map.
-	var finalChecksums []checkSumInfo
-	for _, cksum := range checksumSet {
-		finalChecksums = append(finalChecksums, cksum)
-	}
-	return finalChecksums
 }
 
 // Return ordered partsMetadata depeinding on distribution.

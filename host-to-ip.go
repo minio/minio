@@ -40,8 +40,3 @@ func getIPsFromHosts(hosts []string) (ips []net.IP) {
 	sort.Sort(sort.Reverse(byLastOctet(ips)))
 	return ips
 }
-
-// getHostToIP - parses a host string into net.IP value.
-func getHostToIP(host string) net.IP {
-	return net.ParseIP(host)
-}

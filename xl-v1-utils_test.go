@@ -16,9 +16,13 @@
 
 package main
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
-// Test for reduceErrs.
+// Test for reduceErrs, reduceErr reduces collection
+// of errors into a single maximal error with in the list.
 func TestReduceErrs(t *testing.T) {
 	// List all of all test cases to validate various cases of reduce errors.
 	testCases := []struct {
@@ -57,48 +61,35 @@ func TestReduceErrs(t *testing.T) {
 	}
 }
 
-// Test for unionChecksums
-func TestUnionChecksumInfos(t *testing.T) {
-	cur := []checkSumInfo{
-		{"part.1", "dummy", "cur-hash.1"},
-		{"part.2", "dummy", "cur-hash.2"},
-		{"part.3", "dummy", "cur-hash.3"},
-		{"part.4", "dummy", "cur-hash.4"},
-		{"part.5", "dummy", "cur-hash.5"},
+// TestHashOrder - test order of ints in array
+func TestHashOrder(t *testing.T) {
+	testCases := []struct {
+		objectName  string
+		hashedOrder []int
+	}{
+		// cases which should pass the test.
+		// passing in valid object name.
+		{"object", []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
+		{"The Shining Script <v1>.pdf", []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}},
+		{"Cost Benefit Analysis (2009-2010).pptx", []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
+		{"117Gn8rfHL2ACARPAhaFd0AGzic9pUbIA/5OCn5A", []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2}},
+		{"SHØRT", []int{11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
+		{"There are far too many object names, and far too few bucket names!", []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
+		{"a/b/c/", []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2}},
+		{"/a/b/c", []int{7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6}},
+		{string([]byte{0xff, 0xfe, 0xfd}), []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
 	}
-	updated := []checkSumInfo{
-		{"part.1", "dummy", "updated-hash.1"},
-		{"part.2", "dummy", "updated-hash.2"},
-		{"part.3", "dummy", "updated-hash.3"},
-	}
-	curPartcksum := cur[0] // part.1 is the current part being written
 
-	// Verify that hash of current part being written must be from cur []checkSumInfo
-	finalChecksums := unionChecksumInfos(cur, updated, curPartcksum.Name)
-	for _, cksum := range finalChecksums {
-		if cksum.Name == curPartcksum.Name && cksum.Hash != curPartcksum.Hash {
-			t.Errorf("expected Hash = %s but received Hash = %s\n", curPartcksum.Hash, cksum.Hash)
+	// Tests hashing order to be consistent.
+	for i, testCase := range testCases {
+		hashedOrder := hashOrder(testCase.objectName, 16)
+		if !reflect.DeepEqual(testCase.hashedOrder, hashedOrder) {
+			t.Errorf("Test case %d: Expected \"%#v\" but failed \"%#v\"", i+1, testCase.hashedOrder, hashedOrder)
 		}
 	}
 
-	// Verify that all part checksums are present in the union and nothing more.
-	// Map to store all unique part names
-	allPartNames := make(map[string]struct{})
-	// Insert part names from cur and updated []checkSumInfo
-	for _, cksum := range cur {
-		allPartNames[cksum.Name] = struct{}{}
-	}
-	for _, cksum := range updated {
-		allPartNames[cksum.Name] = struct{}{}
-	}
-	// All parts must have an entry in the []checkSumInfo returned from unionChecksums
-	for _, finalcksum := range finalChecksums {
-		if _, ok := allPartNames[finalcksum.Name]; !ok {
-			t.Errorf("expected to find %s but not present in the union, where current part is %s\n",
-				finalcksum.Name, curPartcksum.Name)
-		}
-	}
-	if len(finalChecksums) != len(allPartNames) {
-		t.Error("Union of Checksums doesn't have same number of elements as unique parts in total")
+	// Tests hashing order to fail for when order is '-1'.
+	if hashedOrder := hashOrder("This will fail", -1); hashedOrder != nil {
+		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
 	}
 }
