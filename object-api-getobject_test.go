@@ -175,250 +175,169 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 // Benchmarks for ObjectLayer.GetObject().
-// The intent is to benchamrk GetObject for various sizes ranging from few bytes to 100MB.
+// The intent is to benchmark GetObject for various sizes ranging from few bytes to 100MB.
 // Also each of these Benchmarks are run both XL and FS backends.
 
 // BenchmarkGetObjectVerySmallFS - Benchmark FS.GetObject() for object size of 10 bytes.
 func BenchmarkGetObjectVerySmallFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(10))
+	benchmarkGetObject(b, "FS", 10)
 }
 
 // BenchmarkGetObjectVerySmallXL - Benchmark XL.GetObject() for object size of 10 bytes.
 func BenchmarkGetObjectVerySmallXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(10))
+	benchmarkGetObject(b, "XL", 10)
 }
 
 // BenchmarkGetObject10KbFS - Benchmark FS.GetObject() for object size of 10KB.
 func BenchmarkGetObject10KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(10*1024))
+	benchmarkGetObject(b, "FS", 10*1024)
 }
 
 // BenchmarkGetObject10KbXL - Benchmark XL.GetObject() for object size of 10KB.
 func BenchmarkGetObject10KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(10*1024))
+	benchmarkGetObject(b, "XL", 10*1024)
 }
 
 // BenchmarkGetObject100KbFS - Benchmark FS.GetObject() for object size of 100KB.
 func BenchmarkGetObject100KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(100*1024))
+	benchmarkGetObject(b, "FS", 100*1024)
 }
 
 // BenchmarkGetObject100KbXL - Benchmark XL.GetObject() for object size of 100KB.
 func BenchmarkGetObject100KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(100*1024))
+	benchmarkGetObject(b, "XL", 100*1024)
 }
 
 // BenchmarkGetObject1MbFS - Benchmark FS.GetObject() for object size of 1MB.
 func BenchmarkGetObject1MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(1024*1024))
+	benchmarkGetObject(b, "FS", 1024*1024)
 }
 
 // BenchmarkGetObject1MbXL - Benchmark XL.GetObject() for object size of 1MB.
 func BenchmarkGetObject1MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(1024*1024))
+	benchmarkGetObject(b, "XL", 1024*1024)
 }
 
 // BenchmarkGetObject5MbFS - Benchmark FS.GetObject() for object size of 5MB.
 func BenchmarkGetObject5MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(5*1024*1024))
+	benchmarkGetObject(b, "FS", 5*1024*1024)
 }
 
 // BenchmarkGetObject5MbXL - Benchmark XL.GetObject() for object size of 5MB.
 func BenchmarkGetObject5MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(5*1024*1024))
+	benchmarkGetObject(b, "XL", 5*1024*1024)
 }
 
 // BenchmarkGetObject10MbFS - Benchmark FS.GetObject() for object size of 10MB.
 func BenchmarkGetObject10MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(10*1024*1024))
+	benchmarkGetObject(b, "FS", 10*1024*1024)
 }
 
 // BenchmarkGetObject10MbXL - Benchmark XL.GetObject() for object size of 10MB.
 func BenchmarkGetObject10MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(10*1024*1024))
+	benchmarkGetObject(b, "XL", 10*1024*1024)
 }
 
 // BenchmarkGetObject25MbFS - Benchmark FS.GetObject() for object size of 25MB.
 func BenchmarkGetObject25MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(25*1024*1024))
+	benchmarkGetObject(b, "FS", 25*1024*1024)
 
 }
 
 // BenchmarkGetObject25MbXL - Benchmark XL.GetObject() for object size of 25MB.
 func BenchmarkGetObject25MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(25*1024*1024))
+	benchmarkGetObject(b, "XL", 25*1024*1024)
 }
 
 // BenchmarkGetObject50MbFS - Benchmark FS.GetObject() for object size of 50MB.
 func BenchmarkGetObject50MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(50*1024*1024))
+	benchmarkGetObject(b, "FS", 50*1024*1024)
 }
 
 // BenchmarkGetObject50MbXL - Benchmark XL.GetObject() for object size of 50MB.
 func BenchmarkGetObject50MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(50*1024*1024))
+	benchmarkGetObject(b, "XL", 50*1024*1024)
 }
 
-// BenchmarkGetObject100MbFS - Benchmark FS.GetObject() for object size of 100MB.
-func BenchmarkGetObject100MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(100*1024*1024))
+// parallel benchmarks for ObjectLayer.GetObject() .
+
+// BenchmarkGetObjectParallelVerySmallFS - Benchmark FS.GetObject() for object size of 10 bytes.
+func BenchmarkGetObjectParallelVerySmallFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 10)
 }
 
-// BenchmarkGetObject100MbXL - Benchmark XL.GetObject() for object size of 100MB.
-func BenchmarkGetObject100MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(100*1024*1024))
+// BenchmarkGetObjectParallelVerySmallXL - Benchmark XL.GetObject() for object size of 10 bytes.
+func BenchmarkGetObjectParallelVerySmallXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 10)
 }
 
-// BenchmarkGetObject200MbFS - Benchmark FS.GetObject() for object size of 200MB.
-func BenchmarkGetObject200MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(200*1024*1024))
+// BenchmarkGetObjectParallel10KbFS - Benchmark FS.GetObject() for object size of 10KB.
+func BenchmarkGetObjectParallel10KbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 10*1024)
 }
 
-// BenchmarkGetObject200MbXL - Benchmark XL.GetObject() for object size of 200MB.
-func BenchmarkGetObject200MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(200*1024*1024))
+// BenchmarkGetObjectParallel10KbXL - Benchmark XL.GetObject() for object size of 10KB.
+func BenchmarkGetObjectParallel10KbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 10*1024)
 }
 
-// BenchmarkGetObject500MbFS - Benchmark FS.GetObject() for object size of 500MB.
-func BenchmarkGetObject500MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(500*1024*1024))
+// BenchmarkGetObjectParallel100KbFS - Benchmark FS.GetObject() for object size of 100KB.
+func BenchmarkGetObjectParallel100KbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 100*1024)
 }
 
-// BenchmarkGetObject500MbXL - Benchmark XL.GetObject() for object size of 500MB.
-func BenchmarkGetObject500MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(500*1024*1024))
+// BenchmarkGetObjectParallel100KbXL - Benchmark XL.GetObject() for object size of 100KB.
+func BenchmarkGetObjectParallel100KbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 100*1024)
 }
 
-// BenchmarkGetObject1GbFS - Benchmark FS.GetObject() for object size of 1GB.
-func BenchmarkGetObject1GbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmark(1024*1024*1024))
+// BenchmarkGetObjectParallel1MbFS - Benchmark FS.GetObject() for object size of 1MB.
+func BenchmarkGetObjectParallel1MbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 1024*1024)
 }
 
-// BenchmarkGetObjectGbXL - Benchmark XL.GetObject() for object size of 1GB.
-func BenchmarkGetObject1GbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmark(1024*1024*1024))
+// BenchmarkGetObjectParallel1MbXL - Benchmark XL.GetObject() for object size of 1MB.
+func BenchmarkGetObjectParallel1MbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 1024*1024)
 }
 
-// The intent is to benchamrk GetObject for various sizes ranging from few bytes to 100MB.
-// Also each of these BenchmarkParallels are run both XL and FS backends.
-
-// BenchmarkParallelGetObjectVerySmallFS - BenchmarkParallel FS.GetObject() for object size of 10 bytes.
-func BenchmarkParallelGetObjectVerySmallFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(10))
+// BenchmarkGetObjectParallel5MbFS - Benchmark FS.GetObject() for object size of 5MB.
+func BenchmarkGetObjectParallel5MbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 5*1024*1024)
 }
 
-// BenchmarkParallelGetObjectVerySmallXL - BenchmarkParallel XL.GetObject() for object size of 10 bytes.
-func BenchmarkParallelGetObjectVerySmallXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(10))
+// BenchmarkGetObjectParallel5MbXL - Benchmark XL.GetObject() for object size of 5MB.
+func BenchmarkGetObjectParallel5MbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 5*1024*1024)
 }
 
-// BenchmarkParallelGetObject10KbFS - BenchmarkParallel FS.GetObject() for object size of 10KB.
-func BenchmarkParallelGetObject10KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(10*1024))
+// BenchmarkGetObjectParallel10MbFS - Benchmark FS.GetObject() for object size of 10MB.
+func BenchmarkGetObjectParallel10MbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 10*1024*1024)
 }
 
-// BenchmarkParallelGetObject10KbXL - BenchmarkParallel XL.GetObject() for object size of 10KB.
-func BenchmarkParallelGetObject10KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(10*1024))
+// BenchmarkGetObjectParallel10MbXL - Benchmark XL.GetObject() for object size of 10MB.
+func BenchmarkGetObjectParallel10MbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 10*1024*1024)
 }
 
-// BenchmarkParallelGetObject100KbFS - BenchmarkParallel FS.GetObject() for object size of 100KB.
-func BenchmarkParallelGetObject100KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(100*1024))
-}
-
-// BenchmarkParallelGetObject100KbXL - BenchmarkParallel XL.GetObject() for object size of 100KB.
-func BenchmarkParallelGetObject100KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(100*1024))
-}
-
-// BenchmarkParallelGetObject1MbFS - BenchmarkParallel FS.GetObject() for object size of 1MB.
-func BenchmarkParallelGetObject1MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(1024*1024))
-}
-
-// BenchmarkParallelGetObject1MbXL - BenchmarkParallel XL.GetObject() for object size of 1MB.
-func BenchmarkParallelGetObject1MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(1024*1024))
-}
-
-// BenchmarkParallelGetObject5MbFS - BenchmarkParallel FS.GetObject() for object size of 5MB.
-func BenchmarkParallelGetObject5MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(5*1024*1024))
-}
-
-// BenchmarkParallelGetObject5MbXL - BenchmarkParallel XL.GetObject() for object size of 5MB.
-func BenchmarkParallelGetObject5MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(5*1024*1024))
-}
-
-// BenchmarkParallelGetObject10MbFS - BenchmarkParallel FS.GetObject() for object size of 10MB.
-func BenchmarkParallelGetObject10MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(10*1024*1024))
-}
-
-// BenchmarkParallelGetObject10MbXL - BenchmarkParallel XL.GetObject() for object size of 10MB.
-func BenchmarkParallelGetObject10MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(10*1024*1024))
-}
-
-// BenchmarkParallelGetObject25MbFS - BenchmarkParallel FS.GetObject() for object size of 25MB.
-func BenchmarkParallelGetObject25MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(25*1024*1024))
+// BenchmarkGetObjectParallel25MbFS - Benchmark FS.GetObject() for object size of 25MB.
+func BenchmarkGetObjectParallel25MbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 25*1024*1024)
 
 }
 
-// BenchmarkParallelGetObject25MbXL - BenchmarkParallel XL.GetObject() for object size of 25MB.
-func BenchmarkParallelGetObject25MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(25*1024*1024))
+// BenchmarkGetObjectParallel25MbXL - Benchmark XL.GetObject() for object size of 25MB.
+func BenchmarkGetObjectParallel25MbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 25*1024*1024)
 }
 
-// BenchmarkParallelGetObject50MbFS - BenchmarkParallel FS.GetObject() for object size of 50MB.
-func BenchmarkParallelGetObject50MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(50*1024*1024))
+// BenchmarkGetObjectParallel50MbFS - Benchmark FS.GetObject() for object size of 50MB.
+func BenchmarkGetObjectParallel50MbFS(b *testing.B) {
+	benchmarkGetObjectParallel(b, "FS", 50*1024*1024)
 }
 
-// BenchmarkParallelGetObject50MbXL - BenchmarkParallel XL.GetObject() for object size of 50MB.
-func BenchmarkParallelGetObject50MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(50*1024*1024))
-}
-
-// BenchmarkParallelGetObject100MbFS - BenchmarkParallel FS.GetObject() for object size of 100MB.
-func BenchmarkParallelGetObject100MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(100*1024*1024))
-}
-
-// BenchmarkParallelGetObject100MbXL - BenchmarkParallel XL.GetObject() for object size of 100MB.
-func BenchmarkParallelGetObject100MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(100*1024*1024))
-}
-
-// BenchmarkParallelGetObject200MbFS - BenchmarkParallel FS.GetObject() for object size of 200MB.
-func BenchmarkParallelGetObject200MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(200*1024*1024))
-}
-
-// BenchmarkParallelGetObject200MbXL - BenchmarkParallel XL.GetObject() for object size of 200MB.
-func BenchmarkParallelGetObject200MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(200*1024*1024))
-}
-
-// BenchmarkParallelGetObject500MbFS - BenchmarkParallel FS.GetObject() for object size of 500MB.
-func BenchmarkParallelGetObject500MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(500*1024*1024))
-}
-
-// BenchmarkParallelGetObject500MbXL - BenchmarkParallel XL.GetObject() for object size of 500MB.
-func BenchmarkParallelGetObject500MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(500*1024*1024))
-}
-
-// BenchmarkParallelGetObject1GbFS - BenchmarkParallel FS.GetObject() for object size of 1GB.
-func BenchmarkParallelGetObject1GbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", returnGetObjectBenchmarkParallel(1024*1024*1024))
-}
-
-// BenchmarkParallelGetObjectGbXL - BenchmarkParallel XL.GetObject() for object size of 1GB.
-func BenchmarkParallelGetObject1GbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", returnGetObjectBenchmarkParallel(1024*1024*1024))
+// BenchmarkGetObjectParallel50MbXL - Benchmark XL.GetObject() for object size of 50MB.
+func BenchmarkGetObjectParallel50MbXL(b *testing.B) {
+	benchmarkGetObjectParallel(b, "XL", 50*1024*1024)
 }

@@ -133,7 +133,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 }
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
-func benchmarkPutObjectPart(b *testing.B, instanceType string, runBenchMark func(b *testing.B, obj ObjectLayer)) {
+func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
 	objLayer, disks, err := makeTestBackend(instanceType)
 	if err != nil {
@@ -141,20 +141,12 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, runBenchMark func
 	}
 	// cleaning up the backend by removing all the directories and files created on function return.
 	defer removeRoots(disks)
-	// calling runPutObjectBenchmark which uses *testing.B and the object Layer to run the benchmark.
-	runBenchMark(b, objLayer)
-}
-
-// closure for returning the put object benchmark executor for given object size in bytes.
-func returnPutObjectPartBenchmark(objSize int) func(*testing.B, ObjectLayer) {
-	// FIXME: Avoid closure.
-	return func(b *testing.B, obj ObjectLayer) {
-		runPutObjectPartBenchmark(b, obj, objSize)
-	}
+	// uses *testing.B and the object Layer to run the benchmark.
+	runPutObjectPartBenchmark(b, objLayer, objSize)
 }
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
-func benchmarkPutObject(b *testing.B, instanceType string, runBenchMark func(b *testing.B, obj ObjectLayer)) {
+func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
 	objLayer, disks, err := makeTestBackend(instanceType)
 	if err != nil {
@@ -162,16 +154,21 @@ func benchmarkPutObject(b *testing.B, instanceType string, runBenchMark func(b *
 	}
 	// cleaning up the backend by removing all the directories and files created on function return.
 	defer removeRoots(disks)
-	// calling runPutObjectBenchmark which uses *testing.B and the object Layer to run the benchmark.
-	runBenchMark(b, objLayer)
+	// uses *testing.B and the object Layer to run the benchmark.
+	runPutObjectBenchmark(b, objLayer, objSize)
 }
 
-// closure for returning the put object benchmark executor for given object size in bytes.
-func returnPutObjectBenchmark(objSize int) func(*testing.B, ObjectLayer) {
-	// FIXME: Avoid closure.
-	return func(b *testing.B, obj ObjectLayer) {
-		runPutObjectBenchmark(b, obj, objSize)
+// creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for put object.
+func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) {
+	// create a temp XL/FS backend.
+	objLayer, disks, err := makeTestBackend(instanceType)
+	if err != nil {
+		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
+	// cleaning up the backend by removing all the directories and files created on function return.
+	defer removeRoots(disks)
+	// uses *testing.B and the object Layer to run the benchmark.
+	runPutObjectBenchmarkParallel(b, objLayer, objSize)
 }
 
 // Benchmark utility functions for ObjectLayer.GetObject().
@@ -243,7 +240,7 @@ func generateBytesData(size int) []byte {
 }
 
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
-func benchmarkGetObject(b *testing.B, instanceType string, runBenchMark func(b *testing.B, obj ObjectLayer)) {
+func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
 	objLayer, disks, err := makeTestBackend(instanceType)
 	if err != nil {
@@ -251,16 +248,21 @@ func benchmarkGetObject(b *testing.B, instanceType string, runBenchMark func(b *
 	}
 	// cleaning up the backend by removing all the directories and files created.
 	defer removeRoots(disks)
-	// calling runGetObjectBenchmark which uses *testing.B and the object Layer to run the benchmark.
-	runBenchMark(b, objLayer)
+	//  uses *testing.B and the object Layer to run the benchmark.
+	runGetObjectBenchmark(b, objLayer, objSize)
 }
 
-// closure for returning the get object benchmark executor for given object size in bytes.
-// FIXME: Avoid closure.
-func returnGetObjectBenchmark(objSize int) func(*testing.B, ObjectLayer) {
-	return func(b *testing.B, obj ObjectLayer) {
-		runGetObjectBenchmark(b, obj, objSize)
+// creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
+func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
+	// create a temp XL/FS backend.
+	objLayer, disks, err := makeTestBackend(instanceType)
+	if err != nil {
+		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
+	// cleaning up the backend by removing all the directories and files created.
+	defer removeRoots(disks)
+	//  uses *testing.B and the object Layer to run the benchmark.
+	runGetObjectBenchmarkParallel(b, objLayer, objSize)
 }
 
 // Parallel benchmark utility functions for ObjectLayer.PutObject().
@@ -308,14 +310,6 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 
 	// Benchmark ends here. Stop timer.
 	b.StopTimer()
-}
-
-// closure for returning the put object benchmark executor for given object size in bytes.
-func returnPutObjectBenchmarkParallel(objSize int) func(*testing.B, ObjectLayer) {
-	// FIXME: Avoid closure.
-	return func(b *testing.B, obj ObjectLayer) {
-		runPutObjectBenchmarkParallel(b, obj, objSize)
-	}
 }
 
 // Parallel benchmark utility functions for ObjectLayer.GetObject().
@@ -373,12 +367,4 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// Benchmark ends here. Stop timer.
 	b.StopTimer()
 
-}
-
-// closure for returning the get object benchmark executor for given object size in bytes.
-// FIXME: Avoid closure.
-func returnGetObjectBenchmarkParallel(objSize int) func(*testing.B, ObjectLayer) {
-	return func(b *testing.B, obj ObjectLayer) {
-		runGetObjectBenchmarkParallel(b, obj, objSize)
-	}
 }
