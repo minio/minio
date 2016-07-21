@@ -20,12 +20,23 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 )
+
+// md5Hex ignores error from Write method since it never returns one. Check
+// crypto/md5 doc for more details.
+func md5Hex(b []byte) string {
+	md5Writer := md5.New()
+	md5Writer.Write(b)
+	return hex.EncodeToString(md5Writer.Sum(nil))
+}
+
+func md5Header(data []byte) map[string]string {
+	return map[string]string{"md5Sum": md5Hex([]byte(data))}
+}
 
 // Wrapper for calling PutObject tests for both XL multiple disks and single node setup.
 func TestObjectAPIPutObject(t *testing.T) {
@@ -52,71 +63,109 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	failCases := []struct {
-		bucketName      string
-		objName         string
-		inputReaderData string
-		inputMeta       map[string]string
-		intputDataSize  int64
-		// flag indicating whether the test should pass.
-		shouldPass bool
+	var (
+		nilBytes    []byte
+		data        = []byte("hello")
+		fiveMBBytes = bytes.Repeat([]byte("a"), 5*1024*124)
+	)
+	invalidMD5 := md5Hex([]byte("meh"))
+	invalidMD5Header := md5Header([]byte("meh"))
+
+	testCases := []struct {
+		bucketName     string
+		objName        string
+		inputData      []byte
+		inputMeta      map[string]string
+		intputDataSize int64
 		// expected error output.
 		expectedMd5   string
 		expectedError error
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{".test", "obj", "", nil, 0, false, "", fmt.Errorf("%s", "Bucket name invalid: .test")},
-		{"------", "obj", "", nil, 0, false, "", fmt.Errorf("%s", "Bucket name invalid: ------")},
-		{"$this-is-not-valid-too", "obj", "", nil, 0, false, "",
-			fmt.Errorf("%s", "Bucket name invalid: $this-is-not-valid-too")},
-		{"a", "obj", "", nil, 0, false, "", fmt.Errorf("%s", "Bucket name invalid: a")},
+		{".test", "obj", []byte(""), nil, 0, "", BucketNameInvalid{Bucket: ".test"}},
+		{"------", "obj", []byte(""), nil, 0, "", BucketNameInvalid{Bucket: "------"}},
+		{"$this-is-not-valid-too", "obj", []byte(""), nil, 0, "",
+			BucketNameInvalid{Bucket: "$this-is-not-valid-too"}},
+		{"a", "obj", []byte(""), nil, 0, "", BucketNameInvalid{Bucket: "a"}},
+
 		// Test case - 5.
 		// Case with invalid object names.
-		{bucket, "", "", nil, 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket#")},
+		{bucket, "", []byte(""), nil, 0, "", ObjectNameInvalid{Bucket: bucket, Object: ""}},
+
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
-		{"abc", "def", "", nil, 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},
+		{"abc", "def", []byte(""), nil, 0, "", BucketNotFound{Bucket: "abc"}},
+
 		// Test case - 7.
 		// Input to replicate Md5 mismatch.
-		{bucket, object, "", map[string]string{"md5Sum": "a35"}, 0, false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated "+"d41d8cd98f00b204e9800998ecf8427e")},
+		{bucket, object, []byte(""), map[string]string{"md5Sum": "a35"}, 0, "",
+			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"}},
+
 		// Test case - 8.
 		// Input with size more than the size of actual data inside the reader.
-		{bucket, object, "abcd", map[string]string{"md5Sum": "a35"}, int64(len("abcd") + 1), false, "",
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, int64(len("abcd") + 1), "",
 			IncompleteBody{}},
+
 		// Test case - 9.
 		// Input with size less than the size of actual data inside the reader.
-		{bucket, object, "abcd", map[string]string{"md5Sum": "a35"}, int64(len("abcd") - 1), false, "",
-			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated 900150983cd24fb0d6963f7d28e17f72")},
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, int64(len("abcd") - 1), "",
+			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"}},
+
 		// Test case - 10-13.
 		// Validating for success cases.
-		{bucket, object, "abcd", map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
-		{bucket, object, "efgh", map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
-		{bucket, object, "ijkl", map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
-		{bucket, object, "mnop", map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), "", nil},
+		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), "", nil},
+		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), "", nil},
+		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), "", nil},
+
+		// Test case 14-16.
+		// With no metadata
+		{bucket, object, data, nil, int64(len(data)), md5Hex(data), nil},
+		{bucket, object, nilBytes, nil, int64(len(nilBytes)), md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, nil, int64(len(fiveMBBytes)), md5Hex(fiveMBBytes), nil},
+
+		// Test case 17-19.
+		// With arbitrary metadata
+		{bucket, object, data, map[string]string{"answer": "42"}, int64(len(data)), md5Hex(data), nil},
+		{bucket, object, nilBytes, map[string]string{"answer": "42"}, int64(len(nilBytes)), md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, map[string]string{"answer": "42"}, int64(len(fiveMBBytes)), md5Hex(fiveMBBytes), nil},
+
+		// Test case 20-22.
+		// With valid md5sum in header
+		{bucket, object, data, md5Header(data), int64(len(data)), md5Hex(data), nil},
+		{bucket, object, nilBytes, md5Header(nilBytes), int64(len(nilBytes)), md5Hex(nilBytes), nil},
+		{bucket, object, fiveMBBytes, md5Header(fiveMBBytes), int64(len(fiveMBBytes)), md5Hex(fiveMBBytes), nil},
+
+		// Test case 23-25.
+		// data with invalid md5sum in header
+		{bucket, object, data, invalidMD5Header, int64(len(data)), md5Hex(data), BadDigest{invalidMD5, md5Hex(data)}},
+		{bucket, object, nilBytes, invalidMD5Header, int64(len(nilBytes)), md5Hex(nilBytes), BadDigest{invalidMD5, md5Hex(nilBytes)}},
+		{bucket, object, fiveMBBytes, invalidMD5Header, int64(len(fiveMBBytes)), md5Hex(fiveMBBytes), BadDigest{invalidMD5, md5Hex(fiveMBBytes)}},
+
+		// Test case 26-28.
+		// data with size different from the actual number of bytes available in the reader
+		{bucket, object, data, nil, int64(len(data) - 1), md5Hex(data[:len(data)-1]), nil},
+		{bucket, object, nilBytes, nil, int64(len(nilBytes) + 1), md5Hex(nilBytes), IncompleteBody{}},
+		{bucket, object, fiveMBBytes, nil, int64(0), md5Hex(fiveMBBytes), nil},
 	}
 
-	for i, testCase := range failCases {
-		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMeta)
-		// All are test cases above are expected to fail.
-
-		if actualErr != nil && testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
+	for i, testCase := range testCases {
+		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+		if actualErr != nil && testCase.expectedError == nil {
+			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i+1, instanceType, actualErr.Error())
 		}
-		if actualErr == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead.", i+1, instanceType, testCase.expectedError.Error())
+		if actualErr == nil && testCase.expectedError != nil {
+			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but passed instead.", i+1, instanceType, testCase.expectedError.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
-		if actualErr != nil && !testCase.shouldPass {
-			if testCase.expectedError.Error() != actualErr.Error() {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
-			}
+		if actualErr != nil && testCase.expectedError != actualErr {
+			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
-		if actualErr == nil && testCase.shouldPass {
+		if actualErr == nil {
 			// Asserting whether the md5 output is correct.
-			if testCase.inputMeta["md5Sum"] != actualMd5Hex {
+			if expectedMD5, ok := testCase.inputMeta["md5Sum"]; ok && expectedMD5 != actualMd5Hex {
 				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualMd5Hex)
 			}
 		}
@@ -155,11 +204,11 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 	}
 
 	testCases := []struct {
-		bucketName      string
-		objName         string
-		inputReaderData string
-		inputMeta       map[string]string
-		intputDataSize  int64
+		bucketName     string
+		objName        string
+		inputData      []byte
+		inputMeta      map[string]string
+		intputDataSize int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -167,14 +216,14 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 		expectedError error
 	}{
 		// Validating for success cases.
-		{bucket, object, "abcd", map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
-		{bucket, object, "efgh", map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
-		{bucket, object, "ijkl", map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
-		{bucket, object, "mnop", map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
+		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
+		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
+		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
 	}
 
 	for i, testCase := range testCases {
-		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMeta)
+		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -202,11 +251,11 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 
 	// Validate the last test.
 	testCase := struct {
-		bucketName      string
-		objName         string
-		inputReaderData string
-		inputMeta       map[string]string
-		intputDataSize  int64
+		bucketName     string
+		objName        string
+		inputData      []byte
+		inputMeta      map[string]string
+		intputDataSize int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -215,14 +264,14 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 	}{
 		bucket,
 		object,
-		"mnop",
+		[]byte("mnop"),
 		map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"},
 		int64(len("mnop")),
 		false,
 		"",
 		InsufficientWriteQuorum{},
 	}
-	_, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMeta)
+	_, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
 	if actualErr != nil && testCase.shouldPass {
 		t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", len(testCases)+1, instanceType, actualErr.Error())
 	}
