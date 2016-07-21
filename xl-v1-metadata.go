@@ -65,24 +65,6 @@ type erasureInfo struct {
 	Checksum     []checkSumInfo `json:"checksum,omitempty"`
 }
 
-// IsValid - tells if the erasure info is sane by validating the data
-// blocks, parity blocks and distribution.
-func (e erasureInfo) IsValid() bool {
-	return e.DataBlocks != 0 && e.ParityBlocks != 0 && len(e.Distribution) != 0
-}
-
-// pickValidErasureInfo - picks one valid erasure info content and returns, from a
-// slice of erasure info content. If no value is found this function panics
-// and dies.
-func pickValidErasureInfo(eInfos []erasureInfo) erasureInfo {
-	for _, eInfo := range eInfos {
-		if eInfo.IsValid() {
-			return eInfo
-		}
-	}
-	panic("Unable to look for valid erasure info content")
-}
-
 // statInfo - carries stat information of the object.
 type statInfo struct {
 	Size    int64     `json:"size"`    // Size of the object `xl.json`.
@@ -247,30 +229,6 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 	}
 	// Return error here.
 	return xlMetaV1{}, err
-}
-
-// Undo rename xl metadata, renames successfully renamed `xl.json` back to source location.
-func (xl xlObjects) undoRenameXLMetadata(srcBucket, srcPrefix, dstBucket, dstPrefix string, errs []error) {
-	var wg = &sync.WaitGroup{}
-	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
-	dstJSONFile := path.Join(dstPrefix, xlMetaJSONFile)
-
-	// Undo rename `xl.json` on disks where RenameFile succeeded.
-	for index, disk := range xl.storageDisks {
-		if disk == nil {
-			continue
-		}
-		// Undo rename object in parallel.
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if errs[index] != nil {
-				return
-			}
-			_ = disk.RenameFile(dstBucket, dstJSONFile, srcBucket, srcJSONFile)
-		}(index, disk)
-	}
-	wg.Wait()
 }
 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
