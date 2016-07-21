@@ -21,6 +21,7 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"sync"
 
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/blake2b-simd"
@@ -234,4 +235,49 @@ func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, b
 
 	// Success.
 	return nil
+}
+
+// Error returned when there are no more free buffers in the scratch pool.
+// Normally this error should never be returned as scratch pool should always be
+// initialized with dataBlocks+parityBlocks number of buffers.
+var errScratchNoBuf = errors.New("no free buffer")
+
+// Temporary pool of buffers that can be used for scratch space.
+type scratchPool struct {
+	buf  [][]byte
+	used []bool
+	sync.Mutex
+}
+
+// Returns an unused buffer.
+func (s *scratchPool) get() (buf []byte, err error) {
+	s.Lock()
+	defer s.Unlock()
+	for i := 0; i < len(s.used); i++ {
+		if !s.used[i] {
+			s.used[i] = true
+			return s.buf[i], nil
+		}
+	}
+	return nil, errScratchNoBuf
+}
+
+// Marks all buffers as unused.
+func (s *scratchPool) reset() {
+	s.Lock()
+	defer s.Unlock()
+	for i := 0; i < len(s.used); i++ {
+		s.used[i] = false
+		s.buf[i] = s.buf[i][:0]
+	}
+}
+
+// Returns new scratch pool with n number of buffers each with size specified as arguemnt.
+func newScratchPool(size int64, n int) *scratchPool {
+	used := make([]bool, n)
+	buf := make([][]byte, n)
+	for i := 0; i < n; i++ {
+		buf[i] = make([]byte, size)
+	}
+	return &scratchPool{buf, used, sync.Mutex{}}
 }
