@@ -105,6 +105,12 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	// Add new error codes here.
 
+	// Bucket notification related errors.
+	ErrEventNotification
+	ErrARNNotification
+	ErrRegionNotification
+	ErrOverlappingFilterNotification
+
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
 
@@ -409,6 +415,28 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "BucketAlreadyOwnedByYou",
 		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+
+	/// Bucket notification related errors.
+	ErrEventNotification: {
+		Code:           "InvalidArgument",
+		Description:    "A specified event is not supported for notifications.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrARNNotification: {
+		Code:           "InvalidArgument",
+		Description:    "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrRegionNotification: {
+		Code:           "InvalidArgument",
+		Description:    "A specified destination is in a different region than the bucket. You must use a destination that resides in the same region as the bucket.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrOverlappingFilterNotification: {
+		Code:           "InvalidArgument",
+		Description:    "An object key name filtering rule defined with overlapping prefixes, overlapping suffixes, or overlapping combinations of prefixes and suffixes for the same event types.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 
 	/// S3 extensions.

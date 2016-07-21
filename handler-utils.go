@@ -17,7 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"io"
+	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -57,4 +60,30 @@ func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
 		s3Error = ErrInvalidRegion
 	}
 	return s3Error
+}
+
+func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, error) {
+	/// HTML Form values
+	formValues := make(map[string]string)
+	filePart := new(bytes.Buffer)
+	var err error
+	for err == nil {
+		var part *multipart.Part
+		part, err = reader.NextPart()
+		if part != nil {
+			if part.FileName() == "" {
+				var buffer []byte
+				buffer, err = ioutil.ReadAll(part)
+				if err != nil {
+					return nil, nil, err
+				}
+				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
+			} else {
+				if _, err = io.Copy(filePart, part); err != nil {
+					return nil, nil, err
+				}
+			}
+		}
+	}
+	return filePart, formValues, nil
 }

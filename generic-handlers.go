@@ -275,7 +275,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 	"cors":           true,
 	"lifecycle":      true,
 	"logging":        true,
-	"notification":   true,
 	"replication":    true,
 	"tagging":        true,
 	"versions":       true,

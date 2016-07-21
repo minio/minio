@@ -90,6 +90,7 @@ func initConfig() error {
 	serverConfig = srvCfg
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
+
 	return nil
 }
 
