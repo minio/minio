@@ -30,6 +30,9 @@ const (
 
 	// Staging buffer read size for all internal operations version 1.
 	readSizeV1 = 128 * 1024 // 128KiB.
+
+	// Buckets meta prefix.
+	bucketMetaPrefix = "buckets"
 )
 
 // Register callback functions that needs to be called when process shutsdown.
