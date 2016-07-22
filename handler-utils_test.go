@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -81,6 +82,39 @@ func TestIsValidLocationContraint(t *testing.T) {
 		actualCode := isValidLocationConstraint(inputRequest)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
+		}
+	}
+}
+
+// Tests validate metadata extraction from http headers.
+func TestExtractMetadataHeaders(t *testing.T) {
+	testCases := []struct {
+		header   http.Header
+		metadata map[string]string
+	}{
+		// Validate if there a known 'content-type'.
+		{
+			header: http.Header{
+				"Content-Type": []string{"image/png"},
+			},
+			metadata: map[string]string{
+				"content-type": "image/png",
+			},
+		},
+		// Validate if there are no keys to extract.
+		{
+			header: http.Header{
+				"test-1": []string{"123"},
+			},
+			metadata: map[string]string{},
+		},
+	}
+
+	// Validate if the extracting headers.
+	for i, testCase := range testCases {
+		metadata := extractMetadataFromHeader(testCase.header)
+		if !reflect.DeepEqual(metadata, testCase.metadata) {
+			t.Fatalf("Test %d failed: Expected \"%#v\", got \"%#v\"", i+1, testCase.metadata, metadata)
 		}
 	}
 }

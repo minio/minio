@@ -325,12 +325,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Save metadata.
 	metadata := make(map[string]string)
 	// Save other metadata if available.
-	if objInfo.ContentType != "" {
-		metadata["content-type"] = objInfo.ContentType
-	}
-	if objInfo.ContentEncoding != "" {
-		metadata["content-encoding"] = objInfo.ContentEncoding
-	}
+	metadata = objInfo.UserDefined
+
 	// Do not set `md5sum` as CopyObject will not keep the
 	// same md5sum as the source.
 
@@ -392,27 +388,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Save metadata.
-	metadata := make(map[string]string)
+	// Extract metadata to be saved from incoming HTTP header.
+	metadata := extractMetadataFromHeader(r.Header)
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
-	// Save other metadata if available.
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "" {
-		metadata["content-type"] = contentType
-	}
-	contentEncoding := r.Header.Get("Content-Encoding")
-	if contentEncoding != "" {
-		metadata["content-encoding"] = contentEncoding
-	}
-	for key := range r.Header {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		}
-	}
 
 	var md5Sum string
 	switch getRequestAuthType(r) {
@@ -472,25 +451,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	// Save metadata.
-	metadata := make(map[string]string)
-	// Save other metadata if available.
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "" {
-		metadata["content-type"] = contentType
-	}
-	contentEncoding := r.Header.Get("Content-Encoding")
-	if contentEncoding != "" {
-		metadata["content-encoding"] = contentEncoding
-	}
-	for key := range r.Header {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = r.Header.Get(cKey)
-		}
-	}
+	// Extract metadata that needs to be saved.
+	metadata := extractMetadataFromHeader(r.Header)
 
 	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {

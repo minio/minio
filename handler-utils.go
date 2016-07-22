@@ -19,6 +19,7 @@ package main
 import (
 	"io"
 	"net/http"
+	"strings"
 )
 
 // Validates location constraint in PutBucket request body.
@@ -57,4 +58,40 @@ func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
 		s3Error = ErrInvalidRegion
 	}
 	return s3Error
+}
+
+// Supported headers that needs to be extracted.
+var supportedHeaders = []string{
+	"content-type",
+	"cache-control",
+	"content-encoding",
+	"content-disposition",
+	// Add more supported headers here.
+}
+
+// extractMetadataFromHeader extracts metadata from HTTP header.
+func extractMetadataFromHeader(header http.Header) map[string]string {
+	metadata := make(map[string]string)
+	// Save standard supported headers.
+	for _, supportedHeader := range supportedHeaders {
+		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
+		// HTTP headers are case insensitive, look for both canonical
+		// and non canonical entries.
+		if _, ok := header[canonicalHeader]; ok {
+			metadata[supportedHeader] = header.Get(canonicalHeader)
+		} else if _, ok := header[supportedHeader]; ok {
+			metadata[supportedHeader] = header.Get(supportedHeader)
+		}
+	}
+	// Go through all other headers for any additional headers that needs to be saved.
+	for key := range header {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
+			metadata[cKey] = header.Get(cKey)
+		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
+			metadata[cKey] = header.Get(cKey)
+		}
+	}
+	// Return.
+	return metadata
 }
