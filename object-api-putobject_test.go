@@ -198,8 +198,8 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	// Take 6 disks down, one more we loose quorum on 16 disk node.
-	for _, disk := range disks[:6] {
+	// Take 8 disks down, one more we loose quorum on 16 disk node.
+	for _, disk := range disks[:8] {
 		removeAll(disk)
 	}
 
