@@ -257,7 +257,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrNoSuchUpload: {
 		Code:           "NoSuchUpload",
-		Description:    "The specified multipart upload does not exist.",
+		Description:    "The specified multipart upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNotImplemented: {
