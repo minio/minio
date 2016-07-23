@@ -62,20 +62,19 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	// set common headers
 	setCommonHeaders(w)
 
-	// set object-related metadata headers
+	// Set content length.
+	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
+
+	// Set last modified time.
 	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
 	w.Header().Set("Last-Modified", lastModified)
 
-	if objInfo.ContentType != "" {
-		w.Header().Set("Content-Type", objInfo.ContentType)
-	}
+	// Set Etag if available.
 	if objInfo.MD5Sum != "" {
 		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	}
-	if objInfo.ContentEncoding != "" {
-		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
-	}
-	w.Header().Set("Content-Length", strconv.FormatInt(objInfo.Size, 10))
+
+	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		w.Header().Set(k, v)
 	}

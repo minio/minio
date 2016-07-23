@@ -314,12 +314,15 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
+	if len(fsMeta.Meta) == 0 {
+		fsMeta.Meta = make(map[string]string)
+	}
+
 	// Guess content-type from the extension if possible.
-	contentType := fsMeta.Meta["content-type"]
-	if contentType == "" {
+	if fsMeta.Meta["content-type"] == "" {
 		if objectExt := filepath.Ext(object); objectExt != "" {
 			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-				contentType = content.ContentType
+				fsMeta.Meta["content-type"] = content.ContentType
 			}
 		}
 	}
@@ -332,7 +335,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		Size:            fi.Size,
 		IsDir:           fi.Mode.IsDir(),
 		MD5Sum:          fsMeta.Meta["md5Sum"],
-		ContentType:     contentType,
+		ContentType:     fsMeta.Meta["content-type"],
 		ContentEncoding: fsMeta.Meta["content-encoding"],
 		UserDefined:     fsMeta.Meta,
 	}, nil
