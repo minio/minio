@@ -132,6 +132,19 @@ func (s serverConfigV5) GetElasticSearchLogger() elasticSearchLogger {
 	return s.Logger.ElasticSearch
 }
 
+func (s *serverConfigV5) SetRedisLogger(rLogger redisLogger) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+	s.Logger.Redis = rLogger
+}
+
+// GetRedisLogger get current Redis logger.
+func (s serverConfigV5) GetRedisLogger() redisLogger {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
+	return s.Logger.Redis
+}
+
 // SetFileLogger set new file logger.
 func (s *serverConfigV5) SetFileLogger(flogger fileLogger) {
 	s.rwMutex.Lock()

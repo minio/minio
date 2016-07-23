@@ -180,6 +180,9 @@ func migrateV4ToV5() {
 	srvConfig.Logger.ElasticSearch = elasticSearchLogger{
 		Enable: false,
 	}
+	srvConfig.Logger.Redis = redisLogger{
+		Enable: false,
+	}
 
 	qc, err := quick.New(srvConfig)
 	fatalIf(err, "Unable to initialize the quick config.")

@@ -48,6 +48,7 @@ type logger struct {
 	Syslog        syslogLogger        `json:"syslog"`
 	AMQP          amqpLogger          `json:"amqp"`
 	ElasticSearch elasticSearchLogger `json:"elasticsearch"`
+	Redis         redisLogger         `json:"redis"`
 	// Add new loggers here.
 }
 

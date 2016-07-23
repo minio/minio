@@ -72,7 +72,7 @@ func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 	// Unmarshals QueueArn into structured object.
 	sqsArn := unmarshalSqsArn(qConfig.QueueArn)
 	// Validate if sqsArn requested any of the known supported queues.
-	if !isAMQPQueue(sqsArn) || !isElasticQueue(sqsArn) {
+	if !isAMQPQueue(sqsArn) || !isElasticQueue(sqsArn) || !isRedisQueue(sqsArn) {
 		return ErrARNNotification
 	}
 
@@ -121,6 +121,8 @@ func unmarshalSqsArn(queueArn string) (mSqs arnMinioSqs) {
 		mSqs.sqsType = queueTypeAMQP
 	case queueTypeElastic:
 		mSqs.sqsType = queueTypeElastic
+	case queueTypeRedis:
+		mSqs.sqsType = queueTypeRedis
 	} // Add more cases here.
 	return mSqs
 }

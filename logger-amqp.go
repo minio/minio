@@ -45,7 +45,7 @@ type amqpConn struct {
 	*amqp.Connection
 }
 
-func connectAMQP(amqpL amqpLogger) (amqpConn, error) {
+func dialAMQP(amqpL amqpLogger) (amqpConn, error) {
 	conn, err := amqp.Dial(amqpL.URL)
 	if err != nil {
 		return amqpConn{}, err
@@ -62,7 +62,7 @@ func enableAMQPLogger() error {
 	}
 
 	// Connect to amqp server.
-	amqpC, err := connectAMQP(amqpL)
+	amqpC, err := dialAMQP(amqpL)
 	if err != nil {
 		return err
 	}

@@ -113,6 +113,12 @@
 			"revisionTime": "2016-07-02T02:15:29-07:00"
 		},
 		{
+			"checksumSHA1": "GOSe2XEQI4AYwrMoLZu8vtmzkJM=",
+			"path": "github.com/minio/redigo/redis",
+			"revision": "5e2117cd32d677a36dcd8c9c83776a065555653b",
+			"revisionTime": "2016-07-24T00:05:56Z"
+		},
+		{
 			"path": "github.com/pkg/profile",
 			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
 			"revisionTime": "2016-05-18T16:56:57+10:00"

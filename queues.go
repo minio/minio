@@ -30,6 +30,8 @@ const (
 	queueTypeAMQP = "1:amqp"
 	// Static string indicating queue type 'elasticsearch'.
 	queueTypeElastic = "1:elasticsearch"
+	// Static string indicating queue type 'redis'.
+	queueTypeRedis = "1:redis"
 )
 
 // Returns true if queueArn is for an AMQP queue.
@@ -40,12 +42,30 @@ func isAMQPQueue(sqsArn arnMinioSqs) bool {
 			return false
 		}
 		// Connect to amqp server to validate.
-		amqpC, err := connectAMQP(amqpL)
+		amqpC, err := dialAMQP(amqpL)
 		if err != nil {
 			errorIf(err, "Unable to connect to amqp service.", amqpL)
 			return false
 		}
 		defer amqpC.Close()
+	}
+	return true
+}
+
+// Returns true if queueArn is for an Redis queue.
+func isRedisQueue(sqsArn arnMinioSqs) bool {
+	if sqsArn.sqsType == queueTypeRedis {
+		rLogger := serverConfig.GetRedisLogger()
+		if !rLogger.Enable {
+			return false
+		}
+		// Connect to redis server to validate.
+		rPool, err := dialRedis(rLogger.Addr, rLogger.Password)
+		if err != nil {
+			errorIf(err, "Unable to connect to redis service.", rLogger)
+			return false
+		}
+		defer rPool.Close()
 	}
 	return true
 }
@@ -57,7 +77,7 @@ func isElasticQueue(sqsArn arnMinioSqs) bool {
 		if !esLogger.Enable {
 			return false
 		}
-		elasticC, err := connectElastic(esLogger.URL)
+		elasticC, err := dialElastic(esLogger.URL)
 		if err != nil {
 			errorIf(err, "Unable to connect to elasticsearch service.", esLogger.URL)
 			return false
