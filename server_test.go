@@ -758,6 +758,7 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 	c.Assert(n, Equals, int64(len([]byte("hello world"))))
 	// asserted the contents of the fetched object with the expected result.
 	c.Assert(true, Equals, bytes.Equal(buffer2.Bytes(), []byte("hello world")))
+
 }
 
 // TestListBuckets - Make request for listing of all buckets.
@@ -2141,4 +2142,5 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	// verify whether complete multipart was successfull.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
 }

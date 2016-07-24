@@ -157,6 +157,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		return w.Write(p)
 	})
+
 	// Reads the object at startOffset and writes to mw.
 	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
@@ -353,6 +354,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponse(w, encodedSuccessResponse)
 	// Explicitly close the reader, to avoid fd leaks.
 	pipeReader.Close()
+
+	// Load notification config if any.
+	nConfig, err := api.loadNotificationConfig(bucket)
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	// Notify object created event.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedCopy, bucket, object, objInfo.MD5Sum, objInfo.Size)
 }
 
 // PutObjectHandler - PUT Object
@@ -422,6 +433,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		w.Header().Set("ETag", "\""+md5Sum+"\"")
 	}
 	writeSuccessResponse(w, nil)
+
+	// Load notification config if any.
+	nConfig, err := api.loadNotificationConfig(bucket)
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	// Notify object created event.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, object, md5Sum, size)
 }
 
 /// Multipart objectAPIHandlers
@@ -645,7 +666,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
 	var md5Sum string
-	var err error
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -711,7 +731,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}(doneCh)
 
 	sendWhiteSpaceChars(w, doneCh)
-
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
 		switch oErr := err.(type) {
@@ -735,9 +754,21 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
-	// write success response.
+
+	// Write success response.
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()
+
+	// Load notification config if any.
+	nConfig, err := api.loadNotificationConfig(bucket)
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	// Notify object created event.
+	size := int64(0) // FIXME: support event size.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedCompleteMultipartUpload, bucket, object, md5Sum, size)
 }
 
 /// Delete objectAPIHandlers
@@ -768,6 +799,19 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	/// Ignore delete object errors, since we are suppposed to reply
 	/// only 204.
-	api.ObjectAPI.DeleteObject(bucket, object)
+	if err := api.ObjectAPI.DeleteObject(bucket, object); err != nil {
+		writeSuccessNoContent(w)
+		return
+	}
 	writeSuccessNoContent(w)
+
+	// Load notification config if any.
+	nConfig, err := api.loadNotificationConfig(bucket)
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	// Notify object deleted event.
+	notifyObjectDeletedEvent(nConfig, bucket, object)
 }

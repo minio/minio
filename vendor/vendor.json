@@ -113,9 +113,10 @@
 			"revisionTime": "2016-07-02T02:15:29-07:00"
 		},
 		{
-			"path": "github.com/mitchellh/go-homedir",
-			"revision": "d682a8f0cf139663a984ff12528da460ca963de9",
-			"revisionTime": "2015-10-24T22:24:27-07:00"
+			"checksumSHA1": "GOSe2XEQI4AYwrMoLZu8vtmzkJM=",
+			"path": "github.com/minio/redigo/redis",
+			"revision": "5e2117cd32d677a36dcd8c9c83776a065555653b",
+			"revisionTime": "2016-07-24T00:05:56Z"
 		},
 		{
 			"path": "github.com/pkg/profile",
@@ -139,6 +140,12 @@
 			"revisionTime": "2016-03-24T19:44:43+05:30"
 		},
 		{
+			"checksumSHA1": "rKV8YLkXpeNG1Oix8hlYqVsEFb4=",
+			"path": "github.com/streadway/amqp",
+			"revision": "2e25825abdbd7752ff08b270d313b93519a0a232",
+			"revisionTime": "2016-03-11T21:55:03Z"
+		},
+		{
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"
@@ -157,6 +164,24 @@
 			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
+		},
+		{
+			"checksumSHA1": "eC4OV7g1tug838fPWrwflstr/TM=",
+			"path": "gopkg.in/olivere/elastic.v3",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
+			"path": "gopkg.in/olivere/elastic.v3/backoff",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "XQg6xG6l15Ke43KolthYYnVDCYo=",
+			"path": "gopkg.in/olivere/elastic.v3/uritemplates",
+			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
+			"revisionTime": "2016-07-16T10:42:39Z"
 		}
 	],
 	"rootPath": "github.com/minio/minio"

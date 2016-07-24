@@ -32,6 +32,8 @@ func migrateConfig() {
 	migrateV2ToV3()
 	// Migrate version '3' to '4'.
 	migrateV3ToV4()
+	// Migrate version '4' to '5'.
+	migrateV4ToV5()
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
@@ -124,8 +126,8 @@ func migrateV3ToV4() {
 	}
 
 	// Save only the new fields, ignore the rest.
-	srvConfig := &serverConfigV4{}
-	srvConfig.Version = globalMinioConfigVersion
+	srvConfig := &configV4{}
+	srvConfig.Version = "4"
 	srvConfig.Credential = cv3.Credential
 	srvConfig.Region = cv3.Region
 	if srvConfig.Region == "" {
@@ -145,4 +147,50 @@ func migrateV3ToV4() {
 	fatalIf(err, "Failed to migrate config from ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
 
 	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+}
+
+// Version '4' to '5' migrates config, removes previous fields related
+// to backend types and server address. This change further simplifies
+// the config for future additions.
+func migrateV4ToV5() {
+	cv4, err := loadConfigV4()
+	if err != nil && os.IsNotExist(err) {
+		return
+	}
+	fatalIf(err, "Unable to load config version ‘4’.")
+	if cv4.Version != "4" {
+		return
+	}
+
+	// Save only the new fields, ignore the rest.
+	srvConfig := &serverConfigV5{}
+	srvConfig.Version = globalMinioConfigVersion
+	srvConfig.Credential = cv4.Credential
+	srvConfig.Region = cv4.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv4.Logger.Console
+	srvConfig.Logger.File = cv4.Logger.File
+	srvConfig.Logger.Syslog = cv4.Logger.Syslog
+	srvConfig.Logger.AMQP = amqpLogger{
+		Enable: false,
+	}
+	srvConfig.Logger.ElasticSearch = elasticSearchLogger{
+		Enable: false,
+	}
+	srvConfig.Logger.Redis = redisLogger{
+		Enable: false,
+	}
+
+	qc, err := quick.New(srvConfig)
+	fatalIf(err, "Unable to initialize the quick config.")
+	configFile, err := getConfigFile()
+	fatalIf(err, "Unable to get config file.")
+
+	err = qc.Save(configFile)
+	fatalIf(err, "Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+
+	console.Println("Migration from version ‘" + cv4.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
