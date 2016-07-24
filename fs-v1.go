@@ -618,13 +618,10 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, fileInfo := range fileInfos {
-		// With delimiter set we fill in NextMarker and Prefixes.
-		if delimiter == slashSeparator {
-			result.NextMarker = fileInfo.Name
-			if fileInfo.Mode.IsDir() {
-				result.Prefixes = append(result.Prefixes, fileInfo.Name)
-				continue
-			}
+		result.NextMarker = fileInfo.Name
+		if fileInfo.Mode.IsDir() {
+			result.Prefixes = append(result.Prefixes, fileInfo.Name)
+			continue
 		}
 		result.Objects = append(result.Objects, ObjectInfo{
 			Name:    fileInfo.Name,

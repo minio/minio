@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,57 +33,41 @@ func TestListObjects(t *testing.T) {
 // Unit test for ListObjects in general.
 func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
-	// This bucket is used for testing ListObject operations.
-	err := obj.MakeBucket("test-bucket-list-object")
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
+	testBuckets := []string{
+		// This bucket is used for testing ListObject operations.
+		"test-bucket-list-object",
+		// Will not store any objects in this bucket,
+		// Its to test ListObjects on an empty bucket.
+		"empty-bucket",
 	}
-	// Will not store any objects in this bucket,
-	// Its to test ListObjects on an empty bucket.
-	err = obj.MakeBucket("empty-bucket")
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	tmpfile, err := ioutil.TempFile("", "simple-file.txt")
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	_, err = obj.PutObject("test-bucket-list-object", "Asia-maps", int64(len("asia-maps")), bytes.NewBufferString("asia-maps"), nil)
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/India-summer-photos-1", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	_, err = obj.PutObject("test-bucket-list-object", "Asia/India/Karnataka/Bangalore/Koramangala/pics", int64(len("contentstring")), bytes.NewBufferString("contentstring"), nil)
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	for i := 0; i < 2; i++ {
-		key := "newPrefix" + strconv.Itoa(i)
-		_, err = obj.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
+	for _, bucket := range testBuckets {
+		err := obj.MakeBucket(bucket)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
-	_, err = obj.PutObject("test-bucket-list-object", "newzen/zen/recurse/again/again/again/pics", int64(len("recurse")), bytes.NewBufferString("recurse"), nil)
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
 
-	for i := 0; i < 3; i++ {
-		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject("test-bucket-list-object", key, int64(len(key)), bytes.NewBufferString(key), nil)
+	var err error
+	testObjects := []struct {
+		name    string
+		content string
+	}{
+		{"Asia-maps", "asis-maps"},
+		{"Asia/India/India-summer-photos-1", "contentstring"},
+		{"Asia/India/Karnataka/Bangalore/Koramangala/pics", "contentstring"},
+		{"newPrefix0", "newPrefix0"},
+		{"newPrefix1", "newPrefix1"},
+		{"newzen/zen/recurse/again/again/again/pics", "recurse"},
+		{"obj0", "obj0"},
+		{"obj1", "obj1"},
+		{"obj2", "obj2"},
+	}
+	for _, object := range testObjects {
+		_, err = obj.PutObject(testBuckets[0], object.name, int64(len(object.content)), bytes.NewBufferString(object.content), nil)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
+
 	}
 
 	// Formualting the result data set to be expected from ListObjects call inside the tests,
@@ -449,63 +432,63 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		// Empty string < "" > and forward slash < / > are the ony two valid arguments for delimeter.
 		{"test-bucket-list-object", "", "", "*", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
 		{"test-bucket-list-object", "", "", "-", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
-		// Testing for failure cases with both perfix and marker (13).
+		// Testing for failure cases with both perfix and marker (11).
 		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
-		// Setting a non-existing directory to be prefix (14-15).
+		// Setting a non-existing directory to be prefix (12-13).
 		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
 		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
-		// Testing on empty bucket, that is, bucket without any objects in it (16).
+		// Testing on empty bucket, that is, bucket without any objects in it (14).
 		{"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
-		// Setting maxKeys to negative value (17-18).
+		// Setting maxKeys to negative value (15-16).
 		{"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
 		{"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
-		// Setting maxKeys to a very large value (19).
+		// Setting maxKeys to a very large value (17).
 		{"empty-bucket", "", "", "", 1111000000000000, ListObjectsInfo{}, nil, true},
-		// Testing for all 7 objects in the bucket (20).
+		// Testing for all 7 objects in the bucket (18).
 		{"test-bucket-list-object", "", "", "", 9, resultCases[0], nil, true},
-		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (21).
+		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (19).
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
-		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (22).
+		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
 		{"test-bucket-list-object", "", "", "", 1234567891011, resultCases[0], nil, true},
-		// Testing for trancated value (23-26).
+		// Testing for trancated value (21-24).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
 		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
 		{"test-bucket-list-object", "", "", "", 1, resultCases[4], nil, true},
-		// Testing with prefix (27-30).
+		// Testing with prefix (25-28).
 		{"test-bucket-list-object", "new", "", "", 3, resultCases[5], nil, true},
 		{"test-bucket-list-object", "new", "", "", 4, resultCases[5], nil, true},
 		{"test-bucket-list-object", "new", "", "", 5, resultCases[5], nil, true},
 		{"test-bucket-list-object", "obj", "", "", 3, resultCases[6], nil, true},
-		// Testing with prefix and truncation (31-32).
+		// Testing with prefix and truncation (29-30).
 		{"test-bucket-list-object", "new", "", "", 1, resultCases[7], nil, true},
 		{"test-bucket-list-object", "obj", "", "", 2, resultCases[8], nil, true},
-		// Testing with marker, but without prefix and truncation (33-37).
+		// Testing with marker, but without prefix and truncation (31-35).
 		{"test-bucket-list-object", "", "newPrefix0", "", 5, resultCases[9], nil, true},
 		{"test-bucket-list-object", "", "newPrefix1", "", 4, resultCases[10], nil, true},
 		{"test-bucket-list-object", "", "obj0", "", 2, resultCases[11], nil, true},
 		{"test-bucket-list-object", "", "obj1", "", 1, resultCases[12], nil, true},
 		{"test-bucket-list-object", "", "man", "", 10, resultCases[13], nil, true},
-		// Marker being set to a value which is greater than and all object names when sorted (38).
+		// Marker being set to a value which is greater than and all object names when sorted (36).
 		// Expected to send an empty response in this case.
 		{"test-bucket-list-object", "", "zen", "", 10, ListObjectsInfo{}, nil, true},
-		// Marker being set to a value which is lesser than and all object names when sorted (39).
+		// Marker being set to a value which is lesser than and all object names when sorted (37).
 		// Expected to send all the objects in the bucket in this case.
 		{"test-bucket-list-object", "", "Abc", "", 10, resultCases[14], nil, true},
-		// Marker is to a hierarhical value (40-41).
+		// Marker is to a hierarhical value (38-39).
 		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "", 10, resultCases[15], nil, true},
 		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "", 10, resultCases[16], nil, true},
-		// Testing with marker and truncation, but no prefix (42-44).
+		// Testing with marker and truncation, but no prefix (40-42).
 		{"test-bucket-list-object", "", "newPrefix0", "", 3, resultCases[17], nil, true},
 		{"test-bucket-list-object", "", "newPrefix1", "", 1, resultCases[18], nil, true},
 		{"test-bucket-list-object", "", "obj0", "", 1, resultCases[19], nil, true},
-		// Testing with both marker and prefix, but without truncation (45-47).
+		// Testing with both marker and prefix, but without truncation (43-45).
 		// The valid combination of marker and prefix should satisfy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "obj", "obj0", "", 2, resultCases[20], nil, true},
 		{"test-bucket-list-object", "obj", "obj1", "", 1, resultCases[21], nil, true},
 		{"test-bucket-list-object", "new", "newPrefix0", "", 2, resultCases[22], nil, true},
-		// Testing with maxKeys set to 0 (48-54).
+		// Testing with maxKeys set to 0 (46-52).
 		// The parameters have to valid.
 		{"test-bucket-list-object", "", "obj1", "", 0, ListObjectsInfo{}, nil, true},
 		{"test-bucket-list-object", "", "obj0", "", 0, ListObjectsInfo{}, nil, true},
@@ -516,18 +499,18 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsInfo{}, nil, true},
 		// Tests on hierarchical key names as prefix.
 		// Without delimteter the code should recurse into the prefix Dir.
-		// Tests with prefix, but without delimiter (55-56).
+		// Tests with prefix, but without delimiter (53-54).
 		{"test-bucket-list-object", "Asia/India/", "", "", 10, resultCases[23], nil, true},
 		{"test-bucket-list-object", "Asia", "", "", 10, resultCases[24], nil, true},
-		// Tests with prefix and delimiter (57-59).
+		// Tests with prefix and delimiter (55-57).
 		// With delimeter the code shouldnot recurse into the sub-directories of prefix Dir.
 		{"test-bucket-list-object", "Asia", "", "/", 10, resultCases[25], nil, true},
 		{"test-bucket-list-object", "new", "", "/", 10, resultCases[26], nil, true},
 		{"test-bucket-list-object", "Asia/India/", "", "/", 10, resultCases[27], nil, true},
-		// Test with marker set as hierarhical value and with delimiter. (60-61)
+		// Test with marker set as hierarhical value and with delimiter. (58-59)
 		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "/", 10, resultCases[28], nil, true},
 		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "/", 10, resultCases[29], nil, true},
-		// Test with prefix and delimiter set to '/'. (62)
+		// Test with prefix and delimiter set to '/'. (60)
 		{"test-bucket-list-object", "/", "", "/", 10, resultCases[30], nil, true},
 	}
 
@@ -567,8 +550,14 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			}
 
 		}
+		// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
+		if result.IsTruncated {
+			_, err = obj.ListObjects(testCase.bucketName, testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-
 }
 
 func BenchmarkListObjects(b *testing.B) {
