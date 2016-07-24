@@ -567,8 +567,14 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			}
 
 		}
+		// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
+		if result.IsTruncated {
+			_, err = obj.ListObjects(testCase.bucketName, testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-
 }
 
 func BenchmarkListObjects(b *testing.B) {
