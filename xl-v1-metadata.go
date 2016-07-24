@@ -27,7 +27,6 @@ import (
 const (
 	// Erasure related constants.
 	erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
-	erasureAlgorithmISAL      = "isa-l/reedsolomon/cauchy"
 )
 
 // objectPartInfo Info of each part kept in the multipart metadata

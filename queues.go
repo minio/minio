@@ -112,7 +112,7 @@ func notifyObjectCreatedEvent(nConfig notificationConfig, eventType EventName, b
 	// Following blocks fills in all the necessary details of s3 event message structure.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	events := []*NotificationEvent{
-		&NotificationEvent{
+		{
 			EventVersion:      "2.0",
 			EventSource:       "aws:s3",
 			AwsRegion:         region,
@@ -158,7 +158,7 @@ func notifyObjectDeletedEvent(nConfig notificationConfig, bucket string, object 
 	// Following blocks fills in all the necessary details of s3 event message structure.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	events := []*NotificationEvent{
-		&NotificationEvent{
+		{
 			EventVersion:      "2.0",
 			EventSource:       "aws:s3",
 			AwsRegion:         region,

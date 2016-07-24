@@ -4,6 +4,10 @@
     "minio": {
         "release": "DEVELOPMENT.GOGET"
     },
+    "meta": {
+        "content-type": "binary/octet-stream",
+        "content-encoding": "gzip"
+    },
     "parts": [
         {
             "number": 1,
