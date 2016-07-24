@@ -216,6 +216,11 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 					Created: volInfo.Created,
 				})
 			}
+			// For buckets info empty, loop once again to check
+			// if we have, can happen if disks are down.
+			if len(bucketsInfo) == 0 {
+				continue
+			}
 			return bucketsInfo, nil
 		}
 		// Ignore any disks not found.

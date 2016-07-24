@@ -87,6 +87,24 @@ func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 	return nil
 }
 
+// Reads uploads.json from any of the load balanced disks.
+func (xl xlObjects) readUploadsJSON(bucket, object string) (uploadsJSON uploadsV1, err error) {
+	for _, disk := range xl.getLoadBalancedDisks() {
+		if disk == nil {
+			continue
+		}
+		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
+		if err == nil {
+			return uploadsJSON, nil
+		}
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
+		}
+		break
+	}
+	return uploadsV1{}, err
+}
+
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
 func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated time.Time) (err error) {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
@@ -96,16 +114,9 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	var errs = make([]error, len(xl.storageDisks))
 	var wg = &sync.WaitGroup{}
 
-	var uploadsJSON uploadsV1
-	for _, disk := range xl.storageDisks {
-		if disk == nil {
-			continue
-		}
-		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		break
-	}
+	// Reads `uploads.json` and returns error.
+	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
 	if err != nil {
-		// For any other errors.
 		if err != errFileNotFound {
 			return err
 		}
@@ -151,12 +162,8 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	// Wait here for all the writes to finish.
 	wg.Wait()
 
-	// Count all the errors and validate if we have write quorum.
+	// Do we have write quorum?.
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		// Do we have readQuorum?.
-		if isDiskQuorum(errs, xl.readQuorum) {
-			return nil
-		}
 		// Rename `uploads.json` left over back to tmp location.
 		for index, disk := range xl.storageDisks {
 			if disk == nil {
@@ -175,7 +182,14 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 		wg.Wait()
 		return errXLWriteQuorum
 	}
-	return nil
+
+	// Ignored errors list.
+	ignoredErrs := []error{
+		errDiskNotFound,
+		errFaultyDisk,
+		errDiskAccessDenied,
+	}
+	return reduceErrs(errs, ignoredErrs)
 }
 
 // Returns if the prefix is a multipart upload.
@@ -234,10 +248,13 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 		if err == nil {
 			return fileInfo, nil
 		}
-		// For any reason disk was deleted or goes offline, continue
+
+		// For any reason disk was deleted or goes offline we continue to next disk.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
 			continue
 		}
+
+		// Catastrophic error, we return.
 		break
 	}
 	return FileInfo{}, err
@@ -283,10 +300,11 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 		return errXLWriteQuorum
 	}
 
-	return reduceErrs(mErrs, []error{
+	// List of ignored errors.
+	ignoredErrs := []error{
 		errDiskNotFound,
 		errDiskAccessDenied,
 		errFaultyDisk,
-		errVolumeNotFound,
-	})
+	}
+	return reduceErrs(mErrs, ignoredErrs)
 }
