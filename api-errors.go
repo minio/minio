@@ -110,6 +110,10 @@ const (
 	ErrARNNotification
 	ErrRegionNotification
 	ErrOverlappingFilterNotification
+	ErrFilterNameInvalid
+	ErrFilterNamePrefix
+	ErrFilterNameSuffix
+	ErrFilterPrefixValueInvalid
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -436,6 +440,26 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrOverlappingFilterNotification: {
 		Code:           "InvalidArgument",
 		Description:    "An object key name filtering rule defined with overlapping prefixes, overlapping suffixes, or overlapping combinations of prefixes and suffixes for the same event types.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrFilterNameInvalid: {
+		Code:           "InvalidArgument",
+		Description:    "filter rule name must be either prefix or suffix",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrFilterNamePrefix: {
+		Code:           "InvalidArgument",
+		Description:    "Cannot specify more than one prefix rule in a filter.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrFilterNameSuffix: {
+		Code:           "InvalidArgument",
+		Description:    "Cannot specify more than one suffix rule in a filter.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrFilterPrefixValueInvalid: {
+		Code:           "InvalidArgument",
+		Description:    "prefix rule value cannot exceed 1024 characters",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

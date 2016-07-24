@@ -80,6 +80,7 @@ func enableLoggers() {
 	// Adding new bucket notification related loggers.
 	enableAMQPLogger()
 	enableElasticLogger()
+	enableRedisLogger()
 
 	// Add your logger here.
 }

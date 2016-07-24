@@ -38,7 +38,13 @@ type redisConn struct {
 }
 
 // Dial a new connection to redis instance at addr, optionally with a password if any.
-func dialRedis(addr, password string) (*redis.Pool, error) {
+func dialRedis(rLogger redisLogger) (*redis.Pool, error) {
+	// Return error if redis not enabled.
+	if !rLogger.Enable {
+		return nil, errLoggerNotEnabled
+	}
+	addr := rLogger.Addr
+	password := rLogger.Password
 	rPool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 240 * time.Second,
@@ -77,12 +83,9 @@ func dialRedis(addr, password string) (*redis.Pool, error) {
 
 func enableRedisLogger() error {
 	rLogger := serverConfig.GetRedisLogger()
-	if !rLogger.Enable {
-		return errLoggerNotEnabled
-	}
 
 	// Dial redis.
-	rPool, err := dialRedis(rLogger.Addr, rLogger.Password)
+	rPool, err := dialRedis(rLogger)
 	if err != nil {
 		return err
 	}

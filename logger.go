@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -51,6 +52,8 @@ type logger struct {
 	Redis         redisLogger         `json:"redis"`
 	// Add new loggers here.
 }
+
+var errLoggerNotEnabled = errors.New("requested logger type is not enabled")
 
 // sysInfo returns useful system statistics.
 func sysInfo() map[string]string {
