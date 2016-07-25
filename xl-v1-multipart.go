@@ -755,21 +755,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	var disk StorageAPI
-	var uploadsJSON uploadsV1
-	for _, disk = range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == nil {
-			break
-		}
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-			continue
-		}
-		break
-	}
+	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, object)
 	}
@@ -809,21 +795,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
-	var disk StorageAPI
-	var uploadsJSON uploadsV1
-	for _, disk = range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == nil {
-			break
-		}
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-			continue
-		}
-		break
-	}
+	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
