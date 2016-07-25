@@ -79,14 +79,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	var xlMeta xlMetaV1
-	for _, meta := range metaArr {
-		if meta.IsValid() && meta.Stat.ModTime == modTime {
-			xlMeta = meta
-			break
-		}
-	}
+	xlMeta := pickValidXLMeta(metaArr, modTime)
+
+	// Reorder online disks based on erasure distribution order.
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+
+	// Reorder parts metadata based on erasure distribution order.
 	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
 
 	// Reply back invalid range if the input offset and length fall out of range.
@@ -172,9 +170,14 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// Get the checksums of the current part.
 		checkSums := make([]string, len(onlineDisks))
-		for index := range onlineDisks {
+		for index, disk := range onlineDisks {
+			// Disk is not found skip the checksum.
+			if disk == nil {
+				checkSums[index] = ""
+				continue
+			}
 			checkSums[index], _, err = metaArr[index].GetCheckSum(partName)
-			if err != nil {
+			if err != nil { // FIXME - relook at returning error here.
 				return toObjectErr(err, bucket, object)
 			}
 		}

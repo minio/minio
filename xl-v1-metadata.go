@@ -156,7 +156,7 @@ func (m *xlMetaV1) AddCheckSum(partName, algorithm, checkSum string) {
 }
 
 // GetCheckSum - get checksum of a part.
-func (m *xlMetaV1) GetCheckSum(partName string) (checkSum, algorithm string, err error) {
+func (m xlMetaV1) GetCheckSum(partName string) (checkSum, algorithm string, err error) {
 	for _, sum := range m.Erasure.Checksum {
 		if sum.Name == partName {
 			return sum.Hash, sum.Algorithm, nil
