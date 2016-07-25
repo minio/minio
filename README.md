@@ -180,11 +180,11 @@ For more examples please navigate to [Minio Client Complete Guide](https://docs.
 ## 5. Explore Further
 
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-container)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quick-start-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/how-to-use-aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio-server)
-- [Use `minio-go` SDK with Minio Server](https://docs/golang-client-quickstart-guide)
+- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
+- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
 
 
 ## 6. Contribute to Minio Project
