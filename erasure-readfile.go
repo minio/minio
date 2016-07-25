@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/minio/pkg/bpool"
 )
 
 // isSuccessDecodeBlocks - do we have all the blocks to be
@@ -111,7 +112,7 @@ func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDis
 }
 
 // parallelRead - reads chunks in parallel from the disks specified in []readDisks.
-func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []StorageAPI, enBlocks [][]byte, blockOffset int64, curChunkSize int64, bitRotVerify func(diskIndex int) bool, scratch *scratchPool) {
+func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []StorageAPI, enBlocks [][]byte, blockOffset int64, curChunkSize int64, bitRotVerify func(diskIndex int) bool, pool *bpool.BytePool) {
 	// WaitGroup to synchronise the read go-routines.
 	wg := &sync.WaitGroup{}
 
@@ -132,9 +133,9 @@ func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []St
 				return
 			}
 
-			buf, err := scratch.get()
+			buf, err := pool.Get()
 			if err != nil {
-				errorIf(err, "unable to get buffer from scratch pool")
+				errorIf(err, "unable to get buffer from byte pool")
 				orderedDisks[index] = nil
 				return
 			}
@@ -158,7 +159,7 @@ func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []St
 // are decoded into a data block. Data block is trimmed for given offset and length,
 // then written to given writer. This function also supports bit-rot detection by
 // verifying checksum of individual block's checksum.
-func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, offset int64, length int64, totalLength int64, blockSize int64, dataBlocks int, parityBlocks int, checkSums []string, scratch *scratchPool) (int64, error) {
+func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, offset int64, length int64, totalLength int64, blockSize int64, dataBlocks int, parityBlocks int, checkSums []string, pool *bpool.BytePool) (int64, error) {
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
 		return 0, errUnexpected
@@ -171,14 +172,6 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 
 	// chunkSize is the amount of data that needs to be read from each disk at a time.
 	chunkSize := getChunkSize(blockSize, dataBlocks)
-
-	// Make sure that scratch pool was initialized with enough storage.
-	if len(scratch.buf) != (dataBlocks + parityBlocks) {
-		return 0, errUnexpected
-	}
-	if int64(cap(scratch.buf[0])) < chunkSize {
-		return 0, errUnexpected
-	}
 
 	// bitRotVerify verifies if the file on a particular disk doesn't have bitrot
 	// by verifying the hash of the contents of the file.
@@ -215,9 +208,9 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	// need to read parity disks. If one of the data disk is missing we need to read DataBlocks+1 number
 	// of disks. Once read, we Reconstruct() missing data if needed and write it to the given writer.
 	for block := startBlock; block <= endBlock; block++ {
-		// Mark all scratch buffers as unused at the start of the loop so that the buffers
+		// Mark all buffers as unused at the start of the loop so that the buffers
 		// can be reused.
-		scratch.reset()
+		pool.Reset()
 
 		// Each element of enBlocks holds curChunkSize'd amount of data read from its corresponding disk.
 		enBlocks := make([][]byte, len(disks))
@@ -249,7 +242,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 				return bytesWritten, err
 			}
 			// Issue a parallel read across the disks specified in readDisks.
-			parallelRead(volume, path, readDisks, disks, enBlocks, blockOffset, curChunkSize, bitRotVerify, scratch)
+			parallelRead(volume, path, readDisks, disks, enBlocks, blockOffset, curChunkSize, bitRotVerify, pool)
 			if isSuccessDecodeBlocks(enBlocks, dataBlocks) {
 				// If enough blocks are available to do rs.Reconstruct()
 				break
