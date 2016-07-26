@@ -144,56 +144,6 @@ func getChunkSize(blockSize int64, dataBlocks int) int64 {
 	return (blockSize + int64(dataBlocks) - 1) / int64(dataBlocks)
 }
 
-// copyN - copies from disk, volume, path to input writer until length
-// is reached at volume, path or an error occurs. A success copyN returns
-// err == nil, not err == EOF. Additionally offset can be provided to start
-// the read at. copyN returns io.EOF if there aren't enough data to be read.
-func copyN(writer io.Writer, disk StorageAPI, volume string, path string, offset int64, length int64) (err error) {
-	// Use staging buffer to read up to length.
-	bufSize := int64(readSizeV1)
-	if length > 0 && bufSize > length {
-		bufSize = length
-	}
-	buf := make([]byte, int(bufSize))
-
-	// Read into writer until length.
-	for length > 0 {
-		curLength := bufSize
-		if length < bufSize {
-			curLength = length
-		}
-		nr, er := disk.ReadFile(volume, path, offset, buf[:curLength])
-		if nr > 0 {
-			nw, ew := writer.Write(buf[0:nr])
-			if nw > 0 {
-				// Decrement the length.
-				length -= int64(nw)
-
-				// Progress the offset.
-				offset += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != int64(nw) {
-				err = io.ErrShortWrite
-				break
-			}
-		}
-		if er == io.EOF || er == io.ErrUnexpectedEOF {
-			break
-		}
-		if er != nil {
-			err = er
-			break
-		}
-	}
-
-	// Success.
-	return err
-}
-
 // copyBuffer - copies from disk, volume, path to input writer until either EOF
 // is reached at volume, path or an error occurs. A success copyBuffer returns
 // err == nil, not err == EOF. Because copyBuffer is defined to read from path
