@@ -16,15 +16,29 @@
 
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
-// Test for getChunkSize()
+// Test validates the number hash writers returned.
+func TestNewHashWriters(t *testing.T) {
+	diskNum := 8
+	hashWriters := newHashWriters(diskNum)
+
+	if len(hashWriters) != diskNum {
+		t.Errorf("Expected %d hashWriters, but instead got %d", diskNum, len(hashWriters))
+	}
+
+}
+
+// Tests validate the output of getChunkSize.
 func TestGetChunkSize(t *testing.T) {
 	// Refer to comments on getChunkSize() for details.
 	testCases := []struct {
 		blockSize  int64
 		dataBlocks int
-		chunkSize  int64
+		// expected result.
+		expectedChunkSize int64
 	}{
 		{
 			10,
@@ -43,11 +57,10 @@ func TestGetChunkSize(t *testing.T) {
 		},
 	}
 	// Verify getChunkSize() for the test cases.
-	for i, test := range testCases {
-		expected := test.chunkSize
-		got := getChunkSize(test.blockSize, test.dataBlocks)
-		if expected != got {
-			t.Errorf("Test %d : expected=%d got=%d", i+1, expected, got)
+	for i, testCase := range testCases {
+		got := getChunkSize(testCase.blockSize, testCase.dataBlocks)
+		if testCase.expectedChunkSize != got {
+			t.Errorf("Test %d : expected=%d got=%d", i+1, testCase.expectedChunkSize, got)
 		}
 	}
 }
