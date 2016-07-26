@@ -16,7 +16,10 @@
 
 package main
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"errors"
+)
 
 // Represents the criteria for the filter rule.
 type filterRule struct {
@@ -67,6 +70,9 @@ type notificationConfig struct {
 	TopicConfigurations  []topicConfig      `xml:"TopicConfiguration"`
 	LambdaConfigurations []lambdaFuncConfig `xml:"CloudFunctionConfiguration"`
 }
+
+// Internal error used to signal notifications not set.
+var errNoSuchNotifications = errors.New("The specified bucket does not have bucket notifications")
 
 // EventName is AWS S3 event type:
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html

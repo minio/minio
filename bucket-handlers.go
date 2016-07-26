@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	mux "github.com/gorilla/mux"
@@ -391,14 +392,25 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Load notification config if any.
 	nConfig, err := api.loadNotificationConfig(bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors, return.
 	if err != nil {
 		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
 		return
 	}
 
-	size := int64(0) // FIXME: support notify size.
-	// Notify event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedPost, bucket, object, md5Sum, size)
+	// Fetch object info for notifications.
+	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		return
+	}
+
+	// Notify object created event.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedPost, bucket, objInfo)
 }
 
 // HeadBucketHandler - HEAD Bucket

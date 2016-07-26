@@ -112,7 +112,7 @@ func filterRuleMatch(object string, frs []filterRule) bool {
 //  - s3:ObjectCreated:Post
 //  - s3:ObjectCreated:Copy
 //  - s3:ObjectCreated:CompleteMultipartUpload
-func notifyObjectCreatedEvent(nConfig notificationConfig, eventType EventName, bucket string, object string, etag string, size int64) {
+func notifyObjectCreatedEvent(nConfig notificationConfig, eventType EventName, bucket string, objInfo ObjectInfo) {
 	/// Construct a new object created event.
 	region := serverConfig.GetRegion()
 	tnow := time.Now().UTC()
@@ -138,9 +138,9 @@ func notifyObjectCreatedEvent(nConfig notificationConfig, eventType EventName, b
 					ARN:           "arn:aws:s3:::" + bucket,
 				},
 				Object: objectMeta{
-					Key:       url.QueryEscape(object),
-					ETag:      etag,
-					Size:      size,
+					Key:       url.QueryEscape(objInfo.Name),
+					ETag:      objInfo.MD5Sum,
+					Size:      objInfo.Size,
 					Sequencer: sequencer,
 				},
 			},
@@ -148,7 +148,7 @@ func notifyObjectCreatedEvent(nConfig notificationConfig, eventType EventName, b
 	}
 	// Notify to all the configured queues.
 	for _, qConfig := range nConfig.QueueConfigurations {
-		ruleMatch := filterRuleMatch(object, qConfig.Filter.Key.FilterRules)
+		ruleMatch := filterRuleMatch(objInfo.Name, qConfig.Filter.Key.FilterRules)
 		if eventMatch(eventType, qConfig.Events) && ruleMatch {
 			log.WithFields(logrus.Fields{
 				"Records": events,
