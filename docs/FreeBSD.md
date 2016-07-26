@@ -110,22 +110,23 @@ $ curl https://dl.minio.io/server/minio/release/freebsd-amd64/minio > minio
 $ chmod 755 minio
 $ ./minio server /minio-example/compressed-objects
 
-AccessKey: X3RU3Q6B4T20TYB281W5  SecretKey: bvp0DF8c+6MzL60UxFqOZGlA5Z8UPfIAATUQuzLS  Region: us-east-1
 
-Minio Object Storage:
-    http://159.203.234.49:9000
-    http://10.12.0.5:9000
-    http://127.0.0.1:9000
+Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+AccessKey: USWUXHGYZQYFYFFIT3RE
+SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
+Region:    us-east-1
 
-Minio Browser:
-    http://159.203.234.49:9000
-    http://10.12.0.5:9000
-    http://127.0.0.1:9000
+Browser Access:
+  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-To configure Minio Client:
-    $ wget https://dl.minio.io/client/mc/release/freebsd-amd64/mc
-    $ chmod 755 mc
-    $ ./mc config host add myminio http://localhost:9000 X3RU3Q6B4T20TYB281W5 bvp0DF8c+6MzL60UxFqOZGlA5Z8UPfIAATUQuzLS
+Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
+  $ mc config host add myminio http://localhost:9000  USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
+
+Object API (Amazon S3 compatible):
+  Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
+  Java:       https://docs.minio.io/docs/java-client-quickstart-guide
+  Python:     https://docs.minio.io/docs/python-client-quickstart-guide
+  JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
 
 ```
 

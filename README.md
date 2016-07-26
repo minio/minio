@@ -48,7 +48,7 @@ Region:    us-east-1
 Browser Access:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 Object API (Amazon S3 compatible):
@@ -76,7 +76,7 @@ Region:    us-east-1
 Browser Access:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 Object API (Amazon S3 compatible):
@@ -102,7 +102,7 @@ Region:    us-east-1
 Browser Access:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
    $ mc.exe config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 Object API (Amazon S3 compatible):
@@ -139,7 +139,7 @@ Region:    us-east-1
 Browser Access:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quick-start-guide
+Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 Object API (Amazon S3 compatible):
