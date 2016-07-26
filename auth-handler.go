@@ -34,40 +34,28 @@ func isRequestUnsignedPayload(r *http.Request) bool {
 
 // Verify if request has JWT.
 func isRequestJWT(r *http.Request) bool {
-	if _, ok := r.Header["Authorization"]; ok {
-		if strings.HasPrefix(r.Header.Get("Authorization"), jwtAlgorithm) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(r.Header.Get("Authorization"), jwtAlgorithm)
 }
 
 // Verify if request has AWS Signature Version '4'.
 func isRequestSignatureV4(r *http.Request) bool {
-	if _, ok := r.Header["Authorization"]; ok {
-		if strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm)
 }
 
-// Verify if request has AWS Presignature Version '4'.
+// Verify if request has AWS PreSign Version '4'.
 func isRequestPresignedSignatureV4(r *http.Request) bool {
-	if _, ok := r.URL.Query()["X-Amz-Credential"]; ok {
-		return true
-	}
-	return false
+	_, ok := r.URL.Query()["X-Amz-Credential"]
+	return ok
 }
 
 // Verify if request has AWS Post policy Signature Version '4'.
 func isRequestPostPolicySignatureV4(r *http.Request) bool {
-	if _, ok := r.Header["Content-Type"]; ok {
-		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") && r.Method == "POST" {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") && r.Method == "POST"
+}
+
+// Verify if the request has AWS Streaming Signature Version '4'. This is only valid for 'PUT' operation.
+func isRequestSignStreamingV4(r *http.Request) bool {
+	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 && r.Method == "PUT"
 }
 
 // Authorization type.
@@ -79,13 +67,16 @@ const (
 	authTypeAnonymous
 	authTypePresigned
 	authTypePostPolicy
+	authTypeStreamingSigned
 	authTypeSigned
 	authTypeJWT
 )
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if isRequestSignatureV4(r) {
+	if isRequestSignStreamingV4(r) {
+		return authTypeStreamingSigned
+	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
 	} else if isRequestPresignedSignatureV4(r) {
 		return authTypePresigned
@@ -154,8 +145,8 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 // request headers and body are used to calculate the signature validating
 // the client signature present in request.
 func checkAuth(r *http.Request) APIErrorCode {
-	authType := getRequestAuthType(r)
-	if authType != authTypePresigned && authType != authTypeSigned {
+	aType := getRequestAuthType(r)
+	if aType != authTypePresigned && aType != authTypeSigned {
 		// For all unhandled auth types return error AccessDenied.
 		return ErrAccessDenied
 	}
@@ -173,23 +164,40 @@ func setAuthHandler(h http.Handler) http.Handler {
 	return authHandler{h}
 }
 
+// List of all support S3 auth types.
+var supportedS3AuthTypes = []authType{
+	authTypeAnonymous,
+	authTypePresigned,
+	authTypeSigned,
+	authTypePostPolicy,
+	authTypeStreamingSigned,
+}
+
+// Validate if the authType is valid and supported.
+func isSupportedS3AuthType(aType authType) bool {
+	for _, a := range supportedS3AuthTypes {
+		if a == aType {
+			return true
+		}
+	}
+	return false
+}
+
 // handler for validating incoming authorization headers.
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch getRequestAuthType(r) {
-	case authTypeAnonymous, authTypePresigned, authTypeSigned, authTypePostPolicy:
-		// Let top level caller validate for anonymous and known
-		// signed requests.
+	aType := getRequestAuthType(r)
+	if isSupportedS3AuthType(aType) {
+		// Let top level caller validate for anonymous and known signed requests.
 		a.handler.ServeHTTP(w, r)
 		return
-	case authTypeJWT:
+	} else if aType == authTypeJWT {
 		// Validate Authorization header if its valid for JWT request.
 		if !isJWTReqAuthenticated(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		a.handler.ServeHTTP(w, r)
-	default:
-		writeErrorResponse(w, r, ErrSignatureVersionNotSupported, r.URL.Path)
 		return
 	}
+	writeErrorResponse(w, r, ErrSignatureVersionNotSupported, r.URL.Path)
 }

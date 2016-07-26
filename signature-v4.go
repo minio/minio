@@ -27,13 +27,14 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/minio/sha256-simd"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/sha256-simd"
 )
 
 // AWS Signature Version '4' constants.
@@ -391,5 +392,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 	if newSignature != signV4Values.Signature {
 		return ErrSignatureDoesNotMatch
 	}
+
+	// Return error none.
 	return ErrNone
 }

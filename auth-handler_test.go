@@ -23,6 +23,64 @@ import (
 	"testing"
 )
 
+// Test all s3 supported auth types.
+func TestS3SupportedAuthType(t *testing.T) {
+	type testCase struct {
+		authT authType
+		pass  bool
+	}
+	// List of all valid and invalid test cases.
+	testCases := []testCase{
+		// Test 1 - supported s3 type anonymous.
+		{
+			authT: authTypeAnonymous,
+			pass:  true,
+		},
+		// Test 2 - supported s3 type presigned.
+		{
+			authT: authTypePresigned,
+			pass:  true,
+		},
+		// Test 3 - supported s3 type signed.
+		{
+			authT: authTypeSigned,
+			pass:  true,
+		},
+		// Test 4 - supported s3 type with post policy.
+		{
+			authT: authTypePostPolicy,
+			pass:  true,
+		},
+		// Test 5 - supported s3 type with streaming signed.
+		{
+			authT: authTypeStreamingSigned,
+			pass:  true,
+		},
+		// Test 6 - JWT is not supported s3 type.
+		{
+			authT: authTypeJWT,
+			pass:  false,
+		},
+		// Test 7 - unknown auth header is not supported s3 type.
+		{
+			authT: authTypeUnknown,
+			pass:  false,
+		},
+		// Test 8 - some new auth type is not supported s3 type.
+		{
+			authT: authType(7),
+			pass:  false,
+		},
+	}
+	// Validate all the test cases.
+	for i, tt := range testCases {
+		ok := isSupportedS3AuthType(tt.authT)
+		if ok != tt.pass {
+			t.Errorf("Test %d:, Expected %t, got %t", i+1, tt.pass, ok)
+		}
+	}
+}
+
 // TestIsRequestUnsignedPayload - Test validates the Unsigned payload detection logic.
 func TestIsRequestUnsignedPayload(t *testing.T) {
 	testCases := []struct {
