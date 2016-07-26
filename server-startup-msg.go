@@ -26,7 +26,7 @@ import (
 
 // Documentation links, these are part of message printing code.
 const (
-	mcQuickStartGuide   = "https://docs.minio.io/docs/minio-client-quick-start-guide"
+	mcQuickStartGuide   = "https://docs.minio.io/docs/minio-client-quickstart-guide"
 	goQuickStartGuide   = "https://docs.minio.io/docs/golang-client-quickstart-guide"
 	jsQuickStartGuide   = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
 	javaQuickStartGuide = "https://docs.minio.io/docs/java-client-quickstart-guide"

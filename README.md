@@ -161,7 +161,7 @@ Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on
 ## 4. Test Minio Server using `mc`
 
 
-Install mc  from [here](https://docs.minio.io/docs/minio-client-quick-start-guide).  Use `mc ls` command to list all the buckets on your minio server.
+Install mc from [here](https://docs.minio.io/docs/minio-client-quickstart-guide). Use `mc ls` command to list all the buckets on your minio server.
 
 ```sh
 
