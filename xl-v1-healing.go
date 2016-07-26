@@ -17,7 +17,6 @@
 package main
 
 import (
-	"sync"
 	"time"
 )
 
@@ -76,38 +75,6 @@ func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time
 		}
 	}
 	return modTimes
-}
-
-// Reads all `xl.json` metadata as a xlMetaV1 slice.
-// Returns error slice indicating the failed metadata reads.
-func readAllXLMetadata(disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
-	errs := make([]error, len(disks))
-	metadataArray := make([]xlMetaV1, len(disks))
-	var wg = &sync.WaitGroup{}
-	// Read `xl.json` parallelly across disks.
-	for index, disk := range disks {
-		if disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Read `xl.json` in routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			var err error
-			metadataArray[index], err = readXLMeta(disk, bucket, object)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-		}(index, disk)
-	}
-
-	// Wait for all the routines to finish.
-	wg.Wait()
-
-	// Return all the metadata.
-	return metadataArray, errs
 }
 
 func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
