@@ -46,9 +46,9 @@ func init() {
 	initNSLock()
 }
 
-// The Argument to TestServer should satidy the interface.
-// Golang Testing.T and Testing.B, and gocheck.C satisfy the interface.
+// TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
 // This makes it easy to run the TestServer from any of the tests.
+// Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
