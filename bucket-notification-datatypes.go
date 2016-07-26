@@ -18,41 +18,43 @@ package main
 
 import "encoding/xml"
 
+// Represents the criteria for the filter rule.
 type filterRule struct {
-	Name  string `xml:"FilterRuleName"`
-	Value string
+	Name  string `xml:"Name"`
+	Value string `xml:"Value"`
 }
 
+// Collection of filter rules per service config.
 type keyFilter struct {
-	FilterRules []filterRule `xml:"FilterRule"`
-}
-
-type notificationConfigFilter struct {
-	Key keyFilter `xml:"S3Key"`
+	FilterRules []filterRule `xml:"FilterRule,omitempty"`
 }
 
 // Queue SQS configuration.
 type queueConfig struct {
-	Events   []string `xml:"Event"`
-	Filter   notificationConfigFilter
+	Events []string `xml:"Event"`
+	Filter struct {
+		Key keyFilter `xml:"S3Key,omitempty"`
+	}
 	ID       string `xml:"Id"`
 	QueueArn string `xml:"Queue"`
 }
 
-// Topic SNS configuration, this is a compliance field
-// not used by minio yet.
+// Topic SNS configuration, this is a compliance field not used by minio yet.
 type topicConfig struct {
-	Events   []string `xml:"Event"`
-	Filter   notificationConfigFilter
+	Events []string `xml:"Event"`
+	Filter struct {
+		Key keyFilter `xml:"S3Key"`
+	}
 	ID       string `xml:"Id"`
 	TopicArn string `xml:"Topic"`
 }
 
-// Lambda function configuration, this is a compliance field
-// not used by minio yet.
+// Lambda function configuration, this is a compliance field not used by minio yet.
 type lambdaFuncConfig struct {
-	Events            []string `xml:"Event"`
-	Filter            notificationConfigFilter
+	Events []string `xml:"Event"`
+	Filter struct {
+		Key keyFilter `xml:"S3Key"`
+	}
 	ID                string `xml:"Id"`
 	LambdaFunctionArn string `xml:"CloudFunction"`
 }
@@ -110,13 +112,15 @@ func defaultIdentity() identity {
 	return identity{"minio"}
 }
 
-type s3BucketReference struct {
+// Notification event bucket metadata.
+type bucketMeta struct {
 	Name          string   `json:"name"`
 	OwnerIdentity identity `json:"ownerIdentity"`
 	ARN           string   `json:"arn"`
 }
 
-type s3ObjectReference struct {
+// Notification event object metadata.
+type objectMeta struct {
 	Key       string `json:"key"`
 	Size      int64  `json:"size,omitempty"`
 	ETag      string `json:"eTag,omitempty"`
@@ -124,11 +128,12 @@ type s3ObjectReference struct {
 	Sequencer string `json:"sequencer"`
 }
 
-type s3Reference struct {
-	SchemaVersion   string            `json:"s3SchemaVersion"`
-	ConfigurationID string            `json:"configurationId"`
-	Bucket          s3BucketReference `json:"bucket"`
-	Object          s3ObjectReference `json:"object"`
+// Notification event server specific metadata.
+type eventMeta struct {
+	SchemaVersion   string     `json:"s3SchemaVersion"`
+	ConfigurationID string     `json:"configurationId"`
+	Bucket          bucketMeta `json:"bucket"`
+	Object          objectMeta `json:"object"`
 }
 
 // NotificationEvent represents an Amazon an S3 bucket notification event.
@@ -141,7 +146,7 @@ type NotificationEvent struct {
 	UserIdentity      identity          `json:"userIdentity"`
 	RequestParameters map[string]string `json:"requestParameters"`
 	ResponseElements  map[string]string `json:"responseElements"`
-	S3                s3Reference       `json:"s3"`
+	S3                eventMeta         `json:"s3"`
 }
 
 // Represents the minio sqs type and inputs.

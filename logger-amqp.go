@@ -17,8 +17,6 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
@@ -46,6 +44,9 @@ type amqpConn struct {
 }
 
 func dialAMQP(amqpL amqpLogger) (amqpConn, error) {
+	if !amqpL.Enable {
+		return amqpConn{}, errLoggerNotEnabled
+	}
 	conn, err := amqp.Dial(amqpL.URL)
 	if err != nil {
 		return amqpConn{}, err
@@ -53,13 +54,8 @@ func dialAMQP(amqpL amqpLogger) (amqpConn, error) {
 	return amqpConn{Connection: conn, params: amqpL}, nil
 }
 
-var errLoggerNotEnabled = errors.New("logger type not enabled")
-
 func enableAMQPLogger() error {
 	amqpL := serverConfig.GetAMQPLogger()
-	if !amqpL.Enable {
-		return errLoggerNotEnabled
-	}
 
 	// Connect to amqp server.
 	amqpC, err := dialAMQP(amqpL)

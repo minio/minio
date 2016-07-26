@@ -51,6 +51,55 @@ func checkEvents(events []string) APIErrorCode {
 	return ErrNone
 }
 
+// Valid if filterName is 'prefix'.
+func isValidFilterNamePrefix(filterName string) bool {
+	return "prefix" == filterName
+}
+
+// Valid if filterName is 'suffix'.
+func isValidFilterNameSuffix(filterName string) bool {
+	return "suffix" == filterName
+}
+
+// Is this a valid filterName? - returns true if valid.
+func isValidFilterName(filterName string) bool {
+	return isValidFilterNamePrefix(filterName) || isValidFilterNameSuffix(filterName)
+}
+
+// checkFilterRules - checks given list of filter rules if all of them are valid.
+func checkFilterRules(filterRules []filterRule) APIErrorCode {
+	ruleSetMap := make(map[string]string)
+	// Validate all filter rules.
+	for _, filterRule := range filterRules {
+		// Unknown filter rule name found, returns an appropriate error.
+		if !isValidFilterName(filterRule.Name) {
+			return ErrFilterNameInvalid
+		}
+
+		// Filter names should not be set twice per notification service
+		// configuration, if found return an appropriate error.
+		if _, ok := ruleSetMap[filterRule.Name]; ok {
+			if isValidFilterNamePrefix(filterRule.Name) {
+				return ErrFilterNamePrefix
+			} else if isValidFilterNameSuffix(filterRule.Name) {
+				return ErrFilterNameSuffix
+			} else {
+				return ErrFilterNameInvalid
+			}
+		}
+
+		// Maximum prefix length can be up to 1,024 characters, validate.
+		if !IsValidObjectPrefix(filterRule.Value) {
+			return ErrFilterPrefixValueInvalid
+		}
+
+		// Set the new rule name to keep track of duplicates.
+		ruleSetMap[filterRule.Name] = filterRule.Value
+	}
+	// Success all prefixes validated.
+	return ErrNone
+}
+
 // checkQueueArn - check if the queue arn is valid.
 func checkQueueArn(queueArn string) APIErrorCode {
 	if !strings.HasPrefix(queueArn, minioSqs) {
@@ -60,6 +109,14 @@ func checkQueueArn(queueArn string) APIErrorCode {
 		return ErrRegionNotification
 	}
 	return ErrNone
+}
+
+// Validate if we recognize the queue type.
+func isValidQueue(sqsArn arnMinioSqs) bool {
+	amqpQ := isAMQPQueue(sqsArn)       // Is amqp queue?.
+	elasticQ := isElasticQueue(sqsArn) // Is elastic queue?.
+	redisQ := isRedisQueue(sqsArn)     // Is redis queue?.
+	return amqpQ || elasticQ || redisQ
 }
 
 // Check - validates queue configuration and returns error if any.
@@ -72,12 +129,17 @@ func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 	// Unmarshals QueueArn into structured object.
 	sqsArn := unmarshalSqsArn(qConfig.QueueArn)
 	// Validate if sqsArn requested any of the known supported queues.
-	if !isAMQPQueue(sqsArn) || !isElasticQueue(sqsArn) || !isRedisQueue(sqsArn) {
+	if !isValidQueue(sqsArn) {
 		return ErrARNNotification
 	}
 
 	// Check if valid events are set in queue config.
 	if s3Error := checkEvents(qConfig.Events); s3Error != ErrNone {
+		return s3Error
+	}
+
+	// Check if valid filters are set in queue config.
+	if s3Error := checkFilterRules(qConfig.Filter.Key.FilterRules); s3Error != ErrNone {
 		return s3Error
 	}
 
@@ -113,6 +175,7 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // Returned value represents minio sqs types, currently supported are
 // - amqp
 // - elasticsearch
+// - redis
 func unmarshalSqsArn(queueArn string) (mSqs arnMinioSqs) {
 	sqsType := strings.TrimPrefix(queueArn, minioSqs+serverConfig.GetRegion()+":")
 	mSqs = arnMinioSqs{}

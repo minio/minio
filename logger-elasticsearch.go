@@ -37,8 +37,11 @@ type elasticClient struct {
 }
 
 // Connects to elastic search instance at URL.
-func dialElastic(url string) (*elastic.Client, error) {
-	client, err := elastic.NewClient(elastic.SetURL(url), elastic.SetSniff(false))
+func dialElastic(esLogger elasticSearchLogger) (*elastic.Client, error) {
+	if !esLogger.Enable {
+		return nil, errLoggerNotEnabled
+	}
+	client, err := elastic.NewClient(elastic.SetURL(esLogger.URL), elastic.SetSniff(false))
 	if err != nil {
 		return nil, err
 	}
@@ -48,10 +51,9 @@ func dialElastic(url string) (*elastic.Client, error) {
 // Enables elasticsearch logger.
 func enableElasticLogger() error {
 	esLogger := serverConfig.GetElasticSearchLogger()
-	if !esLogger.Enable {
-		return errLoggerNotEnabled
-	}
-	client, err := dialElastic(esLogger.URL)
+
+	// Dial to elastic search.
+	client, err := dialElastic(esLogger)
 	if err != nil {
 		return err
 	}
