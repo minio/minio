@@ -14,7 +14,7 @@ Erasure code is a mathematical algorithm to reconstruct missing or corrupted dat
 
 Erasure code protects data from multiple drives failure unlike RAID or replication. Minio encodes each object individually with a high parity count. Storage servers once deployed should not require drive replacement or healing for the lifetime of the server. Minio's erasure coded backend is designed for operational efficiency and takes full advantage of hardware acceleration whenever available.
 
-[![Erasure](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/erasure-code.jpg?raw=true)]
+![Erasure](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/erasure-code.jpg?raw=true)
 
 ## What is Bit Rot protection?
 
