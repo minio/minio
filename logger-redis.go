@@ -54,9 +54,9 @@ func dialRedis(rLogger redisLogger) (*redis.Pool, error) {
 				return nil, err
 			}
 			if password != "" {
-				if _, err := c.Do("AUTH", password); err != nil {
+				if _, derr := c.Do("AUTH", password); derr != nil {
 					c.Close()
-					return nil, err
+					return nil, derr
 				}
 			}
 			return c, err
