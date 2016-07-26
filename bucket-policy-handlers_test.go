@@ -329,12 +329,14 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy"})
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	credentials, rootPath, err := initTestConfig("us-east-1")
+	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{
@@ -425,12 +427,14 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy", "GetBucketPolicy"})
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	credentials, rootPath, err := initTestConfig("us-east-1")
+	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{
@@ -559,17 +563,21 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
 	}
+
 	// Register the API end points with XL/FS object layer.
 	// Registering PutBucketPolicy and DeleteBucketPolicy handlers.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy", "DeleteBucketPolicy"})
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	credentials, rootPath, err := initTestConfig("us-east-1")
+	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{

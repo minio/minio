@@ -126,23 +126,11 @@ func TestNewJWT(t *testing.T) {
 
 // Tests JWT.GenerateToken()
 func TestGenerateToken(t *testing.T) {
-	savedServerConfig := serverConfig
-	defer func() {
-		serverConfig = savedServerConfig
-	}()
-	serverConfig = nil
-
-	// Setup.
-	testPath, err := ioutil.TempDir("", "minio-")
+	testPath, err := newTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
-	}
-	defer removeAll(testPath)
-
-	setGlobalConfigPath(testPath)
-	if err = initConfig(); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
+	defer removeAll(testPath)
 
 	jwt, err := newJWT()
 	if err != nil {
@@ -185,23 +173,11 @@ func TestGenerateToken(t *testing.T) {
 
 // Tests JWT.Authenticate()
 func TestAuthenticate(t *testing.T) {
-	savedServerConfig := serverConfig
-	defer func() {
-		serverConfig = savedServerConfig
-	}()
-	serverConfig = nil
-
-	// Setup.
-	testPath, err := ioutil.TempDir("", "minio-")
+	testPath, err := newTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
-	}
-	defer removeAll(testPath)
-
-	setGlobalConfigPath(testPath)
-	if err = initConfig(); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
+	defer removeAll(testPath)
 
 	jwt, err := newJWT()
 	if err != nil {

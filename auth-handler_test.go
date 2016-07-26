@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"testing"
 )
@@ -46,24 +45,12 @@ func mustNewSignedRequest(method string, urlStr string, contentLength int64, bod
 
 // Tests is requested authenticated function, tests replies for s3 errors.
 func TestIsReqAuthenticated(t *testing.T) {
-	savedServerConfig := serverConfig
-	defer func() {
-		serverConfig = savedServerConfig
-	}()
-	serverConfig = nil
-
-	// Test initialized config file.
-	path, err := ioutil.TempDir("", "minio-")
+	path, err := newTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("unable initialize config file, %s", err)
 	}
 	defer removeAll(path)
 
-	// Inititalize a new config.
-	setGlobalConfigPath(path)
-	if err := initConfig(); err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
-	}
 	serverConfig.SetCredential(credential{"myuser", "mypassword"})
 
 	// List of test cases for validating http request authentication.
