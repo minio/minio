@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"reflect"
 	"sync"
 )
 
@@ -296,21 +296,21 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 
 // checkJBODConsistency - validate xl jbod order if they are consistent.
 func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
-	var jbodStr string
+	var sentinelJBOD []string
 	// Extract first valid JBOD.
 	for _, format := range formatConfigs {
 		if format == nil {
 			continue
 		}
-		jbodStr = strings.Join(format.XL.JBOD, ".")
+		sentinelJBOD = format.XL.JBOD
 		break
 	}
 	for _, format := range formatConfigs {
 		if format == nil {
 			continue
 		}
-		savedJBODStr := strings.Join(format.XL.JBOD, ".")
-		if jbodStr != savedJBODStr {
+		currentJBOD := format.XL.JBOD
+		if !reflect.DeepEqual(sentinelJBOD, currentJBOD) {
 			return errors.New("Inconsistent JBOD found.")
 		}
 	}
@@ -412,14 +412,15 @@ func isFormatFound(formats []*formatConfigV1) bool {
 
 // Heals any missing format.json on the drives. Returns error only for unexpected errors
 // as regular errors can be ignored since there might be enough quorum to be operational.
-func healFormatXL(storageDisks []StorageAPI) error {
+// Heals only fresh disks.
+func healFormatXLFreshDisks(storageDisks []StorageAPI) error {
 	formatConfigs := make([]*formatConfigV1, len(storageDisks))
 	var referenceConfig *formatConfigV1
 	// Loads `format.json` from all disks.
 	for index, disk := range storageDisks {
 		// Disk not found or ignored is a valid case.
 		if disk == nil {
-			// Proceed without healing.
+			// Return nil, one of the disk is offline.
 			return nil
 		}
 		formatXL, err := loadFormat(disk)
@@ -436,6 +437,7 @@ func healFormatXL(storageDisks []StorageAPI) error {
 		} // Success.
 		formatConfigs[index] = formatXL
 	}
+
 	// All `format.json` has been read successfully, previously completed.
 	if isFormatFound(formatConfigs) {
 		// Return success.
@@ -446,6 +448,7 @@ func healFormatXL(storageDisks []StorageAPI) error {
 	if isFormatNotFound(formatConfigs) {
 		return initFormatXL(storageDisks)
 	}
+
 	// Validate format configs for consistency in JBOD and disks.
 	if err := checkFormatXL(formatConfigs); err != nil {
 		return err
@@ -462,40 +465,61 @@ func healFormatXL(storageDisks []StorageAPI) error {
 		}
 	}
 
-	// Collect new format configs.
-	var newFormatConfigs = make([]*formatConfigV1, len(storageDisks))
-
 	// Collect new JBOD.
 	newJBOD := referenceConfig.XL.JBOD
 
-	// This section heals the format.json and updates the fresh disks
-	// by apply a new UUID for all the fresh disks.
-	for index, format := range formatConfigs {
-		if format == nil {
+	// Reorder the disks based on the JBOD order.
+	orderedDisks, err := reorderDisks(storageDisks, formatConfigs)
+	if err != nil {
+		return err
+	}
+
+	// From ordered disks fill the UUID position.
+	for index, disk := range orderedDisks {
+		if disk == nil {
 			newJBOD[index] = getUUID()
 		}
 	}
+
+	// Collect new format configs.
+	var newFormatConfigs = make([]*formatConfigV1, len(orderedDisks))
+
 	// Collect new format configs that need to be written.
-	for index, format := range formatConfigs {
-		if format == nil {
-			config := &formatConfigV1{
-				Version: referenceConfig.Version,
-				Format:  referenceConfig.Format,
-				XL: &xlFormat{
-					Version: referenceConfig.XL.Version,
-					Disk:    newJBOD[index],
-					JBOD:    newJBOD,
-				},
-			}
-			newFormatConfigs[index] = config
-			continue
+	for index := range orderedDisks {
+		// New configs are generated since we are going
+		// to re-populate across all disks.
+		config := &formatConfigV1{
+			Version: referenceConfig.Version,
+			Format:  referenceConfig.Format,
+			XL: &xlFormat{
+				Version: referenceConfig.XL.Version,
+				Disk:    newJBOD[index],
+				JBOD:    newJBOD,
+			},
 		}
-		newFormatConfigs[index] = format
-		newFormatConfigs[index].XL.JBOD = newJBOD
-		newFormatConfigs[index].XL.Disk = newJBOD[index]
+		newFormatConfigs[index] = config
 	}
-	// Save new `format.json` across all disks.
-	return saveFormatXL(storageDisks, newFormatConfigs)
+
+	// Fill in the missing disk back from format configs.
+	// We need to make sure we have kept the previous order
+	// and allowed fresh disks to be arranged anywhere.
+	// Following block facilitates to put fresh disks.
+	for index, format := range formatConfigs {
+		// Format is missing so we go through ordered disks.
+		if format == nil {
+			// At this point when disk is missing the fresh disk
+			// in the stack get it back from storageDisks.
+			for oIndex, disk := range orderedDisks {
+				if disk == nil {
+					orderedDisks[oIndex] = storageDisks[index]
+					break
+				}
+			}
+		}
+	}
+
+	// Save new `format.json` across all disks, in JBOD order.
+	return saveFormatXL(orderedDisks, newFormatConfigs)
 }
 
 // loadFormatXL - loads XL `format.json` and returns back properly

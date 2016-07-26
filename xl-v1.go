@@ -152,7 +152,7 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 		}
 	case errSomeDiskUnformatted:
 		// All drives online but some report missing format.json.
-		if err := healFormatXL(storageDisks); err != nil {
+		if err := healFormatXLFreshDisks(storageDisks); err != nil {
 			// There was an unexpected unrecoverable error during healing.
 			return nil, fmt.Errorf("Unable to heal backend %s", err)
 		}
