@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"github.com/klauspost/reedsolomon"
 	"testing"
 )
 
@@ -93,5 +94,109 @@ func TestErasureCreateFile(t *testing.T) {
 	size, _, err = erasureCreateFile(disks, "testbucket", "testobject4", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, dataBlocks+1)
 	if err != errXLWriteQuorum {
 		t.Error("Expected errXLWriteQuorum error")
+	}
+}
+
+// TestErasureEncode checks for encoding for different data sets.
+func TestErasureEncode(t *testing.T) {
+	// Collection of cases for encode cases.
+	testEncodeCases := []struct {
+		inputData         []byte
+		inputDataBlocks   int
+		inputParityBlocks int
+
+		shouldPass  bool
+		expectedErr error
+	}{
+		// TestCase - 1.
+		// Regular data encoded.
+		{
+			[]byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."),
+			8,
+			8,
+			true,
+			nil,
+		},
+		// TestCase - 2.
+		// Empty data errors out.
+		{
+			[]byte(""),
+			8,
+			8,
+			false,
+			reedsolomon.ErrShortData,
+		},
+		// TestCase - 3.
+		// Single byte encoded.
+		{
+			[]byte("1"),
+			4,
+			4,
+			true,
+			nil,
+		},
+		// TestCase - 4.
+		// test case with negative data block.
+		{
+			[]byte("1"),
+			-1,
+			8,
+			false,
+			reedsolomon.ErrInvShardNum,
+		},
+		// TestCase - 5.
+		// test case with negative parity block.
+		{
+			[]byte("1"),
+			8,
+			-1,
+			false,
+			reedsolomon.ErrInvShardNum,
+		},
+		// TestCase - 6.
+		// test case with zero data block.
+		{
+			[]byte("1"),
+			0,
+			8,
+			false,
+			reedsolomon.ErrInvShardNum,
+		},
+		// TestCase - 7.
+		// test case with zero parity block.
+		{
+			[]byte("1"),
+			8,
+			0,
+			false,
+			reedsolomon.ErrInvShardNum,
+		},
+		// TestCase - 8.
+		// test case with data + parity blocks > 255.
+		// expected to fail with Error Max Shard number.
+		{
+			[]byte("1"),
+			128,
+			128,
+			false,
+			reedsolomon.ErrMaxShardNum,
+		},
+	}
+
+	// Test encode cases.
+	for i, testCase := range testEncodeCases {
+		_, actualErr := encodeData(testCase.inputData, testCase.inputDataBlocks, testCase.inputParityBlocks)
+		if actualErr != nil && testCase.shouldPass {
+			t.Errorf("Test %d: Expected to pass but failed instead with \"%s\"", i+1, actualErr)
+		}
+		if actualErr == nil && !testCase.shouldPass {
+			t.Errorf("Test %d: Expected to fail with error <Error> \"%v\", but instead passed", i+1, testCase.expectedErr)
+		}
+		// Failed as expected, but does it fail for the expected reason.
+		if actualErr != nil && !testCase.shouldPass {
+			if testCase.expectedErr != actualErr {
+				t.Errorf("Test %d: Expected Error to be \"%v\", but instead found \"%v\" ", i+1, testCase.expectedErr, actualErr)
+			}
+		}
 	}
 }

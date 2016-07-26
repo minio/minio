@@ -81,41 +81,6 @@ var encodingMatrices = []encodingMatrix{
 	{8, 8}, // 8 data, 8 parity blocks.
 }
 
-// TestErasureEncode checks for encoding for different data sets.
-func TestErasureEncode(t *testing.T) {
-	// Collection of cases for encode cases.
-	testEncodeCases := []struct {
-		inputData  []byte
-		shouldPass bool
-	}{
-		// Regular data encoded.
-		{
-			inputData:  []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."),
-			shouldPass: true,
-		},
-		// Empty data errors out.
-		{
-			inputData:  []byte(""),
-			shouldPass: false,
-		},
-		// Single byte encoded.
-		{
-			inputData:  []byte("1"),
-			shouldPass: true,
-		},
-	}
-
-	// Test encode cases.
-	for i, testCase := range testEncodeCases {
-		for _, encodingMatrix := range encodingMatrices {
-			_, err := encodeData(testCase.inputData, encodingMatrix.dataBlocks, encodingMatrix.parityBlocks)
-			if err != nil && testCase.shouldPass {
-				t.Errorf("Test %d: Expected to pass by failed instead with %s, for matrix %v", i+1, err, encodingMatrix)
-			}
-		}
-	}
-}
-
 // Tests erasure decoding functionality for various types of inputs.
 func TestErasureDecode(t *testing.T) {
 	data := []byte("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.")
