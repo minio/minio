@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	// deadline (in seconds) upto which the go routine leak detection has to be retried.
+	// deadline (in seconds) up to which the go routine leak detection has to be retried.
 	leakDetectDeadline = 5
 	// pause time (in milliseconds) between each snapshot at the end of the go routine leak detection.
 	leakDetectPauseTimeMs = 50

@@ -120,10 +120,14 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 
-	credentials, root, err := initTestConfig("us-east-1")
+	root, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
+
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+
 	testServer.Root = root
 	testServer.Disks = erasureDisks
 	testServer.AccessKey = credentials.AccessKeyID
@@ -135,25 +139,31 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 }
 
 // Configure the server for the test run.
-func initTestConfig(bucketLocation string) (credential, string, error) {
-	// Initialize server config.
-	initConfig()
-	// Get credential.
-	credentials := serverConfig.GetCredential()
-	// Set a default region.
-	serverConfig.SetRegion(bucketLocation)
-	rootPath, err := getTestRoot()
+func newTestConfig(bucketLocation string) (rootPath string, err error) {
+	// Get test root.
+	rootPath, err = getTestRoot()
 	if err != nil {
-		return credential{}, "", err
+		return "", err
 	}
+
 	// Do this only once here.
 	setGlobalConfigPath(rootPath)
 
-	err = serverConfig.Save()
-	if err != nil {
-		return credential{}, "", err
+	// Initialize server config.
+	if err = initConfig(); err != nil {
+		return "", err
 	}
-	return credentials, rootPath, nil
+
+	// Set a default region.
+	serverConfig.SetRegion(bucketLocation)
+
+	// Save config.
+	if err = serverConfig.Save(); err != nil {
+		return "", err
+	}
+
+	// Return root path.
+	return rootPath, nil
 }
 
 // Deleting the temporary backend and stopping the server.

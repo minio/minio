@@ -27,23 +27,11 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationContraint(t *testing.T) {
-	savedServerConfig := serverConfig
-	defer func() {
-		serverConfig = savedServerConfig
-	}()
-	serverConfig = nil
-
-	// Test initialized config file.
-	path, err := ioutil.TempDir("", "minio-")
+	path, err := newTestConfig("us-east-1")
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
-	}
-	defer removeAll(path)
-
-	setGlobalConfigPath(path)
-	if err := initConfig(); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
+	defer removeAll(path)
 
 	// generates the input request with XML bucket configuration set to the request body.
 	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
