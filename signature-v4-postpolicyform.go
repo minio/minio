@@ -170,32 +170,32 @@ func checkPostPolicy(formValues map[string]string) APIErrorCode {
 	}
 	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
 		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
 		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
 		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
 		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
-			return ErrMissingFields
+			return ErrAccessDenied
 		}
 	}
 	return ErrNone
