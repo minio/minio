@@ -487,6 +487,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Rename if an object already exists to temporary location.
 	newUniqueID := getUUID()
 	if xl.isObject(bucket, object) {
+		// NOTE: Do not use online disks slice here.
+		// The reason is that existing object should be purged
+		// regardless of `xl.json` status and rolled back in case of errors.
 		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, xl.writeQuorum)
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)

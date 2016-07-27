@@ -40,7 +40,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
 	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err == nil {
-		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existant bucket.", instanceType)
+		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
 	}
 	if errMsg != err.Error() {
 		t.Errorf("%s, Expected to fail with Error \"%s\", but instead found \"%s\".", instanceType, errMsg, err.Error())

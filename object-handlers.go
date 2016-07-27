@@ -226,7 +226,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
 
-	// Successfull response.
+	// Successful response.
 	w.WriteHeader(http.StatusOK)
 }
 
