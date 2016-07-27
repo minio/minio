@@ -108,13 +108,14 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 		var part *multipart.Part
 		part, err = reader.NextPart()
 		if part != nil {
-			if part.FileName() == "" {
+			canonicalFormName := http.CanonicalHeaderKey(part.FormName())
+			if canonicalFormName != "File" {
 				var buffer []byte
 				buffer, err = ioutil.ReadAll(part)
 				if err != nil {
 					return nil, nil, err
 				}
-				formValues[http.CanonicalHeaderKey(part.FormName())] = string(buffer)
+				formValues[canonicalFormName] = string(buffer)
 			} else {
 				if _, err = io.Copy(filePart, part); err != nil {
 					return nil, nil, err
