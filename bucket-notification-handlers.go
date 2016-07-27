@@ -39,7 +39,7 @@ func (api objectAPIHandlers) loadNotificationConfig(bucket string) (nConfig noti
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
-			return notificationConfig{}, nil
+			return notificationConfig{}, errNoSuchNotifications
 		}
 		return notificationConfig{}, err
 	}
@@ -48,7 +48,7 @@ func (api objectAPIHandlers) loadNotificationConfig(bucket string) (nConfig noti
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
-			return notificationConfig{}, nil
+			return notificationConfig{}, errNoSuchNotifications
 		}
 		return notificationConfig{}, err
 	}

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -357,13 +358,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Load notification config if any.
 	nConfig, err := api.loadNotificationConfig(bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors, return.
 	if err != nil {
 		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
 		return
 	}
 
 	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedCopy, bucket, object, objInfo.MD5Sum, objInfo.Size)
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedCopy, bucket, objInfo)
 }
 
 // PutObjectHandler - PUT Object
@@ -436,13 +442,25 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Load notification config if any.
 	nConfig, err := api.loadNotificationConfig(bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors return.
 	if err != nil {
 		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
 		return
 	}
 
+	// Fetch object info for notifications.
+	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		return
+	}
+
 	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, object, md5Sum, size)
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, objInfo)
 }
 
 /// Multipart objectAPIHandlers
@@ -761,14 +779,25 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Load notification config if any.
 	nConfig, err := api.loadNotificationConfig(bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors.
 	if err != nil {
 		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
 		return
 	}
 
+	// Fetch object info for notifications.
+	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		return
+	}
+
 	// Notify object created event.
-	size := int64(0) // FIXME: support event size.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedCompleteMultipartUpload, bucket, object, md5Sum, size)
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedCompleteMultipartUpload, bucket, objInfo)
 }
 
 /// Delete objectAPIHandlers
@@ -807,6 +836,11 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	// Load notification config if any.
 	nConfig, err := api.loadNotificationConfig(bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors, return.
 	if err != nil {
 		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
 		return
