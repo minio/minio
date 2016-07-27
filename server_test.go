@@ -780,7 +780,7 @@ func (s *TestSuiteCommon) TestListBuckets(c *C) {
 	// parse the list bucket response.
 	decoder := xml.NewDecoder(response.Body)
 	err = decoder.Decode(&results)
-	// validating that the xml-decoding/parsing was successfull.
+	// validating that the xml-decoding/parsing was successful.
 	c.Assert(err, IsNil)
 }
 
@@ -1560,7 +1560,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *C) {
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	// verify whether upload was successfull.
+	// verify whether upload was successful.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// HTTP request to download the object.
@@ -1653,7 +1653,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	// verify whether upload was successfull.
+	// verify whether upload was successful.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// HTTP request to download the object.
@@ -2140,7 +2140,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	// Execute the complete multipart request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	// verify whether complete multipart was successfull.
+	// verify whether complete multipart was successful.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 }
