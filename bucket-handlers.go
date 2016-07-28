@@ -347,7 +347,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	fileBody, formValues, err := extractHTTPFormValues(reader)
+	fileBody, fileName, formValues, err := extractHTTPFormValues(reader)
 	if err != nil {
 		errorIf(err, "Unable to parse form values.")
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
@@ -356,6 +356,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	bucket := mux.Vars(r)["bucket"]
 	formValues["Bucket"] = bucket
 	object := formValues["Key"]
+
+	if fileName != "" && strings.Contains(object, "${filename}") {
+		// S3 feature to replace ${filename} found in Key form field
+		// by the filename attribute passed in multipart
+		object = strings.Replace(object, "${filename}", fileName, -1)
+	}
 
 	// Verify policy signature.
 	apiErr := doesPolicySignatureMatch(formValues)
