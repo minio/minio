@@ -143,10 +143,10 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	switch runtime.GOOS {
 	case "windows":
 		// For windows.
-		downloadURL = newUpdateURLPrefix + "/minio.exe"
+		downloadURL = newUpdateURLPrefix + "/minio.exe?update=yes"
 	default:
 		// For all other operating systems.
-		downloadURL = newUpdateURLPrefix + "/minio"
+		downloadURL = newUpdateURLPrefix + "/minio?update=yes"
 	}
 
 	// Initialize update message.
