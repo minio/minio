@@ -145,6 +145,10 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Handles different cases properly.
 	switch reduceFormatErrs(sErrs, len(storageDisks)) {
+	case errCorruptedFormat:
+		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
+			return nil, fmt.Errorf("Unable to repair corrupted format, %s", err)
+		}
 	case errUnformattedDisk:
 		// All drives online but fresh, initialize format.
 		if err := initFormatXL(storageDisks); err != nil {
