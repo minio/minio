@@ -18,8 +18,8 @@ package main
 
 import (
 	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/hex"
+	"github.com/minio/sha256-simd"
 	"net/http"
 	"regexp"
 	"strings"
