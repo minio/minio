@@ -17,9 +17,9 @@
 package main
 
 import (
-	"github.com/minio/sha256-simd"
 	"encoding/hex"
 	"fmt"
+	"github.com/minio/sha256-simd"
 	"hash"
 	"io"
 	"net/http"

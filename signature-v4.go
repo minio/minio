@@ -26,8 +26,8 @@ package main
 
 import (
 	"bytes"
-	"github.com/minio/sha256-simd"
 	"encoding/hex"
+	"github.com/minio/sha256-simd"
 	"net/http"
 	"net/url"
 	"sort"
