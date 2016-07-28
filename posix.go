@@ -492,6 +492,10 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		}
 		return 0, err
 	}
+
+	// Close the file descriptor.
+	defer file.Close()
+
 	st, err := file.Stat()
 	if err != nil {
 		return 0, err
@@ -505,9 +509,6 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	if err != nil {
 		return 0, err
 	}
-
-	// Close the reader.
-	defer file.Close()
 
 	// Read full until buffer.
 	m, err := io.ReadFull(file, buf)
