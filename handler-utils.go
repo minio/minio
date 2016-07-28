@@ -99,10 +99,11 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	return metadata
 }
 
-func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]string, error) {
+func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, string, map[string]string, error) {
 	/// HTML Form values
 	formValues := make(map[string]string)
 	filePart := new(bytes.Buffer)
+	fileName := ""
 	var err error
 	for err == nil {
 		var part *multipart.Part
@@ -113,16 +114,17 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, map[string]stri
 				var buffer []byte
 				buffer, err = ioutil.ReadAll(part)
 				if err != nil {
-					return nil, nil, err
+					return nil, "", nil, err
 				}
 				formValues[canonicalFormName] = string(buffer)
 			} else {
 				if _, err = io.Copy(filePart, part); err != nil {
-					return nil, nil, err
+					return nil, "", nil, err
 				}
+				fileName = part.FileName()
 			}
 		}
 	}
-	return filePart, formValues, nil
+	return filePart, fileName, formValues, nil
 
 }
