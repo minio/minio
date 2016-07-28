@@ -347,7 +347,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	fileBody, fileName, formValues, err := extractHTTPFormValues(reader)
+	fileBody, fileName, formValues, err := extractPostPolicyFormValues(reader)
 	if err != nil {
 		errorIf(err, "Unable to parse form values.")
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
