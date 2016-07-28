@@ -357,7 +357,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	pipeReader.Close()
 
 	// Load notification config if any.
-	nConfig, err := api.loadNotificationConfig(bucket)
+	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
 	// Notifications not set, return.
 	if err == errNoSuchNotifications {
 		return
@@ -441,7 +441,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponse(w, nil)
 
 	// Load notification config if any.
-	nConfig, err := api.loadNotificationConfig(bucket)
+	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
 	// Notifications not set, return.
 	if err == errNoSuchNotifications {
 		return
@@ -778,7 +778,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.(http.Flusher).Flush()
 
 	// Load notification config if any.
-	nConfig, err := api.loadNotificationConfig(bucket)
+	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
 	// Notifications not set, return.
 	if err == errNoSuchNotifications {
 		return
@@ -835,7 +835,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	writeSuccessNoContent(w)
 
 	// Load notification config if any.
-	nConfig, err := api.loadNotificationConfig(bucket)
+	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
 	// Notifications not set, return.
 	if err == errNoSuchNotifications {
 		return

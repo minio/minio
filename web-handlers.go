@@ -374,10 +374,36 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	// FIXME: Allow file upload handler to set content-type, content-encoding.
-	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, nil); err != nil {
+
+	// Extract incoming metadata if any.
+	metadata := extractMetadataFromHeader(r.Header)
+
+	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
 		writeWebErrorResponse(w, err)
+		return
 	}
+
+	// Load notification config if any.
+	nConfig, err := loadNotificationConfig(web.ObjectAPI, bucket)
+	// Notifications not set, return.
+	if err == errNoSuchNotifications {
+		return
+	}
+	// For all other errors, return.
+	if err != nil {
+		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
+		return
+	}
+
+	// Fetch object info for notifications.
+	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		return
+	}
+
+	// Notify object created event.
+	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, objInfo)
 }
 
 // Download - file download handler.

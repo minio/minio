@@ -32,10 +32,10 @@ const (
 )
 
 // loads notifcation config if any for a given bucket, returns back structured notification config.
-func (api objectAPIHandlers) loadNotificationConfig(bucket string) (nConfig notificationConfig, err error) {
+func loadNotificationConfig(objAPI ObjectLayer, bucket string) (nConfig notificationConfig, err error) {
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	var objInfo ObjectInfo
-	objInfo, err = api.ObjectAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
+	objInfo, err = objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
@@ -44,7 +44,7 @@ func (api objectAPIHandlers) loadNotificationConfig(bucket string) (nConfig noti
 		return notificationConfig{}, err
 	}
 	var buffer bytes.Buffer
-	err = api.ObjectAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
+	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:

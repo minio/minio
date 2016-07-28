@@ -397,7 +397,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	writeSuccessResponse(w, encodedSuccessResponse)
 
 	// Load notification config if any.
-	nConfig, err := api.loadNotificationConfig(bucket)
+	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
 	// Notifications not set, return.
 	if err == errNoSuchNotifications {
 		return
