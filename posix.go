@@ -488,7 +488,7 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		} else if os.IsPermission(err) {
 			return 0, errFileAccessDenied
 		} else if strings.Contains(err.Error(), "not a directory") {
-			return 0, errFileNotFound
+			return 0, errFileAccessDenied
 		}
 		return 0, err
 	}
@@ -500,10 +500,12 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	if err != nil {
 		return 0, err
 	}
+
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return 0, errFileNotFound
+		return 0, errIsNotRegular
 	}
+
 	// Seek to requested offset.
 	_, err = file.Seek(offset, os.SEEK_SET)
 	if err != nil {
@@ -554,7 +556,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
 	if st, err = os.Stat(preparePath(filePath)); err == nil {
-		if st.IsDir() {
+		if !st.Mode().IsRegular() {
 			return errIsNotRegular
 		}
 	}
@@ -565,6 +567,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		if strings.Contains(err.Error(), "not a directory") {
 			return errFileAccessDenied
 		} else if runtime.GOOS == "windows" && strings.Contains(err.Error(), "system cannot find the path specified") {
+			// Add specific case for windows.
 			return errFileAccessDenied
 		}
 		return err

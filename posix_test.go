@@ -17,6 +17,9 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	slashpath "path"
@@ -204,7 +207,7 @@ func TestMakeVol(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err := posix.MakeVol(testCase.volName); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 
@@ -262,7 +265,7 @@ func TestDeleteVol(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err := posix.DeleteVol(testCase.volName); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 
@@ -310,7 +313,7 @@ func TestStatVol(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if _, err := posix.StatVol(testCase.volName); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 }
@@ -383,7 +386,7 @@ func TestDeleteFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err := posix.DeleteFile("success-vol", testCase.fileName); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 
@@ -397,6 +400,187 @@ func TestDeleteFile(t *testing.T) {
 
 		if err := posix.DeleteFile("bin", "yes"); !os.IsPermission(err) {
 			t.Fatalf("expected: Permission error, got: %s", err)
+		}
+	}
+}
+
+// Test posix.ReadFile()
+func TestReadFile(t *testing.T) {
+	// Create temporary directory.
+	path, err := ioutil.TempDir("", "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create a temporary directory, %s", err)
+	}
+	defer removeAll(path)
+
+	// Initialize posix storage layer.
+	posix, err := newPosix(path)
+	if err != nil {
+		t.Fatalf("Unable to initialize posix, %s", err)
+	}
+
+	// Setup test environment.
+	if err = posix.MakeVol("success-vol"); err != nil {
+		t.Fatalf("Unable to create volume, %s", err)
+	}
+
+	// Create directory to make errIsNotRegular
+	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0777); err != nil {
+		t.Fatalf("Unable to create directory, %s", err)
+	}
+
+	testCases := []struct {
+		fileName    string
+		offset      int64
+		bufSize     int
+		expectedBuf []byte
+		expectedErr error
+	}{
+		// Successful read at offset 0 and proper buffer size. - 1
+		{
+			"myobject", 0, 5,
+			[]byte("hello"), nil,
+		},
+		// Success read at hierarchy. - 2
+		{
+			"path/to/my/object", 0, 5,
+			[]byte("hello"), nil,
+		},
+		// One path segment length is 255 chars long. - 3
+		{
+			"path/to/my/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			0, 5, []byte("hello"), nil},
+		// Whole path is 1024 characters long, success case. - 4
+		{
+			"level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			0, 5, []byte("hello"),
+			func() error {
+				// On darwin HFS does not support > 1024 characters.
+				if runtime.GOOS == "darwin" {
+					return errFileNameTooLong
+				}
+				// On all other platforms return success.
+				return nil
+			}(),
+		},
+		// Object is a directory. - 5
+		{
+			"object-as-dir",
+			0, 5, nil, errIsNotRegular},
+		// One path segment length is > 255 chars long. - 6
+		{
+			"path/to/my/object0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			0, 5, nil, errFileNameTooLong},
+		// Path length is > 1024 chars long. - 7
+		{
+			"level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			0, 5, nil, errFileNameTooLong},
+		// Buffer size greater than object size. - 8
+		{
+			"myobject", 0, 16,
+			[]byte("hello, world"),
+			io.ErrUnexpectedEOF,
+		},
+		// Reading from an offset success. - 9
+		{
+			"myobject", 7, 5,
+			[]byte("world"), nil,
+		},
+		// Reading from an object but buffer size greater. - 10
+		{
+			"myobject",
+			7, 8,
+			[]byte("world"),
+			io.ErrUnexpectedEOF,
+		},
+		// Seeking into a wrong offset, return PathError. - 11
+		{
+			"myobject",
+			-1, 5,
+			nil,
+			func() error {
+				if runtime.GOOS == "windows" {
+					return &os.PathError{
+						Op:   "seek",
+						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+						Err:  errors.New("An attempt was made to move the file pointer before the beginning of the file."),
+					}
+				}
+				return &os.PathError{
+					Op:   "seek",
+					Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+					Err:  os.ErrInvalid,
+				}
+			}(),
+		},
+		// Seeking ahead returns io.EOF. - 12
+		{
+			"myobject", 14, 1, nil, io.EOF,
+		},
+	}
+
+	// Create all files needed during testing.
+	appendFiles := testCases[:4]
+
+	// Create test files for further reading.
+	for i, appendFile := range appendFiles {
+		err = posix.AppendFile("success-vol", appendFile.fileName, []byte("hello, world"))
+		if err != appendFile.expectedErr {
+			t.Fatalf("Creating file failed: %d %#v, expected: %s, got: %s", i+1, appendFile, appendFile.expectedErr, err)
+		}
+	}
+
+	// Following block validates all ReadFile test cases.
+	for i, testCase := range testCases {
+		// Common read buffer.
+		var buf = make([]byte, testCase.bufSize)
+		n, err := posix.ReadFile("success-vol", testCase.fileName, testCase.offset, buf)
+		if err != nil && testCase.expectedErr != nil {
+			// Validate if the type string of the errors are an exact match.
+			if err.Error() != testCase.expectedErr.Error() {
+				t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+			}
+			// Err unexpected EOF special case, where we verify we have provided a larger
+			// buffer than the data itself, but the results are in-fact valid. So we validate
+			// this error condition specifically treating it as a good condition with valid
+			// results. In this scenario return 'n' is always lesser than the input buffer.
+			if err == io.ErrUnexpectedEOF {
+				if !bytes.Equal(testCase.expectedBuf, buf[:n]) {
+					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
+				}
+				if n > int64(len(buf)) {
+					t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
+				}
+			}
+		}
+		// ReadFile has returned success, but our expected error is non 'nil'.
+		if err == nil && err != testCase.expectedErr {
+			t.Errorf("Case: %d %#v, expected: %s, got :%s", i+1, testCase, testCase.expectedErr, err)
+		}
+		// Expected error retured, proceed further to validate the returned results.
+		if err == nil && err == testCase.expectedErr {
+			if !bytes.Equal(testCase.expectedBuf, buf) {
+				t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
+			}
+			if n != int64(testCase.bufSize) {
+				t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
+			}
+		}
+	}
+
+	// Test for permission denied.
+	if runtime.GOOS == "linux" {
+		// Initialize posix storage layer for permission denied error.
+		posix, err := newPosix("/")
+		if err != nil {
+			t.Errorf("Unable to initialize posix, %s", err)
+		}
+		if err == nil {
+			// Common read buffer.
+			var buf = make([]byte, 10)
+			if _, err = posix.ReadFile("proc", "1/fd", 0, buf); err != errFileAccessDenied {
+				t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+			}
 		}
 	}
 }
@@ -460,7 +644,7 @@ func TestAppendFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err := posix.AppendFile("success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 
@@ -531,7 +715,7 @@ func TestRenameFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err := posix.RenameFile("src-vol", testCase.srcPath, "dest-vol", testCase.destPath); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 }
@@ -580,7 +764,7 @@ func TestStatFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if _, err := posix.StatFile("success-vol", testCase.path); err != testCase.expectedErr {
-			t.Fatalf("case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Fatalf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
 		}
 	}
 }

@@ -83,8 +83,10 @@ func shutdownFS(storage StorageAPI) {
 		os.Exit(1)
 	}
 	if err = storage.DeleteVol(minioMetaBucket); err != nil {
-		errorIf(err, "Unable to delete minio meta bucket", minioMetaBucket)
-		os.Exit(1)
+		if err != errVolumeNotEmpty {
+			errorIf(err, "Unable to delete minio meta bucket %s", minioMetaBucket)
+			os.Exit(1)
+		}
 	}
 	// Successful exit.
 	os.Exit(0)
