@@ -110,12 +110,13 @@ func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, 
 			canonicalFormName := http.CanonicalHeaderKey(part.FormName())
 			if canonicalFormName != "File" {
 				var buffer []byte
-				// Limit fields size (except file) to 1Mib since Policy document
-				// can reach that size according to https://aws.amazon.com/articles/1434
-				limitReader := io.LimitReader(part, 1024*1024)
+				limitReader := io.LimitReader(part, maxFormFieldSize+1)
 				buffer, err = ioutil.ReadAll(limitReader)
 				if err != nil {
 					return nil, "", nil, err
+				}
+				if int64(len(buffer)) > maxFormFieldSize {
+					return nil, "", nil, errSizeUnexpected
 				}
 				formValues[canonicalFormName] = string(buffer)
 			} else {

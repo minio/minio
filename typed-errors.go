@@ -32,3 +32,6 @@ var errInvalidToken = errors.New("Invalid token")
 
 // If x-amz-content-sha256 header value mismatches with what we calculate.
 var errContentSHA256Mismatch = errors.New("sha256 mismatch")
+
+// used when we deal with data larger than expected
+var errSizeUnexpected = errors.New("data size larger than expected")

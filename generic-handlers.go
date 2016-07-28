@@ -39,6 +39,27 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 	return f
 }
 
+// Adds limiting body size middleware
+
+// Set the body size limit to 6 Gb = Maximum object size + other possible data
+// in the same request
+const requestMaxBodySize = 1024 * 1024 * 1024 * (5 + 1)
+
+type requestSizeLimitHandler struct {
+	handler     http.Handler
+	maxBodySize int64
+}
+
+func setRequestSizeLimitHandler(h http.Handler) http.Handler {
+	return requestSizeLimitHandler{handler: h, maxBodySize: requestMaxBodySize}
+}
+
+func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Restricting read data to a given maximum length
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodySize)
+	h.handler.ServeHTTP(w, r)
+}
+
 // Adds redirect rules for incoming requests.
 type redirectHandler struct {
 	handler        http.Handler
