@@ -21,6 +21,7 @@ import (
 	"hash/crc32"
 	"path"
 	"sync"
+	"time"
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
@@ -47,6 +48,29 @@ func reduceErrs(errs []error, ignoredErrs []error) error {
 		}
 	}
 	return errMax
+}
+
+// Returns slice of online disks needed.
+// - slice returing readable disks.
+// - modTime of the Object
+func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
+	onlineDisks = make([]StorageAPI, len(disks))
+
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(partsMetadata, errs)
+
+	// Reduce list of UUIDs to a single common value.
+	modTime = commonTime(modTimes)
+
+	// Create a new online disks slice, which have common uuid.
+	for index, t := range modTimes {
+		if t == modTime {
+			onlineDisks[index] = disks[index]
+		} else {
+			onlineDisks[index] = nil
+		}
+	}
+	return onlineDisks, modTime
 }
 
 // Validates if we have quorum based on the errors related to disk only.
