@@ -79,6 +79,8 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	var handlerFns = []HandlerFunc{
 		// Limits the number of concurrent http requests.
 		setRateLimitHandler,
+		// Limits all requests size to a maximum fixed limit
+		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 		setCrossDomainPolicy,
 		// Redirect some pre-defined browser request paths to a static location prefix.

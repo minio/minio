@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -99,12 +98,11 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	return metadata
 }
 
-func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, string, map[string]string, error) {
+// Extract form fields and file data from a HTTP POST Policy
+func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, fileName string, formValues map[string]string, err error) {
 	/// HTML Form values
-	formValues := make(map[string]string)
-	filePart := new(bytes.Buffer)
-	fileName := ""
-	var err error
+	formValues = make(map[string]string)
+	fileName = ""
 	for err == nil {
 		var part *multipart.Part
 		part, err = reader.NextPart()
@@ -112,19 +110,22 @@ func extractHTTPFormValues(reader *multipart.Reader) (io.Reader, string, map[str
 			canonicalFormName := http.CanonicalHeaderKey(part.FormName())
 			if canonicalFormName != "File" {
 				var buffer []byte
-				buffer, err = ioutil.ReadAll(part)
+				limitReader := io.LimitReader(part, maxFormFieldSize+1)
+				buffer, err = ioutil.ReadAll(limitReader)
 				if err != nil {
 					return nil, "", nil, err
 				}
+				if int64(len(buffer)) > maxFormFieldSize {
+					return nil, "", nil, errSizeUnexpected
+				}
 				formValues[canonicalFormName] = string(buffer)
 			} else {
-				if _, err = io.Copy(filePart, part); err != nil {
-					return nil, "", nil, err
-				}
+				filePart = io.LimitReader(part, maxObjectSize)
 				fileName = part.FileName()
+				// As described in S3 spec, we expect file to be the last form field
+				break
 			}
 		}
 	}
 	return filePart, fileName, formValues, nil
-
 }

@@ -52,6 +52,12 @@ var (
 	// Add new variable global values here.
 )
 
+var (
+	// Limit fields size (except file) to 1Mib since Policy document
+	// can reach that size according to https://aws.amazon.com/articles/1434
+	maxFormFieldSize = int64(1024 * 1024)
+)
+
 // global colors.
 var (
 	colorBlue = color.New(color.FgBlue).SprintfFunc()
