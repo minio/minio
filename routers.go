@@ -19,6 +19,8 @@ package main
 import (
 	"errors"
 	"net/http"
+	"os"
+	"strings"
 
 	router "github.com/gorilla/mux"
 )
@@ -62,7 +64,13 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 
 	// Register all routers.
 	registerStorageRPCRouter(mux, storageRPC)
-	registerWebRouter(mux, webHandlers)
+
+	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
+	// By default minio web browser is enabled.
+	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
+		registerWebRouter(mux, webHandlers)
+	}
+
 	registerAPIRouter(mux, apiHandlers)
 	// Add new routers here.
 
