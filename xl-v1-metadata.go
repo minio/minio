@@ -52,6 +52,11 @@ type checkSumInfo struct {
 	Hash      string `json:"hash"`
 }
 
+// Constant indicates current bit-rot algo used when creating objects.
+const (
+	bitRotAlgo = "blake2b"
+)
+
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
 type erasureInfo struct {
@@ -62,6 +67,28 @@ type erasureInfo struct {
 	Index        int            `json:"index"`
 	Distribution []int          `json:"distribution"`
 	Checksum     []checkSumInfo `json:"checksum,omitempty"`
+}
+
+// AddCheckSum - add checksum of a part.
+func (e *erasureInfo) AddCheckSumInfo(ckSumInfo checkSumInfo) {
+	for i, sum := range e.Checksum {
+		if sum.Name == ckSumInfo.Name {
+			e.Checksum[i] = ckSumInfo
+			return
+		}
+	}
+	e.Checksum = append(e.Checksum, ckSumInfo)
+}
+
+// GetCheckSumInfo - get checksum of a part.
+func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo, err error) {
+	// Return the checksum.
+	for _, sum := range e.Checksum {
+		if sum.Name == partName {
+			return sum, nil
+		}
+	}
+	return checkSumInfo{}, errUnexpected
 }
 
 // statInfo - carries stat information of the object.
@@ -142,27 +169,6 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 
 	// Parts in xlMeta should be in sorted order by part number.
 	sort.Sort(byObjectPartNumber(m.Parts))
-}
-
-// AddCheckSum - add checksum of a part.
-func (m *xlMetaV1) AddCheckSum(partName, algorithm, checkSum string) {
-	for i, sum := range m.Erasure.Checksum {
-		if sum.Name == partName {
-			m.Erasure.Checksum[i] = checkSumInfo{partName, "blake2b", checkSum}
-			return
-		}
-	}
-	m.Erasure.Checksum = append(m.Erasure.Checksum, checkSumInfo{partName, "blake2b", checkSum})
-}
-
-// GetCheckSum - get checksum of a part.
-func (m xlMetaV1) GetCheckSum(partName string) (checkSum, algorithm string, err error) {
-	for _, sum := range m.Erasure.Checksum {
-		if sum.Name == partName {
-			return sum.Hash, sum.Algorithm, nil
-		}
-	}
-	return "", "", errUnexpected
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.

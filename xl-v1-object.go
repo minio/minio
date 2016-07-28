@@ -175,24 +175,33 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// Get the checksums of the current part.
 		checkSums := make([]string, len(onlineDisks))
+		var ckSumAlgo string
 		for index, disk := range onlineDisks {
 			// Disk is not found skip the checksum.
 			if disk == nil {
 				checkSums[index] = ""
 				continue
 			}
-			checkSums[index], _, err = metaArr[index].GetCheckSum(partName)
+			ckSumInfo, err := metaArr[index].Erasure.GetCheckSumInfo(partName)
 			if err != nil { // FIXME - relook at returning error here.
 				return toObjectErr(err, bucket, object)
 			}
+			checkSums[index] = ckSumInfo.Hash
+			// Set checksum algo only once, while it is possible to have
+			// different algos per block because of our `xl.json`.
+			// It is not a requirement, set this only once for all the disks.
+			if ckSumAlgo != "" {
+				ckSumAlgo = ckSumInfo.Algorithm
+			}
 		}
 
-		// Start reading the part name.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, pool)
+		// Start erasure decoding and writing to the client.
+		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 
+		// Track total bytes read from disk and written to the client.
 		totalBytesRead += n
 
 		// partOffset will be valid only for the first part, hence reset it to 0 for
@@ -413,7 +422,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	onlineDisks := getOrderedDisks(xlMeta.Erasure.Distribution, xl.storageDisks)
 
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xl.writeQuorum)
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
 		// Create file failed, delete temporary object.
 		xl.deleteObject(minioMetaTmpBucket, tempObj)
@@ -508,7 +517,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
 		partsMetadata[index] = xlMeta
-		partsMetadata[index].AddCheckSum("part.1", "blake2b", checkSums[index])
+		partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
+			Name:      "part.1",
+			Hash:      checkSums[index],
+			Algorithm: bitRotAlgo,
+		})
 	}
 
 	// Write unique `xl.json` for each disk.
