@@ -45,6 +45,13 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	objAPI, err := newObjectLayer(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	fatalIf(err, "Unable to intialize object layer.")
 
+	// Migrate bucket policy from configDir to .minio.sys/buckets/
+	err = migrateBucketPolicyConfig(objAPI)
+	fatalIf(err, "Unable to migrate bucket policy from config directory")
+
+	err = cleanupOldBucketPolicyConfigs()
+	fatalIf(err, "Unable to clean up bucket policy from config directory.")
+
 	// Initialize storage rpc server.
 	storageRPC, err := newRPCServer(srvCmdConfig.disks[0]) // FIXME: should only have one path.
 	fatalIf(err, "Unable to initialize storage RPC server.")

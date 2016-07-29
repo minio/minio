@@ -17,13 +17,12 @@
 package main
 
 import (
-	"io/ioutil"
-	"os"
+	"bytes"
 	"path/filepath"
 )
 
 // getBucketsConfigPath - get buckets path.
-func getBucketsConfigPath() (string, error) {
+func getOldBucketsConfigPath() (string, error) {
 	configPath, err := getConfigPath()
 	if err != nil {
 		return "", err
@@ -32,97 +31,65 @@ func getBucketsConfigPath() (string, error) {
 }
 
 // getBucketConfigPath - get bucket config path.
-func getBucketConfigPath(bucket string) (string, error) {
-	bucketsConfigPath, err := getBucketsConfigPath()
+func getOldBucketConfigPath(bucket string) (string, error) {
+	bucketsConfigPath, err := getOldBucketsConfigPath()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(bucketsConfigPath, bucket), nil
 }
 
-// createBucketConfigPath - create bucket config directory.
-func createBucketConfigPath(bucket string) error {
-	bucketConfigPath, err := getBucketConfigPath(bucket)
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(bucketConfigPath, 0700)
-}
-
 // readBucketPolicy - read bucket policy.
-func readBucketPolicy(bucket string) ([]byte, error) {
+func readBucketPolicy(api objectAPIHandlers, bucket string) ([]byte, error) {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
 	}
 
-	bucketConfigPath, err := getBucketConfigPath(bucket)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	objInfo, err := api.ObjectAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	if err != nil {
-		return nil, err
-	}
-
-	// Get policy file.
-	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, err = os.Stat(bucketPolicyFile); err != nil {
-		if os.IsNotExist(err) {
+		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
 		return nil, err
 	}
-	return ioutil.ReadFile(bucketPolicyFile)
+	var buffer bytes.Buffer
+	err = api.ObjectAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
+	if err != nil {
+		if _, ok := err.(ObjectNotFound); ok {
+			return nil, BucketPolicyNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
 // removeBucketPolicy - remove bucket policy.
-func removeBucketPolicy(bucket string) error {
+func removeBucketPolicy(api objectAPIHandlers, bucket string) error {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	bucketConfigPath, err := getBucketConfigPath(bucket)
-	if err != nil {
-		return err
-	}
-
-	// Get policy file.
-	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, err = os.Stat(bucketPolicyFile); err != nil {
-		if os.IsNotExist(err) {
+	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	if err := api.ObjectAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
+		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
-		return err
-	}
-	if err := os.Remove(bucketPolicyFile); err != nil {
 		return err
 	}
 	return nil
 }
 
 // writeBucketPolicy - save bucket policy.
-func writeBucketPolicy(bucket string, accessPolicyBytes []byte) error {
+func writeBucketPolicy(api objectAPIHandlers, bucket string, accessPolicyBytes []byte) error {
 	// Verify if bucket path legal
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	// Create bucket config path.
-	if err := createBucketConfigPath(bucket); err != nil {
-		return err
-	}
-
-	bucketConfigPath, err := getBucketConfigPath(bucket)
-	if err != nil {
-		return err
-	}
-
-	// Get policy file.
-	bucketPolicyFile := filepath.Join(bucketConfigPath, "access-policy.json")
-	if _, err := os.Stat(bucketPolicyFile); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-	}
-
-	// Write bucket policy.
-	return ioutil.WriteFile(bucketPolicyFile, accessPolicyBytes, 0600)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	_, err := api.ObjectAPI.PutObject(minioMetaBucket, policyPath, int64(len(accessPolicyBytes)), bytes.NewReader(accessPolicyBytes), nil)
+	return err
 }
