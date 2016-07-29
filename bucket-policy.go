@@ -57,6 +57,9 @@ func readBucketPolicy(api objectAPIHandlers, bucket string) ([]byte, error) {
 	var buffer bytes.Buffer
 	err = api.ObjectAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
 	if err != nil {
+		if _, ok := err.(ObjectNotFound); ok {
+			return nil, BucketPolicyNotFound{Bucket: bucket}
+		}
 		return nil, err
 	}
 	return buffer.Bytes(), nil
@@ -70,7 +73,13 @@ func removeBucketPolicy(api objectAPIHandlers, bucket string) error {
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	return api.ObjectAPI.DeleteObject(minioMetaBucket, policyPath)
+	if err := api.ObjectAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
+		if _, ok := err.(ObjectNotFound); ok {
+			return BucketPolicyNotFound{Bucket: bucket}
+		}
+		return err
+	}
+	return nil
 }
 
 // writeBucketPolicy - save bucket policy.
