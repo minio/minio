@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -32,7 +33,7 @@ import (
 // This causes confusion on Mac OSX that minio server is not reachable
 // on 127.0.0.1 even though minio server is running. So before we start
 // the minio server we make sure that the port is free on all the IPs.
-func checkPortAvailability(port int) {
+func checkPortAvailability(port int) error {
 	isAddrInUse := func(err error) bool {
 		// Check if the syscall error is EADDRINUSE.
 		// EADDRINUSE is the system call error if another process is
@@ -54,40 +55,48 @@ func checkPortAvailability(port int) {
 		}
 		return true
 	}
+
 	ifcs, err := net.Interfaces()
 	if err != nil {
-		fatalIf(err, "Unable to list interfaces.")
+		return err
 	}
+
 	for _, ifc := range ifcs {
 		addrs, err := ifc.Addrs()
 		if err != nil {
-			fatalIf(err, "Unable to list addresses on interface %s.", ifc.Name)
+			return err
 		}
+
 		for _, addr := range addrs {
 			ipnet, ok := addr.(*net.IPNet)
 			if !ok {
 				errorIf(errors.New(""), "Failed to assert type on (*net.IPNet) interface.")
 				continue
 			}
+
 			ip := ipnet.IP
 			network := "tcp4"
 			if ip.To4() == nil {
 				network = "tcp6"
 			}
-			tcpAddr := net.TCPAddr{IP: ip, Port: port, Zone: ifc.Name}
-			l, err := net.ListenTCP(network, &tcpAddr)
+
+			l, err := net.Listen(network, fmt.Sprintf(":%d", port))
 			if err != nil {
 				if isAddrInUse(err) {
 					// Fail if port is already in use.
-					fatalIf(err, "Unable to listen on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
-				} else {
-					// Ignore other errors.
-					continue
+					return err
 				}
+
+				// Ignore other errors.
+				continue
+
 			}
+
 			if err = l.Close(); err != nil {
-				fatalIf(err, "Unable to close listener on %s:%.d.", tcpAddr.IP, tcpAddr.Port)
+				return err
 			}
 		}
 	}
+
+	return nil
 }

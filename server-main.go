@@ -246,7 +246,9 @@ func serverMain(c *cli.Context) {
 	serverAddress := c.String("address")
 
 	// Check if requested port is available.
-	checkPortAvailability(getPort(serverAddress))
+	port := getPort(serverAddress)
+	err := checkPortAvailability(port)
+	fatalIf(err, "Port unavailable %d", port)
 
 	// Disks to be ignored in server init, to skip format healing.
 	ignoredDisks := strings.Split(c.String("ignore-disks"), ",")
@@ -268,7 +270,6 @@ func serverMain(c *cli.Context) {
 	printStartupMessage(endPoints)
 
 	// Start server.
-	var err error
 	// Configure TLS if certs are available.
 	if tls {
 		err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
