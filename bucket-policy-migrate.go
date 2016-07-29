@@ -37,30 +37,9 @@ func cleanupOldBucketPolicyConfigs() error {
 	oldBucketsConfigDir, err := getOldBucketsConfigPath()
 	fatalIf(err, "Unable to fetch buckets config path to migrate bucket policy")
 
-	// Check if config directory holding bucket policy exists before
-	// starting to clean up.
-	_, err = os.Stat(oldBucketsConfigDir)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	// WalkFunc that deletes bucket policy files in the config directory
-	// after successfully migrating all of them.
-	cleanupOldBucketPolicy := func(policyPath string, fileInfo os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		// Skip entries that aren't bucket policy files.
-		if fileInfo.Name() != "access-policy.json" {
-			return nil
-		}
-		// Delete the bucket policy file from config directory.
-		return os.Remove(policyPath)
-	}
-	return filepath.Walk(oldBucketsConfigDir, cleanupOldBucketPolicy)
+	// Recursively remove configDir/buckets/ - old bucket policy config location.
+	// N B This is called only if all bucket policies were successfully migrated.
+	return os.RemoveAll(oldBucketsConfigDir)
 }
 
 func migrateBucketPolicyConfig(objAPI ObjectLayer) error {
@@ -71,9 +50,13 @@ func migrateBucketPolicyConfig(objAPI ObjectLayer) error {
 	// Check if config directory holding bucket policy exists before
 	// migration.
 	_, err = os.Stat(oldBucketsConfigDir)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+
 	// WalkFunc that migrates access-policy.json to
 	// .minio.sys/buckets/bucketName/policy.json on all disks.
 	migrateBucketPolicy := func(policyPath string, fileInfo os.FileInfo, err error) error {
