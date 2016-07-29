@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,14 +40,16 @@ func cleanupOldBucketPolicyConfigs() error {
 	// Check if config directory holding bucket policy exists before
 	// starting to clean up.
 	_, err = os.Stat(oldBucketsConfigDir)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 
 	// WalkFunc that deletes bucket policy files in the config directory
 	// after successfully migrating all of them.
-	var cleanupOldBucketPolicy filepath.WalkFunc
-	cleanupOldBucketPolicy = func(policyPath string, fileInfo os.FileInfo, err error) error {
+	cleanupOldBucketPolicy := func(policyPath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -74,8 +76,7 @@ func migrateBucketPolicyConfig(objAPI ObjectLayer) error {
 	}
 	// WalkFunc that migrates access-policy.json to
 	// .minio.sys/buckets/bucketName/policy.json on all disks.
-	var migrateBucketPolicy filepath.WalkFunc
-	migrateBucketPolicy = func(policyPath string, fileInfo os.FileInfo, err error) error {
+	migrateBucketPolicy := func(policyPath string, fileInfo os.FileInfo, err error) error {
 		// policyFile - e.g /configDir/sample-bucket/access-policy.json
 		if err != nil {
 			return err
