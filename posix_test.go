@@ -28,6 +28,20 @@ import (
 	"testing"
 )
 
+// creates a temp dir and sets up posix layer.
+// returns posix layer, temp dir path to be used for the purpose of tests.
+func newPosixTestSetup() (StorageAPI, string, error) {
+	diskPath, err := ioutil.TempDir(os.TempDir(), "minio-")
+	if err != nil {
+		return nil, "", err
+	}
+	posixStorage, err := newPosix(diskPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return posixStorage, diskPath, nil
+}
+
 // Tests posix.getDiskInfo()
 func TestGetDiskInfo(t *testing.T) {
 	path, err := ioutil.TempDir(os.TempDir(), "minio-")
@@ -54,17 +68,13 @@ func TestGetDiskInfo(t *testing.T) {
 
 // Tests the functionality implemented by ReadAll storage API.
 func TestReadAll(t *testing.T) {
-	path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
 
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
+	defer removeAll(path)
 
 	// Create files for the test cases.
 	if err = posix.MakeVol("exists"); err != nil {
@@ -173,18 +183,12 @@ func TestNewPosix(t *testing.T) {
 
 // Test posix.MakeVol()
 func TestMakeVol(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	// Create a file.
@@ -227,18 +231,12 @@ func TestMakeVol(t *testing.T) {
 
 // Test posix.DeleteVol()
 func TestDeleteVol(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err := posix.MakeVol("success-vol"); err != nil {
@@ -285,18 +283,12 @@ func TestDeleteVol(t *testing.T) {
 
 // Test posix.StatVol()
 func TestStatVol(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err := posix.MakeVol("success-vol"); err != nil {
@@ -320,18 +312,12 @@ func TestStatVol(t *testing.T) {
 
 // Test posix.ListVols()
 func TestListVols(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Test empty list vols.
 	if volInfo, err := posix.ListVols(); err != nil {
@@ -355,18 +341,12 @@ func TestListVols(t *testing.T) {
 
 // Test posix.DeleteFile()
 func TestDeleteFile(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err := posix.MakeVol("success-vol"); err != nil {
@@ -406,21 +386,15 @@ func TestDeleteFile(t *testing.T) {
 
 // Test posix.ReadFile()
 func TestReadFile(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
-
+	volume := "success-vol"
 	// Setup test environment.
-	if err = posix.MakeVol("success-vol"); err != nil {
+	if err = posix.MakeVol(volume); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -430,6 +404,7 @@ func TestReadFile(t *testing.T) {
 	}
 
 	testCases := []struct {
+		volume      string
 		fileName    string
 		offset      int64
 		bufSize     int
@@ -438,21 +413,21 @@ func TestReadFile(t *testing.T) {
 	}{
 		// Successful read at offset 0 and proper buffer size. - 1
 		{
-			"myobject", 0, 5,
+			volume, "myobject", 0, 5,
 			[]byte("hello"), nil,
 		},
 		// Success read at hierarchy. - 2
 		{
-			"path/to/my/object", 0, 5,
+			volume, "path/to/my/object", 0, 5,
 			[]byte("hello"), nil,
 		},
 		// One path segment length is 255 chars long. - 3
 		{
-			"path/to/my/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			volume, "path/to/my/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			0, 5, []byte("hello"), nil},
 		// Whole path is 1024 characters long, success case. - 4
 		{
-			"level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			volume, "level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			0, 5, []byte("hello"),
 			func() error {
 				// On darwin HFS does not support > 1024 characters.
@@ -465,37 +440,37 @@ func TestReadFile(t *testing.T) {
 		},
 		// Object is a directory. - 5
 		{
-			"object-as-dir",
+			volume, "object-as-dir",
 			0, 5, nil, errIsNotRegular},
 		// One path segment length is > 255 chars long. - 6
 		{
-			"path/to/my/object0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			volume, "path/to/my/object0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			0, 5, nil, errFileNameTooLong},
 		// Path length is > 1024 chars long. - 7
 		{
-			"level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			volume, "level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			0, 5, nil, errFileNameTooLong},
 		// Buffer size greater than object size. - 8
 		{
-			"myobject", 0, 16,
+			volume, "myobject", 0, 16,
 			[]byte("hello, world"),
 			io.ErrUnexpectedEOF,
 		},
 		// Reading from an offset success. - 9
 		{
-			"myobject", 7, 5,
+			volume, "myobject", 7, 5,
 			[]byte("world"), nil,
 		},
 		// Reading from an object but buffer size greater. - 10
 		{
-			"myobject",
+			volume, "myobject",
 			7, 8,
 			[]byte("world"),
 			io.ErrUnexpectedEOF,
 		},
 		// Seeking into a wrong offset, return PathError. - 11
 		{
-			"myobject",
+			volume, "myobject",
 			-1, 5,
 			nil,
 			func() error {
@@ -515,7 +490,23 @@ func TestReadFile(t *testing.T) {
 		},
 		// Seeking ahead returns io.EOF. - 12
 		{
-			"myobject", 14, 1, nil, io.EOF,
+			volume, "myobject", 14, 1, nil, io.EOF,
+		},
+		// Empty volume name. - 13
+		{
+			"", "myobject", 14, 1, nil, errInvalidArgument,
+		},
+		// Empty filename name. - 14
+		{
+			volume, "", 14, 1, nil, errIsNotRegular,
+		},
+		// Non existent volume name - 15.
+		{
+			"abcd", "", 14, 1, nil, errVolumeNotFound,
+		},
+		// Non existent filename - 16.
+		{
+			volume, "abcd", 14, 1, nil, errFileNotFound,
 		},
 	}
 
@@ -524,7 +515,7 @@ func TestReadFile(t *testing.T) {
 
 	// Create test files for further reading.
 	for i, appendFile := range appendFiles {
-		err = posix.AppendFile("success-vol", appendFile.fileName, []byte("hello, world"))
+		err = posix.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
 		if err != appendFile.expectedErr {
 			t.Fatalf("Creating file failed: %d %#v, expected: %s, got: %s", i+1, appendFile, appendFile.expectedErr, err)
 		}
@@ -534,7 +525,7 @@ func TestReadFile(t *testing.T) {
 	for i, testCase := range testCases {
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err := posix.ReadFile("success-vol", testCase.fileName, testCase.offset, buf)
+		n, err := posix.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf)
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -587,18 +578,12 @@ func TestReadFile(t *testing.T) {
 
 // Test posix.AppendFile()
 func TestAppendFile(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err = posix.MakeVol("success-vol"); err != nil {
@@ -664,18 +649,12 @@ func TestAppendFile(t *testing.T) {
 
 // Test posix.RenameFile()
 func TestRenameFile(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err := posix.MakeVol("src-vol"); err != nil {
@@ -722,18 +701,12 @@ func TestRenameFile(t *testing.T) {
 
 // Test posix.StatFile()
 func TestStatFile(t *testing.T) {
-	// Create temporary directory.
-	path, err := ioutil.TempDir("", "minio-")
+	// create posix test setup
+	posix, path, err := newPosixTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create a temporary directory, %s", err)
+		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	defer removeAll(path)
-
-	// Initialize posix storage layer.
-	posix, err := newPosix(path)
-	if err != nil {
-		t.Fatalf("Unable to initialize posix, %s", err)
-	}
 
 	// Setup test environment.
 	if err := posix.MakeVol("success-vol"); err != nil {
