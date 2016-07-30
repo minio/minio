@@ -30,7 +30,7 @@ func setMaxOpenFiles() error {
 		return err
 	}
 	// Set the current limit to Max, it is usually around 4096.
-	// TO increate this limit further user has to manually edit
+	// TO increase this limit further user has to manually edit
 	// `/etc/security/limits.conf`
 	rLimit.Cur = rLimit.Max
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
@@ -40,6 +40,37 @@ func setMaxOpenFiles() error {
 	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// Set max memory used by minio as a process, this value is usually
+// set to 'unlimited' but we need to validate additionally to verify
+// if any hard limit is set by the user, in such a scenario would need
+// to reset the global max cache size to be 80% of the hardlimit set
+// by the user. This is done to honor the system limits and not crash.
+func setMaxMemory() error {
+	var rLimit syscall.Rlimit
+	err := syscall.Getrlimit(syscall.RLIMIT_AS, &rLimit)
+	if err != nil {
+		return err
+	}
+	// Set the current limit to Max, it is default 'unlimited'.
+	// TO decrease this limit further user has to manually edit
+	// `/etc/security/limits.conf`
+	rLimit.Cur = rLimit.Max
+	err = syscall.Setrlimit(syscall.RLIMIT_AS, &rLimit)
+	if err != nil {
+		return err
+	}
+	err = syscall.Getrlimit(syscall.RLIMIT_AS, &rLimit)
+	if err != nil {
+		return err
+	}
+	// Validate if rlimit memory is set to lower
+	// than max cache size. Then we should use such value.
+	if rLimit.Cur < globalMaxCacheSize {
+		globalMaxCacheSize = (80 / 100) * rLimit.Cur
 	}
 	return nil
 }

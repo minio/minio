@@ -24,3 +24,8 @@ func setMaxOpenFiles() error {
 	// (well, you do but it is based on your resources like memory).
 	return nil
 }
+
+func setMaxMemory() error {
+	// TODO: explore if Win32 API's provide anything special here.
+	return nil
+}
