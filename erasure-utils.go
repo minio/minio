@@ -163,10 +163,9 @@ func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, b
 	for {
 		n, err := disk.ReadFile(volume, path, startOffset, buf)
 		if n > 0 {
-			var m int
-			m, err = writer.Write(buf[:n])
-			if err != nil {
-				return err
+			m, wErr := writer.Write(buf[:n])
+			if wErr != nil {
+				return wErr
 			}
 			if int64(m) != n {
 				return io.ErrShortWrite

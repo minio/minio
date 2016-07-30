@@ -400,6 +400,36 @@ func getRandomBucketName() string {
 
 }
 
+// TruncateWriter - Writes `n` bytes, then returns with number of bytes written.
+// differs from iotest.TruncateWriter, the difference is commented in the Write method.
+func TruncateWriter(w io.Writer, n int64) io.Writer {
+	return &truncateWriter{w, n}
+}
+
+type truncateWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (t *truncateWriter) Write(p []byte) (n int, err error) {
+	if t.n <= 0 {
+		return len(p), nil
+	}
+	// real write
+	n = len(p)
+	if int64(n) > t.n {
+		n = int(t.n)
+	}
+	n, err = t.w.Write(p[0:n])
+	t.n -= int64(n)
+	// Removed from iotest.TruncateWriter.
+	// Need the Write method to return truncated number of bytes written, not the size of the buffer requested to be written.
+	// if err == nil {
+	// 	n = len(p)
+	// }
+	return
+}
+
 // NewEOFWriter returns a Writer that writes to w,
 // but returns EOF error after writing n bytes.
 func NewEOFWriter(w io.Writer, n int64) io.Writer {
