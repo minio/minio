@@ -41,24 +41,21 @@ type serverConfigV5 struct {
 // initConfig - initialize server config. config version (called only once).
 func initConfig() error {
 	if !isConfigFileExists() {
+		// Initialize server config.
 		srvCfg := &serverConfigV5{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
+
 		// Enable console logger by default on a fresh run.
 		srvCfg.Logger.Console = consoleLogger{
 			Enable: true,
 			Level:  "fatal",
 		}
 		srvCfg.rwMutex = &sync.RWMutex{}
+
 		// Create config path.
 		err := createConfigPath()
-		if err != nil {
-			return err
-		}
-
-		// Create certs path.
-		err = createCertsPath()
 		if err != nil {
 			return err
 		}

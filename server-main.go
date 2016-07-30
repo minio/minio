@@ -154,8 +154,12 @@ func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
 
 // initServerConfig initialize server config.
 func initServerConfig(c *cli.Context) {
+	// Create certs path.
+	err := createCertsPath()
+	fatalIf(err, "Unable to create \"certs\" directory.")
+
 	// Save new config.
-	err := serverConfig.Save()
+	err = serverConfig.Save()
 	fatalIf(err, "Unable to save config.")
 
 	// Fetch max conn limit from environment variable.
