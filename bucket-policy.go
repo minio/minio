@@ -38,7 +38,12 @@ func readBucketPolicy(api objectAPIHandlers, bucket string) ([]byte, error) {
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	objInfo, err := api.ObjectAPI.GetObjectInfo(minioMetaBucket, policyPath)
+	objectAPI := api.ObjectAPI()
+	// FIXME: add a new error
+	if objectAPI == nil {
+		return nil, errVolumeNotFound
+	}
+	objInfo, err := objectAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
@@ -46,7 +51,7 @@ func readBucketPolicy(api objectAPIHandlers, bucket string) ([]byte, error) {
 		return nil, err
 	}
 	var buffer bytes.Buffer
-	err = api.ObjectAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
+	err = objectAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
@@ -63,8 +68,12 @@ func removeBucketPolicy(api objectAPIHandlers, bucket string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		return errVolumeNotFound
+	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	if err := api.ObjectAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
+	if err := objectAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -80,7 +89,11 @@ func writeBucketPolicy(api objectAPIHandlers, bucket string, accessPolicyBytes [
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		return errVolumeNotFound
+	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	_, err := api.ObjectAPI.PutObject(minioMetaBucket, policyPath, int64(len(accessPolicyBytes)), bytes.NewReader(accessPolicyBytes), nil)
+	_, err := objectAPI.PutObject(minioMetaBucket, policyPath, int64(len(accessPolicyBytes)), bytes.NewReader(accessPolicyBytes), nil)
 	return err
 }
