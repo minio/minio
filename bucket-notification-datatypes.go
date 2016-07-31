@@ -39,7 +39,7 @@ type queueConfig struct {
 		Key keyFilter `xml:"S3Key,omitempty"`
 	}
 	ID       string `xml:"Id"`
-	QueueArn string `xml:"Queue"`
+	QueueARN string `xml:"Queue"`
 }
 
 // Topic SNS configuration, this is a compliance field not used by minio yet.
@@ -49,26 +49,26 @@ type topicConfig struct {
 		Key keyFilter `xml:"S3Key"`
 	}
 	ID       string `xml:"Id"`
-	TopicArn string `xml:"Topic"`
+	TopicARN string `xml:"Topic"`
 }
 
 // Lambda function configuration, this is a compliance field not used by minio yet.
-type lambdaFuncConfig struct {
+type lambdaConfig struct {
 	Events []string `xml:"Event"`
 	Filter struct {
-		Key keyFilter `xml:"S3Key"`
+		Key keyFilter `xml:"S3Key,omitempty"`
 	}
-	ID                string `xml:"Id"`
-	LambdaFunctionArn string `xml:"CloudFunction"`
+	ID        string `xml:"Id"`
+	LambdaARN string `xml:"CloudFunction"`
 }
 
 // Notification configuration structure represents the XML format of
 // notification configuration of buckets.
 type notificationConfig struct {
-	XMLName              xml.Name           `xml:"NotificationConfiguration"`
-	QueueConfigurations  []queueConfig      `xml:"QueueConfiguration"`
-	TopicConfigurations  []topicConfig      `xml:"TopicConfiguration"`
-	LambdaConfigurations []lambdaFuncConfig `xml:"CloudFunctionConfiguration"`
+	XMLName       xml.Name       `xml:"NotificationConfiguration"`
+	QueueConfigs  []queueConfig  `xml:"QueueConfiguration"`
+	TopicConfigs  []topicConfig  `xml:"TopicConfiguration"`
+	LambdaConfigs []lambdaConfig `xml:"CloudFunctionConfiguration"`
 }
 
 // Internal error used to signal notifications not set.
@@ -81,9 +81,9 @@ type EventName int
 const (
 	// ObjectCreatedPut is s3:ObjectCreated:Put
 	ObjectCreatedPut EventName = iota
-	// ObjectCreatedPost is s3:ObjectCreated:POst
+	// ObjectCreatedPost is s3:ObjectCreated:Post
 	ObjectCreatedPost
-	// ObjectCreatedCopy is s3:ObjectCreated:Post
+	// ObjectCreatedCopy is s3:ObjectCreated:Copy
 	ObjectCreatedCopy
 	// ObjectCreatedCompleteMultipartUpload is s3:ObjectCreated:CompleteMultipartUpload
 	ObjectCreatedCompleteMultipartUpload
@@ -155,12 +155,24 @@ type NotificationEvent struct {
 	S3                eventMeta         `json:"s3"`
 }
 
-// Represents the minio sqs type and inputs.
-type arnMinioSqs struct {
-	sqsType string
+// Represents the minio lambda type and account id's.
+type arnLambda struct {
+	Type      string
+	AccountID string
 }
 
 // Stringer for constructing AWS ARN compatible string.
-func (m arnMinioSqs) String() string {
-	return minioSqs + serverConfig.GetRegion() + ":" + m.sqsType
+func (m arnLambda) String() string {
+	return minioLambda + serverConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
+}
+
+// Represents the minio sqs type and account id's.
+type arnSQS struct {
+	Type      string
+	AccountID string
+}
+
+// Stringer for constructing AWS ARN compatible string.
+func (m arnSQS) String() string {
+	return minioSqs + serverConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
 }

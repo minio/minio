@@ -18,10 +18,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"net/http"
 	"path"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -30,37 +33,6 @@ const (
 	bucketConfigPrefix       = "buckets"
 	bucketNotificationConfig = "notification.xml"
 )
-
-// loads notifcation config if any for a given bucket, returns back structured notification config.
-func loadNotificationConfig(objAPI ObjectLayer, bucket string) (nConfig notificationConfig, err error) {
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	var objInfo ObjectInfo
-	objInfo, err = objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
-	if err != nil {
-		switch err.(type) {
-		case ObjectNotFound:
-			return notificationConfig{}, errNoSuchNotifications
-		}
-		return notificationConfig{}, err
-	}
-	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
-	if err != nil {
-		switch err.(type) {
-		case ObjectNotFound:
-			return notificationConfig{}, errNoSuchNotifications
-		}
-		return notificationConfig{}, err
-	}
-
-	// Unmarshal notification bytes.
-	notificationConfigBytes := buffer.Bytes()
-	if err = xml.Unmarshal(notificationConfigBytes, &nConfig); err != nil {
-		return notificationConfig{}, err
-	} // Successfully marshalled notification configuration.
-
-	return nConfig, nil
-}
 
 // GetBucketNotificationHandler - This implementation of the GET
 // operation uses the notification subresource to return the
@@ -75,63 +47,27 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	objInfo, err := api.ObjectAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
-	if err != nil {
-		switch err.(type) {
-		case ObjectNotFound:
-			writeSuccessResponse(w, nil)
-			return
-		}
-		errorIf(err, "Unable to read notification configuration.", notificationConfigPath)
+	// Attempt to successfully load notification config.
+	nConfig, err := loadNotificationConfig(bucket, api.ObjectAPI)
+	if err != nil && err != errNoSuchNotifications {
+		errorIf(err, "Unable to read notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, nil)
-
-			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
-
-			dataWritten = true
-		}
-		return w.Write(p)
-	})
-
-	// Reads the object at startOffset and writes to func writer..
-	err = api.ObjectAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, writer)
+	// For no notifications we write a dummy XML.
+	if err == errNoSuchNotifications {
+		// Complies with the s3 behavior in this regard.
+		nConfig = &notificationConfig{}
+	}
+	notificationBytes, err := xml.Marshal(nConfig)
 	if err != nil {
-		if !dataWritten {
-			switch err.(type) {
-			case ObjectNotFound:
-				writeSuccessResponse(w, nil)
-				return
-			}
-			// Error response only if no data has been written to client yet. i.e if
-			// partial data has already been written before an error
-			// occurred then no point in setting StatusCode and
-			// sending error XML.
-			apiErr := toAPIErrorCode(err)
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
-		}
-		errorIf(err, "Unable to write to client.")
+		// For any marshalling failure.
+		errorIf(err, "Unable to marshal notification configuration into XML.", err)
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
-	}
-
+	// Success.
+	writeSuccessResponse(w, notificationBytes)
 }
 
 // PutBucketNotificationHandler - Minio notification feature enables
@@ -169,10 +105,11 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	// Reads the incoming notification configuration.
 	var buffer bytes.Buffer
+	var bufferSize int64
 	if r.ContentLength >= 0 {
-		_, err = io.CopyN(&buffer, r.Body, r.ContentLength)
+		bufferSize, err = io.CopyN(&buffer, r.Body, r.ContentLength)
 	} else {
-		_, err = io.Copy(&buffer, r.Body)
+		bufferSize, err = io.Copy(&buffer, r.Body)
 	}
 	if err != nil {
 		errorIf(err, "Unable to read incoming body.")
@@ -196,16 +133,142 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	// Proceed to save notification configuration.
-	size := int64(len(notificationConfigBytes))
-	data := bytes.NewReader(notificationConfigBytes)
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	_, err = api.ObjectAPI.PutObject(minioMetaBucket, notificationConfigPath, size, data, nil)
+	_, err = api.ObjectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), nil)
 	if err != nil {
-		errorIf(err, "Unable to write bucket notification configuration.", notificationConfigPath)
+		errorIf(err, "Unable to write bucket notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
+	// Set bucket notification config.
+	eventN.SetBucketNotificationConfig(bucket, &notificationCfg)
+
 	// Success.
 	writeSuccessResponse(w, nil)
+}
+
+// writeNotification marshals notification message before writing to client.
+func writeNotification(w http.ResponseWriter, notification map[string][]NotificationEvent) error {
+	// Invalid response writer.
+	if w == nil {
+		return errInvalidArgument
+	}
+	// Invalid notification input.
+	if notification == nil {
+		return errInvalidArgument
+	}
+	// Marshal notification data into XML and write to client.
+	notificationBytes, err := json.Marshal(&notification)
+	if err != nil {
+		return err
+	}
+	// Add additional CRLF characters for client to
+	// differentiate the individual events properly.
+	_, err = w.Write(append(notificationBytes, crlf...))
+	// Make sure we have flushed, this would set Transfer-Encoding: chunked.
+	w.(http.Flusher).Flush()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CRLF character used for chunked transfer in accordance with HTTP standards.
+var crlf = []byte("\r\n")
+
+// sendBucketNotification - writes notification back to client on the response writer
+// for each notification input, otherwise writes whitespace characters periodically
+// to keep the connection active. Each notification messages are terminated by CRLF
+// character. Upon any error received on response writer the for loop exits.
+//
+// TODO - do not log for all errors.
+func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []NotificationEvent) {
+	var dummyEvents = map[string][]NotificationEvent{"Records": nil}
+	// Continuously write to client either timely empty structures
+	// every 5 seconds, or return back the notifications.
+	for {
+		select {
+		case events := <-arnListenerCh:
+			if err := writeNotification(w, map[string][]NotificationEvent{"Records": events}); err != nil {
+				errorIf(err, "Unable to write notification to client.")
+				return
+			}
+		case <-time.After(5 * time.Second):
+			if err := writeNotification(w, dummyEvents); err != nil {
+				errorIf(err, "Unable to write notification to client.")
+				return
+			}
+		}
+	}
+}
+
+// Returns true if the queueARN is for an Minio queue.
+func isMinL(lambdaARN arnLambda) bool {
+	return strings.HasSuffix(lambdaARN.Type, lambdaTypeMinio)
+}
+
+// isMinioARNConfigured - verifies if one lambda ARN is valid and is enabled.
+func isMinioARNConfigured(lambdaARN string, lambdaConfigs []lambdaConfig) bool {
+	for _, lambdaConfig := range lambdaConfigs {
+		// Validate if lambda ARN is already enabled.
+		if lambdaARN == lambdaConfig.LambdaARN {
+			return true
+		}
+	}
+	return false
+}
+
+// ListenBucketNotificationHandler - list bucket notifications.
+func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate request authorization.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	// Get notification ARN.
+	lambdaARN := r.URL.Query().Get("notificationARN")
+	if lambdaARN == "" {
+		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
+		return
+	}
+
+	// Validate if bucket exists.
+	_, err := api.ObjectAPI.GetBucketInfo(bucket)
+	if err != nil {
+		errorIf(err, "Unable to bucket info.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
+
+	notificationCfg := eventN.GetBucketNotificationConfig(bucket)
+	if notificationCfg == nil {
+		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
+		return
+	}
+
+	// Notifications set, but do not have MINIO queue enabled, return.
+	if !isMinioARNConfigured(lambdaARN, notificationCfg.LambdaConfigs) {
+		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
+		return
+	}
+
+	// Add all common headers.
+	setCommonHeaders(w)
+
+	// Create a new notification event channel.
+	nEventCh := make(chan []NotificationEvent)
+	// Close the listener channel.
+	defer close(nEventCh)
+
+	// Set lambda target.
+	eventN.SetLambdaTarget(lambdaARN, nEventCh)
+	// Remove lambda listener after the writer has closed or the client disconnected.
+	defer eventN.RemoveLambdaTarget(lambdaARN, nEventCh)
+
+	// Start sending bucket notifications.
+	sendBucketNotification(w, nEventCh)
 }

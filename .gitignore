@@ -15,4 +15,4 @@ vendor/**/*.json
 release
 .DS_Store
 *.syso
-coverage.out
+coverage.txt

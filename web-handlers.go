@@ -386,18 +386,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(web.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
-	}
-	// For all other errors, return.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
-
 	// Fetch object info for notifications.
 	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -405,8 +393,17 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, objInfo)
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object created event.
+		eventNotify(eventData{
+			Type:    ObjectCreatedPut,
+			Bucket:  bucket,
+			ObjInfo: objInfo,
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
+	}
 }
 
 // Download - file download handler.

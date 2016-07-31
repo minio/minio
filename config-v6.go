@@ -23,8 +23,8 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-// serverConfigV5 server configuration version '5'.
-type serverConfigV5 struct {
+// serverConfigV6 server configuration version '5'.
+type serverConfigV6 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -34,6 +34,9 @@ type serverConfigV5 struct {
 	// Additional error logging configuration.
 	Logger logger `json:"logger"`
 
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
 	// Read Write mutex.
 	rwMutex *sync.RWMutex
 }
@@ -42,7 +45,7 @@ type serverConfigV5 struct {
 func initConfig() error {
 	if !isConfigFileExists() {
 		// Initialize server config.
-		srvCfg := &serverConfigV5{}
+		srvCfg := &serverConfigV6{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
@@ -73,7 +76,7 @@ func initConfig() error {
 	if _, err = os.Stat(configFile); err != nil {
 		return err
 	}
-	srvCfg := &serverConfigV5{}
+	srvCfg := &serverConfigV6{}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
@@ -92,10 +95,10 @@ func initConfig() error {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV5
+var serverConfig *serverConfigV6
 
 // GetVersion get current config version.
-func (s serverConfigV5) GetVersion() string {
+func (s serverConfigV6) GetVersion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Version
@@ -103,117 +106,135 @@ func (s serverConfigV5) GetVersion() string {
 
 /// Logger related.
 
-func (s *serverConfigV5) SetAMQPLogger(amqpl amqpLogger) {
+func (s *serverConfigV6) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
-	s.Logger.AMQP = amqpl
+	s.Notify.AMQP[accountID] = amqpn
 }
 
-// GetAMQPLogger get current AMQP logger.
-func (s serverConfigV5) GetAMQPLogger() amqpLogger {
+func (s serverConfigV6) GetAMQP() map[string]amqpNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
-	return s.Logger.AMQP
+	return s.Notify.AMQP
 }
 
-func (s *serverConfigV5) SetElasticSearchLogger(esLogger elasticSearchLogger) {
+// GetAMQPNotify get current AMQP logger.
+func (s serverConfigV6) GetAMQPNotifyByID(accountID string) amqpNotify {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
+	return s.Notify.AMQP[accountID]
+}
+
+func (s *serverConfigV6) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
-	s.Logger.ElasticSearch = esLogger
+	s.Notify.ElasticSearch[accountID] = esNotify
 }
 
-// GetElasticSearchLogger get current ElasicSearch logger.
-func (s serverConfigV5) GetElasticSearchLogger() elasticSearchLogger {
+func (s serverConfigV6) GetElasticSearch() map[string]elasticSearchNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
-	return s.Logger.ElasticSearch
+	return s.Notify.ElasticSearch
 }
 
-func (s *serverConfigV5) SetRedisLogger(rLogger redisLogger) {
+// GetElasticSearchNotify get current ElasicSearch logger.
+func (s serverConfigV6) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
+	return s.Notify.ElasticSearch[accountID]
+}
+
+func (s *serverConfigV6) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
-	s.Logger.Redis = rLogger
+	s.Notify.Redis[accountID] = rNotify
 }
 
-// GetRedisLogger get current Redis logger.
-func (s serverConfigV5) GetRedisLogger() redisLogger {
+func (s serverConfigV6) GetRedis() map[string]redisNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
-	return s.Logger.Redis
+	return s.Notify.Redis
+}
+
+// GetRedisNotify get current Redis logger.
+func (s serverConfigV6) GetRedisNotifyByID(accountID string) redisNotify {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
+	return s.Notify.Redis[accountID]
 }
 
 // SetFileLogger set new file logger.
-func (s *serverConfigV5) SetFileLogger(flogger fileLogger) {
+func (s *serverConfigV6) SetFileLogger(flogger fileLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.File = flogger
 }
 
 // GetFileLogger get current file logger.
-func (s serverConfigV5) GetFileLogger() fileLogger {
+func (s serverConfigV6) GetFileLogger() fileLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.File
 }
 
 // SetConsoleLogger set new console logger.
-func (s *serverConfigV5) SetConsoleLogger(clogger consoleLogger) {
+func (s *serverConfigV6) SetConsoleLogger(clogger consoleLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.Console = clogger
 }
 
 // GetConsoleLogger get current console logger.
-func (s serverConfigV5) GetConsoleLogger() consoleLogger {
+func (s serverConfigV6) GetConsoleLogger() consoleLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Console
 }
 
 // SetSyslogLogger set new syslog logger.
-func (s *serverConfigV5) SetSyslogLogger(slogger syslogLogger) {
+func (s *serverConfigV6) SetSyslogLogger(slogger syslogLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.Syslog = slogger
 }
 
 // GetSyslogLogger get current syslog logger.
-func (s *serverConfigV5) GetSyslogLogger() syslogLogger {
+func (s *serverConfigV6) GetSyslogLogger() syslogLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Syslog
 }
 
 // SetRegion set new region.
-func (s *serverConfigV5) SetRegion(region string) {
+func (s *serverConfigV6) SetRegion(region string) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Region = region
 }
 
 // GetRegion get current region.
-func (s serverConfigV5) GetRegion() string {
+func (s serverConfigV6) GetRegion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Region
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV5) SetCredential(creds credential) {
+func (s *serverConfigV6) SetCredential(creds credential) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Credential = creds
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV5) GetCredential() credential {
+func (s serverConfigV6) GetCredential() credential {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Credential
 }
 
 // Save config.
-func (s serverConfigV5) Save() error {
+func (s serverConfigV6) Save() error {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 

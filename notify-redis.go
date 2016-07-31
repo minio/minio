@@ -17,16 +17,16 @@
 package main
 
 import (
+	"io/ioutil"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/redigo/redis"
 )
 
-// redisLogger to send logs to Redis server
-type redisLogger struct {
+// redisNotify to send logs to Redis server
+type redisNotify struct {
 	Enable   bool   `json:"enable"`
-	Level    string `json:"level"`
 	Addr     string `json:"address"`
 	Password string `json:"password"`
 	Key      string `json:"key"`
@@ -34,17 +34,17 @@ type redisLogger struct {
 
 type redisConn struct {
 	*redis.Pool
-	params redisLogger
+	params redisNotify
 }
 
 // Dial a new connection to redis instance at addr, optionally with a password if any.
-func dialRedis(rLogger redisLogger) (*redis.Pool, error) {
+func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 	// Return error if redis not enabled.
-	if !rLogger.Enable {
-		return nil, errLoggerNotEnabled
+	if !rNotify.Enable {
+		return nil, errNotifyNotEnabled
 	}
-	addr := rLogger.Addr
-	password := rLogger.Password
+	addr := rNotify.Addr
+	password := rNotify.Password
 	rPool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 240 * time.Second,
@@ -81,35 +81,34 @@ func dialRedis(rLogger redisLogger) (*redis.Pool, error) {
 	return rPool, nil
 }
 
-func enableRedisLogger() error {
-	rLogger := serverConfig.GetRedisLogger()
+func newRedisNotify(accountID string) (*logrus.Logger, error) {
+	rNotify := serverConfig.GetRedisNotifyByID(accountID)
 
 	// Dial redis.
-	rPool, err := dialRedis(rLogger)
+	rPool, err := dialRedis(rNotify)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	rrConn := redisConn{
 		Pool:   rPool,
-		params: rLogger,
+		params: rNotify,
 	}
 
-	lvl, err := logrus.ParseLevel(rLogger.Level)
-	fatalIf(err, "Unknown log level found in the config file.")
+	redisLog := logrus.New()
 
-	// Add a elasticsearch hook.
-	log.Hooks.Add(rrConn)
+	redisLog.Out = ioutil.Discard
 
 	// Set default JSON formatter.
-	log.Formatter = new(logrus.JSONFormatter)
+	redisLog.Formatter = new(logrus.JSONFormatter)
 
-	// Set default log level to info.
-	log.Level = lvl
+	redisLog.Hooks.Add(rrConn)
 
-	return nil
+	// Success, redis enabled.
+	return redisLog, nil
 }
 
+// Fire is called when an event should be sent to the message broker.
 func (r redisConn) Fire(entry *logrus.Entry) error {
 	rConn := r.Pool.Get()
 	defer rConn.Close()
@@ -129,11 +128,6 @@ func (r redisConn) Fire(entry *logrus.Entry) error {
 // Required for logrus hook implementation
 func (r redisConn) Levels() []logrus.Level {
 	return []logrus.Level{
-		logrus.PanicLevel,
-		logrus.FatalLevel,
-		logrus.ErrorLevel,
-		logrus.WarnLevel,
 		logrus.InfoLevel,
-		logrus.DebugLevel,
 	}
 }

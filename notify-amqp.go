@@ -17,15 +17,16 @@
 package main
 
 import (
+	"io/ioutil"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
 
-// amqpLogger - represents logrus compatible AMQP hook.
+// amqpNotify - represents logrus compatible AMQP hook.
 // All fields represent AMQP configuration details.
-type amqpLogger struct {
+type amqpNotify struct {
 	Enable       bool   `json:"enable"`
-	Level        string `json:"level"`
 	URL          string `json:"url"`
 	Exchange     string `json:"exchange"`
 	RoutingKey   string `json:"routineKey"`
@@ -39,13 +40,16 @@ type amqpLogger struct {
 }
 
 type amqpConn struct {
-	params amqpLogger
+	params amqpNotify
 	*amqp.Connection
 }
 
-func dialAMQP(amqpL amqpLogger) (amqpConn, error) {
+// dialAMQP - dials and returns an amqpConnection instance,
+// for sending notifications. Returns error if amqp logger
+// is not enabled.
+func dialAMQP(amqpL amqpNotify) (amqpConn, error) {
 	if !amqpL.Enable {
-		return amqpConn{}, errLoggerNotEnabled
+		return amqpConn{}, errNotifyNotEnabled
 	}
 	conn, err := amqp.Dial(amqpL.URL)
 	if err != nil {
@@ -54,32 +58,31 @@ func dialAMQP(amqpL amqpLogger) (amqpConn, error) {
 	return amqpConn{Connection: conn, params: amqpL}, nil
 }
 
-func enableAMQPLogger() error {
-	amqpL := serverConfig.GetAMQPLogger()
+func newAMQPNotify(accountID string) (*logrus.Logger, error) {
+	amqpL := serverConfig.GetAMQPNotifyByID(accountID)
 
 	// Connect to amqp server.
 	amqpC, err := dialAMQP(amqpL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	lvl, err := logrus.ParseLevel(amqpL.Level)
-	fatalIf(err, "Unknown log level found in the config file.")
+	amqpLog := logrus.New()
+
+	// Disable writing to console.
+	amqpLog.Out = ioutil.Discard
 
 	// Add a amqp hook.
-	log.Hooks.Add(amqpC)
+	amqpLog.Hooks.Add(amqpC)
 
 	// Set default JSON formatter.
-	log.Formatter = new(logrus.JSONFormatter)
+	amqpLog.Formatter = new(logrus.JSONFormatter)
 
-	// Set default log level to info.
-	log.Level = lvl
-
-	// Successfully enabled.
-	return nil
+	// Successfully enabled all AMQPs.
+	return amqpLog, nil
 }
 
-// Fire is called when an event should be sent to the message broker.
+// Fire is called when an event should be sent to the message broker.k
 func (q amqpConn) Fire(entry *logrus.Entry) error {
 	ch, err := q.Connection.Channel()
 	if err != nil {
@@ -137,11 +140,6 @@ func (q amqpConn) Fire(entry *logrus.Entry) error {
 // Levels is available logging levels.
 func (q amqpConn) Levels() []logrus.Level {
 	return []logrus.Level{
-		logrus.PanicLevel,
-		logrus.FatalLevel,
-		logrus.ErrorLevel,
-		logrus.WarnLevel,
 		logrus.InfoLevel,
-		logrus.DebugLevel,
 	}
 }

@@ -18,81 +18,80 @@ package main
 
 import (
 	"errors"
+	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
 	"gopkg.in/olivere/elastic.v3"
 )
 
 // elasticQueue is a elasticsearch event notification queue.
-type elasticSearchLogger struct {
+type elasticSearchNotify struct {
 	Enable bool   `json:"enable"`
-	Level  string `json:"level"`
 	URL    string `json:"url"`
 	Index  string `json:"index"`
 }
 
 type elasticClient struct {
 	*elastic.Client
-	params elasticSearchLogger
+	params elasticSearchNotify
 }
 
 // Connects to elastic search instance at URL.
-func dialElastic(esLogger elasticSearchLogger) (*elastic.Client, error) {
-	if !esLogger.Enable {
-		return nil, errLoggerNotEnabled
+func dialElastic(esNotify elasticSearchNotify) (*elastic.Client, error) {
+	if !esNotify.Enable {
+		return nil, errNotifyNotEnabled
 	}
-	client, err := elastic.NewClient(elastic.SetURL(esLogger.URL), elastic.SetSniff(false))
+	client, err := elastic.NewClient(elastic.SetURL(esNotify.URL), elastic.SetSniff(false))
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
 }
 
-// Enables elasticsearch logger.
-func enableElasticLogger() error {
-	esLogger := serverConfig.GetElasticSearchLogger()
+func newElasticNotify(accountID string) (*logrus.Logger, error) {
+	esNotify := serverConfig.GetElasticSearchNotifyByID(accountID)
 
 	// Dial to elastic search.
-	client, err := dialElastic(esLogger)
+	client, err := dialElastic(esNotify)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Use the IndexExists service to check if a specified index exists.
-	exists, err := client.IndexExists(esLogger.Index).Do()
+	exists, err := client.IndexExists(esNotify.Index).Do()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Index does not exist, attempt to create it.
 	if !exists {
 		var createIndex *elastic.IndicesCreateResult
-		createIndex, err = client.CreateIndex(esLogger.Index).Do()
+		createIndex, err = client.CreateIndex(esNotify.Index).Do()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !createIndex.Acknowledged {
-			return errors.New("index not created")
+			return nil, errors.New("index not created")
 		}
 	}
 
 	elasticCl := elasticClient{
 		Client: client,
-		params: esLogger,
+		params: esNotify,
 	}
 
-	lvl, err := logrus.ParseLevel(esLogger.Level)
-	fatalIf(err, "Unknown log level found in the config file.")
+	elasticSearchLog := logrus.New()
 
-	// Add a elasticsearch hook.
-	log.Hooks.Add(elasticCl)
+	// Disable writing to console.
+	elasticSearchLog.Out = ioutil.Discard
+
+	// Add a elasticSearch hook.
+	elasticSearchLog.Hooks.Add(elasticCl)
 
 	// Set default JSON formatter.
-	log.Formatter = new(logrus.JSONFormatter)
+	elasticSearchLog.Formatter = new(logrus.JSONFormatter)
 
-	// Set default log level to info.
-	log.Level = lvl
-
-	return nil
+	// Success, elastic search successfully initialized.
+	return elasticSearchLog, nil
 }
 
 // Fire is required to implement logrus hook
@@ -108,11 +107,6 @@ func (q elasticClient) Fire(entry *logrus.Entry) error {
 // Required for logrus hook implementation
 func (q elasticClient) Levels() []logrus.Level {
 	return []logrus.Level{
-		logrus.PanicLevel,
-		logrus.FatalLevel,
-		logrus.ErrorLevel,
-		logrus.WarnLevel,
 		logrus.InfoLevel,
-		logrus.DebugLevel,
 	}
 }

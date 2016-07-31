@@ -100,36 +100,76 @@ func checkFilterRules(filterRules []filterRule) APIErrorCode {
 	return ErrNone
 }
 
-// checkQueueArn - check if the queue arn is valid.
-func checkQueueArn(queueArn string) APIErrorCode {
-	if !strings.HasPrefix(queueArn, minioSqs) {
+// checkQueueARN - check if the queue arn is valid.
+func checkQueueARN(queueARN string) APIErrorCode {
+	if !strings.HasPrefix(queueARN, minioSqs) {
 		return ErrARNNotification
 	}
-	if !strings.HasPrefix(queueArn, minioSqs+serverConfig.GetRegion()+":") {
+	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
+		return ErrRegionNotification
+	}
+	return ErrNone
+}
+
+// checkLambdaARN - check if the lambda arn is valid.
+func checkLambdaARN(lambdaARN string) APIErrorCode {
+	if !strings.HasPrefix(lambdaARN, minioLambda) {
+		return ErrARNNotification
+	}
+	if !strings.HasPrefix(lambdaARN, minioLambda+serverConfig.GetRegion()+":") {
 		return ErrRegionNotification
 	}
 	return ErrNone
 }
 
 // Validate if we recognize the queue type.
-func isValidQueue(sqsArn arnMinioSqs) bool {
-	amqpQ := isAMQPQueue(sqsArn)       // Is amqp queue?.
-	elasticQ := isElasticQueue(sqsArn) // Is elastic queue?.
-	redisQ := isRedisQueue(sqsArn)     // Is redis queue?.
+func isValidQueue(sqsARN arnSQS) bool {
+	amqpQ := isAMQPQueue(sqsARN)       // Is amqp queue?.
+	elasticQ := isElasticQueue(sqsARN) // Is elastic queue?.
+	redisQ := isRedisQueue(sqsARN)     // Is redis queue?.
 	return amqpQ || elasticQ || redisQ
+}
+
+// Validate if we recognize the lambda type.
+func isValidLambda(lambdaARN arnLambda) bool {
+	return isMinL(lambdaARN) // Is minio lambda?.
+}
+
+// Validates account id for input queue ARN.
+func isValidQueueID(queueARN string) bool {
+	// Unmarshals QueueARN into structured object.
+	sqsARN := unmarshalSqsARN(queueARN)
+	// AMQP queue.
+	if isAMQPQueue(sqsARN) {
+		amqpN := serverConfig.GetAMQPNotifyByID(sqsARN.AccountID)
+		return amqpN.Enable && amqpN.URL != ""
+	} else if isElasticQueue(sqsARN) { // Elastic queue.
+		elasticN := serverConfig.GetElasticSearchNotifyByID(sqsARN.AccountID)
+		return elasticN.Enable && elasticN.URL != ""
+
+	} else if isRedisQueue(sqsARN) { // Redis queue.
+		redisN := serverConfig.GetRedisNotifyByID(sqsARN.AccountID)
+		return redisN.Enable && redisN.Addr != ""
+	}
+	return false
 }
 
 // Check - validates queue configuration and returns error if any.
 func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 	// Check queue arn is valid.
-	if s3Error := checkQueueArn(qConfig.QueueArn); s3Error != ErrNone {
+	if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != ErrNone {
 		return s3Error
 	}
 
-	// Unmarshals QueueArn into structured object.
-	sqsArn := unmarshalSqsArn(qConfig.QueueArn)
-	// Validate if sqsArn requested any of the known supported queues.
-	if !isValidQueue(sqsArn) {
+	// Unmarshals QueueARN into structured object.
+	sqsARN := unmarshalSqsARN(qConfig.QueueARN)
+	// Validate if sqsARN requested any of the known supported queues.
+	if !isValidQueue(sqsARN) {
+		return ErrARNNotification
+	}
+
+	// Validate if the account ID is correct.
+	if !isValidQueueID(qConfig.QueueARN) {
 		return ErrARNNotification
 	}
 
@@ -140,6 +180,34 @@ func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 
 	// Check if valid filters are set in queue config.
 	if s3Error := checkFilterRules(qConfig.Filter.Key.FilterRules); s3Error != ErrNone {
+		return s3Error
+	}
+
+	// Success.
+	return ErrNone
+}
+
+// Check - validates queue configuration and returns error if any.
+func checkLambdaConfig(lConfig lambdaConfig) APIErrorCode {
+	// Check queue arn is valid.
+	if s3Error := checkLambdaARN(lConfig.LambdaARN); s3Error != ErrNone {
+		return s3Error
+	}
+
+	// Unmarshals QueueARN into structured object.
+	lambdaARN := unmarshalLambdaARN(lConfig.LambdaARN)
+	// Validate if lambdaARN requested any of the known supported queues.
+	if !isValidLambda(lambdaARN) {
+		return ErrARNNotification
+	}
+
+	// Check if valid events are set in queue config.
+	if s3Error := checkEvents(lConfig.Events); s3Error != ErrNone {
+		return s3Error
+	}
+
+	// Check if valid filters are set in queue config.
+	if s3Error := checkFilterRules(lConfig.Filter.Key.FilterRules); s3Error != ErrNone {
 		return s3Error
 	}
 
@@ -160,15 +228,49 @@ func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
 	return ErrNone
 }
 
+// Validates all incoming lambda configs, checkLambdaConfig validates if the
+// input fields for each queues is not malformed and has valid configuration
+// information.  If validation fails bucket notifications are not enabled.
+func validateLambdaConfigs(lambdaConfigs []lambdaConfig) APIErrorCode {
+	for _, lConfig := range lambdaConfigs {
+		if s3Error := checkLambdaConfig(lConfig); s3Error != ErrNone {
+			return s3Error
+		}
+	}
+	// Success.
+	return ErrNone
+}
+
 // Validates all the bucket notification configuration for their validity,
 // if one of the config is malformed or has invalid data it is rejected.
 // Configuration is never applied partially.
 func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
-	if s3Error := validateQueueConfigs(nConfig.QueueConfigurations); s3Error != ErrNone {
+	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
 		return s3Error
 	}
+	if s3Error := validateLambdaConfigs(nConfig.LambdaConfigs); s3Error != ErrNone {
+		return s3Error
+	}
+
 	// Add validation for other configurations.
 	return ErrNone
+}
+
+// Unmarshals input value of AWS ARN format into minioLambda object.
+// Returned value represents minio lambda type, currently supported are
+// - minio
+func unmarshalLambdaARN(lambdaARN string) arnLambda {
+	lambda := arnLambda{}
+	if !strings.HasPrefix(lambdaARN, minioLambda+serverConfig.GetRegion()+":") {
+		return lambda
+	}
+	lambdaType := strings.TrimPrefix(lambdaARN, minioLambda+serverConfig.GetRegion()+":")
+	switch {
+	case strings.HasSuffix(lambdaType, lambdaTypeMinio):
+		lambda.Type = lambdaTypeMinio
+	} // Add more lambda here.
+	lambda.AccountID = strings.TrimSuffix(lambdaType, ":"+lambda.Type)
+	return lambda
 }
 
 // Unmarshals input value of AWS ARN format into minioSqs object.
@@ -176,16 +278,20 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - amqp
 // - elasticsearch
 // - redis
-func unmarshalSqsArn(queueArn string) (mSqs arnMinioSqs) {
-	sqsType := strings.TrimPrefix(queueArn, minioSqs+serverConfig.GetRegion()+":")
-	mSqs = arnMinioSqs{}
-	switch sqsType {
-	case queueTypeAMQP:
-		mSqs.sqsType = queueTypeAMQP
-	case queueTypeElastic:
-		mSqs.sqsType = queueTypeElastic
-	case queueTypeRedis:
-		mSqs.sqsType = queueTypeRedis
-	} // Add more cases here.
+func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
+	mSqs = arnSQS{}
+	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
+		return mSqs
+	}
+	sqsType := strings.TrimPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":")
+	switch {
+	case strings.HasSuffix(sqsType, queueTypeAMQP):
+		mSqs.Type = queueTypeAMQP
+	case strings.HasSuffix(sqsType, queueTypeElastic):
+		mSqs.Type = queueTypeElastic
+	case strings.HasSuffix(sqsType, queueTypeRedis):
+		mSqs.Type = queueTypeRedis
+	} // Add more queues here.
+	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
 	return mSqs
 }

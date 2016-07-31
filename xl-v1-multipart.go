@@ -320,7 +320,7 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 
 // PutObjectPart - reads incoming stream and internally erasure codes
 // them. This call is similar to single put operation but it is part
-// of the multipart transcation.
+// of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
 func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {

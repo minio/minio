@@ -559,6 +559,20 @@ func getHeadObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
 }
 
+// return URL for inserting bucket notification.
+func getPutNotificationURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("notification", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for fetching bucket notification.
+func getGetNotificationURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("notification", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL for inserting bucket policy.
 func getPutPolicyURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
