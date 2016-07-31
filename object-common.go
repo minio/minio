@@ -17,7 +17,7 @@
 package main
 
 import (
-	"path/filepath"
+	"net"
 	"strings"
 	"sync"
 )
@@ -53,13 +53,57 @@ func fsHouseKeeping(storageDisk StorageAPI) error {
 	return nil
 }
 
+// Check if a network path is local to this node.
+func isLocalStorage(networkPath string) bool {
+	if idx := strings.LastIndex(networkPath, ":"); idx != -1 {
+		// e.g 10.0.0.1:9000:/mnt/networkPath
+		netAddr, _ := splitNetPath(networkPath)
+		var netHost string
+		var err error
+		netHost, _, err = net.SplitHostPort(netAddr)
+		if err != nil {
+			netHost = netAddr
+		}
+		// Resolve host to address to check if the IP is loopback.
+		// If address resolution fails, assume it's a non-local host.
+		addrs, err := net.LookupHost(netHost)
+		if err != nil {
+			return false
+		}
+		for _, addr := range addrs {
+			if ip := net.ParseIP(addr); ip.IsLoopback() {
+				return true
+			}
+		}
+		iaddrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return false
+		}
+		for _, addr := range addrs {
+			for _, iaddr := range iaddrs {
+				ip, _, err := net.ParseCIDR(iaddr.String())
+				if err != nil {
+					return false
+				}
+				if ip.String() == addr {
+					return true
+				}
+
+			}
+		}
+		return false
+	}
+	return true
+}
+
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(disk string) (storage StorageAPI, err error) {
-	if !strings.ContainsRune(disk, ':') || filepath.VolumeName(disk) != "" {
-		// Initialize filesystem storage API.
+	if isLocalStorage(disk) {
+		if idx := strings.LastIndex(disk, ":"); idx != -1 {
+			return newPosix(disk[idx+1:])
+		}
 		return newPosix(disk)
 	}
-	// Initialize rpc client storage API.
 	return newRPCClient(disk)
 }
 

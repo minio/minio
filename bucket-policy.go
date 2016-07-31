@@ -36,7 +36,6 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) ([]byte, error) {
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
 	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	if err != nil {
@@ -62,7 +61,6 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		if _, ok := err.(ObjectNotFound); ok {

@@ -124,6 +124,10 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 		// to handle these errors internally.
 		storageDisks[index], err = newStorageAPI(disk)
 		if err != nil && err != errDiskNotFound {
+			switch diskType := storageDisks[index].(type) {
+			case networkStorage:
+				diskType.rpcClient.Close()
+			}
 			return nil, err
 		}
 	}
