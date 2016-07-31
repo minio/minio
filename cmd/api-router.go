@@ -20,7 +20,7 @@ import router "github.com/gorilla/mux"
 
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
-	ObjectAPI ObjectLayer
+	ObjectAPI func() ObjectLayer
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
