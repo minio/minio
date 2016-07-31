@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -120,7 +121,11 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.StorageInfo = web.ObjectAPI.StorageInfo()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	reply.StorageInfo = objectAPI.StorageInfo()
 	return nil
 }
 
@@ -135,7 +140,11 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.MakeBucket(args.BucketName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -160,7 +169,11 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, err := web.ObjectAPI.ListBuckets()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -208,7 +221,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	for {
-		lo, err := web.ObjectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
+		objectAPI := web.ObjectAPI()
+		if objectAPI == nil {
+			return &json2.Error{Message: "Volume not found"}
+		}
+		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -246,7 +263,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -380,13 +401,18 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Volume not found"))
+		return
+	}
+	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 
 	// Fetch object info for notifications.
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
 		return
@@ -431,13 +457,18 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Volume not found"))
+		return
+	}
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 	offset := int64(0)
-	err = web.ObjectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
+	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
 	if err != nil {
 		/// No need to print error, response writer already written to.
 		return
