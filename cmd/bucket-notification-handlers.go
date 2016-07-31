@@ -47,7 +47,12 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	// Attempt to successfully load notification config.
-	nConfig, err := loadNotificationConfig(bucket, api.ObjectAPI)
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	nConfig, err := loadNotificationConfig(bucket, objAPI)
 	if err != nil && err != errNoSuchNotifications {
 		errorIf(err, "Unable to read notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -86,7 +91,12 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	_, err := api.ObjectAPI.GetBucketInfo(bucket)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	_, err := objectAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -133,7 +143,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	// Proceed to save notification configuration.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	_, err = api.ObjectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), nil)
+	_, err = objectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -220,7 +230,13 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	}
 
 	// Validate if bucket exists.
-	_, err := api.ObjectAPI.GetBucketInfo(bucket)
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+
+	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)

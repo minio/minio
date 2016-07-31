@@ -28,6 +28,7 @@ import (
 	"github.com/minio/cli"
 )
 
+var srvConfig serverCmdConfig
 var serverCmd = cli.Command{
 	Name:  "server",
 	Usage: "Start object storage server.",
@@ -245,11 +246,13 @@ func serverMain(c *cli.Context) {
 	disks := c.Args()
 
 	// Configure server.
-	handler := configureServerHandler(serverCmdConfig{
+	srvConfig = serverCmdConfig{
 		serverAddr:   serverAddress,
 		disks:        disks,
 		ignoredDisks: ignoredDisks,
-	})
+	}
+	// Configure server.
+	handler := configureServerHandler(srvConfig)
 
 	apiServer := NewServerMux(serverAddress, handler)
 

@@ -82,7 +82,12 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		}
 	}
 
-	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
@@ -144,7 +149,12 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		}
 	}
 
-	listMultipartsInfo, err := api.ObjectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	listMultipartsInfo, err := objectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		errorIf(err, "Unable to list multipart uploads.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -170,7 +180,12 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	bucketsInfo, err := api.ObjectAPI.ListBuckets()
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	bucketsInfo, err := objectAPI.ListBuckets()
 	if err != nil {
 		errorIf(err, "Unable to list buckets.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -238,6 +253,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
 		errorIf(err, "Unable to unmarshal delete objects request XML.")
 		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
@@ -327,8 +348,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
 	// Proceed to creating a bucket.
-	err := api.ObjectAPI.MakeBucket(bucket)
+	err := objectAPI.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -384,7 +410,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	metadata := make(map[string]string)
 	// Nothing to store right now.
 
-	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, -1, fileBody, metadata)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	md5Sum, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -405,7 +436,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Fetch object info for notifications.
-		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+		objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 		if err != nil {
 			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
 			return
@@ -451,7 +482,12 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if _, err := api.ObjectAPI.GetBucketInfo(bucket); err != nil {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
+	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
@@ -470,8 +506,13 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		return
+	}
 	// Attempt to delete bucket.
-	if err := api.ObjectAPI.DeleteBucket(bucket); err != nil {
+	if err := objectAPI.DeleteBucket(bucket); err != nil {
 		errorIf(err, "Unable to delete a bucket.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
