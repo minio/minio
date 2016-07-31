@@ -32,6 +32,7 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 		// Initialize FS object layer.
 		return newFSObjects(exportPath)
 	}
+	// TODO: use dsync to block other concurrently booting up nodes.
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(disks, ignoredDisks)
 	if err == errXLWriteQuorum {
@@ -40,45 +41,60 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	return objAPI, err
 }
 
+func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
+	var objAPI ObjectLayer
+	// FIXME: This needs to be go-routine safe.
+	return func() ObjectLayer {
+		var err error
+		if objAPI != nil {
+			return objAPI
+		}
+		objAPI, err = newObjectLayer(disks, ignoredDisks)
+		if err != nil {
+			return nil
+		}
+		// Migrate bucket policy from configDir to .minio.sys/buckets/
+		err = migrateBucketPolicyConfig(objAPI)
+		fatalIf(err, "Unable to migrate bucket policy from config directory")
+
+		err = cleanupOldBucketPolicyConfigs()
+		fatalIf(err, "Unable to clean up bucket policy from config directory.")
+
+		// Initialize a new event notifier.
+		err = initEventNotifier(objAPI)
+		fatalIf(err, "Unable to initialize event notification queue")
+
+		// Initialize and load bucket policies.
+		err = initBucketPolicies(objAPI)
+		fatalIf(err, "Unable to load all bucket policies")
+
+		return objAPI
+	}
+}
+
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	objAPI, err := newObjectLayer(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
-	fatalIf(err, "Unable to intialize object layer.")
-
-	// Migrate bucket policy from configDir to .minio.sys/buckets/
-	err = migrateBucketPolicyConfig(objAPI)
-	fatalIf(err, "Unable to migrate bucket policy from config directory")
-
-	err = cleanupOldBucketPolicyConfigs()
-	fatalIf(err, "Unable to clean up bucket policy from config directory.")
-
-	// Initialize storage rpc server.
-	storageRPC, err := newRPCServer(srvCmdConfig.disks[0]) // FIXME: should only have one path.
+	// Initialize storage rpc servers for every disk that is hosted on this node.
+	storageRPCs, err := newRPCServer(srvCmdConfig)
 	fatalIf(err, "Unable to initialize storage RPC server.")
 
+	newObjectLayerFn := newObjectLayerFactory(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{
-		ObjectAPI: objAPI,
+		ObjectAPI: newObjectLayerFn,
 	}
 
 	// Initialize Web.
 	webHandlers := &webAPIHandlers{
-		ObjectAPI: objAPI,
+		ObjectAPI: newObjectLayerFn,
 	}
-
-	// Initialize a new event notifier.
-	err = initEventNotifier(objAPI)
-	fatalIf(err, "Unable to initialize event notification queue")
-
-	// Initialize a new bucket policies.
-	err = initBucketPolicies(objAPI)
-	fatalIf(err, "Unable to load all bucket policies")
 
 	// Initialize router.
 	mux := router.NewRouter()
 
 	// Register all routers.
-	registerStorageRPCRouter(mux, storageRPC)
+	registerStorageRPCRouters(mux, storageRPCs)
+	initDistributedNSLock(mux, srvCmdConfig)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.

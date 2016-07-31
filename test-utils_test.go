@@ -797,7 +797,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
 	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
 	api := objectAPIHandlers{
-		ObjectAPI: objLayer,
+		ObjectAPI: func() ObjectLayer { return objLayer },
 	}
 	// API Router.
 	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
