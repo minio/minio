@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/rpc"
+	"path"
+	"strings"
 
 	router "github.com/gorilla/mux"
 )
@@ -10,6 +12,7 @@ import (
 // disk over a network.
 type storageServer struct {
 	storage StorageAPI
+	path    string
 }
 
 /// Volume operations handlers
@@ -111,22 +114,50 @@ func (s *storageServer) RenameFileHandler(arg *RenameFileArgs, reply *GenericRep
 }
 
 // Initialize new storage rpc.
-func newRPCServer(exportPath string) (*storageServer, error) {
+func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
 	// Initialize posix storage API.
-	storage, err := newPosix(exportPath)
-	if err != nil && err != errDiskNotFound {
-		return nil, err
+	exports := serverConfig.disks
+	ignoredExports := serverConfig.ignoredDisks
+
+	// Save ignored disks in a map
+	skipDisks := make(map[string]bool)
+	for _, ignoredExport := range ignoredExports {
+		skipDisks[ignoredExport] = true
 	}
-	return &storageServer{
-		storage: storage,
-	}, nil
+	for _, export := range exports {
+		if skipDisks[export] {
+			continue
+		}
+		// e.g server:/mnt/disk1
+		if isLocalStorage(export) {
+			if idx := strings.LastIndex(export, ":"); idx != -1 {
+				export = export[idx+1:]
+			}
+			var storage StorageAPI
+			storage, err = newPosix(export)
+			if err != nil && err != errDiskNotFound {
+				return nil, err
+			}
+			if idx := strings.LastIndex(export, ":"); idx != -1 {
+				export = export[idx+1:]
+			}
+			servers = append(servers, &storageServer{
+				storage: storage,
+				path:    export,
+			})
+		}
+	}
+	return servers, err
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouter(mux *router.Router, stServer *storageServer) {
+func registerStorageRPCRouters(mux *router.Router, stServers []*storageServer) {
 	storageRPCServer := rpc.NewServer()
-	storageRPCServer.RegisterName("Storage", stServer)
-	storageRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
-	// Add minio storage routes.
-	storageRouter.Path("/storage").Handler(storageRPCServer)
+	// Create a unique route for each disk exported from this node.
+	for _, stServer := range stServers {
+		storageRPCServer.RegisterName("Storage", stServer)
+		// Add minio storage routes.
+		storageRouter := mux.PathPrefix(reservedBucket).Subrouter()
+		storageRouter.Path(path.Join("/storage", stServer.path)).Handler(storageRPCServer)
+	}
 }
