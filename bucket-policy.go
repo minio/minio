@@ -156,7 +156,6 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
