@@ -1,4 +1,4 @@
-// +build !linux
+// +build !linux,!windows,!darwin
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -18,8 +18,7 @@
 
 package sys
 
-// GetStats - return system statistics.
-// Note: not implemented on non-linux OSes.
+// GetStats - return system statistics for windows.
 func GetStats() (stats Stats, err error) {
 	return Stats{}, ErrNotImplemented
 }

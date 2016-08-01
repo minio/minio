@@ -18,10 +18,10 @@ package sys
 
 import "errors"
 
-// ErrNotImplemented - GetStats() is implemented only on linux. On other OSes return this error.
+// ErrNotImplemented - GetStats() is not implemented on bsds.
 var ErrNotImplemented = errors.New("not implemented")
 
 // Stats - system statistics.
 type Stats struct {
-	TotalRAM uint64 // RAM size
+	TotalRAM uint64 // Physical RAM size in bytes,
 }

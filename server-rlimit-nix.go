@@ -19,7 +19,6 @@
 package main
 
 import (
-	"fmt"
 	"syscall"
 
 	"github.com/minio/minio/pkg/sys"
@@ -64,7 +63,6 @@ func setMaxMemory() error {
 	// TO decrease this limit further user has to manually edit
 	// `/etc/security/limits.conf`
 	rLimit.Cur = rLimit.Max
-	fmt.Println(rLimit.Max)
 	err = syscall.Setrlimit(syscall.RLIMIT_AS, &rLimit)
 	if err != nil {
 		return err

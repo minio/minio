@@ -1,4 +1,4 @@
-// +build linux
+// +build darwin
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -18,17 +18,34 @@
 
 package sys
 
-import "syscall"
+import (
+	"encoding/binary"
+	"syscall"
+)
 
-// GetStats - return system statistics.
-func GetStats() (stats Stats, err error) {
-	si := syscall.Sysinfo_t{}
-	err = syscall.Sysinfo(&si)
+func getHwMemsize() (uint64, error) {
+	totalString, err := syscall.Sysctl("hw.memsize")
 	if err != nil {
-		return
+		return 0, err
+	}
+
+	// syscall.sysctl() helpfully assumes the result is a null-terminated string and
+	// removes the last byte of the result if it's 0 :/
+	totalString += "\x00"
+
+	total := uint64(binary.LittleEndian.Uint64([]byte(totalString)))
+
+	return total, nil
+}
+
+// GetStats - return system statistics for windows.
+func GetStats() (stats Stats, err error) {
+	memSize, err := getHwMemsize()
+	if err != nil {
+		return Stats{}, err
 	}
 	stats = Stats{
-		TotalRAM: si.Totalram,
+		TotalRAM: memSize,
 	}
 	return stats, nil
 }
