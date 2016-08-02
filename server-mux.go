@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
 var defaultHTTP2Methods = []string{
@@ -53,17 +55,58 @@ type MuxConn struct {
 	net.Conn
 	lastError error
 	dataBuf   ConnBuf
+	wg        *sync.WaitGroup
+}
+
+// MuxServer - the main mux server
+type MuxServer struct {
+	http.Server
+	wg              *sync.WaitGroup
+	listener        *MuxListener
+	GracefulTimeout time.Duration
+}
+
+// NewServer configures a new server instance
+func NewServer(srvCmdConfig serverCmdConfig) *MuxServer {
+	// Minio server config
+	m := &MuxServer{
+		Server: http.Server{
+			Addr: srvCmdConfig.serverAddr,
+			// Adding timeout of 10 minutes for unresponsive client connections.
+			ReadTimeout:    10 * time.Minute,
+			WriteTimeout:   10 * time.Minute,
+			Handler:        configureServerHandler(srvCmdConfig),
+			MaxHeaderBytes: 1 << 20,
+		},
+		wg:              new(sync.WaitGroup),
+		GracefulTimeout: 5 * time.Second,
+	}
+
+	m.Server.ConnState = func(c net.Conn, cs http.ConnState) {
+		if cs == http.StateIdle {
+			// Close any idle connections
+			if m.listener == nil {
+				c.Close()
+			}
+		}
+	}
+
+	// Needed for gracefully closing if a WaitGroup calls Wait() and doesn't
+	// call Add() first it will cause a panic: sync: negative WaitGroup counter
+	m.wg.Add(1)
+
+	return m
 }
 
 // NewMuxConn - creates a new MuxConn instance
-func NewMuxConn(c net.Conn) *MuxConn {
+func NewMuxConn(c net.Conn, wg *sync.WaitGroup) *MuxConn {
 	h1 := longestWord(defaultHTTP1Methods)
 	h2 := longestWord(defaultHTTP2Methods)
 	max := h1
 	if h2 > max {
 		max = h2
 	}
-	return &MuxConn{Conn: c, dataBuf: ConnBuf{buffer: make([]byte, max+1)}}
+	return &MuxConn{Conn: c, dataBuf: ConnBuf{buffer: make([]byte, max+1)}, wg: wg}
 }
 
 // PeekProtocol - reads the first bytes, then checks if it is similar
@@ -115,47 +158,75 @@ func (c *MuxConn) Read(b []byte) (int, error) {
 	return c.Conn.Read(b)
 }
 
+// Close the connection and decrements the WaitGroup
+func (c *MuxConn) Close() error {
+	err := c.Conn.Close()
+	if err != nil {
+		return err
+	}
+
+	c.wg.Done()
+	return nil
+}
+
 // MuxListener - encapuslates the standard net.Listener to inspect
 // the communication protocol upon network connection
 type MuxListener struct {
 	net.Listener
 	config *tls.Config
+	wg     *sync.WaitGroup
 }
 
 // NewMuxListener - creates new MuxListener, returns error when cert/key files are not found
 // or invalid
-func NewMuxListener(listener net.Listener, certPath, keyPath string) (MuxListener, error) {
+func NewMuxListener(listener net.Listener, wg *sync.WaitGroup, certPath, keyPath string) (*MuxListener, error) {
 	var err error
-	config := &tls.Config{}
-	if config.NextProtos == nil {
-		config.NextProtos = []string{"http/1.1", "h2"}
+	var config *tls.Config
+	config = nil
+
+	if certPath != "" {
+		config = &tls.Config{}
+		if config.NextProtos == nil {
+			config.NextProtos = []string{"http/1.1", "h2"}
+		}
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			return &MuxListener{}, err
+		}
 	}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		return MuxListener{}, err
-	}
-	return MuxListener{Listener: listener, config: config}, nil
+
+	l := &MuxListener{Listener: listener, config: config, wg: wg}
+
+	return l, nil
 }
 
 // Accept - peek the protocol to decide if we should wrap the
 // network stream with the TLS server
-func (l MuxListener) Accept() (net.Conn, error) {
+func (l *MuxListener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err != nil {
 		return c, err
 	}
-	cmux := NewMuxConn(c)
+	cmux := NewMuxConn(c, l.wg)
 	protocol := cmux.PeekProtocol()
 	if protocol == "tls" {
 		return tls.Server(cmux, l.config), nil
 	}
+
+	// Increment the WaitGroup to enable graceful shutdown
+	l.wg.Add(1)
+
 	return cmux, nil
 }
 
-// MuxServer - the main mux server
-type MuxServer struct {
-	http.Server
+// Close Listener
+func (l *MuxListener) Close() error {
+	if l == nil {
+		return nil
+	}
+
+	return l.Listener.Close()
 }
 
 // ListenAndServeTLS - similar to the http.Server version. However, it has the
@@ -166,10 +237,13 @@ func (m *MuxServer) ListenAndServeTLS(certFile, keyFile string) error {
 	if err != nil {
 		return err
 	}
-	mux, err := NewMuxListener(listener, mustGetCertFile(), mustGetKeyFile())
+	mux, err := NewMuxListener(listener, m.wg, mustGetCertFile(), mustGetKeyFile())
 	if err != nil {
 		return err
 	}
+
+	m.listener = mux
+
 	err = http.Serve(mux,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// We reach here when MuxListener.MuxConn is not wrapped with tls.Server
@@ -194,7 +268,46 @@ func (m *MuxServer) ListenAndServeTLS(certFile, keyFile string) error {
 
 // ListenAndServe - Same as the http.Server version
 func (m *MuxServer) ListenAndServe() error {
-	return m.Server.ListenAndServe()
+	listener, err := net.Listen("tcp", m.Server.Addr)
+	if err != nil {
+		return err
+	}
+	mux, err := NewMuxListener(listener, m.wg, "", "")
+	if err != nil {
+		return err
+	}
+
+	m.listener = mux
+
+	return m.Server.Serve(mux)
+}
+
+// Address returns the address of http.Server.
+func (m *MuxServer) Address() string {
+	return m.Server.Addr
+}
+
+// Stop initiats the graceful shutdown
+func (m *MuxServer) Stop() error {
+	m.Server.SetKeepAlivesEnabled(false)
+
+	// force connections to close after timeout
+	wait := make(chan struct{})
+	go func() {
+		// Decrement intial WaitGroup added in NewServer()
+		m.wg.Done()
+
+		// Wait for all connections to be gracefully closed
+		m.wg.Wait()
+		close(wait)
+	}()
+
+	select {
+	case <-time.After(m.GracefulTimeout):
+		return m.listener.Close()
+	case <-wait:
+		return m.listener.Close()
+	}
 }
 
 func longestWord(strings []string) int {
