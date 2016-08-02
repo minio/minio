@@ -18,7 +18,11 @@
 
 package main
 
-import "syscall"
+import (
+	"syscall"
+
+	"github.com/minio/minio/pkg/sys"
+)
 
 // For all unixes we need to bump allowed number of open files to a
 // higher value than its usual default of '1024'. The reasoning is
@@ -71,6 +75,17 @@ func setMaxMemory() error {
 	// than max cache size. Then we should use such value.
 	if rLimit.Cur < globalMaxCacheSize {
 		globalMaxCacheSize = (80 / 100) * rLimit.Cur
+	}
+
+	// Make sure globalMaxCacheSize is less than RAM size.
+	stats, err := sys.GetStats()
+	if err != nil && err != sys.ErrNotImplemented {
+		// sys.GetStats() is implemented only on linux. Ignore errors
+		// from other OSes.
+		return err
+	}
+	if err == nil && stats.TotalRAM < globalMaxCacheSize {
+		globalMaxCacheSize = (80 / 100) * stats.TotalRAM
 	}
 	return nil
 }
