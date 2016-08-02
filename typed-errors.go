@@ -18,6 +18,14 @@ package main
 
 import "errors"
 
+// errCode represents the return status of shutdown functions
+type errCode int
+
+const (
+	exitFailure errCode = -1
+	exitSuccess errCode = 0
+)
+
 // errSyslogNotSupported - this message is only meaningful on windows
 var errSyslogNotSupported = errors.New("Syslog logger not supported on windows")
 

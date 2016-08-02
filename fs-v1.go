@@ -63,33 +63,33 @@ func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
 }
 
 // Should be called when process shuts down.
-func shutdownFS(storage StorageAPI) {
+func shutdownFS(storage StorageAPI) errCode {
 	// List if there are any multipart entries.
 	_, err := storage.ListDir(minioMetaBucket, mpartMetaPrefix)
 	if err != errFileNotFound {
 		// Multipart directory is not empty hence do not remove '.minio.sys' volume.
-		os.Exit(0)
+		return exitSuccess
 	}
 	// List if there are any bucket configuration entries.
 	_, err = storage.ListDir(minioMetaBucket, bucketConfigPrefix)
 	if err != errFileNotFound {
 		// Bucket config directory is not empty hence do not remove '.minio.sys' volume.
-		os.Exit(0)
+		return exitSuccess
 	}
 	// Cleanup everything else.
 	prefix := ""
 	if err = cleanupDir(storage, minioMetaBucket, prefix); err != nil {
 		errorIf(err, "Unable to cleanup minio meta bucket")
-		os.Exit(1)
+		return exitFailure
 	}
 	if err = storage.DeleteVol(minioMetaBucket); err != nil {
 		if err != errVolumeNotEmpty {
 			errorIf(err, "Unable to delete minio meta bucket %s", minioMetaBucket)
-			os.Exit(1)
+			return exitFailure
 		}
 	}
 	// Successful exit.
-	os.Exit(0)
+	return exitSuccess
 }
 
 // newFSObjects - initialize new fs object layer.
@@ -133,8 +133,8 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 	}
 
 	// Register the callback that should be called when the process shuts down.
-	registerShutdown(func() {
-		shutdownFS(storage)
+	registerObjectStorageShutdown(func() errCode {
+		return shutdownFS(storage)
 	})
 
 	// Initialize fs objects.
