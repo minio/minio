@@ -23,6 +23,74 @@ import (
 	"testing"
 )
 
+// TestIsRequestUnsignedPayload - Test validates the Unsigned payload detection logic.
+func TestIsRequestUnsignedPayload(t *testing.T) {
+	testCases := []struct {
+		inputAmzContentHeader string
+		expectedResult        bool
+	}{
+		// Test case - 1.
+		// Test case with "X-Amz-Content-Sha256" header set to empty value.
+		{"", false},
+		// Test case - 2.
+		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD"
+		// The payload is flagged as unsigned When "X-Amz-Content-Sha256" header is set to  "UNSIGNED-PAYLOAD".
+		{"UNSIGNED-PAYLOAD", true},
+		// Test case - 3.
+		// set to a random value.
+		{"abcd", false},
+	}
+
+	// creating an input HTTP request.
+	// Only the headers are relevant for this particular test.
+	inputReq, err := http.NewRequest("GET", "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("Error initializing input HTTP request: %v", err)
+	}
+
+	for i, testCase := range testCases {
+		inputReq.Header.Set("X-Amz-Content-Sha256", testCase.inputAmzContentHeader)
+		actualResult := isRequestUnsignedPayload(inputReq)
+		if testCase.expectedResult != actualResult {
+			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)
+		}
+	}
+}
+
+// TestIsRequestPresignedSignatureV4 - Test validates the logic for presign signature verision v4 detection.
+func TestIsRequestPresignedSignatureV4(t *testing.T) {
+	testCases := []struct {
+		inputQueryKey   string
+		inputQueryValue string
+		expectedResult  bool
+	}{
+		// Test case - 1.
+		// Test case with query key ""X-Amz-Credential" set.
+		{"", "", false},
+		// Test case - 2.
+		{"X-Amz-Credential", "", true},
+		// Test case - 3.
+		{"X-Amz-Content-Sha256", "", false},
+	}
+
+	for i, testCase := range testCases {
+		// creating an input HTTP request.
+		// Only the query parameters are relevant for this particular test.
+		inputReq, err := http.NewRequest("GET", "http://example.com", nil)
+		if err != nil {
+			t.Fatalf("Error initializing input HTTP request: %v", err)
+		}
+		q := inputReq.URL.Query()
+		q.Add(testCase.inputQueryKey, testCase.inputQueryValue)
+		inputReq.URL.RawQuery = q.Encode()
+
+		actualResult := isRequestPresignedSignatureV4(inputReq)
+		if testCase.expectedResult != actualResult {
+			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)
+		}
+	}
+}
+
 // Provides a fully populated http request instance, fails otherwise.
 func mustNewRequest(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req, err := newTestRequest(method, urlStr, contentLength, body)
