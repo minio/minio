@@ -158,14 +158,9 @@ func initServerConfig(c *cli.Context) {
 	err := createCertsPath()
 	fatalIf(err, "Unable to create \"certs\" directory.")
 
-	// Save new config.
-	err = serverConfig.Save()
-	fatalIf(err, "Unable to save config.")
-
 	// Fetch max conn limit from environment variable.
 	if maxConnStr := os.Getenv("MINIO_MAXCONN"); maxConnStr != "" {
 		// We need to parse to its integer value.
-		var err error
 		globalMaxConn, err = strconv.Atoi(maxConnStr)
 		fatalIf(err, "Unable to convert MINIO_MAXCONN=%s environment variable into its integer value.", maxConnStr)
 	}
@@ -173,7 +168,6 @@ func initServerConfig(c *cli.Context) {
 	// Fetch max cache size from environment variable.
 	if maxCacheSizeStr := os.Getenv("MINIO_CACHE_SIZE"); maxCacheSizeStr != "" {
 		// We need to parse cache size to its integer value.
-		var err error
 		globalMaxCacheSize, err = strconvBytes(maxCacheSizeStr)
 		fatalIf(err, "Unable to convert MINIO_CACHE_SIZE=%s environment variable into its integer value.", maxCacheSizeStr)
 	}
@@ -181,7 +175,6 @@ func initServerConfig(c *cli.Context) {
 	// Fetch cache expiry from environment variable.
 	if cacheExpiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); cacheExpiryStr != "" {
 		// We need to parse cache expiry to its time.Duration value.
-		var err error
 		globalCacheExpiry, err = time.ParseDuration(cacheExpiryStr)
 		fatalIf(err, "Unable to convert MINIO_CACHE_EXPIRY=%s environment variable into its time.Duration value.", cacheExpiryStr)
 	}
@@ -198,10 +191,14 @@ func initServerConfig(c *cli.Context) {
 		if !isValidSecretKey.MatchString(secretKey) {
 			fatalIf(errInvalidArgument, "Invalid secret key.")
 		}
+		// Set new credentials.
 		serverConfig.SetCredential(credential{
 			AccessKeyID:     accessKey,
 			SecretAccessKey: secretKey,
 		})
+		// Save new config.
+		err = serverConfig.Save()
+		fatalIf(err, "Unable to save config.")
 	}
 
 	// Set maxOpenFiles, This is necessary since default operating
