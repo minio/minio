@@ -18,8 +18,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
-	"os"
 	"testing"
 )
 
@@ -171,14 +169,9 @@ func (e erasureTestSetup) Remove() {
 func newErasureTestSetup(dataBlocks int, parityBlocks int, blockSize int64) (*erasureTestSetup, error) {
 	diskPaths := make([]string, dataBlocks+parityBlocks)
 	disks := make([]StorageAPI, len(diskPaths))
-
+	var err error
 	for i := range diskPaths {
-		var err error
-		diskPaths[i], err = ioutil.TempDir(os.TempDir(), "minio-")
-		if err != nil {
-			return nil, err
-		}
-		disks[i], err = newPosix(diskPaths[i])
+		disks[i], diskPaths[i], err = newPosixTestSetup()
 		if err != nil {
 			return nil, err
 		}
