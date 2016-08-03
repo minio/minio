@@ -74,6 +74,7 @@ type ServerInfoRep struct {
 	MinioMemory   string
 	MinioPlatform string
 	MinioRuntime  string
+	MinioEnvVars  []string
 	UIVersion     string `json:"uiVersion"`
 }
 
@@ -98,6 +99,8 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 		runtime.GOOS,
 		runtime.GOARCH)
 	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
+
+	reply.MinioEnvVars = os.Environ()
 	reply.MinioVersion = minioVersion
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
