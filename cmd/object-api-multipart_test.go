@@ -1844,10 +1844,6 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[2].parts, "", InvalidPart{}, false},
 		// Test case with unsorted parts (Test number 17).
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[3].parts, s3MD5, nil, true},
-		// The other parts will be flushed after a successful completePart (Test number 18).
-		// the case above successfully completes CompleteMultipartUpload, the remaining Parts will be flushed.
-		// Expecting to fail with Invalid UploadID.
-		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[4].parts, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
 	}
 
 	for i, testCase := range testCases {

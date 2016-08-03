@@ -521,12 +521,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
-	tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
+	var totalSize int64
 
-	// Allocate staging buffer.
-	var buf = make([]byte, readSizeV1)
-
-	// Loop through all parts, validate them and then commit to disk.
+	// Loop through all parts to validate them before starting the background commit
 	for i, part := range parts {
 		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 		if partIdx == -1 {
@@ -543,6 +540,48 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				PartETag:   part.ETag,
 			}
 		}
+		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
+		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+		_, err = fs.storage.StatFile(minioMetaBucket, multipartPartFile)
+		if err != nil {
+			return "", InvalidPart{}
+		}
+
+		totalSize += fsMeta.Parts[partIdx].Size
+	}
+
+	// Check if we have enough disk space to make the commit. The parts size + the target file (totalSize*2)
+	// should respect the minimum free space requirement.
+	storageInfo := fs.StorageInfo()
+	if storageInfo.Free+totalSize*2 < storageInfo.Total*(1-fsMinSpacePercent) {
+		return "", toObjectErr(errDiskFull, bucket, object)
+	}
+
+	// Run commit parts in background
+	go fs.completeMultipartCommit(bucket, object, uploadID, s3MD5, fsMeta, parts)
+
+	// Return md5sum.
+	return s3MD5, nil
+}
+
+// Background commit
+func (fs fsObjects) completeMultipartCommit(bucket, object, uploadID, s3MD5 string, fsMeta fsMetaV1, parts []completePart) {
+	var err, returnErr error
+	defer func() {
+		if returnErr != nil {
+			//FIXME: alert if needed
+		}
+	}()
+	// Hold lock in the uploaded object until background commiting terminates
+
+	tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
+
+	// Allocate staging buffer.
+	var buf = make([]byte, readSizeV1)
+
+	// Loop through all parts, validate them and then commit to disk.
+	for _, part := range parts {
+		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
 		multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
@@ -557,7 +596,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
 			if n > 0 {
 				if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
-					return "", toObjectErr(err, minioMetaBucket, tempObj)
+					returnErr = toObjectErr(err, minioMetaBucket, tempObj)
+					return
 				}
 			}
 			if err != nil {
@@ -565,9 +605,11 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 					break
 				}
 				if err == errFileNotFound {
-					return "", InvalidPart{}
+					returnErr = InvalidPart{}
+					return
 				}
-				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
+				returnErr = toObjectErr(err, minioMetaBucket, multipartPartFile)
+				return
 			}
 			offset += n
 			totalLeft -= n
@@ -575,12 +617,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Rename the file back to original location, if not delete the temporary object.
+	nsMutex.Lock(bucket, object)
 	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	nsMutex.Unlock(bucket, object)
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempObj)
+			returnErr = toObjectErr(dErr, minioMetaBucket, tempObj)
+			return
 		}
-		return "", toObjectErr(err, bucket, object)
+		returnErr = toObjectErr(err, bucket, object)
+		return
 	}
 
 	// No need to save part info, since we have concatenated all parts.
@@ -596,17 +642,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// Write the metadata to a temp file and rename it to the actual location.
 		tmpMetaPath := path.Join(tmpMetaPrefix, getUUID())
 		if err = writeFSMetadata(fs.storage, minioMetaBucket, tmpMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			returnErr = toObjectErr(err, bucket, object)
+			return
 		}
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		if err = fs.storage.RenameFile(minioMetaBucket, tmpMetaPath, minioMetaBucket, fsMetaPath); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			returnErr = toObjectErr(err, bucket, object)
+			return
 		}
 	}
 
 	// Cleanup all the parts if everything else has been safely committed.
 	if err = cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
-		return "", toObjectErr(err, bucket, object)
+		returnErr = toObjectErr(err, bucket, object)
+		return
 	}
 
 	// Hold the lock so that two parallel complete-multipart-uploads do not
@@ -618,7 +667,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, object)
+		returnErr = toObjectErr(err, minioMetaBucket, object)
+		return
 	}
 	// If we have successfully read `uploads.json`, then we proceed to
 	// purge or update `uploads.json`.
@@ -628,18 +678,18 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 	if len(uploadsJSON.Uploads) > 0 {
 		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+			returnErr = toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+			return
 		}
 		// Return success.
-		return s3MD5, nil
+		returnErr = nil
+		return
 	}
 
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		returnErr = toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return
 	}
-
-	// Return md5sum.
-	return s3MD5, nil
 }
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart
