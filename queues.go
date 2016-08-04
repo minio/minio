@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 const (
@@ -85,7 +86,7 @@ func isElasticQueue(sqsArn arnMinioSqs) bool {
 // Match function matches wild cards in 'pattern' for events.
 func eventMatch(eventType EventName, events []string) (ok bool) {
 	for _, event := range events {
-		ok = wildCardMatch(event, eventType.String())
+		ok = wildcard.Match(event, eventType.String())
 		if ok {
 			break
 		}

@@ -21,9 +21,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 // maximum supported access policy size.
@@ -71,41 +71,14 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	return false
 }
 
-// Match function matches wild cards in 'pattern' for 'text'.
-func wildCardMatch(pattern, text string) bool {
-	if pattern == "" {
-		return text == pattern
-	}
-	if pattern == "*" {
-		return true
-	}
-	parts := strings.Split(pattern, "*")
-	if len(parts) == 1 {
-		return text == pattern
-	}
-	tGlob := strings.HasSuffix(pattern, "*")
-	end := len(parts) - 1
-	if !strings.HasPrefix(text, parts[0]) {
-		return false
-	}
-	for i := 1; i < end; i++ {
-		if !strings.Contains(text, parts[i]) {
-			return false
-		}
-		idx := strings.Index(text, parts[i]) + len(parts[i])
-		text = text[idx:]
-	}
-	return tGlob || strings.HasSuffix(text, parts[end])
-}
-
 // Match function matches wild cards in 'pattern' for resource.
 func resourceMatch(pattern, resource string) bool {
-	return wildCardMatch(pattern, resource)
+	return wildcard.MatchExtended(pattern, resource)
 }
 
 // Match function matches wild cards in 'pattern' for action.
 func actionMatch(pattern, action string) bool {
-	return wildCardMatch(pattern, action)
+	return wildcard.Match(pattern, action)
 }
 
 // Verify if given resource matches with policy statement.
