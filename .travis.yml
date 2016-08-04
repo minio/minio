@@ -13,8 +13,11 @@ env:
 - ARCH=i686
 
 script:
-- make test
 - make test GOFLAGS="-race"
+- make coverage
+
+after_success:
+- bash <(curl -s https://codecov.io/bash)
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)

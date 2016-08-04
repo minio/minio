@@ -109,6 +109,10 @@ test: build
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
+coverage: build
+	@echo "Running all coverage for minio:"
+	@GO15VENDOREXPERIMENT=1 ./buildscripts/go-coverage.sh
+
 gomake-all: build
 	@echo "Installing minio:"
 	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
