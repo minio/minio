@@ -22,13 +22,14 @@ install:
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - go test .
   - go test -race .
-  - go test github.com/minio/minio/pkg...
   - go test -race github.com/minio/minio/pkg...
   - go run buildscripts/gen-ldflags.go > temp.txt
   - set /p BUILD_LDFLAGS=<temp.txt
   - go build -ldflags="%BUILD_LDFLAGS%" -o %GOPATH%\bin\minio.exe
+
+after_test:
+  - bash <(curl -s https://codecov.io/bash)
 
 # to disable automatic tests
 test: off
