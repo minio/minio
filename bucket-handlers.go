@@ -17,12 +17,8 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/xml"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -89,28 +85,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		payload, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		// Verify Content-Md5, if payload is set.
-		if r.Header.Get("Content-Md5") != "" {
-			if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
-				writeErrorResponse(w, r, ErrBadDigest, r.URL.Path)
-				return
-			}
-		}
-		// Populate back the payload.
-		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-		var s3Error APIErrorCode // API error code.
-		validateRegion := false  // Validate region.
-		if isRequestSignatureV4(r) {
-			s3Error = doesSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
-		} else if isRequestPresignedSignatureV4(r) {
-			s3Error = doesPresignedSignatureMatch(hex.EncodeToString(sum256(payload)), r, validateRegion)
-		}
-		if s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
