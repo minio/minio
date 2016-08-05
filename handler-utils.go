@@ -22,6 +22,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Validates location constraint in PutBucket request body.
@@ -128,4 +129,17 @@ func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, 
 		}
 	}
 	return filePart, fileName, formValues, nil
+}
+
+// Send whitespace character, once every 5secs, until CompleteMultipartUpload is done.
+// CompleteMultipartUpload method of the object layer indicates that it's done via doneCh
+func sendWhiteSpaceChars(w http.ResponseWriter, doneCh <-chan struct{}) {
+	for {
+		select {
+		case <-time.After(5 * time.Second):
+			w.Write([]byte(" "))
+		case <-doneCh:
+			return
+		}
+	}
 }

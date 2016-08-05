@@ -76,12 +76,6 @@ func enableLoggers() {
 	// Enable all loggers here.
 	enableConsoleLogger()
 	enableFileLogger()
-
-	// Adding new bucket notification related loggers.
-	enableAMQPLogger()
-	enableElasticLogger()
-	enableRedisLogger()
-
 	// Add your logger here.
 }
 

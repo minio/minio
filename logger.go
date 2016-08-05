@@ -19,15 +19,10 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
-	"os"
-	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/dustin/go-humanize"
 )
 
 type fields map[string]interface{}
@@ -40,40 +35,11 @@ var log = logrus.New() // Default console logger.
 //   - console [default]
 //   - file
 //   - syslog
-//   - amqp
-//   - elasticsearch
-//
 type logger struct {
-	Console       consoleLogger       `json:"console"`
-	File          fileLogger          `json:"file"`
-	Syslog        syslogLogger        `json:"syslog"`
-	AMQP          amqpLogger          `json:"amqp"`
-	ElasticSearch elasticSearchLogger `json:"elasticsearch"`
-	Redis         redisLogger         `json:"redis"`
+	Console consoleLogger `json:"console"`
+	File    fileLogger    `json:"file"`
+	Syslog  syslogLogger  `json:"syslog"`
 	// Add new loggers here.
-}
-
-var errLoggerNotEnabled = errors.New("requested logger type is not enabled")
-
-// sysInfo returns useful system statistics.
-func sysInfo() map[string]string {
-	host, err := os.Hostname()
-	if err != nil {
-		host = ""
-	}
-	memstats := &runtime.MemStats{}
-	runtime.ReadMemStats(memstats)
-	return map[string]string{
-		"host.name":      host,
-		"host.os":        runtime.GOOS,
-		"host.arch":      runtime.GOARCH,
-		"host.lang":      runtime.Version(),
-		"host.cpus":      strconv.Itoa(runtime.NumCPU()),
-		"mem.used":       humanize.Bytes(memstats.Alloc),
-		"mem.total":      humanize.Bytes(memstats.Sys),
-		"mem.heap.used":  humanize.Bytes(memstats.HeapAlloc),
-		"mem.heap.total": humanize.Bytes(memstats.HeapSys),
-	}
 }
 
 // stackInfo returns printable stack trace.

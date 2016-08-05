@@ -368,20 +368,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		Key:      object,
 		ETag:     md5Sum,
 	})
-	setCommonHeaders(w)
-	writeSuccessResponse(w, encodedSuccessResponse)
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
-	}
-	// For all other errors, return.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
+	setCommonHeaders(w)
+
+	writeSuccessResponse(w, encodedSuccessResponse)
 
 	// Fetch object info for notifications.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
@@ -390,8 +380,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedPost, bucket, objInfo)
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object created event.
+		eventNotify(eventData{
+			Type:    ObjectCreatedPost,
+			Bucket:  bucket,
+			ObjInfo: objInfo,
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
+	}
 }
 
 // HeadBucketHandler - HEAD Bucket

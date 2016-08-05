@@ -137,12 +137,15 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		shutdownFS(storage)
 	})
 
-	// Return successfully initialized object layer.
-	return fsObjects{
+	// Initialize fs objects.
+	fs := fsObjects{
 		storage:      storage,
 		physicalDisk: disk,
 		listPool:     newTreeWalkPool(globalLookupTimeout),
-	}, nil
+	}
+
+	// Return successfully initialized object layer.
+	return fs, nil
 }
 
 // StorageInfo - returns underlying storage statistics.

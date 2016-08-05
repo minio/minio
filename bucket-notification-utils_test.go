@@ -97,8 +97,8 @@ func TestValidEvents(t *testing.T) {
 	}
 }
 
-// Tests queue arn validation.
-func TestQueueArn(t *testing.T) {
+// Tests lambda arn validation.
+func TestLambdaARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
@@ -106,38 +106,80 @@ func TestQueueArn(t *testing.T) {
 	defer removeAll(rootPath)
 
 	testCases := []struct {
-		queueArn string
+		lambdaARN string
+		errCode   APIErrorCode
+	}{
+		// Valid minio lambda with '1' account id.
+		{
+			lambdaARN: "arn:minio:lambda:us-east-1:1:minio",
+			errCode:   ErrNone,
+		},
+		// Valid minio lambda with '10' account id.
+		{
+			lambdaARN: "arn:minio:lambda:us-east-1:10:minio",
+			errCode:   ErrNone,
+		},
+		// Invalid empty queue arn.
+		{
+			lambdaARN: "",
+			errCode:   ErrARNNotification,
+		},
+		// Invalid region 'us-west-1' in queue arn.
+		{
+			lambdaARN: "arn:minio:lambda:us-west-1:1:redis",
+			errCode:   ErrRegionNotification,
+		},
+	}
+
+	for i, testCase := range testCases {
+		errCode := checkLambdaARN(testCase.lambdaARN)
+		if testCase.errCode != errCode {
+			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
+		}
+	}
+}
+
+// Tests queue arn validation.
+func TestQueueARN(t *testing.T) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(rootPath)
+
+	testCases := []struct {
+		queueARN string
 		errCode  APIErrorCode
 	}{
 		// Valid redis queue arn.
 		{
-			queueArn: "arn:minio:sqs:us-east-1:1:redis",
+			queueARN: "arn:minio:sqs:us-east-1:1:redis",
 			errCode:  ErrNone,
 		},
 		// Valid elasticsearch queue arn.
 		{
-			queueArn: "arn:minio:sqs:us-east-1:1:elasticsearch",
+			queueARN: "arn:minio:sqs:us-east-1:1:elasticsearch",
 			errCode:  ErrNone,
 		},
 		// Valid amqp queue arn.
 		{
-			queueArn: "arn:minio:sqs:us-east-1:1:amqp",
+			queueARN: "arn:minio:sqs:us-east-1:1:amqp",
 			errCode:  ErrNone,
 		},
 		// Invalid empty queue arn.
 		{
-			queueArn: "",
+			queueARN: "",
 			errCode:  ErrARNNotification,
 		},
 		// Invalid region 'us-west-1' in queue arn.
 		{
-			queueArn: "arn:minio:sqs:us-west-1:1:redis",
+			queueARN: "arn:minio:sqs:us-west-1:1:redis",
 			errCode:  ErrRegionNotification,
 		},
 	}
 
 	for i, testCase := range testCases {
-		errCode := checkQueueArn(testCase.queueArn)
+		errCode := checkQueueARN(testCase.queueARN)
 		if testCase.errCode != errCode {
 			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
 		}
@@ -145,7 +187,7 @@ func TestQueueArn(t *testing.T) {
 }
 
 // Test unmarshal queue arn.
-func TestUnmarshalSqsArn(t *testing.T) {
+func TestUnmarshalLambdaARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
@@ -153,50 +195,97 @@ func TestUnmarshalSqsArn(t *testing.T) {
 	defer removeAll(rootPath)
 
 	testCases := []struct {
-		queueArn string
-		sqsType  string
+		lambdaARN string
+		Type      string
 	}{
-		// Valid redis queue arn.
+		// Valid minio lambda arn.
 		{
-			queueArn: "arn:minio:sqs:us-east-1:1:redis",
-			sqsType:  "1:redis",
-		},
-		// Valid elasticsearch queue arn.
-		{
-			queueArn: "arn:minio:sqs:us-east-1:1:elasticsearch",
-			sqsType:  "1:elasticsearch",
-		},
-		// Valid amqp queue arn.
-		{
-			queueArn: "arn:minio:sqs:us-east-1:1:amqp",
-			sqsType:  "1:amqp",
+			lambdaARN: "arn:minio:lambda:us-east-1:1:lambda",
+			Type:      "lambda",
 		},
 		// Invalid empty queue arn.
 		{
-			queueArn: "",
-			sqsType:  "",
+			lambdaARN: "",
+			Type:      "",
 		},
 		// Invalid region 'us-west-1' in queue arn.
 		{
-			queueArn: "arn:minio:sqs:us-west-1:1:redis",
-			sqsType:  "",
+			lambdaARN: "arn:minio:lambda:us-west-1:1:lambda",
+			Type:      "",
 		},
 		// Partial queue arn.
 		{
-			queueArn: "arn:minio:sqs:",
-			sqsType:  "",
+			lambdaARN: "arn:minio:lambda:",
+			Type:      "",
 		},
 		// Invalid queue service value.
 		{
-			queueArn: "arn:minio:sqs:us-east-1:1:*",
-			sqsType:  "",
+			lambdaARN: "arn:minio:lambda:us-east-1:1:*",
+			Type:      "",
 		},
 	}
 
 	for i, testCase := range testCases {
-		mSqs := unmarshalSqsArn(testCase.queueArn)
-		if testCase.sqsType != mSqs.sqsType {
-			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.sqsType, mSqs.sqsType)
+		lambda := unmarshalLambdaARN(testCase.lambdaARN)
+		if testCase.Type != lambda.Type {
+			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, lambda.Type)
+		}
+	}
+}
+
+// Test unmarshal queue arn.
+func TestUnmarshalSqsARN(t *testing.T) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(rootPath)
+
+	testCases := []struct {
+		queueARN string
+		Type     string
+	}{
+		// Valid redis queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:redis",
+			Type:     "redis",
+		},
+		// Valid elasticsearch queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:elasticsearch",
+			Type:     "elasticsearch",
+		},
+		// Valid amqp queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:amqp",
+			Type:     "amqp",
+		},
+		// Invalid empty queue arn.
+		{
+			queueARN: "",
+			Type:     "",
+		},
+		// Invalid region 'us-west-1' in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-west-1:1:redis",
+			Type:     "",
+		},
+		// Partial queue arn.
+		{
+			queueARN: "arn:minio:sqs:",
+			Type:     "",
+		},
+		// Invalid queue service value.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:*",
+			Type:     "",
+		},
+	}
+
+	for i, testCase := range testCases {
+		mSqs := unmarshalSqsARN(testCase.queueARN)
+		if testCase.Type != mSqs.Type {
+			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, mSqs.Type)
 		}
 	}
 

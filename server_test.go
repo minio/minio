@@ -74,6 +74,89 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
+// TestBucketNotification - Inserts the bucket notification and
+// verifies it by fetching the notification back.
+func (s *TestSuiteCommon) TestBucketNotification(c *C) {
+	// Sample bucket notification
+	bucketNotificationBuf := `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(bucketNotificationBuf)), bytes.NewReader([]byte(bucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// Fetch the uploaded policy.
+	request, err = newTestSignedRequest("GET", getGetNotificationURL(s.endPoint, bucketName), 0, nil,
+		s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	bucketNotificationReadBuf, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	// Verify if downloaded policy matches with previousy uploaded.
+	c.Assert(bytes.Equal([]byte(bucketNotificationBuf), bucketNotificationReadBuf), Equals, true)
+
+	invalidBucketNotificationBuf := `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:minio</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+
+	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+
+	invalidBucketNotificationBuf = `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-west-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+
+	verifyError(c, response, "InvalidArgument", "A specified destination is in a different region than the bucket. You must use a destination that resides in the same region as the bucket.", http.StatusBadRequest)
+
+	invalidBucketNotificationBuf = `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Invalid</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "A specified event is not supported for notifications.", http.StatusBadRequest)
+}
+
 // TestBucketPolicy - Inserts the bucket policy and verifies it by fetching the policy back.
 // Deletes the policy and verifies the deletion by fetching it back.
 func (s *TestSuiteCommon) TestBucketPolicy(c *C) {

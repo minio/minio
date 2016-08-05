@@ -34,6 +34,8 @@ func migrateConfig() {
 	migrateV3ToV4()
 	// Migrate version '4' to '5'.
 	migrateV4ToV5()
+	// Migrate version '5' to '6.
+	migrateV5ToV6()
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
@@ -149,6 +151,72 @@ func migrateV3ToV4() {
 	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
 
+// Version '5' to '6' migrates config, removes previous fields related
+// to backend types and server address. This change further simplifies
+// the config for future additions.
+func migrateV5ToV6() {
+	cv5, err := loadConfigV5()
+	if err != nil && os.IsNotExist(err) {
+		return
+	}
+	fatalIf(err, "Unable to load config version ‘5’.")
+	if cv5.Version != "5" {
+		return
+	}
+
+	// Save only the new fields, ignore the rest.
+	srvConfig := &serverConfigV6{}
+	srvConfig.Version = globalMinioConfigVersion
+	srvConfig.Credential = cv5.Credential
+	srvConfig.Region = cv5.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv5.Logger.Console
+	srvConfig.Logger.File = cv5.Logger.File
+	srvConfig.Logger.Syslog = cv5.Logger.Syslog
+	srvConfig.Notify.AMQP = map[string]amqpNotify{
+		"1": {
+			Enable:      cv5.Logger.AMQP.Enable,
+			URL:         cv5.Logger.AMQP.URL,
+			Exchange:    cv5.Logger.AMQP.Exchange,
+			RoutingKey:  cv5.Logger.AMQP.RoutingKey,
+			Mandatory:   cv5.Logger.AMQP.Mandatory,
+			Immediate:   cv5.Logger.AMQP.Immediate,
+			Durable:     cv5.Logger.AMQP.Durable,
+			Internal:    cv5.Logger.AMQP.Internal,
+			NoWait:      cv5.Logger.AMQP.NoWait,
+			AutoDeleted: cv5.Logger.AMQP.AutoDeleted,
+		},
+	}
+	srvConfig.Notify.ElasticSearch = map[string]elasticSearchNotify{
+		"1": {
+			Enable: cv5.Logger.ElasticSearch.Enable,
+			URL:    cv5.Logger.ElasticSearch.URL,
+			Index:  cv5.Logger.ElasticSearch.Index,
+		},
+	}
+	srvConfig.Notify.Redis = map[string]redisNotify{
+		"1": {
+			Enable:   cv5.Logger.Redis.Enable,
+			Addr:     cv5.Logger.Redis.Addr,
+			Password: cv5.Logger.Redis.Password,
+			Key:      cv5.Logger.Redis.Key,
+		},
+	}
+
+	qc, err := quick.New(srvConfig)
+	fatalIf(err, "Unable to initialize the quick config.")
+	configFile, err := getConfigFile()
+	fatalIf(err, "Unable to get config file.")
+
+	err = qc.Save(configFile)
+	fatalIf(err, "Failed to migrate config from ‘"+cv5.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+
+	console.Println("Migration from version ‘" + cv5.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+}
+
 // Version '4' to '5' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
@@ -163,7 +231,7 @@ func migrateV4ToV5() {
 	}
 
 	// Save only the new fields, ignore the rest.
-	srvConfig := &serverConfigV5{}
+	srvConfig := &configV5{}
 	srvConfig.Version = globalMinioConfigVersion
 	srvConfig.Credential = cv4.Credential
 	srvConfig.Region = cv4.Region
@@ -174,15 +242,9 @@ func migrateV4ToV5() {
 	srvConfig.Logger.Console = cv4.Logger.Console
 	srvConfig.Logger.File = cv4.Logger.File
 	srvConfig.Logger.Syslog = cv4.Logger.Syslog
-	srvConfig.Logger.AMQP = amqpLogger{
-		Enable: false,
-	}
-	srvConfig.Logger.ElasticSearch = elasticSearchLogger{
-		Enable: false,
-	}
-	srvConfig.Logger.Redis = redisLogger{
-		Enable: false,
-	}
+	srvConfig.Logger.AMQP.Enable = false
+	srvConfig.Logger.ElasticSearch.Enable = false
+	srvConfig.Logger.Redis.Enable = false
 
 	qc, err := quick.New(srvConfig)
 	fatalIf(err, "Unable to initialize the quick config.")

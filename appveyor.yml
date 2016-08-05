@@ -24,6 +24,7 @@ install:
 build_script:
   - go test -race .
   - go test -race github.com/minio/minio/pkg...
+  - go test -coverprofile=coverage.txt -covermode=atomic
   - go run buildscripts/gen-ldflags.go > temp.txt
   - set /p BUILD_LDFLAGS=<temp.txt
   - go build -ldflags="%BUILD_LDFLAGS%" -o %GOPATH%\bin\minio.exe

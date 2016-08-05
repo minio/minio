@@ -99,7 +99,7 @@ func TestEventMatch(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		ok := eventMatch(testCase.eventName, testCase.events)
+		ok := eventMatch(testCase.eventName.String(), testCase.events)
 		if testCase.match != ok {
 			t.Errorf("Test %d: Expected \"%t\", got \"%t\"", i+1, testCase.match, ok)
 		}

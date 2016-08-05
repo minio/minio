@@ -66,6 +66,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		ObjectAPI: objAPI,
 	}
 
+	// Initialize a new event notifier.
+	err = initEventNotifier(objAPI)
+	fatalIf(err, "Unable to initialize event notification queue")
+
 	// Initialize router.
 	mux := router.NewRouter()
 

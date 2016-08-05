@@ -30,15 +30,6 @@ func getOldBucketsConfigPath() (string, error) {
 	return filepath.Join(configPath, "buckets"), nil
 }
 
-// getBucketConfigPath - get bucket config path.
-func getOldBucketConfigPath(bucket string) (string, error) {
-	bucketsConfigPath, err := getOldBucketsConfigPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(bucketsConfigPath, bucket), nil
-}
-
 // readBucketPolicy - read bucket policy.
 func readBucketPolicy(api objectAPIHandlers, bucket string) ([]byte, error) {
 	// Verify bucket is valid.

@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	mux "github.com/gorilla/mux"
 )
@@ -356,20 +355,17 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Explicitly close the reader, to avoid fd leaks.
 	pipeReader.Close()
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object created event.
+		eventNotify(eventData{
+			Type:    ObjectCreatedCopy,
+			Bucket:  bucket,
+			ObjInfo: objInfo,
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
 	}
-	// For all other errors, return.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
-
-	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedCopy, bucket, objInfo)
 }
 
 // PutObjectHandler - PUT Object
@@ -440,18 +436,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	writeSuccessResponse(w, nil)
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
-	}
-	// For all other errors return.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
-
 	// Fetch object info for notifications.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -459,8 +443,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedPut, bucket, objInfo)
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object created event.
+		eventNotify(eventData{
+			Type:    ObjectCreatedPut,
+			Bucket:  bucket,
+			ObjInfo: objInfo,
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
+	}
 }
 
 /// Multipart objectAPIHandlers
@@ -614,19 +607,6 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	writeSuccessNoContent(w)
 }
 
-// Send whitespace character, once every 5secs, until CompleteMultipartUpload is done.
-// CompleteMultipartUpload method of the object layer indicates that it's done via doneCh
-func sendWhiteSpaceChars(w http.ResponseWriter, doneCh <-chan struct{}) {
-	for {
-		select {
-		case <-time.After(5 * time.Second):
-			w.Write([]byte(" "))
-		case <-doneCh:
-			return
-		}
-	}
-}
-
 // ListObjectPartsHandler - List object parts
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -777,18 +757,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
-	}
-	// For all other errors.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
-
 	// Fetch object info for notifications.
 	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -796,8 +764,17 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	// Notify object created event.
-	notifyObjectCreatedEvent(nConfig, ObjectCreatedCompleteMultipartUpload, bucket, objInfo)
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object created event.
+		eventNotify(eventData{
+			Type:    ObjectCreatedCompleteMultipartUpload,
+			Bucket:  bucket,
+			ObjInfo: objInfo,
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
+	}
 }
 
 /// Delete objectAPIHandlers
@@ -834,18 +811,17 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 	writeSuccessNoContent(w)
 
-	// Load notification config if any.
-	nConfig, err := loadNotificationConfig(api.ObjectAPI, bucket)
-	// Notifications not set, return.
-	if err == errNoSuchNotifications {
-		return
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify object deleted event.
+		eventNotify(eventData{
+			Type:   ObjectRemovedDelete,
+			Bucket: bucket,
+			ObjInfo: ObjectInfo{
+				Name: object,
+			},
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
 	}
-	// For all other errors, return.
-	if err != nil {
-		errorIf(err, "Unable to load notification config for bucket: \"%s\"", bucket)
-		return
-	}
-
-	// Notify object deleted event.
-	notifyObjectDeletedEvent(nConfig, bucket, object)
 }
