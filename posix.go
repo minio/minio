@@ -555,10 +555,12 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	}
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
+	var fileSize int64
 	if st, err = os.Stat(preparePath(filePath)); err == nil {
 		if !st.Mode().IsRegular() {
 			return errIsNotRegular
 		}
+		fileSize = st.Size()
 	}
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
@@ -586,6 +588,30 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 
 	// Close upon return.
 	defer w.Close()
+
+	if len(buf) == 0 {
+		return nil
+	}
+
+	// Allocate needed disk space to append data
+	e := Fallocate(int(w.Fd()), fileSize, int64(len(buf)))
+
+	// Ignore errors when Fallocate is not supported in the current system
+	if e != nil && e != syscall.ENOSYS && e != syscall.EOPNOTSUPP {
+		switch e {
+		case syscall.EFBIG:
+			err = errFileTooBig
+		case syscall.ENOSPC:
+			err = errDiskFull
+		case syscall.EIO:
+			err = e
+		default:
+			// For errors: EBADF, EINTR, EINVAL, ENODEV, EPERM, ESPIPE  and ETXTBSY
+			// Appending was failed anyway, returns unexpected error
+			err = errUnexpected
+		}
+		return err
+	}
 
 	// Return io.Copy
 	_, err = io.Copy(w, bytes.NewReader(buf))

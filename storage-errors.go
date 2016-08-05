@@ -59,3 +59,6 @@ var errVolumeAccessDenied = errors.New("volume access denied")
 
 // errVolumeAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
+
+// errFileTooBig - cannot write, file too big
+var errFileTooBig = errors.New("file too big")
