@@ -275,6 +275,11 @@ func serverMain(c *cli.Context) {
 	// Prints the formatted startup message.
 	printStartupMessage(endPoints)
 
+	registerShutdown(func() errCode {
+		// apiServer.Stop()
+		return exitSuccess
+	})
+
 	// Start server.
 	// Configure TLS if certs are available.
 	if tls {
@@ -283,5 +288,6 @@ func serverMain(c *cli.Context) {
 		// Fallback to http.
 		err = apiServer.ListenAndServe()
 	}
+
 	fatalIf(err, "Failed to start minio server.")
 }

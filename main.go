@@ -189,6 +189,10 @@ func main() {
 		defer profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir)).Stop()
 	}
 
+	// Initialize and monitor shutdown signal
+	shutdownSignal = make(chan bool, 1)
+	monitorShutdownSignal()
+
 	// Run the app - exit on error.
 	app.RunAndExitOnError()
 }

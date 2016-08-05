@@ -17,11 +17,9 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 const (
@@ -34,17 +32,6 @@ const (
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"
 )
-
-// Register callback functions that needs to be called when process shutsdown.
-// For now, SIGINT triggers the callbacks, in future controller can trigger
-// shutdown callbacks.
-func registerShutdown(callback func()) {
-	go func() {
-		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-		<-trapCh
-		callback()
-	}()
-}
 
 // isErrIgnored should we ignore this error?, takes a list of errors which can be ignored.
 func isErrIgnored(err error, ignoredErrs []error) bool {
