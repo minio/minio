@@ -5,7 +5,8 @@ Service script for minio service for systemd.
 ```
 mkdir /etc/minio/
 mkdir -p /usr/share/minio/bin/
-wget -o /usr/share/minio/bin/minio http://...
+wget -O /usr/share/minio/bin/minio http://...
+chmod +x /usr/share/minio/bin/minio
 ```
 
 Create minio user.
