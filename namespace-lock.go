@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"github.com/minio/dsync"
 	"sync"
 )
 
@@ -29,7 +30,7 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	sync.RWMutex
+	*dsync.DRWMutex
 	ref uint
 }
 
@@ -58,7 +59,8 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			ref: 0,
+			DRWMutex: dsync.NewDRWMutex(volume + path),
+			ref:      0,
 		}
 		n.lockMap[param] = nsLk
 	}
