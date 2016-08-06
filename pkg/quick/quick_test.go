@@ -51,13 +51,22 @@ func (s *MySuite) TestCheckData(c *C) {
 	err := quick.CheckData(nil)
 	c.Assert(err, Not(IsNil))
 
-	type myStructBad struct {
+	type myStructBadNoVersion struct {
 		User     string
 		Password string
 		Folders  []string
 	}
-	saveMeBad := myStructBad{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = quick.CheckData(&saveMeBad)
+	saveMeBadNoVersion := myStructBadNoVersion{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
+	err = quick.CheckData(&saveMeBadNoVersion)
+	c.Assert(err, Not(IsNil))
+
+	type myStructBadVersionInt struct {
+		Version  int
+		User     string
+		Password string
+	}
+	saveMeBadVersionInt := myStructBadVersionInt{1, "guest", "nopassword"}
+	err = quick.CheckData(&saveMeBadVersionInt)
 	c.Assert(err, Not(IsNil))
 
 	type myStructGood struct {
@@ -94,6 +103,15 @@ func (s *MySuite) TestVersion(c *C) {
 	valid, err = quick.CheckVersion("test.json", "2")
 	c.Assert(err, IsNil)
 	c.Assert(valid, Equals, false)
+
+	_, err = quick.CheckVersion("test1.json", "1")
+	c.Assert(err, Not(IsNil))
+
+	file, err := os.Create("test.json")
+	c.Assert(err, IsNil)
+	c.Assert(file.Close(), IsNil)
+	_, err = quick.CheckVersion("test.json", "1")
+	c.Assert(err, Not(IsNil))
 }
 
 func (s *MySuite) TestSaveLoad(c *C) {

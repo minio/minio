@@ -25,6 +25,44 @@ import (
 	"time"
 )
 
+// TestObjectCache tests cases of object cache with expiry.
+func TestObjExpiry(t *testing.T) {
+	// Non exhaustive list of all object cache behavior cases.
+	testCases := []struct {
+		expiry    time.Duration
+		cacheSize uint64
+		err       error
+		closeErr  error
+	}{
+		{
+			expiry:    100 * time.Millisecond,
+			cacheSize: 1024,
+			err:       ErrKeyNotFoundInCache,
+			closeErr:  nil,
+		},
+	}
+
+	// Test case 1 validates running of GC.
+	testCase := testCases[0]
+	cache := New(testCase.cacheSize, testCase.expiry)
+	cache.OnEviction = func(key string) {}
+	w, err := cache.Create("test", 1)
+	if err != nil {
+		t.Errorf("Test case 1 expected to pass, failed instead %s", err)
+	}
+	// Write a byte.
+	w.Write([]byte("1"))
+	if err = w.Close(); err != nil {
+		t.Errorf("Test case 1 expected to pass, failed instead %s", err)
+	}
+	// Wait for 500 millisecond.
+	time.Sleep(500 * time.Millisecond)
+	_, err = cache.Open("test")
+	if err != testCase.err {
+		t.Errorf("Test case 1 expected %s, got instead %s", testCase.err, err)
+	}
+}
+
 // TestObjCache - tests various cases for object cache behavior.
 func TestObjCache(t *testing.T) {
 	// Non exhaustive list of all object cache behavior cases.
@@ -67,6 +105,12 @@ func TestObjCache(t *testing.T) {
 		{
 			expiry:    NoExpiry,
 			cacheSize: 1024,
+		},
+		// Validate error excess data.
+		{
+			expiry:    NoExpiry,
+			cacheSize: 5,
+			closeErr:  ErrExcessData,
 		},
 	}
 
@@ -168,5 +212,28 @@ func TestObjCache(t *testing.T) {
 	cache.Delete("test")
 	if deleteKey != "test" {
 		t.Errorf("Test case 6 expected to pass, wanted \"test\", got %s", deleteKey)
+	}
+
+	// Test 7 validates rejecting requests when excess data is being saved.
+	testCase = testCases[6]
+	cache = New(testCase.cacheSize, testCase.expiry)
+	w, err = cache.Create("test1", 5)
+	if err != nil {
+		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
+	}
+	// Write '5' bytes.
+	w.Write([]byte("Hello"))
+	// Close to successfully save into cache.
+	if err = w.Close(); err != nil {
+		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
+	}
+	w, err = cache.Create("test2", 1)
+	if err != nil {
+		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
+	}
+	// Write '1' byte.
+	w.Write([]byte("H"))
+	if err = w.Close(); err != testCase.closeErr {
+		t.Errorf("Test case 7 expected to fail, passed instead")
 	}
 }
