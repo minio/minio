@@ -32,6 +32,7 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 		// Initialize FS object layer.
 		return newFSObjects(exportPath)
 	}
+	// TODO: use dsync to block other concurrently booting up nodes.
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(disks, ignoredDisks)
 	if err == errXLWriteQuorum {
@@ -89,6 +90,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 
 	// Register all routers.
 	registerStorageRPCRouters(mux, storageRPCs)
+	initDistributedNSLock(mux, srvCmdConfig)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
