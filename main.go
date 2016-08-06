@@ -190,7 +190,7 @@ func main() {
 	}
 
 	// Initialize and monitor shutdown signal
-	shutdownSignal = make(chan bool, 1)
+	shutdownSignalCh = make(chan shutdownSignal, 1)
 	monitorShutdownSignal()
 
 	// Run the app - exit on error.

@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 )
@@ -76,9 +77,16 @@ func contains(stringList []string, element string) bool {
 	return false
 }
 
-// shutdownSignal - is the channel that receives any boolean when
-// we want broadcast the start of shutdown
-var shutdownSignal chan bool
+// shutdownSignal to specify the shutdown policy (halt/restart)
+type shutdownSignal string
+
+const (
+	shutdownHalt    shutdownSignal = "halt"
+	shutdownRestart                = "restart"
+)
+
+// shutdownSignal - is the channel that receives the shutdown order
+var shutdownSignalCh chan shutdownSignal
 
 // shutdownCallbacks - is the list of function callbacks executed one by one
 // when a shutdown starts. A callback returns 0 for success and 1 for failure.
@@ -109,8 +117,8 @@ func monitorShutdownSignal() {
 			select {
 			case <-trapCh:
 				// Start a graceful shutdown call
-				shutdownSignal <- true
-			case <-shutdownSignal:
+				shutdownSignalCh <- shutdownHalt
+			case signal := <-shutdownSignalCh:
 				// Call all callbacks and exit for emergency
 				for _, callback := range shutdownCallbacks {
 					exitCode := callback()
@@ -126,6 +134,21 @@ func monitorShutdownSignal() {
 						os.Exit(int(exitCode))
 					}
 
+				}
+				// All shutdown callbacks ensure that the server is safely terminated
+				// and any concurrent process could be started again
+				if signal == shutdownRestart {
+					path := os.Args[0]
+					cmdArgs := os.Args[1:]
+					cmd := exec.Command(path, cmdArgs...)
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+
+					err := cmd.Start()
+					if err != nil {
+						// FIXME: log to the appropriate engine
+					}
+					os.Exit(int(exitSuccess))
 				}
 				os.Exit(int(exitSuccess))
 			}
