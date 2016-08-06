@@ -68,6 +68,33 @@ type WebGenericRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
+// ServerCtrlRep - reply for server control commands
+type ServerCtrlRep struct {
+	Status    string
+	UIVersion string `json:"uiVersion"`
+}
+
+// ServerCtrlArgs - server control args
+type ServerCtrlArgs struct {
+	Cmd string `json:"Cmd"`
+}
+
+// ServerInfo - get server info.
+func (web *webAPIHandlers) ServerCtrl(r *http.Request, args *ServerCtrlArgs, reply *ServerCtrlRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	switch args.Cmd {
+	case "Shutdown":
+		shutdownSignalCh <- shutdownHalt
+	case "Restart":
+		shutdownSignalCh <- shutdownRestart
+	default:
+		return &json2.Error{Message: "Invalid arguments"}
+	}
+	return nil
+}
+
 // ServerInfoRep - server info reply.
 type ServerInfoRep struct {
 	MinioVersion  string
