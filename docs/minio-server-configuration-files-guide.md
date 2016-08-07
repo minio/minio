@@ -25,9 +25,10 @@ $ tree ~/.minio/
 config.json is the configuration file for Minio, it gets generated after you install and start Minio.
 
 ```sh
-$cat config.json
+
+$ cat config.json
 {
-	"version": "5",
+	"version": "6",
 	"credential": {
 		"accessKey": "YI7S1CKXB76RGOGT6R8W",
 		"secretKey": "FJ9PWUVNXGPfiI72WMRFepN3LsFgW3MjsxSALroV"
@@ -47,36 +48,43 @@ $cat config.json
 			"enable": false,
 			"address": "",
 			"level": "debug"
-		},
+		}
+	},
+	"notify": {
 		"amqp": {
-			"enable": false,
-			"level": "",
-			"url": "",
-			"exchange": "",
-			"routineKey": "",
-			"exchangeType": "",
-			"mandatory": false,
-			"immediate": false,
-			"durable": false,
-			"internal": false,
-			"noWait": false,
-			"autoDeleted": false
+			"1": {
+				"enable": false,
+				"url": "",
+				"exchange": "",
+				"routineKey": "",
+				"exchangeType": "",
+				"mandatory": false,
+				"immediate": false,
+				"durable": false,
+				"internal": false,
+				"noWait": false,
+				"autoDeleted": false
+			}
 		},
 		"elasticsearch": {
-			"enable": false,
-			"level": "",
-			"url": "",
-			"index": ""
+			"1": {
+				"enable": false,
+				"url": "",
+				"index": ""
+			}
 		},
 		"redis": {
-			"enable": false,
-			"level": "",
-			"address": "",
-			"password": "",
-			"key": ""
+			"1": {
+				"enable": false,
+				"address": "",
+				"password": "",
+				"key": ""
+			}
 		}
 	}
-} 
+}
+
+
 ```
 
 ``version``  talks about the version of the file.
