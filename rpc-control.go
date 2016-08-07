@@ -35,6 +35,26 @@ type HealListReply struct {
 	Objects     []string
 }
 
-func (h healHandler) List(arg *HealListArgs, reply *HealListReply) error {
+func (h healHandler) ListObjects(arg *HealListArgs, reply *HealListReply) error {
+	info, err := h.ObjectAPI.ListObjectsHeal(arg.Bucket, arg.Prefix, arg.Marker, arg.Delimiter, arg.MaxKeys)
+	if err != nil {
+		return err
+	}
+	reply.IsTruncated = info.IsTruncated
+	reply.NextMarker = info.NextMarker
+	for _, obj := range info.Objects {
+		reply.Objects = append(reply.Objects, obj.Name)
+	}
 	return nil
+}
+
+type HealObjectArgs struct {
+	Bucket string
+	Object string
+}
+
+type HealObjectReply struct{}
+
+func (h healHandler) HealObject(arg *HealObjectArgs, reply *HealObjectReply) error {
+	return h.ObjectAPI.HealObject(arg.Bucket, arg.Object)
 }

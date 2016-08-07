@@ -17,7 +17,7 @@
 package main
 
 import (
-	"fmt"
+	"strings"
 
 	"net/rpc"
 	"net/url"
@@ -27,7 +27,7 @@ import (
 
 var controlCmd = cli.Command{
 	Name:   "control",
-	Usage:  "Minio control commands.",
+	Usage:  "minio control commands.",
 	Action: mainControl,
 	Subcommands: []cli.Command{
 		healCmd,
@@ -35,24 +35,78 @@ var controlCmd = cli.Command{
 }
 
 func mainControl(c *cli.Context) {
-	fmt.Println("mainControl")
 	cli.ShowCommandHelp(c, "")
 }
 
 var healCmd = cli.Command{
 	Name:   "heal",
-	Usage:  "healing",
+	Usage:  "heal objects",
 	Action: healControl,
+	CustomHelpTemplate: `NAME:
+  minio {{.Name}} - {{.Usage}}
+
+USAGE:
+  minio {{.Name}} [OPTIONS] PATH [PATH...]
+
+EAMPLES:
+  1. Heal an object.
+     $ minio control heal http://localhost:9000/songs/classical/western/piano.mp3
+
+  2. Heal all objects in a bucket recursively.
+     $ minio control heal http://localhost:9000/songs
+
+  3. Heall all objects with a given prefix recursively.
+     $ minio control heal http://localhost:9000/songs/classical/
+`,
 }
 
 func healControl(c *cli.Context) {
 	if len(c.Args()) != 1 {
-		fmt.Println("should have 1 argument")
+		cli.ShowCommandHelpAndExit(c, "heal", 1)
+	}
+	var bucket string
+	var object string
+	parsedURL, err := url.ParseRequestURI(c.Args()[0])
+	fatalIf(err, "Unable to parse URL")
+
+	path := parsedURL.Path
+	if path == "" || path == slashSeparator {
+		cli.ShowCommandHelpAndExit(c, "heal", 1)
 	}
 
-	parsedURL, err := url.ParseRequestURI(c.Args()[0])
-	fatalIf(err, "parse heal URL")
-
-	_, err = rpc.DialHTTPPath("tcp", parsedURL.Host, healPath)
+	path = path[1:]
+	slashIndex := strings.Index(path, slashSeparator)
+	if slashIndex == -1 {
+		bucket = path
+	} else {
+		bucket = path[:slashIndex]
+		object = path[slashIndex+1:]
+	}
+	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, healPath)
 	fatalIf(err, "error connecting to %s", parsedURL.Host)
+
+	if object != "" && !strings.HasSuffix(object, slashSeparator) {
+		args := &HealObjectArgs{bucket, object}
+		reply := &HealObjectReply{}
+		err := client.Call("Heal.HealObject", args, reply)
+		fatalIf(err, "RPC Heal.HealObject call failed")
+		return
+	}
+	prefix := object
+	marker := ""
+	for {
+		args := HealListArgs{bucket, prefix, marker, slashSeparator, 1000}
+		reply := &HealListReply{}
+		err := client.Call("Heal.ListObjects", args, reply)
+		fatalIf(err, "RPC Heal.ListObjects call failed")
+		for _, obj := range reply.Objects {
+			reply := &HealObjectReply{}
+			err := client.Call("Heal.HealObject", HealObjectArgs{bucket, obj}, reply)
+			fatalIf(err, "RPC Heal.HealObject call failed")
+		}
+		if !reply.IsTruncated {
+			break
+		}
+		marker = reply.NextMarker
+	}
 }

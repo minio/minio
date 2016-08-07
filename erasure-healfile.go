@@ -53,12 +53,11 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 			if disk == nil {
 				continue
 			}
-			blockIndex := erasure.Distribution[index] - 1
-			enBlocks[blockIndex] = make([]byte, curEncBlockSize)
+			enBlocks[index] = make([]byte, curEncBlockSize)
 			_, err := disk.ReadFile(volume, path, offset,
-				enBlocks[blockIndex])
+				enBlocks[index])
 			if err != nil {
-				enBlocks[blockIndex] = nil
+				enBlocks[index] = nil
 			}
 		}
 
@@ -73,12 +72,11 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 			if disk == nil {
 				continue
 			}
-			blockIndex := erasure.Distribution[index] - 1
-			err := disk.AppendFile(metaBucket, tmpPath, enBlocks[blockIndex])
+			err := disk.AppendFile(metaBucket, tmpPath, enBlocks[index])
 			if err != nil {
 				return nil, err
 			}
-			hashWriters[index].Write(enBlocks[blockIndex])
+			hashWriters[index].Write(enBlocks[index])
 		}
 		remainingSize -= curBlockSize
 		offset += curEncBlockSize

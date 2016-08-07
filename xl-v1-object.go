@@ -272,6 +272,10 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		}
 	}
 
+	latestDisks = getOrderedDisks(latestMeta.Erasure.Distribution, latestDisks)
+	outDatedDisks = getOrderedDisks(latestMeta.Erasure.Distribution, outDatedDisks)
+	partsMetadata = getOrderedPartsMetadata(latestMeta.Erasure.Distribution, partsMetadata)
+
 	// Used for temp location.
 	tmpID := getUUID()
 	// Sha512 of the part files.
@@ -301,13 +305,13 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		if disk == nil {
 			continue
 		}
-		newMeta := latestMeta
-		newMeta.Erasure.Index = index + 1
-		newMeta.Erasure.Checksum = checkSumInfos[index]
-		err := writeXLMetadata(disk, minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID), newMeta)
-		if err != nil {
-			return err
-		}
+		partsMetadata[index] = latestMeta
+		partsMetadata[index].Erasure.Checksum = checkSumInfos[index]
+	}
+
+	err := writeUniqueXLMetadata(outDatedDisks, minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID), partsMetadata, 1)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
 	}
 
 	// Rename from tmp location to the actual location.
