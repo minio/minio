@@ -33,7 +33,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 	remainingSize := size
 
 	// Sha512 hash for bitrot protection.
-	hashWriters := newHashWriters(len(outDatedDisks))
+	hashWriters := newHashWriters(len(outDatedDisks), bitRotAlgo)
 
 	for remainingSize > 0 {
 		curBlockSize := erasure.BlockSize
@@ -42,7 +42,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 		}
 
 		// Calculate the block size that needs to be read from each disk.
-		curEncBlockSize := getEncodedBlockLen(curBlockSize, erasure.DataBlocks)
+		curEncBlockSize := getChunkSize(curBlockSize, erasure.DataBlocks)
 
 		// Memory for reading data from disks and reconstructing missing data using erasure coding.
 		enBlocks := make([][]byte, len(latestDisks))
@@ -74,7 +74,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 				continue
 			}
 			blockIndex := erasure.Distribution[index] - 1
-			_, err := disk.AppendFile(metaBucket, tmpPath, enBlocks[blockIndex])
+			err := disk.AppendFile(metaBucket, tmpPath, enBlocks[blockIndex])
 			if err != nil {
 				return nil, err
 			}

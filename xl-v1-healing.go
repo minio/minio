@@ -102,33 +102,15 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 
 // Return disks with the latest version of the object.
 func (xl xlObjects) latestDisks(partsMetadata []xlMetaV1, errs []error) (latestDisks []StorageAPI) {
-	latestDisks = make([]StorageAPI, len(xl.storageDisks))
-	highestVersion := int64(0)
-	// List all the file versions from partsMetadata list.
-	versions := listObjectVersions(partsMetadata, errs)
-
-	// Get highest object version.
-	highestVersion = highestInt(versions)
-
-	for index, version := range versions {
-		if version == highestVersion {
-			latestDisks[index] = xl.storageDisks[index]
-		}
-	}
+	latestDisks, _ = listOnlineDisks(xl.storageDisks, partsMetadata, errs)
 	return latestDisks
 }
 
 // Return disks with the outdated version or missing object.
 func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
 	outDatedDisks = make([]StorageAPI, len(xl.storageDisks))
-	highestVersion := int64(0)
-	// List all the file versions from partsMetadata list.
-	versions := listObjectVersions(partsMetadata, errs)
-
-	// Get highest object version.
-	highestVersion = highestInt(versions)
-
-	for index, version := range versions {
+	latestDisks, _ := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
+	for index, disk := range latestDisks {
 		if errs[index] == errFileNotFound {
 			outDatedDisks[index] = xl.storageDisks[index]
 			continue
@@ -136,7 +118,7 @@ func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDa
 		if errs[index] != nil {
 			continue
 		}
-		if version < highestVersion {
+		if disk == nil {
 			outDatedDisks[index] = xl.storageDisks[index]
 		}
 	}
@@ -145,39 +127,26 @@ func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDa
 
 // Return xlMetaV1 of the latest version of the object.
 func xlLatestMetadata(partsMetadata []xlMetaV1, errs []error) (latestMeta xlMetaV1) {
-	highestVersion := int64(0)
-	// List all the file versions from partsMetadata list.
-	versions := listObjectVersions(partsMetadata, errs)
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	// Get highest object version.
-	highestVersion = highestInt(versions)
+	// Reduce list of UUIDs to a single common value.
+	modTime := commonTime(modTimes)
 
-	for index, version := range versions {
-		if version == highestVersion {
-			latestMeta = partsMetadata[index]
-			break
-		}
-	}
-	return
+	return pickValidXLMeta(partsMetadata, modTime)
 }
 
 // Returns if the object should be healed.
 func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
-	highestVersion := int64(0)
-	// List all the file versions from partsMetadata list.
-	versions := listObjectVersions(partsMetadata, errs)
-
-	// Get highest object version.
-	highestVersion = highestInt(versions)
-
-	for index, version := range versions {
-		if errs[index] == errFileNotFound {
+	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
+	for index := range partsMetadata {
+		if errs[index] == errFileNameTooLong {
 			return true
 		}
 		if errs[index] != nil {
 			continue
 		}
-		if version < highestVersion {
+		if modTime != partsMetadata[index].Stat.ModTime {
 			return true
 		}
 	}

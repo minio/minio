@@ -68,8 +68,8 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	var walkResultCh chan treeWalkResult
 	var endWalkCh chan struct{}
+	heal := false
 	if maxUploads > 0 {
-		heal := false
 		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
@@ -145,7 +145,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	if !eof {
 		// Save the go-routine state in the pool so that it can continue from where it left off on
 		// the next request.
-		fs.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix}, walkResultCh, endWalkCh)
+		fs.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix, heal}, walkResultCh, endWalkCh)
 	}
 
 	result.IsTruncated = !eof

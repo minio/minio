@@ -228,8 +228,8 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	nsMutex.RLock(bucket, object)
 	defer nsMutex.RUnlock(bucket, object)
 
-	partsMetadata, errs := xl.readAllXLMetadata(bucket, object)
-	if err := xl.reduceError(errs); err != nil {
+	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
+	if err := reduceErrs(errs, nil); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

@@ -85,9 +85,9 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	var walkerCh chan treeWalkResult
 	var walkerDoneCh chan struct{}
+	heal := false
 	// Validate if we need to list further depending on maxUploads.
 	if maxUploads > 0 {
-		heal := false
 		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
@@ -180,7 +180,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	if !eof {
 		// Save the go-routine state in the pool so that it can continue from where it left off on
 		// the next request.
-		xl.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix}, walkerCh, walkerDoneCh)
+		xl.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix, heal}, walkerCh, walkerDoneCh)
 	}
 
 	result.IsTruncated = !eof
