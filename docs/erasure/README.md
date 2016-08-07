@@ -16,9 +16,6 @@ Erasure code protects data from multiple drives failure unlike RAID or replicati
 
 ![Erasure](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/erasure-code.jpg?raw=true)
 
-### RAID vs Erasure
-Erasue code protects data 
-
 ## What is Bit Rot protection?
 
 Bit Rot also known as Data Rot or Silent Data Corruption is a serious data loss issue faced by disk drives today. Data on the drive may silently get corrupted without signalling an error has occurred. This makes Bit Rot more dangerous than permanent hard drive failure. 
