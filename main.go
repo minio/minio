@@ -105,6 +105,7 @@ func registerApp() *cli.App {
 	registerCommand(serverCmd)
 	registerCommand(versionCmd)
 	registerCommand(updateCmd)
+	registerCommand(controlCmd)
 
 	// Set up app.
 	app := cli.NewApp()

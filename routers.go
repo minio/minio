@@ -95,6 +95,8 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// Register all routers.
 	registerStorageRPCRouter(mux, storageRPC)
 
+	registerControlRPCRouter(mux, objAPI)
+
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
 	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
