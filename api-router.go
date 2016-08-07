@@ -45,8 +45,6 @@ func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
 	// AbortMultipartUpload
 	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-	// HealObject
-	bucket.Methods("GET").Path("/{object:.+}").Headers("X-Minio-Heal", "heal").HandlerFunc(api.HealObjectHandler)
 	// GetObject
 	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
 	// CopyObject
@@ -74,10 +72,6 @@ func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	// ListObjectsV1 (Legacy)
 	bucket.Methods("GET").HandlerFunc(api.ListObjectsV1Handler)
 
-	// ListObjectsHeal
-	bucket.Methods("GET").Headers("X-Minio-Heal", "heal").HandlerFunc(api.ListObjectsHealHandler)
-	// ListObjects
-	bucket.Methods("GET").HandlerFunc(api.ListObjectsHandler)
 	// PutBucketPolicy
 	bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
 	// PutBucketNotification
