@@ -100,10 +100,13 @@ func registerObjectStorageShutdown(callback func() errCode) {
 	shutdownObjectStorageCallbacks = append(shutdownObjectStorageCallbacks, callback)
 }
 
+// Represents a type of an exit func which will be invoked during shutdown signal.
+type onExitFunc func(code int)
+
 // Start to monitor shutdownSignal to execute shutdown callbacks
-func monitorShutdownSignal() {
+func monitorShutdownSignal(onExitFn onExitFunc) {
 	go func() {
-		// Monitor processus signal
+		// Monitor signals.
 		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
 		for {
 			select {
@@ -115,7 +118,7 @@ func monitorShutdownSignal() {
 				for _, callback := range shutdownCallbacks {
 					exitCode := callback()
 					if exitCode != exitSuccess {
-						os.Exit(int(exitCode))
+						onExitFn(int(exitCode))
 					}
 
 				}
@@ -123,11 +126,11 @@ func monitorShutdownSignal() {
 				for _, callback := range shutdownObjectStorageCallbacks {
 					exitCode := callback()
 					if exitCode != exitSuccess {
-						os.Exit(int(exitCode))
+						onExitFn(int(exitCode))
 					}
 
 				}
-				os.Exit(int(exitSuccess))
+				onExitFn(int(exitSuccess))
 			}
 		}
 	}()

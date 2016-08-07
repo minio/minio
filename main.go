@@ -191,7 +191,7 @@ func main() {
 
 	// Initialize and monitor shutdown signal
 	shutdownSignal = make(chan bool, 1)
-	monitorShutdownSignal()
+	monitorShutdownSignal(os.Exit)
 
 	// Run the app - exit on error.
 	app.RunAndExitOnError()

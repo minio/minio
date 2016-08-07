@@ -16,13 +16,10 @@
 
 package main
 
-import (
-	"testing"
-)
+import "testing"
 
-// ShutdownCallback simulates a successful exit here, all registered
-// shutdown callbacks need to return exitSuccess for this test to succeed
-func TestShutdownCallback(t *testing.T) {
+// ShutdownCallback simulates a successful and failure exit here.
+func TestShutdownCallbackSuccess(t *testing.T) {
 	// Register two callbacks that return success
 	registerObjectStorageShutdown(func() errCode {
 		return exitSuccess
@@ -33,10 +30,11 @@ func TestShutdownCallback(t *testing.T) {
 
 	shutdownSignal = make(chan bool, 1)
 	shutdownSignal <- true
-	// Start executing callbacks and quit if everything is fine
-	monitorShutdownSignal()
-
-	// Infinite loop here simulates an infinite running program
-	for {
+	// Start executing callbacks and exitFunc receives a success.
+	dummySuccess := func(code int) {
+		if code != int(exitSuccess) {
+			t.Fatalf("Expected %d, got %d instead.", code, exitSuccess)
+		}
 	}
+	monitorShutdownSignal(dummySuccess)
 }
