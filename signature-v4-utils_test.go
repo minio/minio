@@ -133,10 +133,6 @@ func TestGetURLEncodedName(t *testing.T) {
 func TestExtractSignedHeaders(t *testing.T) {
 	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date"}
 
-	for i, key := range signedHeaders {
-		signedHeaders[i] = http.CanonicalHeaderKey(key)
-	}
-
 	// If the `expect` key exists in the signed headers then golang server would have stripped out the value, expecting the `expect` header set to `100-continue` in the result.
 	signedHeaders = append(signedHeaders, "expect")
 	// expected header values.
@@ -150,27 +146,67 @@ func TestExtractSignedHeaders(t *testing.T) {
 	inputHeader.Set(signedHeaders[1], expectedContentSha256)
 	inputHeader.Set(signedHeaders[2], expectedTime)
 	// calling the function being tested.
-	extractedSignedHeaders := extractSignedHeaders(signedHeaders, inputHeader)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, inputHeader)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
 	// "x-amz-content-sha256" header value from the extracted result.
-	extractedContentSha256 := extractedSignedHeaders.Get(signedHeaders[1])
+	extractedContentSha256 := extractedSignedHeaders[signedHeaders[1]]
 	// "host" header value from the extracted result.
-	extractedHost := extractedSignedHeaders.Get(signedHeaders[0])
+	extractedHost := extractedSignedHeaders[signedHeaders[0]]
 	//  "x-amz-date" header from the extracted result.
-	extractedDate := extractedSignedHeaders.Get(signedHeaders[2])
+	extractedDate := extractedSignedHeaders[signedHeaders[2]]
 	// extracted `expect` header.
 	extractedExpect := extractedSignedHeaders["expect"][0]
-	// assert the result with the expected value.
-	if expectedContentSha256 != extractedContentSha256 {
-		t.Errorf("x-amz-content-sha256 header mismatch: expected `%s`, got `%s`", expectedContentSha256, extractedContentSha256)
-	}
-	if expectedTime != extractedDate {
-		t.Errorf("x-amz-date header mismatch: expected `%s`, got `%s`", expectedTime, extractedDate)
-	}
-	if expectedHost != extractedHost {
+	if expectedHost != extractedHost[0] {
 		t.Errorf("host header mismatch: expected `%s`, got `%s`", expectedHost, extractedHost)
 	}
+	// assert the result with the expected value.
+	if expectedContentSha256 != extractedContentSha256[0] {
+		t.Errorf("x-amz-content-sha256 header mismatch: expected `%s`, got `%s`", expectedContentSha256, extractedContentSha256)
+	}
+	if expectedTime != extractedDate[0] {
+		t.Errorf("x-amz-date header mismatch: expected `%s`, got `%s`", expectedTime, extractedDate)
+	}
+
 	// Since the list of signed headers value contained `expect`, the default value of `100-continue` will be added to extracted signed headers.
 	if extractedExpect != "100-continue" {
 		t.Errorf("expect header incorrect value: expected `%s`, got `%s`", "100-continue", extractedExpect)
+	}
+
+	// case where the headers doesn't contain the one of the signed header in the signed headers list.
+	signedHeaders = append(signedHeaders, " X-Amz-Credential")
+	// expected to fail with `ErrUnsignedHeaders`.
+	extractedSignedHeaders, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+
+	// case where the list of signed headers doesn't contain the host field.
+	signedHeaders = signedHeaders[1:]
+	// expected to fail with `ErrUnsignedHeaders`.
+	extractedSignedHeaders, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+}
+
+// TestFindHost - tests the logic to find whether "host" is part of signed headers.
+func TestFindHost(t *testing.T) {
+	// doesn't contain "host".
+	signedHeaders := []string{"x-amz-content-sha256", "x-amz-date"}
+	errCode := findHost(signedHeaders)
+	// expected to error out with code ErrUnsignedHeaders .
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+
+	// adding "host".
+	signedHeaders = append(signedHeaders, "host")
+	// epxected to pass.
+	errCode = findHost(signedHeaders)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
 }

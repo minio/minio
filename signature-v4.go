@@ -234,8 +234,10 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders := extractSignedHeaders(preSignValues.SignedHeaders, req.Header)
-
+	extractedSignedHeaders, errCode := extractSignedHeaders(preSignValues.SignedHeaders, req.Header)
+	if errCode != ErrNone {
+		return errCode
+	}
 	// Construct new query.
 	query := make(url.Values)
 	if contentSha256 != "" {
@@ -341,7 +343,10 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	if errCode != ErrNone {
+		return errCode
+	}
 
 	// Verify if the access key id matches.
 	if signV4Values.Credential.accessKey != cred.AccessKeyID {

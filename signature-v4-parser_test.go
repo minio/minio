@@ -17,6 +17,8 @@
 package main
 
 import (
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +26,12 @@ import (
 
 // generates credential string from its fields.
 func generateCredentialStr(accessKey, date, region, service, requestVersion string) string {
-	return "Credential=" + strings.Join([]string{
+	return "Credential=" + joinWithSlash(accessKey, date, region, service, requestVersion)
+}
+
+// joins the argument strings with a '/' and returns it.
+func joinWithSlash(accessKey, date, region, service, requestVersion string) string {
+	return strings.Join([]string{
 		accessKey,
 		date,
 		region,
@@ -131,7 +138,7 @@ func TestParseCredentialHeader(t *testing.T) {
 				"ABCD",
 				"ABCD"),
 			expectedCredentials: credentialHeader{},
-			expectedErrCode:     ErrMalformedDate,
+			expectedErrCode:     ErrMalformedCredentialDate,
 		},
 		// Test Case - 6.
 		// Test case with invalid region.
@@ -144,7 +151,7 @@ func TestParseCredentialHeader(t *testing.T) {
 				"ABCD",
 				"ABCD"),
 			expectedCredentials: credentialHeader{},
-			expectedErrCode:     ErrInvalidRegion,
+			expectedErrCode:     ErrMalformedCredentialRegion,
 		},
 		// Test Case - 7.
 		// Test case with invalid service.
@@ -357,7 +364,7 @@ func TestParseSignV4(t *testing.T) {
 			expectedAuthField: signValues{},
 			expectedErrCode:   ErrMissingSignHeadersTag,
 		},
-		// Test case - 5.
+		// Test case - 6.
 		// Auth string with missing "SignatureTag",ErrMissingSignTag expected.
 		// A vaild credential is generated.
 		// Test case with invalid credential field.
@@ -381,6 +388,7 @@ func TestParseSignV4(t *testing.T) {
 			expectedAuthField: signValues{},
 			expectedErrCode:   ErrMissingSignTag,
 		},
+		// Test case - 7.
 		{
 			inputV4AuthStr: signV4Algorithm +
 				strings.Join([]string{
@@ -437,4 +445,307 @@ func TestParseSignV4(t *testing.T) {
 
 	}
 
+}
+
+// TestDoesV4PresignParamsExist - tests validate the logic to
+func TestDoesV4PresignParamsExist(t *testing.T) {
+	testCases := []struct {
+		inputQueryKeyVals []string
+		expectedErrCode   APIErrorCode
+	}{
+		// Test case - 1.
+		// contains all query param keys which are necessary for v4 presign request.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrNone,
+		},
+		// Test case - 2.
+		// missing 	"X-Amz-Algorithm" in tdhe query param.
+		// contains all query param keys which are necessary for v4 presign request.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+		// Test case - 3.
+		// missing "X-Amz-Credential" in the query param.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+		// Test case - 4.
+		// missing "X-Amz-Signature" in the query param.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+		// Test case - 5.
+		// missing "X-Amz-Date" in the query param.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+		// Test case - 6.
+		// missing "X-Amz-SignedHeaders" in the query param.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-Expires", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+		// Test case - 7.
+		// missing "X-Amz-Expires" in the query param.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+			},
+			expectedErrCode: ErrInvalidQueryParams,
+		},
+	}
+
+	for i, testCase := range testCases {
+		inputQuery := url.Values{}
+		// iterating through input query key value and setting the inputQuery of type url.Values.
+		for j := 0; j < len(testCase.inputQueryKeyVals)-1; j += 2 {
+
+			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
+		}
+
+		actualErrCode := doesV4PresignParamsExist(inputQuery)
+
+		if testCase.expectedErrCode != actualErrCode {
+			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
+		}
+	}
+
+}
+
+// TestParsePreSignV4 - Validates the parsing logic of Presignied v4 request from its url query values.
+func TestParsePreSignV4(t *testing.T) {
+	// converts the duration in seconds into string format.
+	getDurationStr := func(expires int) string {
+		return strconv.FormatInt(int64(expires), 10)
+	}
+	// used in expected preSignValues, preSignValues.Date is of type time.Time .
+	queryTime := time.Now()
+
+	sampleTimeStr := time.Now().UTC().Format(yyyymmdd)
+
+	testCases := []struct {
+		inputQueryKeyVals     []string
+		expectedPreSignValues preSignValues
+		expectedErrCode       APIErrorCode
+	}{
+		// Test case - 1.
+		// A Valid v4 presign URL requires the following params to be in the query.
+		// "X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Signature", " X-Amz-Date", "X-Amz-SignedHeaders", "X-Amz-Expires".
+		// If these params are missing its expected to get ErrInvalidQueryParams .
+		// In the following test case 2 out of 6 query params are missing.
+		{
+			inputQueryKeyVals: []string{
+				"X-Amz-Algorithm", "",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Expires", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrInvalidQueryParams,
+		},
+		// Test case - 2.
+		// Test case with invalid  "X-Amz-Algorithm" query value.
+		// The other query params should exist, other wise ErrInvalidQueryParams will be returned because of missing fields.
+		{
+			inputQueryKeyVals: []string{
+
+				"X-Amz-Algorithm", "InvalidValue",
+				"X-Amz-Credential", "",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrInvalidQuerySignatureAlgo,
+		},
+		// Test case - 3.
+		// Test case with valid "X-Amz-Algorithm" query value, but invalid  "X-Amz-Credential" header.
+		// Malformed crenential.
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", "invalid-credential",
+				"X-Amz-Signature", "",
+				"X-Amz-Date", "",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrCredMalformed,
+		},
+
+		// Test case - 4.
+		// Test case with valid "X-Amz-Algorithm" query value.
+		// Malformed date.
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// invalid "X-Amz-Date" query.
+				"X-Amz-Date", "invalid-time",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Expires", "",
+				"X-Amz-Signature", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrMalformedPresignedDate,
+		},
+		// Test case - 5.
+		// Test case with valid "X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Date" query value.
+		// Malformed Expiry, a valid expiry should be of format "<int>s".
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// valid "X-Amz-Date" query.
+				"X-Amz-Date", time.Now().UTC().Format(iso8601Format),
+				"X-Amz-Expires", "MalformedExpiry",
+				"X-Amz-SignedHeaders", "",
+				"X-Amz-Signature", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrMalformedExpires,
+		},
+		// Test case - 6.
+		// Test case with valid "X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Date" query value.
+		// Malformed Expiry, a valid expiry should be of format "<int>s".
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// valid "X-Amz-Date" query.
+				"X-Amz-Date", queryTime.UTC().Format(iso8601Format),
+				"X-Amz-Expires", getDurationStr(100),
+				"X-Amz-Signature", "abcd",
+				"X-Amz-SignedHeaders", "host;x-amz-content-sha256;x-amz-date",
+			},
+			expectedPreSignValues: preSignValues{
+				signValues{
+					// Credentials.
+					generateCredentials(
+						t,
+						"Z7IXGOO6BZ0REAN1Q26I",
+						sampleTimeStr,
+						"us-west-1",
+						"s3",
+						"aws4_request",
+					),
+					// SignedHeaders.
+					[]string{"host", "x-amz-content-sha256", "x-amz-date"},
+					// Signature.
+					"abcd",
+				},
+				// Date
+				queryTime,
+				// Expires.
+				100 * time.Second,
+			},
+			expectedErrCode: ErrNone,
+		},
+	}
+
+	for i, testCase := range testCases {
+		inputQuery := url.Values{}
+		// iterating through input query key value and setting the inputQuery of type url.Values.
+		for j := 0; j < len(testCase.inputQueryKeyVals)-1; j += 2 {
+			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
+		}
+		// call the function under test.
+		parsedPreSign, actualErrCode := parsePreSignV4(inputQuery)
+
+		if testCase.expectedErrCode != actualErrCode {
+			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
+		}
+		if actualErrCode == ErrNone {
+			// validating credentials.
+			validateCredentialfields(t, i+1, testCase.expectedPreSignValues.Credential, parsedPreSign.Credential)
+			// validating signed headers.
+			if strings.Join(testCase.expectedPreSignValues.SignedHeaders, ",") != strings.Join(parsedPreSign.SignedHeaders, ",") {
+				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedPreSignValues.SignedHeaders, parsedPreSign.SignedHeaders)
+			}
+			// validating signature field.
+			if testCase.expectedPreSignValues.Signature != parsedPreSign.Signature {
+				t.Errorf("Test %d: Signature field mismatch: Expected \"%s\", got \"%s\"", i+1, testCase.expectedPreSignValues.Signature, parsedPreSign.Signature)
+			}
+			// validating expiry duration.
+			if testCase.expectedPreSignValues.Expires != parsedPreSign.Expires {
+				t.Errorf("Test %d: Expected expiry time to be %v, but got %v", i+1, testCase.expectedPreSignValues.Expires, parsedPreSign.Expires)
+			}
+			// validating presign date field.
+			if testCase.expectedPreSignValues.Date.UTC().Format(iso8601Format) != parsedPreSign.Date.UTC().Format(iso8601Format) {
+				t.Errorf("Test %d: Expected date to be %v, but got %v", i+1, testCase.expectedPreSignValues.Date.UTC().Format(iso8601Format), parsedPreSign.Date.UTC().Format(iso8601Format))
+			}
+		}
+
+	}
 }

@@ -95,8 +95,10 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
-
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	if errCode != ErrNone {
+		return "", time.Time{}, errCode
+	}
 	// Verify if the access key id matches.
 	if signV4Values.Credential.accessKey != cred.AccessKeyID {
 		return "", time.Time{}, ErrInvalidAccessKeyID
