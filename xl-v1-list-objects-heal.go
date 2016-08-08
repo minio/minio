@@ -16,7 +16,58 @@
 
 package main
 
-import "strings"
+import (
+	"path"
+	"sort"
+	"strings"
+)
+
+func listDirHealFactory(disks ...StorageAPI) listDirFunc {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedentries []string, delayIsLeaf bool, err error) {
+		for _, disk := range disks {
+			var entries []string
+			var newEntries []string
+			entries, err = disk.ListDir(bucket, prefixDir)
+			if err != nil {
+				// Skip the disk of listDir returns error.
+				continue
+			}
+
+			for i, entry := range entries {
+				if strings.HasSuffix(entry, slashSeparator) {
+					if _, err = disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
+						// If it is an object trim the trailing "/"
+						entries[i] = strings.TrimSuffix(entry, slashSeparator)
+					}
+				}
+			}
+
+			if len(mergedentries) == 0 {
+				// For the first successful disk.ListDir()
+				mergedentries = entries
+				sort.Strings(mergedentries)
+				continue
+			}
+
+			// find elements in entries which are not in mergedentries
+			for _, entry := range entries {
+				idx := sort.SearchStrings(mergedentries, entry)
+				if mergedentries[idx] == entry {
+					continue
+				}
+				newEntries = append(newEntries, entry)
+			}
+
+			if len(newEntries) > 0 {
+				// Merge the entries and sort it.
+				mergedentries = append(mergedentries, newEntries...)
+				sort.Strings(mergedentries)
+			}
+		}
+		return
+	}
+	return listDir
+}
 
 // listObjectsHeal - wrapper function implemented over file tree walk.
 func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
@@ -31,7 +82,8 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		walkResultCh = xl.startTreeWalkHeal(bucket, prefix, marker, recursive, endWalkCh)
+		listDir := listDirHealFactory(xl.storageDisks...)
+		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo

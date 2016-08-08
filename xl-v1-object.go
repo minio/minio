@@ -285,8 +285,9 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	// We write at temporary location and then rename to fianal location.
 	tmpID := getUUID()
 
-	// Sha512 of the part files.
-	checkSumInfos := make([][]checkSumInfo, len(xl.storageDisks))
+	// Checksum of the part files. checkSumInfos[index] will contain checksums of all the part files
+	// in the outDatedDisks[index]
+	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
 	// .minio/tmp/uuid/ which needs to be renamed later.
@@ -298,6 +299,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		if err != nil {
 			return err
 		}
+		// Heal the part file.
 		checkSums, err := erasureHealFile(latestDisks, outDatedDisks,
 			bucket, pathJoin(object, partName),
 			minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID, partName),
@@ -313,7 +315,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		}
 	}
 
-	// Write xl.json to all the outdated disks.
+	// xl.json should be written to all the healed disks.
 	for index, disk := range outDatedDisks {
 		if disk == nil {
 			continue
