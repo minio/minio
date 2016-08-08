@@ -645,11 +645,12 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
-// HealObject - no-op for fs.
+// HealObject - no-op for fs. Valid only for XL.
 func (fs fsObjects) HealObject(bucket, object string) error {
 	return nil
 }
 
+// HealListObjects - list objects for healing. Valid only for XL
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, nil
 }

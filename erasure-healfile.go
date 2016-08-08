@@ -18,17 +18,7 @@ package main
 
 import "encoding/hex"
 
-// erasureHealFile heals part file of an object. It never writes the healed file to the actual
-// location, but to a temporary location ".minio/tmpPath" as specified by the caller. It will
-// be the responsibility of the caller to rename to the actual location.
-func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
-	volume, // Volume of the object.
-	path, // Path to the part file.
-	partName, // Name of the part.
-	metaBucket, // .minio
-	tmpPath string, // Temporary file path where healed part will be written to.
-	size int64, // Size of the part file.
-	erasure erasureInfo) ([]checkSumInfo, error) {
+func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volume, path, healBucket, healPath string, size int64, blockSize int64, dataBlocks int, parityBlocks int, algo string) (checkSums []string, err error) {
 	var offset int64
 	remainingSize := size
 
@@ -36,13 +26,13 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 	hashWriters := newHashWriters(len(outDatedDisks), bitRotAlgo)
 
 	for remainingSize > 0 {
-		curBlockSize := erasure.BlockSize
+		curBlockSize := blockSize
 		if remainingSize < curBlockSize {
 			curBlockSize = remainingSize
 		}
 
 		// Calculate the block size that needs to be read from each disk.
-		curEncBlockSize := getChunkSize(curBlockSize, erasure.DataBlocks)
+		curEncBlockSize := getChunkSize(curBlockSize, dataBlocks)
 
 		// Memory for reading data from disks and reconstructing missing data using erasure coding.
 		enBlocks := make([][]byte, len(latestDisks))
@@ -54,25 +44,24 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 				continue
 			}
 			enBlocks[index] = make([]byte, curEncBlockSize)
-			_, err := disk.ReadFile(volume, path, offset,
-				enBlocks[index])
+			_, err := disk.ReadFile(volume, path, offset, enBlocks[index])
 			if err != nil {
 				enBlocks[index] = nil
 			}
 		}
 
 		// Reconstruct missing data.
-		err := decodeData(enBlocks, erasure.DataBlocks, erasure.ParityBlocks)
+		err := decodeData(enBlocks, dataBlocks, parityBlocks)
 		if err != nil {
 			return nil, err
 		}
 
-		// Write to the temporary heal file.
+		// Write to the healPath file.
 		for index, disk := range outDatedDisks {
 			if disk == nil {
 				continue
 			}
-			err := disk.AppendFile(metaBucket, tmpPath, enBlocks[index])
+			err := disk.AppendFile(healBucket, healPath, enBlocks[index])
 			if err != nil {
 				return nil, err
 			}
@@ -82,17 +71,13 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI,
 		offset += curEncBlockSize
 	}
 
-	// Sha512 checksums for the healed parts.
-	checkSums := make([]checkSumInfo, len(outDatedDisks))
+	// Checksums for the bit rot.
+	checkSums = make([]string, len(outDatedDisks))
 	for index, disk := range outDatedDisks {
 		if disk == nil {
 			continue
 		}
-		checkSums[index] = checkSumInfo{
-			Name:      partName,
-			Algorithm: "sha512",
-			Hash:      hex.EncodeToString(hashWriters[index].Sum(nil)),
-		}
+		checkSums[index] = hex.EncodeToString(hashWriters[index].Sum(nil))
 	}
 	return checkSums, nil
 }
