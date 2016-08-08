@@ -89,7 +89,7 @@ $ cat config.json
 
 ``version``  talks about the version of the file.
 
-``credential`` stores authenctication credentials for your Minio server. If you want to provide your own custom access/secret key you will have to modify it and run Minio.
+``credential`` stores authentication credentials for your Minio server. If you want to provide your own custom access/secret key you will have to modify it and run Minio.
 
 ``region``: We are following S3 specs and hence the region.
 

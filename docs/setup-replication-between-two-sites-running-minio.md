@@ -74,7 +74,7 @@ $ ./mc config host add minio2 http://192.168.1.12:9000 YRDRWWQLEWS9OBJ31GZ2 y2sS
 
 ```
 
-## 4. Settup crontab
+## 4. Setup crontab
 Cron is a Unix/Linux system utility by which you can schedule a task process for particular duration, we have tested this setup on Ubuntu Linux.
 
 
@@ -113,7 +113,7 @@ $ mc diff ~/minio1-data/ minio2/mbucket
 ```
 You can run `` mc diff --help`` on your terminal for more details.
 
-Note: We are going to inrtoduce continuous replication feature in `mc mirror` which will enable the sites to be in sync without having the need to set up cron job.
+Note: We are going to introduce continuous replication feature in `mc mirror` which will enable the sites to be in sync without having the need to set up cron job.
 
 # Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
