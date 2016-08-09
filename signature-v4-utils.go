@@ -99,10 +99,27 @@ func getURLEncodedName(name string) string {
 	return encodedName
 }
 
+// find whether "host" is part of list of signed headers.
+func findHost(signedHeaders []string) APIErrorCode {
+	for _, header := range signedHeaders {
+		if header == "host" {
+			return ErrNone
+		}
+	}
+	return ErrUnsignedHeaders
+}
+
 // extractSignedHeaders extract signed headers from Authorization header
-func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) http.Header {
+func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.Header, APIErrorCode) {
+	errCode := findHost(signedHeaders)
+	if errCode != ErrNone {
+		return nil, errCode
+	}
 	extractedSignedHeaders := make(http.Header)
 	for _, header := range signedHeaders {
+		// `host` will not be found in the headers, can be found in r.Host.
+		// but its alway necessary that the list of signed headers containing host in it.
+
 		val, ok := reqHeaders[http.CanonicalHeaderKey(header)]
 		if !ok {
 			// Golang http server strips off 'Expect' header, if the
@@ -123,11 +140,19 @@ func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) http.H
 			// doesn't filter out the 'Expect' header.
 			if header == "expect" {
 				extractedSignedHeaders[header] = []string{"100-continue"}
+				continue
 			}
-			// If not found continue, we will fail later.
-			continue
+			// the "host" field will not be found in the header map, it can be found in req.Host.
+			// but its necessary to make sure that the "host" field exists in the list of signed paramaters,
+			// the check is done above.
+			if header == "host" {
+				continue
+			}
+			// If not found continue, we will stop here.
+			return nil, ErrUnsignedHeaders
 		}
 		extractedSignedHeaders[header] = val
 	}
-	return extractedSignedHeaders
+
+	return extractedSignedHeaders, ErrNone
 }

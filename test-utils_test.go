@@ -312,7 +312,6 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 		req.Header.Set("Content-Md5", md5Base64)
 	}
 	req.Header.Set("x-amz-content-sha256", hashedPayload)
-
 	// Seek back to beginning.
 	if body != nil {
 		body.Seek(0, 0)

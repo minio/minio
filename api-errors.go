@@ -96,9 +96,14 @@ const (
 	ErrMissingSignHeadersTag
 	ErrPolicyAlreadyExpired
 	ErrMalformedDate
+	ErrMalformedPresignedDate
+	ErrMalformedCredentialDate
+	ErrMalformedCredentialRegion
 	ErrMalformedExpires
+	ErrNegativeExpires
 	ErrAuthHeaderEmpty
 	ErrExpiredPresignRequest
+	ErrUnsignedHeaders
 	ErrMissingDateHeader
 	ErrInvalidQuerySignatureAlgo
 	ErrInvalidQueryParams
@@ -346,8 +351,8 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrCredMalformed: {
-		Code:           "CredentialMalformed",
-		Description:    "Credential field malformed does not follow accessKeyID/credScope.",
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Error parsing the X-Amz-Credential parameter; the Credential is mal-formed; expecting \"<YOUR-AKID>/YYYYMMDD/REGION/SERVICE/aws4_request\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedDate: {
@@ -355,19 +360,46 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Invalid date format header, expected to be in ISO8601, RFC1123 or RFC1123Z time format.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrMalformedPresignedDate: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Date must be in the ISO8601 Long Format \"yyyyMMdd'T'HHmmss'Z'\"",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
+	// right Description:    "Error parsing the X-Amz-Credential parameter; incorrect date format \"%s\". This date in the credential must be in the format \"yyyyMMdd\".",
+	// Need changes to make sure variable messages can be constructed.
+	ErrMalformedCredentialDate: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Error parsing the X-Amz-Credential parameter; incorrect date format \"%s\". This date in the credential must be in the format \"yyyyMMdd\".",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
+	// right Description:    "Error parsing the X-Amz-Credential parameter; the region 'us-east-' is wrong; expecting 'us-east-1'".
+	// Need changes to make sure variable messages can be constructed.
+	ErrMalformedCredentialRegion: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Error parsing the X-Amz-Credential parameter; the region is wrong;",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidRegion: {
 		Code:           "InvalidRegion",
 		Description:    "Region does not match.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
+	// right Description:   "Error parsing the X-Amz-Credential parameter; incorrect service \"s4\". This endpoint belongs to \"s3\".".
+	// Need changes to make sure variable messages can be constructed.
 	ErrInvalidService: {
-		Code:           "AccessDenied",
-		Description:    "Service scope should be of value 's3'.",
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Error parsing the X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
+	// Description:   "Error parsing the X-Amz-Credential parameter; incorrect terminal "aws4_reque". This endpoint uses "aws4_request".
+	// Need changes to make sure variable messages can be constructed.
 	ErrInvalidRequestVersion: {
-		Code:           "AccessDenied",
-		Description:    "Request scope should be of value 'aws4_request'.",
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "Error parsing the X-Amz-Credential parameter; incorrect terminal. This endpoint uses \"aws4_request\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSignTag: {
@@ -386,8 +418,13 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedExpires: {
-		Code:           "MalformedExpires",
-		Description:    "Malformed expires header, expected non-zero number.",
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Expires should be a number",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNegativeExpires: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Expires must be non-negative",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAuthHeaderEmpty: {
@@ -407,7 +444,13 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrExpiredPresignRequest: {
 		Code:           "AccessDenied",
-		Description:    "Request has expired.",
+		Description:    "Request has expired",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	// FIXME: Actual XML error response also contains the header which missed in lsit of signed header parameters.
+	ErrUnsignedHeaders: {
+		Code:           "AccessDenied",
+		Description:    "There were headers present in the request which were not signed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidQueryParams: {
@@ -578,4 +621,8 @@ func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
 	data.HostID = "3L137"
 
 	return data
+}
+
+func getErrMalformedCredentialDate(malformedDateStr string) {
+
 }

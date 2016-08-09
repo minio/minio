@@ -57,10 +57,10 @@ func parseCredentialHeader(credElement string) (credentialHeader, APIErrorCode) 
 	var e error
 	cred.scope.date, e = time.Parse(yyyymmdd, credElements[1])
 	if e != nil {
-		return credentialHeader{}, ErrMalformedDate
+		return credentialHeader{}, ErrMalformedCredentialDate
 	}
 	if credElements[2] == "" {
-		return credentialHeader{}, ErrInvalidRegion
+		return credentialHeader{}, ErrMalformedCredentialRegion
 	}
 	cred.scope.region = credElements[2]
 	if credElements[3] != "s3" {
@@ -122,8 +122,27 @@ type preSignValues struct {
 //   querystring += &X-Amz-Expires=timeout interval
 //   querystring += &X-Amz-SignedHeaders=signed_headers
 //   querystring += &X-Amz-Signature=signature
-//
+//{
+
+// verifies if any of the necessary query params are missing in the presigned request.
+func doesV4PresignParamsExist(query url.Values) APIErrorCode {
+	v4PresignQueryParams := []string{"X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Date", "X-Amz-SignedHeaders", "X-Amz-Expires"}
+	for _, v4PresignQueryParam := range v4PresignQueryParams {
+		if _, ok := query[v4PresignQueryParam]; !ok {
+			return ErrInvalidQueryParams
+		}
+	}
+	return ErrNone
+}
+
 func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
+	var err APIErrorCode
+	// verify whether the required query params exist.
+	err = doesV4PresignParamsExist(query)
+	if err != ErrNone {
+		return preSignValues{}, err
+	}
+
 	// Verify if the query algorithm is supported or not.
 	if query.Get("X-Amz-Algorithm") != signV4Algorithm {
 		return preSignValues{}, ErrInvalidQuerySignatureAlgo
@@ -132,7 +151,6 @@ func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 	// Initialize signature version '4' structured header.
 	preSignV4Values := preSignValues{}
 
-	var err APIErrorCode
 	// Save credential.
 	preSignV4Values.Credential, err = parseCredentialHeader("Credential=" + query.Get("X-Amz-Credential"))
 	if err != ErrNone {
@@ -143,7 +161,7 @@ func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 	// Save date in native time.Time.
 	preSignV4Values.Date, e = time.Parse(iso8601Format, query.Get("X-Amz-Date"))
 	if e != nil {
-		return preSignValues{}, ErrMalformedDate
+		return preSignValues{}, ErrMalformedPresignedDate
 	}
 
 	// Save expires in native time.Duration.
@@ -152,10 +170,18 @@ func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 		return preSignValues{}, ErrMalformedExpires
 	}
 
+	if preSignV4Values.Expires < 0 {
+		return preSignValues{}, ErrNegativeExpires
+	}
 	// Save signed headers.
 	preSignV4Values.SignedHeaders, err = parseSignedHeaders("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
 	if err != ErrNone {
 		return preSignValues{}, err
+	}
+	// `host` is the only header used during the presigned request.
+	// Malformed signed headers has be caught here, otherwise it'll lead to signature mismatch.
+	if preSignV4Values.SignedHeaders[0] != "host" {
+		return preSignValues{}, ErrUnsignedHeaders
 	}
 
 	// Save signature.
