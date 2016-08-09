@@ -64,7 +64,7 @@ func listDirHealFactory(disks ...StorageAPI) listDirFunc {
 				sort.Strings(mergedentries)
 			}
 		}
-		return
+		return mergedentries, false, nil
 	}
 	return listDir
 }

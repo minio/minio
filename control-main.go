@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"net/rpc"
@@ -25,6 +26,7 @@ import (
 	"github.com/minio/cli"
 )
 
+// "minio control" command.
 var controlCmd = cli.Command{
 	Name:   "control",
 	Usage:  "minio control commands.",
@@ -40,13 +42,13 @@ func mainControl(c *cli.Context) {
 
 var healCmd = cli.Command{
 	Name:   "heal",
-	Usage:  "heal objects",
+	Usage:  "To heal objects.",
 	Action: healControl,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [OPTIONS] PATH [PATH...]
+  minio {{.Name}} [OPTIONS] URL
 
 EAMPLES:
   1. Heal an object.
@@ -60,7 +62,21 @@ EAMPLES:
 `,
 }
 
+// "minio control heal" entry point.
 func healControl(c *cli.Context) {
+	// Parse bucket and object from url.URL.Path
+	parseBucketObject := func(path string) (bucket string, object string) {
+		path = path[1:]
+		slashIndex := strings.Index(path, slashSeparator)
+		if slashIndex == -1 {
+			bucket = path
+		} else {
+			bucket = path[:slashIndex]
+			object = path[slashIndex+1:]
+		}
+		return bucket, object
+	}
+
 	if len(c.Args()) != 1 {
 		cli.ShowCommandHelpAndExit(c, "heal", 1)
 	}
@@ -74,37 +90,41 @@ func healControl(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "heal", 1)
 	}
 
-	path = path[1:]
-	slashIndex := strings.Index(path, slashSeparator)
-	if slashIndex == -1 {
-		bucket = path
-	} else {
-		bucket = path[:slashIndex]
-		object = path[slashIndex+1:]
-	}
+	bucket, object = parseBucketObject(path)
+
 	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, healPath)
 	fatalIf(err, "error connecting to %s", parsedURL.Host)
 
+	// If object does not have trailing "/" then it's an object, hence heal it.
 	if object != "" && !strings.HasSuffix(object, slashSeparator) {
+		fmt.Printf("Healing : /%s/%s", bucket, object)
 		args := &HealObjectArgs{bucket, object}
 		reply := &HealObjectReply{}
-		err := client.Call("Heal.HealObject", args, reply)
+		err = client.Call("Heal.HealObject", args, reply)
 		fatalIf(err, "RPC Heal.HealObject call failed")
+		fmt.Println()
 		return
 	}
+
+	// Recursively list and heal the objects.
 	prefix := object
 	marker := ""
 	for {
-		args := HealListArgs{bucket, prefix, marker, slashSeparator, 1000}
+		args := HealListArgs{bucket, prefix, marker, "", 1000}
 		reply := &HealListReply{}
-		err := client.Call("Heal.ListObjects", args, reply)
+		err = client.Call("Heal.ListObjects", args, reply)
 		fatalIf(err, "RPC Heal.ListObjects call failed")
+
+		// Heal the objects returned in the ListObjects reply.
 		for _, obj := range reply.Objects {
+			fmt.Printf("Healing : /%s/%s", bucket, obj)
 			reply := &HealObjectReply{}
-			err := client.Call("Heal.HealObject", HealObjectArgs{bucket, obj}, reply)
+			err = client.Call("Heal.HealObject", HealObjectArgs{bucket, obj}, reply)
 			fatalIf(err, "RPC Heal.HealObject call failed")
+			fmt.Println()
 		}
 		if !reply.IsTruncated {
+			// End of listing.
 			break
 		}
 		marker = reply.NextMarker

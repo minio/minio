@@ -95,7 +95,11 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// Register all routers.
 	registerStorageRPCRouter(mux, storageRPC)
 
-	registerControlRPCRouter(mux, objAPI)
+	// FIXME: till net/rpc auth is brought in "minio control" can be enabled only though
+	// this env variable.
+	if os.Getenv("MINIO_CONTROL") != "" {
+		registerControlRPCRouter(mux, objAPI)
+	}
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
