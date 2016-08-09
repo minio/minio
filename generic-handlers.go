@@ -245,8 +245,8 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		bucketName = splits[0]
 		objectName = splits[1]
 	}
-	// If bucketName is present and not objectName check for bucket
-	// level resource queries.
+
+	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
 			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
@@ -265,6 +265,8 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
 		return
 	}
+
+	// Serve HTTP.
 	h.handler.ServeHTTP(w, r)
 }
 

@@ -391,6 +391,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	/// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
+	rAuthType := getRequestAuthType(r)
+	if rAuthType == authTypeStreamingSigned {
+		sizeStr := r.Header.Get("x-amz-decoded-content-length")
+		size, err = strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
+			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+			return
+		}
+	}
 	if size == -1 && !contains(r.TransferEncoding, "chunked") {
 		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
 		return
@@ -407,7 +417,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
 	var md5Sum string
-	switch getRequestAuthType(r) {
+	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
@@ -420,6 +430,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		// Create anonymous object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
+	case authTypeStreamingSigned:
+		// Initialize stream signature verifier.
+		reader, s3Error := newSignV4ChunkedReader(r)
+		if s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
 		reader := newSignVerify(r)
@@ -516,6 +534,18 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	/// if Content-Length is unknown/missing, throw away
 	size := r.ContentLength
+
+	rAuthType := getRequestAuthType(r)
+	// For auth type streaming signature, we need to gather a different content length.
+	if rAuthType == authTypeStreamingSigned {
+		sizeStr := r.Header.Get("x-amz-decoded-content-length")
+		size, err = strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
+			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+			return
+		}
+	}
 	if size == -1 {
 		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
 		return
@@ -544,7 +574,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	var partMD5 string
 	incomingMD5 := hex.EncodeToString(md5Bytes)
-	switch getRequestAuthType(r) {
+	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
@@ -557,6 +587,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 		// No need to verify signature, anonymous request access is already allowed.
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
+	case authTypeStreamingSigned:
+		// Initialize stream signature verifier.
+		reader, s3Error := newSignV4ChunkedReader(r)
+		if s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
 		reader := newSignVerify(r)

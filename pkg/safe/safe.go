@@ -35,12 +35,12 @@ type File struct {
 
 // Write writes len(b) bytes to the temporary File.  In case of error, the temporary file is removed.
 func (file *File) Write(b []byte) (n int, err error) {
-	if file.aborted {
-		err = errors.New("write on aborted file")
-		return
-	}
 	if file.closed {
 		err = errors.New("write on closed file")
+		return
+	}
+	if file.aborted {
+		err = errors.New("write on aborted file")
 		return
 	}
 
@@ -64,7 +64,12 @@ func (file *File) Close() (err error) {
 		}
 	}()
 
-	if file.aborted || file.closed {
+	if file.closed {
+		err = errors.New("close on closed file")
+		return
+	}
+	if file.aborted {
+		err = errors.New("close on aborted file")
 		return
 	}
 
@@ -80,7 +85,12 @@ func (file *File) Close() (err error) {
 
 // Abort aborts the temporary File by closing and removing the temporary file.
 func (file *File) Abort() (err error) {
-	if file.aborted || file.closed {
+	if file.closed {
+		err = errors.New("abort on closed file")
+		return
+	}
+	if file.aborted {
+		err = errors.New("abort on aborted file")
 		return
 	}
 
