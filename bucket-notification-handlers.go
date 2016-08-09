@@ -272,3 +272,14 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Start sending bucket notifications.
 	sendBucketNotification(w, nEventCh)
 }
+
+// Removes notification.xml for a given bucket, only used during DeleteBucket.
+func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
+	// Verify bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+
+	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+	return objAPI.DeleteObject(minioMetaBucket, notificationConfigPath)
+}
