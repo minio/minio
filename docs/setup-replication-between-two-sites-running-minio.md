@@ -1,6 +1,6 @@
 # How to use ``mc mirror`` to setup replication between two sites running Minio. [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-![minio_MIRROR](https://raw.githubusercontent.com/minio/blob/master/docs/screenshots/miniomirror.jpeg?raw=true)
+![minio_MIRROR](https://github.com/minio/minio/blob/master/docs/screenshots/miniomirror.jpeg?raw=true)
 
 
 
