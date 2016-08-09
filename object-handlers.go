@@ -52,13 +52,13 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // this is in keeping with the permissions sections of the docs of both:
 //   HEAD Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
 //   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
-func errAllowableObjectNotFound(api objectAPIHandlers, bucket string, r *http.Request) APIErrorCode {
+func errAllowableObjectNotFound(objAPI ObjectLayer, bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
 		//we care about the bucket as a whole, not a particular resource
 		url := *r.URL
 		url.Path = "/" + bucket
 
-		if s3Error := enforceBucketPolicy(api, "s3:ListBucket", bucket, &url); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(objAPI, "s3:ListBucket", bucket, &url); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -89,7 +89,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api, "s3:GetObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -105,7 +105,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(api, bucket, r)
+			apiErr = errAllowableObjectNotFound(api.ObjectAPI, bucket, r)
 		}
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
@@ -195,7 +195,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api, "s3:GetObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:GetObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -211,7 +211,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(api, bucket, r)
+			apiErr = errAllowableObjectNotFound(api.ObjectAPI, bucket, r)
 		}
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
@@ -245,7 +245,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -424,7 +424,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -490,7 +490,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -581,7 +581,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -625,7 +625,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api, "s3:AbortMultipartUpload", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:AbortMultipartUpload", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -658,7 +658,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api, "s3:ListMultipartUploadParts", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:ListMultipartUploadParts", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -709,7 +709,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:PutObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -830,7 +830,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api, "s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}

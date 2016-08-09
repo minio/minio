@@ -188,7 +188,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	if err := writeBucketPolicy(api, bucket, bucketPolicyBuf); err != nil {
+	if err := writeBucketPolicy(bucket, api.ObjectAPI, bucketPolicyBuf); err != nil {
 		errorIf(err, "Unable to write bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -222,7 +222,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	// Delete bucket access policy.
-	if err := removeBucketPolicy(api, bucket); err != nil {
+	if err := removeBucketPolicy(bucket, api.ObjectAPI); err != nil {
 		errorIf(err, "Unable to remove bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -258,7 +258,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	p, err := readBucketPolicy(api, bucket)
+	p, err := readBucketPolicy(bucket, api.ObjectAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		switch err.(type) {
