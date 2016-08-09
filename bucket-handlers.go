@@ -28,25 +28,14 @@ import (
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-func enforceBucketPolicy(objAPI ObjectLayer, action string, bucket string, reqURL *url.URL) (s3Error APIErrorCode) {
-	// Read saved bucket policy.
-	policy, err := readBucketPolicy(bucket, objAPI)
-	if err != nil {
-		errorIf(err, "Unable read bucket policy.")
-		switch err.(type) {
-		case BucketNotFound:
-			return ErrNoSuchBucket
-		case BucketNameInvalid:
-			return ErrInvalidBucketName
-		default:
-			// For any other error just return AccessDenied.
-			return ErrAccessDenied
-		}
+// Enforces bucket policies for a bucket for a given tatusaction.
+func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error APIErrorCode) {
+	if !IsValidBucketName(bucket) {
+		return ErrInvalidBucketName
 	}
-	// Parse the saved policy.
-	bucketPolicy, err := parseBucketPolicy(policy)
-	if err != nil {
-		errorIf(err, "Unable to parse bucket policy.")
+	// Fetch bucket policy, if policy is not set return access denied.
+	policy := globalBucketPolicies.GetBucketPolicy(bucket)
+	if policy == nil {
 		return ErrAccessDenied
 	}
 
@@ -60,7 +49,7 @@ func enforceBucketPolicy(objAPI ObjectLayer, action string, bucket string, reqUR
 	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditions, bucketPolicy.Statements) {
+	if !bucketPolicyEvalStatements(action, resource, conditions, policy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
@@ -80,7 +69,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:GetBucketLocation", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:GetBucketLocation", r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -129,7 +118,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:ListBucketMultipartUploads", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucketMultipartUploads", r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -207,7 +196,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:DeleteObject", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:DeleteObject", r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -410,7 +399,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}

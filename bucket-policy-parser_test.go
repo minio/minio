@@ -16,10 +16,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 )
 
@@ -69,7 +69,7 @@ var (
 	}
 )
 
-// Obtain bucket statement for read-write BucketPolicy.
+// Obtain bucket statement for read-write bucketPolicy.
 func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
@@ -79,7 +79,7 @@ func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatemen
 	return objectResourceStatement
 }
 
-// Obtain object statement for read-write BucketPolicy.
+// Obtain object statement for read-write bucketPolicy.
 func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
@@ -89,7 +89,7 @@ func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatemen
 	return bucketResourceStatement
 }
 
-// Obtain statements for read-write BucketPolicy.
+// Obtain statements for read-write bucketPolicy.
 func getReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
 	statements := []policyStatement{}
 	// Save the read write policy.
@@ -97,7 +97,7 @@ func getReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
 	return statements
 }
 
-// Obtain bucket statement for read only BucketPolicy.
+// Obtain bucket statement for read only bucketPolicy.
 func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
@@ -107,7 +107,7 @@ func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement
 	return bucketResourceStatement
 }
 
-// Obtain object statement for read only BucketPolicy.
+// Obtain object statement for read only bucketPolicy.
 func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
@@ -117,7 +117,7 @@ func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement
 	return objectResourceStatement
 }
 
-// Obtain statements for read only BucketPolicy.
+// Obtain statements for read only bucketPolicy.
 func getReadOnlyStatement(bucketName, objectPrefix string) []policyStatement {
 	statements := []policyStatement{}
 	// Save the read only policy.
@@ -125,7 +125,7 @@ func getReadOnlyStatement(bucketName, objectPrefix string) []policyStatement {
 	return statements
 }
 
-// Obtain bucket statements for write only BucketPolicy.
+// Obtain bucket statements for write only bucketPolicy.
 func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
 
 	bucketResourceStatement := policyStatement{}
@@ -136,7 +136,7 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 	return bucketResourceStatement
 }
 
-// Obtain object statements for write only BucketPolicy.
+// Obtain object statements for write only bucketPolicy.
 func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
@@ -146,7 +146,7 @@ func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatemen
 	return objectResourceStatement
 }
 
-// Obtain statements for write only BucketPolicy.
+// Obtain statements for write only bucketPolicy.
 func getWriteOnlyStatement(bucketName, objectPrefix string) []policyStatement {
 	statements := []policyStatement{}
 	// Write only policy.
@@ -471,7 +471,7 @@ func TestIsValidConditions(t *testing.T) {
 }
 
 // Tests validate Policy Action and Resource fields.
-func TestCheckBucketPolicyResources(t *testing.T) {
+func TestCheckbucketPolicyResources(t *testing.T) {
 	// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
 	setValidPrefixActions := func(statements []policyStatement) []policyStatement {
 		statements[0].Actions = []string{"s3:DeleteObject", "s3:PutObject"}
@@ -491,27 +491,27 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		return statements
 	}
 
-	// List of BucketPolicy used for tests.
-	bucketAccessPolicies := []BucketPolicy{
-		// BucketPolicy - 1.
+	// List of bucketPolicy used for tests.
+	bucketAccessPolicies := []bucketPolicy{
+		// bucketPolicy - 1.
 		// Contains valid read only policy statement.
 		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket", "")},
-		// BucketPolicy - 2.
+		// bucketPolicy - 2.
 		// Contains valid read-write only policy statement.
 		{Version: "1.0", Statements: getReadWriteStatement("minio-bucket", "Asia/")},
-		// BucketPolicy - 3.
+		// bucketPolicy - 3.
 		// Contains valid write only policy statement.
 		{Version: "1.0", Statements: getWriteOnlyStatement("minio-bucket", "Asia/India/")},
-		// BucketPolicy - 4.
+		// bucketPolicy - 4.
 		// Contains invalidPrefixActions.
 		// Since resourcePrefix is not to the bucket-name, it return ErrMalformedPolicy.
 		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket-fail", "Asia/India/")},
-		// BucketPolicy - 5.
+		// bucketPolicy - 5.
 		// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
 		// but bucket part of the resource is not equal to the bucket name.
 		// this results in return of ErrMalformedPolicy.
 		{Version: "1.0", Statements: setValidPrefixActions(getWriteOnlyStatement("minio-bucket-fail", "Asia/India/"))},
-		// BucketPolicy - 6.
+		// bucketPolicy - 6.
 		// contructing policy statement with recursive resources.
 		// should result in ErrMalformedPolicy
 		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(getWriteOnlyStatement("minio-bucket", "")))},
@@ -523,7 +523,7 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 	}
 
 	testCases := []struct {
-		inputPolicy BucketPolicy
+		inputPolicy bucketPolicy
 		// expected results.
 		apiErrCode APIErrorCode
 		// Flag indicating whether the test should pass.
@@ -554,7 +554,7 @@ func TestCheckBucketPolicyResources(t *testing.T) {
 		{bucketAccessPolicies[6], ErrNone, true},
 	}
 	for i, testCase := range testCases {
-		apiErrCode := checkBucketPolicyResources("minio-bucket", testCase.inputPolicy)
+		apiErrCode := checkBucketPolicyResources("minio-bucket", &testCase.inputPolicy)
 		if apiErrCode != ErrNone && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with Errocode %v", i+1, apiErrCode)
 		}
@@ -596,53 +596,53 @@ func TestParseBucketPolicy(t *testing.T) {
 		statements[0].Resources = []string{"my-resource"}
 		return statements
 	}
-	// List of BucketPolicy used for test cases.
-	bucketAccesPolicies := []BucketPolicy{
-		// BucketPolicy - 0.
-		// BucketPolicy statement empty.
+	// List of bucketPolicy used for test cases.
+	bucketAccesPolicies := []bucketPolicy{
+		// bucketPolicy - 0.
+		// bucketPolicy statement empty.
 		{Version: "1.0"},
-		// BucketPolicy - 1.
-		// BucketPolicy version empty.
+		// bucketPolicy - 1.
+		// bucketPolicy version empty.
 		{Version: "", Statements: []policyStatement{}},
-		// BucketPolicy - 2.
-		// Readonly BucketPolicy.
+		// bucketPolicy - 2.
+		// Readonly bucketPolicy.
 		{Version: "1.0", Statements: getReadOnlyStatement("minio-bucket", "")},
-		// BucketPolicy - 3.
+		// bucketPolicy - 3.
 		// Read-Write bucket policy.
 		{Version: "1.0", Statements: getReadWriteStatement("minio-bucket", "Asia/")},
-		// BucketPolicy - 4.
+		// bucketPolicy - 4.
 		// Write only bucket policy.
 		{Version: "1.0", Statements: getWriteOnlyStatement("minio-bucket", "Asia/India/")},
-		// BucketPolicy - 5.
-		// BucketPolicy statement contains unsupported action.
+		// bucketPolicy - 5.
+		// bucketPolicy statement contains unsupported action.
 		{Version: "1.0", Statements: setUnsupportedActions(getReadOnlyStatement("minio-bucket", ""))},
-		// BucketPolicy - 6.
-		// BucketPolicy statement contains unsupported Effect.
+		// bucketPolicy - 6.
+		// bucketPolicy statement contains unsupported Effect.
 		{Version: "1.0", Statements: setUnsupportedEffect(getReadWriteStatement("minio-bucket", "Asia/"))},
-		// BucketPolicy - 7.
-		// BucketPolicy statement contains unsupported Principal.
+		// bucketPolicy - 7.
+		// bucketPolicy statement contains unsupported Principal.
 		{Version: "1.0", Statements: setUnsupportedPrincipals(getWriteOnlyStatement("minio-bucket", "Asia/India/"))},
-		// BucketPolicy - 8.
-		// BucketPolicy statement contains unsupported Resource.
+		// bucketPolicy - 8.
+		// bucketPolicy statement contains unsupported Resource.
 		{Version: "1.0", Statements: setUnsupportedResources(getWriteOnlyStatement("minio-bucket", "Asia/India/"))},
 	}
 
 	testCases := []struct {
-		inputPolicy BucketPolicy
+		inputPolicy bucketPolicy
 		// expected results.
-		expectedPolicy BucketPolicy
+		expectedPolicy bucketPolicy
 		err            error
 		// Flag indicating whether the test should pass.
 		shouldPass bool
 	}{
 		// Test case - 1.
-		// BucketPolicy statement empty.
-		{bucketAccesPolicies[0], BucketPolicy{}, errors.New("Policy statement cannot be empty."), false},
+		// bucketPolicy statement empty.
+		{bucketAccesPolicies[0], bucketPolicy{}, errors.New("Policy statement cannot be empty."), false},
 		// Test case - 2.
-		// BucketPolicy version empty.
-		{bucketAccesPolicies[1], BucketPolicy{}, errors.New("Policy version cannot be empty."), false},
+		// bucketPolicy version empty.
+		{bucketAccesPolicies[1], bucketPolicy{}, errors.New("Policy version cannot be empty."), false},
 		// Test case - 3.
-		// Readonly BucketPolicy.
+		// Readonly bucketPolicy.
 		{bucketAccesPolicies[2], bucketAccesPolicies[2], nil, true},
 		// Test case - 4.
 		// Read-Write bucket policy.
@@ -651,25 +651,28 @@ func TestParseBucketPolicy(t *testing.T) {
 		// Write only bucket policy.
 		{bucketAccesPolicies[4], bucketAccesPolicies[4], nil, true},
 		// Test case - 6.
-		// BucketPolicy statement contains unsupported action.
+		// bucketPolicy statement contains unsupported action.
 		{bucketAccesPolicies[5], bucketAccesPolicies[5], fmt.Errorf("Unsupported action found: ‘s3:DeleteEverything’, please validate your policy document."), false},
 		// Test case - 7.
-		// BucketPolicy statement contains unsupported Effect.
+		// bucketPolicy statement contains unsupported Effect.
 		{bucketAccesPolicies[6], bucketAccesPolicies[6], fmt.Errorf("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
 		// Test case - 8.
-		// BucketPolicy statement contains unsupported Principal.
+		// bucketPolicy statement contains unsupported Principal.
 		{bucketAccesPolicies[7], bucketAccesPolicies[7], fmt.Errorf("Unsupported principal style found: ‘User1111’, please validate your policy document."), false},
 		// Test case - 9.
-		// BucketPolicy statement contains unsupported Resource.
+		// bucketPolicy statement contains unsupported Resource.
 		{bucketAccesPolicies[8], bucketAccesPolicies[8], fmt.Errorf("Unsupported resource style found: ‘my-resource’, please validate your policy document."), false},
 	}
 	for i, testCase := range testCases {
-		inputPolicyBytes, e := json.Marshal(testCase.inputPolicy)
-		if e != nil {
-			t.Fatalf("Test %d: Couldn't Marshal bucket policy", i+1)
+		var buffer bytes.Buffer
+		encoder := json.NewEncoder(&buffer)
+		err := encoder.Encode(testCase.inputPolicy)
+		if err != nil {
+			t.Fatalf("Test %d: Couldn't Marshal bucket policy %s", i+1, err)
 		}
 
-		actualAccessPolicy, err := parseBucketPolicy(inputPolicyBytes)
+		var actualAccessPolicy = &bucketPolicy{}
+		err = parseBucketPolicy(&buffer, actualAccessPolicy)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
@@ -684,7 +687,7 @@ func TestParseBucketPolicy(t *testing.T) {
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
 		if err == nil && testCase.shouldPass {
-			if !reflect.DeepEqual(testCase.expectedPolicy, actualAccessPolicy) {
+			if testCase.expectedPolicy.String() != actualAccessPolicy.String() {
 				t.Errorf("Test %d: The expected statements from resource statement generator doesn't match the actual statements", i+1)
 			}
 		}

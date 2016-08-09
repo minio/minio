@@ -70,6 +70,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	err = initEventNotifier(objAPI)
 	fatalIf(err, "Unable to initialize event notification queue")
 
+	// Initialize a new bucket policies.
+	err = initBucketPolicies(objAPI)
+	fatalIf(err, "Unable to load all bucket policies")
+
 	// Initialize router.
 	mux := router.NewRouter()
 

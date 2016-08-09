@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"sort"
 	"strings"
@@ -71,13 +72,23 @@ type policyStatement struct {
 	Principal  policyUser                   `json:"Principal"`
 	Actions    []string                     `json:"Action"`
 	Resources  []string                     `json:"Resource"`
-	Conditions map[string]map[string]string `json:"Condition"`
+	Conditions map[string]map[string]string `json:"Condition,omitempty"`
 }
 
-// BucketPolicy - minio policy collection
-type BucketPolicy struct {
+// bucketPolicy - collection of various bucket policy statements.
+type bucketPolicy struct {
 	Version    string            // date in 0000-00-00 format
 	Statements []policyStatement `json:"Statement"`
+}
+
+// Stringer implementation for the bucket policies.
+func (b bucketPolicy) String() string {
+	bbytes, err := json.Marshal(&b)
+	if err != nil {
+		errorIf(err, "Unable to unmarshal bucket policy into JSON %#v", b)
+		return ""
+	}
+	return string(bbytes)
 }
 
 // supportedEffectMap - supported effects.
@@ -213,7 +224,7 @@ func resourcePrefix(resource string) string {
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
 // First valation of Resources done for given set of Actions.
 // Later its validated for recursive Resources.
-func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErrorCode {
+func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
 	var resourceMap = make(map[string]struct{})
@@ -268,44 +279,46 @@ func checkBucketPolicyResources(bucket string, bucketPolicy BucketPolicy) APIErr
 
 // parseBucketPolicy - parses and validates if bucket policy is of
 // proper JSON and follows allowed restrictions with policy standards.
-func parseBucketPolicy(bucketPolicyBuf []byte) (policy BucketPolicy, err error) {
-	if err = json.Unmarshal(bucketPolicyBuf, &policy); err != nil {
-		return BucketPolicy{}, err
+func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err error) {
+	// Parse bucket policy reader.
+	decoder := json.NewDecoder(bucketPolicyReader)
+	if err = decoder.Decode(&policy); err != nil {
+		return err
 	}
 
 	// Policy version cannot be empty.
 	if len(policy.Version) == 0 {
 		err = errors.New("Policy version cannot be empty.")
-		return BucketPolicy{}, err
+		return err
 	}
 
 	// Policy statements cannot be empty.
 	if len(policy.Statements) == 0 {
 		err = errors.New("Policy statement cannot be empty.")
-		return BucketPolicy{}, err
+		return err
 	}
 
 	// Loop through all policy statements and validate entries.
 	for _, statement := range policy.Statements {
 		// Statement effect should be valid.
 		if err := isValidEffect(statement.Effect); err != nil {
-			return BucketPolicy{}, err
+			return err
 		}
 		// Statement principal should be supported format.
 		if err := isValidPrincipals(statement.Principal.AWS); err != nil {
-			return BucketPolicy{}, err
+			return err
 		}
 		// Statement actions should be valid.
 		if err := isValidActions(statement.Actions); err != nil {
-			return BucketPolicy{}, err
+			return err
 		}
 		// Statement resources should be valid.
 		if err := isValidResources(statement.Resources); err != nil {
-			return BucketPolicy{}, err
+			return err
 		}
 		// Statement conditions should be valid.
 		if err := isValidConditions(statement.Conditions); err != nil {
-			return BucketPolicy{}, err
+			return err
 		}
 	}
 
@@ -326,5 +339,5 @@ func parseBucketPolicy(bucketPolicyBuf []byte) (policy BucketPolicy, err error) 
 	policy.Statements = append(denyStatements, allowStatements...)
 
 	// Return successfully parsed policy structure.
-	return policy, nil
+	return nil
 }
