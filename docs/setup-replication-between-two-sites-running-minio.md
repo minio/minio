@@ -82,7 +82,7 @@ Cron is a Unix/Linux system utility by which you can schedule a task process for
 
 Add crontab configuration on `minio1` providing path of data directory, ``minio1-data``. 
 
-``--force`` option with ``mc mirror``  overwrites the destination contents, this would keep your contents in sync..  
+``--force`` option with ``mc mirror``  overwrites the destination contents, this would keep your contents in sync. 
 
 ```sh
 
@@ -101,7 +101,7 @@ Set executable permissions on the script before adding a cron entry.
 $ chmod 755 /home/minio/minio.sh
 ```
 
-Set a new cron entry to run ``minio.sh`` script once every 30mins
+Set a new cron entry to run ``minio.sh`` script once every 30mins.
 
 ```sh
 
