@@ -152,40 +152,6 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
-// List all the volumes from diskPath.
-func listVols(dirPath string) ([]VolInfo, error) {
-	if err := checkPathLength(dirPath); err != nil {
-		return nil, err
-	}
-	entries, err := readDir(dirPath)
-	if err != nil {
-		return nil, errDiskNotFound
-	}
-	var volsInfo []VolInfo
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
-			// Skip if entry is neither a directory not a valid volume name.
-			continue
-		}
-		var fi os.FileInfo
-		fi, err = os.Stat(preparePath(pathJoin(dirPath, entry)))
-		if err != nil {
-			// If the file does not exist, skip the entry.
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		volsInfo = append(volsInfo, VolInfo{
-			Name: fi.Name(),
-			// As os.Stat() doesn't carry other than ModTime(), use
-			// ModTime() as CreatedTime.
-			Created: fi.ModTime(),
-		})
-	}
-	return volsInfo, nil
-}
-
 // getVolDir - will convert incoming volume names to
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found
@@ -193,9 +159,6 @@ func listVols(dirPath string) ([]VolInfo, error) {
 func (s *posix) getVolDir(volume string) (string, error) {
 	if !isValidVolname(volume) {
 		return "", errInvalidArgument
-	}
-	if err := checkPathLength(volume); err != nil {
-		return "", err
 	}
 	volumeDir := pathJoin(s.diskPath, volume)
 	return volumeDir, nil
@@ -258,6 +221,40 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 			Created: vol.Created,
 		}
 		volsInfo[i] = volInfo
+	}
+	return volsInfo, nil
+}
+
+// List all the volumes from diskPath.
+func listVols(dirPath string) ([]VolInfo, error) {
+	if err := checkPathLength(dirPath); err != nil {
+		return nil, err
+	}
+	entries, err := readDir(dirPath)
+	if err != nil {
+		return nil, errDiskNotFound
+	}
+	var volsInfo []VolInfo
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+			// Skip if entry is neither a directory not a valid volume name.
+			continue
+		}
+		var fi os.FileInfo
+		fi, err = os.Stat(preparePath(pathJoin(dirPath, entry)))
+		if err != nil {
+			// If the file does not exist, skip the entry.
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		volsInfo = append(volsInfo, VolInfo{
+			Name: fi.Name(),
+			// As os.Stat() doesn't carry other than ModTime(), use
+			// ModTime() as CreatedTime.
+			Created: fi.ModTime(),
+		})
 	}
 	return volsInfo, nil
 }
