@@ -19,6 +19,7 @@
 package quick_test
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -79,6 +80,46 @@ func (s *MySuite) TestCheckData(c *C) {
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	err = quick.CheckData(&saveMeGood)
 	c.Assert(err, IsNil)
+}
+
+func (s *MySuite) TestLoadFile(c *C) {
+	type myStruct struct {
+		Version  string
+		User     string
+		Password string
+		Folders  []string
+	}
+	saveMe := myStruct{}
+	_, err := quick.Load("test.json", &saveMe)
+	c.Assert(err, Not(IsNil))
+
+	file, err := os.Create("test.json")
+	c.Assert(err, IsNil)
+	c.Assert(file.Close(), IsNil)
+	_, err = quick.Load("test.json", &saveMe)
+	c.Assert(err, Not(IsNil))
+	config, err := quick.New(&saveMe)
+	c.Assert(err, IsNil)
+	err = config.Load("test-non-exist.json")
+	c.Assert(err, Not(IsNil))
+	err = config.Load("test.json")
+	c.Assert(err, Not(IsNil))
+
+	saveMe = myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
+	config, err = quick.New(&saveMe)
+	c.Assert(err, IsNil)
+	c.Assert(config, Not(IsNil))
+	err = config.Save("test.json")
+	c.Assert(err, IsNil)
+	saveMe1 := myStruct{}
+	_, err = quick.Load("test.json", &saveMe1)
+	c.Assert(err, IsNil)
+	c.Assert(saveMe1, DeepEquals, saveMe)
+
+	saveMe2 := myStruct{}
+	err = json.Unmarshal([]byte(config.String()), &saveMe2)
+	c.Assert(err, IsNil)
+	c.Assert(saveMe2, DeepEquals, saveMe1)
 }
 
 func (s *MySuite) TestVersion(c *C) {

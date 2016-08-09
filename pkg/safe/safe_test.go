@@ -19,7 +19,7 @@ package safe
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	"path"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -44,26 +44,60 @@ func (s *MySuite) TearDownSuite(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *MySuite) TestSafe(c *C) {
-	f, err := CreateFile(filepath.Join(s.root, "testfile"))
-	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(s.root, "testfile"))
-	c.Assert(err, Not(IsNil))
-	err = f.Close()
-	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(s.root, "testfile"))
-	c.Assert(err, IsNil)
-	err = os.Remove(filepath.Join(s.root, "testfile"))
-	c.Assert(err, IsNil)
-}
-
 func (s *MySuite) TestSafeAbort(c *C) {
-	f, err := CreateFile(filepath.Join(s.root, "purgefile"))
+	f, err := CreateFile(path.Join(s.root, "testfile-abort"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
+	_, err = os.Stat(path.Join(s.root, "testfile-abort"))
 	c.Assert(err, Not(IsNil))
 	err = f.Abort()
 	c.Assert(err, IsNil)
-	_, err = os.Stat(filepath.Join(s.root, "purgefile"))
+	err = f.Close()
+	c.Assert(err.Error(), Equals, "close on aborted file")
+}
+
+func (s *MySuite) TestSafeClose(c *C) {
+	f, err := CreateFile(path.Join(s.root, "testfile-close"))
+	c.Assert(err, IsNil)
+	_, err = os.Stat(path.Join(s.root, "testfile-close"))
 	c.Assert(err, Not(IsNil))
+	err = f.Close()
+	c.Assert(err, IsNil)
+	_, err = os.Stat(path.Join(s.root, "testfile-close"))
+	c.Assert(err, IsNil)
+	err = os.Remove(path.Join(s.root, "testfile-close"))
+	c.Assert(err, IsNil)
+	err = f.Abort()
+	c.Assert(err.Error(), Equals, "abort on closed file")
+}
+
+func (s *MySuite) TestSafe(c *C) {
+	f, err := CreateFile(path.Join(s.root, "testfile-safe"))
+	c.Assert(err, IsNil)
+	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
+	c.Assert(err, Not(IsNil))
+	err = f.Close()
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("Test"))
+	c.Assert(err.Error(), Equals, "write on closed file")
+	err = f.Close()
+	c.Assert(err.Error(), Equals, "close on closed file")
+	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
+	c.Assert(err, IsNil)
+	err = os.Remove(path.Join(s.root, "testfile-safe"))
+	c.Assert(err, IsNil)
+}
+
+func (s *MySuite) TestSafeAbortWrite(c *C) {
+	f, err := CreateFile(path.Join(s.root, "purgefile-abort"))
+	c.Assert(err, IsNil)
+	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
+	c.Assert(err, Not(IsNil))
+	err = f.Abort()
+	c.Assert(err, IsNil)
+	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
+	c.Assert(err, Not(IsNil))
+	err = f.Abort()
+	c.Assert(err.Error(), Equals, "abort on aborted file")
+	_, err = f.Write([]byte("Test"))
+	c.Assert(err.Error(), Equals, "write on aborted file")
 }
