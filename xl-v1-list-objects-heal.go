@@ -23,6 +23,7 @@ import (
 )
 
 func listDirHealFactory(disks ...StorageAPI) listDirFunc {
+	// Returns sorted merged entries from all the disks.
 	listDir := func(bucket, prefixDir, prefixEntry string) (mergedentries []string, delayIsLeaf bool, err error) {
 		for _, disk := range disks {
 			var entries []string

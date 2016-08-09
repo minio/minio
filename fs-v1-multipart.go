@@ -68,7 +68,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	var walkResultCh chan treeWalkResult
 	var endWalkCh chan struct{}
-	heal := false
+	heal := false // true only for xl.ListObjectsHeal()
 	if maxUploads > 0 {
 		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walkResultCh == nil {

@@ -100,13 +100,7 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
-// Return disks with the latest version of the object.
-func (xl xlObjects) latestDisks(partsMetadata []xlMetaV1, errs []error) (latestDisks []StorageAPI) {
-	latestDisks, _ = listOnlineDisks(xl.storageDisks, partsMetadata, errs)
-	return latestDisks
-}
-
-// Return disks with the outdated version or missing object.
+// Return disks with the outdated or missing object.
 func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
 	outDatedDisks = make([]StorageAPI, len(xl.storageDisks))
 	latestDisks, _ := listOnlineDisks(xl.storageDisks, partsMetadata, errs)

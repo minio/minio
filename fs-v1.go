@@ -574,7 +574,7 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		recursive = false
 	}
 
-	heal := false
+	heal := false // true only for xl.ListObjectsHeal()
 	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
@@ -647,10 +647,10 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 // HealObject - no-op for fs. Valid only for XL.
 func (fs fsObjects) HealObject(bucket, object string) error {
-	return nil
+	return NotImplemented{}
 }
 
 // HealListObjects - list objects for healing. Valid only for XL
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, nil
+	return ListObjectsInfo{}, NotImplemented{}
 }

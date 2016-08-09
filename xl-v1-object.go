@@ -290,7 +290,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
-	// .minio/tmp/uuid/ which needs to be renamed later.
+	// .minio/tmp/uuid/ which needs to be renamed later to the final location.
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size

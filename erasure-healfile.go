@@ -22,7 +22,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volum
 	var offset int64
 	remainingSize := size
 
-	// Sha512 hash for bitrot protection.
+	// Hash for bitrot protection.
 	hashWriters := newHashWriters(len(outDatedDisks), bitRotAlgo)
 
 	for remainingSize > 0 {
@@ -38,7 +38,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volum
 		enBlocks := make([][]byte, len(latestDisks))
 
 		// Read data from the latest disks.
-		// FIXME: can be optimized to read from DataBlocks only if possible.
+		// FIXME: no need to read from all the disks. dataBlocks+1 is enough.
 		for index, disk := range latestDisks {
 			if disk == nil {
 				continue

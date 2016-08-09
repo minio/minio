@@ -85,7 +85,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	var walkerCh chan treeWalkResult
 	var walkerDoneCh chan struct{}
-	heal := false
+	heal := false // true only for xl.ListObjectsHeal
 	// Validate if we need to list further depending on maxUploads.
 	if maxUploads > 0 {
 		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
