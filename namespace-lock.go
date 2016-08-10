@@ -18,9 +18,55 @@ package main
 
 import (
 	"errors"
-	"github.com/minio/dsync"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/minio/dsync"
 )
+
+// Global name space lock.
+var nsMutex *nsLockMap
+
+// Initialize distributed locking only in case of distributed setup.
+// Returns if the setup is distributed or not on success.
+func initDsyncNodes(disks []string, port int) (bool, error) {
+	var isDist = false
+	var dsyncNodes []string
+	var rpcPaths []string
+	serverPort := strconv.Itoa(port)
+
+	for _, disk := range disks {
+		if idx := strings.LastIndex(disk, ":"); idx != -1 {
+			dsyncNodes = append(dsyncNodes, disk[:idx]+":"+serverPort)
+			rpcPaths = append(rpcPaths, path.Join(lockRPCPath, disk[idx+1:]))
+		}
+		if !isLocalStorage(disk) {
+			// One or more disks supplied as arguments are remote.
+			isDist = true
+		}
+	}
+	if isDist {
+		return isDist, dsync.SetNodesWithPath(dsyncNodes, rpcPaths)
+	}
+	return isDist, nil
+}
+
+// initNSLock - initialize name space lock map.
+func initNSLock(isDist bool) {
+	nsMutex = &nsLockMap{
+		isDist:  isDist,
+		lockMap: make(map[nsParam]*nsLock),
+	}
+}
+
+// RWLocker - interface that any read-write locking library should implement.
+type RWLocker interface {
+	sync.Locker
+	RLock()
+	RUnlock()
+}
 
 // nsParam - carries name space resource.
 type nsParam struct {
@@ -30,37 +76,36 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	*dsync.DRWMutex
-	ref uint
+	rwlock RWLocker
+	ref    uint
 }
 
 // nsLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
+	isDist  bool
 	lockMap map[nsParam]*nsLock
 	mutex   sync.Mutex
 }
 
-// Global name space lock.
-var nsMutex *nsLockMap
-
-// initNSLock - initialize name space lock map.
-func initNSLock() {
-	nsMutex = &nsLockMap{
-		lockMap: make(map[nsParam]*nsLock),
-	}
-}
-
 // Lock the namespace resource.
 func (n *nsLockMap) lock(volume, path string, readLock bool) {
+	var nsLk *nsLock
 	n.mutex.Lock()
 
 	param := nsParam{volume, path}
 	nsLk, found := n.lockMap[param]
 	if !found {
-		nsLk = &nsLock{
-			DRWMutex: dsync.NewDRWMutex(volume + path),
-			ref:      0,
+		if n.isDist {
+			nsLk = &nsLock{
+				rwlock: dsync.NewDRWMutex(volume + path),
+				ref:    0,
+			}
+		} else {
+			nsLk = &nsLock{
+				rwlock: &sync.RWMutex{},
+				ref:    0,
+			}
 		}
 		n.lockMap[param] = nsLk
 	}
@@ -70,9 +115,9 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 
 	// Locking here can block.
 	if readLock {
-		nsLk.RLock()
+		nsLk.rwlock.RLock()
 	} else {
-		nsLk.Lock()
+		nsLk.rwlock.Lock()
 	}
 }
 
@@ -85,9 +130,9 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 	param := nsParam{volume, path}
 	if nsLk, found := n.lockMap[param]; found {
 		if readLock {
-			nsLk.RUnlock()
+			nsLk.rwlock.RUnlock()
 		} else {
-			nsLk.Unlock()
+			nsLk.rwlock.Unlock()
 		}
 		if nsLk.ref == 0 {
 			errorIf(errors.New("Namespace reference count cannot be 0."), "Invalid reference count detected.")

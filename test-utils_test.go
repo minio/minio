@@ -43,7 +43,7 @@ import (
 // Tests should initNSLock only once.
 func init() {
 	// Initialize name space lock.
-	initNSLock()
+	initNSLock(false)
 }
 
 // TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
