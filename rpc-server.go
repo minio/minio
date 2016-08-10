@@ -100,7 +100,7 @@ func (s *storageServer) ReadAllHandler(arg *ReadFileArgs, reply *[]byte) error {
 	if err != nil {
 		return err
 	}
-	reply = &buf
+	*reply = buf
 	return nil
 }
 
@@ -110,7 +110,7 @@ func (s *storageServer) ReadFileHandler(arg *ReadFileArgs, reply *int64) error {
 	if err != nil {
 		return err
 	}
-	reply = &n
+	*reply = n
 	return nil
 }
 
@@ -168,9 +168,9 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRPCRouters(mux *router.Router, stServers []*storageServer) {
-	storageRPCServer := rpc.NewServer()
 	// Create a unique route for each disk exported from this node.
 	for _, stServer := range stServers {
+		storageRPCServer := rpc.NewServer()
 		storageRPCServer.RegisterName("Storage", stServer)
 		// Add minio storage routes.
 		storageRouter := mux.PathPrefix(reservedBucket).Subrouter()
