@@ -21,13 +21,11 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/cli"
-	"github.com/minio/dsync"
 )
 
 var srvConfig serverCmdConfig
@@ -222,29 +220,6 @@ func getPort(address string) int {
 	return portInt
 }
 
-// Initialize distributed locking only in case of distributed setup.
-func initDsyncNodes(disks []string, port int) error {
-	var isDist bool = false
-	var dsyncNodes []string
-	var rpcPaths []string
-	serverPort := strconv.Itoa(port)
-
-	for _, disk := range disks {
-		if idx := strings.LastIndex(disk, ":"); idx != -1 {
-			dsyncNodes = append(dsyncNodes, disk[:idx]+":"+serverPort)
-			rpcPaths = append(rpcPaths, path.Join(lockRPCPath, disk[idx+1:]))
-		}
-		if !isLocalStorage(disk) {
-			// One or more disks supplied as arguments are remote.
-			isDist = true
-		}
-	}
-	if isDist {
-		return dsync.SetNodesWithPath(dsyncNodes, rpcPaths)
-	}
-	return nil
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	// Check 'server' cli arguments.
@@ -271,12 +246,12 @@ func serverMain(c *cli.Context) {
 	disks := c.Args()
 
 	// Set nodes for dsync
-	err = initDsyncNodes(disks, port)
+	var isDist bool
+	isDist, err = initDsyncNodes(disks, port)
 	fatalIf(err, "Unable to initialize distributed locking")
 
 	// Initialize name space lock.
-	// FIXME: add logic to switch between distributed and single-node namespace locking.
-	initNSLock()
+	initNSLock(isDist)
 
 	// Configure server.
 	srvConfig = serverCmdConfig{
