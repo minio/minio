@@ -45,7 +45,8 @@ import (
 // Tests should initNSLock only once.
 func init() {
 	// Initialize name space lock.
-	initNSLock()
+	isDist := false
+	initNSLock(isDist)
 }
 
 // TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
