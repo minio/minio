@@ -158,9 +158,6 @@ func main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
-		// Initialize name space lock.
-		initNSLock()
-
 		// Set global quiet flag.
 		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 
