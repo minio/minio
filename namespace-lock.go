@@ -18,9 +18,64 @@ package main
 
 import (
 	"errors"
-	"github.com/minio/dsync"
+	pathpkg "path"
+	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/minio/dsync"
 )
+
+// Global name space lock.
+var nsMutex *nsLockMap
+
+// Initialize distributed locking only in case of distributed setup.
+// Returns if the setup is distributed or not on success.
+func initDsyncNodes(disks []string, port int) (bool, error) {
+	// Holds a bool indicating whether this server instance is part of
+	// distributed setup or not.
+	var isDist = false
+	// List of lock servers that part in the co-operative namespace locking.
+	var dsyncNodes []string
+	// Corresponding rpc paths needed for communication over net/rpc
+	var rpcPaths []string
+
+	// Port to connect to for the lock servers in a distributed setup.
+	serverPort := strconv.Itoa(port)
+
+	for _, disk := range disks {
+		if idx := strings.LastIndex(disk, ":"); idx != -1 {
+			dsyncNodes = append(dsyncNodes, disk[:idx]+":"+serverPort)
+			rpcPaths = append(rpcPaths, pathpkg.Join(lockRPCPath, disk[idx+1:]))
+		}
+		if !isLocalStorage(disk) {
+			// One or more disks supplied as arguments are not
+			// attached to the local node.
+			isDist = true
+		}
+	}
+	// Initialize rpc lock client information only if this instance is a
+	// distributed setup.
+	if isDist {
+		return isDist, dsync.SetNodesWithPath(dsyncNodes, rpcPaths)
+	}
+	return isDist, nil
+}
+
+// initNSLock - initialize name space lock map.
+func initNSLock(isDist bool) {
+	nsMutex = &nsLockMap{
+		isDist:  isDist,
+		lockMap: make(map[nsParam]*nsLock),
+	}
+}
+
+// RWLocker - interface that any read-write locking library should implement.
+type RWLocker interface {
+	sync.Locker
+	RLock()
+	RUnlock()
+}
 
 // nsParam - carries name space resource.
 type nsParam struct {
@@ -30,43 +85,40 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	*dsync.DRWMutex
+	RWLocker
 	ref uint
 }
 
 // nsLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
-	lockMap map[nsParam]*nsLock
-	mutex   sync.Mutex
-}
-
-// Global name space lock.
-var nsMutex *nsLockMap
-
-// initNSLock - initialize name space lock map.
-func initNSLock() {
-	nsMutex = &nsLockMap{
-		lockMap: make(map[nsParam]*nsLock),
-	}
+	isDist       bool // indicates whether the locking service is part of a distributed setup or not.
+	lockMap      map[nsParam]*nsLock
+	lockMapMutex sync.Mutex
 }
 
 // Lock the namespace resource.
 func (n *nsLockMap) lock(volume, path string, readLock bool) {
-	n.mutex.Lock()
+	var nsLk *nsLock
+	n.lockMapMutex.Lock()
 
 	param := nsParam{volume, path}
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			DRWMutex: dsync.NewDRWMutex(volume + path),
-			ref:      0,
+			RWLocker: func() RWLocker {
+				if n.isDist {
+					return dsync.NewDRWMutex(pathpkg.Join(volume, path))
+				}
+				return &sync.RWMutex{}
+			}(),
+			ref: 0,
 		}
 		n.lockMap[param] = nsLk
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 	// Unlock map before Locking NS which might block.
-	n.mutex.Unlock()
+	n.lockMapMutex.Unlock()
 
 	// Locking here can block.
 	if readLock {
@@ -79,8 +131,8 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 // Unlock the namespace resource.
 func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 	// nsLk.Unlock() will not block, hence locking the map for the entire function is fine.
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
+	n.lockMapMutex.Lock()
+	defer n.lockMapMutex.Unlock()
 
 	param := nsParam{volume, path}
 	if nsLk, found := n.lockMap[param]; found {
