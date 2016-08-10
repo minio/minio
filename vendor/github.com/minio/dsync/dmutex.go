@@ -35,7 +35,6 @@ type DMutex struct {
 	m     sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 
 	// TODO: Decide: create per object or create once for whole class
-	clnts []*rpc.Client
 }
 
 type Granted struct {
@@ -45,13 +44,13 @@ type Granted struct {
 }
 
 func connectLazy(dm *DMutex) {
-	if dm.clnts == nil {
-		dm.clnts = make([]*rpc.Client, n)
+	if clnts == nil {
+		clnts = make([]*rpc.Client, n)
 	}
-	for i := range dm.clnts {
-		if dm.clnts[i] == nil {
+	for i := range clnts {
+		if clnts[i] == nil {
 			// pass in unique path (as required by server.HandleHTTP()
-			dm.clnts[i], _ = rpc.DialHTTPPath("tcp", nodes[i], rpcPaths[i])
+			clnts[i], _ = rpc.DialHTTPPath("tcp", nodes[i], rpcPaths[i])
 		}
 	}
 }
@@ -78,7 +77,7 @@ func (dm *DMutex) Lock() {
 		ids := make([]string, n)
 
 		// try to acquire the lock
-		success := lock(dm.clnts, &locks, &ids, dm.Name)
+		success := lock(clnts, &locks, &ids, dm.Name)
 		if success {
 			// if success, copy array to object
 			dm.locks = make([]bool, n)
@@ -118,7 +117,7 @@ func (dm *DMutex) tryLockTimeout() bool {
 	ids := make([]string, n)
 
 	// try to acquire the lock
-	success := lock(dm.clnts, &locks, &ids, dm.Name)
+	success := lock(clnts, &locks, &ids, dm.Name)
 	if success {
 		// if success, copy array to object
 		dm.locks = make([]bool, n)
@@ -286,7 +285,7 @@ func (dm *DMutex) Unlock() {
 	// We don't need to wait until we have released all the locks (or the quorum)
 	// (a subsequent lock will retry automatically in case it would fail to get
 	//  quorum)
-	for index, c := range dm.clnts {
+	for index, c := range clnts {
 
 		if dm.locks[index] {
 			// broadcast lock release to all nodes the granted the lock
