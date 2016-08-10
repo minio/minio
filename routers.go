@@ -49,6 +49,11 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 		if objAPI != nil {
 			return objAPI
 		}
+
+		// Acquire a distributed lock to ensure only one of the nodes
+		// initializes the format.json.
+		nsMutex.Lock(minioMetaBucket, formatConfigFile)
+		defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
 		objAPI, err = newObjectLayer(disks, ignoredDisks)
 		if err != nil {
 			return nil
