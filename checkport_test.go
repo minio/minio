@@ -23,12 +23,13 @@ import (
 	"testing"
 )
 
+// Tests for port availability logic written for server startup sequence.
 func TestCheckPortAvailability(t *testing.T) {
 	tests := []struct {
 		port int
 	}{
-		{9000},
-		{10000},
+		{getFreePort()},
+		{getFreePort()},
 	}
 	for _, test := range tests {
 		// This test should pass if the ports are available
