@@ -29,6 +29,7 @@ const DefaultPath = "/rpc/dsync"
 var n int
 var nodes []string
 var rpcPaths []string
+var clnts []*rpc.Client
 
 func closeClients(clients []*rpc.Client) {
 	for _, clnt := range clients {
