@@ -28,7 +28,7 @@ const DefaultPath = "/rpc/dsync"
 
 var n int
 var nodes []string
-var rpcPath string
+var rpcPaths []string
 
 func closeClients(clients []*rpc.Client) {
 	for _, clnt := range clients {
@@ -36,8 +36,8 @@ func closeClients(clients []*rpc.Client) {
 	}
 }
 
-// Same as SetNodes, but takes a path argument different from the package-level default.
-func SetNodesWithPath(nodeList []string, path string) (err error) {
+// Same as SetNodes, but takes a slice of rpc paths as argument different from the package-level default.
+func SetNodesWithPath(nodeList []string, paths []string) (err error) {
 
 	// Validate if number of nodes is within allowable range.
 	if n != 0 {
@@ -50,7 +50,8 @@ func SetNodesWithPath(nodeList []string, path string) (err error) {
 
 	nodes = make([]string, len(nodeList))
 	copy(nodes, nodeList[:])
-	rpcPath = path
+	rpcPaths = make([]string, len(paths))
+	copy(rpcPaths, paths[:])
 	n = len(nodes)
 	return nil
 }
