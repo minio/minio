@@ -26,7 +26,7 @@ import (
 	router "github.com/gorilla/mux"
 )
 
-const lockRPCPath = "/lock"
+const lockRPCPath = "/minio/lock"
 
 type lockServer struct {
 	rpcPath string
@@ -37,7 +37,7 @@ type lockServer struct {
 ///  Distributed lock handlers
 
 // LockHandler - rpc handler for lock operation.
-func (l *lockServer) LockHandler(name *string, reply *bool) error {
+func (l *lockServer) Lock(name *string, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	_, ok := l.lockMap[*name]
@@ -51,7 +51,7 @@ func (l *lockServer) LockHandler(name *string, reply *bool) error {
 }
 
 // UnlockHandler - rpc handler for unlock operation.
-func (l *lockServer) UnlockHandler(name *string, reply *bool) error {
+func (l *lockServer) Unlock(name *string, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	_, ok := l.lockMap[*name]
@@ -84,22 +84,24 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 		if skipDisks[export] {
 			continue
 		}
-		if idx := strings.LastIndex(export, ":"); idx != -1 {
-			export = export[idx+1:]
+		if isLocalStorage(export) {
+			if idx := strings.LastIndex(export, ":"); idx != -1 {
+				export = export[idx+1:]
+			}
+			lockServers = append(lockServers, &lockServer{
+				rpcPath: export,
+				mutex:   sync.Mutex{},
+				lockMap: make(map[string]struct{}),
+			})
 		}
-		lockServers = append(lockServers, &lockServer{
-			rpcPath: export,
-			mutex:   sync.Mutex{},
-			lockMap: make(map[string]struct{}),
-		})
 	}
 	return lockServers
 }
 
-// registerStorageLockers - register locker rpc handlers for valyala/gorpc library clients
+// registerStorageLockers - register locker rpc handlers for net/rpc library clients
 func registerStorageLockers(mux *router.Router, lockServers []*lockServer) {
-	lockRPCServer := rpc.NewServer()
 	for _, lockServer := range lockServers {
+		lockRPCServer := rpc.NewServer()
 		lockRPCServer.RegisterName("Dsync", lockServer)
 		lockRouter := mux.PathPrefix(reservedBucket).Subrouter()
 		lockRouter.Path(path.Join("/lock", lockServer.rpcPath)).Handler(lockRPCServer)
