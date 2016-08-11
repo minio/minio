@@ -64,6 +64,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -71,7 +77,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(objectAPI, "s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -94,11 +100,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// Validate all the query params before beginning to serve the request.
 	if s3Error := listObjectsValidateArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
-		return
-	}
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 	// Inititate a list objects operation based on the input params.
@@ -128,6 +129,12 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -135,7 +142,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(api.ObjectAPI, "s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(objectAPI, "s3:ListBucket", bucket, r.URL); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -155,11 +162,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
