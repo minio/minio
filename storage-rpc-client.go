@@ -17,20 +17,19 @@
 package main
 
 import (
-	"net/http"
+	"errors"
 	"net/rpc"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type networkStorage struct {
-	netScheme  string
-	netAddr    string
-	netPath    string
-	rpcClient  *rpc.Client
-	httpClient *http.Client
+	netScheme string
+	netAddr   string
+	netPath   string
+	rpcClient *rpc.Client
+	rpcToken  string
 }
 
 const (
@@ -70,6 +69,25 @@ func toStorageErr(err error) error {
 	return err
 }
 
+// Login rpc client makes an authentication request to the rpc server.
+// Receives a session token which will be used for subsequent requests.
+// FIXME: Currently these tokens expire in 100yrs.
+func loginRPCClient(rpcClient *rpc.Client) (tokenStr string, err error) {
+	cred := serverConfig.GetCredential()
+	reply := RPCLoginReply{}
+	if err = rpcClient.Call("Storage.LoginHandler", RPCLoginArgs{
+		Username: cred.AccessKeyID,
+		Password: cred.SecretAccessKey,
+	}, &reply); err != nil {
+		return "", err
+	}
+	if reply.ServerVersion != minioVersion {
+		return "", errors.New("Server version mismatch")
+	}
+	// Reply back server provided token.
+	return reply.Token, nil
+}
+
 // Initialize new rpc client.
 func newRPCClient(networkPath string) (StorageAPI, error) {
 	// Input validation.
@@ -80,15 +98,6 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	// TODO validate netAddr and netPath.
 	netAddr, netPath := splitNetPath(networkPath)
 
-	// Initialize http client.
-	httpClient := &http.Client{
-		// Setting a sensible time out of 6minutes to wait for
-		// response headers. Request is pro-actively cancelled
-		// after 6minutes if no response was received from server.
-		Timeout:   6 * time.Minute,
-		Transport: http.DefaultTransport,
-	}
-
 	// Dial minio rpc storage http path.
 	rpcPath := path.Join(storageRPCPath, netPath)
 	port := getPort(srvConfig.serverAddr)
@@ -98,13 +107,18 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 		return nil, err
 	}
 
+	token, err := loginRPCClient(rpcClient)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netScheme:  "http", // TODO: fix for ssl rpc support.
-		netAddr:    netAddr,
-		netPath:    netPath,
-		rpcClient:  rpcClient,
-		httpClient: httpClient,
+		netScheme: "http", // TODO: fix for ssl rpc support.
+		netAddr:   netAddr,
+		netPath:   netPath,
+		rpcClient: rpcClient,
+		rpcToken:  token,
 	}
 
 	// Returns successfully here.
@@ -117,7 +131,8 @@ func (n networkStorage) MakeVol(volume string) error {
 		return errVolumeBusy
 	}
 	reply := GenericReply{}
-	if err := n.rpcClient.Call("Storage.MakeVolHandler", volume, &reply); err != nil {
+	args := GenericVolArgs{n.rpcToken, volume}
+	if err := n.rpcClient.Call("Storage.MakeVolHandler", args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -129,7 +144,7 @@ func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 		return nil, errVolumeBusy
 	}
 	ListVols := ListVolsReply{}
-	err = n.rpcClient.Call("Storage.ListVolsHandler", "", &ListVols)
+	err = n.rpcClient.Call("Storage.ListVolsHandler", n.rpcToken, &ListVols)
 	if err != nil {
 		return nil, err
 	}
