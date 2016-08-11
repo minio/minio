@@ -40,6 +40,12 @@ const (
 // not enabled on the bucket, the operation returns an empty
 // NotificationConfiguration element.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	// Validate request authorization.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -48,11 +54,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	// Attempt to successfully load notification config.
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
 	if err != nil && err != errNoSuchNotifications {
 		errorIf(err, "Unable to read notification configuration.")
@@ -84,6 +85,12 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // By default, your bucket has no event notifications configured. That is,
 // the notification configuration will be an empty NotificationConfiguration.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	// Validate request authorization.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -92,11 +99,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	_, err := objectAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to bucket info.")
@@ -231,6 +233,13 @@ func isMinioARNConfigured(lambdaARN string, lambdaConfigs []lambdaConfig) bool {
 
 // ListenBucketNotificationHandler - list bucket notifications.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate if bucket exists.
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	// Validate request authorization.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -243,13 +252,6 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	lambdaARN := r.URL.Query().Get("notificationARN")
 	if lambdaARN == "" {
 		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
-		return
-	}
-
-	// Validate if bucket exists.
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
 
