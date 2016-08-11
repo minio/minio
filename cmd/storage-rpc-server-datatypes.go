@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package main
 
 // GenericReply represents any generic RPC reply.
 type GenericReply struct{}
