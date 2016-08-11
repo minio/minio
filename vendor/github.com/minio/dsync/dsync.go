@@ -16,10 +16,7 @@
 
 package dsync
 
-import (
-	"errors"
-	"net/rpc"
-)
+import "errors"
 
 const RpcPath = "/dsync"
 const DebugPath = "/debug"
@@ -29,15 +26,18 @@ const DefaultPath = "/rpc/dsync"
 var n int
 var nodes []string
 var rpcPaths []string
-var clnts []*rpc.Client
+var clnts []*RPCClient
 
-func closeClients(clients []*rpc.Client) {
+func closeClients(clients []*RPCClient) {
 	for _, clnt := range clients {
 		clnt.Close()
 	}
 }
 
-// Same as SetNodes, but takes a slice of rpc paths as argument different from the package-level default.
+// SetNodesWithPath - initializes package-level global state variables such as
+// nodes, rpcPaths, clnts.
+// N B - This function should be called only once inside any program that uses
+// dsync.
 func SetNodesWithPath(nodeList []string, paths []string) (err error) {
 
 	// Validate if number of nodes is within allowable range.
@@ -54,5 +54,10 @@ func SetNodesWithPath(nodeList []string, paths []string) (err error) {
 	rpcPaths = make([]string, len(paths))
 	copy(rpcPaths, paths[:])
 	n = len(nodes)
+	clnts = make([]*RPCClient, n)
+	// Initialize node name and rpc path for each RPCClient object.
+	for i := range clnts {
+		clnts[i] = newClient(nodes[i], rpcPaths[i])
+	}
 	return nil
 }
