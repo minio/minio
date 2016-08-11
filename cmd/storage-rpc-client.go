@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"net/rpc"
 	"path"
 	"strconv"
@@ -49,6 +50,12 @@ func splitNetPath(networkPath string) (netAddr, netPath string) {
 // disks as well.
 func toStorageErr(err error) error {
 	switch err.Error() {
+	case io.EOF.Error():
+		return io.EOF
+	case io.ErrUnexpectedEOF.Error():
+		return io.ErrUnexpectedEOF
+	case errUnexpected.Error():
+		return errUnexpected
 	case errDiskFull.Error():
 		return errDiskFull
 	case errVolumeNotFound.Error():
@@ -57,14 +64,20 @@ func toStorageErr(err error) error {
 		return errVolumeExists
 	case errFileNotFound.Error():
 		return errFileNotFound
+	case errFileNameTooLong.Error():
+		return errFileNameTooLong
+	case errFileAccessDenied.Error():
+		return errFileAccessDenied
 	case errIsNotRegular.Error():
 		return errIsNotRegular
 	case errVolumeNotEmpty.Error():
 		return errVolumeNotEmpty
-	case errFileAccessDenied.Error():
-		return errFileAccessDenied
 	case errVolumeAccessDenied.Error():
 		return errVolumeAccessDenied
+	case errCorruptedFormat.Error():
+		return errCorruptedFormat
+	case errUnformattedDisk.Error():
+		return errUnformattedDisk
 	}
 	return err
 }
