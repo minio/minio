@@ -38,7 +38,7 @@ import (
 // isJWTReqAuthenticated validates if any incoming request to be a
 // valid JWT authenticated request.
 func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		errorIf(err, "unable to initialize a new JWT")
 		return false
@@ -286,9 +286,14 @@ type LoginRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
+// Default JWT for minio browser expires in 24hrs.
+const (
+	defaultWebTokenExpiry time.Duration = time.Hour * 24 // 24Hrs.
+)
+
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -353,7 +358,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return &json2.Error{Message: err.Error()}
 	}
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // JWT Expiry set to 24Hrs.
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -439,7 +444,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	tokenStr := r.URL.Query().Get("token")
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // Expiry set to 24Hrs.
 	if err != nil {
 		errorIf(err, "error in getting new JWT")
 		return
