@@ -34,7 +34,6 @@ type DMutex struct {
 	uids  []string   // Array of uids for verification of sending correct release messages
 	m     sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 
-	// TODO: Decide: create per object or create once for whole class
 }
 
 type Granted struct {
@@ -43,15 +42,25 @@ type Granted struct {
 	uid    string
 }
 
+// Connect to respective lock server nodes on the first Lock() call.
 func connectLazy(dm *DMutex) {
 	if clnts == nil {
-		clnts = make([]*rpc.Client, n)
+		panic("rpc client connections weren't initialized.")
 	}
 	for i := range clnts {
-		if clnts[i] == nil {
-			// pass in unique path (as required by server.HandleHTTP()
-			clnts[i], _ = rpc.DialHTTPPath("tcp", nodes[i], rpcPaths[i])
+		if clnts[i].rpc != nil {
+			continue
 		}
+
+		// Pass in unique path (as required by server.HandleHTTP().
+		// Ignore failure to connect, the lock server node may join the
+		// cluster later.
+		clnt, err := rpc.DialHTTPPath("tcp", nodes[i], rpcPaths[i])
+		if err != nil {
+			clnts[i].SetRPC(nil)
+			continue
+		}
+		clnts[i].SetRPC(clnt)
 	}
 }
 
@@ -69,7 +78,6 @@ func (dm *DMutex) Lock() {
 	runs, backOff := 1, 1
 
 	for {
-		// TODO: Implement reconnect
 		connectLazy(dm)
 
 		// create temp arrays on stack
@@ -130,18 +138,15 @@ func (dm *DMutex) tryLockTimeout() bool {
 
 // lock tries to acquire the distributed lock, returning true or false
 //
-func lock(clnts []*rpc.Client, locks *[]bool, uids *[]string, lockName string) bool {
+func lock(clnts []*RPCClient, locks *[]bool, uids *[]string, lockName string) bool {
 
 	// Create buffered channel of quorum size
 	ch := make(chan Granted, n/2+1)
 
 	for index, c := range clnts {
 
-		if c == nil {
-			continue
-		}
 		// broadcast lock request to all nodes
-		go func(index int, c *rpc.Client) {
+		go func(index int, c *RPCClient) {
 			// All client methods issuing RPCs are thread-safe and goroutine-safe,
 			// i.e. it is safe to call them from multiple concurrently running go routines.
 			var status bool
@@ -153,6 +158,11 @@ func lock(clnts []*rpc.Client, locks *[]bool, uids *[]string, lockName string) b
 				// TODO: Get UIOD again
 				uid = ""
 			} else {
+				// If rpc call failed due to connection related errors, reset rpc.Client object
+				// to trigger reconnect on subsequent Lock()/Unlock() requests to the same node.
+				if IsRPCError(err) {
+					clnts[index].SetRPC(nil)
+				}
 				// silently ignore error, retry later
 			}
 
@@ -239,7 +249,7 @@ func quorumMet(locks *[]bool) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(clnts []*rpc.Client, locks *[]bool, ids *[]string, lockName string) {
+func releaseAll(clnts []*RPCClient, locks *[]bool, ids *[]string, lockName string) {
 
 	for lock := 0; lock < n; lock++ {
 		if (*locks)[lock] {
@@ -297,7 +307,7 @@ func (dm *DMutex) Unlock() {
 }
 
 // sendRelease sends a release message to a node that previously granted a lock
-func sendRelease(c *rpc.Client, name, uid string) {
+func sendRelease(c *RPCClient, name, uid string) {
 
 	// All client methods issuing RPCs are thread-safe and goroutine-safe,
 	// i.e. it is safe to call them from multiple concurrently running goroutines.
