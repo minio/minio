@@ -64,6 +64,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -97,11 +103,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
@@ -128,6 +129,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	switch getRequestAuthType(r) {
 	default:
@@ -156,11 +163,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
