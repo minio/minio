@@ -161,40 +161,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 // Deletes the policy and verifies the deletion by fetching it back.
 func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 	// Sample bucket policy.
-	bucketPolicyBuf := `{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:ListBucket"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-              "arn:aws:s3:::%s"
-            ]
-        },
-        {
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-                  "arn:aws:s3:::%s/this*"
-            ]
-        }
-    ]
-}`
+	bucketPolicyBuf := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
 
 	// generate a random bucket Name.
 	bucketName := getRandomBucketName()
@@ -494,6 +461,49 @@ func (s *TestSuiteCommon) TestBucket(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+}
+
+// Tests get anonymous object.
+func (s *TestSuiteCommon) TestObjectGetAnonymous(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	buffer := bytes.NewReader([]byte("hello world"))
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the make bucket http request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	// assert the response http status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	objectName := "testObject"
+	// create HTTP request to upload the object.
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request to upload the object.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// assert the HTTP response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// initiate anonymous HTTP request to fetch the object which does not exist. We need to return AccessDenied.
+	response, err = http.Get(getGetObjectURL(s.endPoint, bucketName, objectName+".1"))
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	verifyError(c, response, "AccessDenied", "Access Denied.", http.StatusForbidden)
+
+	// initiate anonymous HTTP request to fetch the object which does exist. We need to return AccessDenied.
+	response, err = http.Get(getGetObjectURL(s.endPoint, bucketName, objectName))
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	verifyError(c, response, "AccessDenied", "Access Denied.", http.StatusForbidden)
 }
 
 // TestGetObject - Tests fetching of a small object after its insertion into the bucket.

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -166,15 +167,15 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Read access policy up to maxAccessPolicySize.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 	// bucket policies are limited to 20KB in size, using a limit reader.
-	bucketPolicyBuf, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
+	policyBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
-		errorIf(err, "Unable to read bucket policy.")
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		errorIf(err, "Unable to read from client.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-
 	// Parse bucket policy.
-	bucketPolicy, err := parseBucketPolicy(bucketPolicyBuf)
+	var policy = &bucketPolicy{}
+	err = parseBucketPolicy(bytes.NewReader(policyBytes), policy)
 	if err != nil {
 		errorIf(err, "Unable to parse bucket policy.")
 		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
@@ -182,13 +183,13 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(bucket, bucketPolicy); s3Error != ErrNone {
+	if s3Error := checkBucketPolicyResources(bucket, policy); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
 
 	// Save bucket policy.
-	if err := writeBucketPolicy(bucket, api.ObjectAPI, bucketPolicyBuf); err != nil {
+	if err = writeBucketPolicy(bucket, api.ObjectAPI, bytes.NewReader(policyBytes), int64(len(policyBytes))); err != nil {
 		errorIf(err, "Unable to write bucket policy.")
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -198,6 +199,11 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		}
 		return
 	}
+
+	// Set the bucket policy in memory.
+	globalBucketPolicies.SetBucketPolicy(bucket, policy)
+
+	// Success.
 	writeSuccessNoContent(w)
 }
 
@@ -234,6 +240,11 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		}
 		return
 	}
+
+	// Remove bucket policy.
+	globalBucketPolicies.RemoveBucketPolicy(bucket)
+
+	// Success.
 	writeSuccessNoContent(w)
 }
 
@@ -258,7 +269,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	p, err := readBucketPolicy(bucket, api.ObjectAPI)
+	policy, err := readBucketPolicy(bucket, api.ObjectAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		switch err.(type) {
@@ -271,5 +282,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 		}
 		return
 	}
-	io.Copy(w, bytes.NewReader(p))
+
+	// Write to client.
+	fmt.Fprint(w, policy)
 }

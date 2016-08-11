@@ -245,6 +245,8 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	initBucketPolicies(obj)
+
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -267,40 +269,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
-	bucketPolicyTemplate := `{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:ListBucket"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-                "arn:aws:s3:::%s"
-            ]
-        },
-        {
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-                "arn:aws:s3:::%s/this*"
-            ]
-        }
-    ]
-}`
+	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
 
 	// test cases with sample input and expected output.
 	testCases := []struct {
@@ -342,6 +311,8 @@ func TestGetBucketPolicyHandler(t *testing.T) {
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	initBucketPolicies(obj)
+
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -365,40 +336,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
-	bucketPolicyTemplate := `{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:ListBucket"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-                "arn:aws:s3:::%s"
-            ]
-        },
-        {
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                    "*"
-                ]
-            },
-            "Resource": [
-                "arn:aws:s3:::%s/this*"
-            ]
-        }
-    ]
-}`
+	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
 
 	// Writing bucket policy before running test on GetBucketPolicy.
 	putTestPolicies := []struct {
@@ -483,6 +421,8 @@ func TestDeleteBucketPolicyHandler(t *testing.T) {
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	initBucketPolicies(obj)
+
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
