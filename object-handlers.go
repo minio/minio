@@ -36,6 +36,8 @@ var supportedGetReqParams = map[string]string{
 	"response-expires":             "Expires",
 	"response-content-type":        "Content-Type",
 	"response-cache-control":       "Cache-Control",
+	"response-content-encoding":    "Content-Encoding",
+	"response-content-language":    "Content-Language",
 	"response-content-disposition": "Content-Disposition",
 }
 
