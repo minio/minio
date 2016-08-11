@@ -156,7 +156,8 @@ func (n networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	if n.rpcClient == nil {
 		return VolInfo{}, errVolumeBusy
 	}
-	if err = n.rpcClient.Call("Storage.StatVolHandler", volume, &volInfo); err != nil {
+	args := GenericVolArgs{n.rpcToken, volume}
+	if err = n.rpcClient.Call("Storage.StatVolHandler", args, &volInfo); err != nil {
 		return VolInfo{}, toStorageErr(err)
 	}
 	return volInfo, nil
@@ -168,7 +169,8 @@ func (n networkStorage) DeleteVol(volume string) error {
 		return errVolumeBusy
 	}
 	reply := GenericReply{}
-	if err := n.rpcClient.Call("Storage.DeleteVolHandler", volume, &reply); err != nil {
+	args := GenericVolArgs{n.rpcToken, volume}
+	if err := n.rpcClient.Call("Storage.DeleteVolHandler", args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -183,6 +185,7 @@ func (n networkStorage) AppendFile(volume, path string, buffer []byte) (err erro
 	}
 	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.AppendFileHandler", AppendFileArgs{
+		Token:  n.rpcToken,
 		Vol:    volume,
 		Path:   path,
 		Buffer: buffer,
@@ -195,8 +198,9 @@ func (n networkStorage) AppendFile(volume, path string, buffer []byte) (err erro
 // StatFile - get latest Stat information for a file at path.
 func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
 	if err = n.rpcClient.Call("Storage.StatFileHandler", StatFileArgs{
-		Vol:  volume,
-		Path: path,
+		Token: n.rpcToken,
+		Vol:   volume,
+		Path:  path,
 	}, &fileInfo); err != nil {
 		return FileInfo{}, toStorageErr(err)
 	}
@@ -209,8 +213,9 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 // not use this on large files as it would cause server to crash.
 func (n networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 	if err = n.rpcClient.Call("Storage.ReadAllHandler", ReadAllArgs{
-		Vol:  volume,
-		Path: path,
+		Token: n.rpcToken,
+		Vol:   volume,
+		Path:  path,
 	}, &buf); err != nil {
 		return nil, toStorageErr(err)
 	}
@@ -223,6 +228,7 @@ func (n networkStorage) ReadFile(volume string, path string, offset int64, buffe
 		return 0, errVolumeBusy
 	}
 	if err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{
+		Token:  n.rpcToken,
 		Vol:    volume,
 		Path:   path,
 		Offset: offset,
@@ -239,8 +245,9 @@ func (n networkStorage) ListDir(volume, path string) (entries []string, err erro
 		return nil, errVolumeBusy
 	}
 	if err = n.rpcClient.Call("Storage.ListDirHandler", ListDirArgs{
-		Vol:  volume,
-		Path: path,
+		Token: n.rpcToken,
+		Vol:   volume,
+		Path:  path,
 	}, &entries); err != nil {
 		return nil, toStorageErr(err)
 	}
@@ -255,8 +262,9 @@ func (n networkStorage) DeleteFile(volume, path string) (err error) {
 	}
 	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.DeleteFileHandler", DeleteFileArgs{
-		Vol:  volume,
-		Path: path,
+		Token: n.rpcToken,
+		Vol:   volume,
+		Path:  path,
 	}, &reply); err != nil {
 		return toStorageErr(err)
 	}
@@ -270,6 +278,7 @@ func (n networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string
 	}
 	reply := GenericReply{}
 	if err = n.rpcClient.Call("Storage.RenameFileHandler", RenameFileArgs{
+		Token:   n.rpcToken,
 		SrcVol:  srcVolume,
 		SrcPath: srcPath,
 		DstVol:  dstVolume,
