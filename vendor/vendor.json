@@ -100,8 +100,8 @@
 		{
 			"checksumSHA1": "Ev8FdU+RSmpHQsLGzRpg5/ka7zE=",
 			"path": "github.com/minio/dsync",
-			"revision": "c84de1533e4cd403cdaaf9c4018e12c60a916e23",
-			"revisionTime": "2016-08-10T23:17:05Z"
+			"revision": "b26292b87d023da097193c8fe624d4a159e0fd03",
+			"revisionTime": "2016-08-11T06:53:13Z"
 		},
 		{
 			"path": "github.com/minio/go-homedir",
