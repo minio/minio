@@ -212,7 +212,7 @@ main() {
         echo "Please install them "
         echo "${MISSING}"
         echo
-        echo "Follow https://github.com/minio/minio/blob/master/INSTALLGO.md for further instructions"
+        echo "Follow https://docs.minio.io/docs/how-to-install-golang for further instructions"
         exit 1
     fi
     echo "Done"
