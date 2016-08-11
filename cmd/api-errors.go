@@ -134,6 +134,7 @@ const (
 	ErrObjectExistsAsDirectory
 	ErrPolicyNesting
 	ErrInvalidObjectName
+	ErrServerNotInitialized
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -555,6 +556,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioInvalidObjectName",
 		Description:    "Object name contains unsupported characters. Unsupported characters are `^*|\\\"",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrServerNotInitialized: {
+		Code:           "XMinioServerNotInitialized",
+		Description:    "Server not initialized, please try again.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	// Add your error structure here.
 }
