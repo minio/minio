@@ -72,11 +72,11 @@ func TestNewJWT(t *testing.T) {
 		expectedErr error
 	}{
 		// Test non-existent config directory.
-		{path.Join(path1, "non-existent-dir"), false, nil, fmt.Errorf("server not initialzed")},
+		{path.Join(path1, "non-existent-dir"), false, nil, fmt.Errorf("Server not initialzed")},
 		// Test empty config directory.
-		{path2, false, nil, fmt.Errorf("server not initialzed")},
+		{path2, false, nil, fmt.Errorf("Server not initialzed")},
 		// Test empty config file.
-		{path3, false, nil, fmt.Errorf("server not initialzed")},
+		{path3, false, nil, fmt.Errorf("Server not initialzed")},
 		// Test initialized config file.
 		{path4, true, nil, nil},
 		// Test to read already created config file.
@@ -108,7 +108,7 @@ func TestNewJWT(t *testing.T) {
 			serverConfig.SetCredential(*testCase.cred)
 		}
 
-		_, err := newJWT()
+		_, err := newJWT(defaultWebTokenExpiry)
 
 		if testCase.expectedErr != nil {
 			if err == nil {
@@ -132,7 +132,7 @@ func TestGenerateToken(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}
@@ -179,7 +179,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}
