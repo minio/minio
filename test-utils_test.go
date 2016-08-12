@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -340,6 +341,62 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 	}
 
 	return req, nil
+}
+
+// Return new WebRPC request object.
+func newWebRPCRequest(methodRPC, authorization string, body io.ReadSeeker) (*http.Request, error) {
+	req, err := http.NewRequest("POST", "/minio/webrpc", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if authorization != "" {
+		req.Header.Set("Authorization", "Bearer "+authorization)
+	}
+	// Seek back to beginning.
+	if body != nil {
+		body.Seek(0, 0)
+		// Add body
+		req.Body = ioutil.NopCloser(body)
+	} else {
+		// this is added to avoid panic during ioutil.ReadAll(req.Body).
+		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
+		// This is very similar to https://github.com/golang/go/issues/7527.
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
+	}
+	return req, nil
+}
+
+// Marshal request and return a new HTTP request object to call the webrpc
+func newTestWebRPCRequest(rpcMethod string, authorization string, data interface{}) (*http.Request, error) {
+	type genericJson struct {
+		JsonRPC string      `json:"jsonrpc"`
+		Id      string      `json:"id"`
+		Method  string      `json:"method"`
+		Params  interface{} `json:"params"`
+	}
+	encapsulatedData := genericJson{JsonRPC: "2.0", Id: "1", Method: rpcMethod, Params: data}
+	jsonData, err := json.Marshal(encapsulatedData)
+	req, err := newWebRPCRequest(rpcMethod, authorization, bytes.NewReader(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+// Unmarshal response and return the webrpc response
+func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) error {
+	type rpcReply struct {
+		Id      string      `json:"id"`
+		Jsonrpc string      `json:"jsonrpc"`
+		Result  interface{} `json:"result"`
+	}
+	reply := &rpcReply{Result: data}
+	err := json.NewDecoder(resp.Body).Decode(reply)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // creates the temp backend setup.
@@ -829,5 +886,17 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 			break
 		}
 	}
+	return muxRouter
+}
+
+func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
+	// Initialize Web.
+	webHandlers := &webAPIHandlers{
+		ObjectAPI: objLayer,
+	}
+
+	// Initialize router.
+	muxRouter := router.NewRouter()
+	registerWebRouter(muxRouter, webHandlers)
 	return muxRouter
 }
