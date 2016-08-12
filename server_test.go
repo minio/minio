@@ -2064,6 +2064,17 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	// HTTP request to ListMultipart Uploads.
+	// max-keys is set to valid value of 1
+	request, err = newTestSignedRequest("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "1"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	// execute the HTTP request.
+	response3, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response3.StatusCode, Equals, http.StatusOK)
+
 	// HTTP request to ListMultipart Uploads.
 	// max-keys is set to invalid value of -2.
 	request, err = newTestSignedRequest("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "-2"),
