@@ -178,7 +178,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// case where the headers doesn't contain the one of the signed header in the signed headers list.
 	signedHeaders = append(signedHeaders, " X-Amz-Credential")
 	// expected to fail with `ErrUnsignedHeaders`.
-	extractedSignedHeaders, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}
@@ -186,7 +186,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// case where the list of signed headers doesn't contain the host field.
 	signedHeaders = signedHeaders[1:]
 	// expected to fail with `ErrUnsignedHeaders`.
-	extractedSignedHeaders, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}

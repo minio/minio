@@ -92,6 +92,9 @@ func TestCopyBuffer(t *testing.T) {
 	testFile := "testFile"
 	testContent := []byte("hello, world")
 	err = disk.AppendFile(volume, testFile, testContent)
+	if err != nil {
+		t.Fatalf("AppendFile failed: <ERROR> %s", err)
+	}
 
 	testCases := []struct {
 		writer io.Writer

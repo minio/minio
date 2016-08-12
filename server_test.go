@@ -726,6 +726,9 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 
 			client := http.Client{}
 			response, err := client.Do(request)
+			if err != nil {
+				c.Fatalf("Put bucket Failed: <ERROR> %s", err)
+			}
 			defer response.Body.Close()
 		}()
 	}

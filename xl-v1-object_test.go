@@ -91,7 +91,9 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 
 	// Create object "obj" under bucket "bucket" for Test 7 to pass
 	_, err = xl.PutObject("bucket", "obj", int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
-
+	if err != nil {
+		t.Fatalf("XL Object upload failed: <ERROR> %s", err)
+	}
 	for i, test := range testCases {
 		actualErr := xl.DeleteObject(test.bucket, test.object)
 		if test.expectedErr != nil && actualErr != test.expectedErr {
