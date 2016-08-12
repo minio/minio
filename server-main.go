@@ -90,24 +90,6 @@ type serverCmdConfig struct {
 	ignoredDisks []string
 }
 
-// configureServer configure a new server instance
-func configureServer(srvCmdConfig serverCmdConfig) *MuxServer {
-	// Minio server config
-	apiServer := &MuxServer{
-		Server: http.Server{
-			Addr: srvCmdConfig.serverAddr,
-			// Adding timeout of 10 minutes for unresponsive client connections.
-			ReadTimeout:    10 * time.Minute,
-			WriteTimeout:   10 * time.Minute,
-			Handler:        configureServerHandler(srvCmdConfig),
-			MaxHeaderBytes: 1 << 20,
-		},
-	}
-
-	// Returns configured HTTP server.
-	return apiServer
-}
-
 // getListenIPs - gets all the ips to listen on.
 func getListenIPs(httpServerConf *http.Server) (hosts []string, port string) {
 	host, port, err := net.SplitHostPort(httpServerConf.Addr)
@@ -263,11 +245,13 @@ func serverMain(c *cli.Context) {
 	disks := c.Args()
 
 	// Configure server.
-	apiServer := configureServer(serverCmdConfig{
+	handler := configureServerHandler(serverCmdConfig{
 		serverAddr:   serverAddress,
 		disks:        disks,
 		ignoredDisks: ignoredDisks,
 	})
+
+	apiServer := NewMuxServer(serverAddress, handler)
 
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)
