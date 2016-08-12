@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/rpc"
 	"path"
 	"strings"
@@ -162,16 +164,29 @@ func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error 
 }
 
 // ReadFileHandler - read file handler is rpc wrapper to read file.
-func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *int64) error {
+func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Recover any panic and return ErrCacheFull.
+			err = bytes.ErrTooLarge
+		}
+	}() // Do not crash the server.
 	if !isRPCTokenValid(args.Token) {
 		return errors.New("Invalid token")
 	}
-	n, err := s.storage.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer)
-	if err != nil {
-		return err
+	// Allocate the requested buffer from the client.
+	*reply = make([]byte, args.Size)
+	var n int64
+	n, err = s.storage.ReadFile(args.Vol, args.Path, args.Offset, *reply)
+	// Sending an error over the rpc layer, would cause unmarshalling to fail. In situations
+	// when we have short read i.e `io.ErrUnexpectedEOF` treat it as good condition and copy
+	// the buffer properly.
+	if err == io.ErrUnexpectedEOF {
+		// Reset to nil as good condition.
+		err = nil
 	}
-	*reply = n
-	return nil
+	*reply = (*reply)[0:n]
+	return err
 }
 
 // AppendFileHandler - append file handler is rpc wrapper to append file.
