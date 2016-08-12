@@ -561,14 +561,25 @@ func reorderDisksByInspection(orderedDisks, storageDisks []StorageAPI, formatCon
 		if len(vols) == 0 {
 			continue
 		}
-		objects, err := storageDisks[index].ListDir(vols[0].Name, "")
+		volName := ""
+		// Avoid picking minioMetaBucket because ListVols() returns a non ordered list
+		for i := range vols {
+			if vols[i].Name != minioMetaBucket {
+				volName = vols[i].Name
+				break
+			}
+		}
+		if volName == "" {
+			continue
+		}
+		objects, err := storageDisks[index].ListDir(volName, "")
 		if err != nil {
 			return nil, err
 		}
 		if len(objects) == 0 {
 			continue
 		}
-		xlData, err := readXLMeta(storageDisks[index], vols[0].Name, objects[0])
+		xlData, err := readXLMeta(storageDisks[index], volName, objects[0])
 		if err != nil {
 			if err == errFileNotFound {
 				continue
