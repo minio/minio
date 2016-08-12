@@ -17,10 +17,7 @@ script:
 - make coverage
 
 after_success:
-- bash <(curl -s https://codecov.io/bash)
-
-after_success:
-- bash <(curl -s https://codecov.io/bash)
+- bash <(curl -s https://codecov.io/bash) -X fix
 
 go:
 - 1.6
