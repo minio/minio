@@ -257,7 +257,7 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	pool := bpool.NewBytePool(chunkSize, len(disks))
 
 	buf := &bytes.Buffer{}
-	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 	if err != nil {
 		t.Error(err)
 	}
@@ -270,7 +270,7 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	disks[5] = ReadDiskDown{disks[5].(*posix)}
 
 	buf.Reset()
-	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 	if err != nil {
 		t.Error(err)
 	}
@@ -285,7 +285,7 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	disks[11] = ReadDiskDown{disks[11].(*posix)}
 
 	buf.Reset()
-	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 	if err != nil {
 		t.Error(err)
 	}
@@ -296,7 +296,7 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	// 1 more disk down. 7 disks down in total. Read should fail.
 	disks[12] = ReadDiskDown{disks[12].(*posix)}
 	buf.Reset()
-	size, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 	if err != errXLReadQuorum {
 		t.Fatal("expected errXLReadQuorum error")
 	}
@@ -361,7 +361,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 	for i, testCase := range testCases {
 		expected := data[testCase.offset:(testCase.offset + testCase.length)]
 		buf := &bytes.Buffer{}
-		size, err = erasureReadFile(buf, disks, "testbucket", "testobject", testCase.offset, testCase.length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+		_, err = erasureReadFile(buf, disks, "testbucket", "testobject", testCase.offset, testCase.length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -429,7 +429,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 		expected := data[offset : offset+readLen]
 
-		size, err = erasureReadFile(buf, disks, "testbucket", "testobject", offset, readLen, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+		_, err = erasureReadFile(buf, disks, "testbucket", "testobject", offset, readLen, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 		if err != nil {
 			t.Fatal(err, offset, readLen)
 		}

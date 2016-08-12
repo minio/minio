@@ -92,7 +92,7 @@ func TestErasureCreateFile(t *testing.T) {
 
 	// 1 more disk down. 7 disk down in total. Should return quorum error.
 	disks[10] = AppendDiskDown{disks[10].(*posix)}
-	size, _, err = erasureCreateFile(disks, "testbucket", "testobject4", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
+	_, _, err = erasureCreateFile(disks, "testbucket", "testobject4", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
 	if err != errXLWriteQuorum {
 		t.Errorf("erasureCreateFile returned expected errXLWriteQuorum error, got %s", err)
 	}
