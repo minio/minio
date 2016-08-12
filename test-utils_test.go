@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -369,13 +370,13 @@ func newWebRPCRequest(methodRPC, authorization string, body io.ReadSeeker) (*htt
 
 // Marshal request and return a new HTTP request object to call the webrpc
 func newTestWebRPCRequest(rpcMethod string, authorization string, data interface{}) (*http.Request, error) {
-	type genericJson struct {
-		JsonRPC string      `json:"jsonrpc"`
-		Id      string      `json:"id"`
+	type genericJSON struct {
+		JSONRPC string      `json:"jsonrpc"`
+		ID      string      `json:"id"`
 		Method  string      `json:"method"`
 		Params  interface{} `json:"params"`
 	}
-	encapsulatedData := genericJson{JsonRPC: "2.0", Id: "1", Method: rpcMethod, Params: data}
+	encapsulatedData := genericJSON{JSONRPC: "2.0", ID: "1", Method: rpcMethod, Params: data}
 	jsonData, err := json.Marshal(encapsulatedData)
 	req, err := newWebRPCRequest(rpcMethod, authorization, bytes.NewReader(jsonData))
 	if err != nil {
@@ -384,17 +385,29 @@ func newTestWebRPCRequest(rpcMethod string, authorization string, data interface
 	return req, nil
 }
 
+type ErrWebRPC struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
 // Unmarshal response and return the webrpc response
 func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) error {
 	type rpcReply struct {
-		Id      string      `json:"id"`
-		Jsonrpc string      `json:"jsonrpc"`
+		ID      string      `json:"id"`
+		JSONRPC string      `json:"jsonrpc"`
 		Result  interface{} `json:"result"`
+		Error   *ErrWebRPC  `json:"error"`
 	}
-	reply := &rpcReply{Result: data}
+	reply := &rpcReply{Result: &data}
 	err := json.NewDecoder(resp.Body).Decode(reply)
 	if err != nil {
 		return err
+	}
+	// For the moment, web handlers errors code are not meaningful
+	// Return only the error message
+	if reply.Error != nil {
+		return errors.New(reply.Error.Message)
 	}
 	return nil
 }
