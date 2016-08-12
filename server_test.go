@@ -28,6 +28,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -1234,6 +1235,59 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 	c.Assert(string(partialObject), Equals, "Wo")
 }
 
+// TestListObjectsHandler - Setting valid parameters to List Objects
+// and then asserting the response with the expected one.
+func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the HTTP request to create bucket.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	buffer1 := bytes.NewReader([]byte("Hello World"))
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, "bar"),
+		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// create listObjectsV1 request with valid parameters
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
+
+	// create listObjectsV2 request with valid parameters
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
+}
+
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
 // and then asserting the error response with the expected one.
 func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
@@ -2064,6 +2118,17 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response2.StatusCode, Equals, http.StatusOK)
+
+	// HTTP request to ListMultipart Uploads.
+	// max-keys is set to valid value of 1
+	request, err = newTestSignedRequest("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "1"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	// execute the HTTP request.
+	response3, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response3.StatusCode, Equals, http.StatusOK)
+
 	// HTTP request to ListMultipart Uploads.
 	// max-keys is set to invalid value of -2.
 	request, err = newTestSignedRequest("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "-2"),
