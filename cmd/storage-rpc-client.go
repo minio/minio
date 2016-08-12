@@ -49,6 +49,9 @@ func splitNetPath(networkPath string) (netAddr, netPath string) {
 // written so that the storageAPI errors are consistent across network
 // disks as well.
 func toStorageErr(err error) error {
+	if err == nil {
+		return nil
+	}
 	switch err.Error() {
 	case io.EOF.Error():
 		return io.EOF
@@ -240,16 +243,18 @@ func (n networkStorage) ReadFile(volume string, path string, offset int64, buffe
 	if n.rpcClient == nil {
 		return 0, errVolumeBusy
 	}
-	if err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{
+	var result []byte
+	err = n.rpcClient.Call("Storage.ReadFileHandler", ReadFileArgs{
 		Token:  n.rpcToken,
 		Vol:    volume,
 		Path:   path,
 		Offset: offset,
-		Buffer: buffer,
-	}, &m); err != nil {
-		return 0, toStorageErr(err)
-	}
-	return m, nil
+		Size:   len(buffer),
+	}, &result)
+	// Copy results to buffer.
+	copy(buffer, result)
+	// Return length of result, err if any.
+	return int64(len(result)), toStorageErr(err)
 }
 
 // ListDir - list all entries at prefix.
