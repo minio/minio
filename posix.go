@@ -143,9 +143,19 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	// Remove 5% from total space for cumulative disk
 	// space used for journalling, inodes etc.
 	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	availableFiles := (float64(di.Ffree) / (float64(di.Files) - (0.05 * float64(di.Files)))) * 100
-	if int64(availableDiskSpace) <= minFreeDisk || int64(availableFiles) <= minFreeDisk {
+	if int64(availableDiskSpace) <= minFreeDisk {
 		return errDiskFull
+	}
+
+	// Some filesystems do not implement a way to provide total inodes available, instead inodes
+	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
+	// Allow for the available disk to be separately validate and we will validate inodes only if
+	// total inodes are provided by the underlying filesystem.
+	if di.Files != 0 {
+		availableFiles := (float64(di.Ffree) / (float64(di.Files) - (0.05 * float64(di.Files)))) * 100
+		if int64(availableFiles) <= minFreeDisk {
+			return errDiskFull
+		}
 	}
 
 	// Success.
