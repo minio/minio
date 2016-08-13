@@ -20,6 +20,8 @@ import "testing"
 
 // ShutdownCallback simulates a successful and failure exit here.
 func TestShutdownCallbackSuccess(t *testing.T) {
+	// initialize graceful shutdown mechanism
+	prepareGracefulShutdown()
 	// Register two callbacks that return success
 	registerObjectStorageShutdown(func() errCode {
 		return exitSuccess
@@ -28,7 +30,6 @@ func TestShutdownCallbackSuccess(t *testing.T) {
 		return exitSuccess
 	})
 
-	shutdownSignal = make(chan bool, 1)
 	shutdownSignal <- true
 	// Start executing callbacks and exitFunc receives a success.
 	dummySuccess := func(code int) {

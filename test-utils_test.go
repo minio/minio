@@ -744,6 +744,10 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 // ExecObjectLayerTest - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
+	// Object layers define graceful shutdown functions, so we need to prepare
+	// the shutdown mechanism first
+	prepareGracefulShutdown()
+
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)

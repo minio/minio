@@ -190,7 +190,7 @@ func main() {
 	}
 
 	// Initialize and monitor shutdown signal
-	shutdownSignal = make(chan bool, 1)
+	prepareGracefulShutdown()
 	monitorShutdownSignal(os.Exit)
 
 	// Run the app - exit on error.

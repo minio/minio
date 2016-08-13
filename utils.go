@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -90,18 +91,31 @@ var shutdownCallbacks []func() errCode
 // the general callback shutdowns
 var shutdownObjectStorageCallbacks []func() errCode
 
+// Protect shutdownCallbacks list from a concurrent access
+var shutdownMutex *sync.Mutex
+
 // Register callback functions that need to be called when process terminates.
 func registerShutdown(callback func() errCode) {
+	shutdownMutex.Lock()
 	shutdownCallbacks = append(shutdownCallbacks, callback)
+	shutdownMutex.Unlock()
 }
 
 // Register object storagecallback functions that need to be called when process terminates.
 func registerObjectStorageShutdown(callback func() errCode) {
+	shutdownMutex.Lock()
 	shutdownObjectStorageCallbacks = append(shutdownObjectStorageCallbacks, callback)
+	shutdownMutex.Unlock()
 }
 
 // Represents a type of an exit func which will be invoked during shutdown signal.
 type onExitFunc func(code int)
+
+// Initialize graceful shutdown mechanism
+func prepareGracefulShutdown() {
+	shutdownMutex = &sync.Mutex{}
+	shutdownSignal = make(chan bool, 1)
+}
 
 // Start to monitor shutdownSignal to execute shutdown callbacks
 func monitorShutdownSignal(onExitFn onExitFunc) {
@@ -114,6 +128,7 @@ func monitorShutdownSignal(onExitFn onExitFunc) {
 				// Start a graceful shutdown call
 				shutdownSignal <- true
 			case <-shutdownSignal:
+				shutdownMutex.Lock()
 				// Call all callbacks and exit for emergency
 				for _, callback := range shutdownCallbacks {
 					exitCode := callback()
@@ -130,6 +145,8 @@ func monitorShutdownSignal(onExitFn onExitFunc) {
 					}
 
 				}
+				shutdownMutex.Unlock()
+
 				onExitFn(int(exitSuccess))
 			}
 		}
