@@ -56,7 +56,7 @@ $ cat config.json
 				"enable": false,
 				"url": "",
 				"exchange": "",
-				"routineKey": "",
+				"routingKey": "",
 				"exchangeType": "",
 				"mandatory": false,
 				"immediate": false,

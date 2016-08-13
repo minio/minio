@@ -218,7 +218,7 @@ type loggerV5 struct {
 		Level        string `json:"level"`
 		URL          string `json:"url"`
 		Exchange     string `json:"exchange"`
-		RoutingKey   string `json:"routineKey"`
+		RoutingKey   string `json:"routingKey"`
 		ExchangeType string `json:"exchangeType"`
 		Mandatory    bool   `json:"mandatory"`
 		Immediate    bool   `json:"immediate"`
