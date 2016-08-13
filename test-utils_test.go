@@ -746,7 +746,12 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Object layers define graceful shutdown functions, so we need to prepare
 	// the shutdown mechanism first
-	prepareGracefulShutdown()
+	dummySuccess := func(code int) {
+		if code != int(exitSuccess) {
+			t.Fatalf("Expected %d, got %d instead.", code, exitSuccess)
+		}
+	}
+	initGracefulShutdown(dummySuccess)
 
 	objLayer, fsDir, err := getSingleNodeObjectLayer()
 	if err != nil {

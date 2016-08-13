@@ -77,78 +77,80 @@ func contains(stringList []string, element string) bool {
 	return false
 }
 
-// shutdownSignal - is the channel that receives any boolean when
-// we want broadcast the start of shutdown
+// Represents a type of an exit func which will be invoked during shutdown signal.
+type onExitFunc func(code int)
+
+type ShutdownCallbacks struct {
+	// Protect callbacks list from a concurrent access
+	mutex *sync.Mutex
+	// callbacks - is the list of function callbacks executed one by one
+	// when a shutdown starts. A callback returns 0 for success and 1 for failure.
+	// Failure is considered an emergency error that needs an immediate exit
+	callbacks []func() errCode
+	// objectStorageCallbacks - contains the list of function callbacks that
+	// need to be invoked when a shutdown starts. These callbacks will be called before
+	// the general callback shutdowns
+	objectStorageCallbacks []func() errCode
+}
+
+// shutdownSignal receives any boolean when we want broadcast
+// the start of the shutdown process
 var shutdownSignal chan bool
 
-// shutdownCallbacks - is the list of function callbacks executed one by one
-// when a shutdown starts. A callback returns 0 for success and 1 for failure.
-// Failure is considered an emergency error that needs an immediate exit
-var shutdownCallbacks []func() errCode
-
-// shutdownObjectStorageCallbacks - contains the list of function callbacks that
-// need to be invoked when a shutdown starts. These callbacks will be called before
-// the general callback shutdowns
-var shutdownObjectStorageCallbacks []func() errCode
-
-// Protect shutdownCallbacks list from a concurrent access
-var shutdownMutex *sync.Mutex
+// shutdownCBs stores regular and object storages callbacks
+var shutdownCBs ShutdownCallbacks
 
 // Register callback functions that need to be called when process terminates.
 func registerShutdown(callback func() errCode) {
-	shutdownMutex.Lock()
-	shutdownCallbacks = append(shutdownCallbacks, callback)
-	shutdownMutex.Unlock()
+	shutdownCBs.mutex.Lock()
+	shutdownCBs.callbacks = append(shutdownCBs.callbacks, callback)
+	shutdownCBs.mutex.Unlock()
 }
 
 // Register object storagecallback functions that need to be called when process terminates.
 func registerObjectStorageShutdown(callback func() errCode) {
-	shutdownMutex.Lock()
-	shutdownObjectStorageCallbacks = append(shutdownObjectStorageCallbacks, callback)
-	shutdownMutex.Unlock()
+	shutdownCBs.mutex.Lock()
+	shutdownCBs.objectStorageCallbacks = append(shutdownCBs.objectStorageCallbacks, callback)
+	shutdownCBs.mutex.Unlock()
 }
 
-// Represents a type of an exit func which will be invoked during shutdown signal.
-type onExitFunc func(code int)
-
 // Initialize graceful shutdown mechanism
-func prepareGracefulShutdown() {
-	shutdownMutex = &sync.Mutex{}
-	shutdownSignal = make(chan bool, 1)
+func initGracefulShutdown(onExitFn onExitFunc) {
+	shutdownSignal = make(chan bool)
+	shutdownCBs = ShutdownCallbacks{}
+	shutdownCBs.mutex = &sync.Mutex{}
+	go monitorShutdownSignal(onExitFn)
 }
 
 // Start to monitor shutdownSignal to execute shutdown callbacks
 func monitorShutdownSignal(onExitFn onExitFunc) {
-	go func() {
-		// Monitor signals.
-		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-		for {
-			select {
-			case <-trapCh:
-				// Start a graceful shutdown call
-				shutdownSignal <- true
-			case <-shutdownSignal:
-				shutdownMutex.Lock()
-				// Call all callbacks and exit for emergency
-				for _, callback := range shutdownCallbacks {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						onExitFn(int(exitCode))
-					}
-
+	// Monitor signals.
+	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
+	for {
+		select {
+		case <-trapCh:
+			// Start a graceful shutdown call
+			shutdownSignal <- true
+		case <-shutdownSignal:
+			shutdownCBs.mutex.Lock()
+			// Call all callbacks and exit for emergency
+			for _, callback := range shutdownCBs.callbacks {
+				exitCode := callback()
+				if exitCode != exitSuccess {
+					onExitFn(int(exitCode))
 				}
-				// Call all object storage shutdown callbacks and exit for emergency
-				for _, callback := range shutdownObjectStorageCallbacks {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						onExitFn(int(exitCode))
-					}
-
-				}
-				shutdownMutex.Unlock()
-
-				onExitFn(int(exitSuccess))
 			}
+			// Call all object storage shutdown callbacks and exit for emergency
+			for _, callback := range shutdownCBs.objectStorageCallbacks {
+				exitCode := callback()
+				if exitCode != exitSuccess {
+					onExitFn(int(exitCode))
+				}
+
+			}
+			shutdownCBs.mutex.Unlock()
+
+			onExitFn(int(exitSuccess))
 		}
-	}()
+	}
 }

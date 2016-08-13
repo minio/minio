@@ -190,8 +190,7 @@ func main() {
 	}
 
 	// Initialize and monitor shutdown signal
-	prepareGracefulShutdown()
-	monitorShutdownSignal(os.Exit)
+	initGracefulShutdown(os.Exit)
 
 	// Run the app - exit on error.
 	app.RunAndExitOnError()
