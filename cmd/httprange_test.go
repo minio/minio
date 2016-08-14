@@ -83,8 +83,10 @@ func TestParseRequestRange(t *testing.T) {
 		"bytes=-0",
 	}
 	for _, rangeString := range errorRangeString {
-		if _, err := parseRequestRange(rangeString, 10); err != errInvalidRange {
-			t.Fatalf("expected: %s, got: %s", errInvalidRange, err)
+		if _, err := parseRequestRange(rangeString, 10); err != nil {
+			if _, ok := err.(InvalidRange); !ok {
+				t.Fatalf("expected: InvalidRange, got: %s", err)
+			}
 		}
 	}
 }

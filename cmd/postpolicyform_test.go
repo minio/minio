@@ -23,7 +23,6 @@ import (
 
 // Test Post Policy parsing and checking conditions
 func TestPostPolicyForm(t *testing.T) {
-
 	type testCase struct {
 		Bucket        string
 		Key           string
@@ -31,7 +30,7 @@ func TestPostPolicyForm(t *testing.T) {
 		XAmzAlgorithm string
 		ContentType   string
 		Policy        string
-		ErrCode       APIErrorCode
+		ErrCode       string
 	}
 	testCases := []testCase{
 		// Different AMZ date
@@ -67,9 +66,16 @@ func TestPostPolicyForm(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		errCode := checkPostPolicy(formValues, postPolicyForm)
-		if tt.ErrCode != errCode {
-			t.Errorf("Test %d:, Expected %d, got %d", i+1, tt.ErrCode, errCode)
+		err = checkPostPolicy(formValues, postPolicyForm)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			errCode := aerr.Code()
+			if tt.ErrCode != errCode {
+				t.Errorf("Test %d:, Expected %s, got %s", i+1, tt.ErrCode, errCode)
+			}
 		}
 	}
 }

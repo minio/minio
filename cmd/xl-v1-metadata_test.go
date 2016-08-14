@@ -133,7 +133,7 @@ func TestObjectToPartOffset(t *testing.T) {
 		// Max fffset is always (size - 1).
 		{(1 + 2 + 4 + 5 + 7) + (5 * humanize.MiByte) - 1, 4, 1048582, nil},
 		// Error if offset is size.
-		{(1 + 2 + 4 + 5 + 7) + (5 * humanize.MiByte), 0, 0, InvalidRange{}},
+		{(1 + 2 + 4 + 5 + 7) + (5 * humanize.MiByte), 0, 0, eInvalidRange((1+2+4+5+7)+(5*humanize.MiByte), 0, 0)},
 	}
 
 	// Test them.

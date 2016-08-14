@@ -122,12 +122,12 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -147,12 +147,12 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// incoming request is not chunked.
 	if !contains(r.TransferEncoding, "chunked") {
 		if r.ContentLength == -1 || r.ContentLength == 0 {
-			writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
+			writeErrorResponse(w, r, eMissingContentLength())
 			return
 		}
 		// If Content-Length is greater than maximum allowed policy size.
 		if r.ContentLength > maxAccessPolicySize {
-			writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
+			writeErrorResponse(w, r, eObjectTooLarge(maxAccessPolicySize, r.ContentLength))
 			return
 		}
 	}
@@ -163,7 +163,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	policyBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
 		errorIf(err, "Unable to read from client.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	// Parse bucket policy.
@@ -171,24 +171,19 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	err = parseBucketPolicy(bytes.NewReader(policyBytes), policy)
 	if err != nil {
 		errorIf(err, "Unable to parse bucket policy.")
-		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidPolicyDocument(bucket))
 		return
 	}
 
 	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(bucket, policy); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkBucketPolicyResources(bucket, policy); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
 	// Save bucket policy.
 	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, policy}, objAPI); err != nil {
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -207,22 +202,12 @@ func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI 
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
 
-	if pCh.IsRemove {
-		if err := removeBucketPolicy(bucket, objAPI); err != nil {
-			return err
-		}
-	} else {
-		if pCh.BktPolicy == nil {
-			return errInvalidArgument
-		}
-		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
-			return err
-		}
-	}
-
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, pCh)
-	return nil
+	defer S3PeersUpdateBucketPolicy(bucket, pCh)
+	if pCh.IsRemove {
+		return removeBucketPolicy(bucket, objAPI)
+	}
+	return writeBucketPolicy(bucket, objAPI, pCh.BktPolicy)
 }
 
 // DeleteBucketPolicyHandler - DELETE Bucket policy
@@ -232,12 +217,12 @@ func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI 
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -248,19 +233,13 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
-	// Delete bucket access policy, by passing an empty policy
-	// struct.
+	// Delete bucket access policy, by passing an empty policy struct.
 	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -275,12 +254,12 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -291,7 +270,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -299,12 +278,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	policy, err := readBucketPolicy(bucket, objAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
+		writeErrorResponse(w, r, err)
 		return
 	}
 

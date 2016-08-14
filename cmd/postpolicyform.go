@@ -175,39 +175,39 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 }
 
 // checkPostPolicy - apply policy conditions and validate input values.
-func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm) APIErrorCode {
+func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm) error {
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
-		return ErrPolicyAlreadyExpired
+		return ePolicyAlreadyExpired()
 	}
 	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
 		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
 		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
 		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
 		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
 	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
 		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
-			return ErrAccessDenied
+			return eAccessDenied()
 		}
 	}
-	return ErrNone
+	return nil
 }

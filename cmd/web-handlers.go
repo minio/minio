@@ -547,6 +547,32 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// writeWebErrorResponse - set HTTP status code and write error description to the body.
+func writeWebErrorResponse(w http.ResponseWriter, err error) {
+	defer w.(http.Flusher).Flush()
+	err = errorCause(err)
+	if err == errAuthentication {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	if err == errServerNotInitialized {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Convert error type to api error code.
+	apiErr, ok := err.(APIError)
+	if ok {
+		w.WriteHeader(errCodeResponse[apiErr.Code()])
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(err.Error()))
+}
+
 // GetBucketPolicyArgs - get bucket policy args.
 type GetBucketPolicyArgs struct {
 	BucketName string `json:"bucketName"`
@@ -700,15 +726,8 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
-		apiErr := getAPIError(s3Error)
-		var err error
-		if apiErr.Code == "XMinioPolicyNesting" {
-			err = PolicyNesting{}
-		} else {
-			err = errors.New(apiErr.Description)
-		}
-		return toJSONError(err, args.BucketName)
+	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != nil {
+		return toJSONError(s3Error, args.BucketName)
 	}
 
 	// TODO: update policy statements according to bucket name,
@@ -799,13 +818,12 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 // toJSONError converts regular errors into more user friendly
 // and consumable error message for the browser UI.
 func toJSONError(err error, params ...string) (jerr *json2.Error) {
-	apiErr := toWebAPIError(err)
 	jerr = &json2.Error{
-		Message: apiErr.Description,
+		Message: err.Error(),
 	}
-	switch apiErr.Code {
+	switch err.(type) {
 	// Bucket name invalid with custom error message.
-	case "InvalidBucketName":
+	case BucketNameInvalid:
 		if len(params) > 0 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period and numerals are the only allowed characters.",
@@ -813,14 +831,14 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 			}
 		}
 	// Bucket not found custom error message.
-	case "NoSuchBucket":
+	case BucketNotFound:
 		if len(params) > 0 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("The specified bucket %s does not exist.", params[0]),
 			}
 		}
 	// Object not found custom error message.
-	case "NoSuchKey":
+	case ObjectNotFound:
 		if len(params) > 1 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("The specified key %s does not exist", params[1]),
@@ -829,65 +847,4 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 		// Add more custom error messages here with more context.
 	}
 	return jerr
-}
-
-// toWebAPIError - convert into error into APIError.
-func toWebAPIError(err error) APIError {
-	err = errorCause(err)
-	if err == errAuthentication {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	}
-	if err == errServerNotInitialized {
-		return APIError{
-			Code:           "XMinioServerNotInitialized",
-			HTTPStatusCode: http.StatusServiceUnavailable,
-			Description:    err.Error(),
-		}
-	}
-
-	// Convert error type to api error code.
-	var apiErrCode APIErrorCode
-	switch err.(type) {
-	case StorageFull:
-		apiErrCode = ErrStorageFull
-	case BucketNotFound:
-		apiErrCode = ErrNoSuchBucket
-	case BucketExists:
-		apiErrCode = ErrBucketAlreadyOwnedByYou
-	case BucketNameInvalid:
-		apiErrCode = ErrInvalidBucketName
-	case BadDigest:
-		apiErrCode = ErrBadDigest
-	case IncompleteBody:
-		apiErrCode = ErrIncompleteBody
-	case ObjectExistsAsDirectory:
-		apiErrCode = ErrObjectExistsAsDirectory
-	case ObjectNotFound:
-		apiErrCode = ErrNoSuchKey
-	case ObjectNameInvalid:
-		apiErrCode = ErrNoSuchKey
-	case InsufficientWriteQuorum:
-		apiErrCode = ErrWriteQuorum
-	case InsufficientReadQuorum:
-		apiErrCode = ErrReadQuorum
-	case PolicyNesting:
-		apiErrCode = ErrPolicyNesting
-	default:
-		// Log unexpected and unhandled errors.
-		errorIf(err, errUnexpected.Error())
-		apiErrCode = ErrInternalError
-	}
-	apiErr := getAPIError(apiErrCode)
-	return apiErr
-}
-
-// writeWebErrorResponse - set HTTP status code and write error description to the body.
-func writeWebErrorResponse(w http.ResponseWriter, err error) {
-	apiErr := toWebAPIError(err)
-	w.WriteHeader(apiErr.HTTPStatusCode)
-	w.Write([]byte(apiErr.Description))
 }

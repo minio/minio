@@ -87,7 +87,6 @@ func (lc *localBucketMetaState) UpdateBucketPolicy(args *SetBucketPolicyPeerArgs
 	if err := json.Unmarshal(args.PChBytes, &pCh); err != nil {
 		return err
 	}
-
 	return globalBucketPolicies.SetBucketPolicy(args.Bucket, pCh)
 }
 

@@ -36,11 +36,11 @@ func checkDelObjArgs(bucket, object string) error {
 func checkBucketAndObjectNames(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
+		return traceError(eBucketNameInvalid(bucket))
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return traceError(eObjectNameInvalid(bucket, object))
 	}
 	return nil
 }
@@ -57,23 +57,15 @@ func checkListObjsArgs(bucket, prefix, marker, delimiter string, obj ObjectLayer
 	}
 	// Validates object prefix validity after bucket exists.
 	if !IsValidObjectPrefix(prefix) {
-		return traceError(ObjectNameInvalid{
-			Bucket: bucket,
-			Object: prefix,
-		})
+		return traceError(eObjectNameInvalid(bucket, prefix))
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return traceError(UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
+		return traceError(eUnsupportedDelimiter(delimiter))
 	}
 	// Verify if marker has prefix.
 	if marker != "" && !strings.HasPrefix(marker, prefix) {
-		return traceError(InvalidMarkerPrefixCombination{
-			Marker: marker,
-			Prefix: prefix,
-		})
+		return traceError(eInvalidMarkerPrefixCombination(marker, prefix))
 	}
 	return nil
 }
@@ -85,19 +77,15 @@ func checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter
 	}
 	if uploadIDMarker != "" {
 		if strings.HasSuffix(keyMarker, slashSeparator) {
-			return traceError(InvalidUploadIDKeyCombination{
-				UploadIDMarker: uploadIDMarker,
-				KeyMarker:      keyMarker,
-			})
+			return traceError(eInvalidUploadIDKeyCombination(uploadIDMarker,
+				keyMarker))
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
 			return traceError(err)
 		}
 		if id.IsZero() {
-			return traceError(MalformedUploadID{
-				UploadID: uploadIDMarker,
-			})
+			return traceError(eMalformedUploadID(bucket, prefix, uploadIDMarker))
 		}
 	}
 	return nil
@@ -140,10 +128,7 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer) error {
 	}
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
+		return traceError(eObjectNameInvalid(bucket, object))
 	}
 	return nil
 }
@@ -151,11 +136,11 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer) error {
 // Checks whether bucket exists and returns appropriate error if not.
 func checkBucketExist(bucket string, obj ObjectLayer) error {
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return eBucketNameInvalid(bucket)
 	}
 	_, err := obj.GetBucketInfo(bucket)
 	if err != nil {
-		return BucketNotFound{Bucket: bucket}
+		return eBucketNotFound(bucket)
 	}
 	return nil
 }

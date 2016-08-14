@@ -25,7 +25,7 @@ import (
 func TestCheckDuplicateConfigs(t *testing.T) {
 	testCases := []struct {
 		qConfigs        []queueConfig
-		expectedErrCode APIErrorCode
+		expectedErrCode string
 	}{
 		// Error for duplicate queue configs.
 		{
@@ -52,9 +52,15 @@ func TestCheckDuplicateConfigs(t *testing.T) {
 
 	// ... validate for duplicate queue configs.
 	for i, testCase := range testCases {
-		errCode := checkDuplicateQueueConfigs(testCase.qConfigs)
-		if errCode != testCase.expectedErrCode {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		err := checkDuplicateQueueConfigs(testCase.qConfigs)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if aerr.Code() != testCase.expectedErrCode {
+				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErrCode, aerr.Code())
+			}
 		}
 	}
 }
@@ -63,7 +69,7 @@ func TestCheckDuplicateConfigs(t *testing.T) {
 func TestCheckFilterRules(t *testing.T) {
 	testCases := []struct {
 		rules           []filterRule
-		expectedErrCode APIErrorCode
+		expectedErrCode string
 	}{
 		// Valid prefix and suffix values.
 		{
@@ -130,9 +136,15 @@ func TestCheckFilterRules(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		errCode := checkFilterRules(testCase.rules)
-		if errCode != testCase.expectedErrCode {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		err := checkFilterRules(testCase.rules)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if aerr.Code() != testCase.expectedErrCode {
+				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErrCode, aerr.Code())
+			}
 		}
 	}
 }
@@ -177,7 +189,7 @@ func TestIsValidFilterName(t *testing.T) {
 func TestValidEvents(t *testing.T) {
 	testCases := []struct {
 		events  []string
-		errCode APIErrorCode
+		errCode string
 	}{
 		// Return error for unknown event element.
 		{
@@ -209,9 +221,15 @@ func TestValidEvents(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		errCode := checkEvents(testCase.events)
-		if testCase.errCode != errCode {
-			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
+		err := checkEvents(testCase.events)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if testCase.errCode != aerr.Code() {
+				t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.errCode, aerr.Code())
+			}
 		}
 	}
 }
@@ -226,7 +244,7 @@ func TestQueueARN(t *testing.T) {
 
 	testCases := []struct {
 		queueARN string
-		errCode  APIErrorCode
+		errCode  string
 	}{
 		// Valid redis queue arn.
 		{
@@ -287,9 +305,15 @@ func TestQueueARN(t *testing.T) {
 
 	// Validate all tests for queue arn.
 	for i, testCase := range testCases {
-		errCode := checkQueueARN(testCase.queueARN)
-		if testCase.errCode != errCode {
-			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
+		err := checkQueueARN(testCase.queueARN)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if testCase.errCode != aerr.Code() {
+				t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.errCode, aerr.Code())
+			}
 		}
 	}
 }

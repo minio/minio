@@ -223,7 +223,7 @@ func TestIsValidEffect(t *testing.T) {
 	}{
 		// Inputs with unsupported Effect.
 		// Test case - 1.
-		{"", errors.New("Policy effect cannot be empty"), false},
+		{"", eMalformedPolicy(), false},
 		// Test case - 2.
 		{"DontAllow", errors.New("Unsupported Effect found: ‘DontAllow’, please validate your policy document"), false},
 		// Test case - 3.
@@ -267,7 +267,7 @@ func TestIsValidResources(t *testing.T) {
 		// Inputs with unsupported Action.
 		// Test case - 1.
 		// Empty Resources.
-		{[]string{}, errors.New("Resource list cannot be empty"), false},
+		{[]string{}, eMalformedPolicy(), false},
 		// Test case - 2.
 		// A valid resource should have prefix "arn:aws:s3:::".
 		{[]string{"my-resource"}, errors.New("Unsupported resource style found: ‘my-resource’, please validate your policy document"), false},
@@ -313,7 +313,7 @@ func TestIsValidPrincipals(t *testing.T) {
 		// Inputs with unsupported Principals.
 		// Test case - 1.
 		// Empty Principals list.
-		{[]string{}, errors.New("Principal cannot be empty"), false},
+		{[]string{}, eMalformedPolicy(), false},
 		// Test case - 2.
 		// "*" is the only valid principal.
 		{[]string{"my-principal"}, errors.New("Unsupported principals found: ‘set.StringSet{\"my-principal\":struct {}{}}’, please validate your policy document"), false},
@@ -539,7 +539,7 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 	testCases := []struct {
 		inputPolicy bucketPolicy
 		// expected results.
-		apiErrCode APIErrorCode
+		apiErrCode string
 		// Flag indicating whether the test should pass.
 		shouldPass bool
 	}{
@@ -568,17 +568,25 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 		{bucketAccessPolicies[6], ErrNone, true},
 	}
 	for i, testCase := range testCases {
-		apiErrCode := checkBucketPolicyResources("minio-bucket", &testCase.inputPolicy)
-		if apiErrCode != ErrNone && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with Errocode %v", i+1, apiErrCode)
+		apiErr := checkBucketPolicyResources("minio-bucket", &testCase.inputPolicy)
+		if apiErr != nil && testCase.shouldPass {
+			t.Errorf("Test %d: Expected to pass, but failed with Error %v", i+1, apiErr)
+
 		}
-		if apiErrCode == ErrNone && !testCase.shouldPass {
-			t.Errorf("Test %d: Expected to fail with ErrCode %v, but passed instead", i+1, testCase.apiErrCode)
-		}
-		// Failed as expected, but does it fail for the expected reason.
-		if apiErrCode != ErrNone && !testCase.shouldPass {
-			if testCase.apiErrCode != apiErrCode {
-				t.Errorf("Test %d: Expected to fail with error code %v, but instead failed with error code %v", i+1, testCase.apiErrCode, apiErrCode)
+		if apiErr != nil {
+			aerr, ok := apiErr.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", apiErr)
+			}
+			apiErrCode := aerr.Code()
+			if apiErrCode == ErrNone && !testCase.shouldPass {
+				t.Errorf("Test %d: Expected to fail with ErrCode %v, but passed instead", i+1, testCase.apiErrCode)
+			}
+			// Failed as expected, but does it fail for the expected reason.
+			if apiErrCode != ErrNone && !testCase.shouldPass {
+				if testCase.apiErrCode != apiErrCode {
+					t.Errorf("Test %d: Expected to fail with error code %v, but instead failed with error code %v", i+1, testCase.apiErrCode, apiErrCode)
+				}
 			}
 		}
 	}
@@ -653,10 +661,10 @@ func TestParseBucketPolicy(t *testing.T) {
 	}{
 		// Test case - 1.
 		// bucketPolicy statement empty.
-		{bucketAccesPolicies[0], bucketPolicy{}, errors.New("Policy statement cannot be empty"), false},
+		{bucketAccesPolicies[0], bucketPolicy{}, eMalformedPolicy(), false},
 		// Test case - 2.
 		// bucketPolicy version empty.
-		{bucketAccesPolicies[1], bucketPolicy{}, errors.New("Policy version cannot be empty"), false},
+		{bucketAccesPolicies[1], bucketPolicy{}, eMalformedPolicy(), false},
 		// Test case - 3.
 		// Readonly bucketPolicy.
 		{bucketAccesPolicies[2], bucketAccesPolicies[2], nil, true},

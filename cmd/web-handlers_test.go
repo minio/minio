@@ -37,47 +37,47 @@ func TestWriteWebErrorResponse(t *testing.T) {
 	var buffer bytes.Buffer
 	testCases := []struct {
 		webErr     error
-		apiErrCode APIErrorCode
+		apiErrCode string
 	}{
 		// List of various errors and their corresponding API errors.
 		{
-			webErr:     StorageFull{},
+			webErr:     eStorageFull(),
 			apiErrCode: ErrStorageFull,
 		},
 		{
-			webErr:     BucketNotFound{},
+			webErr:     eBucketNotFound("bucket"),
 			apiErrCode: ErrNoSuchBucket,
 		},
 		{
-			webErr:     BucketNameInvalid{},
+			webErr:     eBucketNameInvalid("bucket2..1"),
 			apiErrCode: ErrInvalidBucketName,
 		},
 		{
-			webErr:     BadDigest{},
+			webErr:     eBadDigest("", ""),
 			apiErrCode: ErrBadDigest,
 		},
 		{
-			webErr:     IncompleteBody{},
+			webErr:     eIncompleteBody(),
 			apiErrCode: ErrIncompleteBody,
 		},
 		{
-			webErr:     ObjectExistsAsDirectory{},
+			webErr:     eObjectExistsAsDirectory("", ""),
 			apiErrCode: ErrObjectExistsAsDirectory,
 		},
 		{
-			webErr:     ObjectNotFound{},
+			webErr:     eObjectNotFound("", ""),
 			apiErrCode: ErrNoSuchKey,
 		},
 		{
-			webErr:     ObjectNameInvalid{},
+			webErr:     eObjectNameInvalid("", ""),
 			apiErrCode: ErrNoSuchKey,
 		},
 		{
-			webErr:     InsufficientWriteQuorum{},
+			webErr:     eInsufficientWriteQuorum(),
 			apiErrCode: ErrWriteQuorum,
 		},
 		{
-			webErr:     InsufficientReadQuorum{},
+			webErr:     eInsufficientReadQuorum(),
 			apiErrCode: ErrReadQuorum,
 		},
 	}
@@ -85,7 +85,7 @@ func TestWriteWebErrorResponse(t *testing.T) {
 	// Validate all the test cases.
 	for i, testCase := range testCases {
 		writeWebErrorResponse(newFlushWriter(&buffer), testCase.webErr)
-		desc := getAPIError(testCase.apiErrCode).Description
+		desc := testCase.webErr.Error()
 		recvDesc := buffer.Bytes()
 		// Check if the written desc is same as the one expected.
 		if !bytes.Equal(recvDesc, []byte(desc)) {
@@ -1379,8 +1379,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	rec := httptest.NewRecorder()
-
 	credentials := serverConfig.GetCredential()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
 	if err != nil {
@@ -1398,6 +1396,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		if nerr != nil {
 			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
+		rec := httptest.NewRecorder()
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("Test %s: Expected the response status to be 200, but instead found `%d`", rpcCall, rec.Code)
@@ -1415,6 +1414,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
 	}
+	rec := httptest.NewRecorder()
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
@@ -1432,13 +1432,14 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
+	rec = httptest.NewRecorder()
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected the response status to be 500, but instead found `%d`", rec.Code)
 	}
 	resp := string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.Contains(resp, "Storage backend is faulty or corrupted. Please check your server logs.") {
+		t.Fatalf("Unexpected error message, expected: `Storage backend is faulty or corrupted. Please check your server logs.`, found: `%s`", resp)
 	}
 
 	// Test authorization of Web.Upload
@@ -1452,12 +1453,13 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
+	rec = httptest.NewRecorder()
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNotFound {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
 	resp = string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.Contains(resp, "The specified bucket does not exist") {
+		t.Fatalf("Unexpected error message, expected: `The specified bucket does not exist`, found: `%s`", resp)
 	}
 }

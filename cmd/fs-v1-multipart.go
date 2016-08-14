@@ -63,7 +63,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
 		keyMarkerLock.RUnlock()
 		if err != nil {
-			return ListMultipartsInfo{}, err
+			return ListMultipartsInfo{}, toObjectErr(err, bucket, keyMarker)
 		}
 		maxUploads = maxUploads - len(uploads)
 	}
@@ -92,7 +92,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 					eof = true
 					break
 				}
-				return ListMultipartsInfo{}, walkResult.err
+				return ListMultipartsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			if strings.HasSuffix(walkResult.entry, slashSeparator) {
@@ -118,7 +118,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
 			entryLock.RUnlock()
 			if err != nil {
-				return ListMultipartsInfo{}, err
+				return ListMultipartsInfo{}, toObjectErr(err, bucket, entry)
 			}
 			uploads = append(uploads, tmpUploads...)
 			maxUploads -= len(tmpUploads)
@@ -199,11 +199,11 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	uploadID = mustGetUUID()
 	initiated := time.Now().UTC()
+	uploadIDPath := path.Join(bucket, object, uploadID)
 	// Add upload ID to uploads.json
 	if err = fs.addUploadID(bucket, object, uploadID, initiated); err != nil {
-		return "", err
+		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
-	uploadIDPath := path.Join(bucket, object, uploadID)
 	if err = writeFSMetadata(fs.storage, minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
@@ -245,7 +245,6 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return "", err
 	}
-
 	uploadIDPath := path.Join(bucket, object, uploadID)
 
 	preUploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
@@ -254,7 +253,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
 	preUploadIDLock.RUnlock()
 	if !uploadIDExists {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 
 	partSuffix := fmt.Sprintf("object%d", partID)
@@ -305,7 +304,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// bytes than specified in request header.
 	if bytesWritten < size {
 		fs.storage.DeleteFile(minioMetaTmpBucket, tmpPartPath)
-		return "", traceError(IncompleteBody{})
+		return "", traceError(eIncompleteBody())
 	}
 
 	// Delete temporary part in case of failure. If
@@ -316,14 +315,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			return "", traceError(BadDigest{md5Hex, newMD5Hex})
+			return "", traceError(eBadDigest(newMD5Hex, md5Hex))
 		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return "", traceError(SHA256Mismatch{})
+			return "", traceError(eSHA256Mismatch(sha256sum, newSHA256sum))
 		}
 	}
 
@@ -334,7 +333,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
@@ -444,7 +443,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
+		return ListPartsInfo{}, traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
@@ -454,7 +453,7 @@ func (fs fsObjects) totalObjectSize(fsMeta fsMetaV1, parts []completePart) (int6
 	for _, part := range parts {
 		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 		if partIdx == -1 {
-			return 0, InvalidPart{}
+			return 0, errUnexpected
 		}
 		objSize += fsMeta.Parts[partIdx].Size
 	}
@@ -471,7 +470,6 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err := checkCompleteMultipartArgs(bucket, object, fs); err != nil {
 		return "", err
 	}
-
 	uploadIDPath := path.Join(bucket, object, uploadID)
 
 	// Hold lock so that
@@ -483,7 +481,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 
 	// Calculate s3 compatible md5sum for complete multipart.
@@ -539,18 +537,24 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		for i, part := range parts {
 			partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 			if partIdx == -1 {
-				return "", traceError(InvalidPart{})
+				return "", traceError(eInvalidPart(bucket, object,
+					uploadID,
+					part.PartNumber))
 			}
 			if fsMeta.Parts[partIdx].ETag != part.ETag {
-				return "", traceError(BadDigest{})
+				return "", traceError(eBadDigest(
+					fsMeta.Parts[partIdx].ETag,
+					part.ETag,
+				))
 			}
 			// All parts except the last part has to be atleast 5MB.
 			if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-				return "", traceError(PartTooSmall{
-					PartNumber: part.PartNumber,
-					PartSize:   fsMeta.Parts[partIdx].Size,
-					PartETag:   part.ETag,
-				})
+				return "", traceError(ePartTooSmall(
+					fsMeta.Parts[partIdx].Size,
+					minPartSize,
+					part.PartNumber,
+					fsMeta.Parts[partIdx].ETag,
+				))
 			}
 			// Construct part suffix.
 			partSuffix := fmt.Sprintf("object%d", part.PartNumber)
@@ -574,7 +578,12 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 						break
 					}
 					if err == errFileNotFound {
-						return "", traceError(InvalidPart{})
+						return "", traceError(eInvalidPart(
+							bucket,
+							object,
+							uploadID,
+							part.PartNumber,
+						))
 					}
 					return "", toObjectErr(traceError(err), minioMetaMultipartBucket, multipartPartFile)
 				}
@@ -676,7 +685,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return traceError(InvalidUploadID{UploadID: uploadID})
+		return traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 
 	err := fs.abortMultipartUpload(bucket, object, uploadID)

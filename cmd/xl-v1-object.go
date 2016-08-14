@@ -55,11 +55,11 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 	// Start offset and length cannot be negative.
 	if startOffset < 0 || length < 0 {
-		return traceError(errUnexpected)
+		return toObjectErr(traceError(errUnexpected), bucket, object)
 	}
 	// Writer cannot be nil.
 	if writer == nil {
-		return traceError(errUnexpected)
+		return toObjectErr(traceError(errUnexpected), bucket, object)
 	}
 
 	// Lock the object before reading.
@@ -71,7 +71,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have read quorum?
 	if !isDiskQuorum(errs, xl.readQuorum) {
-		return traceError(InsufficientReadQuorum{}, errs...)
+		return traceError(eInsufficientReadQuorum(), errs...)
 	}
 
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
@@ -84,7 +84,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(metaArr, modTime)
 	if err != nil {
-		return err
+		return toObjectErr(traceError(err), bucket, object)
 	}
 
 	// Reorder online disks based on erasure distribution order.
@@ -95,24 +95,31 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return traceError(eInvalidRange(startOffset,
+			length, xlMeta.Stat.Size))
 	}
 
 	// Reply if we have inputs with offset and length.
 	if startOffset+length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return traceError(eInvalidRange(startOffset,
+			length, xlMeta.Stat.Size))
 	}
 
 	// Get start part index and offset.
 	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		errorIf(err, "Unable to fetch part index/offset for offset at %d", startOffset)
+		return traceError(eInvalidRange(startOffset,
+			length, xlMeta.Stat.Size))
 	}
 
 	// Get last part index to read given length.
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(startOffset + length - 1)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		errorIf(err, "Unable to fetch part index/offset for offset at %d",
+			startOffset+length-1)
+		return traceError(eInvalidRange(startOffset,
+			length, xlMeta.Stat.Size))
 	}
 
 	// Save the writer.
@@ -126,17 +133,17 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		if err == nil { // Cache hit.
 			// Advance the buffer to offset as if it was read.
 			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
-				return traceError(err)
+				return toObjectErr(traceError(err), bucket, object)
 			}
 			// Write the requested length.
 			if _, err = io.CopyN(writer, cachedBuffer, length); err != nil {
-				return traceError(err)
+				return toObjectErr(traceError(err), bucket, object)
 			}
 			return nil
 		} // Cache miss.
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
-			return traceError(err)
+			return toObjectErr(traceError(err), bucket, object)
 		} // Cache has not been found, fill the cache.
 
 		// Cache is only set if whole object is being read.
@@ -198,10 +205,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 
 		// Start erasure decoding and writing to the client.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
-		if err != nil {
-			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
-			return toObjectErr(err, bucket, object)
+		n, rerr := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
+		if rerr != nil {
+			errorIf(rerr, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
+			return toObjectErr(rerr, bucket, object)
 		}
 
 		// Track total bytes read from disk and written to the client.
@@ -358,6 +365,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
 		return ObjectInfo{}, err
 	}
+
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -442,7 +450,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
-		return ObjectInfo{}, traceError(IncompleteBody{})
+		return ObjectInfo{}, traceError(eIncompleteBody())
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -474,14 +482,14 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
-			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
+			return ObjectInfo{}, traceError(eBadDigest(newMD5Hex, md5Hex))
 		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
+			return ObjectInfo{}, traceError(eSHA256Mismatch(sha256sum, newSHA256sum))
 		}
 	}
 
@@ -493,7 +501,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(errVolumeAccessDenied), bucket, object)
 	}
 
 	// Rename if an object already exists to temporary location.
@@ -612,7 +620,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
-		return traceError(ObjectNotFound{bucket, object})
+		return traceError(eObjectNotFound(bucket, object))
 	} // else proceed to delete the object.
 
 	// Delete the object on all disks.

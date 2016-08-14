@@ -78,45 +78,50 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{".test", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: ".test"}},
-		{"------", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: "------"}},
+		{".test", "obj", []byte(""), nil, "", 0, "", eBucketNameInvalid(".test")},
+		{"------", "obj", []byte(""), nil, "", 0, "", eBucketNameInvalid("------")},
 		{"$this-is-not-valid-too", "obj", []byte(""), nil, "", 0, "",
-			BucketNameInvalid{Bucket: "$this-is-not-valid-too"}},
-		{"a", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: "a"}},
+			eBucketNameInvalid("$this-is-not-valid-too")},
+		{"a", "obj", []byte(""), nil, "", 0, "", eBucketNameInvalid("a")},
 
 		// Test case - 5.
 		// Case with invalid object names.
-		{bucket, "", []byte(""), nil, "", 0, "", ObjectNameInvalid{Bucket: bucket, Object: ""}},
+		{bucket, "", []byte(""), nil, "", 0, "", eObjectNameInvalid(bucket, "")},
 
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
-		{"abc", "def", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: "abc"}},
+		{"abc", "def", []byte(""), nil, "", 0, "", eBucketNotFound("abc")},
 
 		// Test case - 7.
 		// Input to replicate Md5 mismatch.
 		{bucket, object, []byte(""), map[string]string{"md5Sum": "a35"}, "", 0, "",
-			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"}},
+			eBadDigest("a35", "d41d8cd98f00b204e9800998ecf8427e")},
 
 		// Test case - 8.
 		// With incorrect sha256.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, "incorrect-sha256", int64(len("abcd")), "", SHA256Mismatch{}},
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"},
+			"incorrect-sha256", int64(len("abcd")), "", eSHA256Mismatch("", "")},
 
 		// Test case - 9.
 		// Input with size more than the size of actual data inside the reader.
 		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, "", int64(len("abcd") + 1), "",
-			IncompleteBody{}},
+			eIncompleteBody()},
 
 		// Test case - 10.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, "", int64(len("abcd") - 1), "",
-			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"}},
+			eBadDigest("a35", "900150983cd24fb0d6963f7d28e17f72")},
 
 		// Test case - 11-14.
 		// Validating for success cases.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, "", int64(len("abcd")), "", nil},
-		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, "", int64(len("efgh")), "", nil},
-		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, "", int64(len("ijkl")), "", nil},
-		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, "", int64(len("mnop")), "", nil},
+		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, "",
+			int64(len("abcd")), "", nil},
+		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, "",
+			int64(len("efgh")), "", nil},
+		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, "",
+			int64(len("ijkl")), "", nil},
+		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, "",
+			int64(len("mnop")), "", nil},
 
 		// Test case 15-17.
 		// With no metadata
@@ -138,14 +143,17 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 
 		// Test case 24-26.
 		// data with invalid md5sum in header
-		{bucket, object, data, invalidMD5Header, "", int64(len(data)), getMD5Hash(data), BadDigest{invalidMD5, getMD5Hash(data)}},
-		{bucket, object, nilBytes, invalidMD5Header, "", int64(len(nilBytes)), getMD5Hash(nilBytes), BadDigest{invalidMD5, getMD5Hash(nilBytes)}},
-		{bucket, object, fiveMBBytes, invalidMD5Header, "", int64(len(fiveMBBytes)), getMD5Hash(fiveMBBytes), BadDigest{invalidMD5, getMD5Hash(fiveMBBytes)}},
+		{bucket, object, data, invalidMD5Header, "", int64(len(data)), getMD5Hash(data),
+			eBadDigest(invalidMD5, getMD5Hash(data))},
+		{bucket, object, nilBytes, invalidMD5Header, "", int64(len(nilBytes)), getMD5Hash(nilBytes),
+			eBadDigest(invalidMD5, getMD5Hash(nilBytes))},
+		{bucket, object, fiveMBBytes, invalidMD5Header, "", int64(len(fiveMBBytes)), getMD5Hash(fiveMBBytes),
+			eBadDigest(invalidMD5, getMD5Hash(fiveMBBytes))},
 
 		// Test case 27-29.
 		// data with size different from the actual number of bytes available in the reader
 		{bucket, object, data, nil, "", int64(len(data) - 1), getMD5Hash(data[:len(data)-1]), nil},
-		{bucket, object, nilBytes, nil, "", int64(len(nilBytes) + 1), getMD5Hash(nilBytes), IncompleteBody{}},
+		{bucket, object, nilBytes, nil, "", int64(len(nilBytes) + 1), getMD5Hash(nilBytes), eIncompleteBody()},
 		{bucket, object, fiveMBBytes, nil, "", int64(0), getMD5Hash(fiveMBBytes), nil},
 
 		// Test case 30

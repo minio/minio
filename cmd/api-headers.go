@@ -17,9 +17,7 @@
 package cmd
 
 import (
-	"bytes"
 	"crypto/rand"
-	"encoding/xml"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -40,19 +38,8 @@ func newRequestID() string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	// Set unique request ID for each reply.
-	w.Header().Set("X-Amz-Request-Id", newRequestID())
 	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
-}
-
-// Encodes the response headers into XML format.
-func encodeResponse(response interface{}) []byte {
-	var bytesBuffer bytes.Buffer
-	bytesBuffer.WriteString(xml.Header)
-	e := xml.NewEncoder(&bytesBuffer)
-	e.Encode(response)
-	return bytesBuffer.Bytes()
 }
 
 // Write object header

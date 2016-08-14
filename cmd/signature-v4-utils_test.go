@@ -148,9 +148,16 @@ func TestExtractSignedHeaders(t *testing.T) {
 	inputHeader.Set(signedHeaders[1], expectedContentSha256)
 	inputHeader.Set(signedHeaders[2], expectedTime)
 	// calling the function being tested.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, inputHeader)
-	if errCode != ErrNone {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	extractedSignedHeaders, err := extractSignedHeaders(signedHeaders, inputHeader)
+	if err != nil {
+		aerr, ok := err.(APIError)
+		if !ok {
+			t.Fatal("Unable to validate APIError", err)
+		}
+		errCode := aerr.Code()
+		if errCode != ErrNone {
+			t.Fatalf("Expected the APIErrorCode to be %s, but got %s", ErrNone, errCode)
+		}
 	}
 
 	// "x-amz-content-sha256" header value from the extracted result.
@@ -180,17 +187,31 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// case where the headers doesn't contain the one of the signed header in the signed headers list.
 	signedHeaders = append(signedHeaders, " X-Amz-Credential")
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	_, err = extractSignedHeaders(signedHeaders, inputHeader)
+	if err != nil {
+		aerr, ok := err.(APIError)
+		if !ok {
+			t.Fatal("Unable to validate APIError", err)
+		}
+		errCode := aerr.Code()
+		if errCode != ErrUnsignedHeaders {
+			t.Fatalf("Expected the APIErrorCode to %s, but got %s", ErrUnsignedHeaders, errCode)
+		}
 	}
 
 	// case where the list of signed headers doesn't contain the host field.
 	signedHeaders = signedHeaders[1:]
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	_, err = extractSignedHeaders(signedHeaders, inputHeader)
+	if err != nil {
+		aerr, ok := err.(APIError)
+		if !ok {
+			t.Fatal("Unable to validate APIError", err)
+		}
+		errCode := aerr.Code()
+		if errCode != ErrUnsignedHeaders {
+			t.Fatalf("Expected the APIErrorCode to %s, but got %s", ErrUnsignedHeaders, errCode)
+		}
 	}
 }
 
@@ -198,18 +219,32 @@ func TestExtractSignedHeaders(t *testing.T) {
 func TestFindHost(t *testing.T) {
 	// doesn't contain "host".
 	signedHeaders := []string{"x-amz-content-sha256", "x-amz-date"}
-	errCode := findHost(signedHeaders)
-	// expected to error out with code ErrUnsignedHeaders .
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
+	err := findHost(signedHeaders)
+	if err != nil {
+		aerr, ok := err.(APIError)
+		if !ok {
+			t.Fatal("Unable to validate APIError", err)
+		}
+		errCode := aerr.Code()
+		// expected to error out with code ErrUnsignedHeaders .
+		if errCode != ErrUnsignedHeaders {
+			t.Fatalf("Expected the APIErrorCode to be %s, but got %s", ErrUnsignedHeaders, errCode)
+		}
 	}
 
 	// adding "host".
 	signedHeaders = append(signedHeaders, "host")
 	// epxected to pass.
-	errCode = findHost(signedHeaders)
-	if errCode != ErrNone {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	err = findHost(signedHeaders)
+	if err != nil {
+		aerr, ok := err.(APIError)
+		if !ok {
+			t.Fatal("Unable to validate APIError", err)
+		}
+		errCode := aerr.Code()
+		if errCode != ErrNone {
+			t.Fatalf("Expected the APIErrorCode to be %s, but got %s", ErrNone, errCode)
+		}
 	}
 }
 

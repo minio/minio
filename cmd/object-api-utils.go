@@ -163,21 +163,23 @@ func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
 // but returns error if reader exits before reading Min bytes
 // errDataTooSmall.
 type rangeReader struct {
-	Reader io.Reader // underlying reader
-	Min    int64     // min bytes remaining
-	Max    int64     // max bytes remaining
+	Reader    io.Reader // underlying reader
+	totalRead int64     // total bytes read.
+	Min       int64     // min bytes remaining
+	Max       int64     // max bytes remaining
 }
 
 func (l *rangeReader) Read(p []byte) (n int, err error) {
 	n, err = l.Reader.Read(p)
+	l.totalRead += int64(n)
 	l.Max -= int64(n)
 	l.Min -= int64(n)
 	if l.Max < 0 {
 		// If more data is available than what is expected we return error.
-		return 0, errDataTooLarge
+		return 0, eObjectTooLarge(l.Max, l.totalRead)
 	}
 	if err == io.EOF && l.Min > 0 {
-		return 0, errDataTooSmall
+		return 0, eObjectTooSmall(l.Min, l.totalRead)
 	}
 	return
 }

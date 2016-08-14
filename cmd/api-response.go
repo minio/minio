@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/xml"
 	"net/http"
 	"path"
@@ -492,24 +493,37 @@ func writeSuccessNoContent(w http.ResponseWriter) {
 }
 
 // writeErrorRespone write error headers
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
-	apiError := getAPIError(errorCode)
-	// set common headers
-	setCommonHeaders(w)
-	// write Header
-	w.WriteHeader(apiError.HTTPStatusCode)
-	writeErrorResponseNoHeader(w, req, errorCode, resource)
+func writeErrorResponse(w http.ResponseWriter, req *http.Request, err error) {
+	apiErr := errorCause(err)
+	apiResp, ok := apiErr.(APIError)
+	if ok {
+		// Set common headers
+		setCommonHeaders(w)
+		// Set unique request ID for each reply.
+		w.Header().Set("X-Amz-Request-Id", apiResp.RequestID())
+		// Write Header
+		w.WriteHeader(errCodeResponse[apiResp.Code()])
+	}
+	writeErrorResponseNoHeader(w, req, apiErr)
 }
 
-func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
-	apiError := getAPIError(errorCode)
-	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, resource)
-	encodedErrorResponse := encodeResponse(errorResponse)
-	// HEAD should have no body, do not attempt to write to it
-	if req.Method != "HEAD" {
-		// write error body
-		w.Write(encodedErrorResponse)
-		w.(http.Flusher).Flush()
+// Encodes the response headers into XML format.
+func encodeResponse(response interface{}) []byte {
+	var bytesBuffer bytes.Buffer
+	bytesBuffer.WriteString(xml.Header)
+	e := xml.NewEncoder(&bytesBuffer)
+	e.Encode(response)
+	return bytesBuffer.Bytes()
+}
+
+func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, err error) {
+	// HEAD should have no body, do not attempt to write.
+	if req.Method == "HEAD" {
+		return
 	}
+	// Generate error response.
+	encodedErrorResponse := encodeResponse(err)
+	// Write error body.
+	w.Write(encodedErrorResponse)
+	w.(http.Flusher).Flush()
 }

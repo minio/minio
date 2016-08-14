@@ -16,120 +16,107 @@
 
 package cmd
 
-import (
-	"errors"
-	"testing"
-)
+import "testing"
 
 func TestAPIErrCode(t *testing.T) {
 	testCases := []struct {
 		err     error
-		errCode APIErrorCode
+		errCode string
 	}{
 		// Valid cases.
 		{
-			BadDigest{},
+			eBadDigest("bucket", "bucket"),
 			ErrBadDigest,
 		},
 		{
-			IncompleteBody{},
+			eIncompleteBody(),
 			ErrIncompleteBody,
 		},
 		{
-			ObjectExistsAsDirectory{},
+			eObjectExistsAsDirectory("bucket", "bucket"),
 			ErrObjectExistsAsDirectory,
 		},
 		{
-			BucketNameInvalid{},
+			eBucketNameInvalid("bucket"),
 			ErrInvalidBucketName,
 		},
 		{
-			BucketExists{},
+			eBucketExists("bucket"),
 			ErrBucketAlreadyOwnedByYou,
 		},
 		{
-			ObjectNotFound{},
+			eObjectNotFound("bucket", "bucket"),
 			ErrNoSuchKey,
 		},
 		{
-			ObjectNameInvalid{},
+			eObjectNameInvalid("bucket", "bucket"),
 			ErrInvalidObjectName,
 		},
 		{
-			InvalidUploadID{},
+			eInvalidUploadID("bucket", "bucket", "bucket"),
 			ErrNoSuchUpload,
 		},
 		{
-			InvalidPart{},
+			eInvalidPart("bucket", "bucket", "bucket", 0),
 			ErrInvalidPart,
 		},
 		{
-			InsufficientReadQuorum{},
+			eInsufficientReadQuorum(),
 			ErrReadQuorum,
 		},
 		{
-			InsufficientWriteQuorum{},
+			eInsufficientWriteQuorum(),
 			ErrWriteQuorum,
 		},
 		{
-			UnsupportedDelimiter{},
-			ErrNotImplemented,
+			eUnsupportedDelimiter("%"),
+			ErrUnsupportedDelimiter,
 		},
 		{
-			InvalidMarkerPrefixCombination{},
-			ErrNotImplemented,
+			eInvalidMarkerPrefixCombination("bucket", "bucket"),
+			ErrInvalidMarkerKeyCombination,
 		},
 		{
-			InvalidUploadIDKeyCombination{},
-			ErrNotImplemented,
+			eInvalidUploadIDKeyCombination("bucket", "bucket"),
+			ErrInvalidUploadIDKeyCombination,
 		},
 		{
-			MalformedUploadID{},
+			eMalformedUploadID("bucket", "bucket", "bucket"),
 			ErrNoSuchUpload,
 		},
 		{
-			PartTooSmall{},
+			ePartTooSmall(0, 0, 0, "bucket"),
 			ErrEntityTooSmall,
 		},
 		{
-			BucketNotEmpty{},
+			eBucketNotEmpty("bucket"),
 			ErrBucketNotEmpty,
 		},
 		{
-			BucketNotFound{},
+			eBucketNotFound("bucket"),
 			ErrNoSuchBucket,
 		},
 		{
-			StorageFull{},
+			eStorageFull(),
 			ErrStorageFull,
 		},
 		{
-			errSignatureMismatch,
+			eSignatureDoesNotMatch("bucket", "bucket", "bucket",
+				"bucket", "bucket", "bucket"),
 			ErrSignatureDoesNotMatch,
-		},
-		{
-			errContentSHA256Mismatch,
-			ErrContentSHA256Mismatch,
 		}, // End of all valid cases.
-
-		// Case where err is nil.
-		{
-			nil,
-			ErrNone,
-		},
-
-		// Case where err type is unknown.
-		{
-			errors.New("Custom error"),
-			ErrInternalError,
-		},
 	}
 
 	// Validate all the errors with their API error codes.
 	for i, testCase := range testCases {
-		errCode := toAPIErrorCode(testCase.err)
-		if errCode != testCase.errCode {
-			t.Errorf("Test %d: Expected error code %d, got %d", i+1, testCase.errCode, errCode)
+		if testCase.err != nil {
+			aerr, ok := testCase.err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if aerr.Code() != testCase.errCode {
+				t.Errorf("Test %d: Expected error code %s, got %s", i+1, testCase.errCode, aerr.Code())
+			}
 		}
 	}
 }

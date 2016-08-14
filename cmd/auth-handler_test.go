@@ -320,7 +320,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	// List of test cases for validating http request authentication.
 	testCases := []struct {
 		req     *http.Request
-		s3Error APIErrorCode
+		s3Error string
 	}{
 		// When request is nil, internal error is returned.
 		{nil, ErrInternalError},
@@ -337,8 +337,15 @@ func TestIsReqAuthenticated(t *testing.T) {
 		if testCase.s3Error == ErrBadDigest {
 			testCase.req.Header.Set("Content-Md5", "garbage")
 		}
-		if s3Error := isReqAuthenticated(testCase.req, serverConfig.GetRegion()); s3Error != testCase.s3Error {
-			t.Fatalf("Unexpected s3error returned wanted %d, got %d", testCase.s3Error, s3Error)
+		s3Error := isReqAuthenticated(testCase.req, serverConfig.GetRegion())
+		if s3Error != nil {
+			aerr, ok := s3Error.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", s3Error)
+			}
+			if aerr.Code() != testCase.s3Error {
+				t.Fatalf("Unexpected s3error returned wanted %s, got %s", testCase.s3Error, aerr.Code())
+			}
 		}
 	}
 }

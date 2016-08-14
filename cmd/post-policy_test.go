@@ -202,7 +202,7 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          "",
 			secretKey:          "",
 			malformedBody:      false,
@@ -288,7 +288,6 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
-
 }
 
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.

@@ -24,23 +24,20 @@ import (
 	"time"
 )
 
-func niceError(code APIErrorCode) string {
-	// Special-handle ErrNone
-	if code == ErrNone {
-		return "ErrNone"
-	}
-
-	return fmt.Sprintf("%s (%s)", errorCodeResponse[code].Code, errorCodeResponse[code].Description)
-}
-
 func TestDoesPolicySignatureMatch(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 	now := time.Now().UTC()
 	accessKey := serverConfig.GetCredential().AccessKeyID
 
 	testCases := []struct {
 		form     map[string]string
-		expected APIErrorCode
+		expected string
 	}{
 		// (0) It should fail if 'X-Amz-Credential' is missing.
 		{
@@ -59,7 +56,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 			form: map[string]string{
 				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "invalidregion"),
 			},
-			expected: ErrInvalidRegion,
+			expected: ErrMalformedCredentialRegion,
 		},
 		// (3) It should fail if the date is invalid (or missing, in this case).
 		{
@@ -92,9 +89,16 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 
 	// Run each test case individually.
 	for i, testCase := range testCases {
-		code := doesPolicySignatureMatch(testCase.form)
-		if code != testCase.expected {
-			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(code))
+		err := doesPolicySignatureMatch(testCase.form)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			errCode := aerr.Code()
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get %s, instead got %s", i, testCase.expected, errCode)
+			}
 		}
 	}
 }
@@ -117,7 +121,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 		queryParams map[string]string
 		headers     map[string]string
 		region      string
-		expected    APIErrorCode
+		expected    string
 	}{
 		// (0) Should error without a set URL query.
 		{
@@ -132,9 +136,9 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Expires":       "60",
 				"X-Amz-Signature":     "badsignature",
 				"X-Amz-SignedHeaders": "host;x-amz-content-sha256;x-amz-date",
-				"X-Amz-Credential":    fmt.Sprintf(credentialTemplate, "Z7IXGOO6BZ0REAN1Q26I", now.Format(yyyymmdd), "us-west-1"),
+				"X-Amz-Credential":    fmt.Sprintf(credentialTemplate, "Z7IXGOO6BZ0REAN1Q26I", now.Format(yyyymmdd), "us-east-1"),
 			},
-			region:   "us-west-1",
+			region:   "us-east-1",
 			expected: ErrInvalidAccessKeyID,
 		},
 		// (2) Should error when the payload sha256 doesn't match.
@@ -145,10 +149,10 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Expires":        "60",
 				"X-Amz-Signature":      "badsignature",
 				"X-Amz-SignedHeaders":  "host;x-amz-content-sha256;x-amz-date",
-				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-west-1"),
+				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-east-1"),
 				"X-Amz-Content-Sha256": "ThisIsNotThePayloadHash",
 			},
-			region:   "us-west-1",
+			region:   "us-east-1",
 			expected: ErrContentSHA256Mismatch,
 		},
 		// (3) Should fail with an invalid region.
@@ -159,10 +163,10 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Expires":        "60",
 				"X-Amz-Signature":      "badsignature",
 				"X-Amz-SignedHeaders":  "host;x-amz-content-sha256;x-amz-date",
-				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-west-1"),
+				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-east-1"),
 				"X-Amz-Content-Sha256": payloadSHA256,
 			},
-			region:   "us-east-1",
+			region:   "us-west-1",
 			expected: ErrInvalidRegion,
 		},
 		// (4) Should NOT fail with an invalid region if it doesn't verify it.
@@ -173,10 +177,10 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Expires":        "60",
 				"X-Amz-Signature":      "badsignature",
 				"X-Amz-SignedHeaders":  "host;x-amz-content-sha256;x-amz-date",
-				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-west-1"),
+				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-east-1"),
 				"X-Amz-Content-Sha256": payloadSHA256,
 			},
-			region:   "us-west-1",
+			region:   "us-east-1",
 			expected: ErrUnsignedHeaders,
 		},
 		// (5) Should fail to extract headers if the host header is not signed.
@@ -327,8 +331,15 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 
 		// Check if it matches!
 		err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region)
-		if err != testCase.expected {
-			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			errCode := aerr.Code()
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get %s, instead got %s", i, testCase.expected, errCode)
+			}
 		}
 	}
 }

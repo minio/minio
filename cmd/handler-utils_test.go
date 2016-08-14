@@ -38,8 +38,10 @@ func TestIsValidLocationContraint(t *testing.T) {
 		Body:          ioutil.NopCloser(bytes.NewBuffer([]byte("<>"))),
 		ContentLength: int64(len("<>")),
 	}
-	if err := isValidLocationConstraint(malformedReq); err != ErrMalformedXML {
-		t.Fatal("Unexpected error: ", err)
+	if err := isValidLocationConstraint(malformedReq); err != nil {
+		if _, ok := err.(MalformedXML); !ok {
+			t.Fatal("Unexpected error: ", err)
+		}
 	}
 
 	// generates the input request with XML bucket configuration set to the request body.
@@ -60,7 +62,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 	testCases := []struct {
 		locationForInputRequest string
 		serverConfigRegion      string
-		expectedCode            APIErrorCode
+		expectedCode            string
 	}{
 		// Test case - 1.
 		{"us-east-1", "us-east-1", ErrNone},
@@ -76,9 +78,16 @@ func TestIsValidLocationContraint(t *testing.T) {
 			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
 		}
 		serverConfig.SetRegion(testCase.serverConfigRegion)
-		actualCode := isValidLocationConstraint(inputRequest)
-		if testCase.expectedCode != actualCode {
-			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
+		err := isValidLocationConstraint(inputRequest)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate the error response")
+			}
+			if testCase.expectedCode != aerr.Code() {
+				t.Errorf("Test %d: Expected the APIErrCode to be %s, but instead found %s", i+1,
+					testCase.expectedCode, aerr.Code)
+			}
 		}
 	}
 }

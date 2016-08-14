@@ -304,7 +304,7 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType, bucketName stri
 		bucketName  string
 		expectedErr error
 	}{
-		{invalidBucket, BucketNameInvalid{Bucket: invalidBucket}},
+		{invalidBucket, eBucketNameInvalid(invalidBucket)},
 		{randBucket, nil},
 	}
 	for i, test := range testCases {

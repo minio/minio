@@ -132,7 +132,7 @@ func TestFSShutdown(t *testing.T) {
 		fs.DeleteObject(bucketName, objectName)
 		fsStorage := fs.storage.(*retryStorage)
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {
+		if err := fs.Shutdown(); errorCause(err) != eFaultyDisk() {
 			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
 		}
 		removeAll(disk)
@@ -199,8 +199,11 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fsStorage := fs.storage.(*retryStorage)
 	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	_, err = fs.GetBucketInfo(bucketName)
-	if errorCause(err) != errFaultyDisk {
-		t.Fatal("errFaultyDisk error not returned")
+	if err != nil {
+		err = errorCause(err)
+		if err != eFaultyDisk() {
+			t.Fatalf("Expected error %s, got %s", eFaultyDisk(), err)
+		}
 	}
 
 }
@@ -240,7 +243,7 @@ func TestFSDeleteObject(t *testing.T) {
 	// Loading format file from faulty disk
 	fsStorage := fs.storage.(*retryStorage)
 	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-	if err := fs.DeleteObject(bucketName, objectName); errorCause(err) != errFaultyDisk {
+	if err := fs.DeleteObject(bucketName, objectName); errorCause(err) != eFaultyDisk() {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -280,7 +283,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 2; i++ {
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := fs.DeleteBucket(bucketName); errorCause(err) != errFaultyDisk {
+		if err := fs.DeleteBucket(bucketName); errorCause(err) != eFaultyDisk() {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
@@ -319,7 +322,7 @@ func TestFSListBuckets(t *testing.T) {
 	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 2; i++ {
 		fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-		if _, err := fs.ListBuckets(); errorCause(err) != errFaultyDisk {
+		if _, err := fs.ListBuckets(); errorCause(err) != eFaultyDisk() {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}

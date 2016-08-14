@@ -54,17 +54,20 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // this is in keeping with the permissions sections of the docs of both:
 //   HEAD Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
 //   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
-func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
+func errAllowableObjectNotFound(bucket string, r *http.Request) error {
 	if getRequestAuthType(r) == authTypeAnonymous {
 		//we care about the bucket as a whole, not a particular resource
 		url := *r.URL
 		url.Path = "/" + bucket
 
-		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", &url); s3Error != ErrNone {
-			return ErrAccessDenied
+		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", &url); s3Error != nil {
+			return AccessDenied{}
 		}
 	}
-	return ErrNoSuchKey
+	return ObjectNotFound{
+		Bucket: bucket,
+		Object: strings.TrimPrefix(r.URL.Path, "/"+bucket),
+	}
 }
 
 // Simple way to convert a func to io.Writer type.
@@ -87,23 +90,23 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
-		apiErr := toAPIErrorCode(err)
-		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(bucket, r)
+		switch err.(type) {
+		case ObjectNotFound:
+			err = errAllowableObjectNotFound(bucket, r)
 		}
-		writeErrorResponse(w, r, apiErr, r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -112,10 +115,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
 		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
+			// Handle only InvalidRange
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, r, ErrInvalidRange, r.URL.Path)
+			if _, ok := err.(InvalidRange); ok {
+				writeErrorResponse(w, r, err)
 				return
 			}
 
@@ -162,8 +165,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// partial data has already been written before an error
 			// occurred then no point in setting StatusCode and
 			// sending error XML.
-			apiErr := toAPIErrorCode(err)
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
+			writeErrorResponse(w, r, err)
 		}
 		return
 	}
@@ -186,23 +188,23 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
-		apiErr := toAPIErrorCode(err)
-		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(bucket, r)
+		switch err.(type) {
+		case ObjectNotFound:
+			err = errAllowableObjectNotFound(bucket, r)
 		}
-		writeErrorResponse(w, r, apiErr, r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -229,12 +231,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -248,8 +250,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Skip the first element if it is '/', split the rest.
-	objectSource = strings.TrimPrefix(objectSource, "/")
-	splits := strings.SplitN(objectSource, "/", 2)
+	objectSourceTrimmed := strings.TrimPrefix(objectSource, "/")
+	splits := strings.SplitN(objectSourceTrimmed, "/", 2)
 
 	// Save sourceBucket and sourceObject extracted from url Path.
 	var sourceBucket, sourceObject string
@@ -259,20 +261,20 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	// If source object is empty, reply back error.
 	if sourceObject == "" {
-		writeErrorResponse(w, r, ErrInvalidCopySource, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidCopySource(sourceObject))
 		return
 	}
 
 	// Source and destination objects cannot be same, reply back error.
 	if sourceObject == object && sourceBucket == bucket {
-		writeErrorResponse(w, r, ErrInvalidCopyDest, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidCopyDest(objectSource, path.Join(bucket, object)))
 		return
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -283,7 +285,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(objInfo.Size) {
-		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
+		writeErrorResponse(w, r, eObjectTooLarge(maxObjectSize, objInfo.Size))
 		return
 	}
 
@@ -317,7 +319,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Close the this end of the pipe upon error in PutObject.
 		pipeReader.CloseWithError(err)
 		errorIf(err, "Unable to create an object.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	// Explicitly close the reader, before fetching object info.
@@ -348,13 +350,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
-		return
-	}
-
-	// X-Amz-Copy-Source shouldn't be set for this call.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		writeErrorResponse(w, r, ErrInvalidCopySource, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
@@ -366,7 +362,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
 		errorIf(err, "Unable to validate content-md5 format.")
-		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidDigest(r.Header.Get("Content-Md5")))
 		return
 	}
 
@@ -378,18 +374,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		size, err = strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil {
 			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
-			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+			writeErrorResponse(w, r, err)
 			return
 		}
 	}
 	if size == -1 && !contains(r.TransferEncoding, "chunked") {
-		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
+		writeErrorResponse(w, r, eMissingContentLength())
 		return
 	}
 
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
+		writeErrorResponse(w, r, eObjectTooLarge(maxObjectSize, size))
 		return
 	}
 
@@ -404,12 +400,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, eAccessDenied())
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		// Create anonymous object.
@@ -417,24 +413,21 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error := reqSignatureV4Verify(r); s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		if !skipContentSha256Cksum(r) {
@@ -445,7 +438,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
@@ -473,12 +466,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -488,7 +481,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	uploadID, err := objectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
 		errorIf(err, "Unable to initiate new multipart upload id.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -508,14 +501,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
 	// get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		writeErrorResponse(w, r, ErrInvalidDigest, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidDigest(r.Header.Get("Content-Md5")))
 		return
 	}
 
@@ -529,18 +522,18 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		size, err = strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil {
 			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
-			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+			writeErrorResponse(w, r, err)
 			return
 		}
 	}
 	if size == -1 {
-		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
+		writeErrorResponse(w, r, eMissingContentLength())
 		return
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, r, ErrEntityTooLarge, r.URL.Path)
+		writeErrorResponse(w, r, eObjectTooLarge(maxObjectSize, size))
 		return
 	}
 
@@ -549,13 +542,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
-		writeErrorResponse(w, r, ErrInvalidPart, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidPart(bucket, object, uploadID, partID))
 		return
 	}
 
 	// check partID with maximum part ID for multipart objects
 	if isMaxPartID(partID) {
-		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidMaxParts(partID))
 		return
 	}
 
@@ -565,12 +558,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+		writeErrorResponse(w, r, eAccessDenied())
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
@@ -578,24 +571,21 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
+		if s3Error := reqSignatureV4Verify(r); s3Error != nil {
+			writeErrorResponse(w, r, s3Error)
 			return
 		}
 
@@ -607,7 +597,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
 		// Verify if the underlying error is signature mismatch.
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	if partMD5 != "" {
@@ -624,19 +614,19 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:AbortMultipartUpload", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:AbortMultipartUpload", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := objectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
 		errorIf(err, "Unable to abort multipart upload.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	writeSuccessNoContent(w)
@@ -650,28 +640,28 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListMultipartUploadParts", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListMultipartUploadParts", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
 	uploadID, partNumberMarker, maxParts, _ := getObjectResources(r.URL.Query())
 	if partNumberMarker < 0 {
-		writeErrorResponse(w, r, ErrInvalidPartNumberMarker, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidPartNumberMarker(partNumberMarker))
 		return
 	}
 	if maxParts < 0 {
-		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidMaxParts(maxParts))
 		return
 	}
 	listPartsInfo, err := objectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "Unable to list uploaded parts.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	response := generateListPartsResponse(listPartsInfo)
@@ -690,12 +680,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -706,21 +696,21 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	completeMultipartBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, r, eIncompleteBody())
 		return
 	}
 	complMultipartUpload := &completeMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
 		errorIf(err, "Unable to parse complete multipart upload XML.")
-		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		writeErrorResponse(w, r, eMalformedXML())
 		return
 	}
 	if len(complMultipartUpload.Parts) == 0 {
-		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		writeErrorResponse(w, r, eMalformedXML())
 		return
 	}
 	if !sort.IsSorted(completedParts(complMultipartUpload.Parts)) {
-		writeErrorResponse(w, r, ErrInvalidPartOrder, r.URL.Path)
+		writeErrorResponse(w, r, eInvalidPartOrder())
 		return
 	}
 	// Complete parts.
@@ -733,16 +723,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
-		err = errorCause(err)
 		errorIf(err, "Unable to complete multipart upload.")
-		switch oErr := err.(type) {
-		case PartTooSmall:
-			// Write part too small error.
-			writePartSmallErrorResponse(w, r, oErr)
-		default:
-			// Handle all other generic issues.
-			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
-		}
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -751,11 +733,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, md5Sum)
 	encodedSuccessResponse := encodeResponse(response)
-	if err != nil {
-		errorIf(err, "Unable to parse CompleteMultipartUpload response")
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
 
 	// Set etag.
 	w.Header().Set("ETag", "\""+md5Sum+"\"")
@@ -792,12 +769,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
