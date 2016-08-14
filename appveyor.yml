@@ -30,7 +30,7 @@ build_script:
   - go build -ldflags="%BUILD_LDFLAGS%" -o %GOPATH%\bin\minio.exe
 
 after_test:
-  - bash <(curl -s https://codecov.io/bash)
+  - bash <(curl -s https://codecov.io/bash) -X fix
 
 # to disable automatic tests
 test: off
