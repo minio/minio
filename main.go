@@ -158,9 +158,6 @@ func main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
-		// Initialize name space lock.
-		initNSLock()
-
 		// Set global quiet flag.
 		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 
@@ -188,10 +185,6 @@ func main() {
 	case "block":
 		defer profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir)).Stop()
 	}
-
-	// Initialize and monitor shutdown signal
-	shutdownSignal = make(chan bool, 1)
-	monitorShutdownSignal(os.Exit)
 
 	// Run the app - exit on error.
 	app.RunAndExitOnError()

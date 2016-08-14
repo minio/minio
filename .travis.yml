@@ -19,12 +19,5 @@ script:
 after_success:
 - bash <(curl -s https://codecov.io/bash)
 
-after_success:
-- bash <(curl -s https://codecov.io/bash)
-
 go:
-- 1.6
-
-notifications:
-  slack:
-    secure: K9tsn5MvrCAxuEZTxn+m3Kq1K2NG2xMEJFSv/sTp+RQBW7TslPHzv859GsIvrm8mU1y1btOU9RlOzqrRUczI5cJpE8IL1oljPZbXrIXgetE0kbsw0Wpy99g27UQ2VGp933WDu8tfj7zU4cZv+BI0RltNLwqYO6GWXmcWP0IueCU=
+- 1.6.2

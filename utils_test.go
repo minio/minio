@@ -20,21 +20,19 @@ import "testing"
 
 // ShutdownCallback simulates a successful and failure exit here.
 func TestShutdownCallbackSuccess(t *testing.T) {
-	// Register two callbacks that return success
-	registerObjectStorageShutdown(func() errCode {
-		return exitSuccess
-	})
-	registerShutdown(func() errCode {
-		return exitSuccess
-	})
-
-	shutdownSignal = make(chan bool, 1)
-	shutdownSignal <- true
-	// Start executing callbacks and exitFunc receives a success.
+	// initialize graceful shutdown
 	dummySuccess := func(code int) {
 		if code != int(exitSuccess) {
 			t.Fatalf("Expected %d, got %d instead.", code, exitSuccess)
 		}
 	}
-	monitorShutdownSignal(dummySuccess)
+	initGracefulShutdown(dummySuccess)
+	// Register two callbacks that return success
+	globalShutdownCBs.AddObjectLayerCB(func() errCode {
+		return exitSuccess
+	})
+	globalShutdownCBs.AddGenericCB(func() errCode {
+		return exitSuccess
+	})
+	globalShutdownSignalCh <- struct{}{}
 }
