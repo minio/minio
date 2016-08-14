@@ -28,12 +28,11 @@ func TestShutdownCallbackSuccess(t *testing.T) {
 	}
 	initGracefulShutdown(dummySuccess)
 	// Register two callbacks that return success
-	registerObjectStorageShutdown(func() errCode {
+	globalShutdownCBs.AddObjectLayerCB(func() errCode {
 		return exitSuccess
 	})
-	registerShutdown(func() errCode {
+	globalShutdownCBs.AddGenericCB(func() errCode {
 		return exitSuccess
 	})
-
-	shutdownSignal <- true
+	globalShutdownSignalCh <- struct{}{}
 }

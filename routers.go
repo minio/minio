@@ -42,6 +42,9 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
+	// Initialize name space lock.
+	initNSLock()
+
 	objAPI, err := newObjectLayer(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	fatalIf(err, "Unable to intialize object layer.")
 
@@ -65,6 +68,18 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	webHandlers := &webAPIHandlers{
 		ObjectAPI: objAPI,
 	}
+
+	// Initialize and monitor shutdown signals.
+	err = initGracefulShutdown(os.Exit)
+	fatalIf(err, "Unable to initialize graceful shutdown operation")
+
+	// Register the callback that should be called when the process shuts down.
+	globalShutdownCBs.AddObjectLayerCB(func() errCode {
+		if sErr := objAPI.Shutdown(); sErr != nil {
+			return exitFailure
+		}
+		return exitSuccess
+	})
 
 	// Initialize a new event notifier.
 	err = initEventNotifier(objAPI)

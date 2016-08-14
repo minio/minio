@@ -62,36 +62,6 @@ func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
 	return format, nil
 }
 
-// Should be called when process shuts down.
-func shutdownFS(storage StorageAPI) errCode {
-	// List if there are any multipart entries.
-	_, err := storage.ListDir(minioMetaBucket, mpartMetaPrefix)
-	if err != errFileNotFound {
-		// Multipart directory is not empty hence do not remove '.minio.sys' volume.
-		return exitSuccess
-	}
-	// List if there are any bucket configuration entries.
-	_, err = storage.ListDir(minioMetaBucket, bucketConfigPrefix)
-	if err != errFileNotFound {
-		// Bucket config directory is not empty hence do not remove '.minio.sys' volume.
-		return exitSuccess
-	}
-	// Cleanup everything else.
-	prefix := ""
-	if err = cleanupDir(storage, minioMetaBucket, prefix); err != nil {
-		errorIf(err, "Unable to cleanup minio meta bucket")
-		return exitFailure
-	}
-	if err = storage.DeleteVol(minioMetaBucket); err != nil {
-		if err != errVolumeNotEmpty {
-			errorIf(err, "Unable to delete minio meta bucket %s", minioMetaBucket)
-			return exitFailure
-		}
-	}
-	// Successful exit.
-	return exitSuccess
-}
-
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(disk string) (ObjectLayer, error) {
 	storage, err := newStorageAPI(disk)
@@ -132,11 +102,6 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		return nil, errFSDiskFormat
 	}
 
-	// Register the callback that should be called when the process shuts down.
-	registerObjectStorageShutdown(func() errCode {
-		return shutdownFS(storage)
-	})
-
 	// Initialize fs objects.
 	fs := fsObjects{
 		storage:      storage,
@@ -146,6 +111,36 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return fs, nil
+}
+
+// Should be called when process shuts down.
+func (fs fsObjects) Shutdown() error {
+	// List if there are any multipart entries.
+	_, err := fs.storage.ListDir(minioMetaBucket, mpartMetaPrefix)
+	if err != errFileNotFound {
+		// Multipart directory is not empty hence do not remove '.minio.sys' volume.
+		return nil
+	}
+	// List if there are any bucket configuration entries.
+	_, err = fs.storage.ListDir(minioMetaBucket, bucketConfigPrefix)
+	if err != errFileNotFound {
+		// Bucket config directory is not empty hence do not remove '.minio.sys' volume.
+		return nil
+	}
+	// Cleanup everything else.
+	prefix := ""
+	if err = cleanupDir(fs.storage, minioMetaBucket, prefix); err != nil {
+		errorIf(err, "Unable to cleanup minio meta bucket")
+		return err
+	}
+	if err = fs.storage.DeleteVol(minioMetaBucket); err != nil {
+		if err != errVolumeNotEmpty {
+			errorIf(err, "Unable to delete minio meta bucket %s", minioMetaBucket)
+			return err
+		}
+	}
+	// Successful.
+	return nil
 }
 
 // StorageInfo - returns underlying storage statistics.
