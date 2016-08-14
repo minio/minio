@@ -31,7 +31,9 @@ const lockRPCPath = "/minio/lock"
 type lockServer struct {
 	rpcPath string
 	mutex   sync.Mutex
-	lockMap map[string]struct{}
+	// e.g, when a Lock(name) is held, map[string][]bool{"name" : []bool{true}}
+	// when one or more RLock() is held, map[string][]bool{"name" : []bool{false, false}}
+	lockMap map[string][]bool
 }
 
 ///  Distributed lock handlers
@@ -43,7 +45,7 @@ func (l *lockServer) Lock(name *string, reply *bool) error {
 	_, ok := l.lockMap[*name]
 	if !ok {
 		*reply = true
-		l.lockMap[*name] = struct{}{}
+		l.lockMap[*name] = []bool{true}
 		return nil
 	}
 	*reply = false
@@ -60,6 +62,40 @@ func (l *lockServer) Unlock(name *string, reply *bool) error {
 	}
 	*reply = true
 	delete(l.lockMap, *name)
+	return nil
+}
+
+func (l *lockServer) RLock(name *string, reply *bool) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	locksHeld, ok := l.lockMap[*name]
+	if !ok {
+		// First read-lock to be held on *name.
+		l.lockMap[*name] = []bool{false}
+	} else {
+		// Add an entry for this read lock.
+		l.lockMap[*name] = append(locksHeld, false)
+	}
+
+	return nil
+}
+
+func (l *lockServer) RUnlock(name *string, reply *bool) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	locksHeld, ok := l.lockMap[*name]
+	if !ok {
+		return fmt.Errorf("RUnlock attempted on an un-locked entity: %s", *name)
+	}
+	if len(locksHeld) > 1 {
+		// Remove one of the read locks held.
+		locksHeld = locksHeld[1:]
+		l.lockMap[*name] = locksHeld
+	} else {
+		// Delete the map entry since this is the last read lock held
+		// on *name.
+		delete(l.lockMap, *name)
+	}
 	return nil
 }
 
@@ -91,7 +127,7 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 			lockServers = append(lockServers, &lockServer{
 				rpcPath: export,
 				mutex:   sync.Mutex{},
-				lockMap: make(map[string]struct{}),
+				lockMap: make(map[string][]bool),
 			})
 		}
 	}
