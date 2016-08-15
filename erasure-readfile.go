@@ -43,8 +43,8 @@ func isSuccessDecodeBlocks(enBlocks [][]byte, dataBlocks int) bool {
 		} // else { // update parity block count.
 		successParityBlocksCount++
 	}
-	// Returns true if we have atleast dataBlocks + 1 parity.
-	return successDataBlocksCount == dataBlocks || successDataBlocksCount+successParityBlocksCount >= dataBlocks+1
+	// Returns true if we have atleast dataBlocks parity.
+	return successDataBlocksCount == dataBlocks || successDataBlocksCount+successParityBlocksCount >= dataBlocks
 }
 
 // isSuccessDataBlocks - do we have all the data blocks?
@@ -86,7 +86,7 @@ func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDis
 	if dataDisks == dataBlocks {
 		return nil, 0, errUnexpected
 	}
-	if dataDisks+parityDisks >= dataBlocks+1 {
+	if dataDisks+parityDisks >= dataBlocks {
 		return nil, 0, errUnexpected
 	}
 
@@ -103,8 +103,7 @@ func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDis
 		readDisks[i] = orderedDisks[i]
 		if dataDisks == dataBlocks {
 			return readDisks, i + 1, nil
-		}
-		if dataDisks+parityDisks == dataBlocks+1 {
+		} else if dataDisks+parityDisks == dataBlocks {
 			return readDisks, i + 1, nil
 		}
 	}
