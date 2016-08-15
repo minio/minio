@@ -91,9 +91,6 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	// Initialize Namespace locking.
-	initNSLock()
-
 	// Initialize storage rpc servers for every disk that is hosted on this node.
 	storageRPCs, err := newRPCServer(srvCmdConfig)
 	fatalIf(err, "Unable to initialize storage RPC server.")
