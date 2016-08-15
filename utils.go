@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -76,62 +77,112 @@ func contains(stringList []string, element string) bool {
 	return false
 }
 
-// shutdownSignal - is the channel that receives any boolean when
-// we want broadcast the start of shutdown
-var shutdownSignal chan bool
-
-// shutdownCallbacks - is the list of function callbacks executed one by one
-// when a shutdown starts. A callback returns 0 for success and 1 for failure.
-// Failure is considered an emergency error that needs an immediate exit
-var shutdownCallbacks []func() errCode
-
-// shutdownObjectStorageCallbacks - contains the list of function callbacks that
-// need to be invoked when a shutdown starts. These callbacks will be called before
-// the general callback shutdowns
-var shutdownObjectStorageCallbacks []func() errCode
-
-// Register callback functions that need to be called when process terminates.
-func registerShutdown(callback func() errCode) {
-	shutdownCallbacks = append(shutdownCallbacks, callback)
-}
-
-// Register object storagecallback functions that need to be called when process terminates.
-func registerObjectStorageShutdown(callback func() errCode) {
-	shutdownObjectStorageCallbacks = append(shutdownObjectStorageCallbacks, callback)
-}
-
-// Represents a type of an exit func which will be invoked during shutdown signal.
+// Represents a type of an exit func which will be invoked upon shutdown signal.
 type onExitFunc func(code int)
 
+// Represents a type for all the the callback functions invoked upon shutdown signal.
+type cleanupOnExitFunc func() errCode
+
+// Represents a collection of various callbacks executed upon exit signals.
+type shutdownCallbacks struct {
+	// Protect callbacks list from a concurrent access
+	*sync.RWMutex
+	// genericCallbacks - is the list of function callbacks executed one by one
+	// when a shutdown starts. A callback returns 0 for success and 1 for failure.
+	// Failure is considered an emergency error that needs an immediate exit
+	genericCallbacks []cleanupOnExitFunc
+	// objectLayerCallbacks - contains the list of function callbacks that
+	// need to be invoked when a shutdown starts. These callbacks will be called before
+	// the general callback shutdowns
+	objectLayerCallbacks []cleanupOnExitFunc
+}
+
+// globalShutdownCBs stores regular and object storages callbacks
+var globalShutdownCBs *shutdownCallbacks
+
+func (s shutdownCallbacks) GetObjectLayerCBs() []cleanupOnExitFunc {
+	s.RLock()
+	defer s.RUnlock()
+	return s.objectLayerCallbacks
+}
+
+func (s shutdownCallbacks) GetGenericCBs() []cleanupOnExitFunc {
+	s.RLock()
+	defer s.RUnlock()
+	return s.genericCallbacks
+}
+
+func (s *shutdownCallbacks) AddObjectLayerCB(callback cleanupOnExitFunc) error {
+	s.Lock()
+	defer s.Unlock()
+	if callback == nil {
+		return errInvalidArgument
+	}
+	s.objectLayerCallbacks = append(s.objectLayerCallbacks, callback)
+	return nil
+}
+
+func (s *shutdownCallbacks) AddGenericCB(callback cleanupOnExitFunc) error {
+	s.Lock()
+	defer s.Unlock()
+	if callback == nil {
+		return errInvalidArgument
+	}
+	s.genericCallbacks = append(s.genericCallbacks, callback)
+	return nil
+}
+
+// Initialize graceful shutdown mechanism.
+func initGracefulShutdown(onExitFn onExitFunc) error {
+	// Validate exit func.
+	if onExitFn == nil {
+		return errInvalidArgument
+	}
+	globalShutdownCBs = &shutdownCallbacks{
+		RWMutex: &sync.RWMutex{},
+	}
+	// Return start monitor shutdown signal.
+	return startMonitorShutdownSignal(onExitFn)
+}
+
+// Global shutdown signal channel.
+var globalShutdownSignalCh = make(chan struct{})
+
 // Start to monitor shutdownSignal to execute shutdown callbacks
-func monitorShutdownSignal(onExitFn onExitFunc) {
+func startMonitorShutdownSignal(onExitFn onExitFunc) error {
+	// Validate exit func.
+	if onExitFn == nil {
+		return errInvalidArgument
+	}
 	go func() {
+		defer close(globalShutdownSignalCh)
 		// Monitor signals.
 		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
 		for {
 			select {
 			case <-trapCh:
-				// Start a graceful shutdown call
-				shutdownSignal <- true
-			case <-shutdownSignal:
-				// Call all callbacks and exit for emergency
-				for _, callback := range shutdownCallbacks {
+				// Initiate graceful shutdown.
+				globalShutdownSignalCh <- struct{}{}
+			case <-globalShutdownSignalCh:
+				// Call all object storage shutdown callbacks and exit for emergency
+				for _, callback := range globalShutdownCBs.GetObjectLayerCBs() {
 					exitCode := callback()
 					if exitCode != exitSuccess {
 						onExitFn(int(exitCode))
 					}
 
 				}
-				// Call all object storage shutdown callbacks and exit for emergency
-				for _, callback := range shutdownObjectStorageCallbacks {
+				// Call all callbacks and exit for emergency
+				for _, callback := range globalShutdownCBs.GetGenericCBs() {
 					exitCode := callback()
 					if exitCode != exitSuccess {
 						onExitFn(int(exitCode))
 					}
-
 				}
 				onExitFn(int(exitSuccess))
 			}
 		}
 	}()
+	// Successfully started routine.
+	return nil
 }

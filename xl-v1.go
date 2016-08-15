@@ -206,6 +206,12 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 	return xl, nil
 }
 
+// Shutdown function for object storage interface.
+func (xl xlObjects) Shutdown() error {
+	// Add any object layer shutdown activities here.
+	return nil
+}
+
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []disk.Info
 
