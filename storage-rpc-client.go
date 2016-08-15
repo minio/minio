@@ -36,14 +36,6 @@ const (
 	storageRPCPath = reservedBucket + "/storage"
 )
 
-// splits network path into its components Address and Path.
-func splitNetPath(networkPath string) (netAddr, netPath string) {
-	index := strings.LastIndex(networkPath, ":")
-	netAddr = networkPath[:index]
-	netPath = networkPath[index+1:]
-	return netAddr, netPath
-}
-
 // Converts rpc.ServerError to underlying error. This function is
 // written so that the storageAPI errors are consistent across network
 // disks as well.
@@ -111,7 +103,10 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	}
 
 	// TODO validate netAddr and netPath.
-	netAddr, netPath := splitNetPath(networkPath)
+	netAddr, netPath, err := splitNetPath(networkPath)
+	if err != nil {
+		return nil, err
+	}
 
 	// Dial minio rpc storage http path.
 	rpcPath := path.Join(storageRPCPath, netPath)
