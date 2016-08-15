@@ -37,7 +37,7 @@ func NewLeakDetect() LeakDetect {
 	return snapshot
 }
 
-// CompareCurrentSnapshot - Comapres the initial relevant stack trace with the current one (during the time of invocation).
+// CompareCurrentSnapshot - Compares the initial relevant stack trace with the current one (during the time of invocation).
 func (initialSnapShot LeakDetect) CompareCurrentSnapshot() []string {
 	var stackDiff []string
 	for _, g := range pickRelevantGoroutines() {

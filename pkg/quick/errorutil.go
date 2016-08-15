@@ -49,7 +49,7 @@ func FormatJSONSyntaxError(data io.Reader, sErr *json.SyntaxError) error {
 	termWidth := 25
 
 	// errorShift is the length of the minimum needed place for
-	// error msg accessoires, like <--, etc.. We calculate it
+	// error msg accessories, like <--, etc.. We calculate it
 	// dynamically to avoid an eventual bug after modifying errorFmt
 	errorShift := len(fmt.Sprintf(errorFmt, 1, ""))
 

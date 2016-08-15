@@ -118,7 +118,7 @@ func TestBucketPolicyActionMatch(t *testing.T) {
 		{"s3:ListBucketMultipartUploads", getWriteOnlyBucketStatement(bucketName, objectPrefix), true},
 		// read-only bucket policy is expected to not allow ListBucketMultipartUploads operation on an anonymous request (Test case 9).
 		// the allowed actions in read-only bucket statement are  "s3:GetBucketLocation","s3:ListBucket",
-		// this shouldnot allow for ListBucketMultipartUploads operations.
+		// this should not allow for ListBucketMultipartUploads operations.
 		{"s3:ListBucketMultipartUploads", getReadOnlyBucketStatement(bucketName, objectPrefix), false},
 
 		// Any of the object level policy will not allow for s3:ListBucketMultipartUploads (Test cases 10-12).
@@ -136,7 +136,7 @@ func TestBucketPolicyActionMatch(t *testing.T) {
 		{"s3:ListBucket", getReadWriteBucketStatement(bucketName, objectPrefix), true},
 		// write-only  bucket policy is expected to not allow ListBucket operation on an anonymous request (Test case 15).
 		// the allowed actions in write-only  bucket statement are "s3:GetBucketLocation",	"s3:ListBucketMultipartUploads",
-		// this shouldnot allow for ListBucket operations.
+		// this should not allow for ListBucket operations.
 		{"s3:ListBucket", getWriteOnlyBucketStatement(bucketName, objectPrefix), false},
 
 		// Cases for testing ListBucket access for different Object level access permissions (Test cases 16-18).

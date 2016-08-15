@@ -62,7 +62,7 @@ Verify if it is writable
 
 ```
 
-Now you have successfully created a ZFS pool for futher reading please refer to [ZFS Quickstart Guide](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
+Now you have successfully created a ZFS pool for further reading please refer to [ZFS Quickstart Guide](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
 
 However, this pool is not taking advantage of any ZFS features, so let's create a ZFS filesytem on this pool with compression enabled.  ZFS supports many compression algorithms: lzjb, gzip, zle, lz4.  LZ4 is often the most performant algorithm in terms of compression of data versus system overhead.
 

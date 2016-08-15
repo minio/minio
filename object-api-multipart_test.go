@@ -1876,7 +1876,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 }
 
 // Benchmarks for ObjectLayer.PutObjectPart().
-// The intent is to benchamrk PutObjectPart for various sizes ranging from few bytes to 100MB.
+// The intent is to benchmark PutObjectPart for various sizes ranging from few bytes to 100MB.
 // Also each of these Benchmarks are run both XL and FS backends.
 
 // BenchmarkPutObjectPart5MbFS - Benchmark FS.PutObjectPart() for object size of 5MB.

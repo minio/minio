@@ -722,7 +722,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// This lock also protects the cache namespace.
 		nsMutex.Unlock(bucket, object)
 
-		// Prefetch the object from disk by triggerring a fake GetObject call
+		// Prefetch the object from disk by triggering a fake GetObject call
 		// Unlike a regular single PutObject,  multipart PutObject is comes in
 		// stages and it is harder to cache.
 		go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
