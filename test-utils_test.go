@@ -623,8 +623,13 @@ func getDeleteObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
 }
 
-// return URL for HEAD o nthe object.
+// return URL for HEAD on the object.
 func getHeadObjectURL(endPoint, bucketName, objectName string) string {
+	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
+}
+
+// return url to be used while copying the object.
+func getCopyObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
 }
 
@@ -769,6 +774,12 @@ func getXLObjectLayer() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// Disabling the cache for integration tests.
+	// Should use the object layer tests for validating cache.
+	if xl, ok := objLayer.(xlObjects); ok {
+		xl.objCacheEnabled = false
+	}
+
 	return objLayer, erasureDisks, nil
 }
 
@@ -876,11 +887,18 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	// Iterate the list of API functions requested for and register them in mux HTTP handler.
 	for _, apiFunction := range apiFunctions {
 		switch apiFunction {
+		// Register GetObject handler.
+		case "GetObject`":
+			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
+		// Register GetObject handler.
+		case "CopyObject`":
+			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
+
 		// Register PutBucket Policy handler.
 		case "PutBucketPolicy":
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
 
-			// Register Delete bucket HTTP policy handler.
+		// Register Delete bucket HTTP policy handler.
 		case "DeleteBucketPolicy":
 			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
 
