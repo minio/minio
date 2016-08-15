@@ -16,7 +16,10 @@
 
 package main
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 // Tests scenarios which can occur for hasExtendedHeader function.
 func TestHasExtendedHeader(t *testing.T) {
@@ -30,26 +33,26 @@ func TestHasExtendedHeader(t *testing.T) {
 			metadata: map[string]string{
 				"X-Amz-Meta-1": "value",
 			},
-			has: true,
+			has: true || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
 		},
 		// Verifies if X-Minio-Meta is present.
 		{
 			metadata: map[string]string{
 				"X-Minio-Meta-1": "value",
 			},
-			has: true,
+			has: true || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
 		},
 		// Verifies if extended header is not present.
 		{
 			metadata: map[string]string{
 				"md5Sum": "value",
 			},
-			has: false,
+			has: false || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
 		},
-		// Verifieis if extended header is not present, but with an empty input.
+		// Verifies if extended header is not present, but with an empty input.
 		{
 			metadata: nil,
-			has:      false,
+			has:      false || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
 		},
 	}
 

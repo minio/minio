@@ -587,6 +587,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
 	if hasExtendedHeader(fsMeta.Meta) {
+		if len(fsMeta.Meta) == 0 {
+			fsMeta.Meta = make(map[string]string)
+		}
 		fsMeta.Meta["md5Sum"] = s3MD5
 
 		// Write the metadata to a temp file and rename it to the actual location.
