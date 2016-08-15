@@ -21,6 +21,7 @@ import "io"
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Storage operations.
+	Shutdown() error
 	StorageInfo() StorageInfo
 
 	// Bucket operations.

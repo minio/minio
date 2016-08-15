@@ -259,7 +259,8 @@ func serverMain(c *cli.Context) {
 	// Prints the formatted startup message.
 	printStartupMessage(endPoints)
 
-	registerShutdown(func() errCode {
+	// Register generic callbacks.
+	globalShutdownCBs.AddGenericCB(func() errCode {
 		// apiServer.Stop()
 		return exitSuccess
 	})
