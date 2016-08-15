@@ -101,19 +101,19 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 }
 
 // Return disks with the outdated or missing object.
-func (xl xlObjects) outDatedDisks(partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
-	outDatedDisks = make([]StorageAPI, len(xl.storageDisks))
-	latestDisks, _ := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
+func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+	outDatedDisks = make([]StorageAPI, len(disks))
+	latestDisks, _ := listOnlineDisks(disks, partsMetadata, errs)
 	for index, disk := range latestDisks {
 		if errs[index] == errFileNotFound {
-			outDatedDisks[index] = xl.storageDisks[index]
+			outDatedDisks[index] = disks[index]
 			continue
 		}
 		if errs[index] != nil {
 			continue
 		}
 		if disk == nil {
-			outDatedDisks[index] = xl.storageDisks[index]
+			outDatedDisks[index] = disks[index]
 		}
 	}
 	return outDatedDisks

@@ -244,7 +244,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	// List of disks having latest version of the object.
 	latestDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
 	// List of disks having outdated version of the object or missing object.
-	outDatedDisks := xl.outDatedDisks(partsMetadata, errs)
+	outDatedDisks := outDatedDisks(xl.storageDisks, partsMetadata, errs)
 	// Latest xlMetaV1 for reference.
 	latestMeta := pickValidXLMeta(partsMetadata, modTime)
 
