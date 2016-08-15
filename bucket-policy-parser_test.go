@@ -477,7 +477,7 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 		statements[0].Actions = []string{"s3:DeleteObject", "s3:PutObject"}
 		return statements
 	}
-	// contructing policy statement with recursive resources.
+	// contracting policy statement with recursive resources.
 	// should result in ErrMalformedPolicy
 	setRecurseResource := func(statements []policyStatement) []policyStatement {
 		statements[0].Resources = []string{"arn:aws:s3:::minio-bucket/Asia/*", "arn:aws:s3:::minio-bucket/Asia/India/*"}
@@ -512,7 +512,7 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 		// this results in return of ErrMalformedPolicy.
 		{Version: "1.0", Statements: setValidPrefixActions(getWriteOnlyStatement("minio-bucket-fail", "Asia/India/"))},
 		// bucketPolicy - 6.
-		// contructing policy statement with recursive resources.
+		// contracting policy statement with recursive resources.
 		// should result in ErrMalformedPolicy
 		{Version: "1.0", Statements: setRecurseResource(setValidPrefixActions(getWriteOnlyStatement("minio-bucket", "")))},
 		// BucketPolciy - 7.
@@ -544,7 +544,7 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 		// Resource prefix bucket part is not equal to the bucket name in this case.
 		{bucketAccessPolicies[4], ErrMalformedPolicy, false},
 		// Test case - 6.
-		// contructing policy statement with recursive resources.
+		// contracting policy statement with recursive resources.
 		// should result in ErrPolicyNesting.
 		{bucketAccessPolicies[5], ErrPolicyNesting, false},
 		// Test case - 7.

@@ -1,9 +1,9 @@
 # How to run multiple Minio server instances on single machine. [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-![minio_MULTISERVER](https://github.com/minio/minio/blob/master/docs/screenshots/multiport.jpeg?raw=true)
+![minio_MULTIVERSE](https://github.com/minio/minio/blob/master/docs/screenshots/multiport.jpeg?raw=true)
 
 
-In this document we will illustrate how to set up multiple Minio server instances on single machine. These Minio servers are running on thier own port, data directory & configuration directory.
+In this document we will illustrate how to set up multiple Minio server instances on single machine. These Minio servers are running on their own port, data directory & configuration directory.
 
 ## 1. Prerequisites
 

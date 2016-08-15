@@ -143,7 +143,7 @@ func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.
 				continue
 			}
 			// the "host" field will not be found in the header map, it can be found in req.Host.
-			// but its necessary to make sure that the "host" field exists in the list of signed paramaters,
+			// but its necessary to make sure that the "host" field exists in the list of signed parameters,
 			// the check is done above.
 			if header == "host" {
 				continue

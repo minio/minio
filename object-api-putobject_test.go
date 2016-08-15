@@ -395,7 +395,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 }
 
 // Benchmarks for ObjectLayer.PutObject().
-// The intent is to benchamrk PutObject for various sizes ranging from few bytes to 100MB.
+// The intent is to benchmark PutObject for various sizes ranging from few bytes to 100MB.
 // Also each of these Benchmarks are run both XL and FS backends.
 
 // BenchmarkPutObjectVerySmallFS - Benchmark FS.PutObject() for object size of 10 bytes.

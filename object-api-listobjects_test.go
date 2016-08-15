@@ -503,7 +503,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "Asia/India/", "", "", 10, resultCases[23], nil, true},
 		{"test-bucket-list-object", "Asia", "", "", 10, resultCases[24], nil, true},
 		// Tests with prefix and delimiter (55-57).
-		// With delimeter the code shouldnot recurse into the sub-directories of prefix Dir.
+		// With delimeter the code should not recurse into the sub-directories of prefix Dir.
 		{"test-bucket-list-object", "Asia", "", "/", 10, resultCases[25], nil, true},
 		{"test-bucket-list-object", "new", "", "/", 10, resultCases[26], nil, true},
 		{"test-bucket-list-object", "Asia/India/", "", "/", 10, resultCases[27], nil, true},

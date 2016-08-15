@@ -50,7 +50,7 @@ if [ ! $# -eq 2 ]
 then
 	# exit if commit SHA's are not provided. 
 	echo $#
-	echo "Need Commit SHA's of 2 snapshots to be supplied to run benchmark comparision."
+	echo "Need Commit SHA's of 2 snapshots to be supplied to run benchmark comparison."
 	exit 1
 fi
 
