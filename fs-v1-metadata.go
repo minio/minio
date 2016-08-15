@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -161,6 +162,9 @@ func isExtendedHeader(header string) bool {
 
 // Return true if extended HTTP headers are set, false otherwise.
 func hasExtendedHeader(metadata map[string]string) bool {
+	if os.Getenv("MINIO_ENABLE_FSMETA") == "1" {
+		return true
+	}
 	for k := range metadata {
 		if isExtendedHeader(k) {
 			return true

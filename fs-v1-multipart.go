@@ -588,8 +588,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
 	if hasExtendedHeader(fsMeta.Meta) {
 		fsMeta.Meta["md5Sum"] = s3MD5
+		uniqueID := getUUID()
+		fsMetaTmp := path.Join(tmpMetaPrefix, uniqueID)
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaTmp, fsMeta); err != nil {
+			return "", toObjectErr(err, bucket, object)
+		}
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+		if err = fs.storage.RenameFile(minioMetaBucket, fsMetaTmp, minioMetaBucket, fsMetaPath); err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
 	}
