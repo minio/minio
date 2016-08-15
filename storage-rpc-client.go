@@ -19,7 +19,10 @@ package main
 import (
 	"errors"
 	"io"
+	"net"
 	"path"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -37,11 +40,25 @@ const (
 )
 
 // splits network path into its components Address and Path.
-func splitNetPath(networkPath string) (netAddr, netPath string) {
-	index := strings.LastIndex(networkPath, ":")
-	netAddr = networkPath[:index]
-	netPath = networkPath[index+1:]
-	return netAddr, netPath
+func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
+	if runtime.GOOS == "windows" {
+		if volumeName := filepath.VolumeName(networkPath); volumeName != "" {
+			return "", networkPath, nil
+		}
+	}
+	networkParts := strings.SplitN(networkPath, ":", 2)
+	switch len(networkParts) {
+	case 0, 1:
+		return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}
+	case 2:
+		if networkParts[1] == "" {
+			return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}
+		} else if networkParts[0] == "" {
+			return "", "", &net.AddrError{Err: "missing address in network path", Addr: networkPath}
+		}
+		return networkParts[0], networkParts[1], nil
+	}
+	return networkParts[0], networkParts[1], nil
 }
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -111,7 +128,10 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	}
 
 	// TODO validate netAddr and netPath.
-	netAddr, netPath := splitNetPath(networkPath)
+	netAddr, netPath, err := splitNetPath(networkPath)
+	if err != nil {
+		return nil, err
+	}
 
 	// Dial minio rpc storage http path.
 	rpcPath := path.Join(storageRPCPath, netPath)

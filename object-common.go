@@ -56,8 +56,8 @@ func fsHouseKeeping(storageDisk StorageAPI) error {
 // Check if a network path is local to this node.
 func isLocalStorage(networkPath string) bool {
 	if idx := strings.LastIndex(networkPath, ":"); idx != -1 {
-		// e.g 10.0.0.1:9000:/mnt/networkPath
-		netAddr, _ := splitNetPath(networkPath)
+		// e.g 10.0.0.1:/mnt/networkPath
+		netAddr, _, _ := splitNetPath(networkPath)
 		var netHost string
 		var err error
 		netHost, _, err = net.SplitHostPort(netAddr)
