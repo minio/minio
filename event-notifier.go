@@ -138,7 +138,10 @@ func (en *eventNotifier) RemoveLambdaTarget(lambdaARN string, listenerCh chan []
 }
 
 // Returns true if bucket notification is set for the bucket, false otherwise.
-func (en eventNotifier) IsBucketNotificationSet(bucket string) bool {
+func (en *eventNotifier) IsBucketNotificationSet(bucket string) bool {
+	if en == nil {
+		return false
+	}
 	en.rwMutex.RLock()
 	defer en.rwMutex.RUnlock()
 	_, ok := en.notificationConfigs[bucket]
