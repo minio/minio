@@ -19,7 +19,6 @@ package main
 import (
 	"errors"
 	"io"
-	"net/rpc"
 	"path"
 	"strconv"
 	"strings"
@@ -29,7 +28,7 @@ type networkStorage struct {
 	netScheme string
 	netAddr   string
 	netPath   string
-	rpcClient *rpc.Client
+	rpcClient *RPCClient
 	rpcToken  string
 }
 
@@ -88,7 +87,7 @@ func toStorageErr(err error) error {
 // Login rpc client makes an authentication request to the rpc server.
 // Receives a session token which will be used for subsequent requests.
 // FIXME: Currently these tokens expire in 100yrs.
-func loginRPCClient(rpcClient *rpc.Client) (tokenStr string, err error) {
+func loginRPCClient(rpcClient *RPCClient) (tokenStr string, err error) {
 	cred := serverConfig.GetCredential()
 	reply := RPCLoginReply{}
 	if err = rpcClient.Call("Storage.LoginHandler", RPCLoginArgs{
@@ -118,13 +117,14 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	rpcPath := path.Join(storageRPCPath, netPath)
 	port := getPort(srvConfig.serverAddr)
 	rpcAddr := netAddr + ":" + strconv.Itoa(port)
-	rpcClient, err := rpc.DialHTTPPath("tcp", rpcAddr, rpcPath)
-	if err != nil {
-		return nil, err
-	}
+	// Initialize rpc client with network address and rpc path.
+	rpcClient := newClient(rpcAddr, rpcPath)
 
 	token, err := loginRPCClient(rpcClient)
 	if err != nil {
+		// Close the corresponding network connection w/ server to
+		// avoid leaking socket file descriptor.
+		rpcClient.Close()
 		return nil, err
 	}
 
@@ -213,6 +213,9 @@ func (n networkStorage) AppendFile(volume, path string, buffer []byte) (err erro
 
 // StatFile - get latest Stat information for a file at path.
 func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
+	if n.rpcClient == nil {
+		return FileInfo{}, errVolumeBusy
+	}
 	if err = n.rpcClient.Call("Storage.StatFileHandler", StatFileArgs{
 		Token: n.rpcToken,
 		Vol:   volume,
@@ -228,6 +231,9 @@ func (n networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err er
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
 func (n networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
+	if n.rpcClient == nil {
+		return nil, errVolumeBusy
+	}
 	if err = n.rpcClient.Call("Storage.ReadAllHandler", ReadAllArgs{
 		Token: n.rpcToken,
 		Vol:   volume,
