@@ -21,9 +21,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -41,6 +44,28 @@ func cloneHeader(h http.Header) http.Header {
 
 	}
 	return h2
+}
+
+// splits network path into its components Address and Path.
+func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
+	if runtime.GOOS == "windows" {
+		if volumeName := filepath.VolumeName(networkPath); volumeName != "" {
+			return "", networkPath, nil
+		}
+	}
+	networkParts := strings.SplitN(networkPath, ":", 2)
+	switch len(networkParts) {
+	case 1:
+		return "", networkPath, nil
+	case 2:
+		if networkParts[1] == "" {
+			return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}
+		} else if networkParts[0] == "" {
+			return "", "", &net.AddrError{Err: "missing address in network path", Addr: networkPath}
+		}
+		return networkParts[0], networkParts[1], nil
+	}
+	return networkParts[0], networkParts[1], nil
 }
 
 // xmlDecoder provide decoded value in xml.

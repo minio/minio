@@ -43,6 +43,10 @@ func newClient(node, rpcPath string) *RPCClient {
 func (rpcClient *RPCClient) Close() error {
 	rpcClient.Lock()
 	defer rpcClient.Unlock()
+	// If rpc client has not connected yet there is nothing to close.
+	if rpcClient.rpc == nil {
+		return nil
+	}
 	// Reset rpcClient.rpc to allow for subsequent calls to use a new
 	// (socket) connection.
 	clnt := rpcClient.rpc
