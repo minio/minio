@@ -18,21 +18,79 @@ package main
 
 import "testing"
 
-// ShutdownCallback simulates a successful and failure exit here.
-func TestShutdownCallbackSuccess(t *testing.T) {
-	// initialize graceful shutdown
-	dummySuccess := func(code int) {
-		if code != int(exitSuccess) {
-			t.Fatalf("Expected %d, got %d instead.", code, exitSuccess)
+// Tests maximum object size.
+func TestMaxObjectSize(t *testing.T) {
+	sizes := []struct {
+		isMax bool
+		size  int64
+	}{
+		// Test - 1 - maximum object size.
+		{
+			true,
+			maxObjectSize + 1,
+		},
+		// Test - 2 - not maximum object size.
+		{
+			false,
+			maxObjectSize - 1,
+		},
+	}
+	for i, s := range sizes {
+		isMax := isMaxObjectSize(s.size)
+		if isMax != s.isMax {
+			t.Errorf("Test %d: Expected %t, got %t", i+1, s.isMax, isMax)
 		}
 	}
-	initGracefulShutdown(dummySuccess)
-	// Register two callbacks that return success
-	globalShutdownCBs.AddObjectLayerCB(func() errCode {
-		return exitSuccess
-	})
-	globalShutdownCBs.AddGenericCB(func() errCode {
-		return exitSuccess
-	})
-	globalShutdownSignalCh <- struct{}{}
+}
+
+// Tests minimum allowed part size.
+func TestMinAllowedPartSize(t *testing.T) {
+	sizes := []struct {
+		isMin bool
+		size  int64
+	}{
+		// Test - 1 - within minimum part size.
+		{
+			true,
+			minPartSize + 1,
+		},
+		// Test - 2 - smaller than minimum part size.
+		{
+			false,
+			minPartSize - 1,
+		},
+	}
+
+	for i, s := range sizes {
+		isMin := isMinAllowedPartSize(s.size)
+		if isMin != s.isMin {
+			t.Errorf("Test %d: Expected %t, got %t", i+1, s.isMin, isMin)
+		}
+	}
+}
+
+// Tests maximum allowed part number.
+func TestMaxPartID(t *testing.T) {
+	sizes := []struct {
+		isMax bool
+		partN int
+	}{
+		// Test - 1 part number within max part number.
+		{
+			false,
+			maxPartID - 1,
+		},
+		// Test - 2 part number bigger than max part number.
+		{
+			true,
+			maxPartID + 1,
+		},
+	}
+
+	for i, s := range sizes {
+		isMax := isMaxPartID(s.partN)
+		if isMax != s.isMax {
+			t.Errorf("Test %d: Expected %t, got %t", i+1, s.isMax, isMax)
+		}
+	}
 }
