@@ -60,7 +60,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 		EventVersion:      "2.0",
 		EventSource:       "aws:s3",
 		AwsRegion:         region,
-		EventTime:         tnow.Format(iso8601Format),
+		EventTime:         tnow.Format(timeFormatAMZ),
 		EventName:         event.Type.String(),
 		UserIdentity:      defaultIdentity(),
 		RequestParameters: event.ReqParams,
