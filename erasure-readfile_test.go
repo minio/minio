@@ -37,57 +37,64 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 		nextIndex int          // return value from getReadDisks
 		err       error        // error return value from getReadDisks
 	}{
+		// Test case - 1.
+		// When all disks are available, should return data disks.
 		{
 			0,
-			// When all disks are available, should return data disks.
 			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
 			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, nil, nil, nil, nil, nil, nil},
 			8,
 			nil,
 		},
+		// Test case - 2.
+		// If a parity disk is down, should return all data disks.
 		{
 			0,
-			// If a parity disk is down, should return all data disks.
 			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], nil, d[10], d[11], d[12], d[13], d[14], d[15]},
 			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, nil, nil, nil, nil, nil, nil},
 			8,
 			nil,
 		},
+		// Test case - 3.
+		// If a data disk is down, should return 7 data and 1 parity.
 		{
 			0,
-			// If a data disk is down, should return 7 data and 2 parity.
 			[]StorageAPI{nil, d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], nil, nil, nil, nil, nil, nil},
+			[]StorageAPI{nil, d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], nil, nil, nil, nil, nil, nil, nil},
+			9,
+			nil,
+		},
+		// Test case - 4.
+		// If 7 data disks are down, should return 1 data and 7 parity.
+		{
+			0,
+			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
+			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], nil},
+			15,
+			nil,
+		},
+		// Test case - 5.
+		// When 2 disks fail during parallelRead, next call to getReadDisks should return 3 disks
+		{
+			8,
+			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
+			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, d[8], d[9], nil, nil, nil, nil, nil, nil},
 			10,
 			nil,
 		},
-		{
-			0,
-			// If 7 data disks are down, should return 1 data and 8 parity.
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			16,
-			nil,
-		},
-		{
-			8,
-			// When all disks are available, should return data disks.
-			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, d[8], d[9], d[10], nil, nil, nil, nil, nil},
-			11,
-			nil,
-		},
+		// Test case - 6.
+		// If 2 disks again fail from the 3 disks returned previously, return next 2 disks
 		{
 			11,
-			// When all disks are available, should return data disks.
 			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, d[11], d[12], nil, nil, nil},
-			13,
+			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, d[11], nil, nil, nil, nil},
+			12,
 			nil,
 		},
+		// Test case - 7.
+		// No more disks are available for read, return error
 		{
 			13,
-			// When all disks are available, should return data disks.
 			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, d[10], nil, nil, nil, nil, nil},
 			nil,
 			0,
@@ -106,7 +113,7 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 			continue
 		}
 		if reflect.DeepEqual(test.retDisks, disks) == false {
-			t.Errorf("test-case %d : incorrect disks returned. %v", i+1, disks)
+			t.Errorf("test-case %d : incorrect disks returned. expected %+v, got %+v", i+1, test.retDisks, disks)
 			continue
 		}
 	}
@@ -177,10 +184,19 @@ func TestIsSuccessBlocks(t *testing.T) {
 			true,
 		},
 		{
-			// Not enough disks for reedsolomon.Reconstruct()
+			// When all data disks are not available, enough for reedsolomon.Reconstruct()
 			[][]byte{
 				nil, nil, nil, nil, nil, nil, nil, nil,
 				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
+			},
+			false,
+			true,
+		},
+		{
+			// Not enough disks for reedsolomon.Reconstruct()
+			[][]byte{
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
 			},
 			false,
 			false,
@@ -293,8 +309,9 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 		t.Error("Contents of the erasure coded file differs")
 	}
 
-	// 1 more disk down. 7 disks down in total. Read should fail.
+	// 2 more disk down. 8 disks down in total. Read should fail.
 	disks[12] = ReadDiskDown{disks[12].(*posix)}
+	disks[13] = ReadDiskDown{disks[13].(*posix)}
 	buf.Reset()
 	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
 	if err != errXLReadQuorum {
