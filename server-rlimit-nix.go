@@ -42,7 +42,10 @@ func setMaxOpenFiles() error {
 		return err
 	}
 	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Set max memory used by minio as a process, this value is usually

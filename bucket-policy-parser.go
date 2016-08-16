@@ -170,6 +170,14 @@ func isValidPrincipals(principals []string) (err error) {
 // isValidConditions - are valid conditions.
 func isValidConditions(conditions map[string]map[string]string) (err error) {
 	// Returns true if string 'a' is found in the list.
+	findString := func(a string, list []string) bool {
+		for _, b := range list {
+			if b == a {
+				return true
+			}
+		}
+		return false
+	}
 	conditionKeyVal := make(map[string][]string)
 	// Verify conditions should be valid.
 	// Validate if stringEquals, stringNotEquals are present
@@ -187,7 +195,7 @@ func isValidConditions(conditions map[string]map[string]string) (err error) {
 				return err
 			}
 			conditionArray, ok := conditionKeyVal[key]
-			if ok && contains(conditionArray, conditions[conditionType][key]) {
+			if ok && findString(conditions[conditionType][key], conditionArray) {
 				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document.", key)
 				return err
 			}

@@ -95,7 +95,13 @@ func checkSufficientDisks(disks []string) error {
 
 // isDiskFound - validates if the disk is found in a list of input disks.
 func isDiskFound(disk string, disks []string) bool {
-	return contains(disks, disk)
+	for _, d := range disks {
+		// Disk found return
+		if disk == d {
+			return true
+		}
+	}
+	return false
 }
 
 // newXLObjects - initialize new xl object layer.
