@@ -73,8 +73,8 @@ func setMaxMemory() error {
 	}
 	// Validate if rlimit memory is set to lower
 	// than max cache size. Then we should use such value.
-	if rLimit.Cur < globalMaxCacheSize {
-		globalMaxCacheSize = (80 / 100) * rLimit.Cur
+	if uint64(rLimit.Cur) < globalMaxCacheSize {
+		globalMaxCacheSize = (80 / 100) * uint64(rLimit.Cur)
 	}
 
 	// Make sure globalMaxCacheSize is less than RAM size.

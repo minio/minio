@@ -28,7 +28,7 @@ func GetStats() (stats Stats, err error) {
 		return
 	}
 	stats = Stats{
-		TotalRAM: si.Totalram,
+		TotalRAM: uint64(si.Totalram),
 	}
 	return stats, nil
 }
