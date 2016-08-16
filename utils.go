@@ -146,7 +146,7 @@ func initGracefulShutdown(onExitFn onExitFunc) error {
 }
 
 // Global shutdown signal channel.
-var globalShutdownSignalCh = make(chan struct{})
+var globalShutdownSignalCh = make(chan struct{}, 1)
 
 // Start to monitor shutdownSignal to execute shutdown callbacks
 func startMonitorShutdownSignal(onExitFn onExitFunc) error {
