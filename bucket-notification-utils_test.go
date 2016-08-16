@@ -97,8 +97,8 @@ func TestValidEvents(t *testing.T) {
 	}
 }
 
-// Tests lambda arn validation.
-func TestLambdaARN(t *testing.T) {
+// Tests topic arn validation.
+func TestTopicARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
@@ -106,33 +106,33 @@ func TestLambdaARN(t *testing.T) {
 	defer removeAll(rootPath)
 
 	testCases := []struct {
-		lambdaARN string
-		errCode   APIErrorCode
+		topicARN string
+		errCode  APIErrorCode
 	}{
-		// Valid minio lambda with '1' account id.
+		// Valid minio topic with '1' account id.
 		{
-			lambdaARN: "arn:minio:lambda:us-east-1:1:minio",
-			errCode:   ErrNone,
+			topicARN: "arn:minio:sns:us-east-1:1:minio",
+			errCode:  ErrNone,
 		},
-		// Valid minio lambda with '10' account id.
+		// Valid minio topic with '10' account id.
 		{
-			lambdaARN: "arn:minio:lambda:us-east-1:10:minio",
-			errCode:   ErrNone,
+			topicARN: "arn:minio:sns:us-east-1:10:minio",
+			errCode:  ErrNone,
 		},
 		// Invalid empty queue arn.
 		{
-			lambdaARN: "",
-			errCode:   ErrARNNotification,
+			topicARN: "",
+			errCode:  ErrARNNotification,
 		},
 		// Invalid region 'us-west-1' in queue arn.
 		{
-			lambdaARN: "arn:minio:lambda:us-west-1:1:redis",
-			errCode:   ErrRegionNotification,
+			topicARN: "arn:minio:sns:us-west-1:1:redis",
+			errCode:  ErrRegionNotification,
 		},
 	}
 
 	for i, testCase := range testCases {
-		errCode := checkLambdaARN(testCase.lambdaARN)
+		errCode := checkTopicARN(testCase.topicARN)
 		if testCase.errCode != errCode {
 			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
 		}
@@ -186,8 +186,8 @@ func TestQueueARN(t *testing.T) {
 	}
 }
 
-// Test unmarshal queue arn.
-func TestUnmarshalLambdaARN(t *testing.T) {
+// Test unmarshal topic arn.
+func TestUnmarshalTopicARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
@@ -195,40 +195,40 @@ func TestUnmarshalLambdaARN(t *testing.T) {
 	defer removeAll(rootPath)
 
 	testCases := []struct {
-		lambdaARN string
-		Type      string
+		topicARN string
+		Type     string
 	}{
-		// Valid minio lambda arn.
+		// Valid minio topic arn.
 		{
-			lambdaARN: "arn:minio:lambda:us-east-1:1:lambda",
-			Type:      "lambda",
+			topicARN: "arn:minio:sns:us-east-1:1:listen",
+			Type:     "listen",
 		},
-		// Invalid empty queue arn.
+		// Invalid empty topic arn.
 		{
-			lambdaARN: "",
-			Type:      "",
+			topicARN: "",
+			Type:     "",
 		},
-		// Invalid region 'us-west-1' in queue arn.
+		// Invalid region 'us-west-1' in topic arn.
 		{
-			lambdaARN: "arn:minio:lambda:us-west-1:1:lambda",
-			Type:      "",
+			topicARN: "arn:minio:sns:us-west-1:1:listen",
+			Type:     "",
 		},
-		// Partial queue arn.
+		// Partial topic arn.
 		{
-			lambdaARN: "arn:minio:lambda:",
-			Type:      "",
+			topicARN: "arn:minio:sns:",
+			Type:     "",
 		},
-		// Invalid queue service value.
+		// Invalid topic service value.
 		{
-			lambdaARN: "arn:minio:lambda:us-east-1:1:*",
-			Type:      "",
+			topicARN: "arn:minio:sns:us-east-1:1:*",
+			Type:     "",
 		},
 	}
 
 	for i, testCase := range testCases {
-		lambda := unmarshalLambdaARN(testCase.lambdaARN)
-		if testCase.Type != lambda.Type {
-			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, lambda.Type)
+		topic := unmarshalTopicARN(testCase.topicARN)
+		if testCase.Type != topic.Type {
+			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, topic.Type)
 		}
 	}
 }
