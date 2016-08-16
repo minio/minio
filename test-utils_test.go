@@ -906,7 +906,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	// Initialize Web.
 	webHandlers := &webAPIHandlers{
-		ObjectAPI: objLayer,
+		ObjectAPI: func() ObjectLayer { return objLayer },
 	}
 
 	// Initialize router.
